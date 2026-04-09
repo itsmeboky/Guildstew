@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react'
 import { supabase } from '@/api/supabaseClient'
+import { useQueryClient } from '@tanstack/react-query'
 
 const AuthContext = createContext()
 
@@ -9,6 +10,7 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoadingAuth, setIsLoadingAuth] = useState(true)
   const [authError, setAuthError] = useState(null)
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     checkAuth()
@@ -74,6 +76,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null)
     setProfile(null)
     setIsAuthenticated(false)
+    queryClient.clear()
     if (shouldRedirect) window.location.href = '/'
   }
 
@@ -82,10 +85,17 @@ export const AuthProvider = ({ children }) => {
   }
 
   const mergedUser = user ? {
+    ...profile,
     id: user.id,
     email: user.email,
-    ...(profile || {})
+    profile_id: profile?.id
   } : null
+
+  useEffect(() => {
+    if (mergedUser) {
+      queryClient.setQueryData(['currentUser'], mergedUser)
+    }
+  }, [mergedUser, queryClient])
 
   return (
     <AuthContext.Provider value={{

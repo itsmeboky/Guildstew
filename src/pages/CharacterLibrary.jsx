@@ -257,9 +257,9 @@ export default function CharacterLibrary() {
                         : 'ring-2 ring-gray-600 hover:ring-[#FF5722]'
                     }`}
                   >
-                    {character.profile_avatar_url ? (
+                    {(character.profile_avatar_url || character.avatar_url) ? (
                       <img
-                        src={character.profile_avatar_url}
+                        src={character.profile_avatar_url || character.avatar_url}
                         alt={character.name}
                         className="w-full h-full"
                         style={{

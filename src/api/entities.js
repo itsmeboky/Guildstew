@@ -30,14 +30,18 @@ function createEntity(tableName) {
     },
 
     async create(obj) {
+      console.log(`CREATE ${tableName}:`, JSON.stringify(obj, null, 2))
       const { data, error } = await supabase
         .from(tableName)
         .insert(obj)
         .select()
         .single()
-      if (error) throw error
+      if (error) {
+        console.error(`CREATE ${tableName} FAILED:`, error.message, error.details, error.hint)
+        throw error
+      }
       return data
-    },
+    }, 
 
     async update(id, updates) {
       const { data, error } = await supabase
