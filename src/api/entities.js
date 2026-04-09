@@ -20,11 +20,22 @@ function createEntity(tableName) {
       return data || []
     },
 
-    async list() {
-      const { data, error } = await supabase
-        .from(tableName)
-        .select('*')
-        .order('created_at', { ascending: false })
+async list(sort, limit) {
+      let query = supabase.from(tableName).select('*')
+      
+      if (sort) {
+        const desc = sort.startsWith('-')
+        const field = desc ? sort.slice(1) : sort
+        query = query.order(field, { ascending: !desc })
+      } else {
+        query = query.order('created_at', { ascending: false })
+      }
+      
+      if (limit) {
+        query = query.limit(limit)
+      }
+      
+      const { data, error } = await query
       if (error) throw error
       return data || []
     },
