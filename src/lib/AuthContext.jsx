@@ -18,7 +18,7 @@ export const AuthProvider = ({ children }) => {
         if (session?.user) {
           setUser(session.user)
           setIsAuthenticated(true)
-          await fetchProfile(session.user.id)
+          fetchProfile(session.user.id).catch(() => {})
         } else {
           setUser(null)
           setProfile(null)
@@ -33,30 +33,38 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     try {
+      console.log('AUTH: checking session...')
       const { data: { session } } = await supabase.auth.getSession()
+      console.log('AUTH: session result:', session ? 'found' : 'none')
+
       if (session?.user) {
+        console.log('AUTH: user found:', session.user.id)
         setUser(session.user)
         setIsAuthenticated(true)
-        await fetchProfile(session.user.id)
+        fetchProfile(session.user.id).catch(err => {
+          console.error('AUTH: profile fetch failed:', err)
+        })
       }
     } catch (error) {
-      console.error('Auth check failed:', error)
+      console.error('AUTH: error:', error)
       setAuthError({ type: 'unknown', message: error.message })
     }
     setIsLoadingAuth(false)
   }
 
   const fetchProfile = async (userId) => {
+    console.log('AUTH: fetching profile for', userId)
     const { data, error } = await supabase
       .from('user_profiles')
       .select('*')
       .eq('user_id', userId)
       .single()
 
+    console.log('AUTH: profile result:', data, error)
+
     if (data) {
       setProfile(data)
     } else if (error && error.code !== 'PGRST116') {
-      // PGRST116 = no rows found (new user, no profile yet — that's fine)
       console.error('Profile fetch error:', error)
     }
   }
@@ -73,7 +81,6 @@ export const AuthProvider = ({ children }) => {
     window.location.href = '/login'
   }
 
-  // Merge auth user + profile so it matches the shape your pages expect
   const mergedUser = user ? {
     id: user.id,
     email: user.email,

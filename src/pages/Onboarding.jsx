@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { supabase } from "@/api/supabaseClient";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import { createPageUrl } from "@/utils";
 export default function Onboarding() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  
+
   const [avatarFile, setAvatarFile] = useState(null);
   const [username, setUsername] = useState("");
   const [birthday, setBirthday] = useState("");
@@ -28,7 +29,6 @@ export default function Onboarding() {
     initialData: null
   });
 
-  // Redirect to Home if user already has birthday set
   React.useEffect(() => {
     if (currentUser && currentUser.birthday) {
       navigate(createPageUrl("Home"));
@@ -38,13 +38,18 @@ export default function Onboarding() {
   const completeOnboardingMutation = useMutation({
     mutationFn: async (data) => {
       let avatarUrl = null;
-      
+
       if (avatarFile) {
-        const { file_url } = await base44.integrations.Core.UploadFile({ file: avatarFile });
-        avatarUrl = file_url;
+        const fileName = `avatars/${currentUser.id}_${Date.now()}`
+        const { error: uploadError } = await supabase.storage
+          .from('uploads')
+          .upload(fileName, avatarFile)
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(fileName)
+          avatarUrl = urlData.publicUrl
+        }
       }
 
-      // Calculate age from birthday
       const birthDate = new Date(data.birthday);
       const today = new Date();
       let age = today.getFullYear() - birthDate.getFullYear();
@@ -53,34 +58,33 @@ export default function Onboarding() {
         age--;
       }
 
-      await base44.auth.updateMe({
+      // Update the user profile
+      const updates = {
         username: data.username,
         birthday: data.birthday,
         age: age,
         country: data.country,
         pronouns: data.pronouns,
         onboarding_reason: data.reason,
-        avatar_url: avatarUrl,
-        onboarding_completed: true
-      });
+        onboarding_completed: true,
+        updated_at: new Date().toISOString()
+      }
+      if (avatarUrl) updates.avatar_url = avatarUrl
 
-      // Create UserProfile for search
-      await base44.entities.UserProfile.create({
-        user_id: currentUser.id,
-        username: data.username,
-        email: currentUser.email,
-        avatar_url: avatarUrl,
-        age: age,
-        tagline: ''
-      });
+      const { error } = await supabase
+        .from('user_profiles')
+        .update(updates)
+        .eq('user_id', currentUser.id)
+
+      if (error) throw error
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currentUser'] });
       toast.success("Welcome to Guildstew!");
-      // Force full page reload to ensure fresh state
       window.location.href = createPageUrl("Home");
     },
     onError: (error) => {
+      console.error('Onboarding error:', error);
       toast.error("Failed to complete onboarding. Please try again.");
     }
   });
@@ -110,21 +114,19 @@ export default function Onboarding() {
 
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4 sm:p-6">
-      {/* Background with image */}
-      <div 
+      <div
         className="absolute inset-0 bg-cover bg-center"
-        style={{ 
+        style={{
           backgroundImage: 'url(https://i.imgur.com/5LT5NUj.gif)'
         }}
       />
-      {/* Warm cozy overlay with depth */}
       <div className="absolute inset-0 bg-gradient-to-br from-orange-500/30 to-[#2A3441]/40 backdrop-blur-[2px]" />
 
       <div className="w-full max-w-[min(95vmin,1100px)] aspect-square bg-white/95 rounded-full p-6 sm:p-10 md:p-12 lg:p-16 relative z-10 flex flex-col items-center justify-center overflow-y-auto">
         <div className="text-center mb-3 sm:mb-4">
-          <img 
-            src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/2a112bc4f_GuildStewLogoOfficialForRedditWhite1.png" 
-            alt="Guildstew" 
+          <img
+            src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/2a112bc4f_GuildStewLogoOfficialForRedditWhite1.png"
+            alt="Guildstew"
             className="h-20 sm:h-28 md:h-32 w-auto mx-auto mb-2"
           />
           <h1 className="text-2xl sm:text-3xl font-bold mb-1 text-[#FF5722]">Welcome to Guildstew!</h1>
@@ -132,7 +134,6 @@ export default function Onboarding() {
         </div>
 
         <div className="space-y-3 sm:space-y-4 w-full max-w-md">
-          {/* Profile Picture */}
           <div>
             <Label className="text-sm sm:text-base font-semibold mb-2 block text-gray-800">Profile Picture</Label>
             <div className="flex items-center gap-3 sm:gap-4">
@@ -165,7 +166,6 @@ export default function Onboarding() {
             </div>
           </div>
 
-          {/* Username */}
           <div>
             <Label htmlFor="username" className="text-sm sm:text-base font-semibold mb-2 block text-gray-800">
               Username <span className="text-[#FF5722]">*</span>
@@ -180,13 +180,12 @@ export default function Onboarding() {
             <p className="text-xs sm:text-sm text-gray-600 mt-1">This cannot be changed later</p>
           </div>
 
-          {/* Birthday */}
           <div>
             <div className="flex items-center gap-2 mb-2">
               <Label htmlFor="birthday" className="text-sm sm:text-base font-semibold text-gray-800">
                 Birthday <span className="text-[#FF5722]">*</span>
               </Label>
-              <div 
+              <div
                 className="relative"
                 onMouseEnter={() => setShowBirthdayInfo(true)}
                 onMouseLeave={() => setShowBirthdayInfo(false)}
@@ -210,7 +209,6 @@ export default function Onboarding() {
             />
           </div>
 
-          {/* Country */}
           <div>
             <Label htmlFor="country" className="text-sm sm:text-base font-semibold mb-2 block text-gray-800">Country</Label>
             <Input
@@ -223,7 +221,6 @@ export default function Onboarding() {
             <p className="text-xs sm:text-sm text-gray-600 mt-1">Optional</p>
           </div>
 
-          {/* Pronouns */}
           <div>
             <Label htmlFor="pronouns" className="text-sm sm:text-base font-semibold mb-2 block text-gray-800">Pronouns</Label>
             <Input
@@ -236,7 +233,6 @@ export default function Onboarding() {
             <p className="text-xs sm:text-sm text-gray-600 mt-1">Optional</p>
           </div>
 
-          {/* What brought you here */}
           <div>
             <Label htmlFor="reason" className="text-sm sm:text-base font-semibold mb-2 block text-gray-800">
               What made you want to try out Guildstew? <span className="text-[#FF5722]">*</span>
