@@ -1086,12 +1086,23 @@ export default function GMPanel() {
         </div>
       </div>
 
-      {/* Possess Player Selector */}
-      {showPossessSelector && (
+      {/* Possess Character Selector (players + GM monster queue) */}
+      {showPossessSelector && (() => {
+        // Pull the GM's current monster queue from localStorage so the dialog
+        // shows monsters the GM is already running alongside the party.
+        let monsterQueue = [];
+        try {
+          const savedQueue = localStorage.getItem(`gm_monster_queue_${campaignId}`);
+          if (savedQueue) monsterQueue = JSON.parse(savedQueue) || [];
+        } catch (e) {
+          console.error("Failed to read monster queue for Possess dialog", e);
+        }
+
+        return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-6">
           <div className="bg-[#050816] rounded-3xl border-2 border-[#37F2D1]/30 shadow-[0_24px_80px_rgba(0,0,0,0.9)] max-w-2xl w-full max-h-[80vh] overflow-hidden">
             <div className="flex items-center justify-between p-6 border-b border-[#111827]">
-              <h2 className="text-2xl font-bold">Possess Player Character</h2>
+              <h2 className="text-2xl font-bold">Possess Character</h2>
               <button
                 onClick={() => setShowPossessSelector(false)}
                 className="w-10 h-10 rounded-full bg-[#1a1f2e] hover:bg-[#37F2D1]/20 transition-colors flex items-center justify-center"
@@ -1100,63 +1111,126 @@ export default function GMPanel() {
               </button>
             </div>
 
-            <div className="p-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
-              {players.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {players.map(player => {
-                    const char = player.character;
-                    const color1 = player.profile_color_1 || "#FF5722";
-                    const color2 = player.profile_color_2 || "#37F2D1";
-                    
-                    return (
-                      <button
-                        key={player.user_id}
-                        onClick={() => {
-                          if (char) {
-                            setSelectedCharacter({ ...char, type: 'player' });
-                            setIsPossessed(true);
-                          }
-                          setShowPossessSelector(false);
-                        }}
-                        disabled={!char}
-                        className="bg-[#1a1f2e] rounded-xl overflow-hidden hover:ring-2 hover:ring-[#37F2D1] transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <div 
-                          className="h-32 bg-cover bg-center relative"
-                          style={{ 
-                            backgroundImage: char?.profile_avatar_url ? `url(${char.profile_avatar_url})` : 'none',
-                            backgroundColor: '#0b1220'
+            <div className="p-6 max-h-[60vh] overflow-y-auto custom-scrollbar space-y-6">
+              {/* Players */}
+              <div>
+                <h3 className="text-xs font-bold tracking-[0.22em] uppercase text-slate-400 mb-3">
+                  Party
+                </h3>
+                {players.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {players.map(player => {
+                      const char = player.character;
+                      const color1 = player.profile_color_1 || "#FF5722";
+                      const color2 = player.profile_color_2 || "#37F2D1";
+
+                      return (
+                        <button
+                          key={player.user_id}
+                          onClick={() => {
+                            if (char) {
+                              setSelectedCharacter({ ...char, type: 'player' });
+                              setIsPossessed(true);
+                            }
+                            setShowPossessSelector(false);
                           }}
+                          disabled={!char}
+                          className="bg-[#1a1f2e] rounded-xl overflow-hidden hover:ring-2 hover:ring-[#37F2D1] transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {!char?.profile_avatar_url && (
-                            <div className="absolute inset-0 flex items-center justify-center text-4xl text-slate-600">?</div>
-                          )}
-                          <div 
-                            className="absolute bottom-0 left-0 right-0 h-1"
-                            style={{ background: `linear-gradient(to right, ${color1}, ${color2})` }}
-                          />
-                        </div>
-                        <div className="p-3">
-                          <h3 className="text-white font-bold text-sm truncate">
-                            {char?.name || 'No Character'}
-                          </h3>
-                          <p className="text-slate-400 text-xs truncate">
-                            {player.username} • {char?.race || '?'} {char?.class || '?'}
-                          </p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <p className="text-slate-400">No players in this campaign</p>
-                </div>
-              )}
+                          <div
+                            className="h-32 bg-cover bg-center relative"
+                            style={{
+                              backgroundImage: char?.profile_avatar_url ? `url(${char.profile_avatar_url})` : 'none',
+                              backgroundColor: '#0b1220'
+                            }}
+                          >
+                            {!char?.profile_avatar_url && (
+                              <div className="absolute inset-0 flex items-center justify-center text-4xl text-slate-600">?</div>
+                            )}
+                            <div
+                              className="absolute bottom-0 left-0 right-0 h-1"
+                              style={{ background: `linear-gradient(to right, ${color1}, ${color2})` }}
+                            />
+                          </div>
+                          <div className="p-3">
+                            <h3 className="text-white font-bold text-sm truncate">
+                              {char?.name || 'No Character'}
+                            </h3>
+                            <p className="text-slate-400 text-xs truncate">
+                              {player.username} • {char?.race || '?'} {char?.class || '?'}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-slate-500 text-sm italic">
+                    No players in this campaign
+                  </div>
+                )}
+              </div>
+
+              {/* GM's monster queue */}
+              <div>
+                <h3 className="text-xs font-bold tracking-[0.22em] uppercase text-slate-400 mb-3">
+                  Your Monsters
+                </h3>
+                {monsterQueue.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {monsterQueue.map((monster) => {
+                      const art = monster.image_url || monster.avatar_url || monster.stats?.image_url;
+                      return (
+                        <button
+                          key={monster.queueId}
+                          onClick={() => {
+                            const enriched = enrichMonster(monster);
+                            enriched.queueId = monster.queueId;
+                            enriched.uniqueId = `monster-${monster.queueId}`;
+                            setSelectedCharacter(enriched);
+                            setMonsterInventory(enriched.inventory || []);
+                            setEquippedItems(enriched.equipped || {});
+                            setIsPossessed(true);
+                            setShowPossessSelector(false);
+                          }}
+                          className="bg-[#1a1f2e] rounded-xl overflow-hidden hover:ring-2 hover:ring-[#FF5722] transition-all text-left"
+                        >
+                          <div
+                            className="h-32 bg-cover bg-center relative"
+                            style={{
+                              backgroundImage: art ? `url(${art})` : 'none',
+                              backgroundColor: '#0b1220'
+                            }}
+                          >
+                            {!art && (
+                              <div className="absolute inset-0 flex items-center justify-center text-4xl text-slate-600">?</div>
+                            )}
+                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-[#FF5722] to-[#F59E0B]" />
+                          </div>
+                          <div className="p-3">
+                            <h3 className="text-white font-bold text-sm truncate">
+                              {monster.name || 'Unknown Creature'}
+                            </h3>
+                            <p className="text-slate-400 text-xs truncate">
+                              {monster.type || 'monster'}
+                              {monster.stats?.challenge_rating != null ? ` • CR ${monster.stats.challenge_rating}` : ''}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-slate-500 text-sm italic">
+                    No monsters in your queue. Add some from the Monster Queue panel.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Character Selector Popup */}
       <CharacterSelector
@@ -1871,7 +1945,7 @@ function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPosses
               onClick={onPossessPlayer}
               className="flex-1 bg-[#37F2D1]/20 hover:bg-[#37F2D1]/30 text-[#37F2D1] rounded-lg py-2 text-sm font-semibold transition-colors"
             >
-              Possess Player
+              Possess
             </button>
           </div>
         </>
