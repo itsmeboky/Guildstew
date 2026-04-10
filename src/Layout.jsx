@@ -32,9 +32,7 @@ export default function Layout({ children, currentPageName }) {
 
   // Sync user profile on mount
   React.useEffect(() => {
-    if (user) {
-      base44.functions.invoke('syncUserProfiles').catch(() => {});
-    }
+    // syncUserProfiles will be an Edge Function later — skip for now
   }, [user]);
 
   const { data: currentUserProfile } = useQuery({

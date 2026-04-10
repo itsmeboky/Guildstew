@@ -33,6 +33,8 @@ export default function YourProfile() {
     initialData: null
   });
 
+console.log('PROFILE PAGE USER:', user)
+
   const { data: characters } = useQuery({
     queryKey: ['recentCharacters'],
     queryFn: () => base44.entities.Character.filter({ created_by: user?.email }, '-last_played', 6),

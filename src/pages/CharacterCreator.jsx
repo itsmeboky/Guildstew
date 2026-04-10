@@ -1,3 +1,4 @@
+import { useAuth } from '@/lib/AuthContext';
 import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -94,6 +95,9 @@ export default function CharacterCreator() {
   const [backgroundImage] = useState(() => 
     BACKGROUND_GIFS[Math.floor(Math.random() * BACKGROUND_GIFS.length)]
   );
+
+  const { user } = useAuth();
+
   const [characterData, setCharacterData] = useState({
     name: "",
     race: "",
@@ -344,13 +348,15 @@ export default function CharacterCreator() {
     }
   };
 
-  const handleSubmit = () => {
+const handleSubmit = () => {
     if (!characterData.name || !characterData.race || !characterData.class) {
       toast.error("Please fill in all required fields");
       return;
     }
 
     const stats = buildStatsFromCharacterData(characterData);
+    stats.created_by = user?.email;
+    stats.user_id = user?.id;
     createMutation.mutate(stats);
   };
 
