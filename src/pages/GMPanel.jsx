@@ -329,27 +329,15 @@ export default function GMPanel() {
 
   // Handler called when CombatActionBar cycles the attack toggle.
   const handleAttackModeChange = React.useCallback((nextMode) => {
-    console.log('[GMPanel] handleAttackModeChange', {
-      from: attackMode,
-      to: nextMode,
-      combatActive: !!campaign?.combat_active,
-      hasCombatData: !!campaign?.combat_data,
-      isActorsTurn,
-      actionsStateAction: actionsState.action,
-      selectedCharacter: selectedCharacter?.name,
-    });
-
     // Guardrails: only check turn order / action economy when transitioning
     // from null → a mode (i.e. entering attack targeting). Cycling between
     // modes or cancelling is always allowed.
     if (attackMode === null && nextMode !== null) {
       if (campaign?.combat_active && campaign?.combat_data && !isActorsTurn) {
-        console.log('[GMPanel] BLOCKED: not actors turn');
         toast.error("It's not this character's turn!");
         return;
       }
       if (!actionsState.action) {
-        console.log('[GMPanel] BLOCKED: no action available');
         toast.error("No action available this turn!");
         return;
       }
@@ -368,7 +356,6 @@ export default function GMPanel() {
     } else {
       // Enter / update attack targeting mode with the new weapon.
       const action = buildAttackAction(nextMode);
-      console.log('[GMPanel] entering targeting with action', action);
       setCombatState({ isOpen: false, step: 'selecting_target', action, target: null });
     }
   }, [
@@ -378,7 +365,6 @@ export default function GMPanel() {
     isActorsTurn,
     actionsState.action,
     buildAttackAction,
-    selectedCharacter,
   ]);
 
   const rollInitiative = () => {
