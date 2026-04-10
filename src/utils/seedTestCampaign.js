@@ -203,6 +203,10 @@ async function createTestCampaign(gmUser) {
     description: `${SEED_TAG} Auto-generated test campaign for combat QA.`,
     cover_image_url:
       "https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=1200&h=400&fit=crop",
+    // THIS is what makes the campaign show up in the GM's Campaigns tab —
+    // Campaigns.jsx filters by `game_master_id === user.id || player_ids.includes(user.id)`.
+    game_master_id: gmUser.id,
+    status: "active",
     player_ids: FAKE_PLAYERS.map((p) => p.user_id),
     consent_rating: "PG-13",
     is_session_active: true,
@@ -215,7 +219,6 @@ async function createTestCampaign(gmUser) {
       is_distributed: false,
     },
   };
-  // Only pass created_by if the schema lets us — many tables set it via trigger.
   const created = await base44.entities.Campaign.create(data);
   return created;
 }
@@ -244,6 +247,43 @@ async function createTestCharacters(campaignId, gmUser) {
   return created;
 }
 
+async function findExistingSeededCampaign() {
+  try {
+    // Raw query — entities.filter() only supports equality, and we want to
+    // match on title to catch campaigns that have already been seeded.
+    const { data, error } = await supabase
+      .from("campaigns")
+      .select("*")
+      .eq("title", "Seeded Combat Test Campaign");
+    if (error) {
+      console.warn("[seed] Could not look up existing seed campaign:", error.message);
+      return null;
+    }
+    return data && data.length > 0 ? data[0] : null;
+  } catch (err) {
+    console.warn("[seed] Lookup threw:", err);
+    return null;
+  }
+}
+
+async function repairCampaign(campaign, gm) {
+  const patch = {};
+  if (!campaign.game_master_id) patch.game_master_id = gm.id;
+  if (!campaign.status) patch.status = "active";
+  if (!campaign.player_ids || campaign.player_ids.length === 0) {
+    patch.player_ids = FAKE_PLAYERS.map((p) => p.user_id);
+  }
+  if (Object.keys(patch).length === 0) return campaign;
+  console.log(`[seed] Repairing existing campaign ${campaign.id} with:`, patch);
+  try {
+    const updated = await base44.entities.Campaign.update(campaign.id, patch);
+    return updated;
+  } catch (err) {
+    console.error("[seed] Repair failed:", err);
+    return campaign;
+  }
+}
+
 export async function seedTestCampaign() {
   console.log("[seed] Starting test campaign seed…");
   const gm = await getCurrentUser();
@@ -258,11 +298,29 @@ export async function seedTestCampaign() {
     );
   }
 
-  const campaign = await createTestCampaign(gm);
-  console.log(`[seed] Created campaign: ${campaign.id} — ${campaign.title}`);
-
-  const characters = await createTestCharacters(campaign.id, gm);
-  console.log(`[seed] Created ${characters.length} characters.`);
+  // Idempotent: if a previous run already created the campaign, repair it
+  // instead of making a duplicate. This is important because earlier
+  // versions of this seed forgot to set game_master_id, which left the
+  // campaign invisible in the GM's Campaigns tab.
+  let campaign = await findExistingSeededCampaign();
+  let characters = [];
+  if (campaign) {
+    console.log(`[seed] Found existing seed campaign ${campaign.id}; repairing instead of creating.`);
+    campaign = await repairCampaign(campaign, gm);
+    // Check if it already has characters; if not, create them.
+    const existing = await base44.entities.Character.filter({ campaign_id: campaign.id });
+    if (!existing || existing.length === 0) {
+      characters = await createTestCharacters(campaign.id, gm);
+    } else {
+      characters = existing;
+      console.log(`[seed] Campaign already has ${existing.length} characters — skipping character create.`);
+    }
+  } else {
+    campaign = await createTestCampaign(gm);
+    console.log(`[seed] Created campaign: ${campaign.id} — ${campaign.title}`);
+    characters = await createTestCharacters(campaign.id, gm);
+    console.log(`[seed] Created ${characters.length} characters.`);
+  }
 
   const url = `${window.location.origin}/gmpanel?id=${campaign.id}`;
   console.log(`[seed] ✅ Done. Open the campaign: ${url}`);
@@ -273,20 +331,34 @@ export async function seedTestCampaign() {
 seedTestCampaign.cleanup = async function cleanupTestCampaign() {
   console.log("[seed] Cleaning up seeded test data…");
 
-  // Delete seeded campaigns by description tag
-  const campaigns = await base44.entities.Campaign.filter({});
-  const seeded = (campaigns || []).filter((c) =>
-    (c.description || "").includes(SEED_TAG) || c.title === "Seeded Combat Test Campaign"
-  );
-  for (const c of seeded) {
+  // Find seeded campaigns by title (bypasses RLS `created_by` filters by
+  // matching on a non-private column).
+  const { data: seeded, error: lookupErr } = await supabase
+    .from("campaigns")
+    .select("id, title")
+    .eq("title", "Seeded Combat Test Campaign");
+  if (lookupErr) {
+    console.error("[seed] Lookup failed:", lookupErr.message);
+    return;
+  }
+
+  for (const c of seeded || []) {
     try {
       // Delete characters in this campaign first
-      const chars = await base44.entities.Character.filter({ campaign_id: c.id });
+      const { data: chars } = await supabase
+        .from("characters")
+        .select("id")
+        .eq("campaign_id", c.id);
       for (const ch of chars || []) {
-        try { await base44.entities.Character.delete(ch.id); } catch (e) { console.warn(e); }
+        const { error } = await supabase.from("characters").delete().eq("id", ch.id);
+        if (error) console.warn(`[seed] Delete character ${ch.id}:`, error.message);
       }
-      await base44.entities.Campaign.delete(c.id);
-      console.log(`[seed] Deleted campaign ${c.id}`);
+      const { error: campErr } = await supabase.from("campaigns").delete().eq("id", c.id);
+      if (campErr) {
+        console.error(`[seed] Failed to delete campaign ${c.id}:`, campErr.message);
+      } else {
+        console.log(`[seed] Deleted campaign ${c.id}`);
+      }
     } catch (err) {
       console.error(`[seed] Failed to delete campaign ${c.id}:`, err);
     }
