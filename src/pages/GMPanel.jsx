@@ -120,6 +120,14 @@ export default function GMPanel() {
     target: null
   });
 
+  // Derived: are we currently in attack-targeting mode? Controls the attack button icon.
+  const attackTargetingMode =
+    combatState.step === 'selecting_target' &&
+    combatState.action?.name === 'Attack' &&
+    (combatState.action?.mode === 'melee' || combatState.action?.mode === 'ranged')
+      ? combatState.action.mode
+      : null;
+
   // Sync combat state to DB for spectators
   const updateCombatEncounter = React.useCallback((newState) => {
     if (!campaign?.combat_active) return;
@@ -374,12 +382,6 @@ export default function GMPanel() {
         setInitiativeOrder(campaign.combat_data.order);
       }
     }
-    
-
-  // Reset action economy when turn changes
-  React.useEffect(() => {
-    setActionsState({ action: true, bonus: true, inspiration: false });
-  }, [campaign?.combat_data?.currentTurnIndex, campaign?.combat_data?.round]);
 
     // Auto-initialize loot data for existing campaigns
     if (campaign && !campaign.loot_data) {
@@ -393,6 +395,11 @@ export default function GMPanel() {
       });
     }
   }, [campaign, campaignId]);
+
+  // Reset action economy when turn changes (separate effect — must be at top level)
+  React.useEffect(() => {
+    setActionsState({ action: true, bonus: true, inspiration: false });
+  }, [campaign?.combat_data?.currentTurnIndex, campaign?.combat_data?.round, campaign?.combat_data?.order?.[0]?.id]);
 
   const { data: monsters = [] } = useQuery({
     queryKey: ['campaignMonsters', campaignId],
@@ -658,6 +665,31 @@ export default function GMPanel() {
                   }
                 }
               }}
+              onActionComplete={() => {
+                // Consume the action's cost now that it has been resolved
+                const resolvedCost = combatState.action?.resolved?.cost;
+                if (resolvedCost) {
+                  setActionsState(prev => consumeActionCost(prev, resolvedCost));
+                }
+                // Clear the synced encounter so spectators exit cleanly.
+                // Optimistically update the local cache to avoid a flash where the
+                // dice window briefly switches to spectator mode before the
+                // server round-trips back.
+                if (campaign?.combat_data?.active_encounter) {
+                  const cleared = {
+                    ...campaign.combat_data,
+                    active_encounter: null,
+                  };
+                  queryClient.setQueryData(['campaign', campaignId], (old) =>
+                    old ? { ...old, combat_data: cleared } : old
+                  );
+                  base44.entities.Campaign.update(campaignId, {
+                    combat_data: cleared,
+                  }).catch(err => console.error("Failed to clear encounter", err));
+                }
+                // Reset combat state cleanly (do NOT end turn — that's a separate action)
+                setCombatState({ step: 'idle', isOpen: false, action: null, target: null });
+              }}
               onEndTurn={async () => {
                 if (campaign?.combat_data?.stage === 'initiative') {
                   // GM Accepting rolls
@@ -675,7 +707,7 @@ export default function GMPanel() {
                   if (currentOrder.length > 0) {
                     const [finished] = currentOrder.splice(0, 1);
                     currentOrder.push(finished);
-                    
+
                     await base44.entities.Campaign.update(campaignId, {
                       combat_data: {
                         ...campaign.combat_data,
@@ -775,15 +807,16 @@ export default function GMPanel() {
               </div>
             </div>
 
-            <CombatActionBar 
+            <CombatActionBar
               character={selectedCharacter ? { ...selectedCharacter, equipment: equippedItems } : null}
               actionsState={actionsState}
               setActionsState={setActionsState}
+              attackTargetingMode={attackTargetingMode}
               onActionClick={(action) => {
                 // Turn order enforcement
                 if (campaign?.combat_active && campaign?.combat_data) {
                   if (!isActorsTurn) {
-                    alert("It's not this character's turn!");
+                    toast.error("It's not this character's turn!");
                     return;
                   }
                 }
@@ -791,7 +824,7 @@ export default function GMPanel() {
                 const resolved = resolveAction(action, selectedCharacter);
                 const enrichedAction = { ...action, resolved };
 
-                // Check if they have the action economy to do this
+                // Action economy gate — can't do it if the required cost isn't available
                 if (resolved.cost === "action" && !actionsState.action) {
                   toast.error("No action available this turn!");
                   return;
@@ -801,28 +834,28 @@ export default function GMPanel() {
                   return;
                 }
 
-                // No-roll actions — consume the cost and log it
+                // No-roll actions — just consume the cost and toast. Don't open the dice window.
                 if (resolved.rollType === "no_roll") {
                   setActionsState(prev => consumeActionCost(prev, resolved.cost));
                   toast.success(`${selectedCharacter?.name || 'Character'} uses ${action.name}`);
+                  setCombatState({ isOpen: false, step: 'idle', action: null, target: null });
                   return;
                 }
 
-                // Modifier toggles — no cost
+                // Modifier toggles — no cost, no dice window
                 if (resolved.rollType === "modifier") {
                   return;
                 }
 
-                // Actions that need targets or dice
+                // Actions that need a target → enter targeting mode.
+                // (Cost is NOT consumed yet — only on successful resolution via onActionComplete,
+                // so cancelling targeting doesn't burn the action.)
                 if (resolved.requiresTarget) {
                   setCombatState({ isOpen: false, step: 'selecting_target', action: enrichedAction, target: null });
                 } else {
-                  // Skill checks without a target (like Hide)
+                  // Skill checks without a target (like Hide) open the dice window directly.
                   setCombatState({ isOpen: true, step: 'rolling', action: enrichedAction, target: null });
                 }
-
-                // Consume the action cost
-                setActionsState(prev => consumeActionCost(prev, resolved.cost));
               }}
             />
 

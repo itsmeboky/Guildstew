@@ -12,12 +12,13 @@ const basicActionIcons = [
   { name: "Ready Action", url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/4f1e26b5f_ReadyAction.png" }
 ];
 
-export default function CombatActionBar({ 
-  character, 
-  onActionClick, 
+export default function CombatActionBar({
+  character,
+  onActionClick,
   className,
   actionsState,
-  setActionsState
+  setActionsState,
+  attackTargetingMode = null, // null | 'melee' | 'ranged' — controlled by parent
 }) {
   // Internal state if not provided controlled
   const [localActions, setLocalActions] = useState({ action: true, bonus: true, inspiration: false });
@@ -25,7 +26,6 @@ export default function CombatActionBar({
   const setActions = setActionsState || setLocalActions;
 
   const [nonLethalActive, setNonLethalActive] = useState(false);
-  const [attackMode, setAttackMode] = useState(0);
   const [scrollPosition, setScrollPosition] = useState(0);
 
   // Get weapons from equipment
@@ -33,34 +33,63 @@ export default function CombatActionBar({
   const meleeWeapon = equipment.weapon1;
   const rangedWeapon = equipment.ranged;
 
-  // Determine available modes
-  // 0: Generic/Unarmed (always available if no weapons?) or just Melee if weapon1 exists
-  // Let's strictly follow: Melee (Weapon 1) vs Ranged (Ranged Slot)
-  // If we want to toggle, we need to know what's valid.
-
   const isMeleeAvailable = !!meleeWeapon;
   const isRangedAvailable = !!rangedWeapon;
+  const isMonsterOrNPC = character?.type === 'monster' || character?.type === 'npc';
 
-  const handleAttackToggle = () => {
-    let nextMode = attackMode;
-    // Cycle: 0 (Melee) -> 1 (Ranged) -> 0
-    // If one is missing, can we switch?
-    // If currently Melee (0), try Ranged (1). If Ranged not available, stay 0? 
-    // Or if Melee not available, default to Ranged?
+  // What mode the icon should display: reflects the currently-active targeting mode,
+  // or 'melee' as the default when nothing is being targeted.
+  const displayedMode = attackTargetingMode || 'melee';
+  const attackIsTargeting = attackTargetingMode === 'melee' || attackTargetingMode === 'ranged';
 
-    if (attackMode === 0) { // Switching from Melee to Ranged
-       if (isRangedAvailable) nextMode = 1;
-    } else { // Switching from Ranged to Melee
-       if (isMeleeAvailable) nextMode = 0;
+  // Click handler: determine the next mode, emit the action, let the parent manage state.
+  // - No active targeting → start with melee (or ranged if only ranged available)
+  // - Targeting melee → switch to ranged (or loop back to melee if ranged unavailable)
+  // - Targeting ranged → switch to melee
+  const handleAttackClick = () => {
+    // Monster / NPC primary action
+    if (isMonsterOrNPC) {
+      const actionsList = character.actions || character.stats?.actions || [];
+      const primaryAction = actionsList[0];
+      if (primaryAction) {
+        onActionClick && onActionClick(primaryAction);
+      }
+      return;
     }
-    setAttackMode(nextMode);
-  };
 
-  // Ensure valid initial mode
-  React.useEffect(() => {
-     if (attackMode === 0 && !isMeleeAvailable && isRangedAvailable) setAttackMode(1);
-     if (attackMode === 1 && !isRangedAvailable && isMeleeAvailable) setAttackMode(0);
-  }, [isMeleeAvailable, isRangedAvailable]);
+    // Off-hand attack fallback: action already used + bonus available + second weapon exists
+    if (!actions.action && actions.bonus && equipment.weapon2) {
+      onActionClick && onActionClick({
+        type: 'basic',
+        name: 'Attack',
+        mode: 'offhand',
+        weapon: equipment.weapon2,
+        isOffHand: true,
+      });
+      return;
+    }
+
+    // Normal: pick the next mode based on current targeting
+    let nextMode;
+    if (!attackIsTargeting) {
+      nextMode = isMeleeAvailable ? 'melee' : (isRangedAvailable ? 'ranged' : 'melee');
+    } else if (attackTargetingMode === 'melee') {
+      nextMode = isRangedAvailable ? 'ranged' : 'melee';
+    } else {
+      nextMode = isMeleeAvailable ? 'melee' : 'ranged';
+    }
+
+    const weapon = nextMode === 'melee' ? meleeWeapon : rangedWeapon;
+    if (!weapon) return;
+
+    onActionClick && onActionClick({
+      type: 'basic',
+      name: 'Attack',
+      mode: nextMode,
+      weapon,
+      isOffHand: false,
+    });
+  };
   const [showSpellDetails, setShowSpellDetails] = useState(null);
   const [hoveredSpell, setHoveredSpell] = useState(null);
   const [hoverTimer, setHoverTimer] = useState(null);
@@ -156,8 +185,9 @@ export default function CombatActionBar({
         <div className="h-12 w-[1px] bg-[#1e293b] mx-2" />
         <div className="flex-1 flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <ActionButton active={actions.action} onClick={() => setActions(p => ({...p, action: !p.action}))} color="green" icon={Circle} />
-            <ActionButton active={actions.bonus} onClick={() => setActions(p => ({...p, bonus: !p.bonus}))} color="orange" icon={Triangle} />
+            {/* Action & Bonus Action are display-only during combat; consumed by the system */}
+            <ActionButton active={actions.action} color="green" icon={Circle} />
+            <ActionButton active={actions.bonus} color="orange" icon={Triangle} />
             <ActionButton active={actions.inspiration} onClick={() => setActions(p => ({...p, inspiration: !p.inspiration}))} color="yellow" icon={Music} />
           </div>
         </div>
@@ -177,56 +207,16 @@ export default function CombatActionBar({
             />
           ))}
           <BasicActionSlot
-            src={attackMode === 1 ? "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/9bfa45d4d_RangedAttack.png" : "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/86f86dd03_MeleeAttack.png"}
+            src={displayedMode === 'ranged' ? "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/9bfa45d4d_RangedAttack.png" : "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/86f86dd03_MeleeAttack.png"}
             tooltip={
-              (character?.type === 'monster' || character?.type === 'npc')
+              isMonsterOrNPC
                 ? `Attack (${(character.actions?.[0]?.name) || 'Default'})`
-                : (attackMode === 1 ? `Ranged Attack (${rangedWeapon?.name || 'No Weapon'})` : `Melee Attack (${meleeWeapon?.name || 'No Weapon'})`)
+                : (displayedMode === 'ranged' ? `Ranged Attack (${rangedWeapon?.name || 'No Weapon'})` : `Melee Attack (${meleeWeapon?.name || 'No Weapon'})`)
             }
-            toggleable={!(character?.type === 'monster' || character?.type === 'npc')}
-            isActive={true}
-            disabled={
-              !(character?.type === 'monster' || character?.type === 'npc') && 
-              (attackMode === 0 ? !isMeleeAvailable : !isRangedAvailable) && !(
-               // Enable if Off-hand attack is possible: Action used + Bonus available + 2nd weapon exists
-               !actions.action && actions.bonus && equipment.weapon2
-            )}
-            onToggle={handleAttackToggle}
-            onClick={() => {
-              // Check for Monster Actions first
-              if (character?.type === 'monster' || character?.type === 'npc') {
-                const actionsList = character.actions || character.stats?.actions || [];
-                const primaryAction = actionsList[0]; // Default to first action
-                
-                if (primaryAction) {
-                   onActionClick && onActionClick(primaryAction);
-                   return;
-                }
-              }
-
-              // Logic for standard attack vs off-hand attack
-              let weapon = attackMode === 0 ? meleeWeapon : rangedWeapon;
-              let isOffHand = false;
-
-              // Check for Off-hand trigger
-              if (!actions.action && actions.bonus && equipment.weapon2) {
-                 weapon = equipment.weapon2;
-                 isOffHand = true;
-              } else if (!actions.action) {
-                 // Action used and no off-hand valid -> do nothing (disabled state usually handles this)
-                 return;
-              }
-
-              if (weapon) {
-                 onActionClick && onActionClick({ 
-                   type: 'basic', 
-                   name: 'Attack', 
-                   mode: isOffHand ? 'offhand' : (attackMode === 0 ? 'melee' : 'ranged'),
-                   weapon: weapon,
-                   isOffHand: isOffHand
-                 });
-              }
-            }}
+            toggleable={false}
+            isActive={attackIsTargeting}
+            disabled={!isMonsterOrNPC && !isMeleeAvailable && !isRangedAvailable && !equipment.weapon2}
+            onClick={handleAttackClick}
           />
         </div>
         <div className="h-10 w-[2px] bg-[#1e2636]" />
@@ -305,10 +295,12 @@ function StatHump({ label, value, short }) {
 
 function ActionButton({ active, onClick, color, icon: Icon }) {
   const colorClass = color === 'green' ? 'text-green-500 border-green-500' : color === 'orange' ? 'text-orange-500 border-orange-500' : 'text-yellow-400 border-yellow-400';
+  const interactive = typeof onClick === 'function';
   return (
     <button
       onClick={onClick}
-      className={`w-12 h-12 rounded-[14px] border flex items-center justify-center transition-all ${active ? `bg-[#050816] ${colorClass} shadow-[0_0_15px_rgba(0,0,0,0.3)]` : 'bg-[#050816] border-[#111827] opacity-50'}`}
+      disabled={!interactive}
+      className={`w-12 h-12 rounded-[14px] border flex items-center justify-center transition-all ${active ? `bg-[#050816] ${colorClass} shadow-[0_0_15px_rgba(0,0,0,0.3)]` : 'bg-[#050816] border-[#111827] opacity-50'} ${interactive ? 'cursor-pointer' : 'cursor-default'}`}
     >
       <Icon className={`w-4 h-4 fill-current ${active ? colorClass.split(' ')[0] : 'text-slate-500'}`} />
     </button>

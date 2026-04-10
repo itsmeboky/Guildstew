@@ -4,6 +4,11 @@ import { RefreshCw, X, Swords } from "lucide-react";
 import DiceRoller from "@/components/dice/DiceRoller";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
+import {
+  getSkillModifier,
+  getSaveModifier,
+  getSpellSaveDC,
+} from "@/components/combat/actionResolver";
 
 const CLASS_SPELL_ABILITY = {
   Wizard: "int",
@@ -41,12 +46,22 @@ export default function CombatDiceWindow({
   const [selectedAction, setSelectedAction] = useState(initialAction);
   const [attackRoll, setAttackRoll] = useState(null);
   const [damageRoll, setDamageRoll] = useState(null);
+  const [skillCheckRoll, setSkillCheckRoll] = useState(null);
+  const [savingThrowRoll, setSavingThrowRoll] = useState(null);
   const [isRolling, setIsRolling] = useState(false);
-  const [phase, setPhase] = useState("ready"); // 'ready' | 'rolling_attack' | 'attack_result' | 'rolling_damage' | 'damage_result'
+  // Phases:
+  //  Attack:  ready → rolling_attack → attack_result → rolling_damage → damage_result
+  //  Skill:   ready → rolling_check  → check_result
+  //  Save:    ready → rolling_save   → save_result
+  const [phase, setPhase] = useState("ready");
   const [isCrit, setIsCrit] = useState(false);
   const [currentDice, setCurrentDice] = useState("d20");
   const [campaignConfig, setCampaignConfig] = useState(null);
   const [initiativeRoll, setInitiativeRoll] = useState(null);
+
+  // Flow type comes from the resolved action produced by actionResolver.resolveAction
+  const resolved = selectedAction?.resolved || null;
+  const flowType = resolved?.rollType || "attack"; // attack | skill_check | saving_throw | no_roll
 
   const diceRollerRef = useRef(null);
   const prevSpectatorDataRef = useRef(null);
@@ -102,6 +117,8 @@ export default function CombatDiceWindow({
     setSelectedAction(initialAction);
     setAttackRoll(null);
     setDamageRoll(null);
+    setSkillCheckRoll(null);
+    setSavingThrowRoll(null);
     setInitiativeRoll(null);
     setPhase("ready");
     setIsRolling(false);
@@ -312,6 +329,53 @@ export default function CombatDiceWindow({
         targetId: target.id,
       });
     }
+  };
+
+  // === Skill Check flow ===
+  const handleSkillCheckRoll = () => {
+    setIsRolling(true);
+    setCurrentDice("d20");
+    setPhase("rolling_check");
+    onRoll && onRoll({ type: "rolling_check" });
+  };
+
+  const onSkillCheckRollComplete = (roll) => {
+    const skill = resolved?.skill || "Athletics";
+    const mod = getSkillModifier(actor, skill);
+    const total = roll + mod;
+    const result = { total, d20: roll, mod, skill };
+    setSkillCheckRoll(result);
+    setIsRolling(false);
+    setPhase("check_result");
+    onRoll && onRoll({ type: "check_result", roll: result });
+  };
+
+  // === Saving Throw flow (target rolls) ===
+  const handleSavingThrowRoll = () => {
+    setIsRolling(true);
+    setCurrentDice("d20");
+    setPhase("rolling_save");
+    onRoll && onRoll({ type: "rolling_save" });
+  };
+
+  const onSavingThrowRollComplete = (roll) => {
+    const saveAbility = resolved?.save || "dex";
+    const mod = getSaveModifier(target, saveAbility);
+    const total = roll + mod;
+    const dc = getSpellSaveDC(actor);
+    const success = total >= dc;
+    const result = {
+      total,
+      d20: roll,
+      mod,
+      dc,
+      success,
+      ability: saveAbility,
+    };
+    setSavingThrowRoll(result);
+    setIsRolling(false);
+    setPhase("save_result");
+    onRoll && onRoll({ type: "save_result", roll: result });
   };
 
   const onInitiativeRollComplete = (roll) => {
@@ -529,8 +593,21 @@ export default function CombatDiceWindow({
         <div className="flex-1 max-w-md flex flex-col items-center justify-center text-center z-20 pointer-events-auto">
           <h2 className="text-3xl font-black text-white mb-8 tracking-wider drop-shadow-[0_0_10px_rgba(0,0,0,0.8)] flex items-center gap-3">
             <span className="text-[#37F2D1]">{actor?.name || "You"}</span>
-            <span className="text-slate-500 text-xl">VS</span>
-            <span className="text-red-500">{target?.name || "Target"}</span>
+            {(flowType === "attack" || flowType === "saving_throw" || target) && (
+              <>
+                <span className="text-slate-500 text-xl">
+                  {flowType === "skill_check" && resolved?.contested
+                    ? "VS"
+                    : flowType === "saving_throw"
+                    ? "→"
+                    : "VS"}
+                </span>
+                <span className="text-red-500">{target?.name || (flowType === "skill_check" ? "" : "Target")}</span>
+              </>
+            )}
+            {flowType === "skill_check" && !target && resolved?.skill && (
+              <span className="text-[#37F2D1] text-xl">— {resolved.skill}</span>
+            )}
           </h2>
 
           {/* Attack result line */}
@@ -591,7 +668,11 @@ export default function CombatDiceWindow({
               >
                 <Swords className="w-32 h-32 opacity-20 mb-4" />
                 <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">
-                  Ready to Attack
+                  {flowType === "skill_check"
+                    ? `Ready — ${resolved?.skill || "Skill"} Check`
+                    : flowType === "saving_throw"
+                    ? `${target?.name || "Target"} — ${(resolved?.save || "DEX").toUpperCase()} Save`
+                    : "Ready to Attack"}
                 </p>
               </motion.div>
             ) : (
@@ -617,7 +698,13 @@ export default function CombatDiceWindow({
                         ? () => setIsRolling(false)
                         : phase === "rolling_attack"
                         ? onAttackRollComplete
-                        : onDamageRollComplete
+                        : phase === "rolling_damage"
+                        ? onDamageRollComplete
+                        : phase === "rolling_check"
+                        ? onSkillCheckRollComplete
+                        : phase === "rolling_save"
+                        ? onSavingThrowRollComplete
+                        : () => setIsRolling(false)
                     }
                     primaryColor={
                       currentUserProfile?.profile_color_1 || "#FF5722"
@@ -629,7 +716,9 @@ export default function CombatDiceWindow({
                 </div>
 
                 {(phase === "rolling_attack" ||
-                  phase === "rolling_damage") && (
+                  phase === "rolling_damage" ||
+                  phase === "rolling_check" ||
+                  phase === "rolling_save") && (
                   <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 pointer-events-none opacity-50 animate-pulse">
                     <span className="text-white text-sm font-bold bg-black/30 px-3 py-1 rounded-full">
                       Click to Roll
@@ -684,6 +773,57 @@ export default function CombatDiceWindow({
                       )}
                     </div>
                   )}
+
+                  {phase === "check_result" && skillCheckRoll && (
+                    <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
+                      <motion.div
+                        initial={{ scale: 0, y: 50 }}
+                        animate={{ scale: 1, y: 0 }}
+                        transition={{ type: "spring", bounce: 0.5 }}
+                        className="bg-gradient-to-br from-[#37F2D1] to-[#0ea5e9] text-[#050816] w-40 h-40 rounded-full flex flex-col items-center justify-center shadow-[0_0_50px_rgba(55,242,209,0.7)] border-4 border-white z-50"
+                      >
+                        <span className="text-xs font-bold uppercase tracking-widest opacity-80">
+                          {skillCheckRoll.skill}
+                        </span>
+                        <span className="text-5xl font-black drop-shadow-md">
+                          {skillCheckRoll.total}
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">
+                          {skillCheckRoll.d20}
+                          {skillCheckRoll.mod >= 0 ? " + " : " − "}
+                          {Math.abs(skillCheckRoll.mod)}
+                        </span>
+                      </motion.div>
+                    </div>
+                  )}
+
+                  {phase === "save_result" && savingThrowRoll && (
+                    <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
+                      <motion.div
+                        initial={{ scale: 0, y: 50 }}
+                        animate={{ scale: 1, y: 0 }}
+                        transition={{ type: "spring", bounce: 0.5 }}
+                        className={`${
+                          savingThrowRoll.success
+                            ? "bg-gradient-to-br from-[#37F2D1] to-[#0ea5e9] text-[#050816]"
+                            : "bg-gradient-to-br from-red-600 to-red-800 text-white"
+                        } w-44 h-44 rounded-full flex flex-col items-center justify-center shadow-[0_0_50px_rgba(0,0,0,0.8)] border-4 border-white z-50`}
+                      >
+                        <span className="text-xs font-bold uppercase tracking-widest opacity-80">
+                          {savingThrowRoll.ability.toUpperCase()} SAVE
+                        </span>
+                        <span className="text-5xl font-black drop-shadow-md">
+                          {savingThrowRoll.total}
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
+                          vs DC {savingThrowRoll.dc}
+                        </span>
+                        <span className="text-sm font-black uppercase tracking-widest mt-1">
+                          {savingThrowRoll.success ? "SAVED" : "FAILED"}
+                        </span>
+                      </motion.div>
+                    </div>
+                  )}
                 </AnimatePresence>
               </>
             )}
@@ -707,17 +847,45 @@ export default function CombatDiceWindow({
                       : "ATTACK MISSED")}
                   {phase === "rolling_damage" && "ROLLING DAMAGE..."}
                   {phase === "damage_result" && "DAMAGE APPLIED"}
+                  {phase === "rolling_check" && "ROLLING CHECK..."}
+                  {phase === "check_result" && "CHECK COMPLETE"}
+                  {phase === "rolling_save" && "ROLLING SAVE..."}
+                  {phase === "save_result" && "SAVE RESOLVED"}
                 </p>
               </div>
             ) : (
               <>
-                {phase === "ready" && (
+                {phase === "ready" && flowType === "attack" && (
                   <button
                     onClick={handleAttackRoll}
                     disabled={isRolling || !target}
                     className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] disabled:opacity-50 disabled:cursor-not-allowed text-white text-2xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(255,87,34,0.4)] border-b-4 border-[#c43e12] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
                   >
                     {isRolling ? "ROLLING..." : "ROLL ATTACK"}
+                  </button>
+                )}
+
+                {phase === "ready" && flowType === "skill_check" && (
+                  <button
+                    onClick={handleSkillCheckRoll}
+                    disabled={isRolling}
+                    className="w-full bg-[#37F2D1] hover:bg-[#2dd9bd] disabled:opacity-50 disabled:cursor-not-allowed text-[#050816] text-xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(55,242,209,0.4)] border-b-4 border-[#0f766e] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
+                  >
+                    {isRolling
+                      ? "ROLLING..."
+                      : `ROLL ${(resolved?.skill || "SKILL").toUpperCase()} CHECK`}
+                  </button>
+                )}
+
+                {phase === "ready" && flowType === "saving_throw" && (
+                  <button
+                    onClick={handleSavingThrowRoll}
+                    disabled={isRolling || !target}
+                    className="w-full bg-[#8B5CF6] hover:bg-[#7c4dff] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(139,92,246,0.4)] border-b-4 border-[#5b21b6] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
+                  >
+                    {isRolling
+                      ? "ROLLING..."
+                      : `ROLL ${(resolved?.save || "SAVE").toUpperCase()} SAVE`}
                   </button>
                 )}
 
@@ -731,28 +899,18 @@ export default function CombatDiceWindow({
                 )}
 
                 {(phase === "damage_result" ||
-                  (phase === "attack_result" && !isHit)) && (
+                  (phase === "attack_result" && !isHit) ||
+                  phase === "check_result" ||
+                  phase === "save_result") && (
                   <div className="flex flex-col gap-3 pt-8">
                     <button
                       onClick={() => {
                         if (onActionComplete) onActionComplete();
-                        if (onEndTurn) onEndTurn();
                         else onClose();
                       }}
                       className="w-full bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] text-xl font-bold py-4 rounded-2xl shadow-[0_10px_30px_rgba(55,242,209,0.3)]"
                     >
                       DONE
-                    </button>
-
-                    {/* Safety End Turn button in case DONE wasn't reachable for some reason */}
-                    <button
-                      onClick={() => {
-                        if (onEndTurn) onEndTurn();
-                        else onClose();
-                      }}
-                      className="w-full bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold py-2 rounded-xl"
-                    >
-                      End Turn
                     </button>
                   </div>
                 )}
@@ -761,7 +919,8 @@ export default function CombatDiceWindow({
           </div>
         </div>
 
-        {/* RIGHT: Target side */}
+        {/* RIGHT: Target side — hide entirely for target-less flows (Hide, etc.) */}
+        {!(flowType === "skill_check" && !target) && (
         <div className="flex items-center gap-4 pointer-events-auto">
           <div className="relative group flex flex-col items-center gap-2">
             {!isSpectator && (
@@ -854,6 +1013,7 @@ export default function CombatDiceWindow({
             </div>
           )}
         </div>
+        )}
       </div>
     </motion.div>
   );
