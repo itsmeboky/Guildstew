@@ -120,13 +120,10 @@ export default function GMPanel() {
     target: null
   });
 
-  // Derived: are we currently in attack-targeting mode? Controls the attack button icon.
-  const attackTargetingMode =
-    combatState.step === 'selecting_target' &&
-    combatState.action?.name === 'Attack' &&
-    (combatState.action?.mode === 'melee' || combatState.action?.mode === 'ranged')
-      ? combatState.action.mode
-      : null;
+  // Stateful 4-state attack mode toggle: null → melee → ranged → unarmed → null
+  // Owned by GMPanel because both CombatActionBar (display + cycling) and
+  // the targeting / dice-window flow (which weapon to fire) need it.
+  const [attackMode, setAttackMode] = useState(null);
 
   // Sync combat state to DB for spectators
   const updateCombatEncounter = React.useCallback((newState) => {
@@ -278,6 +275,98 @@ export default function GMPanel() {
     });
   };
 
+  // Build a synthetic "Unarmed Strike" weapon. Rules:
+  //   Non-Monk: flat 1 + STR mod damage (no dice roll).
+  //   Monk:     Martial Arts die + max(STR, DEX) mod, die scales by level
+  //             (1-4 → 1d4, 5-10 → 1d6, 11-16 → 1d8, 17+ → 1d10).
+  const buildUnarmedWeapon = React.useCallback((actor) => {
+    const cls = (actor?.class || actor?.stats?.class || '').toLowerCase();
+    const isMonk = cls.includes('monk');
+    if (!isMonk) {
+      return {
+        name: 'Unarmed Strike',
+        damage: '1',
+        flatDamage: 1, // sentinel: dice window skips the damage roll
+        category: 'Melee',
+        properties: ['Unarmed'],
+      };
+    }
+    const level = actor?.level || 1;
+    let die = '1d4';
+    if (level >= 17) die = '1d10';
+    else if (level >= 11) die = '1d8';
+    else if (level >= 5) die = '1d6';
+    return {
+      name: 'Unarmed Strike (Martial Arts)',
+      damage: die,
+      category: 'Melee',
+      properties: ['Unarmed', 'Monk'],
+      useBestOfStrDex: true, // sentinel: dice window picks max(strMod, dexMod)
+    };
+  }, []);
+
+  // Construct the attack action object for a given mode. Used both when the
+  // attack button changes mode (to set combatState.action for targeting) and
+  // when a target is selected.
+  const buildAttackAction = React.useCallback((mode) => {
+    if (!mode) return null;
+    const equipment = equippedItems || {};
+    let weapon = null;
+    if (mode === 'melee') weapon = equipment.weapon1 || null;
+    else if (mode === 'ranged') weapon = equipment.ranged || null;
+    else if (mode === 'unarmed') weapon = buildUnarmedWeapon(selectedCharacter);
+
+    const action = {
+      type: 'basic',
+      name: 'Attack',
+      mode,
+      weapon,
+      isOffHand: false,
+    };
+    const resolved = resolveAction(action, selectedCharacter);
+    return { ...action, resolved };
+  }, [equippedItems, selectedCharacter, buildUnarmedWeapon]);
+
+  // Handler called when CombatActionBar cycles the attack toggle.
+  const handleAttackModeChange = React.useCallback((nextMode) => {
+    // Guardrails: only check turn order / action economy when transitioning
+    // from null → a mode (i.e. entering attack targeting). Cycling between
+    // modes or cancelling is always allowed.
+    if (attackMode === null && nextMode !== null) {
+      if (campaign?.combat_active && campaign?.combat_data && !isActorsTurn) {
+        toast.error("It's not this character's turn!");
+        return;
+      }
+      if (!actionsState.action) {
+        toast.error("No action available this turn!");
+        return;
+      }
+    }
+
+    setAttackMode(nextMode);
+
+    if (nextMode === null) {
+      // Fourth click: cancel. Clear any attack targeting state.
+      setCombatState(prev => {
+        if (prev.action?.name === 'Attack' && prev.step === 'selecting_target') {
+          return { isOpen: false, step: 'idle', action: null, target: null };
+        }
+        return prev;
+      });
+    } else {
+      // Enter / update attack targeting mode with the new weapon.
+      const action = buildAttackAction(nextMode);
+      setCombatState({ isOpen: false, step: 'selecting_target', action, target: null });
+    }
+  }, [
+    attackMode,
+    campaign?.combat_active,
+    campaign?.combat_data,
+    isActorsTurn,
+    actionsState.action,
+    buildAttackAction,
+  ]);
+
   const rollInitiative = () => {
     // 1. Get Players
     const playerCombatants = players.map(p => {
@@ -396,9 +485,10 @@ export default function GMPanel() {
     }
   }, [campaign, campaignId]);
 
-  // Reset action economy when turn changes (separate effect — must be at top level)
+  // Reset action economy + attack mode when turn changes (separate effect — must be at top level)
   React.useEffect(() => {
     setActionsState({ action: true, bonus: true, inspiration: false });
+    setAttackMode(null);
   }, [campaign?.combat_data?.currentTurnIndex, campaign?.combat_data?.round, campaign?.combat_data?.order?.[0]?.id]);
 
   const { data: monsters = [] } = useQuery({
@@ -577,7 +667,10 @@ export default function GMPanel() {
                 (campaign?.combat_data?.stage === 'initiative') ||
                 (!!campaign?.combat_data?.active_encounter && !combatState.isOpen)
               }
-              onClose={() => setCombatState({ step: 'idle', isOpen: false, action: null, target: null })}
+              onClose={() => {
+                setAttackMode(null);
+                setCombatState({ step: 'idle', isOpen: false, action: null, target: null });
+              }}
               actor={
                 (!combatState.isOpen && campaign?.combat_data?.active_encounter)
                   ? { 
@@ -696,6 +789,8 @@ export default function GMPanel() {
                 if (resolvedCost) {
                   setActionsState(prev => consumeActionCost(prev, resolvedCost));
                 }
+                // Attack resolved → leave attack-mode selection
+                setAttackMode(null);
                 // Clear the synced encounter so spectators exit cleanly.
                 // Optimistically update the local cache to avoid a flash where the
                 // dice window briefly switches to spectator mode before the
@@ -743,6 +838,7 @@ export default function GMPanel() {
                     queryClient.invalidateQueries(['campaign', campaignId]);
                   }
                 }
+                setAttackMode(null);
                 setCombatState({ step: 'idle', isOpen: false, action: null, target: null });
               }}
             />
@@ -836,11 +932,12 @@ export default function GMPanel() {
               character={selectedCharacter ? { ...selectedCharacter, equipment: equippedItems } : null}
               actionsState={actionsState}
               setActionsState={setActionsState}
-              attackTargetingMode={attackTargetingMode}
-              onCancelAction={() => {
-                setCombatState({ isOpen: false, step: 'idle', action: null, target: null });
-              }}
+              attackMode={attackMode}
+              onAttackModeChange={handleAttackModeChange}
               onActionClick={(action) => {
+                // Clicking any other action cancels attack-mode targeting.
+                if (attackMode !== null) setAttackMode(null);
+
                 // Turn order enforcement
                 if (campaign?.combat_active && campaign?.combat_data) {
                   if (!isActorsTurn) {

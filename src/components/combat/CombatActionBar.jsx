@@ -12,23 +12,25 @@ const basicActionIcons = [
   { name: "Ready Action", url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/4f1e26b5f_ReadyAction.png" }
 ];
 
-// Fallback weapon used when the character has nothing equipped.
-// Treated as a normal melee weapon for the attack flow.
-const UNARMED_STRIKE = {
-  name: "Unarmed Strike",
-  damage: "1d4",
-  category: "Melee",
-  properties: [],
+const ATTACK_ICONS = {
+  melee: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/86f86dd03_MeleeAttack.png",
+  ranged: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/9bfa45d4d_RangedAttack.png",
+  unarmed: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/abilities/Unarmed Strike.png",
 };
 
 export default function CombatActionBar({
   character,
   onActionClick,
-  onCancelAction,
   className,
   actionsState,
   setActionsState,
-  attackTargetingMode = null, // null | 'melee' | 'ranged' — controlled by parent
+  // The Attack button is a stateful 4-state toggle controlled by the parent:
+  //   null → 'melee' → 'ranged' → 'unarmed' → null
+  // Clicking the button does NOT fire an attack — it just cycles attackMode.
+  // The actual attack happens when the parent's target-selection flow picks
+  // a target while attackMode is set.
+  attackMode = null,
+  onAttackModeChange,
 }) {
   // Internal state if not provided controlled
   const [localActions, setLocalActions] = useState({ action: true, bonus: true, inspiration: false });
@@ -43,23 +45,15 @@ export default function CombatActionBar({
   const meleeWeapon = equipment.weapon1;
   const rangedWeapon = equipment.ranged;
 
-  const isMeleeAvailable = !!meleeWeapon;
-  const isRangedAvailable = !!rangedWeapon;
   const isMonsterOrNPC = character?.type === 'monster' || character?.type === 'npc';
+  const attackIsTargeting = attackMode !== null && attackMode !== undefined;
 
-  // What mode the icon should display: reflects the currently-active targeting mode,
-  // or 'melee' as the default when nothing is being targeted.
-  const displayedMode = attackTargetingMode || 'melee';
-  const attackIsTargeting = attackTargetingMode === 'melee' || attackTargetingMode === 'ranged';
-
-  // Click handler — three-state toggle:
-  //   null   → melee   (first click: enter melee targeting)
-  //   melee  → ranged  (second click: switch to ranged targeting)
-  //   ranged → cancel  (third click: clear targeting entirely)
-  // Falls back to an unarmed strike when no weapon is equipped so the
-  // button is always actionable in combat.
+  // 4-state cycle: null → 'melee' → 'ranged' → 'unarmed' → null
+  // Clicking this button DOES NOT trigger an attack — it only cycles the
+  // selected attack mode. The parent uses attackMode to enter targeting mode
+  // and fires the attack when the GM clicks a combatant portrait.
   const handleAttackClick = () => {
-    // Monster / NPC primary action
+    // Monster / NPC primary action is still a single-click fire-and-forget.
     if (isMonsterOrNPC) {
       const actionsList = character.actions || character.stats?.actions || [];
       const primaryAction = actionsList[0];
@@ -69,40 +63,13 @@ export default function CombatActionBar({
       return;
     }
 
-    // Off-hand attack fallback: action already used + bonus available + second weapon exists.
-    // Only kicks in when we're not already in an attack targeting cycle.
-    if (!attackIsTargeting && !actions.action && actions.bonus && equipment.weapon2) {
-      onActionClick && onActionClick({
-        type: 'basic',
-        name: 'Attack',
-        mode: 'offhand',
-        weapon: equipment.weapon2,
-        isOffHand: true,
-      });
-      return;
-    }
+    let next;
+    if (attackMode === null || attackMode === undefined) next = 'melee';
+    else if (attackMode === 'melee') next = 'ranged';
+    else if (attackMode === 'ranged') next = 'unarmed';
+    else next = null; // 'unarmed' → cancel
 
-    // Third click on the attack button → cancel targeting entirely
-    if (attackTargetingMode === 'ranged') {
-      onCancelAction && onCancelAction();
-      return;
-    }
-
-    // First click (no targeting): melee
-    // Second click (targeting melee): ranged
-    const nextMode = attackTargetingMode === 'melee' ? 'ranged' : 'melee';
-    const weapon =
-      nextMode === 'melee'
-        ? (meleeWeapon || UNARMED_STRIKE)
-        : (rangedWeapon || UNARMED_STRIKE);
-
-    onActionClick && onActionClick({
-      type: 'basic',
-      name: 'Attack',
-      mode: nextMode,
-      weapon,
-      isOffHand: false,
-    });
+    onAttackModeChange && onAttackModeChange(next);
   };
   const [showSpellDetails, setShowSpellDetails] = useState(null);
   const [hoveredSpell, setHoveredSpell] = useState(null);
@@ -221,13 +188,26 @@ export default function CombatActionBar({
             />
           ))}
           <BasicActionSlot
-            src={displayedMode === 'ranged' ? "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/9bfa45d4d_RangedAttack.png" : "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/86f86dd03_MeleeAttack.png"}
+            src={
+              // Icon reflects the currently-selected attack mode. When nothing
+              // is selected we show the melee icon as the idle state (since
+              // the first click will select melee).
+              attackMode === 'ranged'
+                ? ATTACK_ICONS.ranged
+                : attackMode === 'unarmed'
+                ? ATTACK_ICONS.unarmed
+                : ATTACK_ICONS.melee
+            }
             tooltip={
               isMonsterOrNPC
                 ? `Attack (${(character.actions?.[0]?.name) || 'Default'})`
-                : (displayedMode === 'ranged'
-                    ? `Ranged Attack (${rangedWeapon?.name || 'Unarmed Strike'})`
-                    : `Melee Attack (${meleeWeapon?.name || 'Unarmed Strike'})`)
+                : attackMode === 'ranged'
+                ? `Ranged Attack (${rangedWeapon?.name || 'No Ranged Weapon'})`
+                : attackMode === 'unarmed'
+                ? 'Unarmed Strike'
+                : attackMode === 'melee'
+                ? `Melee Attack (${meleeWeapon?.name || 'No Melee Weapon'})`
+                : `Attack — click to select (${meleeWeapon?.name || 'no melee'})`
             }
             toggleable={false}
             isActive={attackIsTargeting}
