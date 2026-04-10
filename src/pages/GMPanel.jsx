@@ -30,6 +30,8 @@ import { canEquipToSlot } from "@/components/gm/equipmentRules";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
+import { resolveAction, consumeActionCost } from "@/components/combat/actionResolver";
+import { toast } from "sonner";
 import { useTurnContext } from "@/components/combat/useTurnContext";
 
 const basicActionIcons = [
@@ -75,6 +77,7 @@ export default function GMPanel() {
   const [equippedItems, setEquippedItems] = useState({});
   const [initiativeOrder, setInitiativeOrder] = useState([]);
   const [combatActive, setCombatActive] = useState(false);
+  const [actionsState, setActionsState] = useState({ action: true, bonus: true, inspiration: false });
   const [activeConditions, setActiveConditions] = useState({});
 
   // 1. Auto-select first monster if queue has items and no character selected
@@ -372,6 +375,12 @@ export default function GMPanel() {
       }
     }
     
+
+  // Reset action economy when turn changes
+  React.useEffect(() => {
+    setActionsState({ action: true, bonus: true, inspiration: false });
+  }, [campaign?.combat_data?.currentTurnIndex, campaign?.combat_data?.round]);
+
     // Auto-initialize loot data for existing campaigns
     if (campaign && !campaign.loot_data) {
       base44.entities.Campaign.update(campaignId, {
@@ -767,7 +776,9 @@ export default function GMPanel() {
             </div>
 
             <CombatActionBar 
-              character={selectedCharacter ? { ...selectedCharacter, equipment: equippedItems } : null} 
+              character={selectedCharacter ? { ...selectedCharacter, equipment: equippedItems } : null}
+              actionsState={actionsState}
+              setActionsState={setActionsState}
               onActionClick={(action) => {
                 // Turn order enforcement
                 if (campaign?.combat_active && campaign?.combat_data) {
@@ -777,12 +788,41 @@ export default function GMPanel() {
                   }
                 }
 
-                const requiresTarget = ['Attack', 'Help', 'Use Object'].includes(action.name) || action.type === 'spell';
-                if (requiresTarget) {
-                  setCombatState({ isOpen: false, step: 'selecting_target', action, target: null });
-                } else {
-                  setCombatState({ isOpen: true, step: 'rolling', action, target: null });
+                const resolved = resolveAction(action, selectedCharacter);
+                const enrichedAction = { ...action, resolved };
+
+                // Check if they have the action economy to do this
+                if (resolved.cost === "action" && !actionsState.action) {
+                  toast.error("No action available this turn!");
+                  return;
                 }
+                if (resolved.cost === "bonus" && !actionsState.bonus) {
+                  toast.error("No bonus action available this turn!");
+                  return;
+                }
+
+                // No-roll actions — consume the cost and log it
+                if (resolved.rollType === "no_roll") {
+                  setActionsState(prev => consumeActionCost(prev, resolved.cost));
+                  toast.success(`${selectedCharacter?.name || 'Character'} uses ${action.name}`);
+                  return;
+                }
+
+                // Modifier toggles — no cost
+                if (resolved.rollType === "modifier") {
+                  return;
+                }
+
+                // Actions that need targets or dice
+                if (resolved.requiresTarget) {
+                  setCombatState({ isOpen: false, step: 'selecting_target', action: enrichedAction, target: null });
+                } else {
+                  // Skill checks without a target (like Hide)
+                  setCombatState({ isOpen: true, step: 'rolling', action: enrichedAction, target: null });
+                }
+
+                // Consume the action cost
+                setActionsState(prev => consumeActionCost(prev, resolved.cost));
               }}
             />
 
