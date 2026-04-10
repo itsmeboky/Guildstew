@@ -53,24 +53,17 @@ export default function CombatActionBar({
   // selected attack mode. The parent uses attackMode to enter targeting mode
   // and fires the attack when the GM clicks a combatant portrait.
   const handleAttackClick = () => {
-    console.log('[ATTACK-BTN] click', {
-      isMonsterOrNPC,
-      attackMode,
-      hasOnAttackModeChange: typeof onAttackModeChange === 'function',
-      hasOnActionClick: typeof onActionClick === 'function',
-      characterType: character?.type,
-      characterName: character?.name,
-    });
-
-    // Monster / NPC primary action is still a single-click fire-and-forget.
+    // Monster / NPC with a declared primary action → single-click fire.
+    // If the monster has no declared actions we fall through to the normal
+    // 4-state cycle so the button always does something.
     if (isMonsterOrNPC) {
-      const actionsList = character.actions || character.stats?.actions || [];
+      const actionsList = character?.actions || character?.stats?.actions || [];
       const primaryAction = actionsList[0];
-      console.log('[ATTACK-BTN] monster branch', { actionsCount: actionsList.length, primaryAction });
       if (primaryAction) {
         onActionClick && onActionClick(primaryAction);
+        return;
       }
-      return;
+      // else: fall through to the 4-state cycle below
     }
 
     let next;
@@ -79,7 +72,6 @@ export default function CombatActionBar({
     else if (attackMode === 'ranged') next = 'unarmed';
     else next = null; // 'unarmed' → cancel
 
-    console.log('[ATTACK-BTN] cycling to', next);
     onAttackModeChange && onAttackModeChange(next);
   };
   const [showSpellDetails, setShowSpellDetails] = useState(null);
