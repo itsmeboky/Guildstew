@@ -812,6 +812,9 @@ export default function GMPanel() {
               actionsState={actionsState}
               setActionsState={setActionsState}
               attackTargetingMode={attackTargetingMode}
+              onCancelAction={() => {
+                setCombatState({ isOpen: false, step: 'idle', action: null, target: null });
+              }}
               onActionClick={(action) => {
                 // Turn order enforcement
                 if (campaign?.combat_active && campaign?.combat_data) {

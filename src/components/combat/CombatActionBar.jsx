@@ -12,9 +12,19 @@ const basicActionIcons = [
   { name: "Ready Action", url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/4f1e26b5f_ReadyAction.png" }
 ];
 
+// Fallback weapon used when the character has nothing equipped.
+// Treated as a normal melee weapon for the attack flow.
+const UNARMED_STRIKE = {
+  name: "Unarmed Strike",
+  damage: "1d4",
+  category: "Melee",
+  properties: [],
+};
+
 export default function CombatActionBar({
   character,
   onActionClick,
+  onCancelAction,
   className,
   actionsState,
   setActionsState,
@@ -42,10 +52,12 @@ export default function CombatActionBar({
   const displayedMode = attackTargetingMode || 'melee';
   const attackIsTargeting = attackTargetingMode === 'melee' || attackTargetingMode === 'ranged';
 
-  // Click handler: determine the next mode, emit the action, let the parent manage state.
-  // - No active targeting → start with melee (or ranged if only ranged available)
-  // - Targeting melee → switch to ranged (or loop back to melee if ranged unavailable)
-  // - Targeting ranged → switch to melee
+  // Click handler — three-state toggle:
+  //   null   → melee   (first click: enter melee targeting)
+  //   melee  → ranged  (second click: switch to ranged targeting)
+  //   ranged → cancel  (third click: clear targeting entirely)
+  // Falls back to an unarmed strike when no weapon is equipped so the
+  // button is always actionable in combat.
   const handleAttackClick = () => {
     // Monster / NPC primary action
     if (isMonsterOrNPC) {
@@ -57,8 +69,9 @@ export default function CombatActionBar({
       return;
     }
 
-    // Off-hand attack fallback: action already used + bonus available + second weapon exists
-    if (!actions.action && actions.bonus && equipment.weapon2) {
+    // Off-hand attack fallback: action already used + bonus available + second weapon exists.
+    // Only kicks in when we're not already in an attack targeting cycle.
+    if (!attackIsTargeting && !actions.action && actions.bonus && equipment.weapon2) {
       onActionClick && onActionClick({
         type: 'basic',
         name: 'Attack',
@@ -69,18 +82,19 @@ export default function CombatActionBar({
       return;
     }
 
-    // Normal: pick the next mode based on current targeting
-    let nextMode;
-    if (!attackIsTargeting) {
-      nextMode = isMeleeAvailable ? 'melee' : (isRangedAvailable ? 'ranged' : 'melee');
-    } else if (attackTargetingMode === 'melee') {
-      nextMode = isRangedAvailable ? 'ranged' : 'melee';
-    } else {
-      nextMode = isMeleeAvailable ? 'melee' : 'ranged';
+    // Third click on the attack button → cancel targeting entirely
+    if (attackTargetingMode === 'ranged') {
+      onCancelAction && onCancelAction();
+      return;
     }
 
-    const weapon = nextMode === 'melee' ? meleeWeapon : rangedWeapon;
-    if (!weapon) return;
+    // First click (no targeting): melee
+    // Second click (targeting melee): ranged
+    const nextMode = attackTargetingMode === 'melee' ? 'ranged' : 'melee';
+    const weapon =
+      nextMode === 'melee'
+        ? (meleeWeapon || UNARMED_STRIKE)
+        : (rangedWeapon || UNARMED_STRIKE);
 
     onActionClick && onActionClick({
       type: 'basic',
@@ -211,11 +225,13 @@ export default function CombatActionBar({
             tooltip={
               isMonsterOrNPC
                 ? `Attack (${(character.actions?.[0]?.name) || 'Default'})`
-                : (displayedMode === 'ranged' ? `Ranged Attack (${rangedWeapon?.name || 'No Weapon'})` : `Melee Attack (${meleeWeapon?.name || 'No Weapon'})`)
+                : (displayedMode === 'ranged'
+                    ? `Ranged Attack (${rangedWeapon?.name || 'Unarmed Strike'})`
+                    : `Melee Attack (${meleeWeapon?.name || 'Unarmed Strike'})`)
             }
             toggleable={false}
             isActive={attackIsTargeting}
-            disabled={!isMonsterOrNPC && !isMeleeAvailable && !isRangedAvailable && !equipment.weapon2}
+            disabled={false}
             onClick={handleAttackClick}
           />
         </div>
