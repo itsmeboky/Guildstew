@@ -120,13 +120,10 @@ export default function GMPanel() {
     target: null
   });
 
-  // Derived: are we currently in attack-targeting mode? Controls the attack button icon.
-  const attackTargetingMode =
-    combatState.step === 'selecting_target' &&
-    combatState.action?.name === 'Attack' &&
-    (combatState.action?.mode === 'melee' || combatState.action?.mode === 'ranged')
-      ? combatState.action.mode
-      : null;
+  // Stateful 4-state attack mode toggle: null → melee → ranged → unarmed → null
+  // Owned by GMPanel because both CombatActionBar (display + cycling) and
+  // the targeting / dice-window flow (which weapon to fire) need it.
+  const [attackMode, setAttackMode] = useState(null);
 
   // Sync combat state to DB for spectators
   const updateCombatEncounter = React.useCallback((newState) => {
@@ -278,6 +275,98 @@ export default function GMPanel() {
     });
   };
 
+  // Build a synthetic "Unarmed Strike" weapon. Rules:
+  //   Non-Monk: flat 1 + STR mod damage (no dice roll).
+  //   Monk:     Martial Arts die + max(STR, DEX) mod, die scales by level
+  //             (1-4 → 1d4, 5-10 → 1d6, 11-16 → 1d8, 17+ → 1d10).
+  const buildUnarmedWeapon = React.useCallback((actor) => {
+    const cls = (actor?.class || actor?.stats?.class || '').toLowerCase();
+    const isMonk = cls.includes('monk');
+    if (!isMonk) {
+      return {
+        name: 'Unarmed Strike',
+        damage: '1',
+        flatDamage: 1, // sentinel: dice window skips the damage roll
+        category: 'Melee',
+        properties: ['Unarmed'],
+      };
+    }
+    const level = actor?.level || 1;
+    let die = '1d4';
+    if (level >= 17) die = '1d10';
+    else if (level >= 11) die = '1d8';
+    else if (level >= 5) die = '1d6';
+    return {
+      name: 'Unarmed Strike (Martial Arts)',
+      damage: die,
+      category: 'Melee',
+      properties: ['Unarmed', 'Monk'],
+      useBestOfStrDex: true, // sentinel: dice window picks max(strMod, dexMod)
+    };
+  }, []);
+
+  // Construct the attack action object for a given mode. Used both when the
+  // attack button changes mode (to set combatState.action for targeting) and
+  // when a target is selected.
+  const buildAttackAction = React.useCallback((mode) => {
+    if (!mode) return null;
+    const equipment = equippedItems || {};
+    let weapon = null;
+    if (mode === 'melee') weapon = equipment.weapon1 || null;
+    else if (mode === 'ranged') weapon = equipment.ranged || null;
+    else if (mode === 'unarmed') weapon = buildUnarmedWeapon(selectedCharacter);
+
+    const action = {
+      type: 'basic',
+      name: 'Attack',
+      mode,
+      weapon,
+      isOffHand: false,
+    };
+    const resolved = resolveAction(action, selectedCharacter);
+    return { ...action, resolved };
+  }, [equippedItems, selectedCharacter, buildUnarmedWeapon]);
+
+  // Handler called when CombatActionBar cycles the attack toggle.
+  const handleAttackModeChange = React.useCallback((nextMode) => {
+    // Guardrails: only check turn order / action economy when transitioning
+    // from null → a mode (i.e. entering attack targeting). Cycling between
+    // modes or cancelling is always allowed.
+    if (attackMode === null && nextMode !== null) {
+      if (campaign?.combat_active && campaign?.combat_data && !isActorsTurn) {
+        toast.error("It's not this character's turn!");
+        return;
+      }
+      if (!actionsState.action) {
+        toast.error("No action available this turn!");
+        return;
+      }
+    }
+
+    setAttackMode(nextMode);
+
+    if (nextMode === null) {
+      // Fourth click: cancel. Clear any attack targeting state.
+      setCombatState(prev => {
+        if (prev.action?.name === 'Attack' && prev.step === 'selecting_target') {
+          return { isOpen: false, step: 'idle', action: null, target: null };
+        }
+        return prev;
+      });
+    } else {
+      // Enter / update attack targeting mode with the new weapon.
+      const action = buildAttackAction(nextMode);
+      setCombatState({ isOpen: false, step: 'selecting_target', action, target: null });
+    }
+  }, [
+    attackMode,
+    campaign?.combat_active,
+    campaign?.combat_data,
+    isActorsTurn,
+    actionsState.action,
+    buildAttackAction,
+  ]);
+
   const rollInitiative = () => {
     // 1. Get Players
     const playerCombatants = players.map(p => {
@@ -396,9 +485,10 @@ export default function GMPanel() {
     }
   }, [campaign, campaignId]);
 
-  // Reset action economy when turn changes (separate effect — must be at top level)
+  // Reset action economy + attack mode when turn changes (separate effect — must be at top level)
   React.useEffect(() => {
     setActionsState({ action: true, bonus: true, inspiration: false });
+    setAttackMode(null);
   }, [campaign?.combat_data?.currentTurnIndex, campaign?.combat_data?.round, campaign?.combat_data?.order?.[0]?.id]);
 
   const { data: monsters = [] } = useQuery({
@@ -453,18 +543,43 @@ export default function GMPanel() {
   }, [allUserProfiles, currentUser?.id]);
 
   const players = React.useMemo(() => {
-    if (!campaign?.player_ids) return [];
-    const uniquePlayerIds = [...new Set(campaign.player_ids)];
     const playerMap = new Map();
-    
-    uniquePlayerIds.forEach(playerId => {
-      const profile = allUserProfiles.find(u => u.user_id === playerId);
-      if (profile && !playerMap.has(playerId)) {
-        const character = characters.find(c => c.created_by === profile.email && c.campaign_id === campaignId);
-        playerMap.set(playerId, { ...profile, character });
-      }
+    const claimedCharacterIds = new Set();
+
+    // 1. Real players: those in campaign.player_ids with a matching profile.
+    if (campaign?.player_ids) {
+      const uniquePlayerIds = [...new Set(campaign.player_ids)];
+      uniquePlayerIds.forEach(playerId => {
+        const profile = allUserProfiles.find(u => u.user_id === playerId);
+        if (profile && !playerMap.has(playerId)) {
+          const character = characters.find(c => c.created_by === profile.email && c.campaign_id === campaignId);
+          if (character) claimedCharacterIds.add(character.id);
+          playerMap.set(playerId, { ...profile, character });
+        }
+      });
+    }
+
+    // 2. Orphan characters: any character in this campaign not already linked
+    // to a profile-based player. This covers test/seeded data, characters
+    // whose owners left the campaign, and GM-controlled NPCs. Each becomes
+    // a synthetic "ghost" player entry so the GM can see and control them
+    // through the same UI flows.
+    characters.forEach(char => {
+      if (char.campaign_id !== campaignId) return;
+      if (claimedCharacterIds.has(char.id)) return;
+      const ghostKey = `ghost-${char.id}`;
+      playerMap.set(ghostKey, {
+        user_id: ghostKey,
+        email: char.created_by || 'ghost@local',
+        username: char.name || 'Unclaimed',
+        avatar_url: char.profile_avatar_url,
+        profile_color_1: '#FF5722',
+        profile_color_2: '#37F2D1',
+        character: char,
+        isGhost: true,
+      });
     });
-    
+
     return Array.from(playerMap.values());
   }, [campaign?.player_ids, allUserProfiles, characters, campaignId]);
 
@@ -552,7 +667,10 @@ export default function GMPanel() {
                 (campaign?.combat_data?.stage === 'initiative') ||
                 (!!campaign?.combat_data?.active_encounter && !combatState.isOpen)
               }
-              onClose={() => setCombatState({ step: 'idle', isOpen: false, action: null, target: null })}
+              onClose={() => {
+                setAttackMode(null);
+                setCombatState({ step: 'idle', isOpen: false, action: null, target: null });
+              }}
               actor={
                 (!combatState.isOpen && campaign?.combat_data?.active_encounter)
                   ? { 
@@ -671,6 +789,8 @@ export default function GMPanel() {
                 if (resolvedCost) {
                   setActionsState(prev => consumeActionCost(prev, resolvedCost));
                 }
+                // Attack resolved → leave attack-mode selection
+                setAttackMode(null);
                 // Clear the synced encounter so spectators exit cleanly.
                 // Optimistically update the local cache to avoid a flash where the
                 // dice window briefly switches to spectator mode before the
@@ -718,6 +838,7 @@ export default function GMPanel() {
                     queryClient.invalidateQueries(['campaign', campaignId]);
                   }
                 }
+                setAttackMode(null);
                 setCombatState({ step: 'idle', isOpen: false, action: null, target: null });
               }}
             />
@@ -811,8 +932,12 @@ export default function GMPanel() {
               character={selectedCharacter ? { ...selectedCharacter, equipment: equippedItems } : null}
               actionsState={actionsState}
               setActionsState={setActionsState}
-              attackTargetingMode={attackTargetingMode}
+              attackMode={attackMode}
+              onAttackModeChange={handleAttackModeChange}
               onActionClick={(action) => {
+                // Clicking any other action cancels attack-mode targeting.
+                if (attackMode !== null) setAttackMode(null);
+
                 // Turn order enforcement
                 if (campaign?.combat_active && campaign?.combat_data) {
                   if (!isActorsTurn) {
@@ -1086,12 +1211,23 @@ export default function GMPanel() {
         </div>
       </div>
 
-      {/* Possess Player Selector */}
-      {showPossessSelector && (
+      {/* Possess Character Selector (players + GM monster queue) */}
+      {showPossessSelector && (() => {
+        // Pull the GM's current monster queue from localStorage so the dialog
+        // shows monsters the GM is already running alongside the party.
+        let monsterQueue = [];
+        try {
+          const savedQueue = localStorage.getItem(`gm_monster_queue_${campaignId}`);
+          if (savedQueue) monsterQueue = JSON.parse(savedQueue) || [];
+        } catch (e) {
+          console.error("Failed to read monster queue for Possess dialog", e);
+        }
+
+        return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-6">
           <div className="bg-[#050816] rounded-3xl border-2 border-[#37F2D1]/30 shadow-[0_24px_80px_rgba(0,0,0,0.9)] max-w-2xl w-full max-h-[80vh] overflow-hidden">
             <div className="flex items-center justify-between p-6 border-b border-[#111827]">
-              <h2 className="text-2xl font-bold">Possess Player Character</h2>
+              <h2 className="text-2xl font-bold">Possess Character</h2>
               <button
                 onClick={() => setShowPossessSelector(false)}
                 className="w-10 h-10 rounded-full bg-[#1a1f2e] hover:bg-[#37F2D1]/20 transition-colors flex items-center justify-center"
@@ -1100,63 +1236,126 @@ export default function GMPanel() {
               </button>
             </div>
 
-            <div className="p-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
-              {players.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {players.map(player => {
-                    const char = player.character;
-                    const color1 = player.profile_color_1 || "#FF5722";
-                    const color2 = player.profile_color_2 || "#37F2D1";
-                    
-                    return (
-                      <button
-                        key={player.user_id}
-                        onClick={() => {
-                          if (char) {
-                            setSelectedCharacter({ ...char, type: 'player' });
-                            setIsPossessed(true);
-                          }
-                          setShowPossessSelector(false);
-                        }}
-                        disabled={!char}
-                        className="bg-[#1a1f2e] rounded-xl overflow-hidden hover:ring-2 hover:ring-[#37F2D1] transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <div 
-                          className="h-32 bg-cover bg-center relative"
-                          style={{ 
-                            backgroundImage: char?.profile_avatar_url ? `url(${char.profile_avatar_url})` : 'none',
-                            backgroundColor: '#0b1220'
+            <div className="p-6 max-h-[60vh] overflow-y-auto custom-scrollbar space-y-6">
+              {/* Players */}
+              <div>
+                <h3 className="text-xs font-bold tracking-[0.22em] uppercase text-slate-400 mb-3">
+                  Party
+                </h3>
+                {players.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {players.map(player => {
+                      const char = player.character;
+                      const color1 = player.profile_color_1 || "#FF5722";
+                      const color2 = player.profile_color_2 || "#37F2D1";
+
+                      return (
+                        <button
+                          key={player.user_id}
+                          onClick={() => {
+                            if (char) {
+                              setSelectedCharacter({ ...char, type: 'player' });
+                              setIsPossessed(true);
+                            }
+                            setShowPossessSelector(false);
                           }}
+                          disabled={!char}
+                          className="bg-[#1a1f2e] rounded-xl overflow-hidden hover:ring-2 hover:ring-[#37F2D1] transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {!char?.profile_avatar_url && (
-                            <div className="absolute inset-0 flex items-center justify-center text-4xl text-slate-600">?</div>
-                          )}
-                          <div 
-                            className="absolute bottom-0 left-0 right-0 h-1"
-                            style={{ background: `linear-gradient(to right, ${color1}, ${color2})` }}
-                          />
-                        </div>
-                        <div className="p-3">
-                          <h3 className="text-white font-bold text-sm truncate">
-                            {char?.name || 'No Character'}
-                          </h3>
-                          <p className="text-slate-400 text-xs truncate">
-                            {player.username} • {char?.race || '?'} {char?.class || '?'}
-                          </p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <p className="text-slate-400">No players in this campaign</p>
-                </div>
-              )}
+                          <div
+                            className="h-32 bg-cover bg-center relative"
+                            style={{
+                              backgroundImage: char?.profile_avatar_url ? `url(${char.profile_avatar_url})` : 'none',
+                              backgroundColor: '#0b1220'
+                            }}
+                          >
+                            {!char?.profile_avatar_url && (
+                              <div className="absolute inset-0 flex items-center justify-center text-4xl text-slate-600">?</div>
+                            )}
+                            <div
+                              className="absolute bottom-0 left-0 right-0 h-1"
+                              style={{ background: `linear-gradient(to right, ${color1}, ${color2})` }}
+                            />
+                          </div>
+                          <div className="p-3">
+                            <h3 className="text-white font-bold text-sm truncate">
+                              {char?.name || 'No Character'}
+                            </h3>
+                            <p className="text-slate-400 text-xs truncate">
+                              {player.username} • {char?.race || '?'} {char?.class || '?'}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-slate-500 text-sm italic">
+                    No players in this campaign
+                  </div>
+                )}
+              </div>
+
+              {/* GM's monster queue */}
+              <div>
+                <h3 className="text-xs font-bold tracking-[0.22em] uppercase text-slate-400 mb-3">
+                  Your Monsters
+                </h3>
+                {monsterQueue.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {monsterQueue.map((monster) => {
+                      const art = monster.image_url || monster.avatar_url || monster.stats?.image_url;
+                      return (
+                        <button
+                          key={monster.queueId}
+                          onClick={() => {
+                            const enriched = enrichMonster(monster);
+                            enriched.queueId = monster.queueId;
+                            enriched.uniqueId = `monster-${monster.queueId}`;
+                            setSelectedCharacter(enriched);
+                            setMonsterInventory(enriched.inventory || []);
+                            setEquippedItems(enriched.equipped || {});
+                            setIsPossessed(true);
+                            setShowPossessSelector(false);
+                          }}
+                          className="bg-[#1a1f2e] rounded-xl overflow-hidden hover:ring-2 hover:ring-[#FF5722] transition-all text-left"
+                        >
+                          <div
+                            className="h-32 bg-cover bg-center relative"
+                            style={{
+                              backgroundImage: art ? `url(${art})` : 'none',
+                              backgroundColor: '#0b1220'
+                            }}
+                          >
+                            {!art && (
+                              <div className="absolute inset-0 flex items-center justify-center text-4xl text-slate-600">?</div>
+                            )}
+                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-[#FF5722] to-[#F59E0B]" />
+                          </div>
+                          <div className="p-3">
+                            <h3 className="text-white font-bold text-sm truncate">
+                              {monster.name || 'Unknown Creature'}
+                            </h3>
+                            <p className="text-slate-400 text-xs truncate">
+                              {monster.type || 'monster'}
+                              {monster.stats?.challenge_rating != null ? ` • CR ${monster.stats.challenge_rating}` : ''}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-slate-500 text-sm italic">
+                    No monsters in your queue. Add some from the Monster Queue panel.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Character Selector Popup */}
       <CharacterSelector
@@ -1871,7 +2070,7 @@ function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPosses
               onClick={onPossessPlayer}
               className="flex-1 bg-[#37F2D1]/20 hover:bg-[#37F2D1]/30 text-[#37F2D1] rounded-lg py-2 text-sm font-semibold transition-colors"
             >
-              Possess Player
+              Possess
             </button>
           </div>
         </>
