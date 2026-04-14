@@ -42,6 +42,7 @@ export default function CombatDiceWindow({
   onActionComplete,
   isSpectator = false,
   spectatorData = null,
+  sneakActive = false,
 }) {
   const [selectedAction, setSelectedAction] = useState(initialAction);
   const [attackRoll, setAttackRoll] = useState(null);
@@ -232,6 +233,28 @@ export default function CombatDiceWindow({
     return "1d4";
   };
 
+  // Rogue Sneak Attack dice count. Requirements:
+  //   - Sneak toggle active (set by the parent)
+  //   - Actor class includes "Rogue"
+  //   - Weapon is finesse or ranged (melee unarmed / non-finesse doesn't
+  //     qualify)
+  // Returns 1d6 per 2 Rogue levels rounded up (1-2 → 1d6, 3-4 → 2d6, etc).
+  // Multiclass: for now we simplify and use the character's full level as
+  // the rogue level; proper multiclass tracking is a later feature.
+  const getSneakAttackDiceCount = () => {
+    if (!sneakActive) return 0;
+    if (selectedAction?.type === "spell") return 0;
+    const cls = (actor?.class || actor?.stats?.class || "").toLowerCase();
+    if (!cls.includes("rogue")) return 0;
+    const weapon = selectedAction?.weapon;
+    // Unarmed strikes don't qualify for Sneak Attack.
+    const isFinesse = !!weapon?.properties?.includes?.("Finesse");
+    const isRangedWeapon = !!weapon?.category?.includes?.("Ranged");
+    if (!isFinesse && !isRangedWeapon) return 0;
+    const level = actor?.level || actor?.stats?.level || 1;
+    return Math.ceil(level / 2);
+  };
+
   // Attack modifier (weapon or spell)
   const getModifier = () => {
     if (!actor) return 0;
@@ -372,8 +395,30 @@ export default function CombatDiceWindow({
       total += Math.floor(Math.random() * faces) + 1;
     }
 
+    // Rogue Sneak Attack: add extra d6s when the sneak toggle is on, the
+    // actor is a Rogue, and the weapon is finesse/ranged. Crit doubles the
+    // sneak dice the same as the weapon dice. The dice roller only shows
+    // the visible weapon die; sneak dice are added to the total silently
+    // and surfaced in the result detail.
+    const sneakDiceBase = getSneakAttackDiceCount();
+    let sneakDamage = 0;
+    if (sneakDiceBase > 0) {
+      const sneakCount = isCrit ? sneakDiceBase * 2 : sneakDiceBase;
+      for (let i = 0; i < sneakCount; i++) {
+        sneakDamage += Math.floor(Math.random() * 6) + 1;
+      }
+      total += sneakDamage;
+    }
+
     const totalDamage = Math.max(0, total + mod);
-    const result = { total: totalDamage, dice: total, mod, isCrit };
+    const result = {
+      total: totalDamage,
+      dice: total,
+      mod,
+      isCrit,
+      sneakDice: sneakDiceBase,
+      sneakDamage,
+    };
     setDamageRoll(result);
     setIsRolling(false);
     setPhase("damage_result");
@@ -826,6 +871,11 @@ export default function CombatDiceWindow({
                           <span className="text-xs font-bold uppercase tracking-widest opacity-90">
                             Damage
                           </span>
+                          {damageRoll.sneakDice > 0 && (
+                            <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-yellow-300 drop-shadow">
+                              +{damageRoll.sneakDice}d6 Sneak
+                            </span>
+                          )}
                         </motion.div>
                       )}
                     </div>
