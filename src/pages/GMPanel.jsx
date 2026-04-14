@@ -110,6 +110,16 @@ export default function GMPanel() {
     refetchInterval: (data) => (data?.combat_active || data?.combat_data?.stage === 'initiative') ? 1000 : 2000
   });
 
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: () => base44.auth.me()
+  });
+
+  // The GM can always act, regardless of whose turn it is in the combat
+  // tracker — they might be running a monster, possessing a player, or
+  // just fixing something mid-session.
+  const isGM = !!campaign?.game_master_id && campaign?.game_master_id === currentUser?.id;
+
   const { isActorsTurn } = useTurnContext({ campaign, actor: selectedCharacter });
 
   // Combat State
@@ -315,7 +325,8 @@ export default function GMPanel() {
     // from null → a mode (i.e. entering attack targeting). Cycling between
     // modes or cancelling is always allowed.
     if (attackMode === null && nextMode !== null) {
-      if (campaign?.combat_active && campaign?.combat_data && !isActorsTurn) {
+      // GM can always act, regardless of whose turn the tracker says it is.
+      if (campaign?.combat_active && campaign?.combat_data && !isGM && !isActorsTurn) {
         toast.error("It's not this character's turn!");
         return;
       }
@@ -345,6 +356,7 @@ export default function GMPanel() {
     campaign?.combat_active,
     campaign?.combat_data,
     isActorsTurn,
+    isGM,
     actionsState.action,
     buildAttackAction,
   ]);
@@ -473,6 +485,35 @@ export default function GMPanel() {
     setAttackMode(null);
   }, [campaign?.combat_data?.currentTurnIndex, campaign?.combat_data?.round, campaign?.combat_data?.order?.[0]?.id]);
 
+  // Sync equippedItems + monsterInventory whenever a different character is
+  // selected/possessed. This is the single source of truth for both players
+  // and monsters, so no matter which selection path fires (Possess dialog,
+  // Character selector, MonsterQueue click, turn auto-select, seed data)
+  // the equipment and inventory always populate from the character row.
+  //
+  // Keyed on selectedCharacter?.id so drag-and-drop mutations to
+  // equippedItems don't get clobbered while the same character is active.
+  React.useEffect(() => {
+    if (!selectedCharacter) {
+      setEquippedItems({});
+      setMonsterInventory([]);
+      return;
+    }
+    // Prefer `equipped` (the canonical field for equipped-slot data).
+    // Fall back to `equipment` if `equipped` is missing or empty, so older
+    // rows that only have the legacy field still light up the slots.
+    const equippedField = selectedCharacter.equipped;
+    const equipmentField = selectedCharacter.equipment;
+    const resolvedEquipped =
+      equippedField && Object.keys(equippedField).length > 0
+        ? equippedField
+        : equipmentField && Object.keys(equipmentField).length > 0
+        ? equipmentField
+        : {};
+    setEquippedItems(resolvedEquipped);
+    setMonsterInventory(Array.isArray(selectedCharacter.inventory) ? selectedCharacter.inventory : []);
+  }, [selectedCharacter?.id, selectedCharacter?.uniqueId]);
+
   const { data: monsters = [] } = useQuery({
     queryKey: ['campaignMonsters', campaignId],
     queryFn: () => base44.entities.Monster.filter({ campaign_id: campaignId }),
@@ -506,11 +547,6 @@ export default function GMPanel() {
     queryKey: ['allUserProfiles'],
     queryFn: () => base44.entities.UserProfile.list(),
     staleTime: 60000
-  });
-
-  const { data: currentUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me()
   });
 
   // Fetch all spells for accurate tooltips
@@ -920,9 +956,10 @@ export default function GMPanel() {
                 // Clicking any other action cancels attack-mode targeting.
                 if (attackMode !== null) setAttackMode(null);
 
-                // Turn order enforcement
+                // Turn order enforcement — GM bypasses the check entirely
+                // (they might be running a monster or possessing a player).
                 if (campaign?.combat_active && campaign?.combat_data) {
-                  if (!isActorsTurn) {
+                  if (!isGM && !isActorsTurn) {
                     toast.error("It's not this character's turn!");
                     return;
                   }
@@ -1810,14 +1847,18 @@ function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPosses
   const [showInventoryOrganizer, setShowInventoryOrganizer] = useState(false);
   const [inventoryOrder, setInventoryOrder] = useState([]);
 
-  // Initialize inventory order when character changes
+  // Initialize inventory order when the selected character changes (or when
+  // its inventory array is refreshed). Depending on the inventory reference
+  // itself — not its length — ensures the effect actually re-fires when a
+  // character swap comes in with a different inventory object but the same
+  // item count.
   React.useEffect(() => {
-    if (character?.inventory) {
+    if (Array.isArray(character?.inventory) && character.inventory.length > 0) {
       setInventoryOrder(character.inventory.map((item, idx) => ({ ...item, _idx: idx })));
     } else {
       setInventoryOrder([]);
     }
-  }, [character?.id, character?.inventory?.length]);
+  }, [character?.id, character?.uniqueId, character?.inventory]);
 
   return (
     <div className="relative z-10 rounded-[32px] bg-[#050816]/95 px-6 pt-6 pb-8 shadow-[0_24px_60px_rgba(0,0,0,0.8)] flex flex-col items-center gap-6">
