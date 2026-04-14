@@ -36,6 +36,13 @@ export default function CombatActionBar({
   // a target while attackMode is set.
   attackMode = null,
   onAttackModeChange,
+  // Sneak / Hide gating — the Sneak toggle is locked unless the parent
+  // says the character is currently hidden (i.e. a Hide skill check
+  // resolved successfully). When isHidden goes false the Sneak toggle is
+  // force-cleared via the parent's reveal flow.
+  isHidden = false,
+  sneakActive: sneakActiveProp,
+  onSneakToggle,
 }) {
   // Internal state if not provided controlled
   const [localActions, setLocalActions] = useState({ action: true, bonus: true, inspiration: false });
@@ -43,7 +50,11 @@ export default function CombatActionBar({
   const setActions = setActionsState || setLocalActions;
 
   const [nonLethalActive, setNonLethalActive] = useState(false);
-  const [sneakActive, setSneakActive] = useState(false);
+  // Sneak is controlled by the parent when onSneakToggle is provided,
+  // otherwise fall back to an internal toggle (so the component still
+  // works in isolation / Storybook).
+  const [localSneakActive, setLocalSneakActive] = useState(false);
+  const sneakActive = onSneakToggle ? !!sneakActiveProp : localSneakActive;
 
   // Determine if selected character is a creature (monster/npc) vs humanoid (player)
   const isCreature = character?.type === 'monster' || character?.type === 'npc';
@@ -191,18 +202,28 @@ export default function CombatActionBar({
             const isSneakAction = action.name === "Sneak";
             const isNonLethal = action.name === "Non-Lethal";
             const isToggleable = action.toggleable;
-            const isActive = isSneakAction ? sneakActive : (isNonLethal ? nonLethalActive : false);
-            
+            const isActive = isSneakAction ? (sneakActive && isHidden) : (isNonLethal ? nonLethalActive : false);
+            // Sneak is locked until the character has actually hidden. The
+            // button still renders so you can see what's available, but it's
+            // greyed out and unclickable.
+            const slotDisabled = isSneakAction && !isHidden;
+
             return (
-              <BasicActionSlot 
-                key={idx} 
-                src={iconUrl} 
-                tooltip={action.name}
+              <BasicActionSlot
+                key={idx}
+                src={iconUrl}
+                tooltip={isSneakAction && !isHidden ? "Sneak (Hide first)" : action.name}
                 toggleable={isToggleable}
                 isActive={isToggleable && isActive}
+                disabled={slotDisabled}
                 onToggle={() => {
-                  if (isSneakAction) setSneakActive(!sneakActive);
-                  else if (isNonLethal) setNonLethalActive(!nonLethalActive);
+                  if (isSneakAction) {
+                    const next = !sneakActive;
+                    if (onSneakToggle) onSneakToggle(next);
+                    else setLocalSneakActive(next);
+                  } else if (isNonLethal) {
+                    setNonLethalActive(!nonLethalActive);
+                  }
                 }}
                 onClick={() => {
                   if (!isToggleable) {
@@ -334,17 +355,18 @@ function ActionButton({ active, onClick, color, icon: Icon }) {
 
 function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick, disabled }) {
   const [showTooltip, setShowTooltip] = useState(false);
-  
+
   return (
-    <button 
+    <button
+      disabled={!!disabled}
       className={`w-16 h-16 rounded-2xl bg-[#050816] border-2 border-[#111827] p-[2px] flex-shrink-0 shadow-[0_14px_32px_rgba(0,0,0,0.8)] transition relative ${disabled ? 'opacity-30 grayscale cursor-not-allowed' : 'hover:-translate-y-[1px]'}`}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
       onClick={(e) => {
-        if (toggleable && onToggle) {
-          onToggle();
-        }
-        if (onClick && !disabled) onClick(e);
+        // A disabled slot blocks both toggles and action clicks.
+        if (disabled) return;
+        if (toggleable && onToggle) onToggle();
+        if (onClick) onClick(e);
       }}
       style={isActive ? {
         animation: 'rotateBorder 3s linear infinite',

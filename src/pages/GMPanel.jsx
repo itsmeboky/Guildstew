@@ -135,6 +135,28 @@ export default function GMPanel() {
   // the targeting / dice-window flow (which weapon to fire) need it.
   const [attackMode, setAttackMode] = useState(null);
 
+  // Stealth / Sneak state.
+  //   hiddenCharacters: Set of character IDs that have successfully hidden
+  //     (Hide action resolved). Hiding persists across turns until the
+  //     character attacks while sneaking.
+  //   sneakActive: whether the currently-selected character has the
+  //     Sneak toggle on. Only meaningful while that character is hidden.
+  const [hiddenCharacters, setHiddenCharacters] = useState(() => new Set());
+  const [sneakActive, setSneakActive] = useState(false);
+
+  // Canonical character id. Monsters from the queue use uniqueId, DB-backed
+  // characters use their row id.
+  const getCharacterKey = React.useCallback((c) => c?.uniqueId || c?.id || null, []);
+  const selectedCharacterKey = getCharacterKey(selectedCharacter);
+  const isHidden = !!selectedCharacterKey && hiddenCharacters.has(selectedCharacterKey);
+
+  // If the selected character is no longer hidden (turn rolled over, attacked
+  // while sneaking, or the GM switched to a different character) the Sneak
+  // toggle should fall back off automatically.
+  React.useEffect(() => {
+    if (!isHidden && sneakActive) setSneakActive(false);
+  }, [isHidden, sneakActive]);
+
   // Sync combat state to DB for spectators
   const updateCombatEncounter = React.useCallback((newState) => {
     if (!campaign?.combat_active) return;
@@ -479,10 +501,13 @@ export default function GMPanel() {
     }
   }, [campaign, campaignId]);
 
-  // Reset action economy + attack mode when turn changes (separate effect — must be at top level)
+  // Reset action economy + attack mode + sneak toggle when turn changes.
+  // Note: we intentionally do NOT clear hiddenCharacters here — hiding
+  // persists across turns, the Sneak toggle is what resets.
   React.useEffect(() => {
     setActionsState({ action: true, bonus: true, inspiration: false });
     setAttackMode(null);
+    setSneakActive(false);
   }, [campaign?.combat_data?.currentTurnIndex, campaign?.combat_data?.round, campaign?.combat_data?.order?.[0]?.id]);
 
   // Sync equippedItems + monsterInventory whenever a different character is
@@ -729,7 +754,7 @@ export default function GMPanel() {
                 if (campaign?.combat_data?.active_encounter) {
                   const currentEncounter = campaign.combat_data.active_encounter;
                   let updates = {};
-                  
+
                   if (data.type === 'attack_result') { // Custom event we'll add to DiceWindow
                      updates = { phase: 'attack_result', attackRoll: data.roll };
                   } else if (data.type === 'damage') {
@@ -746,6 +771,21 @@ export default function GMPanel() {
                         ...campaign.combat_data,
                         active_encounter: { ...currentEncounter, ...updates }
                       }
+                    });
+                  }
+                }
+
+                // Hide success → mark the current character as hidden so the
+                // Sneak toggle unlocks on their next turn (or this turn).
+                // Any completed Hide check counts as success; the GM can
+                // mentally invalidate a low roll by manually revealing.
+                if (data.type === 'check_result' && combatState.action?.name === 'Hide') {
+                  const key = getCharacterKey(selectedCharacter);
+                  if (key) {
+                    setHiddenCharacters(prev => {
+                      const next = new Set(prev);
+                      next.add(key);
+                      return next;
                     });
                   }
                 }
@@ -809,6 +849,22 @@ export default function GMPanel() {
                 }
                 // Attack resolved → leave attack-mode selection
                 setAttackMode(null);
+
+                // If the character attacked while sneaking, reveal them: drop
+                // them from hiddenCharacters and flip the Sneak toggle off
+                // (the isHidden-driven effect will also catch this).
+                if (combatState.action?.name === 'Attack' && sneakActive) {
+                  const key = getCharacterKey(selectedCharacter);
+                  if (key) {
+                    setHiddenCharacters(prev => {
+                      if (!prev.has(key)) return prev;
+                      const next = new Set(prev);
+                      next.delete(key);
+                      return next;
+                    });
+                  }
+                  setSneakActive(false);
+                }
                 // Clear the synced encounter so spectators exit cleanly.
                 // Optimistically update the local cache to avoid a flash where the
                 // dice window briefly switches to spectator mode before the
@@ -952,6 +1008,9 @@ export default function GMPanel() {
               setActionsState={setActionsState}
               attackMode={attackMode}
               onAttackModeChange={handleAttackModeChange}
+              isHidden={isHidden}
+              sneakActive={sneakActive}
+              onSneakToggle={(next) => setSneakActive(next)}
               onActionClick={(action) => {
                 // Clicking any other action cancels attack-mode targeting.
                 if (attackMode !== null) setAttackMode(null);
