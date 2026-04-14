@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { X, Plus, Package, Wand2, Save, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, Plus, Package, Wand2, Save, Trash2, ChevronLeft, ChevronRight, UserPlus } from "lucide-react";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
 import { spellIcons, spellDetails } from "@/components/dnd5e/spellData";
 import { enrichMonster } from "./monsterEnrichment";
 import { readCombatQueue, writeCombatQueue, FACTION_STYLES, FACTIONS } from "@/utils/combatQueue";
+import { normalizeHp } from "@/components/combat/hpColor";
 
 const SAVED_LOADOUTS_KEY = 'gm_saved_monster_loadouts';
 
@@ -11,6 +12,7 @@ export default function CombatQueue({
   monsters,
   npcs,
   onSelectMonster,
+  onCreateNpc,
   campaignId
 }) {
   // Use the shared combat-queue helper so localStorage key + legacy
@@ -51,8 +53,15 @@ export default function CombatQueue({
 
       const enriched = enrichMonster(baseCreature);
 
+      // Normalize HP from whatever shape the source gave us into the
+      // canonical { current, max, temporary } PC shape so the HP bar
+      // renderers can read a single path. Handles SRD monster strings
+      // ("135 (18d10 + 36)") and nested stats.hit_points variants.
+      const normalizedHp = normalizeHp(enriched);
+
       const queued = {
         ...enriched,
+        hit_points: normalizedHp,
         queueId: Date.now() + i, // unique IDs per creature in the queue
         inventory: enriched.inventory || [],
         spells: enriched.spells || [],
@@ -226,6 +235,7 @@ export default function CombatQueue({
           npcs={npcs}
           onAdd={addToQueue}
           onClose={() => setShowAddDialog(false)}
+          onCreateNpc={onCreateNpc}
         />
       )}
 
@@ -247,7 +257,7 @@ export default function CombatQueue({
   );
 }
 
-function AddMonsterDialog({ monsters, npcs, onAdd, onClose }) {
+function AddMonsterDialog({ monsters, npcs, onAdd, onClose, onCreateNpc }) {
   const [tab, setTab] = useState('monsters');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
@@ -426,6 +436,23 @@ function AddMonsterDialog({ monsters, npcs, onAdd, onClose }) {
             placeholder="Search..."
             className="w-full bg-[#1a1f2e] border border-[#111827] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#22c5f5]"
           />
+
+          {/* Quick-create NPC shortcut — only shown on the NPC tab.
+              The parent hands us a callback that navigates to the
+              Character Creator in NPC mode for the current campaign. */}
+          {tab === 'npcs' && typeof onCreateNpc === 'function' && (
+            <button
+              type="button"
+              onClick={() => {
+                onCreateNpc();
+                onClose();
+              }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-[#22c55e]/15 hover:bg-[#22c55e]/25 border border-[#22c55e]/40 text-[#22c55e] text-xs font-bold uppercase tracking-wide transition-colors"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              Create New NPC
+            </button>
+          )}
 
           <div className="max-h-[40vh] overflow-y-auto space-y-2 custom-scrollbar">
             {filtered.length === 0 ? (

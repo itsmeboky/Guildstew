@@ -40,7 +40,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import { resolveAction, consumeActionCost } from "@/components/combat/actionResolver";
-import { hpBarColor, clampHp } from "@/components/combat/hpColor";
+import { hpBarColor, clampHp, normalizeHp } from "@/components/combat/hpColor";
 import { toast } from "sonner";
 import { useTurnContext } from "@/components/combat/useTurnContext";
 
@@ -475,19 +475,31 @@ export default function GMPanel() {
   ]);
 
   const rollInitiative = () => {
+    // Helper: 1d20 + mod, returns a breakdown so the turn order can
+    // show "15 (12 + 3)" per combatant.
+    const rollD20 = (mod) => {
+      const raw = Math.floor(Math.random() * 20) + 1;
+      return { raw, mod, total: raw + mod };
+    };
+
     // 1. Get Players
     const playerCombatants = players.map(p => {
       const char = p.character;
       const dex = char?.attributes?.dex || 10;
       const mod = Math.floor((dex - 10) / 2);
+      const roll = rollD20(mod);
+      const hp = normalizeHp(char);
       return {
         id: `player-${p.user_id}`,
         name: char?.name || p.username,
         avatar: char?.profile_avatar_url || p.avatar_url,
         dexMod: mod,
         type: 'player',
-        initiative: Math.floor(Math.random() * 20) + 1 + mod,
+        initiative: roll.total,
+        initiativeRoll: roll.raw,
+        initiativeMod: roll.mod,
         uniqueId: `player-${p.user_id}`,
+        hit_points: hp,
         // PCs are always their own faction.
         faction: 'player',
         originalFaction: 'player',
@@ -496,24 +508,29 @@ export default function GMPanel() {
     });
 
     // 2. Get queued combatants from the combat queue (monsters, NPCs,
-    // allies, neutrals — whatever the GM lined up). Faction travels
-    // with them into the initiative order so the turn tracker can
-    // color-code and apply charm-duration countdowns.
+    // allies, neutrals — whatever the GM lined up). Faction and the
+    // normalized HP come straight from the queue entry; initiative
+    // is rolled fresh for each combatant as a 1d20 + DEX mod.
     const queuedCombatants = readCombatQueue(campaignId);
 
     const monsterCombatants = queuedCombatants.map(m => {
       const stats = m.stats || m;
       const dex = stats.dex || stats.attributes?.dex || 10;
       const mod = Math.floor((dex - 10) / 2);
+      const roll = rollD20(mod);
+      const hp = normalizeHp(m);
       return {
         id: `monster-${m.queueId}`,
         name: m.name,
         avatar: m.image_url || m.avatar_url,
         dexMod: mod,
         type: 'monster',
-        initiative: Math.floor(Math.random() * 20) + 1 + mod,
+        initiative: roll.total,
+        initiativeRoll: roll.raw,
+        initiativeMod: roll.mod,
         uniqueId: `monster-${m.queueId}`,
         initiative_rolled: true,
+        hit_points: hp,
         faction: m.faction || 'enemy',
         originalFaction: m.originalFaction || m.faction || 'enemy',
         charmDuration: m.charmDuration ?? null,
@@ -1141,18 +1158,25 @@ export default function GMPanel() {
                   onChangeFaction={updateCombatantFaction}
                   selectionMode={combatState.step === 'selecting_target'}
                   isTurnOrderAccepted={isTurnOrderAccepted}
-                  // Pass helpers to lookup HP
+                  // Pass helpers to lookup HP. Everything flows through
+                  // normalizeHp so legacy entries (string HP, nested
+                  // stats.hit_points, etc.) render consistently.
                   getHp={(id) => {
                     if (id.startsWith('player-')) {
+                      const rest = id.slice('player-'.length);
+                      if (rest.startsWith('ghost-')) {
+                        const charId = rest.slice('ghost-'.length);
+                        const char = characters.find(c => c.id === charId);
+                        return normalizeHp(char);
+                      }
                       const p = players.find(p => `player-${p.user_id}` === id);
-                      return p?.character?.hit_points;
+                      return normalizeHp(p?.character);
                     }
                     if (id.startsWith('monster-')) {
-                      // Look in localStorage for sync
                       const qId = id.replace('monster-', '');
                       const q = readCombatQueue(campaignId);
                       const m = q.find(m => m.queueId === qId || String(m.queueId) === qId);
-                      return m?.hit_points || m?.stats?.hit_points;
+                      return normalizeHp(m);
                     }
                     return null;
                   }}
@@ -1168,7 +1192,7 @@ export default function GMPanel() {
                           disabled={acceptTurnOrderMutation.isPending}
                           className="rounded-full bg-[#37F2D1]/20 border border-[#37F2D1] text-[#37F2D1] px-5 py-2 text-xs font-semibold tracking-wide hover:bg-[#37F2D1]/30 transition"
                         >
-                          {acceptTurnOrderMutation.isPending ? "ACCEPTING..." : "ACCEPT TURN ORDER"}
+                          {acceptTurnOrderMutation.isPending ? "STARTING..." : "FIGHT"}
                         </button>
                       ) : (
                         <button 
@@ -1355,6 +1379,12 @@ export default function GMPanel() {
                     setSelectedCharacter(char);
                     setMonsterInventory(char.inventory || []);
                     setEquippedItems(char.equipped || {});
+                  }}
+                  onCreateNpc={() => {
+                    // Jump to the existing Character Creator in NPC mode.
+                    // returnTo is a hint the creator can respect to send
+                    // the user back here after the NPC is saved.
+                    navigate(createPageUrl("CharacterCreator") + `?campaignId=${campaignId}&mode=npc&returnTo=GMPanel`);
                   }}
                   campaignId={campaignId}
                 />
@@ -3440,11 +3470,34 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                                 </div>
                               )}
                             </div>
-                            <div className="absolute bottom-0 inset-x-0 bg-black/80 text-[11px] text-center text-white font-bold py-0.5">
+                            <div
+                              className="absolute bottom-0 inset-x-0 bg-black/80 text-[11px] text-center text-white font-bold py-0.5"
+                              title={
+                                typeof combatant.initiativeRoll === 'number'
+                                  ? `${combatant.name} rolled ${combatant.initiative} (${combatant.initiativeRoll}${
+                                      (combatant.initiativeMod || 0) >= 0 ? ' + ' : ' − '
+                                    }${Math.abs(combatant.initiativeMod || 0)})`
+                                  : undefined
+                              }
+                            >
                               {combatant.initiative}
                             </div>
                           </div>
-                          
+
+                          {/* Initiative roll breakdown — visible only while
+                              combatants are still being arranged (pre-Fight).
+                              Once the GM locks the order we drop back to
+                              just showing the total on the portrait. */}
+                          {!isTurnOrderAccepted && typeof combatant.initiativeRoll === 'number' && (
+                            <span className="text-[9px] font-mono text-slate-400 tracking-tight">
+                              {combatant.initiativeRoll}
+                              {(combatant.initiativeMod || 0) >= 0 ? ' + ' : ' − '}
+                              {Math.abs(combatant.initiativeMod || 0)}
+                              {' = '}
+                              <span className="text-white font-bold">{combatant.initiative}</span>
+                            </span>
+                          )}
+
                           {/* HP Bar for GM — uses the shared getHp lookup so
                               live HP reflects damage write-backs. Color is
                               driven by percentage, not side. */}
