@@ -202,21 +202,53 @@ export default function CombatActionBar({
           {basicActionIcons.map((action, idx) => {
             const iconUrl = (isCreature && action.monsterUrl) ? action.monsterUrl : action.url;
             const isSneakAction = action.name === "Sneak";
+            const isHideAction = action.name === "Hide";
             const isNonLethal = action.name === "Non-Lethal";
             const isToggleable = action.toggleable;
-            const isActive = isSneakAction ? (sneakActive && isHidden) : (isNonLethal ? nonLethalActive : false);
+
+            // Visual "active" state per button:
+            //   Sneak      → sneakActive && isHidden
+            //   Non-Lethal → nonLethalActive
+            //   Hide       → isHidden (not a toggle — this just surfaces
+            //                that the last Hide check succeeded; Sneak can
+            //                still be turned on, the Hide click still re-
+            //                rolls the Stealth check)
+            const isActive =
+              isSneakAction
+                ? (sneakActive && isHidden)
+                : isNonLethal
+                ? nonLethalActive
+                : isHideAction
+                ? isHidden
+                : false;
+
             // Sneak is locked until the character has actually hidden. The
             // button still renders so you can see what's available, but it's
             // greyed out and unclickable.
             const slotDisabled = isSneakAction && !isHidden;
 
+            // Tint colour used when active — distinct per button so the GM
+            // can tell at a glance which toggle is lit.
+            const activeTint = isHideAction
+              ? "#38bdf8" // sky-400 — "you are hidden"
+              : isSneakAction
+              ? "#a855f7" // purple-500 — "sneak attack primed"
+              : undefined; // Non-Lethal uses the default animated border
+
             return (
               <BasicActionSlot
                 key={idx}
                 src={iconUrl}
-                tooltip={isSneakAction && !isHidden ? "Sneak (Hide first)" : action.name}
+                tooltip={
+                  isSneakAction && !isHidden
+                    ? "Sneak (Hide first)"
+                    : isHideAction && isHidden
+                    ? "Hide (currently hidden — click to re-roll)"
+                    : action.name
+                }
                 toggleable={isToggleable}
-                isActive={isToggleable && isActive}
+                isActive={isActive}
+                activeTint={activeTint}
                 disabled={slotDisabled}
                 onToggle={() => {
                   if (isSneakAction) {
@@ -355,8 +387,32 @@ function ActionButton({ active, onClick, color, icon: Icon }) {
   );
 }
 
-function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick, disabled }) {
+function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick, disabled, activeTint }) {
   const [showTooltip, setShowTooltip] = useState(false);
+
+  // When active, we either apply a button-specific tint (solid coloured
+  // border + coloured glow) or fall back to the existing teal/orange
+  // animated border.
+  let activeStyle = {};
+  let iconStyle = {};
+  if (isActive) {
+    if (activeTint) {
+      activeStyle = {
+        borderColor: activeTint,
+        borderWidth: '3px',
+        boxShadow: `0 0 18px ${activeTint}, 0 0 6px ${activeTint}`,
+      };
+      iconStyle = {
+        filter: `drop-shadow(0 0 6px ${activeTint}) drop-shadow(0 0 2px ${activeTint}) brightness(1.05)`,
+      };
+    } else {
+      activeStyle = {
+        animation: 'rotateBorder 3s linear infinite',
+        borderImage: 'linear-gradient(45deg, #37F2D1, #FF5722, #37F2D1) 1',
+        borderWidth: '3px',
+      };
+    }
+  }
 
   return (
     <button
@@ -370,14 +426,17 @@ function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick
         if (toggleable && onToggle) onToggle();
         if (onClick) onClick(e);
       }}
-      style={isActive ? {
-        animation: 'rotateBorder 3s linear infinite',
-        borderImage: 'linear-gradient(45deg, #37F2D1, #FF5722, #37F2D1) 1',
-        borderWidth: '3px'
-      } : {}}
+      style={activeStyle}
     >
       <div className="w-full h-full rounded-[18px] bg-[#050816] overflow-hidden flex items-center justify-center">
-        {src ? <img src={src} alt={tooltip || ""} className="w-full h-full object-cover" /> : null}
+        {src ? (
+          <img
+            src={src}
+            alt={tooltip || ""}
+            className="w-full h-full object-cover"
+            style={iconStyle}
+          />
+        ) : null}
       </div>
       {showTooltip && tooltip && (
         <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-[#1E2430] text-white px-3 py-1.5 rounded-lg text-xs whitespace-nowrap shadow-xl border border-[#37F2D1] z-50">
