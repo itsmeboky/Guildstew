@@ -9,6 +9,7 @@ import {
   getSaveModifier,
   getSpellSaveDC,
 } from "@/components/combat/actionResolver";
+import { hpBarColor } from "@/components/combat/hpColor";
 
 const CLASS_SPELL_ABILITY = {
   Wizard: "int",
@@ -661,33 +662,36 @@ export default function CombatDiceWindow({
                 </div>
               )}
             </div>
-            <div className="bg-[#050816] border border-[#37F2D1] text-[#37F2D1] px-4 py-1 rounded-full text-sm font-bold whitespace-nowrap z-20">
-              {actor?.name || "Actor"}
-            </div>
-            {/* Actor HP (actor always sees own HP) */}
-            {actor?.hit_points && (
-              <>
-                <div className="w-32 h-2 bg-gray-800 rounded-full overflow-hidden mt-1 border border-gray-700">
-                  <div
-                    className="h-full bg-green-500"
-                    style={{
-                      width: `${
-                        Math.min(
-                          100,
-                          ((actor.hit_points.current || 0) /
-                            (actor.hit_points.max || 1)) *
-                            100
-                        ) || 0
-                      }%`,
-                    }}
-                  />
+            {(() => {
+              const isActorPlayer = actor?.type !== 'monster' && actor?.type !== 'npc';
+              const bubble = isActorPlayer
+                ? 'bg-[#37F2D1]/20 text-[#37F2D1] border border-[#37F2D1]'
+                : 'bg-[#FF5722]/20 text-[#FF5722] border border-[#FF5722]';
+              return (
+                <div className={`px-4 py-1 rounded-full text-sm font-bold whitespace-nowrap z-20 ${bubble}`}>
+                  {actor?.name || "Actor"}
                 </div>
-                <span className="text-[10px] text-gray-400">
-                  {actor.hit_points.current || 0} / {actor.hit_points.max || 0}{" "}
-                  HP
-                </span>
-              </>
-            )}
+              );
+            })()}
+            {/* Actor HP (actor always sees own HP) — color driven by % */}
+            {actor?.hit_points && (() => {
+              const max = actor.hit_points.max || 0;
+              const current = actor.hit_points.current ?? max;
+              const pct = max > 0 ? Math.min(100, (current / max) * 100) : 0;
+              return (
+                <>
+                  <div className="w-32 h-2 bg-gray-800 rounded-full overflow-hidden mt-1 border border-gray-700">
+                    <div
+                      className={`h-full ${hpBarColor(pct)}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-gray-400">
+                    {current} / {max} HP
+                  </span>
+                </>
+              );
+            })()}
           </div>
         </div>
 
@@ -1058,37 +1062,40 @@ export default function CombatDiceWindow({
                 </div>
               )}
             </div>
-            <div className="bg-[#050816] border border-red-500 text-red-500 px-4 py-1 rounded-full text-sm font-bold whitespace-nowrap z-20">
-              {target?.name || "No Target"}
-            </div>
-
-            {/* Target HP: bar always for players, numbers only for GM or when target is a player */}
-            {target && target.hit_points && (
-              <>
-                {/* For players: they should see HP loss; for monsters, only bar (no numbers) for non-GM */}
-                <div className="w-32 h-2 bg-gray-800 rounded-full overflow-hidden mt-1 border border-gray-700">
-                  <div
-                    className="h-full bg-red-500"
-                    style={{
-                      width: `${
-                        Math.min(
-                          100,
-                          ((target.hit_points.current || 0) /
-                            (target.hit_points.max || 1)) *
-                            100
-                        ) || 0
-                      }%`,
-                    }}
-                  />
+            {(() => {
+              const isTargetPlayer = target?.type !== 'monster' && target?.type !== 'npc';
+              const bubble = isTargetPlayer
+                ? 'bg-[#37F2D1]/20 text-[#37F2D1] border border-[#37F2D1]'
+                : 'bg-[#FF5722]/20 text-[#FF5722] border border-[#FF5722]';
+              return (
+                <div className={`px-4 py-1 rounded-full text-sm font-bold whitespace-nowrap z-20 ${bubble}`}>
+                  {target?.name || "No Target"}
                 </div>
-                {(isGM || target.type === "player") && (
-                  <span className="text-[10px] text-gray-400">
-                    {target.hit_points.current || 0} /{" "}
-                    {target.hit_points.max || 0} HP
-                  </span>
-                )}
-              </>
-            )}
+              );
+            })()}
+
+            {/* Target HP — same green/yellow/red threshold palette as the
+                actor side. Numbers only for GM or when target is a player. */}
+            {target && target.hit_points && (() => {
+              const max = target.hit_points.max || 0;
+              const current = target.hit_points.current ?? max;
+              const pct = max > 0 ? Math.min(100, (current / max) * 100) : 0;
+              return (
+                <>
+                  <div className="w-32 h-2 bg-gray-800 rounded-full overflow-hidden mt-1 border border-gray-700">
+                    <div
+                      className={`h-full ${hpBarColor(pct)}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  {(isGM || target.type === "player") && (
+                    <span className="text-[10px] text-gray-400">
+                      {current} / {max} HP
+                    </span>
+                  )}
+                </>
+              );
+            })()}
           </div>
 
           {!isSpectator && (
