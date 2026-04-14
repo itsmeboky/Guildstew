@@ -8,6 +8,8 @@ const MONSTER_ICON_BASE = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/o
 const basicActionIcons = [
   { name: "Non-Lethal", url: `${PC_ICON_BASE}/non-lethal.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20non-lethal.png`, toggleable: true },
   { name: "Dash", url: `${PC_ICON_BASE}/dash.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20dash.png` },
+  { name: "Dodge", url: `${PC_ICON_BASE}/dodge.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20dodge.png` },
+  { name: "Disengage", url: `${PC_ICON_BASE}/disengage.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20disengage.png` },
   { name: "Help", url: `${PC_ICON_BASE}/help%20action.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20help%20action.png` },
   { name: "Grapple", url: `${PC_ICON_BASE}/grapple.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20grapple.png` },
   { name: "Throw", url: `${PC_ICON_BASE}/throw.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20throw.png` },
