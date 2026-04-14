@@ -426,6 +426,15 @@ export default function GMPanel() {
       .catch(err => console.error('Order update failed:', err));
   }, [campaign?.combat_data, campaignId, queryClient]);
 
+  // Refs that hold the latest `characters` array and the derived
+  // `players` list. The death-save / heal helpers below use these so
+  // their useCallback deps don't reference variables that are declared
+  // later in render (which would hit the temporal dead zone at module
+  // evaluation). The refs are updated in an effect after both are
+  // defined — see ~line 960 below.
+  const charactersRef = React.useRef([]);
+  const playersRef = React.useRef([]);
+
   // Write a specific current-HP value straight to the persistent entity
   // (Character row for PCs/ghosts, combat queue entry for monsters).
   // Used by the revive-on-nat-20 / heal-from-downed paths so the HP
@@ -453,16 +462,20 @@ export default function GMPanel() {
       return;
     }
 
-    // Player / ghost character path
+    // Player / ghost character path — read characters + players out of
+    // the refs so this callback isn't tied to the later useQuery /
+    // useMemo declarations.
+    const currentCharacters = charactersRef.current || [];
+    const currentPlayers = playersRef.current || [];
     let char = null;
     if (combatantKey.startsWith('player-')) {
       const rest = combatantKey.slice('player-'.length);
       if (rest.startsWith('ghost-')) {
-        char = characters.find(c => c.id === rest.slice('ghost-'.length));
+        char = currentCharacters.find(c => c.id === rest.slice('ghost-'.length));
       } else {
-        const player = players.find(p => p.user_id === rest);
+        const player = currentPlayers.find(p => p.user_id === rest);
         char = player?.character
-          || characters.find(c => c.created_by === player?.email)
+          || currentCharacters.find(c => c.created_by === player?.email)
           || null;
       }
     }
@@ -478,7 +491,7 @@ export default function GMPanel() {
       })
       .then(() => queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] }))
       .catch(err => console.error('HP write-back failed:', err));
-  }, [campaignId, characters, players, queryClient]);
+  }, [campaignId, queryClient]);
 
   // Apply a death save to a combatant in combat_data.order. `delta` is
   // { successesDelta, failuresDelta } — or an explicit { successes,
@@ -956,7 +969,12 @@ export default function GMPanel() {
     return Array.from(playerMap.values());
   }, [campaign?.player_ids, allUserProfiles, characters, campaignId]);
 
-
+  // Keep the refs the death-save / heal helpers above read from in sync
+  // with the latest characters + players. Updating during render is fine
+  // — the helpers are only invoked from event handlers, by which time
+  // render has already committed and the refs hold current values.
+  charactersRef.current = characters;
+  playersRef.current = players;
 
   if (!campaign) {
     return <div className="min-h-screen flex items-center justify-center"><p className="text-gray-400">Loading...</p></div>;
