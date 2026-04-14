@@ -256,15 +256,16 @@ export function resolveAction(action, actor) {
 /**
  * Consume the action cost from the action economy state.
  * Returns the new actions state.
- * 
- * @param {object} currentActions - { action: bool, bonus: bool, inspiration: bool }
+ *
+ * @param {object} currentActions - { action: bool, bonus: bool, reaction: bool, inspiration: bool }
  * @param {string} cost - "action", "bonus", "reaction", "free"
  * @returns {object} - updated actions state
  */
 export function consumeActionCost(currentActions, cost) {
-  if (cost === "free" || cost === "reaction") return currentActions;
+  if (cost === "free") return currentActions;
   if (cost === "action") return { ...currentActions, action: false };
   if (cost === "bonus") return { ...currentActions, bonus: false };
+  if (cost === "reaction") return { ...currentActions, reaction: false };
   return currentActions;
 }
 

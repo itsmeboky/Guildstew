@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Heart, Circle, Triangle, Music, ChevronLeft, ChevronRight } from "lucide-react";
+import { Heart, Circle, Triangle, Music, Zap, ChevronLeft, ChevronRight } from "lucide-react";
 import { spellIcons, spellDetails as hardcodedSpellDetails } from "@/components/dnd5e/spellData";
 
 const PC_ICON_BASE = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/abilities/basic%20actions";
@@ -62,9 +62,16 @@ export default function CombatActionBar({
   isHidden = false,
   sneakActive: sneakActiveProp,
   onSneakToggle,
+  // Spell slot tracker. maxSpellSlots / spentSpellSlots are both
+  // objects keyed by spell level ({ 1: 4, 2: 3, ... }). onToggleSlot is
+  // (level, 'spend' | 'restore') → void, used when the GM clicks a
+  // specific dot to override the auto-tracking.
+  maxSpellSlots = {},
+  spentSpellSlots = {},
+  onToggleSlot,
 }) {
   // Internal state if not provided controlled
-  const [localActions, setLocalActions] = useState({ action: true, bonus: true, inspiration: false });
+  const [localActions, setLocalActions] = useState({ action: true, bonus: true, reaction: true, inspiration: false });
   const actions = actionsState || localActions;
   const setActions = setActionsState || setLocalActions;
 
@@ -127,30 +134,48 @@ export default function CombatActionBar({
 
   const defaultSpells = React.useMemo(() => {
     if (!character) return [];
-    
-    // If enriched spells array exists
+
+    // Normalize a spell entry (string or object) into an object and
+    // attach its known spell level so the GMPanel slot consumption can
+    // read action.level directly when the spell is clicked. Cantrips are
+    // level 0 and never burn a slot.
+    const normalize = (spell, level) => {
+      if (!spell) return null;
+      if (typeof spell === 'string') return { name: spell, level };
+      return { ...spell, level: typeof spell.level === 'number' ? spell.level : level };
+    };
+
+    // Enriched spells array — each entry may already carry its level.
     if (Array.isArray(character.spells) && character.spells.length > 0) {
-      return character.spells;
+      return character.spells.map((s) => normalize(s, s?.level)).filter(Boolean);
     }
-    
-    // Fallback to spells object
+
+    // Fallback to spells object bucketed by level.
     const spellSource = character.spells || character.stats?.spells;
-    
     if (spellSource && typeof spellSource === 'object') {
-      return [
-        ...(spellSource.cantrips || []),
-        ...(spellSource.level1 || []),
-        ...(spellSource.level2 || []),
-        ...(spellSource.level3 || []),
-        ...(spellSource.level4 || []),
-        ...(spellSource.level5 || []),
-        ...(spellSource.level6 || []),
-        ...(spellSource.level7 || []),
-        ...(spellSource.level8 || []),
-        ...(spellSource.level9 || [])
+      const buckets = [
+        { level: 0, arr: spellSource.cantrips },
+        { level: 1, arr: spellSource.level1 },
+        { level: 2, arr: spellSource.level2 },
+        { level: 3, arr: spellSource.level3 },
+        { level: 4, arr: spellSource.level4 },
+        { level: 5, arr: spellSource.level5 },
+        { level: 6, arr: spellSource.level6 },
+        { level: 7, arr: spellSource.level7 },
+        { level: 8, arr: spellSource.level8 },
+        { level: 9, arr: spellSource.level9 },
       ];
+      const out = [];
+      for (const { level, arr } of buckets) {
+        if (!arr) continue;
+        for (const s of arr) {
+          const n = normalize(s, level);
+          if (n) out.push(n);
+        }
+      }
+      return out;
     }
-    
+
     return [];
   }, [character]);
 
@@ -251,10 +276,58 @@ export default function CombatActionBar({
             {/* Action & Bonus Action are display-only during combat; consumed by the system */}
             <ActionButton active={actions.action} color="green" icon={Circle} />
             <ActionButton active={actions.bonus} color="orange" icon={Triangle} />
+            <ActionButton active={actions.reaction} color="purple" icon={Zap} />
             <ActionButton active={actions.inspiration} onClick={() => setActions(p => ({...p, inspiration: !p.inspiration}))} color="yellow" icon={Music} />
           </div>
         </div>
       </div>
+
+      {/* Spell slot tracker. Renders a compact row of dots per spell level
+          — filled = available, hollow = spent. Only shown when the
+          character has any spell slots at all (casters only). Clicking a
+          dot toggles it for manual corrections. */}
+      {Object.keys(maxSpellSlots).length > 0 && (
+        <div className="flex items-center gap-3 mb-3 px-1">
+          <span className="text-[9px] uppercase tracking-[0.22em] text-slate-400 font-bold">
+            Spell Slots
+          </span>
+          <div className="flex items-center gap-3 flex-wrap">
+            {Object.keys(maxSpellSlots)
+              .map((k) => Number(k))
+              .filter((level) => level > 0 && maxSpellSlots[level] > 0)
+              .sort((a, b) => a - b)
+              .map((level) => {
+                const max = maxSpellSlots[level];
+                const spent = spentSpellSlots[level] || 0;
+                return (
+                  <div key={level} className="flex items-center gap-1">
+                    <span className="text-[9px] text-slate-500 font-semibold">
+                      L{level}
+                    </span>
+                    {Array.from({ length: max }).map((_, i) => {
+                      const isFilled = i < max - spent;
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            if (!onToggleSlot) return;
+                            onToggleSlot(level, isFilled ? 'spend' : 'restore');
+                          }}
+                          title={`Level ${level} slot — ${isFilled ? 'available' : 'spent'}`}
+                          className={`w-2.5 h-2.5 rounded-full transition-colors ${
+                            isFilled
+                              ? 'bg-[#6366f1] hover:bg-[#818cf8] shadow-[0_0_6px_rgba(99,102,241,0.6)]'
+                              : 'bg-[#1e293b] hover:bg-[#334155] border border-[#334155]'
+                          }`}
+                        />
+                      );
+                    })}
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center gap-3">
         <div className="flex gap-3">
@@ -418,6 +491,7 @@ export default function CombatActionBar({
             .slice(scrollPosition, scrollPosition + visibleSpellCount)
             .map((spell, idx) => {
               const spellName = typeof spell === 'string' ? spell : spell.name;
+              const spellLevel = typeof spell === 'object' && typeof spell.level === 'number' ? spell.level : undefined;
               return (
                 <div key={`sp-${scrollPosition + idx}`} className="relative">
                   <SpellSlot
@@ -433,7 +507,13 @@ export default function CombatActionBar({
                     onHover={() => handleSpellHover(spellName)}
                     onLeave={handleSpellLeave}
                     onClick={() =>
-                      onActionClick && onActionClick({ type: 'spell', ...spell })
+                      onActionClick &&
+                      onActionClick({
+                        type: 'spell',
+                        name: spellName,
+                        level: spellLevel,
+                        spell,
+                      })
                     }
                   />
                   {showSpellDetails === spellName &&
@@ -496,7 +576,14 @@ function StatHump({ label, value, short }) {
 }
 
 function ActionButton({ active, onClick, color, icon: Icon }) {
-  const colorClass = color === 'green' ? 'text-green-500 border-green-500' : color === 'orange' ? 'text-orange-500 border-orange-500' : 'text-yellow-400 border-yellow-400';
+  const colorClass =
+    color === 'green'
+      ? 'text-green-500 border-green-500'
+      : color === 'orange'
+      ? 'text-orange-500 border-orange-500'
+      : color === 'purple'
+      ? 'text-purple-500 border-purple-500'
+      : 'text-yellow-400 border-yellow-400';
   const interactive = typeof onClick === 'function';
   return (
     <button
