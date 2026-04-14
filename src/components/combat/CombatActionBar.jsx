@@ -63,6 +63,11 @@ export default function CombatActionBar({
   isHidden = false,
   sneakActive: sneakActiveProp,
   onSneakToggle,
+  // Non-lethal toggle — parent-controlled so the damage flow can see
+  // whether the killing blow should stabilise instead of triggering
+  // death saves.
+  nonLethalActive: nonLethalActiveProp,
+  onNonLethalToggle,
   // Spell slot tracker. maxSpellSlots / spentSpellSlots are both
   // objects keyed by spell level ({ 1: 4, 2: 3, ... }). onToggleSlot is
   // (level, 'spend' | 'restore') → void, used when the GM clicks a
@@ -76,7 +81,12 @@ export default function CombatActionBar({
   const actions = actionsState || localActions;
   const setActions = setActionsState || setLocalActions;
 
-  const [nonLethalActive, setNonLethalActive] = useState(false);
+  const [localNonLethal, setLocalNonLethal] = useState(false);
+  const nonLethalActive = typeof nonLethalActiveProp === 'boolean' ? nonLethalActiveProp : localNonLethal;
+  const setNonLethalActive = (next) => {
+    if (onNonLethalToggle) onNonLethalToggle(next);
+    else setLocalNonLethal(next);
+  };
   // Sneak is controlled by the parent when onSneakToggle is provided,
   // otherwise fall back to an internal toggle (so the component still
   // works in isolation / Storybook).
