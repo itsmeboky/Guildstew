@@ -25,6 +25,23 @@ const MONSTER_MELEE_ICON = `${MONSTER_ICON_BASE}/monster%20melee.png`;
 const MONSTER_RANGED_ICON = `${MONSTER_ICON_BASE}/monster%20ranged.png`;
 const MONSTER_UNARMED_ICON = `${MONSTER_ICON_BASE}/monster%20unarmed.png`;
 
+// Class tint map — apply as a CSS filter to the base action icons to
+// visually differentiate class-specific bonus-action variants. Only Rogue
+// and Monk are actually used in the UI today; the others are future-proof
+// placeholders so downstream code can add them without a refactor.
+const CLASS_TINT = {
+  Rogue: 'hue-rotate(260deg) saturate(1.5)',    // purple
+  Monk: 'hue-rotate(160deg) saturate(1.5)',     // teal
+  Barbarian: 'hue-rotate(0deg) saturate(2)',    // deep red
+  Fighter: 'hue-rotate(30deg) saturate(1.5)',   // bronze
+  Ranger: 'hue-rotate(90deg) saturate(1.5)',    // forest green
+  Paladin: 'hue-rotate(45deg) saturate(2)',     // gold
+};
+// Tint used when a monster/NPC has an action that can be fired as a
+// bonus action (e.g. legendary creatures with natural "quick strike"
+// abilities). Not wired to real monster data yet.
+const MONSTER_BONUS_TINT = 'hue-rotate(340deg) saturate(1.5)'; // crimson
+
 export default function CombatActionBar({
   character,
   onActionClick,
@@ -140,6 +157,47 @@ export default function CombatActionBar({
   const visibleSpellCount = 8;
   const canScrollLeft = scrollPosition > 0;
   const canScrollRight = scrollPosition + visibleSpellCount < defaultSpells.length;
+
+  // Class-specific bonus action variants. These are the "same" actions as
+  // the main row (Dash, Disengage, etc.) but cost a bonus action instead of
+  // an action, because the class feature grants the upgrade. Each entry
+  // carries a class key (drives the tint) and a classFeature label (flows
+  // through to onActionClick + the resolver).
+  const classBonusActions = React.useMemo(() => {
+    if (!character || isCreature) return [];
+    const cls = (character.class || character.stats?.class || '').toLowerCase();
+    const level = character.level || character.stats?.level || 1;
+    const list = [];
+
+    // Rogue — Cunning Action (2+): bonus-action Dash / Disengage / Hide.
+    if (cls.includes('rogue') && level >= 2) {
+      list.push(
+        { name: 'Dash', classFeature: 'Cunning Action', classKey: 'Rogue' },
+        { name: 'Disengage', classFeature: 'Cunning Action', classKey: 'Rogue' },
+        { name: 'Hide', classFeature: 'Cunning Action', classKey: 'Rogue' },
+      );
+    }
+
+    // Monk — Step of the Wind (Dash/Disengage) + Patient Defense (Dodge),
+    // 2+, each costs 1 Ki. Ki tracking isn't implemented yet; the GM
+    // enforces it manually for now.
+    if (cls.includes('monk') && level >= 2) {
+      list.push(
+        { name: 'Dash', classFeature: 'Step of the Wind', classKey: 'Monk' },
+        { name: 'Disengage', classFeature: 'Step of the Wind', classKey: 'Monk' },
+        { name: 'Dodge', classFeature: 'Patient Defense', classKey: 'Monk' },
+      );
+    }
+
+    return list;
+  }, [character, isCreature]);
+
+  // Quick lookup so we can grab icon URLs by action name when rendering
+  // the class bonus row. basicActionIcons is the canonical list.
+  const basicActionByName = React.useMemo(
+    () => Object.fromEntries(basicActionIcons.map((a) => [a.name, a])),
+    []
+  );
 
   const handleSpellHover = (spell) => {
     setHoveredSpell(spell);
@@ -360,6 +418,51 @@ export default function CombatActionBar({
           </button>
         )}
       </div>
+
+      {/* Class-specific bonus action row — tinted variants of the main
+          action icons that cost a bonus action instead of an action,
+          gated on class + level 2+. */}
+      {classBonusActions.length > 0 && (
+        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-[#111827]">
+          <div className="flex flex-col items-start gap-0.5 pr-2 border-r border-[#111827]">
+            <span className="text-[9px] uppercase tracking-[0.22em] text-orange-400 font-bold">
+              Bonus Action
+            </span>
+            <span className="text-[8px] uppercase tracking-[0.18em] text-slate-500">
+              Class Feature
+            </span>
+          </div>
+          <div className="flex gap-3">
+            {classBonusActions.map((cba, idx) => {
+              const base = basicActionByName[cba.name];
+              const tint = CLASS_TINT[cba.classKey];
+              // Hide shows its hidden state in both the main row AND the
+              // bonus row so either button reflects reality.
+              const hideActive = cba.name === 'Hide' && isHidden;
+
+              return (
+                <BasicActionSlot
+                  key={`${cba.classKey}-${cba.name}-${idx}`}
+                  src={base?.url || null}
+                  tooltip={`${cba.name} (${cba.classFeature}) — bonus action`}
+                  iconFilter={tint}
+                  isActive={hideActive}
+                  activeTint={hideActive ? '#38bdf8' : undefined}
+                  onClick={() => {
+                    onActionClick &&
+                      onActionClick({
+                        type: 'basic',
+                        name: cba.name,
+                        costOverride: 'bonus',
+                        classFeature: cba.classFeature,
+                      });
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -387,14 +490,14 @@ function ActionButton({ active, onClick, color, icon: Icon }) {
   );
 }
 
-function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick, disabled, activeTint }) {
+function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick, disabled, activeTint, iconFilter }) {
   const [showTooltip, setShowTooltip] = useState(false);
 
   // When active, we either apply a button-specific tint (solid coloured
   // border + coloured glow) or fall back to the existing teal/orange
   // animated border.
   let activeStyle = {};
-  let iconStyle = {};
+  let glowFilter = null;
   if (isActive) {
     if (activeTint) {
       activeStyle = {
@@ -402,9 +505,7 @@ function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick
         borderWidth: '3px',
         boxShadow: `0 0 18px ${activeTint}, 0 0 6px ${activeTint}`,
       };
-      iconStyle = {
-        filter: `drop-shadow(0 0 6px ${activeTint}) drop-shadow(0 0 2px ${activeTint}) brightness(1.05)`,
-      };
+      glowFilter = `drop-shadow(0 0 6px ${activeTint}) drop-shadow(0 0 2px ${activeTint}) brightness(1.05)`;
     } else {
       activeStyle = {
         animation: 'rotateBorder 3s linear infinite',
@@ -413,6 +514,16 @@ function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick
       };
     }
   }
+
+  // The icon can be tinted via a class filter (e.g. Rogue/Monk bonus
+  // action row) and/or glowed via the active tint. Compose both so a
+  // Rogue Cunning-Hide icon is purple-tinted AND sky-blue-glowing when
+  // the character is actually hidden.
+  const iconStyle = {};
+  const filters = [];
+  if (iconFilter) filters.push(iconFilter);
+  if (glowFilter) filters.push(glowFilter);
+  if (filters.length > 0) iconStyle.filter = filters.join(' ');
 
   return (
     <button
