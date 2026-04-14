@@ -28,7 +28,12 @@ const BASIC_ACTION_TYPES = {
   "Grapple":        { rollType: "skill_check", cost: "action", skill: "Athletics", contested: "Athletics or Acrobatics", description: "Grapple a creature (Athletics vs Athletics/Acrobatics)" },
   "Shove":          { rollType: "skill_check", cost: "action", skill: "Athletics", contested: "Athletics or Acrobatics", description: "Shove a creature (Athletics vs Athletics/Acrobatics)" },
   "Hide":           { rollType: "skill_check", cost: "action", skill: "Stealth", description: "Make a Stealth check to hide" },
-  "Throw":          { rollType: "attack", cost: "action", description: "Throw a weapon or object" },
+
+  // Fire-and-forget utility actions — just consume the action, no dice.
+  // (Throw is handled as a plain action here even though RAW it's a
+  // weapon attack roll; the tool treats it as a flavor action the GM
+  // narrates.)
+  "Throw":          { rollType: "no_roll", cost: "action", description: "Throw a weapon or object" },
   
   // No-roll actions — just use the action, no dice needed
   "Dash":           { rollType: "no_roll", cost: "action", description: "Double your movement speed this turn" },
