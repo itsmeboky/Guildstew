@@ -1,4 +1,5 @@
 import React from "react";
+import { hpBarColor } from "@/components/combat/hpColor";
 
 export const ActionBar = ({ character }) => {
   const ac = character?.stats?.armor_class || character?.armor_class || 13;
@@ -60,9 +61,9 @@ export const ActionBar = ({ character }) => {
             {/* Bar */}
             <div className="flex-1">
               <div className="h-4 rounded-full bg-[#252b3d] overflow-hidden">
-                {/* % HP fill */}
-                <div 
-                  className="h-full bg-gradient-to-r from-[#4ade80] via-[#22c55e] to-[#2dd4bf]" 
+                {/* % HP fill — color driven by threshold (green/yellow/red) */}
+                <div
+                  className={`h-full ${hpBarColor(hpPercent)}`}
                   style={{ width: `${hpPercent}%` }}
                 />
               </div>

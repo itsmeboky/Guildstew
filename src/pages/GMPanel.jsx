@@ -24,13 +24,23 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { motion } from "framer-motion";
 import CampaignLog from "@/components/gm/CampaignLog";
 import CharacterSelector from "@/components/gm/CharacterSelector";
-import MonsterQueue from "@/components/gm/MonsterQueue";
+import CombatQueue from "@/components/gm/CombatQueue";
+import {
+  readCombatQueue,
+  writeCombatQueue,
+  clearCombatQueue,
+  FACTION_STYLES,
+  FACTIONS,
+  getFaction,
+  getFactionStyle,
+} from "@/utils/combatQueue";
 import { enrichMonster } from "@/components/gm/monsterEnrichment";
 import { canEquipToSlot } from "@/components/gm/equipmentRules";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import { resolveAction, consumeActionCost } from "@/components/combat/actionResolver";
+import { hpBarColor, clampHp, normalizeHp } from "@/components/combat/hpColor";
 import { toast } from "sonner";
 import { useTurnContext } from "@/components/combat/useTurnContext";
 
@@ -48,6 +58,11 @@ const CONDITIONS = {
   Blinded: { color: "#525252", label: "Blinded" },
   Charmed: { color: "#db2777", label: "Charmed" },
   Deafened: { color: "#475569", label: "Deafened" },
+  // Dodging isn't a 5e condition proper, but we surface it as one so the
+  // Dodge action leaves a visible label on the portrait until the
+  // character's next turn starts (attack rolls vs them have disadvantage,
+  // and they have advantage on DEX saves — GM enforces manually for now).
+  Dodging: { color: "#0ea5e9", label: "Dodging" },
   Exhaustion: { color: "#dc2626", label: "Exhaustion" },
   Frightened: { color: "#9333ea", label: "Frightened" },
   Grappled: { color: "#ea580c", label: "Grappled" },
@@ -77,24 +92,21 @@ export default function GMPanel() {
   const [equippedItems, setEquippedItems] = useState({});
   const [initiativeOrder, setInitiativeOrder] = useState([]);
   const [combatActive, setCombatActive] = useState(false);
-  const [actionsState, setActionsState] = useState({ action: true, bonus: true, inspiration: false });
+  const [actionsState, setActionsState] = useState({ action: true, bonus: true, reaction: true, inspiration: false });
   const [activeConditions, setActiveConditions] = useState({});
 
-  // 1. Auto-select first monster if queue has items and no character selected
+  // 1. Auto-select first combatant if the combat queue has items and no
+  // character is selected yet. readCombatQueue handles the legacy
+  // gm_monster_queue → gm_combat_queue migration transparently.
   React.useEffect(() => {
-    const savedQueue = localStorage.getItem(`gm_monster_queue_${campaignId}`);
-    if (savedQueue && !selectedCharacter) {
-      try {
-        const queue = JSON.parse(savedQueue);
-        if (queue.length > 0) {
-          // Need to enrich it to be usable
-          const first = queue[0];
-          const enriched = enrichMonster(first);
-          setSelectedCharacter(enriched);
-          setMonsterInventory(enriched.inventory || []);
-          setEquippedItems(enriched.equipped || {});
-        }
-      } catch (e) { console.error(e); }
+    if (selectedCharacter) return;
+    const queue = readCombatQueue(campaignId);
+    if (queue.length > 0) {
+      const first = queue[0];
+      const enriched = enrichMonster(first);
+      setSelectedCharacter(enriched);
+      setMonsterInventory(enriched.inventory || []);
+      setEquippedItems(enriched.equipped || {});
     }
   }, [campaignId]); // Run once on mount/campaignId change
 
@@ -110,6 +122,16 @@ export default function GMPanel() {
     refetchInterval: (data) => (data?.combat_active || data?.combat_data?.stage === 'initiative') ? 1000 : 2000
   });
 
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: () => base44.auth.me()
+  });
+
+  // The GM can always act, regardless of whose turn it is in the combat
+  // tracker — they might be running a monster, possessing a player, or
+  // just fixing something mid-session.
+  const isGM = !!campaign?.game_master_id && campaign?.game_master_id === currentUser?.id;
+
   const { isActorsTurn } = useTurnContext({ campaign, actor: selectedCharacter });
 
   // Combat State
@@ -124,6 +146,70 @@ export default function GMPanel() {
   // Owned by GMPanel because both CombatActionBar (display + cycling) and
   // the targeting / dice-window flow (which weapon to fire) need it.
   const [attackMode, setAttackMode] = useState(null);
+
+  // Spell slots spent per character. Keyed by characterKey
+  // (uniqueId / id), value is { 1: <spent>, 2: <spent>, ... }. Slots
+  // persist across turns and combats — only a long rest should reset
+  // them (not implemented yet). Click a dot to manually adjust.
+  const [spentSlotsByCharacter, setSpentSlotsByCharacter] = useState({});
+
+  // Stealth / Sneak state.
+  //   hiddenCharacters: Set of character IDs that have successfully hidden
+  //     (Hide action resolved). Cleared when the character attacks, takes
+  //     damage, or their turn ends without re-hiding.
+  //   sneakActive: whether the currently-selected character has the
+  //     Sneak toggle on. Only meaningful while that character is hidden.
+  //   prevActiveKeyRef: remembers whose turn it was last render so the
+  //     turn-change effect can reveal them if they didn't re-hide.
+  //   hidThisTurnRef: whether a successful Hide check happened during the
+  //     current active character's turn (prevents the end-of-turn reveal).
+  const [hiddenCharacters, setHiddenCharacters] = useState(() => new Set());
+  const [sneakActive, setSneakActive] = useState(false);
+  const prevActiveKeyRef = React.useRef(null);
+  const hidThisTurnRef = React.useRef(false);
+
+  // Canonical character id. Monsters from the queue use uniqueId, DB-backed
+  // characters use their row id.
+  const getCharacterKey = React.useCallback((c) => c?.uniqueId || c?.id || null, []);
+  const selectedCharacterKey = getCharacterKey(selectedCharacter);
+  const isHidden = !!selectedCharacterKey && hiddenCharacters.has(selectedCharacterKey);
+
+  // If the selected character is no longer hidden (turn rolled over, attacked
+  // while sneaking, or the GM switched to a different character) the Sneak
+  // toggle should fall back off automatically.
+  React.useEffect(() => {
+    if (!isHidden && sneakActive) setSneakActive(false);
+  }, [isHidden, sneakActive]);
+
+  // Spell slots for the selected character. getCharacterSpellSlots handles
+  // full / half / pact casters and falls back to parsing monster stat
+  // blocks. Non-casters (Barbarian, Fighter, Monk, Rogue without a caster
+  // multiclass) get {}, which hides the tracker row entirely.
+  const maxSpellSlots = React.useMemo(
+    () => (selectedCharacter ? getCharacterSpellSlots(selectedCharacter) : {}),
+    [selectedCharacter]
+  );
+  const currentSpentSlots = React.useMemo(
+    () => (selectedCharacterKey ? spentSlotsByCharacter[selectedCharacterKey] || {} : {}),
+    [spentSlotsByCharacter, selectedCharacterKey]
+  );
+
+  // Manually adjust a spent slot count for the current character (the GM
+  // clicks a dot in the tracker). Used for corrections.
+  const handleToggleSlot = React.useCallback((level, mode) => {
+    const key = selectedCharacterKey;
+    if (!key) return;
+    const max = maxSpellSlots[level] || 0;
+    setSpentSlotsByCharacter((prev) => {
+      const charSpent = prev[key] || {};
+      const curr = charSpent[level] || 0;
+      let next = curr;
+      if (mode === 'spend') next = Math.min(max, curr + 1);
+      else if (mode === 'restore') next = Math.max(0, curr - 1);
+      if (next === curr) return prev;
+      return { ...prev, [key]: { ...charSpent, [level]: next } };
+    });
+  }, [selectedCharacterKey, maxSpellSlots]);
 
   // Sync combat state to DB for spectators
   const updateCombatEncounter = React.useCallback((newState) => {
@@ -171,14 +257,13 @@ export default function GMPanel() {
       const damage = encounter.damageRoll.total;
       const targetId = encounter.targetId;
 
-      // Apply damage if target is a monster (managed by GM)
+      // Apply damage if target is a combat-queue entry (managed by GM).
       if (targetId.startsWith('monster-')) {
-        const monsterQueueId = targetId.replace('monster-', '');
-        const savedQueue = localStorage.getItem(`gm_monster_queue_${campaignId}`);
-        if (savedQueue) {
-          const queue = JSON.parse(savedQueue);
+        const queueId = targetId.replace('monster-', '');
+        const queue = readCombatQueue(campaignId);
+        if (queue.length > 0) {
           const newQueue = queue.map(m => {
-            if (m.queueId === monsterQueueId) {
+            if (m.queueId === queueId || String(m.queueId) === queueId) {
               const currentHp = m.hit_points?.current !== undefined ? m.hit_points.current : (m.hit_points?.max || 10);
               return {
                 ...m,
@@ -190,8 +275,7 @@ export default function GMPanel() {
             }
             return m;
           });
-          localStorage.setItem(`gm_monster_queue_${campaignId}`, JSON.stringify(newQueue));
-          window.dispatchEvent(new Event('storage'));
+          writeCombatQueue(campaignId, newQueue);
         }
       }
     }
@@ -208,9 +292,8 @@ export default function GMPanel() {
         combat_data: null
       });
       
-      // Clear monster queue from local storage
-      localStorage.removeItem(`gm_monster_queue_${campaignId}`);
-      window.dispatchEvent(new Event('storage'));
+      // Clear combat queue from local storage
+      clearCombatQueue(campaignId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
@@ -250,6 +333,10 @@ export default function GMPanel() {
       setIsTurnOrderAccepted(false);
       setInitiativeOrder([]);
       setActiveConditions({});
+      setHiddenCharacters(new Set());
+      setSneakActive(false);
+      hidThisTurnRef.current = false;
+      prevActiveKeyRef.current = null;
       setShowEndCombatAlert(false);
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
     }
@@ -258,6 +345,42 @@ export default function GMPanel() {
   const handleEndCombat = () => {
     endCombatMutation.mutate();
   };
+
+  // Patch a combatant's faction / charm fields in both the live
+  // combat_data.order (so the turn tracker UI + clients update
+  // immediately) and the persistent combat queue storage (so the
+  // change survives re-rolling initiative).
+  const updateCombatantFaction = React.useCallback((combatantKey, patch) => {
+    if (!combatantKey) return;
+
+    // Live turn order on the campaign entity.
+    if (campaign?.combat_data?.order) {
+      const newOrder = campaign.combat_data.order.map(c => {
+        const key = c.uniqueId || c.id;
+        if (key !== combatantKey) return c;
+        return { ...c, ...patch };
+      });
+      base44.entities.Campaign
+        .update(campaignId, {
+          combat_data: { ...campaign.combat_data, order: newOrder },
+        })
+        .then(() => queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] }))
+        .catch(err => console.error('Faction update (order) failed:', err));
+    }
+
+    // Persistent combat queue (so seeding initiative again keeps the new faction).
+    if (combatantKey.startsWith('monster-')) {
+      const queueId = combatantKey.slice('monster-'.length);
+      const queue = readCombatQueue(campaignId);
+      if (queue.length > 0) {
+        const newQueue = queue.map(m => {
+          if (m.queueId !== queueId && String(m.queueId) !== queueId) return m;
+          return { ...m, ...patch };
+        });
+        writeCombatQueue(campaignId, newQueue);
+      }
+    }
+  }, [campaign?.combat_data, campaignId, queryClient]);
 
   const toggleCondition = (targetId, condition) => {
     setActiveConditions(prev => {
@@ -275,57 +398,39 @@ export default function GMPanel() {
     });
   };
 
-  // Build a synthetic "Unarmed Strike" weapon. Rules:
-  //   Non-Monk: flat 1 + STR mod damage (no dice roll).
-  //   Monk:     Martial Arts die + max(STR, DEX) mod, die scales by level
-  //             (1-4 → 1d4, 5-10 → 1d6, 11-16 → 1d8, 17+ → 1d10).
-  const buildUnarmedWeapon = React.useCallback((actor) => {
-    const cls = (actor?.class || actor?.stats?.class || '').toLowerCase();
-    const isMonk = cls.includes('monk');
-    if (!isMonk) {
-      return {
-        name: 'Unarmed Strike',
-        damage: '1',
-        flatDamage: 1, // sentinel: dice window skips the damage roll
-        category: 'Melee',
-        properties: ['Unarmed'],
-      };
-    }
-    const level = actor?.level || 1;
-    let die = '1d4';
-    if (level >= 17) die = '1d10';
-    else if (level >= 11) die = '1d8';
-    else if (level >= 5) die = '1d6';
-    return {
-      name: 'Unarmed Strike (Martial Arts)',
-      damage: die,
-      category: 'Melee',
-      properties: ['Unarmed', 'Monk'],
-      useBestOfStrDex: true, // sentinel: dice window picks max(strMod, dexMod)
-    };
-  }, []);
-
   // Construct the attack action object for a given mode. Used both when the
   // attack button changes mode (to set combatState.action for targeting) and
-  // when a target is selected.
+  // when a target is selected. If the requested mode has no weapon available
+  // (melee with no weapon1, ranged with no ranged weapon) we fall back to
+  // unarmed, and always send `weapon: null` for unarmed so the dice window
+  // synthesizes the unarmed strike (1d4 + STR, or Martial Arts for Monks).
   const buildAttackAction = React.useCallback((mode) => {
     if (!mode) return null;
     const equipment = equippedItems || {};
+    let effectiveMode = mode;
     let weapon = null;
-    if (mode === 'melee') weapon = equipment.weapon1 || null;
-    else if (mode === 'ranged') weapon = equipment.ranged || null;
-    else if (mode === 'unarmed') weapon = buildUnarmedWeapon(selectedCharacter);
+
+    if (mode === 'melee') {
+      weapon = equipment.weapon1 || null;
+      if (!weapon) effectiveMode = 'unarmed';
+    } else if (mode === 'ranged') {
+      weapon = equipment.ranged || null;
+      if (!weapon) effectiveMode = 'unarmed';
+    }
+    // mode === 'unarmed' always sends weapon: null
+
+    if (effectiveMode === 'unarmed') weapon = null;
 
     const action = {
       type: 'basic',
       name: 'Attack',
-      mode,
+      mode: effectiveMode,
       weapon,
       isOffHand: false,
     };
     const resolved = resolveAction(action, selectedCharacter);
     return { ...action, resolved };
-  }, [equippedItems, selectedCharacter, buildUnarmedWeapon]);
+  }, [equippedItems, selectedCharacter]);
 
   // Handler called when CombatActionBar cycles the attack toggle.
   const handleAttackModeChange = React.useCallback((nextMode) => {
@@ -333,7 +438,8 @@ export default function GMPanel() {
     // from null → a mode (i.e. entering attack targeting). Cycling between
     // modes or cancelling is always allowed.
     if (attackMode === null && nextMode !== null) {
-      if (campaign?.combat_active && campaign?.combat_data && !isActorsTurn) {
+      // GM can always act, regardless of whose turn the tracker says it is.
+      if (campaign?.combat_active && campaign?.combat_data && !isGM && !isActorsTurn) {
         toast.error("It's not this character's turn!");
         return;
       }
@@ -363,44 +469,71 @@ export default function GMPanel() {
     campaign?.combat_active,
     campaign?.combat_data,
     isActorsTurn,
+    isGM,
     actionsState.action,
     buildAttackAction,
   ]);
 
   const rollInitiative = () => {
+    // Helper: 1d20 + mod, returns a breakdown so the turn order can
+    // show "15 (12 + 3)" per combatant.
+    const rollD20 = (mod) => {
+      const raw = Math.floor(Math.random() * 20) + 1;
+      return { raw, mod, total: raw + mod };
+    };
+
     // 1. Get Players
     const playerCombatants = players.map(p => {
       const char = p.character;
       const dex = char?.attributes?.dex || 10;
       const mod = Math.floor((dex - 10) / 2);
+      const roll = rollD20(mod);
+      const hp = normalizeHp(char);
       return {
         id: `player-${p.user_id}`,
         name: char?.name || p.username,
         avatar: char?.profile_avatar_url || p.avatar_url,
         dexMod: mod,
         type: 'player',
-        initiative: Math.floor(Math.random() * 20) + 1 + mod,
-        uniqueId: `player-${p.user_id}`
+        initiative: roll.total,
+        initiativeRoll: roll.raw,
+        initiativeMod: roll.mod,
+        uniqueId: `player-${p.user_id}`,
+        hit_points: hp,
+        // PCs are always their own faction.
+        faction: 'player',
+        originalFaction: 'player',
+        charmDuration: null,
       };
     });
 
-    // 2. Get Monsters from localStorage
-    const savedQueue = localStorage.getItem(`gm_monster_queue_${campaignId}`);
-    const monsterQueue = savedQueue ? JSON.parse(savedQueue) : [];
-    
-    const monsterCombatants = monsterQueue.map(m => {
+    // 2. Get queued combatants from the combat queue (monsters, NPCs,
+    // allies, neutrals — whatever the GM lined up). Faction and the
+    // normalized HP come straight from the queue entry; initiative
+    // is rolled fresh for each combatant as a 1d20 + DEX mod.
+    const queuedCombatants = readCombatQueue(campaignId);
+
+    const monsterCombatants = queuedCombatants.map(m => {
       const stats = m.stats || m;
       const dex = stats.dex || stats.attributes?.dex || 10;
       const mod = Math.floor((dex - 10) / 2);
+      const roll = rollD20(mod);
+      const hp = normalizeHp(m);
       return {
         id: `monster-${m.queueId}`,
         name: m.name,
         avatar: m.image_url || m.avatar_url,
         dexMod: mod,
         type: 'monster',
-        initiative: Math.floor(Math.random() * 20) + 1 + mod,
+        initiative: roll.total,
+        initiativeRoll: roll.raw,
+        initiativeMod: roll.mod,
         uniqueId: `monster-${m.queueId}`,
-        initiative_rolled: true // Monsters always have rolled
+        initiative_rolled: true,
+        hit_points: hp,
+        faction: m.faction || 'enemy',
+        originalFaction: m.originalFaction || m.faction || 'enemy',
+        charmDuration: m.charmDuration ?? null,
       };
     });
 
@@ -435,18 +568,13 @@ export default function GMPanel() {
       const currentCombatant = campaign.combat_data.order[0];
       
       if (currentCombatant && (currentCombatant.type === 'monster' || currentCombatant.type === 'npc')) {
-        // It's a GM turn. Find this monster in the queue/data to select it fully.
+        // It's a GM turn. Find this combatant in the combat queue.
         const queueId = currentCombatant.uniqueId?.replace('monster-', '');
-        
-        // Try to find in localStorage queue first
-        const savedQueue = localStorage.getItem(`gm_monster_queue_${campaignId}`);
-        let foundMonster = null;
-        
-        if (savedQueue) {
-          const queue = JSON.parse(savedQueue);
-          foundMonster = queue.find(m => m.queueId === queueId) || queue.find(m => m.name === currentCombatant.name);
-        }
-        
+        const queue = readCombatQueue(campaignId);
+        const foundMonster = queue.find(m =>
+          m.queueId === queueId || String(m.queueId) === queueId
+        ) || queue.find(m => m.name === currentCombatant.name);
+
         if (foundMonster) {
           const enriched = enrichMonster(foundMonster);
           // IMPORTANT: Inject the uniqueId from the combatant to ensure match and prevent infinite loop
@@ -485,11 +613,98 @@ export default function GMPanel() {
     }
   }, [campaign, campaignId]);
 
-  // Reset action economy + attack mode when turn changes (separate effect — must be at top level)
+  // Per-turn resets on turn change:
+  //   - action economy (Action + Bonus Action + Inspiration)
+  //   - attack-mode toggle
+  //   - sneak toggle
+  //   - Dodging condition on the new active combatant (per 5e the Dodge
+  //     benefit lasts until the start of the dodger's next turn)
+  //   - Reveal the previous active combatant if they didn't re-hide during
+  //     their turn (hidThisTurnRef tracks that). Hiding is short-lived:
+  //     attack / take damage / let your turn pass without re-hiding and
+  //     you're exposed.
   React.useEffect(() => {
-    setActionsState({ action: true, bonus: true, inspiration: false });
+    setActionsState({ action: true, bonus: true, reaction: true, inspiration: false });
     setAttackMode(null);
+    setSneakActive(false);
+
+    const activeCombatant = campaign?.combat_data?.order?.[0];
+    const activeKey = activeCombatant?.uniqueId || activeCombatant?.id;
+
+    if (activeKey) {
+      setActiveConditions(prev => {
+        const current = prev[activeKey] || [];
+        if (!current.includes('Dodging')) return prev;
+        return { ...prev, [activeKey]: current.filter(c => c !== 'Dodging') };
+      });
+    }
+
+    // End-of-turn reveal: if the character whose turn just ended was hidden
+    // and didn't re-hide this turn, remove them from hiddenCharacters.
+    const prevActiveKey = prevActiveKeyRef.current;
+    if (prevActiveKey && prevActiveKey !== activeKey && !hidThisTurnRef.current) {
+      setHiddenCharacters(prev => {
+        if (!prev.has(prevActiveKey)) return prev;
+        const next = new Set(prev);
+        next.delete(prevActiveKey);
+        return next;
+      });
+    }
+
+    // Charm decrement: when a charmed ally's turn ends, decrement their
+    // charmDuration. If it hits 0 the charm wears off and they revert to
+    // their original faction (typically 'enemy'). We look up the
+    // combatant whose turn just ended in both the live order (so the
+    // turn-tracker UI reflects the new faction immediately) and the
+    // combat queue storage (so the new faction persists across re-rolls
+    // of initiative). A toast announces the expiration.
+    if (prevActiveKey && prevActiveKey !== activeKey) {
+      const order = campaign?.combat_data?.order || [];
+      const prev = order.find(c => (c.uniqueId || c.id) === prevActiveKey);
+      if (prev && prev.faction === 'ally' && typeof prev.charmDuration === 'number') {
+        const next = prev.charmDuration - 1;
+        if (next <= 0) {
+          const revertTo = prev.originalFaction || 'enemy';
+          toast(`${prev.name}'s charm has worn off!`);
+          updateCombatantFaction(prevActiveKey, { faction: revertTo, charmDuration: null });
+        } else {
+          updateCombatantFaction(prevActiveKey, { charmDuration: next });
+        }
+      }
+    }
+
+    hidThisTurnRef.current = false;
+    prevActiveKeyRef.current = activeKey;
   }, [campaign?.combat_data?.currentTurnIndex, campaign?.combat_data?.round, campaign?.combat_data?.order?.[0]?.id]);
+
+  // Sync equippedItems + monsterInventory whenever a different character is
+  // selected/possessed. This is the single source of truth for both players
+  // and monsters, so no matter which selection path fires (Possess dialog,
+  // Character selector, CombatQueue click, turn auto-select, seed data)
+  // the equipment and inventory always populate from the character row.
+  //
+  // Keyed on selectedCharacter?.id so drag-and-drop mutations to
+  // equippedItems don't get clobbered while the same character is active.
+  React.useEffect(() => {
+    if (!selectedCharacter) {
+      setEquippedItems({});
+      setMonsterInventory([]);
+      return;
+    }
+    // Prefer `equipped` (the canonical field for equipped-slot data).
+    // Fall back to `equipment` if `equipped` is missing or empty, so older
+    // rows that only have the legacy field still light up the slots.
+    const equippedField = selectedCharacter.equipped;
+    const equipmentField = selectedCharacter.equipment;
+    const resolvedEquipped =
+      equippedField && Object.keys(equippedField).length > 0
+        ? equippedField
+        : equipmentField && Object.keys(equipmentField).length > 0
+        ? equipmentField
+        : {};
+    setEquippedItems(resolvedEquipped);
+    setMonsterInventory(Array.isArray(selectedCharacter.inventory) ? selectedCharacter.inventory : []);
+  }, [selectedCharacter?.id, selectedCharacter?.uniqueId]);
 
   const { data: monsters = [] } = useQuery({
     queryKey: ['campaignMonsters', campaignId],
@@ -524,11 +739,6 @@ export default function GMPanel() {
     queryKey: ['allUserProfiles'],
     queryFn: () => base44.entities.UserProfile.list(),
     staleTime: 60000
-  });
-
-  const { data: currentUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me()
   });
 
   // Fetch all spells for accurate tooltips
@@ -702,6 +912,7 @@ export default function GMPanel() {
               // Spectator Props
               isSpectator={!combatState.isOpen && !!campaign?.combat_data?.active_encounter}
               spectatorData={campaign?.combat_data?.active_encounter}
+              sneakActive={sneakActive}
 
               onSwitchTarget={() => {
                 setCombatState(prev => ({ ...prev, isOpen: false, step: 'selecting_target' }));
@@ -711,7 +922,7 @@ export default function GMPanel() {
                 if (campaign?.combat_data?.active_encounter) {
                   const currentEncounter = campaign.combat_data.active_encounter;
                   let updates = {};
-                  
+
                   if (data.type === 'attack_result') { // Custom event we'll add to DiceWindow
                      updates = { phase: 'attack_result', attackRoll: data.roll };
                   } else if (data.type === 'damage') {
@@ -732,53 +943,116 @@ export default function GMPanel() {
                   }
                 }
 
-                if (data.type === 'damage') {
-                  // Apply damage
-                  const targetId = data.targetId;
-                  const damage = data.value;
-                  
-                  if (targetId.startsWith('player-')) {
-                    const userId = targetId.replace('player-', '');
-                    const char = characters.find(c => {
-                      // find character for this user
-                      // Need to map user_id to email or check campaign player_ids
-                      const player = players.find(p => p.user_id === userId);
-                      return player && c.created_by === player.email;
+                // Hide success → mark the current character as hidden so the
+                // Sneak toggle unlocks. Any completed Hide check counts as
+                // success; the GM can mentally invalidate a low roll by
+                // manually revealing. We also flip hidThisTurnRef so the
+                // end-of-turn reveal in the turn-change effect leaves them
+                // alone.
+                if (data.type === 'check_result' && combatState.action?.name === 'Hide') {
+                  const key = getCharacterKey(selectedCharacter);
+                  if (key) {
+                    setHiddenCharacters(prev => {
+                      const next = new Set(prev);
+                      next.add(key);
+                      return next;
                     });
-                    
-                    if (char) {
-                      const newCurrent = Math.max(0, (char.hit_points?.current || char.hit_points?.max || 0) - damage);
-                      base44.entities.Character.update(char.id, {
-                        hit_points: { ...char.hit_points, current: newCurrent }
-                      });
-                      queryClient.invalidateQueries(['campaignCharacters']);
+                    hidThisTurnRef.current = true;
+                  }
+                }
+
+                if (data.type === 'damage') {
+                  // `delta` is positive for damage, negative for healing.
+                  // clampHp in hpColor.js does current - delta bounded to [0, max].
+                  const targetId = data.targetId;
+                  const delta = data.value;
+
+                  // Taking damage reveals a hidden character.
+                  if (targetId && delta > 0) {
+                    setHiddenCharacters(prev => {
+                      if (!prev.has(targetId)) return prev;
+                      const next = new Set(prev);
+                      next.delete(targetId);
+                      return next;
+                    });
+                  }
+
+                  // Resolve the target to an actual character entity.
+                  // Four id formats in the wild:
+                  //   player-<uuid>           → real player via profile email
+                  //   player-ghost-<charId>   → orphan character (seeded / imported)
+                  //   ghost-<charId>          → same, direct form
+                  //   monster-<queueId>       → combat queue entry
+                  let resolvedChar = null;
+                  let resolvedMonsterQueueId = null;
+
+                  if (targetId.startsWith('player-')) {
+                    const rest = targetId.slice('player-'.length);
+                    if (rest.startsWith('ghost-')) {
+                      const charId = rest.slice('ghost-'.length);
+                      resolvedChar = characters.find(c => c.id === charId) || null;
+                    } else {
+                      const player = players.find(p => p.user_id === rest);
+                      if (player) {
+                        // Prefer the direct `player.character` ref (works for
+                        // both real players AND orphans synthesised as
+                        // ghost players), fall back to email match.
+                        resolvedChar = player.character ||
+                          characters.find(c => c.created_by === player.email) ||
+                          null;
+                      }
                     }
+                  } else if (targetId.startsWith('ghost-')) {
+                    const charId = targetId.slice('ghost-'.length);
+                    resolvedChar = characters.find(c => c.id === charId) || null;
                   } else if (targetId.startsWith('monster-')) {
-                    // Handle monster HP (local state or queue)
-                    // Update local queue in localStorage or state
-                    // NOTE: Monster instances in queue should track their own HP
-                    // We need to update `monsters` state in ConditionManager or wherever it's stored
-                    // Since MonsterQueue uses localStorage, we update it there.
-                    const savedQueue = localStorage.getItem(`gm_monster_queue_${campaignId}`);
-                    if (savedQueue) {
-                      const queue = JSON.parse(savedQueue);
-                      const monsterQueueId = targetId.replace('monster-', '');
-                      const newQueue = queue.map(m => {
-                        if (m.queueId === monsterQueueId) {
-                          const currentHp = m.hit_points?.current !== undefined ? m.hit_points.current : (m.hit_points?.max || 10);
+                    resolvedMonsterQueueId = targetId.slice('monster-'.length);
+                  }
+
+                  // --- Character (player + ghost) HP write-through to DB ---
+                  if (resolvedChar) {
+                    const maxHp = resolvedChar.hit_points?.max || 0;
+                    const currentHp = resolvedChar.hit_points?.current ?? maxHp;
+                    const newCurrent = clampHp(currentHp, maxHp, delta);
+                    if (newCurrent !== currentHp) {
+                      base44.entities.Character
+                        .update(resolvedChar.id, {
+                          hit_points: { ...(resolvedChar.hit_points || {}), current: newCurrent },
+                        })
+                        .then(() => {
+                          queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
+                        })
+                        .catch(err => {
+                          console.error('Damage write-back failed:', err);
+                          toast.error('Failed to update character HP');
+                        });
+                    }
+                  }
+
+                  // --- Combat-queue HP write-through ---
+                  if (resolvedMonsterQueueId) {
+                    try {
+                      const queue = readCombatQueue(campaignId);
+                      if (queue.length > 0) {
+                        const newQueue = queue.map(m => {
+                          if (m.queueId !== resolvedMonsterQueueId && String(m.queueId) !== resolvedMonsterQueueId) {
+                            return m;
+                          }
+                          const maxHp = m.hit_points?.max || 10;
+                          const currentHp = m.hit_points?.current ?? maxHp;
                           return {
                             ...m,
                             hit_points: {
-                              ...m.hit_points,
-                              current: Math.max(0, currentHp - damage)
-                            }
+                              ...(m.hit_points || {}),
+                              current: clampHp(currentHp, maxHp, delta),
+                              max: maxHp,
+                            },
                           };
-                        }
-                        return m;
-                      });
-                      localStorage.setItem(`gm_monster_queue_${campaignId}`, JSON.stringify(newQueue));
-                      // Force re-render/update
-                      window.dispatchEvent(new Event('storage'));
+                        });
+                        writeCombatQueue(campaignId, newQueue);
+                      }
+                    } catch (err) {
+                      console.error('Combat queue damage write-back failed:', err);
                     }
                   }
                 }
@@ -791,6 +1065,22 @@ export default function GMPanel() {
                 }
                 // Attack resolved → leave attack-mode selection
                 setAttackMode(null);
+
+                // If the character attacked while sneaking, reveal them: drop
+                // them from hiddenCharacters and flip the Sneak toggle off
+                // (the isHidden-driven effect will also catch this).
+                if (combatState.action?.name === 'Attack' && sneakActive) {
+                  const key = getCharacterKey(selectedCharacter);
+                  if (key) {
+                    setHiddenCharacters(prev => {
+                      if (!prev.has(key)) return prev;
+                      const next = new Set(prev);
+                      next.delete(key);
+                      return next;
+                    });
+                  }
+                  setSneakActive(false);
+                }
                 // Clear the synced encounter so spectators exit cleanly.
                 // Optimistically update the local cache to avoid a flash where the
                 // dice window briefly switches to spectator mode before the
@@ -850,27 +1140,43 @@ export default function GMPanel() {
                   setOrder={setInitiativeOrder} 
                   activeConditions={activeConditions} 
                   onSelectTarget={(target) => {
-                    if (combatState.step === 'selecting_target') {
-                      setCombatState(prev => ({ ...prev, target, step: 'rolling', isOpen: true }));
+                    if (combatState.step !== 'selecting_target') return;
+                    // Faction-aware targeting: non-GMs get a confirmation
+                    // prompt when the target is an ally or a neutral.
+                    // GMs can always target anything.
+                    const targetFaction = getFaction(target);
+                    const needsConfirm = !isGM && (targetFaction === 'ally' || targetFaction === 'neutral');
+                    if (needsConfirm) {
+                      const label = targetFaction === 'ally' ? 'ally' : 'neutral';
+                      // eslint-disable-next-line no-alert
+                      const ok = window.confirm(`Target ${target.name}? They're ${label === 'ally' ? 'an ally' : 'neutral'}.`);
+                      if (!ok) return;
                     }
+                    setCombatState(prev => ({ ...prev, target, step: 'rolling', isOpen: true }));
                   }}
+                  isGM={isGM}
+                  onChangeFaction={updateCombatantFaction}
                   selectionMode={combatState.step === 'selecting_target'}
                   isTurnOrderAccepted={isTurnOrderAccepted}
-                  // Pass helpers to lookup HP
+                  // Pass helpers to lookup HP. Everything flows through
+                  // normalizeHp so legacy entries (string HP, nested
+                  // stats.hit_points, etc.) render consistently.
                   getHp={(id) => {
                     if (id.startsWith('player-')) {
+                      const rest = id.slice('player-'.length);
+                      if (rest.startsWith('ghost-')) {
+                        const charId = rest.slice('ghost-'.length);
+                        const char = characters.find(c => c.id === charId);
+                        return normalizeHp(char);
+                      }
                       const p = players.find(p => `player-${p.user_id}` === id);
-                      return p?.character?.hit_points;
+                      return normalizeHp(p?.character);
                     }
                     if (id.startsWith('monster-')) {
-                      // Look in localStorage for sync
                       const qId = id.replace('monster-', '');
-                      const savedQueue = localStorage.getItem(`gm_monster_queue_${campaignId}`);
-                      if (savedQueue) {
-                         const q = JSON.parse(savedQueue);
-                         const m = q.find(m => m.queueId === qId);
-                         return m?.hit_points || m?.stats?.hit_points;
-                      }
+                      const q = readCombatQueue(campaignId);
+                      const m = q.find(m => m.queueId === qId || String(m.queueId) === qId);
+                      return normalizeHp(m);
                     }
                     return null;
                   }}
@@ -886,7 +1192,7 @@ export default function GMPanel() {
                           disabled={acceptTurnOrderMutation.isPending}
                           className="rounded-full bg-[#37F2D1]/20 border border-[#37F2D1] text-[#37F2D1] px-5 py-2 text-xs font-semibold tracking-wide hover:bg-[#37F2D1]/30 transition"
                         >
-                          {acceptTurnOrderMutation.isPending ? "ACCEPTING..." : "ACCEPT TURN ORDER"}
+                          {acceptTurnOrderMutation.isPending ? "STARTING..." : "FIGHT"}
                         </button>
                       ) : (
                         <button 
@@ -934,20 +1240,38 @@ export default function GMPanel() {
               setActionsState={setActionsState}
               attackMode={attackMode}
               onAttackModeChange={handleAttackModeChange}
+              isHidden={isHidden}
+              sneakActive={sneakActive}
+              onSneakToggle={(next) => setSneakActive(next)}
+              maxSpellSlots={maxSpellSlots}
+              spentSpellSlots={currentSpentSlots}
+              onToggleSlot={handleToggleSlot}
               onActionClick={(action) => {
                 // Clicking any other action cancels attack-mode targeting.
                 if (attackMode !== null) setAttackMode(null);
 
-                // Turn order enforcement
-                if (campaign?.combat_active && campaign?.combat_data) {
-                  if (!isActorsTurn) {
+                // Resolve first so we know the cost — that determines
+                // whether the turn-order check even applies. Reactions
+                // (Shield, Counterspell, Hellish Rebuke, opportunity
+                // attacks) can fire on ANY combatant's turn, so they
+                // bypass the turn gate entirely and only check the
+                // reaction availability.
+                const resolved = resolveAction(action, selectedCharacter);
+                const enrichedAction = { ...action, resolved };
+
+                if (resolved.cost === "reaction") {
+                  if (!actionsState.reaction) {
+                    toast.error("Reaction already used this round!");
+                    return;
+                  }
+                } else if (campaign?.combat_active && campaign?.combat_data) {
+                  // Action / bonus / free / no-cost entries still obey the
+                  // turn gate. The GM is always allowed through.
+                  if (!isGM && !isActorsTurn) {
                     toast.error("It's not this character's turn!");
                     return;
                   }
                 }
-
-                const resolved = resolveAction(action, selectedCharacter);
-                const enrichedAction = { ...action, resolved };
 
                 // Action economy gate — can't do it if the required cost isn't available
                 if (resolved.cost === "action" && !actionsState.action) {
@@ -959,10 +1283,53 @@ export default function GMPanel() {
                   return;
                 }
 
+                // Spell slot gate — leveled spells (level > 0) require an
+                // available slot. Cantrips (level 0 / undefined) are free.
+                if (action.type === 'spell' && typeof action.level === 'number' && action.level > 0) {
+                  const key = selectedCharacterKey;
+                  const max = maxSpellSlots[action.level] || 0;
+                  const already = (spentSlotsByCharacter[key] || {})[action.level] || 0;
+                  if (max === 0 || already >= max) {
+                    toast.error(`No level ${action.level} spell slots remaining!`);
+                    return;
+                  }
+                  // Commit the slot up-front. If the spell ultimately gets
+                  // cancelled the GM can refund by clicking the dot.
+                  if (key) {
+                    setSpentSlotsByCharacter((prev) => {
+                      const charSpent = prev[key] || {};
+                      return {
+                        ...prev,
+                        [key]: {
+                          ...charSpent,
+                          [action.level]: (charSpent[action.level] || 0) + 1,
+                        },
+                      };
+                    });
+                  }
+                }
+
                 // No-roll actions — just consume the cost and toast. Don't open the dice window.
                 if (resolved.rollType === "no_roll") {
                   setActionsState(prev => consumeActionCost(prev, resolved.cost));
-                  toast.success(`${selectedCharacter?.name || 'Character'} uses ${action.name}`);
+                  const featureSuffix = action.classFeature ? ` (${action.classFeature})` : '';
+                  toast.success(`${selectedCharacter?.name || 'Character'} uses ${action.name}${featureSuffix}`);
+
+                  // Dodge leaves a visible "Dodging" condition label on the
+                  // character until the start of their next turn. The
+                  // turn-change effect auto-clears it when the turn rotates
+                  // back to them.
+                  if (action.name === 'Dodge') {
+                    const key = selectedCharacter?.uniqueId;
+                    if (key) {
+                      setActiveConditions(prev => {
+                        const current = prev[key] || [];
+                        if (current.includes('Dodging')) return prev;
+                        return { ...prev, [key]: [...current, 'Dodging'] };
+                      });
+                    }
+                  }
+
                   setCombatState({ isOpen: false, step: 'idle', action: null, target: null });
                   return;
                 }
@@ -1005,13 +1372,19 @@ export default function GMPanel() {
               </div>
 
               <div className="space-y-4">
-                <MonsterQueue
+                <CombatQueue
                   monsters={monsters}
                   npcs={npcs}
                   onSelectMonster={(char) => {
                     setSelectedCharacter(char);
                     setMonsterInventory(char.inventory || []);
                     setEquippedItems(char.equipped || {});
+                  }}
+                  onCreateNpc={() => {
+                    // Jump to the existing Character Creator in NPC mode.
+                    // returnTo is a hint the creator can respect to send
+                    // the user back here after the NPC is saved.
+                    navigate(createPageUrl("CharacterCreator") + `?campaignId=${campaignId}&mode=npc&returnTo=GMPanel`);
                   }}
                   campaignId={campaignId}
                 />
@@ -1074,11 +1447,11 @@ export default function GMPanel() {
                             )}
                           </div>
                           <div className="px-3 py-2 text-[11px] space-y-1">
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs font-semibold truncate">
+                            <div className="flex justify-between items-center gap-1">
+                              <span className="inline-block text-[10px] font-semibold bg-[#37F2D1]/20 text-[#37F2D1] px-2 py-0.5 rounded-full truncate">
                                 {character?.name || player.username}
                               </span>
-                              <span className="text-[10px] text-slate-400">
+                              <span className="text-[10px] text-slate-400 flex-shrink-0">
                                 AC {ac}
                               </span>
                             </div>
@@ -1211,17 +1584,12 @@ export default function GMPanel() {
         </div>
       </div>
 
-      {/* Possess Character Selector (players + GM monster queue) */}
+      {/* Possess Character Selector (players + GM combat queue) */}
       {showPossessSelector && (() => {
-        // Pull the GM's current monster queue from localStorage so the dialog
-        // shows monsters the GM is already running alongside the party.
-        let monsterQueue = [];
-        try {
-          const savedQueue = localStorage.getItem(`gm_monster_queue_${campaignId}`);
-          if (savedQueue) monsterQueue = JSON.parse(savedQueue) || [];
-        } catch (e) {
-          console.error("Failed to read monster queue for Possess dialog", e);
-        }
+        // Pull the GM's current combat queue so the dialog shows every
+        // combatant (monster, NPC, ally, …) the GM is already running
+        // alongside the party.
+        const combatQueue = readCombatQueue(campaignId);
 
         return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-6">
@@ -1254,7 +1622,16 @@ export default function GMPanel() {
                           key={player.user_id}
                           onClick={() => {
                             if (char) {
-                              setSelectedCharacter({ ...char, type: 'player' });
+                              setSelectedCharacter({
+                                ...char,
+                                type: 'player',
+                                // Mirror the combatant uniqueId so conditions
+                                // (Dodging, etc.) keyed on uniqueId apply to
+                                // the same entity the turn tracker sees.
+                                uniqueId: `player-${player.user_id}`,
+                              });
+                              setEquippedItems(char.equipped || char.equipment || {});
+                              setMonsterInventory(char.inventory || []);
                               setIsPossessed(true);
                             }
                             setShowPossessSelector(false);
@@ -1296,14 +1673,14 @@ export default function GMPanel() {
                 )}
               </div>
 
-              {/* GM's monster queue */}
+              {/* GM's combat queue */}
               <div>
                 <h3 className="text-xs font-bold tracking-[0.22em] uppercase text-slate-400 mb-3">
                   Your Monsters
                 </h3>
-                {monsterQueue.length > 0 ? (
+                {combatQueue.length > 0 ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {monsterQueue.map((monster) => {
+                    {combatQueue.map((monster) => {
                       const art = monster.image_url || monster.avatar_url || monster.stats?.image_url;
                       return (
                         <button
@@ -1430,18 +1807,11 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
   const [adjustingHp, setAdjustingHp] = useState(false);
   const [hpAdjustment, setHpAdjustment] = useState(0);
   
-  // Get monsters from queue
+  // Get combatants from the combat queue
   const [monsters, setMonsters] = useState([]);
-  
+
   const loadMonsters = () => {
-    const saved = localStorage.getItem(`gm_monster_queue_${campaignId}`);
-    if (saved) {
-      try {
-        setMonsters(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to parse saved monster queue", e);
-      }
-    }
+    setMonsters(readCombatQueue(campaignId));
   };
 
   React.useEffect(() => {
@@ -1464,12 +1834,11 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
         // Optimistic update or wait for query invalidation (handled by parent usually, but here we trigger directly)
       }
     } else if (targetId.startsWith('monster-')) {
-      const monsterQueueId = targetId.replace('monster-', '');
-      const savedQueue = localStorage.getItem(`gm_monster_queue_${campaignId}`);
-      if (savedQueue) {
-        const queue = JSON.parse(savedQueue);
+      const queueId = targetId.replace('monster-', '');
+      const queue = readCombatQueue(campaignId);
+      if (queue.length > 0) {
         const newQueue = queue.map(m => {
-          if (m.queueId === monsterQueueId) {
+          if (m.queueId === queueId || String(m.queueId) === queueId) {
             const current = m.hit_points?.current !== undefined ? m.hit_points.current : (m.hit_points?.max || 10);
             const max = m.hit_points?.max || 10;
             return {
@@ -1482,7 +1851,7 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
           }
           return m;
         });
-        localStorage.setItem(`gm_monster_queue_${campaignId}`, JSON.stringify(newQueue));
+        writeCombatQueue(campaignId, newQueue);
         loadMonsters();
       }
     }
@@ -1620,10 +1989,15 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
                             <p className="text-sm font-bold text-white truncate">{char?.name || player.username}</p>
                             {adjustingHp ? (
                               <div className="w-full bg-[#111827] h-1.5 rounded-full mt-1 overflow-hidden">
-                                <div className="bg-green-500 h-full" style={{ width: `${Math.min(100, (currentHp/maxHp)*100)}%` }} />
+                                <div
+                                  className={`${hpBarColor(maxHp > 0 ? (currentHp / maxHp) * 100 : 0)} h-full`}
+                                  style={{ width: `${maxHp > 0 ? Math.min(100, (currentHp / maxHp) * 100) : 0}%` }}
+                                />
                               </div>
                             ) : (
-                              <p className="text-xs text-slate-400">Player</p>
+                              <span className="inline-block text-[10px] font-semibold bg-[#37F2D1]/20 text-[#37F2D1] px-2 py-0.5 rounded-full">
+                                Player
+                              </span>
                             )}
                           </div>
                           {hasCondition && <div className="ml-auto w-2 h-2 rounded-full bg-[#37F2D1]" />}
@@ -1663,10 +2037,15 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
                               <p className="text-sm font-bold text-white truncate">{monster.name}</p>
                               {adjustingHp ? (
                                 <div className="w-full bg-[#111827] h-1.5 rounded-full mt-1 overflow-hidden">
-                                  <div className="bg-red-500 h-full" style={{ width: `${Math.min(100, (currentHp/maxHp)*100)}%` }} />
+                                  <div
+                                    className={`${hpBarColor(maxHp > 0 ? (currentHp / maxHp) * 100 : 0)} h-full`}
+                                    style={{ width: `${maxHp > 0 ? Math.min(100, (currentHp / maxHp) * 100) : 0}%` }}
+                                  />
                                 </div>
                               ) : (
-                                <p className="text-xs text-slate-400">Monster</p>
+                                <span className="inline-block text-[10px] font-semibold bg-[#FF5722]/20 text-[#FF5722] px-2 py-0.5 rounded-full">
+                                  Monster
+                                </span>
                               )}
                             </div>
                             {hasCondition && <div className="ml-auto w-2 h-2 rounded-full bg-[#37F2D1]" />}
@@ -1826,14 +2205,18 @@ function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPosses
   const [showInventoryOrganizer, setShowInventoryOrganizer] = useState(false);
   const [inventoryOrder, setInventoryOrder] = useState([]);
 
-  // Initialize inventory order when character changes
+  // Initialize inventory order when the selected character changes (or when
+  // its inventory array is refreshed). Depending on the inventory reference
+  // itself — not its length — ensures the effect actually re-fires when a
+  // character swap comes in with a different inventory object but the same
+  // item count.
   React.useEffect(() => {
-    if (character?.inventory) {
+    if (Array.isArray(character?.inventory) && character.inventory.length > 0) {
       setInventoryOrder(character.inventory.map((item, idx) => ({ ...item, _idx: idx })));
     } else {
       setInventoryOrder([]);
     }
-  }, [character?.id, character?.inventory?.length]);
+  }, [character?.id, character?.uniqueId, character?.inventory]);
 
   return (
     <div className="relative z-10 rounded-[32px] bg-[#050816]/95 px-6 pt-6 pb-8 shadow-[0_24px_60px_rgba(0,0,0,0.8)] flex flex-col items-center gap-6">
@@ -2942,8 +3325,22 @@ function LogEntry({ name, time, text, highlight }) {
   );
 }
 
-function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selectionMode, isTurnOrderAccepted, getHp }) {
+function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selectionMode, isTurnOrderAccepted, getHp, isGM, onChangeFaction }) {
   const hasPlayedRef = React.useRef(false);
+  // Right-click context menu state. Stores the combatant whose portrait
+  // was right-clicked plus screen coords so the menu floats there.
+  const [factionMenu, setFactionMenu] = React.useState(null);
+
+  React.useEffect(() => {
+    if (!factionMenu) return;
+    const close = () => setFactionMenu(null);
+    window.addEventListener('click', close);
+    window.addEventListener('contextmenu', close);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('contextmenu', close);
+    };
+  }, [factionMenu]);
 
   // Play sound effects on mount (when combat starts/turn order appears)
   React.useEffect(() => {
@@ -2982,6 +3379,14 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                 const mainCondition = conditions[0];
                 const borderColor = mainCondition ? CONDITIONS[mainCondition].color : null;
 
+                const factionStyle = getFactionStyle(combatant);
+                // During targeting mode we swap the border to the faction
+                // color so the GM can tell allies / neutrals / enemies
+                // apart at a glance. Outside targeting the condition-
+                // based border (or active-turn teal) still wins.
+                let computedBorderColor = borderColor || (index === 0 ? '#37F2D1' : '#111827');
+                if (selectionMode) computedBorderColor = factionStyle.hex;
+
                 return (
                   <Draggable key={combatant.uniqueId} draggableId={combatant.uniqueId} index={index}>
                     {(provided, snapshot) => (
@@ -2993,6 +3398,19 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                           snapshot.isDragging ? 'scale-110 z-[100]' : 'z-10'
                         } ${selectionMode ? 'cursor-pointer hover:scale-110' : ''}`}
                         onClick={() => selectionMode && onSelectTarget && onSelectTarget(combatant)}
+                        onContextMenu={(e) => {
+                          // Right-click on a combatant → faction menu.
+                          // GMs can re-faction anyone (players included,
+                          // e.g. dominated). Non-GMs don't get the menu.
+                          if (!isGM || !onChangeFaction) return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setFactionMenu({
+                            combatant,
+                            x: e.clientX,
+                            y: e.clientY,
+                          });
+                        }}
                       >
                         <motion.div
                           initial={{ y: -50, opacity: 0, scale: 0.5 }}
@@ -3012,7 +3430,7 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                           )}
                           {/* Condition Text above head */}
                           {mainCondition && (
-                            <div 
+                            <div
                               className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-bold px-2 py-0.5 rounded-full bg-black/80 text-white whitespace-nowrap z-20 border border-white/20"
                               style={{ borderColor: borderColor }}
                             >
@@ -3020,12 +3438,23 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                             </div>
                           )}
 
-                          <div 
+                          {/* Charm duration badge — only for charmed allies
+                              with a finite duration. */}
+                          {combatant.faction === 'ally' && typeof combatant.charmDuration === 'number' && (
+                            <div
+                              className={`absolute -top-1 -right-1 text-[8px] font-bold px-1.5 py-0.5 rounded-full z-30 ${factionStyle.pillStrong} shadow`}
+                              title={`Charmed — ${combatant.charmDuration} turn${combatant.charmDuration === 1 ? '' : 's'} left`}
+                            >
+                              ×{combatant.charmDuration}
+                            </div>
+                          )}
+
+                          <div
                             className={`relative w-20 h-20 rounded-full border-4 overflow-hidden transition-all ${
                               index === 0 ? 'shadow-[0_0_25px_rgba(55,242,209,0.6)] scale-110' : 'bg-[#050816]'
                             }`}
-                            style={{ 
-                              borderColor: borderColor || (index === 0 ? '#37F2D1' : '#111827')
+                            style={{
+                              borderColor: computedBorderColor,
                             }}
                           >
                             <div 
@@ -3041,61 +3470,61 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                                 </div>
                               )}
                             </div>
-                            <div className="absolute bottom-0 inset-x-0 bg-black/80 text-[11px] text-center text-white font-bold py-0.5">
+                            <div
+                              className="absolute bottom-0 inset-x-0 bg-black/80 text-[11px] text-center text-white font-bold py-0.5"
+                              title={
+                                typeof combatant.initiativeRoll === 'number'
+                                  ? `${combatant.name} rolled ${combatant.initiative} (${combatant.initiativeRoll}${
+                                      (combatant.initiativeMod || 0) >= 0 ? ' + ' : ' − '
+                                    }${Math.abs(combatant.initiativeMod || 0)})`
+                                  : undefined
+                              }
+                            >
                               {combatant.initiative}
                             </div>
                           </div>
-                          
-                          {/* HP Bar for GM */}
+
+                          {/* Initiative roll breakdown — visible only while
+                              combatants are still being arranged (pre-Fight).
+                              Once the GM locks the order we drop back to
+                              just showing the total on the portrait. */}
+                          {!isTurnOrderAccepted && typeof combatant.initiativeRoll === 'number' && (
+                            <span className="text-[9px] font-mono text-slate-400 tracking-tight">
+                              {combatant.initiativeRoll}
+                              {(combatant.initiativeMod || 0) >= 0 ? ' + ' : ' − '}
+                              {Math.abs(combatant.initiativeMod || 0)}
+                              {' = '}
+                              <span className="text-white font-bold">{combatant.initiative}</span>
+                            </span>
+                          )}
+
+                          {/* HP Bar for GM — uses the shared getHp lookup so
+                              live HP reflects damage write-backs. Color is
+                              driven by percentage, not side. */}
                           <div className="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden mt-1 border border-gray-700">
-                             {(() => {
-                               // Determine HP percentage
-                               let current = 0; 
-                               let max = 10;
-                               
-                               // For players we need to look up current HP if not in combatant object
-                               // But initiativeOrder usually has basic info. GM Panel uses 'players' array too.
-                               // Actually the order array in GM Panel might need to be enriched or we look up.
-                               // 'initiativeOrder' is just the campaign.combat_data.order.
-                               // Monsters in queue have HP. Players in campaignCharacters have HP.
-                               
-                               // Since this is GM Panel, we can try to find the entity.
-                               // However, 'order' items are snapshots.
-                               // We should probably look up the live entity for HP.
-                               // But for now, let's assume we can find it or it's in the snapshot if updated.
-                               // Actually, `activeConditions` logic suggests we treat IDs.
-                               
-                               // Simplified: If it's a monster, look in monster queue (localStorage).
-                               // If player, look in `characters` prop from GMPanel.
-                               
-                               if (combatant.type === 'player') {
-                                  // Find player character in `players` or `characters`
-                                  // `players` is available in GMPanel scope but maybe not inside TurnOrderBar if not passed.
-                                  // TurnOrderBar receives `activeConditions`.
-                                  // Let's rely on passed props or context? 
-                                  // Wait, TurnOrderBar is defined IN GMPanel.js, but `players` is in GMPanel scope.
-                                  // But TurnOrderBar is a separate function component at the bottom.
-                                  // We need to pass `players` and `monsters` (queue) to it or handle HP lookup there.
-                                  // For now, let's just show a generic bar if we can't find stats, or pass data.
-                                  
-                                  // Actually, let's just modify TurnOrderBar to accept a lookup function or data.
-                                  // But to keep it simple and efficient with one find_replace, I will assume
-                                  // we can't easily access the full live HP without passing it.
-                                  // Let's just stick to the prompt "Monster and NPC HP should also be displayed".
-                                  // I'll add a simple visual placeholder if I can't access data, OR
-                                  // I'll modify the TurnOrderBar call site to pass `players` and `monsterQueue`.
-                                  
-                                  return <div className="h-full bg-green-500 w-full opacity-50" />; 
-                               } else {
-                                  // Monster
-                                  return <div className="h-full bg-red-500 w-full opacity-50" />;
-                               }
-                             })()}
+                            {(() => {
+                              const hp = typeof getHp === 'function' ? getHp(combatant.id) : null;
+                              const max = hp?.max || 0;
+                              const current = hp?.current ?? max;
+                              const pct = max > 0 ? Math.min(100, (current / max) * 100) : 0;
+                              return (
+                                <div
+                                  className={`h-full ${hpBarColor(pct)}`}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              );
+                            })()}
                           </div>
 
-                          <span className={`text-[10px] font-bold max-w-[90px] truncate px-2 py-0.5 rounded-full ${
-                            index === 0 ? 'text-[#1E2430] bg-[#37F2D1]' : 'text-slate-400 bg-[#111827]/80'
-                          }`}>
+                          {/* Name bubble — colored by faction (player =
+                              teal, enemy = red-orange, ally = green,
+                              neutral = blue). The current turn swaps to
+                              the stronger fill variant. */}
+                          <span
+                            className={`text-[10px] font-bold max-w-[90px] truncate px-2 py-0.5 rounded-full ${
+                              index === 0 ? factionStyle.pillStrong : factionStyle.pill
+                            }`}
+                          >
                             {combatant.name}
                           </span>
                         </motion.div>
@@ -3109,6 +3538,49 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
           )}
         </Droppable>
       </DragDropContext>
+
+      {/* Faction context menu — fires from the onContextMenu handler on
+          each combatant portrait. Only the GM sees this. Clicking a
+          faction applies it via the parent-supplied callback. */}
+      {factionMenu && (
+        <div
+          className="fixed z-[200] bg-[#050816] border-2 border-[#37F2D1]/30 rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-2 min-w-[160px]"
+          style={{ left: factionMenu.x, top: factionMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <div className="text-[9px] uppercase tracking-[0.22em] text-slate-500 font-bold px-2 pb-1 border-b border-[#111827] mb-1">
+            {factionMenu.combatant.name} — Faction
+          </div>
+          {Object.keys(FACTION_STYLES).map((f) => {
+            const style = FACTION_STYLES[f];
+            const current = (factionMenu.combatant.faction || 'enemy') === f;
+            return (
+              <button
+                key={f}
+                type="button"
+                onClick={() => {
+                  onChangeFaction(
+                    factionMenu.combatant.uniqueId || factionMenu.combatant.id,
+                    { faction: f, charmDuration: null }
+                  );
+                  setFactionMenu(null);
+                }}
+                className={`w-full text-left text-xs font-semibold px-3 py-1.5 rounded-lg mb-0.5 flex items-center gap-2 transition-colors ${
+                  current ? style.pillStrong : style.pill + ' hover:brightness-125'
+                }`}
+              >
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: style.hex }}
+                />
+                {style.label}
+                {current && <span className="ml-auto text-[9px] opacity-70">current</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

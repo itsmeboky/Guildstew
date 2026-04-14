@@ -839,7 +839,7 @@ export default function CampaignSettings() {
                   <div className="bg-[#1E2430] p-5 rounded-xl border border-gray-700">
                     <h3 className="text-xl font-bold mb-2 text-white">Monster Manual</h3>
                     <p className="text-sm text-gray-400 mb-4">
-                      Loads all standard SRD monsters into your Monster Queue library.
+                      Loads all standard SRD monsters into your Combat Queue library.
                     </p>
                     <Button 
                       onClick={() => preloadMonstersMutation.mutate()} 

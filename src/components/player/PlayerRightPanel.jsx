@@ -5,6 +5,7 @@ import { LogOut } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { hpBarColor } from "@/components/combat/hpColor";
 
 export default function PlayerRightPanel({ campaignId, players, currentUser }) {
   const navigate = useNavigate();
@@ -52,12 +53,19 @@ export default function PlayerRightPanel({ campaignId, players, currentUser }) {
                       <p className="text-[9px] text-gray-400">Lvl {char.level} {char.class}</p>
                     </div>
                     {/* Mini HP Bar */}
-                    <div className="w-12 h-1 bg-gray-700 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-green-500" 
-                        style={{ width: `${Math.min((char.hit_points?.current/char.hit_points?.max)*100, 100)}%` }} 
-                      />
-                    </div>
+                    {(() => {
+                      const max = char.hit_points?.max || 0;
+                      const cur = char.hit_points?.current ?? max;
+                      const pct = max > 0 ? Math.min(100, Math.max(0, (cur / max) * 100)) : 0;
+                      return (
+                        <div className="w-12 h-1 bg-gray-700 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full ${hpBarColor(pct)}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

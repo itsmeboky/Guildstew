@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Heart, Music, Circle, Triangle, Zap, Plus, Settings, Play } from "lucide-react";
 import { spellIcons } from "@/components/dnd5e/spellData";
+import { hpBarColor } from "@/components/combat/hpColor";
 
 const basicActionIcons = [
   { name: "Dash", url: "https://static.wixstatic.com/media/5cdfd8_02e46386022f4a57bb7537e0459427ea~mv2.png" },
@@ -52,7 +53,7 @@ export default function PlayerCenterPanel({ character }) {
           <div className="flex-1 flex items-center gap-2">
             <Heart className="text-red-500 w-6 h-6" />
             <div className="flex-1 h-4 bg-gray-800 rounded-full overflow-hidden relative border border-gray-700">
-              <div className="absolute top-0 left-0 h-full bg-red-500 transition-all" style={{ width: `${hpPercent}%` }} />
+              <div className={`absolute top-0 left-0 h-full transition-all ${hpBarColor(hpPercent)}`} style={{ width: `${hpPercent}%` }} />
             </div>
             <span className="text-xs font-mono text-gray-300">
               {character.hit_points?.current} / {character.hit_points?.max}

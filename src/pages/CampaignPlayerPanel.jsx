@@ -18,6 +18,7 @@ import { canEquipToSlot } from "@/components/gm/equipmentRules";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import { useTurnContext } from "@/components/combat/useTurnContext";
+import { hpBarColor } from "@/components/combat/hpColor";
 import {
   classFeatureDescriptions,
   languageDescriptions,
@@ -176,7 +177,7 @@ function CampaignPlayerPanelContent() {
   });
 
   // Action Resource State
-  const [actionsState, setActionsState] = useState({ action: true, bonus: true, inspiration: false });
+  const [actionsState, setActionsState] = useState({ action: true, bonus: true, reaction: true, inspiration: false });
 
   // Track previous turn to reset actions
   const prevTurnIndexRef = React.useRef();
@@ -296,7 +297,7 @@ function CampaignPlayerPanelContent() {
         const { order } = campaign.combat_data;
         const currentTurnCombatant = order?.[currentIndex];
         if (currentTurnCombatant?.id === user?.id || currentTurnCombatant?.id === myCharacter?.id) {
-           setActionsState({ action: true, bonus: true, inspiration: false });
+           setActionsState({ action: true, bonus: true, reaction: true, inspiration: false });
         }
         prevTurnIndexRef.current = currentIndex;
      }
@@ -1768,7 +1769,7 @@ function TurnOrderDisplay({ order, currentTurnIndex, onSelectTarget, selectionMo
                             const current = char.hit_points.current || 0;
                             const max = char.hit_points.max || 10;
                             const pct = Math.min(100, Math.max(0, (current / max) * 100));
-                            return <div className="h-full bg-green-500" style={{ width: `${pct}%` }} />;
+                            return <div className={`h-full ${hpBarColor(pct)}`} style={{ width: `${pct}%` }} />;
                          }
                          return <div className="h-full bg-gray-600 w-full opacity-20" />;
                       })()}
@@ -1778,11 +1779,11 @@ function TurnOrderDisplay({ order, currentTurnIndex, onSelectTarget, selectionMo
                 {combatant.type !== 'player' && (
                    <div className="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden mt-1 border border-gray-700 relative" title="Monster Health">
                       {/* Assuming we want to show *some* indication of health loss if possible.
-                          Since we don't have the exact Monster Queue data prop passed here in the TurnOrderDisplay inside CampaignPlayerPanel,
-                          we can't render an accurate bar. 
+                          Since we don't have the exact Combat Queue data prop passed here in the TurnOrderDisplay inside CampaignPlayerPanel,
+                          we can't render an accurate bar.
                           HOWEVER, the user explicitly asked for it: "All monsters and NPCs need to have a health bar... Players should also be able to see HP being lost."
-                          
-                          To fix this properly, we need to fetch the monster queue in CampaignPlayerPanel and pass it down, 
+
+                          To fix this properly, we need to fetch the combat queue in CampaignPlayerPanel and pass it down,
                           OR rely on the fact that 'combatant' in 'order' might have updated 'hit_points' if we are syncing correctly.
                           
                           Currently 'campaign.combat_data.order' is static until updated.
@@ -1794,9 +1795,9 @@ function TurnOrderDisplay({ order, currentTurnIndex, onSelectTarget, selectionMo
                          const current = combatant.hit_points?.current !== undefined ? combatant.hit_points.current : (combatant.hit_points?.max || 10);
                          const max = combatant.hit_points?.max || 10;
                          const pct = Math.min(100, Math.max(0, (current / max) * 100));
-                         
+
                          return (
-                           <div className="h-full bg-red-500" style={{ width: `${pct}%` }} />
+                           <div className={`h-full ${hpBarColor(pct)}`} style={{ width: `${pct}%` }} />
                          );
                       })()}
                    </div>

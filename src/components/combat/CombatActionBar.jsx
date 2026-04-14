@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { Heart, Circle, Triangle, Music, ChevronLeft, ChevronRight } from "lucide-react";
+import { Heart, Circle, Triangle, Music, Zap, ChevronLeft, ChevronRight } from "lucide-react";
 import { spellIcons, spellDetails as hardcodedSpellDetails } from "@/components/dnd5e/spellData";
+import { hpBarColor } from "@/components/combat/hpColor";
 
 const PC_ICON_BASE = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/abilities/basic%20actions";
 const MONSTER_ICON_BASE = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/monsters/monster%20abilities";
@@ -8,6 +9,8 @@ const MONSTER_ICON_BASE = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/o
 const basicActionIcons = [
   { name: "Non-Lethal", url: `${PC_ICON_BASE}/non-lethal.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20non-lethal.png`, toggleable: true },
   { name: "Dash", url: `${PC_ICON_BASE}/dash.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20dash.png` },
+  { name: "Disengage", url: `${PC_ICON_BASE}/disengage.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20disengage.png` },
+  { name: "Dodge", url: `${PC_ICON_BASE}/dodge.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20dodge.png` },
   { name: "Help", url: `${PC_ICON_BASE}/help%20action.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20help%20action.png` },
   { name: "Grapple", url: `${PC_ICON_BASE}/grapple.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20grapple.png` },
   { name: "Throw", url: `${PC_ICON_BASE}/throw.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20throw.png` },
@@ -23,21 +26,62 @@ const MONSTER_MELEE_ICON = `${MONSTER_ICON_BASE}/monster%20melee.png`;
 const MONSTER_RANGED_ICON = `${MONSTER_ICON_BASE}/monster%20ranged.png`;
 const MONSTER_UNARMED_ICON = `${MONSTER_ICON_BASE}/monster%20unarmed.png`;
 
-export default function CombatActionBar({ 
-  character, 
-  onActionClick, 
+// Class tint map — apply as a CSS filter to the base action icons to
+// visually differentiate class-specific bonus-action variants. Only Rogue
+// and Monk are actually used in the UI today; the others are future-proof
+// placeholders so downstream code can add them without a refactor.
+const CLASS_TINT = {
+  Rogue: 'hue-rotate(260deg) saturate(1.5)',    // purple
+  Monk: 'hue-rotate(160deg) saturate(1.5)',     // teal
+  Barbarian: 'hue-rotate(0deg) saturate(2)',    // deep red
+  Fighter: 'hue-rotate(30deg) saturate(1.5)',   // bronze
+  Ranger: 'hue-rotate(90deg) saturate(1.5)',    // forest green
+  Paladin: 'hue-rotate(45deg) saturate(2)',     // gold
+};
+// Tint used when a monster/NPC has an action that can be fired as a
+// bonus action (e.g. legendary creatures with natural "quick strike"
+// abilities). Not wired to real monster data yet.
+const MONSTER_BONUS_TINT = 'hue-rotate(340deg) saturate(1.5)'; // crimson
+
+export default function CombatActionBar({
+  character,
+  onActionClick,
   className,
   actionsState,
-  setActionsState
+  setActionsState,
+  // The Attack button is a stateful 4-state toggle controlled by the parent:
+  //   null → 'melee' → 'ranged' → 'unarmed' → null
+  // Clicking the button does NOT fire an attack — it just cycles attackMode.
+  // The actual attack happens when the parent's target-selection flow picks
+  // a target while attackMode is set.
+  attackMode = null,
+  onAttackModeChange,
+  // Sneak / Hide gating — the Sneak toggle is locked unless the parent
+  // says the character is currently hidden (i.e. a Hide skill check
+  // resolved successfully). When isHidden goes false the Sneak toggle is
+  // force-cleared via the parent's reveal flow.
+  isHidden = false,
+  sneakActive: sneakActiveProp,
+  onSneakToggle,
+  // Spell slot tracker. maxSpellSlots / spentSpellSlots are both
+  // objects keyed by spell level ({ 1: 4, 2: 3, ... }). onToggleSlot is
+  // (level, 'spend' | 'restore') → void, used when the GM clicks a
+  // specific dot to override the auto-tracking.
+  maxSpellSlots = {},
+  spentSpellSlots = {},
+  onToggleSlot,
 }) {
   // Internal state if not provided controlled
-  const [localActions, setLocalActions] = useState({ action: true, bonus: true, inspiration: false });
+  const [localActions, setLocalActions] = useState({ action: true, bonus: true, reaction: true, inspiration: false });
   const actions = actionsState || localActions;
   const setActions = setActionsState || setLocalActions;
 
   const [nonLethalActive, setNonLethalActive] = useState(false);
-  const [sneakActive, setSneakActive] = useState(false);
-  const [attackMode, setAttackMode] = useState(0);
+  // Sneak is controlled by the parent when onSneakToggle is provided,
+  // otherwise fall back to an internal toggle (so the component still
+  // works in isolation / Storybook).
+  const [localSneakActive, setLocalSneakActive] = useState(false);
+  const sneakActive = onSneakToggle ? !!sneakActiveProp : localSneakActive;
 
   // Determine if selected character is a creature (monster/npc) vs humanoid (player)
   const isCreature = character?.type === 'monster' || character?.type === 'npc';
@@ -48,34 +92,33 @@ export default function CombatActionBar({
   const meleeWeapon = equipment.weapon1;
   const rangedWeapon = equipment.ranged;
 
-  // Determine available modes
-  // 0: Generic/Unarmed (always available if no weapons?) or just Melee if weapon1 exists
-  // Let's strictly follow: Melee (Weapon 1) vs Ranged (Ranged Slot)
-  // If we want to toggle, we need to know what's valid.
+  const attackIsTargeting = attackMode !== null && attackMode !== undefined;
 
-  const isMeleeAvailable = !!meleeWeapon;
-  const isRangedAvailable = !!rangedWeapon;
-
-  const handleAttackToggle = () => {
-    let nextMode = attackMode;
-    // Cycle: 0 (Melee) -> 1 (Ranged) -> 0
-    // If one is missing, can we switch?
-    // If currently Melee (0), try Ranged (1). If Ranged not available, stay 0? 
-    // Or if Melee not available, default to Ranged?
-
-    if (attackMode === 0) { // Switching from Melee to Ranged
-       if (isRangedAvailable) nextMode = 1;
-    } else { // Switching from Ranged to Melee
-       if (isMeleeAvailable) nextMode = 0;
+  // 4-state cycle: null → 'melee' → 'ranged' → 'unarmed' → null
+  // Clicking this button DOES NOT trigger an attack — it only cycles the
+  // selected attack mode. The parent uses attackMode to enter targeting mode
+  // and fires the attack when the GM clicks a combatant portrait.
+  const handleAttackClick = () => {
+    // Monster / NPC with a declared primary action → single-click fire.
+    // If the monster has no declared actions, fall through to the same
+    // 4-state cycle characters use so the button always does something.
+    if (isCreature) {
+      const actionsList = character?.actions || character?.stats?.actions || [];
+      const primaryAction = actionsList[0];
+      if (primaryAction) {
+        onActionClick && onActionClick(primaryAction);
+        return;
+      }
     }
-    setAttackMode(nextMode);
-  };
 
-  // Ensure valid initial mode
-  React.useEffect(() => {
-     if (attackMode === 0 && !isMeleeAvailable && isRangedAvailable) setAttackMode(1);
-     if (attackMode === 1 && !isRangedAvailable && isMeleeAvailable) setAttackMode(0);
-  }, [isMeleeAvailable, isRangedAvailable]);
+    let next;
+    if (attackMode === null || attackMode === undefined) next = 'melee';
+    else if (attackMode === 'melee') next = 'ranged';
+    else if (attackMode === 'ranged') next = 'unarmed';
+    else next = null; // 'unarmed' → cancel
+
+    onAttackModeChange && onAttackModeChange(next);
+  };
   const [showSpellDetails, setShowSpellDetails] = useState(null);
   const [hoveredSpell, setHoveredSpell] = useState(null);
   const [hoverTimer, setHoverTimer] = useState(null);
@@ -92,34 +135,94 @@ export default function CombatActionBar({
 
   const defaultSpells = React.useMemo(() => {
     if (!character) return [];
-    
-    // If enriched spells array exists
+
+    // Normalize a spell entry (string or object) into an object and
+    // attach its known spell level so the GMPanel slot consumption can
+    // read action.level directly when the spell is clicked. Cantrips are
+    // level 0 and never burn a slot.
+    const normalize = (spell, level) => {
+      if (!spell) return null;
+      if (typeof spell === 'string') return { name: spell, level };
+      return { ...spell, level: typeof spell.level === 'number' ? spell.level : level };
+    };
+
+    // Enriched spells array — each entry may already carry its level.
     if (Array.isArray(character.spells) && character.spells.length > 0) {
-      return character.spells;
+      return character.spells.map((s) => normalize(s, s?.level)).filter(Boolean);
     }
-    
-    // Fallback to spells object
+
+    // Fallback to spells object bucketed by level.
     const spellSource = character.spells || character.stats?.spells;
-    
     if (spellSource && typeof spellSource === 'object') {
-      return [
-        ...(spellSource.cantrips || []),
-        ...(spellSource.level1 || []),
-        ...(spellSource.level2 || []),
-        ...(spellSource.level3 || []),
-        ...(spellSource.level4 || []),
-        ...(spellSource.level5 || []),
-        ...(spellSource.level6 || []),
-        ...(spellSource.level7 || []),
-        ...(spellSource.level8 || []),
-        ...(spellSource.level9 || [])
+      const buckets = [
+        { level: 0, arr: spellSource.cantrips },
+        { level: 1, arr: spellSource.level1 },
+        { level: 2, arr: spellSource.level2 },
+        { level: 3, arr: spellSource.level3 },
+        { level: 4, arr: spellSource.level4 },
+        { level: 5, arr: spellSource.level5 },
+        { level: 6, arr: spellSource.level6 },
+        { level: 7, arr: spellSource.level7 },
+        { level: 8, arr: spellSource.level8 },
+        { level: 9, arr: spellSource.level9 },
       ];
+      const out = [];
+      for (const { level, arr } of buckets) {
+        if (!arr) continue;
+        for (const s of arr) {
+          const n = normalize(s, level);
+          if (n) out.push(n);
+        }
+      }
+      return out;
     }
-    
+
     return [];
   }, [character]);
 
   const visibleSpellCount = 8;
+
+  // Class-specific bonus action variants. These are the "same" actions as
+  // the main row (Dash, Disengage, etc.) but cost a bonus action instead of
+  // an action, because the class feature grants the upgrade. Each entry
+  // carries a class key (drives the tint) and a classFeature label (flows
+  // through to onActionClick + the resolver).
+  const classBonusActions = React.useMemo(() => {
+    if (!character || isCreature) return [];
+    const cls = (character.class || character.stats?.class || '').toLowerCase();
+    const level = character.level || character.stats?.level || 1;
+    const list = [];
+
+    // Rogue — Cunning Action (2+): bonus-action Dash / Disengage / Hide.
+    if (cls.includes('rogue') && level >= 2) {
+      list.push(
+        { name: 'Dash', classFeature: 'Cunning Action', classKey: 'Rogue' },
+        { name: 'Disengage', classFeature: 'Cunning Action', classKey: 'Rogue' },
+        { name: 'Hide', classFeature: 'Cunning Action', classKey: 'Rogue' },
+      );
+    }
+
+    // Monk — Step of the Wind (Dash/Disengage) + Patient Defense (Dodge),
+    // 2+, each costs 1 Ki. Ki tracking isn't implemented yet; the GM
+    // enforces it manually for now.
+    if (cls.includes('monk') && level >= 2) {
+      list.push(
+        { name: 'Dash', classFeature: 'Step of the Wind', classKey: 'Monk' },
+        { name: 'Disengage', classFeature: 'Step of the Wind', classKey: 'Monk' },
+        { name: 'Dodge', classFeature: 'Patient Defense', classKey: 'Monk' },
+      );
+    }
+
+    return list;
+  }, [character, isCreature]);
+
+  // Quick lookup so we can grab icon URLs by action name when rendering
+  // class bonus action entries. basicActionIcons is the canonical list.
+  const basicActionByName = React.useMemo(
+    () => Object.fromEntries(basicActionIcons.map((a) => [a.name, a])),
+    []
+  );
+
   const canScrollLeft = scrollPosition > 0;
   const canScrollRight = scrollPosition + visibleSpellCount < defaultSpells.length;
 
@@ -159,7 +262,7 @@ export default function CombatActionBar({
           </div>
           <div className="w-64">
             <div className="h-5 rounded-full bg-[#111827] overflow-hidden relative border border-[#1e293b]">
-              <div className="h-full absolute left-0 top-0 bg-[#22c55e]" style={{ width: `${hpPercent}%` }} />
+              <div className={`h-full absolute left-0 top-0 ${hpBarColor(hpPercent)}`} style={{ width: `${hpPercent}%` }} />
               {tempHp > 0 && <div className="h-full absolute top-0 bg-orange-500" style={{ left: `${hpPercent}%`, width: `${tempHpPercent}%` }} />}
             </div>
             <div className="mt-1.5 flex justify-between text-[11px] font-medium text-slate-300 px-1">
@@ -171,32 +274,123 @@ export default function CombatActionBar({
         <div className="h-12 w-[1px] bg-[#1e293b] mx-2" />
         <div className="flex-1 flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <ActionButton active={actions.action} onClick={() => setActions(p => ({...p, action: !p.action}))} color="green" icon={Circle} />
-            <ActionButton active={actions.bonus} onClick={() => setActions(p => ({...p, bonus: !p.bonus}))} color="orange" icon={Triangle} />
+            {/* Action & Bonus Action are display-only during combat; consumed by the system */}
+            <ActionButton active={actions.action} color="green" icon={Circle} />
+            <ActionButton active={actions.bonus} color="orange" icon={Triangle} />
+            <ActionButton active={actions.reaction} color="purple" icon={Zap} />
             <ActionButton active={actions.inspiration} onClick={() => setActions(p => ({...p, inspiration: !p.inspiration}))} color="yellow" icon={Music} />
           </div>
         </div>
       </div>
+
+      {/* Spell slot tracker. Renders a compact row of dots per spell level
+          — filled = available, hollow = spent. Only shown when the
+          character has any spell slots at all (casters only). Clicking a
+          dot toggles it for manual corrections. */}
+      {Object.keys(maxSpellSlots).length > 0 && (
+        <div className="flex items-center gap-3 mb-3 px-1">
+          <span className="text-[9px] uppercase tracking-[0.22em] text-slate-400 font-bold">
+            Spell Slots
+          </span>
+          <div className="flex items-center gap-3 flex-wrap">
+            {Object.keys(maxSpellSlots)
+              .map((k) => Number(k))
+              .filter((level) => level > 0 && maxSpellSlots[level] > 0)
+              .sort((a, b) => a - b)
+              .map((level) => {
+                const max = maxSpellSlots[level];
+                const spent = spentSpellSlots[level] || 0;
+                return (
+                  <div key={level} className="flex items-center gap-1">
+                    <span className="text-[9px] text-slate-500 font-semibold">
+                      L{level}
+                    </span>
+                    {Array.from({ length: max }).map((_, i) => {
+                      const isFilled = i < max - spent;
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            if (!onToggleSlot) return;
+                            onToggleSlot(level, isFilled ? 'spend' : 'restore');
+                          }}
+                          title={`Level ${level} slot — ${isFilled ? 'available' : 'spent'}`}
+                          className={`w-2.5 h-2.5 rounded-full transition-colors ${
+                            isFilled
+                              ? 'bg-[#6366f1] hover:bg-[#818cf8] shadow-[0_0_6px_rgba(99,102,241,0.6)]'
+                              : 'bg-[#1e293b] hover:bg-[#334155] border border-[#334155]'
+                          }`}
+                        />
+                      );
+                    })}
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center gap-3">
         <div className="flex gap-3">
           {basicActionIcons.map((action, idx) => {
             const iconUrl = (isCreature && action.monsterUrl) ? action.monsterUrl : action.url;
             const isSneakAction = action.name === "Sneak";
+            const isHideAction = action.name === "Hide";
             const isNonLethal = action.name === "Non-Lethal";
             const isToggleable = action.toggleable;
-            const isActive = isSneakAction ? sneakActive : (isNonLethal ? nonLethalActive : false);
-            
+
+            // Visual "active" state per button:
+            //   Sneak      → sneakActive && isHidden
+            //   Non-Lethal → nonLethalActive
+            //   Hide       → isHidden (not a toggle — this just surfaces
+            //                that the last Hide check succeeded; Sneak can
+            //                still be turned on, the Hide click still re-
+            //                rolls the Stealth check)
+            const isActive =
+              isSneakAction
+                ? (sneakActive && isHidden)
+                : isNonLethal
+                ? nonLethalActive
+                : isHideAction
+                ? isHidden
+                : false;
+
+            // Sneak is locked until the character has actually hidden. The
+            // button still renders so you can see what's available, but it's
+            // greyed out and unclickable.
+            const slotDisabled = isSneakAction && !isHidden;
+
+            // Tint colour used when active — distinct per button so the GM
+            // can tell at a glance which toggle is lit.
+            const activeTint = isHideAction
+              ? "#38bdf8" // sky-400 — "you are hidden"
+              : isSneakAction
+              ? "#a855f7" // purple-500 — "sneak attack primed"
+              : undefined; // Non-Lethal uses the default animated border
+
             return (
-              <BasicActionSlot 
-                key={idx} 
-                src={iconUrl} 
-                tooltip={action.name}
+              <BasicActionSlot
+                key={idx}
+                src={iconUrl}
+                tooltip={
+                  isSneakAction && !isHidden
+                    ? "Sneak (Hide first)"
+                    : isHideAction && isHidden
+                    ? "Hide (currently hidden — click to re-roll)"
+                    : action.name
+                }
                 toggleable={isToggleable}
-                isActive={isToggleable && isActive}
+                isActive={isActive}
+                activeTint={activeTint}
+                disabled={slotDisabled}
                 onToggle={() => {
-                  if (isSneakAction) setSneakActive(!sneakActive);
-                  else if (isNonLethal) setNonLethalActive(!nonLethalActive);
+                  if (isSneakAction) {
+                    const next = !sneakActive;
+                    if (onSneakToggle) onSneakToggle(next);
+                    else setLocalSneakActive(next);
+                  } else if (isNonLethal) {
+                    setNonLethalActive(!nonLethalActive);
+                  }
                 }}
                 onClick={() => {
                   if (!isToggleable) {
@@ -207,58 +401,35 @@ export default function CombatActionBar({
             );
           })}
           <BasicActionSlot
-            src={isCreature 
-              ? (attackMode === 1 ? MONSTER_RANGED_ICON : MONSTER_MELEE_ICON) 
-              : (attackMode === 1 ? PC_RANGED_ICON : PC_MELEE_ICON)}
+            src={(() => {
+              // Icon reflects the currently-selected attack mode. When nothing
+              // is selected we show the melee icon as the idle state (since
+              // the first click will select melee). Monsters use their own
+              // icon variants.
+              if (isCreature) {
+                if (attackMode === 'ranged') return MONSTER_RANGED_ICON;
+                if (attackMode === 'unarmed') return MONSTER_UNARMED_ICON;
+                return MONSTER_MELEE_ICON;
+              }
+              if (attackMode === 'ranged') return PC_RANGED_ICON;
+              if (attackMode === 'unarmed') return PC_UNARMED_ICON;
+              return PC_MELEE_ICON;
+            })()}
             tooltip={
-              (character?.type === 'monster' || character?.type === 'npc')
-                ? `Attack (${(character.actions?.[0]?.name) || 'Default'})`
-                : (attackMode === 1 ? `Ranged Attack (${rangedWeapon?.name || 'No Weapon'})` : `Melee Attack (${meleeWeapon?.name || 'No Weapon'})`)
+              isCreature
+                ? `Attack (${(character?.actions?.[0]?.name) || 'Default'})`
+                : attackMode === 'ranged'
+                ? `Ranged Attack (${rangedWeapon?.name || 'No Ranged Weapon'})`
+                : attackMode === 'unarmed'
+                ? 'Unarmed Strike'
+                : attackMode === 'melee'
+                ? `Melee Attack (${meleeWeapon?.name || 'No Melee Weapon'})`
+                : `Attack — click to select (${meleeWeapon?.name || 'no melee'})`
             }
-            toggleable={!(character?.type === 'monster' || character?.type === 'npc')}
-            isActive={true}
-            disabled={
-              !(character?.type === 'monster' || character?.type === 'npc') && 
-              (attackMode === 0 ? !isMeleeAvailable : !isRangedAvailable) && !(
-               // Enable if Off-hand attack is possible: Action used + Bonus available + 2nd weapon exists
-               !actions.action && actions.bonus && equipment.weapon2
-            )}
-            onToggle={handleAttackToggle}
-            onClick={() => {
-              // Check for Monster Actions first
-              if (character?.type === 'monster' || character?.type === 'npc') {
-                const actionsList = character.actions || character.stats?.actions || [];
-                const primaryAction = actionsList[0]; // Default to first action
-                
-                if (primaryAction) {
-                   onActionClick && onActionClick(primaryAction);
-                   return;
-                }
-              }
-
-              // Logic for standard attack vs off-hand attack
-              let weapon = attackMode === 0 ? meleeWeapon : rangedWeapon;
-              let isOffHand = false;
-
-              // Check for Off-hand trigger
-              if (!actions.action && actions.bonus && equipment.weapon2) {
-                 weapon = equipment.weapon2;
-                 isOffHand = true;
-              } else if (!actions.action) {
-                 // Action used and no off-hand valid -> do nothing (disabled state usually handles this)
-                 return;
-              }
-
-              if (weapon) {
-                 onActionClick && onActionClick({ 
-                   type: 'basic', 
-                   name: 'Attack', 
-                   mode: isOffHand ? 'offhand' : (attackMode === 0 ? 'melee' : 'ranged'),
-                   weapon: weapon,
-                   isOffHand: isOffHand
-                 });
-              }
-            }}
+            toggleable={false}
+            isActive={attackIsTargeting}
+            disabled={false}
+            onClick={handleAttackClick}
           />
         </div>
         <div className="h-10 w-[2px] bg-[#1e2636]" />
@@ -272,50 +443,120 @@ export default function CombatActionBar({
           </button>
         )}
 
-        <div className="flex-1 flex gap-3 overflow-visible relative">
-          {defaultSpells.slice(scrollPosition, scrollPosition + visibleSpellCount).map((spell, idx) => {
-            const spellName = typeof spell === 'string' ? spell : spell.name;
-            return (
-              <div key={idx} className="relative">
-                <SpellSlot 
-                  src={spellIcons[spellName] || spellIcons[Object.keys(spellIcons).find(k => k.toLowerCase() === spellName?.toLowerCase())]} 
-                  tooltip={spellName}
-                  onHover={() => handleSpellHover(spellName)}
-                  onLeave={handleSpellLeave}
-                  onClick={() => onActionClick && onActionClick({ type: 'spell', ...spell })}
-                />
-                {showSpellDetails === spellName && (
-                  (() => {
-                    const details = getSpellDetail(spellName);
-                    if (!details) return null;
-                    return (
-                      <div className="absolute bottom-full left-0 mb-2 bg-[#1E2430] text-white p-4 rounded-lg text-xs w-80 shadow-2xl border-2 border-[#37F2D1] z-[100] max-h-96 overflow-y-auto custom-scrollbar pointer-events-auto">
-                        <div className="font-bold mb-2 text-[#37F2D1] text-sm">{spellName}</div>
-                        <div className="text-gray-400 mb-2">
-                          {details.level} {details.school}
-                        </div>
-                        <div className="space-y-1 mb-2">
-                          <div><span className="text-gray-400">Casting Time:</span> {details.castingTime}</div>
-                          <div><span className="text-gray-400">Range:</span> {details.range}</div>
-                          <div><span className="text-gray-400">Components:</span> {details.components}</div>
-                          <div><span className="text-gray-400">Duration:</span> {details.duration}</div>
-                        </div>
-                        <div className="text-white leading-relaxed whitespace-pre-wrap">{details.description}</div>
-                      </div>
-                    );
-                  })()
-                )}
+        <div className="flex-1 flex items-center gap-3 overflow-visible relative">
+          {/* Fixed prefix: class-feature bonus actions. Stays put while the
+              spell portion scrolls. Label + tinted icons + vertical divider
+              match the styling of the main-action / spell divider. Skipped
+              entirely when the character has no bonus-action class features. */}
+          {classBonusActions.length > 0 && (
+            <>
+              <div className="flex flex-col items-start gap-0.5 pr-1 flex-shrink-0">
+                <span className="text-[9px] uppercase tracking-[0.22em] text-orange-400 font-bold leading-none">
+                  Bonus Action
+                </span>
+                <span className="text-[8px] uppercase tracking-[0.18em] text-slate-500 leading-none">
+                  Class Feature
+                </span>
               </div>
-            );
-          })}
-          {defaultSpells.length === 0 && (
-            <div className="text-slate-500 text-xs italic flex items-center px-4">No spells available</div>
+              {classBonusActions.map((cba, idx) => {
+                const base = basicActionByName[cba.name];
+                if (!base) return null;
+                const tint = CLASS_TINT[cba.classKey];
+                const hideActive = cba.name === 'Hide' && isHidden;
+                return (
+                  <BasicActionSlot
+                    key={`cb-${cba.classKey}-${cba.name}-${idx}`}
+                    src={base.url}
+                    tooltip={`${cba.name} (${cba.classFeature}) — bonus action`}
+                    iconFilter={tint}
+                    isActive={hideActive}
+                    activeTint={hideActive ? '#38bdf8' : undefined}
+                    onClick={() => {
+                      onActionClick &&
+                        onActionClick({
+                          type: 'basic',
+                          name: cba.name,
+                          costOverride: 'bonus',
+                          classFeature: cba.classFeature,
+                        });
+                    }}
+                  />
+                );
+              })}
+              <div className="h-10 w-[2px] bg-[#1e2636] flex-shrink-0" />
+            </>
+          )}
+
+          {/* Scrollable: cantrips + leveled spells */}
+          {defaultSpells
+            .slice(scrollPosition, scrollPosition + visibleSpellCount)
+            .map((spell, idx) => {
+              const spellName = typeof spell === 'string' ? spell : spell.name;
+              const spellLevel = typeof spell === 'object' && typeof spell.level === 'number' ? spell.level : undefined;
+              return (
+                <div key={`sp-${scrollPosition + idx}`} className="relative">
+                  <SpellSlot
+                    src={
+                      spellIcons[spellName] ||
+                      spellIcons[
+                        Object.keys(spellIcons).find(
+                          (k) => k.toLowerCase() === spellName?.toLowerCase()
+                        )
+                      ]
+                    }
+                    tooltip={spellName}
+                    onHover={() => handleSpellHover(spellName)}
+                    onLeave={handleSpellLeave}
+                    onClick={() =>
+                      onActionClick &&
+                      onActionClick({
+                        type: 'spell',
+                        name: spellName,
+                        level: spellLevel,
+                        spell,
+                      })
+                    }
+                  />
+                  {showSpellDetails === spellName &&
+                    (() => {
+                      const details = getSpellDetail(spellName);
+                      if (!details) return null;
+                      return (
+                        <div className="absolute bottom-full left-0 mb-2 bg-[#1E2430] text-white p-4 rounded-lg text-xs w-80 shadow-2xl border-2 border-[#37F2D1] z-[100] max-h-96 overflow-y-auto custom-scrollbar pointer-events-auto">
+                          <div className="font-bold mb-2 text-[#37F2D1] text-sm">{spellName}</div>
+                          <div className="text-gray-400 mb-2">
+                            {details.level} {details.school}
+                          </div>
+                          <div className="space-y-1 mb-2">
+                            <div><span className="text-gray-400">Casting Time:</span> {details.castingTime}</div>
+                            <div><span className="text-gray-400">Range:</span> {details.range}</div>
+                            <div><span className="text-gray-400">Components:</span> {details.components}</div>
+                            <div><span className="text-gray-400">Duration:</span> {details.duration}</div>
+                          </div>
+                          <div className="text-white leading-relaxed whitespace-pre-wrap">{details.description}</div>
+                        </div>
+                      );
+                    })()}
+                </div>
+              );
+            })}
+          {defaultSpells.length === 0 && classBonusActions.length === 0 && (
+            <div className="text-slate-500 text-xs italic flex items-center px-4">
+              No spells or abilities
+            </div>
           )}
         </div>
 
         {canScrollRight && (
           <button
-            onClick={() => setScrollPosition(Math.min(defaultSpells.length - visibleSpellCount, scrollPosition + 1))}
+            onClick={() =>
+              setScrollPosition(
+                Math.min(
+                  Math.max(0, defaultSpells.length - visibleSpellCount),
+                  scrollPosition + 1
+                )
+              )
+            }
             className="w-8 h-16 bg-[#050816]/80 hover:bg-[#0b1220] rounded-r-xl flex items-center justify-center transition-all shadow-lg z-10"
           >
             <ChevronRight className="w-5 h-5 text-[#37F2D1]" />
@@ -336,39 +577,84 @@ function StatHump({ label, value, short }) {
 }
 
 function ActionButton({ active, onClick, color, icon: Icon }) {
-  const colorClass = color === 'green' ? 'text-green-500 border-green-500' : color === 'orange' ? 'text-orange-500 border-orange-500' : 'text-yellow-400 border-yellow-400';
+  const colorClass =
+    color === 'green'
+      ? 'text-green-500 border-green-500'
+      : color === 'orange'
+      ? 'text-orange-500 border-orange-500'
+      : color === 'purple'
+      ? 'text-purple-500 border-purple-500'
+      : 'text-yellow-400 border-yellow-400';
+  const interactive = typeof onClick === 'function';
   return (
     <button
       onClick={onClick}
-      className={`w-12 h-12 rounded-[14px] border flex items-center justify-center transition-all ${active ? `bg-[#050816] ${colorClass} shadow-[0_0_15px_rgba(0,0,0,0.3)]` : 'bg-[#050816] border-[#111827] opacity-50'}`}
+      disabled={!interactive}
+      className={`w-12 h-12 rounded-[14px] border flex items-center justify-center transition-all ${active ? `bg-[#050816] ${colorClass} shadow-[0_0_15px_rgba(0,0,0,0.3)]` : 'bg-[#050816] border-[#111827] opacity-50'} ${interactive ? 'cursor-pointer' : 'cursor-default'}`}
     >
       <Icon className={`w-4 h-4 fill-current ${active ? colorClass.split(' ')[0] : 'text-slate-500'}`} />
     </button>
   );
 }
 
-function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick, disabled }) {
+function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick, disabled, activeTint, iconFilter }) {
   const [showTooltip, setShowTooltip] = useState(false);
-  
+
+  // When active, we either apply a button-specific tint (solid coloured
+  // border + coloured glow) or fall back to the existing teal/orange
+  // animated border.
+  let activeStyle = {};
+  let glowFilter = null;
+  if (isActive) {
+    if (activeTint) {
+      activeStyle = {
+        borderColor: activeTint,
+        borderWidth: '3px',
+        boxShadow: `0 0 18px ${activeTint}, 0 0 6px ${activeTint}`,
+      };
+      glowFilter = `drop-shadow(0 0 6px ${activeTint}) drop-shadow(0 0 2px ${activeTint}) brightness(1.05)`;
+    } else {
+      activeStyle = {
+        animation: 'rotateBorder 3s linear infinite',
+        borderImage: 'linear-gradient(45deg, #37F2D1, #FF5722, #37F2D1) 1',
+        borderWidth: '3px',
+      };
+    }
+  }
+
+  // The icon can be tinted via a class filter (e.g. Rogue/Monk bonus
+  // action row) and/or glowed via the active tint. Compose both so a
+  // Rogue Cunning-Hide icon is purple-tinted AND sky-blue-glowing when
+  // the character is actually hidden.
+  const iconStyle = {};
+  const filters = [];
+  if (iconFilter) filters.push(iconFilter);
+  if (glowFilter) filters.push(glowFilter);
+  if (filters.length > 0) iconStyle.filter = filters.join(' ');
+
   return (
-    <button 
+    <button
+      disabled={!!disabled}
       className={`w-16 h-16 rounded-2xl bg-[#050816] border-2 border-[#111827] p-[2px] flex-shrink-0 shadow-[0_14px_32px_rgba(0,0,0,0.8)] transition relative ${disabled ? 'opacity-30 grayscale cursor-not-allowed' : 'hover:-translate-y-[1px]'}`}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
       onClick={(e) => {
-        if (toggleable && onToggle) {
-          onToggle();
-        }
-        if (onClick && !disabled) onClick(e);
+        // A disabled slot blocks both toggles and action clicks.
+        if (disabled) return;
+        if (toggleable && onToggle) onToggle();
+        if (onClick) onClick(e);
       }}
-      style={isActive ? {
-        animation: 'rotateBorder 3s linear infinite',
-        borderImage: 'linear-gradient(45deg, #37F2D1, #FF5722, #37F2D1) 1',
-        borderWidth: '3px'
-      } : {}}
+      style={activeStyle}
     >
       <div className="w-full h-full rounded-[18px] bg-[#050816] overflow-hidden flex items-center justify-center">
-        {src ? <img src={src} alt={tooltip || ""} className="w-full h-full object-cover" /> : null}
+        {src ? (
+          <img
+            src={src}
+            alt={tooltip || ""}
+            className="w-full h-full object-cover"
+            style={iconStyle}
+          />
+        ) : null}
       </div>
       {showTooltip && tooltip && (
         <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-[#1E2430] text-white px-3 py-1.5 rounded-lg text-xs whitespace-nowrap shadow-xl border border-[#37F2D1] z-50">
