@@ -10,6 +10,7 @@ import {
   getSpellSaveDC,
 } from "@/components/combat/actionResolver";
 import { hpBarColor } from "@/components/combat/hpColor";
+import { FACTION_STYLES, getFaction } from "@/utils/combatQueue";
 
 const CLASS_SPELL_ABILITY = {
   Wizard: "int",
@@ -44,6 +45,7 @@ export default function CombatDiceWindow({
   isSpectator = false,
   spectatorData = null,
   sneakActive = false,
+  onViewTurnOrder,
 }) {
   const [selectedAction, setSelectedAction] = useState(initialAction);
   const [attackRoll, setAttackRoll] = useState(null);
@@ -497,99 +499,133 @@ export default function CombatDiceWindow({
 
   if (!isOpen) return null;
 
-  // INITIATIVE MODE
+  // INITIATIVE MODE — bulk-roll display. All combatants (queued
+  // monsters/NPCs + player characters) already have their rolls in
+  // combat_data.order when we arrive here, so this screen is purely
+  // a readout + a "View Turn Order" CTA. No dice are rolled on this
+  // screen — the GM doesn't click a d20.
   if (mode === "initiative") {
+    // Group by faction so enemies/allies/neutrals/players each get
+    // their own section, sorted by total desc within each.
+    const factionOrder = ["enemy", "ally", "neutral", "player"];
+    const grouped = factionOrder
+      .map((factionKey) => ({
+        factionKey,
+        style: FACTION_STYLES[factionKey],
+        combatants: allCombatants
+          .filter((c) => getFaction(c) === factionKey)
+          .sort((a, b) => (b.initiative || 0) - (a.initiative || 0)),
+      }))
+      .filter((g) => g.combatants.length > 0);
+
+    const handleViewTurnOrder = () => {
+      if (onViewTurnOrder) onViewTurnOrder();
+      else if (onClose) onClose();
+    };
+
     return (
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center"
+        className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex flex-col items-center justify-start overflow-y-auto py-12 px-6"
       >
         <button
           onClick={onClose}
-          className="absolute top-6 right-6 text-slate-400 hover:text-white p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors"
+          className="fixed top-6 right-6 text-slate-400 hover:text-white p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors z-10"
         >
           <X className="w-6 h-6" />
         </button>
 
-        <h2 className="text-4xl font-black text-white mb-8 tracking-widest">
+        <h2 className="text-4xl font-black text-white mb-2 tracking-widest">
           INITIATIVE ROLL
         </h2>
+        <p className="text-xs text-slate-400 tracking-widest uppercase mb-10">
+          All combatants roll 1d20 + DEX mod
+        </p>
 
-        <div className="grid grid-cols-4 gap-8 mb-12 w-full max-w-6xl px-8">
-          {allCombatants
-            .filter((c) => c.type === "player")
-            .map((player) => (
-              <div
-                key={player.id}
-                className="bg-[#1a1f2e] rounded-2xl p-6 flex flex-col items-center border border-white/10 relative"
-              >
-                <div className="w-24 h-24 rounded-full overflow-hidden mb-4 border-2 border-[#37F2D1]">
-                  {player.avatar ? (
-                    <img
-                      src={player.avatar}
-                      alt={player.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gray-700 flex items-center justify-center text-2xl">
-                      {player.name[0]}
-                    </div>
-                  )}
-                </div>
-                <h3 className="text-xl font-bold text-white mb-2">
-                  {player.name}
-                </h3>
-                {player.initiative_rolled ? (
-                  <div className="text-4xl font-bold text-[#37F2D1]">
-                    {player.initiative}
-                  </div>
-                ) : (
-                  <div className="text-slate-500 italic">Rolling...</div>
-                )}
-              </div>
-            ))}
-        </div>
-
-        {/* Player's own initiative die */}
-        {!initiativeRoll &&
-          !allCombatants.find(
-            (c) => c.id === `player-${user?.id}` && c.initiative_rolled
-          ) && (
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-[200px] h-[200px] relative">
-                <DiceRoller
-                  ref={diceRollerRef}
-                  isOpen={true}
-                  embedded={true}
-                  initialDice="d20"
-                  config={campaignConfig}
-                  onRollComplete={onInitiativeRollComplete}
-                  primaryColor={
-                    currentUserProfile?.profile_color_1 || "#FF5722"
-                  }
-                  secondaryColor={
-                    currentUserProfile?.profile_color_2 || "#8B5CF6"
-                  }
+        <div className="w-full max-w-6xl space-y-8">
+          {grouped.map(({ factionKey, style, combatants }) => (
+            <div key={factionKey}>
+              <div className="flex items-center gap-3 mb-4">
+                <span
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: style.hex }}
                 />
-                {!isRolling && (
-                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 pointer-events-none animate-bounce text-[#37F2D1] font-bold text-xs whitespace-nowrap">
-                    CLICK TO ROLL
-                  </div>
-                )}
+                <h3 className="text-[11px] uppercase tracking-[0.28em] font-bold text-slate-300">
+                  {style.label === "Player" ? "Player Characters" : `${style.label}s`}
+                </h3>
+                <div className="flex-1 h-px bg-[#1e293b]" />
+                <span className="text-[10px] text-slate-500">{combatants.length}</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {combatants.map((c) => {
+                  const raw = c.initiativeRoll;
+                  const mod = c.initiativeMod || 0;
+                  const total = c.initiative;
+                  const modLabel =
+                    mod === 0 ? "" : mod > 0 ? ` + ${mod}` : ` − ${Math.abs(mod)}`;
+                  return (
+                    <div
+                      key={c.uniqueId || c.id}
+                      className="bg-[#0b1220] rounded-2xl p-4 flex flex-col items-center border border-[#111827] relative"
+                    >
+                      {(() => {
+                        const avatar =
+                          c.avatar ||
+                          c.avatar_url ||
+                          c.image_url ||
+                          c.profile_avatar_url;
+                        return (
+                          <div
+                            className={`w-16 h-16 rounded-full overflow-hidden mb-3 border-2 ${style.outline}`}
+                          >
+                            {avatar ? (
+                              <img
+                                src={avatar}
+                                alt={c.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-[#1a1f2e] flex items-center justify-center text-xl text-slate-400 font-bold">
+                                {c.name?.[0] || "?"}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                      <h4 className="text-xs font-bold text-white mb-1 truncate max-w-full">
+                        {c.name}
+                      </h4>
+                      <div
+                        className="text-5xl font-black leading-none tracking-tight"
+                        style={{ color: style.hex }}
+                      >
+                        {typeof total === "number" ? total : "—"}
+                      </div>
+                      {typeof raw === "number" && (
+                        <div className="text-[10px] font-mono text-slate-500 mt-1">
+                          {raw}
+                          {modLabel}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          )}
+          ))}
+        </div>
 
-        {/* GM confirms order */}
+        {/* GM advances to the arrangement / turn-order stage. Non-GMs
+            just watch until the GM commits the order. */}
         {isGM && (
-          <div className="mt-8">
+          <div className="mt-10">
             <button
-              onClick={onEndTurn}
-              className="bg-[#37F2D1] text-[#1E2430] px-8 py-4 rounded-full text-xl font-bold hover:bg-[#2dd9bd] transition-colors shadow-[0_0_30px_rgba(55,242,209,0.4)]"
+              onClick={handleViewTurnOrder}
+              className="bg-[#37F2D1] text-[#1E2430] px-10 py-4 rounded-full text-xl font-black tracking-wide hover:bg-[#2dd9bd] transition-colors shadow-[0_0_30px_rgba(55,242,209,0.4)]"
             >
-              Start Combat
+              View Turn Order
             </button>
           </div>
         )}
