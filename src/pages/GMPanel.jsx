@@ -1101,7 +1101,8 @@ export default function GMPanel() {
                 // No-roll actions — just consume the cost and toast. Don't open the dice window.
                 if (resolved.rollType === "no_roll") {
                   setActionsState(prev => consumeActionCost(prev, resolved.cost));
-                  toast.success(`${selectedCharacter?.name || 'Character'} uses ${action.name}`);
+                  const featureSuffix = action.classFeature ? ` (${action.classFeature})` : '';
+                  toast.success(`${selectedCharacter?.name || 'Character'} uses ${action.name}${featureSuffix}`);
 
                   // Dodge leaves a visible "Dodging" condition label on the
                   // character until the start of their next turn. The

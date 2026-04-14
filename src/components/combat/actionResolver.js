@@ -216,6 +216,12 @@ export function resolveAction(action, actor) {
   if (basicAction) {
     return {
       ...basicAction,
+      // Class features like Rogue Cunning Action and Monk Step of the Wind
+      // let certain actions run as a bonus action instead of an action. The
+      // caller (CombatActionBar bonus row) flags those with costOverride so
+      // the action economy gate consumes the right pool.
+      cost: action.costOverride || basicAction.cost,
+      classFeature: action.classFeature || null,
       requiresTarget: basicAction.rollType === "attack" || action.name === "Grapple" || action.name === "Shove",
       weapon: action.weapon || null,
       mode: action.mode || null,
