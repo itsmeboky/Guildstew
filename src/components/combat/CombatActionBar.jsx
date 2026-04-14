@@ -2,15 +2,26 @@ import React, { useState } from "react";
 import { Heart, Circle, Triangle, Music, ChevronLeft, ChevronRight } from "lucide-react";
 import { spellIcons, spellDetails as hardcodedSpellDetails } from "@/components/dnd5e/spellData";
 
+const PC_ICON_BASE = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/abilities/basic%20actions";
+const MONSTER_ICON_BASE = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/monsters/monster%20abilities";
+
 const basicActionIcons = [
-  { name: "Non-Lethal", url: "https://static.wixstatic.com/media/5cdfd8_2717bd75c7c8435197830d28dc91d0c4~mv2.png", toggleable: true },
-  { name: "Dash", url: "https://static.wixstatic.com/media/5cdfd8_02e46386022f4a57bb7537e0459427ea~mv2.png" },
-  { name: "Help", url: "https://static.wixstatic.com/media/5cdfd8_b6c6460902d246a6bb2f34c0d2a84c71~mv2.png" },
-  { name: "Grapple", url: "https://static.wixstatic.com/media/5cdfd8_1a20fa07c6a74ad8a2c678a716ec3138~mv2.png" },
-  { name: "Throw", url: "https://static.wixstatic.com/media/5cdfd8_f124e759e4f449a1a9514e2ea8046586~mv2.png" },
-  { name: "Hide", url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/1f6ba74ba_Hide.png" },
-  { name: "Ready Action", url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/4f1e26b5f_ReadyAction.png" }
+  { name: "Non-Lethal", url: `${PC_ICON_BASE}/non-lethal.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20non-lethal.png`, toggleable: true },
+  { name: "Dash", url: `${PC_ICON_BASE}/dash.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20dash.png` },
+  { name: "Help", url: `${PC_ICON_BASE}/help%20action.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20help%20action.png` },
+  { name: "Grapple", url: `${PC_ICON_BASE}/grapple.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20grapple.png` },
+  { name: "Throw", url: `${PC_ICON_BASE}/throw.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20throw.png` },
+  { name: "Hide", url: `${PC_ICON_BASE}/hide.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20hide.png` },
+  { name: "Sneak", url: `${PC_ICON_BASE}/sneak.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20sneak.png`, toggleable: true },
+  { name: "Ready Action", url: `${PC_ICON_BASE}/ready%20action.png`, monsterUrl: `${MONSTER_ICON_BASE}/monster%20ready%20action.png` }
 ];
+
+const PC_MELEE_ICON = `${PC_ICON_BASE}/melee.png`;
+const PC_RANGED_ICON = `${PC_ICON_BASE}/ranged.png`;
+const PC_UNARMED_ICON = `${PC_ICON_BASE}/unarmed.png`;
+const MONSTER_MELEE_ICON = `${MONSTER_ICON_BASE}/monster%20melee.png`;
+const MONSTER_RANGED_ICON = `${MONSTER_ICON_BASE}/monster%20ranged.png`;
+const MONSTER_UNARMED_ICON = `${MONSTER_ICON_BASE}/monster%20unarmed.png`;
 
 export default function CombatActionBar({ 
   character, 
@@ -25,7 +36,11 @@ export default function CombatActionBar({
   const setActions = setActionsState || setLocalActions;
 
   const [nonLethalActive, setNonLethalActive] = useState(false);
+  const [sneakActive, setSneakActive] = useState(false);
   const [attackMode, setAttackMode] = useState(0);
+
+  // Determine if selected character is a creature (monster/npc) vs humanoid (player)
+  const isCreature = character?.type === 'monster' || character?.type === 'npc';
   const [scrollPosition, setScrollPosition] = useState(0);
 
   // Get weapons from equipment
@@ -165,19 +180,36 @@ export default function CombatActionBar({
 
       <div className="flex items-center gap-3">
         <div className="flex gap-3">
-          {basicActionIcons.map((action, idx) => (
-            <BasicActionSlot 
-              key={idx} 
-              src={action.url} 
-              tooltip={action.name}
-              toggleable={action.toggleable}
-              isActive={action.toggleable && nonLethalActive}
-              onToggle={() => action.toggleable && setNonLethalActive(!nonLethalActive)}
-              onClick={() => onActionClick && onActionClick({ type: 'basic', name: action.name })}
-            />
-          ))}
+          {basicActionIcons.map((action, idx) => {
+            const iconUrl = (isCreature && action.monsterUrl) ? action.monsterUrl : action.url;
+            const isSneakAction = action.name === "Sneak";
+            const isNonLethal = action.name === "Non-Lethal";
+            const isToggleable = action.toggleable;
+            const isActive = isSneakAction ? sneakActive : (isNonLethal ? nonLethalActive : false);
+            
+            return (
+              <BasicActionSlot 
+                key={idx} 
+                src={iconUrl} 
+                tooltip={action.name}
+                toggleable={isToggleable}
+                isActive={isToggleable && isActive}
+                onToggle={() => {
+                  if (isSneakAction) setSneakActive(!sneakActive);
+                  else if (isNonLethal) setNonLethalActive(!nonLethalActive);
+                }}
+                onClick={() => {
+                  if (!isToggleable) {
+                    onActionClick && onActionClick({ type: 'basic', name: action.name });
+                  }
+                }}
+              />
+            );
+          })}
           <BasicActionSlot
-            src={attackMode === 1 ? "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/9bfa45d4d_RangedAttack.png" : "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/86f86dd03_MeleeAttack.png"}
+            src={isCreature 
+              ? (attackMode === 1 ? MONSTER_RANGED_ICON : MONSTER_MELEE_ICON) 
+              : (attackMode === 1 ? PC_RANGED_ICON : PC_MELEE_ICON)}
             tooltip={
               (character?.type === 'monster' || character?.type === 'npc')
                 ? `Attack (${(character.actions?.[0]?.name) || 'Default'})`
