@@ -48,6 +48,11 @@ const CONDITIONS = {
   Blinded: { color: "#525252", label: "Blinded" },
   Charmed: { color: "#db2777", label: "Charmed" },
   Deafened: { color: "#475569", label: "Deafened" },
+  // Dodging isn't a 5e condition proper, but we surface it as one so the
+  // Dodge action leaves a visible label on the portrait until the
+  // character's next turn starts (attack rolls vs them have disadvantage,
+  // and they have advantage on DEX saves — GM enforces manually for now).
+  Dodging: { color: "#0ea5e9", label: "Dodging" },
   Exhaustion: { color: "#dc2626", label: "Exhaustion" },
   Frightened: { color: "#9333ea", label: "Frightened" },
   Grappled: { color: "#ea580c", label: "Grappled" },
@@ -504,10 +509,24 @@ export default function GMPanel() {
   // Reset action economy + attack mode + sneak toggle when turn changes.
   // Note: we intentionally do NOT clear hiddenCharacters here — hiding
   // persists across turns, the Sneak toggle is what resets.
+  //
+  // We also clear the "Dodging" condition from whoever's turn just started
+  // — per 5e, the Dodge benefit lasts until the start of the dodger's next
+  // turn, so it auto-drops when their initiative slot rolls back around.
   React.useEffect(() => {
     setActionsState({ action: true, bonus: true, inspiration: false });
     setAttackMode(null);
     setSneakActive(false);
+
+    const activeCombatant = campaign?.combat_data?.order?.[0];
+    const activeKey = activeCombatant?.uniqueId || activeCombatant?.id;
+    if (activeKey) {
+      setActiveConditions(prev => {
+        const current = prev[activeKey] || [];
+        if (!current.includes('Dodging')) return prev;
+        return { ...prev, [activeKey]: current.filter(c => c !== 'Dodging') };
+      });
+    }
   }, [campaign?.combat_data?.currentTurnIndex, campaign?.combat_data?.round, campaign?.combat_data?.order?.[0]?.id]);
 
   // Sync equippedItems + monsterInventory whenever a different character is
@@ -1041,6 +1060,22 @@ export default function GMPanel() {
                 if (resolved.rollType === "no_roll") {
                   setActionsState(prev => consumeActionCost(prev, resolved.cost));
                   toast.success(`${selectedCharacter?.name || 'Character'} uses ${action.name}`);
+
+                  // Dodge leaves a visible "Dodging" condition label on the
+                  // character until the start of their next turn. The
+                  // turn-change effect auto-clears it when the turn rotates
+                  // back to them.
+                  if (action.name === 'Dodge') {
+                    const key = selectedCharacter?.uniqueId;
+                    if (key) {
+                      setActiveConditions(prev => {
+                        const current = prev[key] || [];
+                        if (current.includes('Dodging')) return prev;
+                        return { ...prev, [key]: [...current, 'Dodging'] };
+                      });
+                    }
+                  }
+
                   setCombatState({ isOpen: false, step: 'idle', action: null, target: null });
                   return;
                 }
@@ -1332,7 +1367,14 @@ export default function GMPanel() {
                           key={player.user_id}
                           onClick={() => {
                             if (char) {
-                              setSelectedCharacter({ ...char, type: 'player' });
+                              setSelectedCharacter({
+                                ...char,
+                                type: 'player',
+                                // Mirror the combatant uniqueId so conditions
+                                // (Dodging, etc.) keyed on uniqueId apply to
+                                // the same entity the turn tracker sees.
+                                uniqueId: `player-${player.user_id}`,
+                              });
                               setEquippedItems(char.equipped || char.equipment || {});
                               setMonsterInventory(char.inventory || []);
                               setIsPossessed(true);
