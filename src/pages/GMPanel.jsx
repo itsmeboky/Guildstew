@@ -54,6 +54,15 @@ const basicActionIcons = [
   { name: "Ready Action", url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/4f1e26b5f_ReadyAction.png" }
 ];
 
+// Custom icons for death saving throws. The source PNGs are black-on-
+// transparent, so every render site applies `filter: brightness(0) invert(1)`
+// to tint them white on the dark UI background.
+const DEATH_SAVE_ICONS = {
+  life: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/UI/life.png",
+  death: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/UI/death.png",
+};
+const DEATH_SAVE_ICON_STYLE = { filter: "brightness(0) invert(1)" };
+
 const CONDITIONS = {
   Blinded: { color: "#525252", label: "Blinded" },
   Charmed: { color: "#db2777", label: "Charmed" },
@@ -172,6 +181,17 @@ export default function GMPanel() {
   // characters use their row id.
   const getCharacterKey = React.useCallback((c) => c?.uniqueId || c?.id || null, []);
   const selectedCharacterKey = getCharacterKey(selectedCharacter);
+
+  // If the currently-selected combatant is downed, pull their live
+  // death-save state from combat_data.order so the render can swap the
+  // action bar out for a death save panel.
+  const selectedDownedEntry = React.useMemo(() => {
+    if (!selectedCharacterKey || !campaign?.combat_data?.order) return null;
+    const entry = campaign.combat_data.order.find(
+      (c) => (c.uniqueId || c.id) === selectedCharacterKey,
+    );
+    return entry?.downed ? entry : null;
+  }, [selectedCharacterKey, campaign?.combat_data?.order]);
   const isHidden = !!selectedCharacterKey && hiddenCharacters.has(selectedCharacterKey);
 
   // If the selected character is no longer hidden (turn rolled over, attacked
@@ -304,24 +324,38 @@ export default function GMPanel() {
   const [showEndCombatAlert, setShowEndCombatAlert] = useState(false);
   const [isTurnOrderAccepted, setIsTurnOrderAccepted] = useState(false);
 
+  // FIGHT button → stage 'arranging' → 'combat'. The order is taken
+  // from whatever the GM last dragged in the TurnOrderBar.
   const acceptTurnOrderMutation = useMutation({
-    mutationFn: () => base44.entities.Campaign.update(campaignId, { 
+    mutationFn: () => base44.entities.Campaign.update(campaignId, {
       combat_active: true,
       combat_data: {
+        ...(campaign?.combat_data || {}),
+        stage: 'combat',
         order: initiativeOrder,
         currentTurnIndex: 0,
-        round: 1
+        round: 1,
       }
     }),
     onSuccess: () => {
       const audio = new Audio('https://static.wixstatic.com/mp3/5cdfd8_1e1b1f8b2b074994ac92bc8ee2913586.wav');
       audio.volume = 0.5;
       audio.play().catch(e => console.log("Audio play failed", e));
-      
+
       setIsTurnOrderAccepted(true);
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
     }
   });
+
+  // Sync isTurnOrderAccepted from the campaign stage. Drag is unlocked
+  // during 'initiative' and 'arranging', locked during 'combat'. This
+  // makes refresh safe — the UI restores the right state even if the
+  // component remounts.
+  React.useEffect(() => {
+    const stage = campaign?.combat_data?.stage;
+    if (stage === 'combat') setIsTurnOrderAccepted(true);
+    else if (stage === 'initiative' || stage === 'arranging') setIsTurnOrderAccepted(false);
+  }, [campaign?.combat_data?.stage]);
 
   const endCombatMutation = useMutation({
     mutationFn: () => base44.entities.Campaign.update(campaignId, { 
@@ -381,6 +415,178 @@ export default function GMPanel() {
       }
     }
   }, [campaign?.combat_data, campaignId, queryClient]);
+
+  // Generic combat_data.order patcher — used by the downed / death save
+  // flow. Optimistically updates the React Query cache so the GM sees
+  // changes immediately, then persists to the DB.
+  const updateOrderCombatant = React.useCallback((combatantKey, patch) => {
+    if (!combatantKey || !campaign?.combat_data?.order) return;
+    const newOrder = campaign.combat_data.order.map(c => {
+      const key = c.uniqueId || c.id;
+      if (key !== combatantKey) return c;
+      return { ...c, ...patch };
+    });
+    const newData = { ...campaign.combat_data, order: newOrder };
+    queryClient.setQueryData(['campaign', campaignId], (old) =>
+      old ? { ...old, combat_data: newData } : old
+    );
+    base44.entities.Campaign
+      .update(campaignId, { combat_data: newData })
+      .catch(err => console.error('Order update failed:', err));
+  }, [campaign?.combat_data, campaignId, queryClient]);
+
+  // Refs that hold the latest `characters` array and the derived
+  // `players` list. The death-save / heal helpers below use these so
+  // their useCallback deps don't reference variables that are declared
+  // later in render (which would hit the temporal dead zone at module
+  // evaluation). The refs are updated in an effect after both are
+  // defined — see ~line 960 below.
+  const charactersRef = React.useRef([]);
+  const playersRef = React.useRef([]);
+
+  // Write a specific current-HP value straight to the persistent entity
+  // (Character row for PCs/ghosts, combat queue entry for monsters).
+  // Used by the revive-on-nat-20 / heal-from-downed paths so the HP
+  // change outlives combat state.
+  const applyHpToEntity = React.useCallback((combatantKey, newCurrent) => {
+    if (!combatantKey) return;
+
+    if (combatantKey.startsWith('monster-')) {
+      const queueId = combatantKey.slice('monster-'.length);
+      const queue = readCombatQueue(campaignId);
+      if (queue.length === 0) return;
+      const newQueue = queue.map(m => {
+        if (m.queueId !== queueId && String(m.queueId) !== queueId) return m;
+        const max = m.hit_points?.max || newCurrent;
+        return {
+          ...m,
+          hit_points: {
+            ...(m.hit_points || {}),
+            current: Math.max(0, Math.min(max, newCurrent)),
+            max,
+          },
+        };
+      });
+      writeCombatQueue(campaignId, newQueue);
+      return;
+    }
+
+    // Player / ghost character path — read characters + players out of
+    // the refs so this callback isn't tied to the later useQuery /
+    // useMemo declarations.
+    const currentCharacters = charactersRef.current || [];
+    const currentPlayers = playersRef.current || [];
+    let char = null;
+    if (combatantKey.startsWith('player-')) {
+      const rest = combatantKey.slice('player-'.length);
+      if (rest.startsWith('ghost-')) {
+        char = currentCharacters.find(c => c.id === rest.slice('ghost-'.length));
+      } else {
+        const player = currentPlayers.find(p => p.user_id === rest);
+        char = player?.character
+          || currentCharacters.find(c => c.created_by === player?.email)
+          || null;
+      }
+    }
+    if (!char) return;
+    const max = char.hit_points?.max || newCurrent;
+    base44.entities.Character
+      .update(char.id, {
+        hit_points: {
+          ...(char.hit_points || {}),
+          current: Math.max(0, Math.min(max, newCurrent)),
+          max,
+        },
+      })
+      .then(() => queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] }))
+      .catch(err => console.error('HP write-back failed:', err));
+  }, [campaignId, queryClient]);
+
+  // Apply a death save to a combatant in combat_data.order. `delta` is
+  // { successesDelta, failuresDelta } — or an explicit { successes,
+  // failures, stabilized, dead } override. Clamps counts to [0, 3] and
+  // auto-promotes to stabilized / dead at the thresholds.
+  const applyDeathSaveChange = React.useCallback((combatantKey, change) => {
+    if (!combatantKey || !campaign?.combat_data?.order) return;
+    const target = campaign.combat_data.order.find(c => (c.uniqueId || c.id) === combatantKey);
+    if (!target || !target.downed) return;
+    const existing = target.deathSaves || { successes: 0, failures: 0, stabilized: false, dead: false };
+    const next = { ...existing };
+    if (typeof change.successes === 'number') next.successes = change.successes;
+    if (typeof change.failures === 'number') next.failures = change.failures;
+    if (typeof change.successesDelta === 'number') next.successes = Math.max(0, Math.min(3, existing.successes + change.successesDelta));
+    if (typeof change.failuresDelta === 'number') next.failures = Math.max(0, Math.min(3, existing.failures + change.failuresDelta));
+    if (typeof change.stabilized === 'boolean') next.stabilized = change.stabilized;
+    if (typeof change.dead === 'boolean') next.dead = change.dead;
+    // Auto-promotion
+    if (next.failures >= 3) next.dead = true;
+    if (next.successes >= 3) next.stabilized = true;
+
+    // Dead combatants get moved OUT of the live initiative order into
+    // a separate combat_data.fallen[] graveyard. Wounded-but-alive and
+    // stabilized stay in the order so the initiative bar still shows
+    // them with the unconscious overlay.
+    if (next.dead && !existing.dead) {
+      const fallenEntry = { ...target, deathSaves: next };
+      const newOrder = campaign.combat_data.order.filter(
+        (c) => (c.uniqueId || c.id) !== combatantKey,
+      );
+      const newFallen = [...(campaign.combat_data.fallen || []), fallenEntry];
+      const newData = { ...campaign.combat_data, order: newOrder, fallen: newFallen };
+      queryClient.setQueryData(['campaign', campaignId], (old) =>
+        old ? { ...old, combat_data: newData } : old,
+      );
+      base44.entities.Campaign
+        .update(campaignId, { combat_data: newData })
+        .catch(err => console.error('Move to fallen failed:', err));
+      toast.error(`${target.name} has died.`);
+      return;
+    }
+
+    updateOrderCombatant(combatantKey, { deathSaves: next });
+    if (next.stabilized && !existing.stabilized) {
+      toast.success(`${target.name} is stabilized.`);
+    }
+  }, [campaign?.combat_data, campaignId, queryClient, updateOrderCombatant]);
+
+  // Roll a d20 death save for a downed combatant and apply the result.
+  // 10+ = success, 9− = failure, nat 20 = revive to 1 HP, nat 1 = 2 failures.
+  const rollDeathSaveForCombatant = React.useCallback((combatantKey) => {
+    if (!combatantKey || !campaign?.combat_data?.order) return;
+    const target = campaign.combat_data.order.find(c => (c.uniqueId || c.id) === combatantKey);
+    if (!target || !target.downed) return;
+    const existing = target.deathSaves || { successes: 0, failures: 0, stabilized: false, dead: false };
+    if (existing.dead || existing.stabilized) return;
+    const roll = Math.floor(Math.random() * 20) + 1;
+
+    if (roll === 20) {
+      // Back on your feet with 1 HP.
+      updateOrderCombatant(combatantKey, {
+        downed: false,
+        deathSaves: { successes: 0, failures: 0, stabilized: false, dead: false },
+        hit_points: { ...(target.hit_points || {}), current: 1 },
+      });
+      // Also persist the 1 HP to the underlying entity so reads are consistent.
+      applyHpToEntity(combatantKey, 1);
+      // Clear the Unconscious condition.
+      setActiveConditions(prev => {
+        const current = prev[combatantKey] || [];
+        if (!current.includes('Unconscious')) return prev;
+        return { ...prev, [combatantKey]: current.filter(c => c !== 'Unconscious') };
+      });
+      toast.success(`${target.name} is back on their feet!`);
+      return;
+    }
+    if (roll === 1) {
+      applyDeathSaveChange(combatantKey, { failuresDelta: 2 });
+      return;
+    }
+    if (roll >= 10) {
+      applyDeathSaveChange(combatantKey, { successesDelta: 1 });
+      return;
+    }
+    applyDeathSaveChange(combatantKey, { failuresDelta: 1 });
+  }, [campaign?.combat_data, updateOrderCombatant, applyDeathSaveChange]);
 
   const toggleCondition = (targetId, condition) => {
     setActiveConditions(prev => {
@@ -492,7 +698,7 @@ export default function GMPanel() {
       return {
         id: `player-${p.user_id}`,
         name: char?.name || p.username,
-        avatar: char?.profile_avatar_url || p.avatar_url,
+        avatar: char?.profile_avatar_url || char?.avatar_url || char?.image_url || p.avatar_url,
         dexMod: mod,
         type: 'player',
         initiative: roll.total,
@@ -594,7 +800,9 @@ export default function GMPanel() {
   React.useEffect(() => {
     if (campaign?.combat_active) {
       setCombatActive(true);
-      setIsTurnOrderAccepted(true);
+      // isTurnOrderAccepted is now driven by combat_data.stage via a
+      // separate effect; don't force it true here or the drag-and-drop
+      // would lock during the initiative/arranging phases.
       if (campaign.combat_data?.order) {
         setInitiativeOrder(campaign.combat_data.order);
       }
@@ -793,7 +1001,12 @@ export default function GMPanel() {
     return Array.from(playerMap.values());
   }, [campaign?.player_ids, allUserProfiles, characters, campaignId]);
 
-
+  // Keep the refs the death-save / heal helpers above read from in sync
+  // with the latest characters + players. Updating during render is fine
+  // — the helpers are only invoked from event handlers, by which time
+  // render has already committed and the refs hold current values.
+  charactersRef.current = characters;
+  playersRef.current = players;
 
   if (!campaign) {
     return <div className="min-h-screen flex items-center justify-center"><p className="text-gray-400">Loading...</p></div>;
@@ -913,6 +1126,23 @@ export default function GMPanel() {
               isSpectator={!combatState.isOpen && !!campaign?.combat_data?.active_encounter}
               spectatorData={campaign?.combat_data?.active_encounter}
               sneakActive={sneakActive}
+
+              onViewTurnOrder={async () => {
+                // GM dismissed the rolled-initiative readout. Transition
+                // the campaign stage so the dice window closes and the
+                // TurnOrderBar takes over for drag-and-drop arrangement.
+                try {
+                  await base44.entities.Campaign.update(campaignId, {
+                    combat_data: {
+                      ...(campaign?.combat_data || {}),
+                      stage: 'arranging',
+                    },
+                  });
+                  queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
+                } catch (err) {
+                  console.error("Failed to advance to turn-order stage:", err);
+                }
+              }}
 
               onSwitchTarget={() => {
                 setCombatState(prev => ({ ...prev, isOpen: false, step: 'selecting_target' }));
@@ -1053,6 +1283,74 @@ export default function GMPanel() {
                       }
                     } catch (err) {
                       console.error('Combat queue damage write-back failed:', err);
+                    }
+                  }
+
+                  // --- Downed / death save bookkeeping on combat_data.order ---
+                  if (targetId && campaign?.combat_data?.order) {
+                    const orderEntry = campaign.combat_data.order.find(c => (c.uniqueId || c.id) === targetId);
+                    if (orderEntry) {
+                      const maxHp = orderEntry.hit_points?.max
+                        || resolvedChar?.hit_points?.max
+                        || 0;
+                      const currentHp = orderEntry.hit_points?.current
+                        ?? resolvedChar?.hit_points?.current
+                        ?? maxHp;
+                      const newCurrent = clampHp(currentHp, maxHp, delta);
+                      const wasDowned = !!orderEntry.downed;
+                      const isCritDamage = data.detail?.isCrit === true;
+
+                      // Healing path: any positive heal restores a downed
+                      // combatant to consciousness and clears their saves.
+                      if (delta < 0 && wasDowned && newCurrent > 0) {
+                        updateOrderCombatant(targetId, {
+                          downed: false,
+                          deathSaves: { successes: 0, failures: 0, stabilized: false, dead: false },
+                          hit_points: { ...(orderEntry.hit_points || {}), current: newCurrent, max: maxHp },
+                        });
+                        setActiveConditions(prev => {
+                          const current = prev[targetId] || [];
+                          if (!current.includes('Unconscious')) return prev;
+                          return { ...prev, [targetId]: current.filter(c => c !== 'Unconscious') };
+                        });
+                        toast.success(`${orderEntry.name} regains consciousness!`);
+                      } else if (delta > 0 && wasDowned) {
+                        // Damage while already at 0 HP → death save failures.
+                        // Crits count as 2 failures.
+                        const failuresDelta = isCritDamage ? 2 : 1;
+                        applyDeathSaveChange(targetId, { failuresDelta });
+                      } else if (delta > 0 && !wasDowned && newCurrent <= 0) {
+                        // Freshly dropped to 0. Non-lethal → immediate
+                        // stabilize (Knocked Out). Otherwise initialize
+                        // the death save tracker.
+                        if (nonLethalActive) {
+                          updateOrderCombatant(targetId, {
+                            downed: true,
+                            deathSaves: { successes: 0, failures: 0, stabilized: true, dead: false },
+                            hit_points: { ...(orderEntry.hit_points || {}), current: 0, max: maxHp },
+                          });
+                          toast(`${orderEntry.name} is knocked out!`);
+                        } else {
+                          updateOrderCombatant(targetId, {
+                            downed: true,
+                            deathSaves: { successes: 0, failures: 0, stabilized: false, dead: false },
+                            hit_points: { ...(orderEntry.hit_points || {}), current: 0, max: maxHp },
+                          });
+                          toast.error(`${orderEntry.name} is down!`);
+                        }
+                        // Mark Unconscious on the conditions map too.
+                        setActiveConditions(prev => {
+                          const current = prev[targetId] || [];
+                          if (current.includes('Unconscious')) return prev;
+                          return { ...prev, [targetId]: [...current, 'Unconscious'] };
+                        });
+                      } else if (newCurrent !== currentHp) {
+                        // Regular HP tick — keep the order entry in sync
+                        // so the HP bars in the turn tracker are live.
+                        updateOrderCombatant(targetId, {
+                          hit_points: { ...(orderEntry.hit_points || {}), current: newCurrent, max: maxHp },
+                        });
+                      }
                     }
                   }
                 }
@@ -1234,6 +1532,15 @@ export default function GMPanel() {
               </div>
             </div>
 
+            {selectedDownedEntry ? (
+              <DeathSavePanel
+                combatant={selectedDownedEntry}
+                isPlayer={selectedCharacter?.type === 'player'}
+                onRoll={() => rollDeathSaveForCombatant(selectedCharacterKey)}
+                onAdjust={(change) => applyDeathSaveChange(selectedCharacterKey, change)}
+                onKill={() => applyDeathSaveChange(selectedCharacterKey, { failures: 3, dead: true })}
+              />
+            ) : (
             <CombatActionBar
               character={selectedCharacter ? { ...selectedCharacter, equipment: equippedItems } : null}
               actionsState={actionsState}
@@ -1243,6 +1550,8 @@ export default function GMPanel() {
               isHidden={isHidden}
               sneakActive={sneakActive}
               onSneakToggle={(next) => setSneakActive(next)}
+              nonLethalActive={nonLethalActive}
+              onNonLethalToggle={setNonLethalActive}
               maxSpellSlots={maxSpellSlots}
               spentSpellSlots={currentSpentSlots}
               onToggleSlot={handleToggleSlot}
@@ -1350,6 +1659,7 @@ export default function GMPanel() {
                 }
               }}
             />
+            )}
 
             <div className="grid grid-cols-[minmax(0,1fr),minmax(0,1.1fr)] gap-4">
               <div className="flex flex-col gap-4 h-full">
@@ -1550,21 +1860,10 @@ export default function GMPanel() {
               </SectionCard>
 
               <div className="space-y-4">
-                <SectionCard title="Downed">
-                  <div className="flex items-center gap-3">
-                    <button className="w-7 h-7 rounded-full bg-[#050816] flex items-center justify-center text-sm">‹</button>
-                    <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar">
-                      {Array.from({ length: 4 }).map((_, idx) => (
-                        <div
-                          key={idx}
-                          className="min-w-[96px] max-w-[96px] rounded-3xl bg-[#050816] overflow-hidden border border-[#111827]"
-                        >
-                          <div className="h-20 bg-red-900/50 bg-cover bg-center grayscale" />
-                        </div>
-                      ))}
-                    </div>
-                    <button className="w-7 h-7 rounded-full bg-[#050816] flex items-center justify-center text-sm">›</button>
-                  </div>
+                <SectionCard title="Fallen">
+                  <FallenRow
+                    fallen={campaign?.combat_data?.fallen || []}
+                  />
                 </SectionCard>
 
                 <SectionCard title="Loot">
@@ -3017,6 +3316,216 @@ function SectionCard({ title, children, className }) {
   );
 }
 
+// Render the row of downed / dead combatants below the main GM panel.
+// Empty placeholder slots fill the remaining space so the visual footprint
+// stays stable even when nobody is currently on the ground.
+// FALLEN section — pure graveyard. Only fully-dead combatants (death
+// save failures >= 3, or GM-killed) live here. Wounded and stabilized
+// combatants stay in the top initiative bar with their unconscious
+// overlay rather than getting moved down here.
+function FallenRow({ fallen }) {
+  const list = fallen || [];
+  const [scroll, setScroll] = React.useState(0);
+  const visible = 4;
+
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        onClick={() => setScroll(Math.max(0, scroll - 1))}
+        disabled={scroll <= 0}
+        className="w-7 h-7 rounded-full bg-[#050816] flex items-center justify-center text-sm disabled:opacity-30"
+      >
+        ‹
+      </button>
+      <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar flex-1">
+        {list.slice(scroll, scroll + visible).map((c) => (
+          <FallenCard key={c.uniqueId || c.id} combatant={c} />
+        ))}
+        {Array.from({ length: Math.max(0, visible - list.slice(scroll).length) }).map((_, idx) => (
+          <div
+            key={`ph-${idx}`}
+            className="min-w-[96px] max-w-[96px] h-20 rounded-3xl bg-[#050816] border border-[#111827]"
+          />
+        ))}
+      </div>
+      <button
+        onClick={() => setScroll(Math.min(Math.max(0, list.length - visible), scroll + 1))}
+        disabled={scroll + visible >= list.length}
+        className="w-7 h-7 rounded-full bg-[#050816] flex items-center justify-center text-sm disabled:opacity-30"
+      >
+        ›
+      </button>
+    </div>
+  );
+}
+
+// Single fallen-combatant tile: full greyscale portrait with a skull
+// overlay and a grey name label. Purely a visual record.
+function FallenCard({ combatant }) {
+  return (
+    <div
+      className="min-w-[120px] max-w-[120px] rounded-3xl bg-[#050816] overflow-hidden border border-[#111827] relative"
+      title={combatant.name}
+    >
+      <div
+        className="h-20 bg-cover bg-center relative grayscale"
+        style={{
+          backgroundImage: combatant.avatar ? `url(${combatant.avatar})` : 'none',
+          backgroundColor: '#1a1f2e',
+        }}
+      >
+        {!combatant.avatar && (
+          <div className="absolute inset-0 flex items-center justify-center text-2xl text-slate-600 font-bold">
+            {combatant.name?.[0] || '?'}
+          </div>
+        )}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <img
+            src={DEATH_SAVE_ICONS.death}
+            alt="Dead"
+            className="w-10 h-10"
+            style={DEATH_SAVE_ICON_STYLE}
+          />
+        </div>
+      </div>
+      <div className="px-2 py-1.5">
+        <p className="text-[9px] font-semibold text-center px-1.5 py-0.5 rounded-full truncate bg-slate-800 text-slate-400">
+          {combatant.name}
+        </p>
+        <p className="text-[9px] text-slate-500 uppercase tracking-widest text-center mt-1">Dead</p>
+      </div>
+    </div>
+  );
+}
+
+// Replaces the CombatActionBar when the selected combatant is downed.
+// Players get a single "Roll Death Save" button. The GM also gets a
+// row of manual overrides for quick NPC resolution.
+function DeathSavePanel({ combatant, isPlayer, onRoll, onAdjust, onKill }) {
+  const saves = combatant.deathSaves || { successes: 0, failures: 0, stabilized: false, dead: false };
+
+  return (
+    <div className="relative z-20 rounded-[32px] bg-[#050816]/95 px-6 py-5 shadow-[0_20px_60px_rgba(0,0,0,0.75)]">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-[#ef4444] bg-[#1a1f2e] flex-shrink-0 opacity-70">
+            {combatant.avatar ? (
+              <img src={combatant.avatar} alt={combatant.name} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-xl text-slate-400 font-bold">
+                {combatant.name?.[0] || '?'}
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-red-400 font-bold">Downed — 0 HP</p>
+            <p className="text-white text-lg font-bold truncate">{combatant.name}</p>
+            {saves.dead && (
+              <p className="text-xs text-slate-500 uppercase tracking-widest mt-0.5">Dead</p>
+            )}
+            {saves.stabilized && !saves.dead && (
+              <p className="text-xs text-[#22c55e] uppercase tracking-widest mt-0.5">Stabilized</p>
+            )}
+            {!saves.dead && !saves.stabilized && (
+              <div className="flex items-center gap-4 mt-1">
+                <div className="flex items-center gap-1">
+                  <img
+                    src={DEATH_SAVE_ICONS.life}
+                    alt="Successes"
+                    className="w-4 h-4"
+                    style={DEATH_SAVE_ICON_STYLE}
+                  />
+                  {[0, 1, 2].map(i => (
+                    <span
+                      key={i}
+                      className="w-2 h-2 rounded-full inline-block"
+                      style={{ backgroundColor: saves.successes > i ? '#22c55e' : '#1e293b' }}
+                    />
+                  ))}
+                </div>
+                <div className="flex items-center gap-1">
+                  <img
+                    src={DEATH_SAVE_ICONS.death}
+                    alt="Failures"
+                    className="w-4 h-4"
+                    style={DEATH_SAVE_ICON_STYLE}
+                  />
+                  {[0, 1, 2].map(i => (
+                    <span
+                      key={i}
+                      className="w-2 h-2 rounded-full inline-block"
+                      style={{ backgroundColor: saves.failures > i ? '#ef4444' : '#1e293b' }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {!saves.dead && !saves.stabilized && (
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={onRoll}
+              className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] text-white text-lg font-black py-3 rounded-2xl shadow-[0_8px_24px_rgba(255,87,34,0.4)] border-b-4 border-[#c43e12] active:border-b-0 active:translate-y-0.5 transition-all"
+            >
+              ROLL DEATH SAVE (d20)
+            </button>
+
+            {!isPlayer && (
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  onClick={() => onAdjust({ successesDelta: 1 })}
+                  className="bg-[#22c55e]/15 hover:bg-[#22c55e]/25 text-[#22c55e] border border-[#22c55e]/40 text-xs font-bold py-2 rounded-xl uppercase tracking-wide transition-colors"
+                >
+                  Save Once
+                </button>
+                <button
+                  onClick={() => onAdjust({ failuresDelta: 1 })}
+                  className="bg-[#ef4444]/15 hover:bg-[#ef4444]/25 text-[#ef4444] border border-[#ef4444]/40 text-xs font-bold py-2 rounded-xl uppercase tracking-wide transition-colors"
+                >
+                  Fail Once
+                </button>
+                <button
+                  onClick={() => onAdjust({ successes: 3, stabilized: true })}
+                  className="bg-[#22c55e]/10 hover:bg-[#22c55e]/20 text-[#22c55e]/90 border border-[#22c55e]/30 text-xs font-semibold py-2 rounded-xl uppercase tracking-wide transition-colors"
+                >
+                  Save Completely
+                </button>
+                <button
+                  onClick={() => onAdjust({ failures: 3, dead: true })}
+                  className="bg-[#ef4444]/10 hover:bg-[#ef4444]/20 text-[#ef4444]/90 border border-[#ef4444]/30 text-xs font-semibold py-2 rounded-xl uppercase tracking-wide transition-colors"
+                >
+                  Fail Completely
+                </button>
+                <button
+                  onClick={onKill}
+                  className="col-span-2 bg-[#050816] hover:bg-[#111827] text-slate-300 border border-slate-700 text-xs font-bold py-2 rounded-xl uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                >
+                  <img
+                    src={DEATH_SAVE_ICONS.death}
+                    alt=""
+                    className="w-4 h-4"
+                    style={DEATH_SAVE_ICON_STYLE}
+                  />
+                  Kill Instantly
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {saves.dead && (
+          <p className="text-center text-slate-500 text-xs italic">This combatant is dead. End their turn to advance.</p>
+        )}
+        {saves.stabilized && !saves.dead && (
+          <p className="text-center text-slate-500 text-xs italic">Stabilized. They can't act but no longer roll saves — heal them to revive.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MonsterStatBlock({ character, className, onActionClick }) {
   const [activeTab, setActiveTab] = useState('traits');
   
@@ -3387,6 +3896,16 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                 let computedBorderColor = borderColor || (index === 0 ? '#37F2D1' : '#111827');
                 if (selectionMode) computedBorderColor = factionStyle.hex;
 
+                // Downed state — the combatant is at 0 HP but not yet
+                // dead (dead combatants are filtered into combat_data.
+                // fallen and don't reach this map). The portrait gets a
+                // faded treatment and a small unconscious / death-save
+                // overlay below.
+                const saves = combatant.deathSaves;
+                const isDowned = !!combatant.downed;
+                const isStabilized = !!saves?.stabilized;
+                const isDoingDeathSaves = isDowned && !isStabilized;
+
                 return (
                   <Draggable key={combatant.uniqueId} draggableId={combatant.uniqueId} index={index}>
                     {(provided, snapshot) => (
@@ -3449,10 +3968,17 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                             </div>
                           )}
 
+                          {/* Unconscious banner for downed combatants */}
+                          {isDowned && (
+                            <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-bold px-2 py-0.5 rounded-full bg-black/80 text-slate-300 whitespace-nowrap z-30 border border-slate-600 uppercase tracking-wider">
+                              Unconscious
+                            </div>
+                          )}
+
                           <div
                             className={`relative w-20 h-20 rounded-full border-4 overflow-hidden transition-all ${
                               index === 0 ? 'shadow-[0_0_25px_rgba(55,242,209,0.6)] scale-110' : 'bg-[#050816]'
-                            }`}
+                            } ${isDowned ? 'opacity-50' : ''}`}
                             style={{
                               borderColor: computedBorderColor,
                             }}
@@ -3488,7 +4014,7 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                               combatants are still being arranged (pre-Fight).
                               Once the GM locks the order we drop back to
                               just showing the total on the portrait. */}
-                          {!isTurnOrderAccepted && typeof combatant.initiativeRoll === 'number' && (
+                          {!isTurnOrderAccepted && !isDowned && typeof combatant.initiativeRoll === 'number' && (
                             <span className="text-[9px] font-mono text-slate-400 tracking-tight">
                               {combatant.initiativeRoll}
                               {(combatant.initiativeMod || 0) >= 0 ? ' + ' : ' − '}
@@ -3496,6 +4022,48 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                               {' = '}
                               <span className="text-white font-bold">{combatant.initiative}</span>
                             </span>
+                          )}
+
+                          {/* Death save row under the portrait — only
+                              visible while the combatant is downed. */}
+                          {isStabilized && (
+                            <span className="text-[9px] font-bold text-[#22c55e] uppercase tracking-widest">
+                              Stabilized
+                            </span>
+                          )}
+                          {isDoingDeathSaves && saves && (
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <div className="flex items-center gap-0.5">
+                                <img
+                                  src={DEATH_SAVE_ICONS.life}
+                                  alt="Successes"
+                                  className="w-3 h-3 mr-0.5"
+                                  style={DEATH_SAVE_ICON_STYLE}
+                                />
+                                {[0, 1, 2].map(i => (
+                                  <span
+                                    key={i}
+                                    className="w-1.5 h-1.5 rounded-full inline-block"
+                                    style={{ backgroundColor: saves.successes > i ? '#22c55e' : '#1e293b' }}
+                                  />
+                                ))}
+                              </div>
+                              <div className="flex items-center gap-0.5">
+                                <img
+                                  src={DEATH_SAVE_ICONS.death}
+                                  alt="Failures"
+                                  className="w-3 h-3 mr-0.5"
+                                  style={DEATH_SAVE_ICON_STYLE}
+                                />
+                                {[0, 1, 2].map(i => (
+                                  <span
+                                    key={i}
+                                    className="w-1.5 h-1.5 rounded-full inline-block"
+                                    style={{ backgroundColor: saves.failures > i ? '#ef4444' : '#1e293b' }}
+                                  />
+                                ))}
+                              </div>
+                            </div>
                           )}
 
                           {/* HP Bar for GM — uses the shared getHp lookup so
