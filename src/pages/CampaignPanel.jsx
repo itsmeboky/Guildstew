@@ -84,18 +84,37 @@ export default function CampaignPanel() {
   });
 
   const players = React.useMemo(() => {
-    if (!campaign?.player_ids || !allUserProfiles) return [];
-    const uniquePlayerIds = [...new Set(campaign.player_ids)];
     const playerMap = new Map();
-    
-    uniquePlayerIds.forEach(playerId => {
-      const profile = allUserProfiles.find(u => u.user_id === playerId);
-      if (profile && !playerMap.has(playerId)) {
-        const character = characters?.find(c => c.created_by === profile.email && c.campaign_id === campaignId);
-        playerMap.set(playerId, { ...profile, character });
-      }
+    const claimedCharacterIds = new Set();
+
+    if (campaign?.player_ids && allUserProfiles) {
+      const uniquePlayerIds = [...new Set(campaign.player_ids)];
+      uniquePlayerIds.forEach(playerId => {
+        const profile = allUserProfiles.find(u => u.user_id === playerId);
+        if (profile && !playerMap.has(playerId)) {
+          const character = characters?.find(c => c.created_by === profile.email && c.campaign_id === campaignId);
+          if (character) claimedCharacterIds.add(character.id);
+          playerMap.set(playerId, { ...profile, character });
+        }
+      });
+    }
+
+    (characters || []).forEach(char => {
+      if (char.campaign_id !== campaignId) return;
+      if (claimedCharacterIds.has(char.id)) return;
+      const ghostKey = `ghost-${char.id}`;
+      playerMap.set(ghostKey, {
+        user_id: ghostKey,
+        email: char.created_by || 'ghost@local',
+        username: char.name || 'Unclaimed',
+        avatar_url: char.profile_avatar_url,
+        profile_color_1: '#FF5722',
+        profile_color_2: '#37F2D1',
+        character: char,
+        isGhost: true,
+      });
     });
-    
+
     return Array.from(playerMap.values());
   }, [campaign?.player_ids, allUserProfiles, characters, campaignId]);
 
@@ -287,7 +306,11 @@ export default function CampaignPanel() {
                       {character ? `Level ${character.level} ${character.class}` : 'Not created'}
                     </p>
                     <p className="text-white/70 text-xs">
-                      Played by: <Link to={createPageUrl("UserProfile") + `?id=${player.user_id}`} className="text-[#37F2D1] hover:text-[#2dd9bd] transition-colors">@{player.username}</Link>
+                      {player.isGhost ? (
+                        <>GM-controlled</>
+                      ) : (
+                        <>Played by: <Link to={createPageUrl("UserProfile") + `?id=${player.user_id}`} className="text-[#37F2D1] hover:text-[#2dd9bd] transition-colors">@{player.username}</Link></>
+                      )}
                     </p>
                   </div>
                 </div>
