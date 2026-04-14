@@ -275,57 +275,39 @@ export default function GMPanel() {
     });
   };
 
-  // Build a synthetic "Unarmed Strike" weapon. Rules:
-  //   Non-Monk: flat 1 + STR mod damage (no dice roll).
-  //   Monk:     Martial Arts die + max(STR, DEX) mod, die scales by level
-  //             (1-4 → 1d4, 5-10 → 1d6, 11-16 → 1d8, 17+ → 1d10).
-  const buildUnarmedWeapon = React.useCallback((actor) => {
-    const cls = (actor?.class || actor?.stats?.class || '').toLowerCase();
-    const isMonk = cls.includes('monk');
-    if (!isMonk) {
-      return {
-        name: 'Unarmed Strike',
-        damage: '1',
-        flatDamage: 1, // sentinel: dice window skips the damage roll
-        category: 'Melee',
-        properties: ['Unarmed'],
-      };
-    }
-    const level = actor?.level || 1;
-    let die = '1d4';
-    if (level >= 17) die = '1d10';
-    else if (level >= 11) die = '1d8';
-    else if (level >= 5) die = '1d6';
-    return {
-      name: 'Unarmed Strike (Martial Arts)',
-      damage: die,
-      category: 'Melee',
-      properties: ['Unarmed', 'Monk'],
-      useBestOfStrDex: true, // sentinel: dice window picks max(strMod, dexMod)
-    };
-  }, []);
-
   // Construct the attack action object for a given mode. Used both when the
   // attack button changes mode (to set combatState.action for targeting) and
-  // when a target is selected.
+  // when a target is selected. If the requested mode has no weapon available
+  // (melee with no weapon1, ranged with no ranged weapon) we fall back to
+  // unarmed, and always send `weapon: null` for unarmed so the dice window
+  // synthesizes the unarmed strike (1d4 + STR, or Martial Arts for Monks).
   const buildAttackAction = React.useCallback((mode) => {
     if (!mode) return null;
     const equipment = equippedItems || {};
+    let effectiveMode = mode;
     let weapon = null;
-    if (mode === 'melee') weapon = equipment.weapon1 || null;
-    else if (mode === 'ranged') weapon = equipment.ranged || null;
-    else if (mode === 'unarmed') weapon = buildUnarmedWeapon(selectedCharacter);
+
+    if (mode === 'melee') {
+      weapon = equipment.weapon1 || null;
+      if (!weapon) effectiveMode = 'unarmed';
+    } else if (mode === 'ranged') {
+      weapon = equipment.ranged || null;
+      if (!weapon) effectiveMode = 'unarmed';
+    }
+    // mode === 'unarmed' always sends weapon: null
+
+    if (effectiveMode === 'unarmed') weapon = null;
 
     const action = {
       type: 'basic',
       name: 'Attack',
-      mode,
+      mode: effectiveMode,
       weapon,
       isOffHand: false,
     };
     const resolved = resolveAction(action, selectedCharacter);
     return { ...action, resolved };
-  }, [equippedItems, selectedCharacter, buildUnarmedWeapon]);
+  }, [equippedItems, selectedCharacter]);
 
   // Handler called when CombatActionBar cycles the attack toggle.
   const handleAttackModeChange = React.useCallback((nextMode) => {
@@ -1255,6 +1237,8 @@ export default function GMPanel() {
                           onClick={() => {
                             if (char) {
                               setSelectedCharacter({ ...char, type: 'player' });
+                              setEquippedItems(char.equipped || char.equipment || {});
+                              setMonsterInventory(char.inventory || []);
                               setIsPossessed(true);
                             }
                             setShowPossessSelector(false);
