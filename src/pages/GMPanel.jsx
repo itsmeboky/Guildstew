@@ -142,12 +142,18 @@ export default function GMPanel() {
 
   // Stealth / Sneak state.
   //   hiddenCharacters: Set of character IDs that have successfully hidden
-  //     (Hide action resolved). Hiding persists across turns until the
-  //     character attacks while sneaking.
+  //     (Hide action resolved). Cleared when the character attacks, takes
+  //     damage, or their turn ends without re-hiding.
   //   sneakActive: whether the currently-selected character has the
   //     Sneak toggle on. Only meaningful while that character is hidden.
+  //   prevActiveKeyRef: remembers whose turn it was last render so the
+  //     turn-change effect can reveal them if they didn't re-hide.
+  //   hidThisTurnRef: whether a successful Hide check happened during the
+  //     current active character's turn (prevents the end-of-turn reveal).
   const [hiddenCharacters, setHiddenCharacters] = useState(() => new Set());
   const [sneakActive, setSneakActive] = useState(false);
+  const prevActiveKeyRef = React.useRef(null);
+  const hidThisTurnRef = React.useRef(false);
 
   // Canonical character id. Monsters from the queue use uniqueId, DB-backed
   // characters use their row id.
@@ -287,6 +293,10 @@ export default function GMPanel() {
       setIsTurnOrderAccepted(false);
       setInitiativeOrder([]);
       setActiveConditions({});
+      setHiddenCharacters(new Set());
+      setSneakActive(false);
+      hidThisTurnRef.current = false;
+      prevActiveKeyRef.current = null;
       setShowEndCombatAlert(false);
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
     }
@@ -506,13 +516,16 @@ export default function GMPanel() {
     }
   }, [campaign, campaignId]);
 
-  // Reset action economy + attack mode + sneak toggle when turn changes.
-  // Note: we intentionally do NOT clear hiddenCharacters here — hiding
-  // persists across turns, the Sneak toggle is what resets.
-  //
-  // We also clear the "Dodging" condition from whoever's turn just started
-  // — per 5e, the Dodge benefit lasts until the start of the dodger's next
-  // turn, so it auto-drops when their initiative slot rolls back around.
+  // Per-turn resets on turn change:
+  //   - action economy (Action + Bonus Action + Inspiration)
+  //   - attack-mode toggle
+  //   - sneak toggle
+  //   - Dodging condition on the new active combatant (per 5e the Dodge
+  //     benefit lasts until the start of the dodger's next turn)
+  //   - Reveal the previous active combatant if they didn't re-hide during
+  //     their turn (hidThisTurnRef tracks that). Hiding is short-lived:
+  //     attack / take damage / let your turn pass without re-hiding and
+  //     you're exposed.
   React.useEffect(() => {
     setActionsState({ action: true, bonus: true, inspiration: false });
     setAttackMode(null);
@@ -520,6 +533,7 @@ export default function GMPanel() {
 
     const activeCombatant = campaign?.combat_data?.order?.[0];
     const activeKey = activeCombatant?.uniqueId || activeCombatant?.id;
+
     if (activeKey) {
       setActiveConditions(prev => {
         const current = prev[activeKey] || [];
@@ -527,6 +541,20 @@ export default function GMPanel() {
         return { ...prev, [activeKey]: current.filter(c => c !== 'Dodging') };
       });
     }
+
+    // End-of-turn reveal: if the character whose turn just ended was hidden
+    // and didn't re-hide this turn, remove them from hiddenCharacters.
+    const prevActiveKey = prevActiveKeyRef.current;
+    if (prevActiveKey && prevActiveKey !== activeKey && !hidThisTurnRef.current) {
+      setHiddenCharacters(prev => {
+        if (!prev.has(prevActiveKey)) return prev;
+        const next = new Set(prev);
+        next.delete(prevActiveKey);
+        return next;
+      });
+    }
+    hidThisTurnRef.current = false;
+    prevActiveKeyRef.current = activeKey;
   }, [campaign?.combat_data?.currentTurnIndex, campaign?.combat_data?.round, campaign?.combat_data?.order?.[0]?.id]);
 
   // Sync equippedItems + monsterInventory whenever a different character is
@@ -764,6 +792,7 @@ export default function GMPanel() {
               // Spectator Props
               isSpectator={!combatState.isOpen && !!campaign?.combat_data?.active_encounter}
               spectatorData={campaign?.combat_data?.active_encounter}
+              sneakActive={sneakActive}
 
               onSwitchTarget={() => {
                 setCombatState(prev => ({ ...prev, isOpen: false, step: 'selecting_target' }));
@@ -795,9 +824,11 @@ export default function GMPanel() {
                 }
 
                 // Hide success → mark the current character as hidden so the
-                // Sneak toggle unlocks on their next turn (or this turn).
-                // Any completed Hide check counts as success; the GM can
-                // mentally invalidate a low roll by manually revealing.
+                // Sneak toggle unlocks. Any completed Hide check counts as
+                // success; the GM can mentally invalidate a low roll by
+                // manually revealing. We also flip hidThisTurnRef so the
+                // end-of-turn reveal in the turn-change effect leaves them
+                // alone.
                 if (data.type === 'check_result' && combatState.action?.name === 'Hide') {
                   const key = getCharacterKey(selectedCharacter);
                   if (key) {
@@ -806,6 +837,7 @@ export default function GMPanel() {
                       next.add(key);
                       return next;
                     });
+                    hidThisTurnRef.current = true;
                   }
                 }
 
@@ -813,6 +845,16 @@ export default function GMPanel() {
                   // Apply damage
                   const targetId = data.targetId;
                   const damage = data.value;
+
+                  // Taking damage reveals a hidden character.
+                  if (targetId) {
+                    setHiddenCharacters(prev => {
+                      if (!prev.has(targetId)) return prev;
+                      const next = new Set(prev);
+                      next.delete(targetId);
+                      return next;
+                    });
+                  }
                   
                   if (targetId.startsWith('player-')) {
                     const userId = targetId.replace('player-', '');
