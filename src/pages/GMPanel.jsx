@@ -54,6 +54,15 @@ const basicActionIcons = [
   { name: "Ready Action", url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/4f1e26b5f_ReadyAction.png" }
 ];
 
+// Custom icons for death saving throws. The source PNGs are black-on-
+// transparent, so every render site applies `filter: brightness(0) invert(1)`
+// to tint them white on the dark UI background.
+const DEATH_SAVE_ICONS = {
+  life: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/UI/life.png",
+  death: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/UI/death.png",
+};
+const DEATH_SAVE_ICON_STYLE = { filter: "brightness(0) invert(1)" };
+
 const CONDITIONS = {
   Blinded: { color: "#525252", label: "Blinded" },
   Charmed: { color: "#db2777", label: "Charmed" },
@@ -512,10 +521,33 @@ export default function GMPanel() {
     // Auto-promotion
     if (next.failures >= 3) next.dead = true;
     if (next.successes >= 3) next.stabilized = true;
+
+    // Dead combatants get moved OUT of the live initiative order into
+    // a separate combat_data.fallen[] graveyard. Wounded-but-alive and
+    // stabilized stay in the order so the initiative bar still shows
+    // them with the unconscious overlay.
+    if (next.dead && !existing.dead) {
+      const fallenEntry = { ...target, deathSaves: next };
+      const newOrder = campaign.combat_data.order.filter(
+        (c) => (c.uniqueId || c.id) !== combatantKey,
+      );
+      const newFallen = [...(campaign.combat_data.fallen || []), fallenEntry];
+      const newData = { ...campaign.combat_data, order: newOrder, fallen: newFallen };
+      queryClient.setQueryData(['campaign', campaignId], (old) =>
+        old ? { ...old, combat_data: newData } : old,
+      );
+      base44.entities.Campaign
+        .update(campaignId, { combat_data: newData })
+        .catch(err => console.error('Move to fallen failed:', err));
+      toast.error(`${target.name} has died.`);
+      return;
+    }
+
     updateOrderCombatant(combatantKey, { deathSaves: next });
-    if (next.dead) toast.error(`${target.name} has died.`);
-    else if (next.stabilized && !existing.stabilized) toast.success(`${target.name} is stabilized.`);
-  }, [campaign?.combat_data, updateOrderCombatant]);
+    if (next.stabilized && !existing.stabilized) {
+      toast.success(`${target.name} is stabilized.`);
+    }
+  }, [campaign?.combat_data, campaignId, queryClient, updateOrderCombatant]);
 
   // Roll a d20 death save for a downed combatant and apply the result.
   // 10+ = success, 9− = failure, nat 20 = revive to 1 HP, nat 1 = 2 failures.
@@ -1828,9 +1860,9 @@ export default function GMPanel() {
               </SectionCard>
 
               <div className="space-y-4">
-                <SectionCard title="Downed">
-                  <DownedRow
-                    order={campaign?.combat_data?.order || []}
+                <SectionCard title="Fallen">
+                  <FallenRow
+                    fallen={campaign?.combat_data?.fallen || []}
                   />
                 </SectionCard>
 
@@ -3287,9 +3319,12 @@ function SectionCard({ title, children, className }) {
 // Render the row of downed / dead combatants below the main GM panel.
 // Empty placeholder slots fill the remaining space so the visual footprint
 // stays stable even when nobody is currently on the ground.
-function DownedRow({ order }) {
-  const downed = (order || []).filter(c => c.downed);
-  const placeholderCount = Math.max(0, 4 - downed.length);
+// FALLEN section — pure graveyard. Only fully-dead combatants (death
+// save failures >= 3, or GM-killed) live here. Wounded and stabilized
+// combatants stay in the top initiative bar with their unconscious
+// overlay rather than getting moved down here.
+function FallenRow({ fallen }) {
+  const list = fallen || [];
   const [scroll, setScroll] = React.useState(0);
   const visible = 4;
 
@@ -3303,10 +3338,10 @@ function DownedRow({ order }) {
         ‹
       </button>
       <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar flex-1">
-        {downed.slice(scroll, scroll + visible).map((c) => (
-          <DownedCard key={c.uniqueId || c.id} combatant={c} />
+        {list.slice(scroll, scroll + visible).map((c) => (
+          <FallenCard key={c.uniqueId || c.id} combatant={c} />
         ))}
-        {Array.from({ length: Math.max(0, visible - downed.slice(scroll).length) }).map((_, idx) => (
+        {Array.from({ length: Math.max(0, visible - list.slice(scroll).length) }).map((_, idx) => (
           <div
             key={`ph-${idx}`}
             className="min-w-[96px] max-w-[96px] h-20 rounded-3xl bg-[#050816] border border-[#111827]"
@@ -3314,8 +3349,8 @@ function DownedRow({ order }) {
         ))}
       </div>
       <button
-        onClick={() => setScroll(Math.min(Math.max(0, downed.length - visible), scroll + 1))}
-        disabled={scroll + visible >= downed.length}
+        onClick={() => setScroll(Math.min(Math.max(0, list.length - visible), scroll + 1))}
+        disabled={scroll + visible >= list.length}
         className="w-7 h-7 rounded-full bg-[#050816] flex items-center justify-center text-sm disabled:opacity-30"
       >
         ›
@@ -3324,33 +3359,16 @@ function DownedRow({ order }) {
   );
 }
 
-// A single downed-combatant card. Three visual states:
-//   rolling — portrait @ 50% with angel/skull columns of 3 dots each
-//   stabilized — portrait @ 50% with a "Stabilized" pill
-//   dead — full greyscale with a big skull overlay
-function DownedCard({ combatant }) {
-  const saves = combatant.deathSaves || { successes: 0, failures: 0, stabilized: false, dead: false };
-  const dead = saves.dead;
-  const stabilized = saves.stabilized && !dead;
-  const isPlayer = combatant.type === 'player';
-  const labelPill = isPlayer
-    ? 'bg-[#37F2D1]/20 text-[#37F2D1]'
-    : 'bg-[#FF5722]/20 text-[#FF5722]';
-
-  const SaveDot = ({ filled, color }) => (
-    <span
-      className="w-1.5 h-1.5 rounded-full inline-block"
-      style={{ backgroundColor: filled ? color : '#1e293b' }}
-    />
-  );
-
+// Single fallen-combatant tile: full greyscale portrait with a skull
+// overlay and a grey name label. Purely a visual record.
+function FallenCard({ combatant }) {
   return (
     <div
       className="min-w-[120px] max-w-[120px] rounded-3xl bg-[#050816] overflow-hidden border border-[#111827] relative"
       title={combatant.name}
     >
       <div
-        className={`h-20 bg-cover bg-center relative ${dead ? 'grayscale' : 'opacity-60'}`}
+        className="h-20 bg-cover bg-center relative grayscale"
         style={{
           backgroundImage: combatant.avatar ? `url(${combatant.avatar})` : 'none',
           backgroundColor: '#1a1f2e',
@@ -3361,42 +3379,20 @@ function DownedCard({ combatant }) {
             {combatant.name?.[0] || '?'}
           </div>
         )}
-        {dead && (
-          <div className="absolute inset-0 flex items-center justify-center text-4xl text-white/80 drop-shadow">
-            💀
-          </div>
-        )}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <img
+            src={DEATH_SAVE_ICONS.death}
+            alt="Dead"
+            className="w-10 h-10"
+            style={DEATH_SAVE_ICON_STYLE}
+          />
+        </div>
       </div>
       <div className="px-2 py-1.5">
-        <p className={`text-[9px] font-semibold text-center px-1.5 py-0.5 rounded-full truncate ${labelPill}`}>
+        <p className="text-[9px] font-semibold text-center px-1.5 py-0.5 rounded-full truncate bg-slate-800 text-slate-400">
           {combatant.name}
         </p>
-        {dead ? (
-          <p className="text-[9px] text-slate-500 uppercase tracking-widest text-center mt-1">Dead</p>
-        ) : stabilized ? (
-          <p className="text-[9px] text-[#22c55e] uppercase tracking-widest text-center mt-1 font-bold">Stabilized</p>
-        ) : (
-          <div className="mt-1 flex items-center justify-around gap-1">
-            {/* Successes (angel) */}
-            <div className="flex flex-col items-center gap-0.5">
-              <span className="text-[10px]" title="Successes">😇</span>
-              <div className="flex gap-0.5">
-                {[0, 1, 2].map(i => (
-                  <SaveDot key={i} filled={saves.successes > i} color="#22c55e" />
-                ))}
-              </div>
-            </div>
-            {/* Failures (skull) */}
-            <div className="flex flex-col items-center gap-0.5">
-              <span className="text-[10px]" title="Failures">💀</span>
-              <div className="flex gap-0.5">
-                {[0, 1, 2].map(i => (
-                  <SaveDot key={i} filled={saves.failures > i} color="#ef4444" />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        <p className="text-[9px] text-slate-500 uppercase tracking-widest text-center mt-1">Dead</p>
       </div>
     </div>
   );
@@ -3433,7 +3429,12 @@ function DeathSavePanel({ combatant, isPlayer, onRoll, onAdjust, onKill }) {
             {!saves.dead && !saves.stabilized && (
               <div className="flex items-center gap-4 mt-1">
                 <div className="flex items-center gap-1">
-                  <span className="text-sm" title="Successes">😇</span>
+                  <img
+                    src={DEATH_SAVE_ICONS.life}
+                    alt="Successes"
+                    className="w-4 h-4"
+                    style={DEATH_SAVE_ICON_STYLE}
+                  />
                   {[0, 1, 2].map(i => (
                     <span
                       key={i}
@@ -3443,7 +3444,12 @@ function DeathSavePanel({ combatant, isPlayer, onRoll, onAdjust, onKill }) {
                   ))}
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className="text-sm" title="Failures">💀</span>
+                  <img
+                    src={DEATH_SAVE_ICONS.death}
+                    alt="Failures"
+                    className="w-4 h-4"
+                    style={DEATH_SAVE_ICON_STYLE}
+                  />
                   {[0, 1, 2].map(i => (
                     <span
                       key={i}
@@ -3496,7 +3502,13 @@ function DeathSavePanel({ combatant, isPlayer, onRoll, onAdjust, onKill }) {
                   onClick={onKill}
                   className="col-span-2 bg-[#050816] hover:bg-[#111827] text-slate-300 border border-slate-700 text-xs font-bold py-2 rounded-xl uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
                 >
-                  💀 Kill Instantly
+                  <img
+                    src={DEATH_SAVE_ICONS.death}
+                    alt=""
+                    className="w-4 h-4"
+                    style={DEATH_SAVE_ICON_STYLE}
+                  />
+                  Kill Instantly
                 </button>
               </div>
             )}
@@ -3884,6 +3896,16 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                 let computedBorderColor = borderColor || (index === 0 ? '#37F2D1' : '#111827');
                 if (selectionMode) computedBorderColor = factionStyle.hex;
 
+                // Downed state — the combatant is at 0 HP but not yet
+                // dead (dead combatants are filtered into combat_data.
+                // fallen and don't reach this map). The portrait gets a
+                // faded treatment and a small unconscious / death-save
+                // overlay below.
+                const saves = combatant.deathSaves;
+                const isDowned = !!combatant.downed;
+                const isStabilized = !!saves?.stabilized;
+                const isDoingDeathSaves = isDowned && !isStabilized;
+
                 return (
                   <Draggable key={combatant.uniqueId} draggableId={combatant.uniqueId} index={index}>
                     {(provided, snapshot) => (
@@ -3946,10 +3968,17 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                             </div>
                           )}
 
+                          {/* Unconscious banner for downed combatants */}
+                          {isDowned && (
+                            <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-bold px-2 py-0.5 rounded-full bg-black/80 text-slate-300 whitespace-nowrap z-30 border border-slate-600 uppercase tracking-wider">
+                              Unconscious
+                            </div>
+                          )}
+
                           <div
                             className={`relative w-20 h-20 rounded-full border-4 overflow-hidden transition-all ${
                               index === 0 ? 'shadow-[0_0_25px_rgba(55,242,209,0.6)] scale-110' : 'bg-[#050816]'
-                            }`}
+                            } ${isDowned ? 'opacity-50' : ''}`}
                             style={{
                               borderColor: computedBorderColor,
                             }}
@@ -3985,7 +4014,7 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                               combatants are still being arranged (pre-Fight).
                               Once the GM locks the order we drop back to
                               just showing the total on the portrait. */}
-                          {!isTurnOrderAccepted && typeof combatant.initiativeRoll === 'number' && (
+                          {!isTurnOrderAccepted && !isDowned && typeof combatant.initiativeRoll === 'number' && (
                             <span className="text-[9px] font-mono text-slate-400 tracking-tight">
                               {combatant.initiativeRoll}
                               {(combatant.initiativeMod || 0) >= 0 ? ' + ' : ' − '}
@@ -3993,6 +4022,48 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                               {' = '}
                               <span className="text-white font-bold">{combatant.initiative}</span>
                             </span>
+                          )}
+
+                          {/* Death save row under the portrait — only
+                              visible while the combatant is downed. */}
+                          {isStabilized && (
+                            <span className="text-[9px] font-bold text-[#22c55e] uppercase tracking-widest">
+                              Stabilized
+                            </span>
+                          )}
+                          {isDoingDeathSaves && saves && (
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <div className="flex items-center gap-0.5">
+                                <img
+                                  src={DEATH_SAVE_ICONS.life}
+                                  alt="Successes"
+                                  className="w-3 h-3 mr-0.5"
+                                  style={DEATH_SAVE_ICON_STYLE}
+                                />
+                                {[0, 1, 2].map(i => (
+                                  <span
+                                    key={i}
+                                    className="w-1.5 h-1.5 rounded-full inline-block"
+                                    style={{ backgroundColor: saves.successes > i ? '#22c55e' : '#1e293b' }}
+                                  />
+                                ))}
+                              </div>
+                              <div className="flex items-center gap-0.5">
+                                <img
+                                  src={DEATH_SAVE_ICONS.death}
+                                  alt="Failures"
+                                  className="w-3 h-3 mr-0.5"
+                                  style={DEATH_SAVE_ICON_STYLE}
+                                />
+                                {[0, 1, 2].map(i => (
+                                  <span
+                                    key={i}
+                                    className="w-1.5 h-1.5 rounded-full inline-block"
+                                    style={{ backgroundColor: saves.failures > i ? '#ef4444' : '#1e293b' }}
+                                  />
+                                ))}
+                              </div>
+                            </div>
                           )}
 
                           {/* HP Bar for GM — uses the shared getHp lookup so
