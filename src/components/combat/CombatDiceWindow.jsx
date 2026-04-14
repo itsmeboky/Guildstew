@@ -209,6 +209,29 @@ export default function CombatDiceWindow({
     return queue;
   };
 
+  // Is this an unarmed strike? Either the action says so (mode=='unarmed')
+  // or the weapon is flagged as Unarmed.
+  const isUnarmedAttack = () => {
+    if (selectedAction?.mode === "unarmed") return true;
+    const weapon = selectedAction?.weapon;
+    return !!weapon?.properties?.includes?.("Unarmed");
+  };
+
+  // Whether the current actor is a Monk (they get Martial Arts die + best of STR/DEX).
+  const isMonkActor = () => {
+    const cls = (actor?.class || actor?.stats?.class || "").toLowerCase();
+    return cls.includes("monk");
+  };
+
+  // Monk Martial Arts die scales with level.
+  const monkMartialArtsDie = () => {
+    const level = actor?.level || actor?.stats?.level || 1;
+    if (level >= 17) return "1d10";
+    if (level >= 11) return "1d8";
+    if (level >= 5) return "1d6";
+    return "1d4";
+  };
+
   // Attack modifier (weapon or spell)
   const getModifier = () => {
     if (!actor) return 0;
@@ -241,15 +264,13 @@ export default function CombatDiceWindow({
       actor.proficiency_bonus || actor.stats?.proficiency_bonus || 2;
     const strMod = Math.floor((str - 10) / 2);
     const dexMod = Math.floor((dex - 10) / 2);
-    const isUnarmed = !!weapon?.properties?.includes?.("Unarmed");
-    const isMonk = !!weapon?.useBestOfStrDex;
     const isRanged =
       weapon?.category?.includes?.("Ranged") ||
       weapon?.properties?.includes?.("Finesse");
 
-    // Unarmed strikes: Monk uses max(STR, DEX); non-Monk uses STR only.
-    if (isUnarmed) {
-      return (isMonk ? Math.max(strMod, dexMod) : strMod) + proficiency;
+    // Unarmed: Monk uses max(STR, DEX) for "the best of"; everyone else STR.
+    if (isUnarmedAttack()) {
+      return (isMonkActor() ? Math.max(strMod, dexMod) : strMod) + proficiency;
     }
     // Explicit mode hints from the 4-state attack toggle.
     if (selectedAction?.mode === "melee") return strMod + proficiency;
@@ -282,36 +303,21 @@ export default function CombatDiceWindow({
   };
 
   const handleDamageRoll = () => {
-    // Flat-damage weapons (e.g. non-Monk Unarmed Strike = 1 + STR mod) skip
-    // the damage roll entirely — there's no die to roll.
-    const weapon = selectedAction?.weapon;
-    if (weapon?.flatDamage !== undefined) {
-      const strMod = Math.floor(((actor?.attributes?.str || 10) - 10) / 2);
-      const dexMod = Math.floor(((actor?.attributes?.dex || 10) - 10) / 2);
-      const isMonk = !!weapon.useBestOfStrDex;
-      const mod = isMonk ? Math.max(strMod, dexMod) : strMod;
-      const base = weapon.flatDamage * (isCrit ? 2 : 1);
-      const total = Math.max(0, base + mod);
-      const result = { total, dice: base, mod, isCrit, flat: true };
-      setDamageRoll(result);
-      setPhase("damage_result");
-      if (target?.id && onRoll) {
-        onRoll({
-          type: "damage",
-          value: total,
-          detail: result,
-          targetId: target.id,
-        });
-      }
-      return;
-    }
-
     setIsRolling(true);
     onRoll && onRoll({ type: "rolling_damage" });
 
-    const weaponDice =
-      weapon?.damage ||
-      (selectedAction?.type === "spell" ? "1d10" : "1d8");
+    const weapon = selectedAction?.weapon;
+    // Unarmed damage die: Monk uses their scaling Martial Arts die, everyone
+    // else uses 1d4. Weapon-backed attacks use the weapon's damage string.
+    let weaponDice;
+    if (isUnarmedAttack()) {
+      weaponDice = isMonkActor() ? monkMartialArtsDie() : "1d4";
+    } else {
+      weaponDice =
+        weapon?.damage ||
+        (selectedAction?.type === "spell" ? "1d10" : "1d8");
+    }
+
     const diceType = weaponDice.match(/d\d+/)?.[0] || "d8";
     setCurrentDice(diceType);
     setPhase("rolling_damage");
@@ -324,18 +330,16 @@ export default function CombatDiceWindow({
       // Most spells don't add ability mod to damage; we can refine per-spell later.
       mod = 0;
     } else {
-      // Weapon damage mod
+      // Weapon / unarmed damage mod
       const weapon = selectedAction?.weapon;
       const strMod = Math.floor(((actor?.attributes?.str || 10) - 10) / 2);
       const dexMod = Math.floor(((actor?.attributes?.dex || 10) - 10) / 2);
-      const isUnarmed = !!weapon?.properties?.includes?.("Unarmed");
-      const isMonk = !!weapon?.useBestOfStrDex;
       const isRanged =
         weapon?.category?.includes?.("Ranged") ||
         weapon?.properties?.includes?.("Finesse");
 
-      if (isUnarmed) {
-        mod = isMonk ? Math.max(strMod, dexMod) : strMod;
+      if (isUnarmedAttack()) {
+        mod = isMonkActor() ? Math.max(strMod, dexMod) : strMod;
       } else if (selectedAction?.mode === "melee") {
         mod = strMod;
       } else if (selectedAction?.mode === "ranged") {
@@ -347,9 +351,15 @@ export default function CombatDiceWindow({
       if (isOffHand && mod > 0) mod = 0;
     }
 
-    const diceString =
-      selectedAction?.weapon?.damage ||
-      (selectedAction?.type === "spell" ? "1d10" : "1d8");
+    // Unarmed damage uses 1d4 (or Monk Martial Arts die), not the weapon damage.
+    let diceString;
+    if (isUnarmedAttack()) {
+      diceString = isMonkActor() ? monkMartialArtsDie() : "1d4";
+    } else {
+      diceString =
+        selectedAction?.weapon?.damage ||
+        (selectedAction?.type === "spell" ? "1d10" : "1d8");
+    }
     const match = diceString.match(/(\d+)d(\d+)/);
     let numDice = match ? parseInt(match[1], 10) : 1;
     const faces = match ? parseInt(match[2], 10) : 8;
