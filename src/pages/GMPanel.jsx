@@ -1115,17 +1115,28 @@ export default function GMPanel() {
                 // Clicking any other action cancels attack-mode targeting.
                 if (attackMode !== null) setAttackMode(null);
 
-                // Turn order enforcement — GM bypasses the check entirely
-                // (they might be running a monster or possessing a player).
-                if (campaign?.combat_active && campaign?.combat_data) {
+                // Resolve first so we know the cost — that determines
+                // whether the turn-order check even applies. Reactions
+                // (Shield, Counterspell, Hellish Rebuke, opportunity
+                // attacks) can fire on ANY combatant's turn, so they
+                // bypass the turn gate entirely and only check the
+                // reaction availability.
+                const resolved = resolveAction(action, selectedCharacter);
+                const enrichedAction = { ...action, resolved };
+
+                if (resolved.cost === "reaction") {
+                  if (!actionsState.reaction) {
+                    toast.error("Reaction already used this round!");
+                    return;
+                  }
+                } else if (campaign?.combat_active && campaign?.combat_data) {
+                  // Action / bonus / free / no-cost entries still obey the
+                  // turn gate. The GM is always allowed through.
                   if (!isGM && !isActorsTurn) {
                     toast.error("It's not this character's turn!");
                     return;
                   }
                 }
-
-                const resolved = resolveAction(action, selectedCharacter);
-                const enrichedAction = { ...action, resolved };
 
                 // Action economy gate — can't do it if the required cost isn't available
                 if (resolved.cost === "action" && !actionsState.action) {
@@ -1134,10 +1145,6 @@ export default function GMPanel() {
                 }
                 if (resolved.cost === "bonus" && !actionsState.bonus) {
                   toast.error("No bonus action available this turn!");
-                  return;
-                }
-                if (resolved.cost === "reaction" && !actionsState.reaction) {
-                  toast.error("No reaction available this round!");
                   return;
                 }
 
