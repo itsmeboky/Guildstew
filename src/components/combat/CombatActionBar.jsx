@@ -23,12 +23,19 @@ const MONSTER_MELEE_ICON = `${MONSTER_ICON_BASE}/monster%20melee.png`;
 const MONSTER_RANGED_ICON = `${MONSTER_ICON_BASE}/monster%20ranged.png`;
 const MONSTER_UNARMED_ICON = `${MONSTER_ICON_BASE}/monster%20unarmed.png`;
 
-export default function CombatActionBar({ 
-  character, 
-  onActionClick, 
+export default function CombatActionBar({
+  character,
+  onActionClick,
   className,
   actionsState,
-  setActionsState
+  setActionsState,
+  // The Attack button is a stateful 4-state toggle controlled by the parent:
+  //   null → 'melee' → 'ranged' → 'unarmed' → null
+  // Clicking the button does NOT fire an attack — it just cycles attackMode.
+  // The actual attack happens when the parent's target-selection flow picks
+  // a target while attackMode is set.
+  attackMode = null,
+  onAttackModeChange,
 }) {
   // Internal state if not provided controlled
   const [localActions, setLocalActions] = useState({ action: true, bonus: true, inspiration: false });
@@ -37,7 +44,6 @@ export default function CombatActionBar({
 
   const [nonLethalActive, setNonLethalActive] = useState(false);
   const [sneakActive, setSneakActive] = useState(false);
-  const [attackMode, setAttackMode] = useState(0);
 
   // Determine if selected character is a creature (monster/npc) vs humanoid (player)
   const isCreature = character?.type === 'monster' || character?.type === 'npc';
@@ -48,34 +54,33 @@ export default function CombatActionBar({
   const meleeWeapon = equipment.weapon1;
   const rangedWeapon = equipment.ranged;
 
-  // Determine available modes
-  // 0: Generic/Unarmed (always available if no weapons?) or just Melee if weapon1 exists
-  // Let's strictly follow: Melee (Weapon 1) vs Ranged (Ranged Slot)
-  // If we want to toggle, we need to know what's valid.
+  const attackIsTargeting = attackMode !== null && attackMode !== undefined;
 
-  const isMeleeAvailable = !!meleeWeapon;
-  const isRangedAvailable = !!rangedWeapon;
-
-  const handleAttackToggle = () => {
-    let nextMode = attackMode;
-    // Cycle: 0 (Melee) -> 1 (Ranged) -> 0
-    // If one is missing, can we switch?
-    // If currently Melee (0), try Ranged (1). If Ranged not available, stay 0? 
-    // Or if Melee not available, default to Ranged?
-
-    if (attackMode === 0) { // Switching from Melee to Ranged
-       if (isRangedAvailable) nextMode = 1;
-    } else { // Switching from Ranged to Melee
-       if (isMeleeAvailable) nextMode = 0;
+  // 4-state cycle: null → 'melee' → 'ranged' → 'unarmed' → null
+  // Clicking this button DOES NOT trigger an attack — it only cycles the
+  // selected attack mode. The parent uses attackMode to enter targeting mode
+  // and fires the attack when the GM clicks a combatant portrait.
+  const handleAttackClick = () => {
+    // Monster / NPC with a declared primary action → single-click fire.
+    // If the monster has no declared actions, fall through to the same
+    // 4-state cycle characters use so the button always does something.
+    if (isCreature) {
+      const actionsList = character?.actions || character?.stats?.actions || [];
+      const primaryAction = actionsList[0];
+      if (primaryAction) {
+        onActionClick && onActionClick(primaryAction);
+        return;
+      }
     }
-    setAttackMode(nextMode);
-  };
 
-  // Ensure valid initial mode
-  React.useEffect(() => {
-     if (attackMode === 0 && !isMeleeAvailable && isRangedAvailable) setAttackMode(1);
-     if (attackMode === 1 && !isRangedAvailable && isMeleeAvailable) setAttackMode(0);
-  }, [isMeleeAvailable, isRangedAvailable]);
+    let next;
+    if (attackMode === null || attackMode === undefined) next = 'melee';
+    else if (attackMode === 'melee') next = 'ranged';
+    else if (attackMode === 'ranged') next = 'unarmed';
+    else next = null; // 'unarmed' → cancel
+
+    onAttackModeChange && onAttackModeChange(next);
+  };
   const [showSpellDetails, setShowSpellDetails] = useState(null);
   const [hoveredSpell, setHoveredSpell] = useState(null);
   const [hoverTimer, setHoverTimer] = useState(null);
@@ -171,8 +176,9 @@ export default function CombatActionBar({
         <div className="h-12 w-[1px] bg-[#1e293b] mx-2" />
         <div className="flex-1 flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <ActionButton active={actions.action} onClick={() => setActions(p => ({...p, action: !p.action}))} color="green" icon={Circle} />
-            <ActionButton active={actions.bonus} onClick={() => setActions(p => ({...p, bonus: !p.bonus}))} color="orange" icon={Triangle} />
+            {/* Action & Bonus Action are display-only during combat; consumed by the system */}
+            <ActionButton active={actions.action} color="green" icon={Circle} />
+            <ActionButton active={actions.bonus} color="orange" icon={Triangle} />
             <ActionButton active={actions.inspiration} onClick={() => setActions(p => ({...p, inspiration: !p.inspiration}))} color="yellow" icon={Music} />
           </div>
         </div>
@@ -207,58 +213,35 @@ export default function CombatActionBar({
             );
           })}
           <BasicActionSlot
-            src={isCreature 
-              ? (attackMode === 1 ? MONSTER_RANGED_ICON : MONSTER_MELEE_ICON) 
-              : (attackMode === 1 ? PC_RANGED_ICON : PC_MELEE_ICON)}
+            src={(() => {
+              // Icon reflects the currently-selected attack mode. When nothing
+              // is selected we show the melee icon as the idle state (since
+              // the first click will select melee). Monsters use their own
+              // icon variants.
+              if (isCreature) {
+                if (attackMode === 'ranged') return MONSTER_RANGED_ICON;
+                if (attackMode === 'unarmed') return MONSTER_UNARMED_ICON;
+                return MONSTER_MELEE_ICON;
+              }
+              if (attackMode === 'ranged') return PC_RANGED_ICON;
+              if (attackMode === 'unarmed') return PC_UNARMED_ICON;
+              return PC_MELEE_ICON;
+            })()}
             tooltip={
-              (character?.type === 'monster' || character?.type === 'npc')
-                ? `Attack (${(character.actions?.[0]?.name) || 'Default'})`
-                : (attackMode === 1 ? `Ranged Attack (${rangedWeapon?.name || 'No Weapon'})` : `Melee Attack (${meleeWeapon?.name || 'No Weapon'})`)
+              isCreature
+                ? `Attack (${(character?.actions?.[0]?.name) || 'Default'})`
+                : attackMode === 'ranged'
+                ? `Ranged Attack (${rangedWeapon?.name || 'No Ranged Weapon'})`
+                : attackMode === 'unarmed'
+                ? 'Unarmed Strike'
+                : attackMode === 'melee'
+                ? `Melee Attack (${meleeWeapon?.name || 'No Melee Weapon'})`
+                : `Attack — click to select (${meleeWeapon?.name || 'no melee'})`
             }
-            toggleable={!(character?.type === 'monster' || character?.type === 'npc')}
-            isActive={true}
-            disabled={
-              !(character?.type === 'monster' || character?.type === 'npc') && 
-              (attackMode === 0 ? !isMeleeAvailable : !isRangedAvailable) && !(
-               // Enable if Off-hand attack is possible: Action used + Bonus available + 2nd weapon exists
-               !actions.action && actions.bonus && equipment.weapon2
-            )}
-            onToggle={handleAttackToggle}
-            onClick={() => {
-              // Check for Monster Actions first
-              if (character?.type === 'monster' || character?.type === 'npc') {
-                const actionsList = character.actions || character.stats?.actions || [];
-                const primaryAction = actionsList[0]; // Default to first action
-                
-                if (primaryAction) {
-                   onActionClick && onActionClick(primaryAction);
-                   return;
-                }
-              }
-
-              // Logic for standard attack vs off-hand attack
-              let weapon = attackMode === 0 ? meleeWeapon : rangedWeapon;
-              let isOffHand = false;
-
-              // Check for Off-hand trigger
-              if (!actions.action && actions.bonus && equipment.weapon2) {
-                 weapon = equipment.weapon2;
-                 isOffHand = true;
-              } else if (!actions.action) {
-                 // Action used and no off-hand valid -> do nothing (disabled state usually handles this)
-                 return;
-              }
-
-              if (weapon) {
-                 onActionClick && onActionClick({ 
-                   type: 'basic', 
-                   name: 'Attack', 
-                   mode: isOffHand ? 'offhand' : (attackMode === 0 ? 'melee' : 'ranged'),
-                   weapon: weapon,
-                   isOffHand: isOffHand
-                 });
-              }
-            }}
+            toggleable={false}
+            isActive={attackIsTargeting}
+            disabled={false}
+            onClick={handleAttackClick}
           />
         </div>
         <div className="h-10 w-[2px] bg-[#1e2636]" />
@@ -337,10 +320,12 @@ function StatHump({ label, value, short }) {
 
 function ActionButton({ active, onClick, color, icon: Icon }) {
   const colorClass = color === 'green' ? 'text-green-500 border-green-500' : color === 'orange' ? 'text-orange-500 border-orange-500' : 'text-yellow-400 border-yellow-400';
+  const interactive = typeof onClick === 'function';
   return (
     <button
       onClick={onClick}
-      className={`w-12 h-12 rounded-[14px] border flex items-center justify-center transition-all ${active ? `bg-[#050816] ${colorClass} shadow-[0_0_15px_rgba(0,0,0,0.3)]` : 'bg-[#050816] border-[#111827] opacity-50'}`}
+      disabled={!interactive}
+      className={`w-12 h-12 rounded-[14px] border flex items-center justify-center transition-all ${active ? `bg-[#050816] ${colorClass} shadow-[0_0_15px_rgba(0,0,0,0.3)]` : 'bg-[#050816] border-[#111827] opacity-50'} ${interactive ? 'cursor-pointer' : 'cursor-default'}`}
     >
       <Icon className={`w-4 h-4 fill-current ${active ? colorClass.split(' ')[0] : 'text-slate-500'}`} />
     </button>
