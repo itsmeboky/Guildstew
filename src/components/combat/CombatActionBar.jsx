@@ -197,35 +197,8 @@ export default function CombatActionBar({
     []
   );
 
-  // Unified list for the scrollable abilities row:
-  //   1. Class bonus action variants (tinted)
-  //   2. Cantrips + leveled spells (from defaultSpells, already in order)
-  // Each entry carries a `kind` so the renderer can pick the right slot
-  // component. Tinting on the class bonus entries is what visually
-  // distinguishes them from the spells; no separate bar, no label.
-  const scrollableAbilities = React.useMemo(() => {
-    const items = [];
-    for (const cba of classBonusActions) {
-      const base = basicActionByName[cba.name];
-      if (!base) continue;
-      items.push({
-        kind: 'classBonus',
-        key: `cb-${cba.classKey}-${cba.name}`,
-        data: { ...cba, iconUrl: base.url },
-      });
-    }
-    for (let i = 0; i < defaultSpells.length; i += 1) {
-      items.push({
-        kind: 'spell',
-        key: `sp-${i}`,
-        data: defaultSpells[i],
-      });
-    }
-    return items;
-  }, [classBonusActions, basicActionByName, defaultSpells]);
-
   const canScrollLeft = scrollPosition > 0;
-  const canScrollRight = scrollPosition + visibleSpellCount < scrollableAbilities.length;
+  const canScrollRight = scrollPosition + visibleSpellCount < defaultSpells.length;
 
   const handleSpellHover = (spell) => {
     setHoveredSpell(spell);
@@ -396,20 +369,30 @@ export default function CombatActionBar({
           </button>
         )}
 
-        <div className="flex-1 flex gap-3 overflow-visible relative">
-          {scrollableAbilities
-            .slice(scrollPosition, scrollPosition + visibleSpellCount)
-            .map((item) => {
-              // Class bonus action — tinted variant of a basic action, fires
-              // onActionClick with a bonus costOverride + classFeature.
-              if (item.kind === 'classBonus') {
-                const cba = item.data;
+        <div className="flex-1 flex items-center gap-3 overflow-visible relative">
+          {/* Fixed prefix: class-feature bonus actions. Stays put while the
+              spell portion scrolls. Label + tinted icons + vertical divider
+              match the styling of the main-action / spell divider. Skipped
+              entirely when the character has no bonus-action class features. */}
+          {classBonusActions.length > 0 && (
+            <>
+              <div className="flex flex-col items-start gap-0.5 pr-1 flex-shrink-0">
+                <span className="text-[9px] uppercase tracking-[0.22em] text-orange-400 font-bold leading-none">
+                  Bonus Action
+                </span>
+                <span className="text-[8px] uppercase tracking-[0.18em] text-slate-500 leading-none">
+                  Class Feature
+                </span>
+              </div>
+              {classBonusActions.map((cba, idx) => {
+                const base = basicActionByName[cba.name];
+                if (!base) return null;
                 const tint = CLASS_TINT[cba.classKey];
                 const hideActive = cba.name === 'Hide' && isHidden;
                 return (
                   <BasicActionSlot
-                    key={item.key}
-                    src={cba.iconUrl}
+                    key={`cb-${cba.classKey}-${cba.name}-${idx}`}
+                    src={base.url}
                     tooltip={`${cba.name} (${cba.classFeature}) — bonus action`}
                     iconFilter={tint}
                     isActive={hideActive}
@@ -425,13 +408,18 @@ export default function CombatActionBar({
                     }}
                   />
                 );
-              }
+              })}
+              <div className="h-10 w-[2px] bg-[#1e2636] flex-shrink-0" />
+            </>
+          )}
 
-              // Regular spell / cantrip
-              const spell = item.data;
+          {/* Scrollable: cantrips + leveled spells */}
+          {defaultSpells
+            .slice(scrollPosition, scrollPosition + visibleSpellCount)
+            .map((spell, idx) => {
               const spellName = typeof spell === 'string' ? spell : spell.name;
               return (
-                <div key={item.key} className="relative">
+                <div key={`sp-${scrollPosition + idx}`} className="relative">
                   <SpellSlot
                     src={
                       spellIcons[spellName] ||
@@ -471,7 +459,7 @@ export default function CombatActionBar({
                 </div>
               );
             })}
-          {scrollableAbilities.length === 0 && (
+          {defaultSpells.length === 0 && classBonusActions.length === 0 && (
             <div className="text-slate-500 text-xs italic flex items-center px-4">
               No spells or abilities
             </div>
@@ -483,7 +471,7 @@ export default function CombatActionBar({
             onClick={() =>
               setScrollPosition(
                 Math.min(
-                  Math.max(0, scrollableAbilities.length - visibleSpellCount),
+                  Math.max(0, defaultSpells.length - visibleSpellCount),
                   scrollPosition + 1
                 )
               )
