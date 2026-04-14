@@ -176,7 +176,7 @@ function CampaignPlayerPanelContent() {
   });
 
   // Action Resource State
-  const [actionsState, setActionsState] = useState({ action: true, bonus: true, inspiration: false });
+  const [actionsState, setActionsState] = useState({ action: true, bonus: true, reaction: true, inspiration: false });
 
   // Track previous turn to reset actions
   const prevTurnIndexRef = React.useRef();
@@ -296,7 +296,7 @@ function CampaignPlayerPanelContent() {
         const { order } = campaign.combat_data;
         const currentTurnCombatant = order?.[currentIndex];
         if (currentTurnCombatant?.id === user?.id || currentTurnCombatant?.id === myCharacter?.id) {
-           setActionsState({ action: true, bonus: true, inspiration: false });
+           setActionsState({ action: true, bonus: true, reaction: true, inspiration: false });
         }
         prevTurnIndexRef.current = currentIndex;
      }

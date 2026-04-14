@@ -82,7 +82,7 @@ export default function GMPanel() {
   const [equippedItems, setEquippedItems] = useState({});
   const [initiativeOrder, setInitiativeOrder] = useState([]);
   const [combatActive, setCombatActive] = useState(false);
-  const [actionsState, setActionsState] = useState({ action: true, bonus: true, inspiration: false });
+  const [actionsState, setActionsState] = useState({ action: true, bonus: true, reaction: true, inspiration: false });
   const [activeConditions, setActiveConditions] = useState({});
 
   // 1. Auto-select first monster if queue has items and no character selected
@@ -140,6 +140,12 @@ export default function GMPanel() {
   // the targeting / dice-window flow (which weapon to fire) need it.
   const [attackMode, setAttackMode] = useState(null);
 
+  // Spell slots spent per character. Keyed by characterKey
+  // (uniqueId / id), value is { 1: <spent>, 2: <spent>, ... }. Slots
+  // persist across turns and combats — only a long rest should reset
+  // them (not implemented yet). Click a dot to manually adjust.
+  const [spentSlotsByCharacter, setSpentSlotsByCharacter] = useState({});
+
   // Stealth / Sneak state.
   //   hiddenCharacters: Set of character IDs that have successfully hidden
   //     (Hide action resolved). Cleared when the character attacks, takes
@@ -167,6 +173,36 @@ export default function GMPanel() {
   React.useEffect(() => {
     if (!isHidden && sneakActive) setSneakActive(false);
   }, [isHidden, sneakActive]);
+
+  // Spell slots for the selected character. getCharacterSpellSlots handles
+  // full / half / pact casters and falls back to parsing monster stat
+  // blocks. Non-casters (Barbarian, Fighter, Monk, Rogue without a caster
+  // multiclass) get {}, which hides the tracker row entirely.
+  const maxSpellSlots = React.useMemo(
+    () => (selectedCharacter ? getCharacterSpellSlots(selectedCharacter) : {}),
+    [selectedCharacter]
+  );
+  const currentSpentSlots = React.useMemo(
+    () => (selectedCharacterKey ? spentSlotsByCharacter[selectedCharacterKey] || {} : {}),
+    [spentSlotsByCharacter, selectedCharacterKey]
+  );
+
+  // Manually adjust a spent slot count for the current character (the GM
+  // clicks a dot in the tracker). Used for corrections.
+  const handleToggleSlot = React.useCallback((level, mode) => {
+    const key = selectedCharacterKey;
+    if (!key) return;
+    const max = maxSpellSlots[level] || 0;
+    setSpentSlotsByCharacter((prev) => {
+      const charSpent = prev[key] || {};
+      const curr = charSpent[level] || 0;
+      let next = curr;
+      if (mode === 'spend') next = Math.min(max, curr + 1);
+      else if (mode === 'restore') next = Math.max(0, curr - 1);
+      if (next === curr) return prev;
+      return { ...prev, [key]: { ...charSpent, [level]: next } };
+    });
+  }, [selectedCharacterKey, maxSpellSlots]);
 
   // Sync combat state to DB for spectators
   const updateCombatEncounter = React.useCallback((newState) => {
@@ -527,7 +563,7 @@ export default function GMPanel() {
   //     attack / take damage / let your turn pass without re-hiding and
   //     you're exposed.
   React.useEffect(() => {
-    setActionsState({ action: true, bonus: true, inspiration: false });
+    setActionsState({ action: true, bonus: true, reaction: true, inspiration: false });
     setAttackMode(null);
     setSneakActive(false);
 
@@ -1072,6 +1108,9 @@ export default function GMPanel() {
               isHidden={isHidden}
               sneakActive={sneakActive}
               onSneakToggle={(next) => setSneakActive(next)}
+              maxSpellSlots={maxSpellSlots}
+              spentSpellSlots={currentSpentSlots}
+              onToggleSlot={handleToggleSlot}
               onActionClick={(action) => {
                 // Clicking any other action cancels attack-mode targeting.
                 if (attackMode !== null) setAttackMode(null);
@@ -1096,6 +1135,36 @@ export default function GMPanel() {
                 if (resolved.cost === "bonus" && !actionsState.bonus) {
                   toast.error("No bonus action available this turn!");
                   return;
+                }
+                if (resolved.cost === "reaction" && !actionsState.reaction) {
+                  toast.error("No reaction available this round!");
+                  return;
+                }
+
+                // Spell slot gate — leveled spells (level > 0) require an
+                // available slot. Cantrips (level 0 / undefined) are free.
+                if (action.type === 'spell' && typeof action.level === 'number' && action.level > 0) {
+                  const key = selectedCharacterKey;
+                  const max = maxSpellSlots[action.level] || 0;
+                  const already = (spentSlotsByCharacter[key] || {})[action.level] || 0;
+                  if (max === 0 || already >= max) {
+                    toast.error(`No level ${action.level} spell slots remaining!`);
+                    return;
+                  }
+                  // Commit the slot up-front. If the spell ultimately gets
+                  // cancelled the GM can refund by clicking the dot.
+                  if (key) {
+                    setSpentSlotsByCharacter((prev) => {
+                      const charSpent = prev[key] || {};
+                      return {
+                        ...prev,
+                        [key]: {
+                          ...charSpent,
+                          [action.level]: (charSpent[action.level] || 0) + 1,
+                        },
+                      };
+                    });
+                  }
                 }
 
                 // No-roll actions — just consume the cost and toast. Don't open the dice window.
