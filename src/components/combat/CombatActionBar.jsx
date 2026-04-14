@@ -155,8 +155,6 @@ export default function CombatActionBar({
   }, [character]);
 
   const visibleSpellCount = 8;
-  const canScrollLeft = scrollPosition > 0;
-  const canScrollRight = scrollPosition + visibleSpellCount < defaultSpells.length;
 
   // Class-specific bonus action variants. These are the "same" actions as
   // the main row (Dash, Disengage, etc.) but cost a bonus action instead of
@@ -193,11 +191,41 @@ export default function CombatActionBar({
   }, [character, isCreature]);
 
   // Quick lookup so we can grab icon URLs by action name when rendering
-  // the class bonus row. basicActionIcons is the canonical list.
+  // class bonus action entries. basicActionIcons is the canonical list.
   const basicActionByName = React.useMemo(
     () => Object.fromEntries(basicActionIcons.map((a) => [a.name, a])),
     []
   );
+
+  // Unified list for the scrollable abilities row:
+  //   1. Class bonus action variants (tinted)
+  //   2. Cantrips + leveled spells (from defaultSpells, already in order)
+  // Each entry carries a `kind` so the renderer can pick the right slot
+  // component. Tinting on the class bonus entries is what visually
+  // distinguishes them from the spells; no separate bar, no label.
+  const scrollableAbilities = React.useMemo(() => {
+    const items = [];
+    for (const cba of classBonusActions) {
+      const base = basicActionByName[cba.name];
+      if (!base) continue;
+      items.push({
+        kind: 'classBonus',
+        key: `cb-${cba.classKey}-${cba.name}`,
+        data: { ...cba, iconUrl: base.url },
+      });
+    }
+    for (let i = 0; i < defaultSpells.length; i += 1) {
+      items.push({
+        kind: 'spell',
+        key: `sp-${i}`,
+        data: defaultSpells[i],
+      });
+    }
+    return items;
+  }, [classBonusActions, basicActionByName, defaultSpells]);
+
+  const canScrollLeft = scrollPosition > 0;
+  const canScrollRight = scrollPosition + visibleSpellCount < scrollableAbilities.length;
 
   const handleSpellHover = (spell) => {
     setHoveredSpell(spell);
@@ -369,100 +397,103 @@ export default function CombatActionBar({
         )}
 
         <div className="flex-1 flex gap-3 overflow-visible relative">
-          {defaultSpells.slice(scrollPosition, scrollPosition + visibleSpellCount).map((spell, idx) => {
-            const spellName = typeof spell === 'string' ? spell : spell.name;
-            return (
-              <div key={idx} className="relative">
-                <SpellSlot 
-                  src={spellIcons[spellName] || spellIcons[Object.keys(spellIcons).find(k => k.toLowerCase() === spellName?.toLowerCase())]} 
-                  tooltip={spellName}
-                  onHover={() => handleSpellHover(spellName)}
-                  onLeave={handleSpellLeave}
-                  onClick={() => onActionClick && onActionClick({ type: 'spell', ...spell })}
-                />
-                {showSpellDetails === spellName && (
-                  (() => {
-                    const details = getSpellDetail(spellName);
-                    if (!details) return null;
-                    return (
-                      <div className="absolute bottom-full left-0 mb-2 bg-[#1E2430] text-white p-4 rounded-lg text-xs w-80 shadow-2xl border-2 border-[#37F2D1] z-[100] max-h-96 overflow-y-auto custom-scrollbar pointer-events-auto">
-                        <div className="font-bold mb-2 text-[#37F2D1] text-sm">{spellName}</div>
-                        <div className="text-gray-400 mb-2">
-                          {details.level} {details.school}
+          {scrollableAbilities
+            .slice(scrollPosition, scrollPosition + visibleSpellCount)
+            .map((item) => {
+              // Class bonus action — tinted variant of a basic action, fires
+              // onActionClick with a bonus costOverride + classFeature.
+              if (item.kind === 'classBonus') {
+                const cba = item.data;
+                const tint = CLASS_TINT[cba.classKey];
+                const hideActive = cba.name === 'Hide' && isHidden;
+                return (
+                  <BasicActionSlot
+                    key={item.key}
+                    src={cba.iconUrl}
+                    tooltip={`${cba.name} (${cba.classFeature}) — bonus action`}
+                    iconFilter={tint}
+                    isActive={hideActive}
+                    activeTint={hideActive ? '#38bdf8' : undefined}
+                    onClick={() => {
+                      onActionClick &&
+                        onActionClick({
+                          type: 'basic',
+                          name: cba.name,
+                          costOverride: 'bonus',
+                          classFeature: cba.classFeature,
+                        });
+                    }}
+                  />
+                );
+              }
+
+              // Regular spell / cantrip
+              const spell = item.data;
+              const spellName = typeof spell === 'string' ? spell : spell.name;
+              return (
+                <div key={item.key} className="relative">
+                  <SpellSlot
+                    src={
+                      spellIcons[spellName] ||
+                      spellIcons[
+                        Object.keys(spellIcons).find(
+                          (k) => k.toLowerCase() === spellName?.toLowerCase()
+                        )
+                      ]
+                    }
+                    tooltip={spellName}
+                    onHover={() => handleSpellHover(spellName)}
+                    onLeave={handleSpellLeave}
+                    onClick={() =>
+                      onActionClick && onActionClick({ type: 'spell', ...spell })
+                    }
+                  />
+                  {showSpellDetails === spellName &&
+                    (() => {
+                      const details = getSpellDetail(spellName);
+                      if (!details) return null;
+                      return (
+                        <div className="absolute bottom-full left-0 mb-2 bg-[#1E2430] text-white p-4 rounded-lg text-xs w-80 shadow-2xl border-2 border-[#37F2D1] z-[100] max-h-96 overflow-y-auto custom-scrollbar pointer-events-auto">
+                          <div className="font-bold mb-2 text-[#37F2D1] text-sm">{spellName}</div>
+                          <div className="text-gray-400 mb-2">
+                            {details.level} {details.school}
+                          </div>
+                          <div className="space-y-1 mb-2">
+                            <div><span className="text-gray-400">Casting Time:</span> {details.castingTime}</div>
+                            <div><span className="text-gray-400">Range:</span> {details.range}</div>
+                            <div><span className="text-gray-400">Components:</span> {details.components}</div>
+                            <div><span className="text-gray-400">Duration:</span> {details.duration}</div>
+                          </div>
+                          <div className="text-white leading-relaxed whitespace-pre-wrap">{details.description}</div>
                         </div>
-                        <div className="space-y-1 mb-2">
-                          <div><span className="text-gray-400">Casting Time:</span> {details.castingTime}</div>
-                          <div><span className="text-gray-400">Range:</span> {details.range}</div>
-                          <div><span className="text-gray-400">Components:</span> {details.components}</div>
-                          <div><span className="text-gray-400">Duration:</span> {details.duration}</div>
-                        </div>
-                        <div className="text-white leading-relaxed whitespace-pre-wrap">{details.description}</div>
-                      </div>
-                    );
-                  })()
-                )}
-              </div>
-            );
-          })}
-          {defaultSpells.length === 0 && (
-            <div className="text-slate-500 text-xs italic flex items-center px-4">No spells available</div>
+                      );
+                    })()}
+                </div>
+              );
+            })}
+          {scrollableAbilities.length === 0 && (
+            <div className="text-slate-500 text-xs italic flex items-center px-4">
+              No spells or abilities
+            </div>
           )}
         </div>
 
         {canScrollRight && (
           <button
-            onClick={() => setScrollPosition(Math.min(defaultSpells.length - visibleSpellCount, scrollPosition + 1))}
+            onClick={() =>
+              setScrollPosition(
+                Math.min(
+                  Math.max(0, scrollableAbilities.length - visibleSpellCount),
+                  scrollPosition + 1
+                )
+              )
+            }
             className="w-8 h-16 bg-[#050816]/80 hover:bg-[#0b1220] rounded-r-xl flex items-center justify-center transition-all shadow-lg z-10"
           >
             <ChevronRight className="w-5 h-5 text-[#37F2D1]" />
           </button>
         )}
       </div>
-
-      {/* Class-specific bonus action row — tinted variants of the main
-          action icons that cost a bonus action instead of an action,
-          gated on class + level 2+. */}
-      {classBonusActions.length > 0 && (
-        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-[#111827]">
-          <div className="flex flex-col items-start gap-0.5 pr-2 border-r border-[#111827]">
-            <span className="text-[9px] uppercase tracking-[0.22em] text-orange-400 font-bold">
-              Bonus Action
-            </span>
-            <span className="text-[8px] uppercase tracking-[0.18em] text-slate-500">
-              Class Feature
-            </span>
-          </div>
-          <div className="flex gap-3">
-            {classBonusActions.map((cba, idx) => {
-              const base = basicActionByName[cba.name];
-              const tint = CLASS_TINT[cba.classKey];
-              // Hide shows its hidden state in both the main row AND the
-              // bonus row so either button reflects reality.
-              const hideActive = cba.name === 'Hide' && isHidden;
-
-              return (
-                <BasicActionSlot
-                  key={`${cba.classKey}-${cba.name}-${idx}`}
-                  src={base?.url || null}
-                  tooltip={`${cba.name} (${cba.classFeature}) — bonus action`}
-                  iconFilter={tint}
-                  isActive={hideActive}
-                  activeTint={hideActive ? '#38bdf8' : undefined}
-                  onClick={() => {
-                    onActionClick &&
-                      onActionClick({
-                        type: 'basic',
-                        name: cba.name,
-                        costOverride: 'bonus',
-                        classFeature: cba.classFeature,
-                      });
-                  }}
-                />
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
