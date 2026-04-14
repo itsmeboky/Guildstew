@@ -14,7 +14,7 @@
  * Supabase RLS / FK constraints reject the fake user_profiles (because we
  * don't have service_role to create real auth users), we fall back to
  * creating only the campaign + characters so the GM can still test combat
- * via the Possess dialog and the monster queue.
+ * via the Possess dialog and the combat queue.
  */
 
 import { base44 } from "@/api/base44Client";

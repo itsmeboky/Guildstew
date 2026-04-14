@@ -1779,11 +1779,11 @@ function TurnOrderDisplay({ order, currentTurnIndex, onSelectTarget, selectionMo
                 {combatant.type !== 'player' && (
                    <div className="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden mt-1 border border-gray-700 relative" title="Monster Health">
                       {/* Assuming we want to show *some* indication of health loss if possible.
-                          Since we don't have the exact Monster Queue data prop passed here in the TurnOrderDisplay inside CampaignPlayerPanel,
-                          we can't render an accurate bar. 
+                          Since we don't have the exact Combat Queue data prop passed here in the TurnOrderDisplay inside CampaignPlayerPanel,
+                          we can't render an accurate bar.
                           HOWEVER, the user explicitly asked for it: "All monsters and NPCs need to have a health bar... Players should also be able to see HP being lost."
-                          
-                          To fix this properly, we need to fetch the monster queue in CampaignPlayerPanel and pass it down, 
+
+                          To fix this properly, we need to fetch the combat queue in CampaignPlayerPanel and pass it down,
                           OR rely on the fact that 'combatant' in 'order' might have updated 'hit_points' if we are syncing correctly.
                           
                           Currently 'campaign.combat_data.order' is static until updated.
