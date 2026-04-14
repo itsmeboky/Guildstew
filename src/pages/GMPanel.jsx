@@ -31,6 +31,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import { resolveAction, consumeActionCost } from "@/components/combat/actionResolver";
+import { hpBarColor, clampHp } from "@/components/combat/hpColor";
 import { toast } from "sonner";
 import { useTurnContext } from "@/components/combat/useTurnContext";
 
@@ -878,12 +879,13 @@ export default function GMPanel() {
                 }
 
                 if (data.type === 'damage') {
-                  // Apply damage
+                  // `delta` is positive for damage, negative for healing.
+                  // clampHp in hpColor.js does current - delta bounded to [0, max].
                   const targetId = data.targetId;
-                  const damage = data.value;
+                  const delta = data.value;
 
                   // Taking damage reveals a hidden character.
-                  if (targetId) {
+                  if (targetId && delta > 0) {
                     setHiddenCharacters(prev => {
                       if (!prev.has(targetId)) return prev;
                       const next = new Set(prev);
@@ -891,49 +893,86 @@ export default function GMPanel() {
                       return next;
                     });
                   }
-                  
+
+                  // Resolve the target to an actual character entity.
+                  // Four id formats in the wild:
+                  //   player-<uuid>           → real player via profile email
+                  //   player-ghost-<charId>   → orphan character (seeded / imported)
+                  //   ghost-<charId>          → same, direct form
+                  //   monster-<queueId>       → monster queue entry
+                  let resolvedChar = null;
+                  let resolvedMonsterQueueId = null;
+
                   if (targetId.startsWith('player-')) {
-                    const userId = targetId.replace('player-', '');
-                    const char = characters.find(c => {
-                      // find character for this user
-                      // Need to map user_id to email or check campaign player_ids
-                      const player = players.find(p => p.user_id === userId);
-                      return player && c.created_by === player.email;
-                    });
-                    
-                    if (char) {
-                      const newCurrent = Math.max(0, (char.hit_points?.current || char.hit_points?.max || 0) - damage);
-                      base44.entities.Character.update(char.id, {
-                        hit_points: { ...char.hit_points, current: newCurrent }
-                      });
-                      queryClient.invalidateQueries(['campaignCharacters']);
+                    const rest = targetId.slice('player-'.length);
+                    if (rest.startsWith('ghost-')) {
+                      const charId = rest.slice('ghost-'.length);
+                      resolvedChar = characters.find(c => c.id === charId) || null;
+                    } else {
+                      const player = players.find(p => p.user_id === rest);
+                      if (player) {
+                        // Prefer the direct `player.character` ref (works for
+                        // both real players AND orphans synthesised as
+                        // ghost players), fall back to email match.
+                        resolvedChar = player.character ||
+                          characters.find(c => c.created_by === player.email) ||
+                          null;
+                      }
                     }
+                  } else if (targetId.startsWith('ghost-')) {
+                    const charId = targetId.slice('ghost-'.length);
+                    resolvedChar = characters.find(c => c.id === charId) || null;
                   } else if (targetId.startsWith('monster-')) {
-                    // Handle monster HP (local state or queue)
-                    // Update local queue in localStorage or state
-                    // NOTE: Monster instances in queue should track their own HP
-                    // We need to update `monsters` state in ConditionManager or wherever it's stored
-                    // Since MonsterQueue uses localStorage, we update it there.
+                    resolvedMonsterQueueId = targetId.slice('monster-'.length);
+                  }
+
+                  // --- Character (player + ghost) HP write-through to DB ---
+                  if (resolvedChar) {
+                    const maxHp = resolvedChar.hit_points?.max || 0;
+                    const currentHp = resolvedChar.hit_points?.current ?? maxHp;
+                    const newCurrent = clampHp(currentHp, maxHp, delta);
+                    if (newCurrent !== currentHp) {
+                      base44.entities.Character
+                        .update(resolvedChar.id, {
+                          hit_points: { ...(resolvedChar.hit_points || {}), current: newCurrent },
+                        })
+                        .then(() => {
+                          queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
+                        })
+                        .catch(err => {
+                          console.error('Damage write-back failed:', err);
+                          toast.error('Failed to update character HP');
+                        });
+                    }
+                  }
+
+                  // --- Monster queue HP write-through to localStorage ---
+                  if (resolvedMonsterQueueId) {
                     const savedQueue = localStorage.getItem(`gm_monster_queue_${campaignId}`);
                     if (savedQueue) {
-                      const queue = JSON.parse(savedQueue);
-                      const monsterQueueId = targetId.replace('monster-', '');
-                      const newQueue = queue.map(m => {
-                        if (m.queueId === monsterQueueId) {
-                          const currentHp = m.hit_points?.current !== undefined ? m.hit_points.current : (m.hit_points?.max || 10);
+                      try {
+                        const queue = JSON.parse(savedQueue);
+                        const newQueue = queue.map(m => {
+                          if (m.queueId !== resolvedMonsterQueueId && String(m.queueId) !== resolvedMonsterQueueId) {
+                            return m;
+                          }
+                          const maxHp = m.hit_points?.max || 10;
+                          const currentHp = m.hit_points?.current ?? maxHp;
                           return {
                             ...m,
                             hit_points: {
-                              ...m.hit_points,
-                              current: Math.max(0, currentHp - damage)
-                            }
+                              ...(m.hit_points || {}),
+                              current: clampHp(currentHp, maxHp, delta),
+                              max: maxHp,
+                            },
                           };
-                        }
-                        return m;
-                      });
-                      localStorage.setItem(`gm_monster_queue_${campaignId}`, JSON.stringify(newQueue));
-                      // Force re-render/update
-                      window.dispatchEvent(new Event('storage'));
+                        });
+                        localStorage.setItem(`gm_monster_queue_${campaignId}`, JSON.stringify(newQueue));
+                        // Force consumers (MonsterQueue, TurnOrderBar getHp lookup) to re-render.
+                        window.dispatchEvent(new Event('storage'));
+                      } catch (err) {
+                        console.error('Monster damage write-back failed:', err);
+                      }
                     }
                   }
                 }
@@ -1306,11 +1345,11 @@ export default function GMPanel() {
                             )}
                           </div>
                           <div className="px-3 py-2 text-[11px] space-y-1">
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs font-semibold truncate">
+                            <div className="flex justify-between items-center gap-1">
+                              <span className="inline-block text-[10px] font-semibold bg-[#37F2D1]/20 text-[#37F2D1] px-2 py-0.5 rounded-full truncate">
                                 {character?.name || player.username}
                               </span>
-                              <span className="text-[10px] text-slate-400">
+                              <span className="text-[10px] text-slate-400 flex-shrink-0">
                                 AC {ac}
                               </span>
                             </div>
@@ -1861,10 +1900,15 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
                             <p className="text-sm font-bold text-white truncate">{char?.name || player.username}</p>
                             {adjustingHp ? (
                               <div className="w-full bg-[#111827] h-1.5 rounded-full mt-1 overflow-hidden">
-                                <div className="bg-green-500 h-full" style={{ width: `${Math.min(100, (currentHp/maxHp)*100)}%` }} />
+                                <div
+                                  className={`${hpBarColor(maxHp > 0 ? (currentHp / maxHp) * 100 : 0)} h-full`}
+                                  style={{ width: `${maxHp > 0 ? Math.min(100, (currentHp / maxHp) * 100) : 0}%` }}
+                                />
                               </div>
                             ) : (
-                              <p className="text-xs text-slate-400">Player</p>
+                              <span className="inline-block text-[10px] font-semibold bg-[#37F2D1]/20 text-[#37F2D1] px-2 py-0.5 rounded-full">
+                                Player
+                              </span>
                             )}
                           </div>
                           {hasCondition && <div className="ml-auto w-2 h-2 rounded-full bg-[#37F2D1]" />}
@@ -1904,10 +1948,15 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
                               <p className="text-sm font-bold text-white truncate">{monster.name}</p>
                               {adjustingHp ? (
                                 <div className="w-full bg-[#111827] h-1.5 rounded-full mt-1 overflow-hidden">
-                                  <div className="bg-red-500 h-full" style={{ width: `${Math.min(100, (currentHp/maxHp)*100)}%` }} />
+                                  <div
+                                    className={`${hpBarColor(maxHp > 0 ? (currentHp / maxHp) * 100 : 0)} h-full`}
+                                    style={{ width: `${maxHp > 0 ? Math.min(100, (currentHp / maxHp) * 100) : 0}%` }}
+                                  />
                                 </div>
                               ) : (
-                                <p className="text-xs text-slate-400">Monster</p>
+                                <span className="inline-block text-[10px] font-semibold bg-[#FF5722]/20 text-[#FF5722] px-2 py-0.5 rounded-full">
+                                  Monster
+                                </span>
                               )}
                             </div>
                             {hasCondition && <div className="ml-auto w-2 h-2 rounded-full bg-[#37F2D1]" />}
@@ -3291,58 +3340,45 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                             </div>
                           </div>
                           
-                          {/* HP Bar for GM */}
+                          {/* HP Bar for GM — uses the shared getHp lookup so
+                              live HP reflects damage write-backs. Color is
+                              driven by percentage, not side. */}
                           <div className="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden mt-1 border border-gray-700">
-                             {(() => {
-                               // Determine HP percentage
-                               let current = 0; 
-                               let max = 10;
-                               
-                               // For players we need to look up current HP if not in combatant object
-                               // But initiativeOrder usually has basic info. GM Panel uses 'players' array too.
-                               // Actually the order array in GM Panel might need to be enriched or we look up.
-                               // 'initiativeOrder' is just the campaign.combat_data.order.
-                               // Monsters in queue have HP. Players in campaignCharacters have HP.
-                               
-                               // Since this is GM Panel, we can try to find the entity.
-                               // However, 'order' items are snapshots.
-                               // We should probably look up the live entity for HP.
-                               // But for now, let's assume we can find it or it's in the snapshot if updated.
-                               // Actually, `activeConditions` logic suggests we treat IDs.
-                               
-                               // Simplified: If it's a monster, look in monster queue (localStorage).
-                               // If player, look in `characters` prop from GMPanel.
-                               
-                               if (combatant.type === 'player') {
-                                  // Find player character in `players` or `characters`
-                                  // `players` is available in GMPanel scope but maybe not inside TurnOrderBar if not passed.
-                                  // TurnOrderBar receives `activeConditions`.
-                                  // Let's rely on passed props or context? 
-                                  // Wait, TurnOrderBar is defined IN GMPanel.js, but `players` is in GMPanel scope.
-                                  // But TurnOrderBar is a separate function component at the bottom.
-                                  // We need to pass `players` and `monsters` (queue) to it or handle HP lookup there.
-                                  // For now, let's just show a generic bar if we can't find stats, or pass data.
-                                  
-                                  // Actually, let's just modify TurnOrderBar to accept a lookup function or data.
-                                  // But to keep it simple and efficient with one find_replace, I will assume
-                                  // we can't easily access the full live HP without passing it.
-                                  // Let's just stick to the prompt "Monster and NPC HP should also be displayed".
-                                  // I'll add a simple visual placeholder if I can't access data, OR
-                                  // I'll modify the TurnOrderBar call site to pass `players` and `monsterQueue`.
-                                  
-                                  return <div className="h-full bg-green-500 w-full opacity-50" />; 
-                               } else {
-                                  // Monster
-                                  return <div className="h-full bg-red-500 w-full opacity-50" />;
-                               }
-                             })()}
+                            {(() => {
+                              const hp = typeof getHp === 'function' ? getHp(combatant.id) : null;
+                              const max = hp?.max || 0;
+                              const current = hp?.current ?? max;
+                              const pct = max > 0 ? Math.min(100, (current / max) * 100) : 0;
+                              return (
+                                <div
+                                  className={`h-full ${hpBarColor(pct)}`}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              );
+                            })()}
                           </div>
 
-                          <span className={`text-[10px] font-bold max-w-[90px] truncate px-2 py-0.5 rounded-full ${
-                            index === 0 ? 'text-[#1E2430] bg-[#37F2D1]' : 'text-slate-400 bg-[#111827]/80'
-                          }`}>
-                            {combatant.name}
-                          </span>
+                          {/* Name bubble — teal for players, red-orange for
+                              monsters / NPCs. The current turn gets a
+                              brighter pill on top of that base color. */}
+                          {(() => {
+                            const isPlayerSide = combatant.type === 'player';
+                            const baseBubble = isPlayerSide
+                              ? 'bg-[#37F2D1]/20 text-[#37F2D1]'
+                              : 'bg-[#FF5722]/20 text-[#FF5722]';
+                            const activeBubble = isPlayerSide
+                              ? 'text-[#1E2430] bg-[#37F2D1]'
+                              : 'text-white bg-[#FF5722]';
+                            return (
+                              <span
+                                className={`text-[10px] font-bold max-w-[90px] truncate px-2 py-0.5 rounded-full ${
+                                  index === 0 ? activeBubble : baseBubble
+                                }`}
+                              >
+                                {combatant.name}
+                              </span>
+                            );
+                          })()}
                         </motion.div>
                       </div>
                     )}

@@ -18,6 +18,7 @@ import { canEquipToSlot } from "@/components/gm/equipmentRules";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import { useTurnContext } from "@/components/combat/useTurnContext";
+import { hpBarColor } from "@/components/combat/hpColor";
 import {
   classFeatureDescriptions,
   languageDescriptions,
@@ -1768,7 +1769,7 @@ function TurnOrderDisplay({ order, currentTurnIndex, onSelectTarget, selectionMo
                             const current = char.hit_points.current || 0;
                             const max = char.hit_points.max || 10;
                             const pct = Math.min(100, Math.max(0, (current / max) * 100));
-                            return <div className="h-full bg-green-500" style={{ width: `${pct}%` }} />;
+                            return <div className={`h-full ${hpBarColor(pct)}`} style={{ width: `${pct}%` }} />;
                          }
                          return <div className="h-full bg-gray-600 w-full opacity-20" />;
                       })()}
@@ -1794,9 +1795,9 @@ function TurnOrderDisplay({ order, currentTurnIndex, onSelectTarget, selectionMo
                          const current = combatant.hit_points?.current !== undefined ? combatant.hit_points.current : (combatant.hit_points?.max || 10);
                          const max = combatant.hit_points?.max || 10;
                          const pct = Math.min(100, Math.max(0, (current / max) * 100));
-                         
+
                          return (
-                           <div className="h-full bg-red-500" style={{ width: `${pct}%` }} />
+                           <div className={`h-full ${hpBarColor(pct)}`} style={{ width: `${pct}%` }} />
                          );
                       })()}
                    </div>

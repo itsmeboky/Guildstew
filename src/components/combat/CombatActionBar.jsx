@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Heart, Circle, Triangle, Music, Zap, ChevronLeft, ChevronRight } from "lucide-react";
 import { spellIcons, spellDetails as hardcodedSpellDetails } from "@/components/dnd5e/spellData";
+import { hpBarColor } from "@/components/combat/hpColor";
 
 const PC_ICON_BASE = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/abilities/basic%20actions";
 const MONSTER_ICON_BASE = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/monsters/monster%20abilities";
@@ -261,7 +262,7 @@ export default function CombatActionBar({
           </div>
           <div className="w-64">
             <div className="h-5 rounded-full bg-[#111827] overflow-hidden relative border border-[#1e293b]">
-              <div className="h-full absolute left-0 top-0 bg-[#22c55e]" style={{ width: `${hpPercent}%` }} />
+              <div className={`h-full absolute left-0 top-0 ${hpBarColor(hpPercent)}`} style={{ width: `${hpPercent}%` }} />
               {tempHp > 0 && <div className="h-full absolute top-0 bg-orange-500" style={{ left: `${hpPercent}%`, width: `${tempHpPercent}%` }} />}
             </div>
             <div className="mt-1.5 flex justify-between text-[11px] font-medium text-slate-300 px-1">
