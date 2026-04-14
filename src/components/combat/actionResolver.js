@@ -28,7 +28,12 @@ const BASIC_ACTION_TYPES = {
   "Grapple":        { rollType: "skill_check", cost: "action", skill: "Athletics", contested: "Athletics or Acrobatics", description: "Grapple a creature (Athletics vs Athletics/Acrobatics)" },
   "Shove":          { rollType: "skill_check", cost: "action", skill: "Athletics", contested: "Athletics or Acrobatics", description: "Shove a creature (Athletics vs Athletics/Acrobatics)" },
   "Hide":           { rollType: "skill_check", cost: "action", skill: "Stealth", description: "Make a Stealth check to hide" },
-  "Throw":          { rollType: "attack", cost: "action", description: "Throw a weapon or object" },
+
+  // Fire-and-forget utility actions — just consume the action, no dice.
+  // (Throw is handled as a plain action here even though RAW it's a
+  // weapon attack roll; the tool treats it as a flavor action the GM
+  // narrates.)
+  "Throw":          { rollType: "no_roll", cost: "action", description: "Throw a weapon or object" },
   
   // No-roll actions — just use the action, no dice needed
   "Dash":           { rollType: "no_roll", cost: "action", description: "Double your movement speed this turn" },
@@ -211,6 +216,12 @@ export function resolveAction(action, actor) {
   if (basicAction) {
     return {
       ...basicAction,
+      // Class features like Rogue Cunning Action and Monk Step of the Wind
+      // let certain actions run as a bonus action instead of an action. The
+      // caller (CombatActionBar bonus row) flags those with costOverride so
+      // the action economy gate consumes the right pool.
+      cost: action.costOverride || basicAction.cost,
+      classFeature: action.classFeature || null,
       requiresTarget: basicAction.rollType === "attack" || action.name === "Grapple" || action.name === "Shove",
       weapon: action.weapon || null,
       mode: action.mode || null,
@@ -245,15 +256,16 @@ export function resolveAction(action, actor) {
 /**
  * Consume the action cost from the action economy state.
  * Returns the new actions state.
- * 
- * @param {object} currentActions - { action: bool, bonus: bool, inspiration: bool }
+ *
+ * @param {object} currentActions - { action: bool, bonus: bool, reaction: bool, inspiration: bool }
  * @param {string} cost - "action", "bonus", "reaction", "free"
  * @returns {object} - updated actions state
  */
 export function consumeActionCost(currentActions, cost) {
-  if (cost === "free" || cost === "reaction") return currentActions;
+  if (cost === "free") return currentActions;
   if (cost === "action") return { ...currentActions, action: false };
   if (cost === "bonus") return { ...currentActions, bonus: false };
+  if (cost === "reaction") return { ...currentActions, reaction: false };
   return currentActions;
 }
 

@@ -9,6 +9,7 @@ import {
   getSaveModifier,
   getSpellSaveDC,
 } from "@/components/combat/actionResolver";
+import { hpBarColor } from "@/components/combat/hpColor";
 
 const CLASS_SPELL_ABILITY = {
   Wizard: "int",
@@ -42,6 +43,7 @@ export default function CombatDiceWindow({
   onActionComplete,
   isSpectator = false,
   spectatorData = null,
+  sneakActive = false,
 }) {
   const [selectedAction, setSelectedAction] = useState(initialAction);
   const [attackRoll, setAttackRoll] = useState(null);
@@ -209,6 +211,51 @@ export default function CombatDiceWindow({
     return queue;
   };
 
+  // Is this an unarmed strike? Either the action says so (mode=='unarmed')
+  // or the weapon is flagged as Unarmed.
+  const isUnarmedAttack = () => {
+    if (selectedAction?.mode === "unarmed") return true;
+    const weapon = selectedAction?.weapon;
+    return !!weapon?.properties?.includes?.("Unarmed");
+  };
+
+  // Whether the current actor is a Monk (they get Martial Arts die + best of STR/DEX).
+  const isMonkActor = () => {
+    const cls = (actor?.class || actor?.stats?.class || "").toLowerCase();
+    return cls.includes("monk");
+  };
+
+  // Monk Martial Arts die scales with level.
+  const monkMartialArtsDie = () => {
+    const level = actor?.level || actor?.stats?.level || 1;
+    if (level >= 17) return "1d10";
+    if (level >= 11) return "1d8";
+    if (level >= 5) return "1d6";
+    return "1d4";
+  };
+
+  // Rogue Sneak Attack dice count. Requirements:
+  //   - Sneak toggle active (set by the parent)
+  //   - Actor class includes "Rogue"
+  //   - Weapon is finesse or ranged (melee unarmed / non-finesse doesn't
+  //     qualify)
+  // Returns 1d6 per 2 Rogue levels rounded up (1-2 → 1d6, 3-4 → 2d6, etc).
+  // Multiclass: for now we simplify and use the character's full level as
+  // the rogue level; proper multiclass tracking is a later feature.
+  const getSneakAttackDiceCount = () => {
+    if (!sneakActive) return 0;
+    if (selectedAction?.type === "spell") return 0;
+    const cls = (actor?.class || actor?.stats?.class || "").toLowerCase();
+    if (!cls.includes("rogue")) return 0;
+    const weapon = selectedAction?.weapon;
+    // Unarmed strikes don't qualify for Sneak Attack.
+    const isFinesse = !!weapon?.properties?.includes?.("Finesse");
+    const isRangedWeapon = !!weapon?.category?.includes?.("Ranged");
+    if (!isFinesse && !isRangedWeapon) return 0;
+    const level = actor?.level || actor?.stats?.level || 1;
+    return Math.ceil(level / 2);
+  };
+
   // Attack modifier (weapon or spell)
   const getModifier = () => {
     if (!actor) return 0;
@@ -241,15 +288,13 @@ export default function CombatDiceWindow({
       actor.proficiency_bonus || actor.stats?.proficiency_bonus || 2;
     const strMod = Math.floor((str - 10) / 2);
     const dexMod = Math.floor((dex - 10) / 2);
-    const isUnarmed = !!weapon?.properties?.includes?.("Unarmed");
-    const isMonk = !!weapon?.useBestOfStrDex;
     const isRanged =
       weapon?.category?.includes?.("Ranged") ||
       weapon?.properties?.includes?.("Finesse");
 
-    // Unarmed strikes: Monk uses max(STR, DEX); non-Monk uses STR only.
-    if (isUnarmed) {
-      return (isMonk ? Math.max(strMod, dexMod) : strMod) + proficiency;
+    // Unarmed: Monk uses max(STR, DEX) for "the best of"; everyone else STR.
+    if (isUnarmedAttack()) {
+      return (isMonkActor() ? Math.max(strMod, dexMod) : strMod) + proficiency;
     }
     // Explicit mode hints from the 4-state attack toggle.
     if (selectedAction?.mode === "melee") return strMod + proficiency;
@@ -282,36 +327,21 @@ export default function CombatDiceWindow({
   };
 
   const handleDamageRoll = () => {
-    // Flat-damage weapons (e.g. non-Monk Unarmed Strike = 1 + STR mod) skip
-    // the damage roll entirely — there's no die to roll.
-    const weapon = selectedAction?.weapon;
-    if (weapon?.flatDamage !== undefined) {
-      const strMod = Math.floor(((actor?.attributes?.str || 10) - 10) / 2);
-      const dexMod = Math.floor(((actor?.attributes?.dex || 10) - 10) / 2);
-      const isMonk = !!weapon.useBestOfStrDex;
-      const mod = isMonk ? Math.max(strMod, dexMod) : strMod;
-      const base = weapon.flatDamage * (isCrit ? 2 : 1);
-      const total = Math.max(0, base + mod);
-      const result = { total, dice: base, mod, isCrit, flat: true };
-      setDamageRoll(result);
-      setPhase("damage_result");
-      if (target?.id && onRoll) {
-        onRoll({
-          type: "damage",
-          value: total,
-          detail: result,
-          targetId: target.id,
-        });
-      }
-      return;
-    }
-
     setIsRolling(true);
     onRoll && onRoll({ type: "rolling_damage" });
 
-    const weaponDice =
-      weapon?.damage ||
-      (selectedAction?.type === "spell" ? "1d10" : "1d8");
+    const weapon = selectedAction?.weapon;
+    // Unarmed damage die: Monk uses their scaling Martial Arts die, everyone
+    // else uses 1d4. Weapon-backed attacks use the weapon's damage string.
+    let weaponDice;
+    if (isUnarmedAttack()) {
+      weaponDice = isMonkActor() ? monkMartialArtsDie() : "1d4";
+    } else {
+      weaponDice =
+        weapon?.damage ||
+        (selectedAction?.type === "spell" ? "1d10" : "1d8");
+    }
+
     const diceType = weaponDice.match(/d\d+/)?.[0] || "d8";
     setCurrentDice(diceType);
     setPhase("rolling_damage");
@@ -324,18 +354,16 @@ export default function CombatDiceWindow({
       // Most spells don't add ability mod to damage; we can refine per-spell later.
       mod = 0;
     } else {
-      // Weapon damage mod
+      // Weapon / unarmed damage mod
       const weapon = selectedAction?.weapon;
       const strMod = Math.floor(((actor?.attributes?.str || 10) - 10) / 2);
       const dexMod = Math.floor(((actor?.attributes?.dex || 10) - 10) / 2);
-      const isUnarmed = !!weapon?.properties?.includes?.("Unarmed");
-      const isMonk = !!weapon?.useBestOfStrDex;
       const isRanged =
         weapon?.category?.includes?.("Ranged") ||
         weapon?.properties?.includes?.("Finesse");
 
-      if (isUnarmed) {
-        mod = isMonk ? Math.max(strMod, dexMod) : strMod;
+      if (isUnarmedAttack()) {
+        mod = isMonkActor() ? Math.max(strMod, dexMod) : strMod;
       } else if (selectedAction?.mode === "melee") {
         mod = strMod;
       } else if (selectedAction?.mode === "ranged") {
@@ -347,9 +375,15 @@ export default function CombatDiceWindow({
       if (isOffHand && mod > 0) mod = 0;
     }
 
-    const diceString =
-      selectedAction?.weapon?.damage ||
-      (selectedAction?.type === "spell" ? "1d10" : "1d8");
+    // Unarmed damage uses 1d4 (or Monk Martial Arts die), not the weapon damage.
+    let diceString;
+    if (isUnarmedAttack()) {
+      diceString = isMonkActor() ? monkMartialArtsDie() : "1d4";
+    } else {
+      diceString =
+        selectedAction?.weapon?.damage ||
+        (selectedAction?.type === "spell" ? "1d10" : "1d8");
+    }
     const match = diceString.match(/(\d+)d(\d+)/);
     let numDice = match ? parseInt(match[1], 10) : 1;
     const faces = match ? parseInt(match[2], 10) : 8;
@@ -362,8 +396,30 @@ export default function CombatDiceWindow({
       total += Math.floor(Math.random() * faces) + 1;
     }
 
+    // Rogue Sneak Attack: add extra d6s when the sneak toggle is on, the
+    // actor is a Rogue, and the weapon is finesse/ranged. Crit doubles the
+    // sneak dice the same as the weapon dice. The dice roller only shows
+    // the visible weapon die; sneak dice are added to the total silently
+    // and surfaced in the result detail.
+    const sneakDiceBase = getSneakAttackDiceCount();
+    let sneakDamage = 0;
+    if (sneakDiceBase > 0) {
+      const sneakCount = isCrit ? sneakDiceBase * 2 : sneakDiceBase;
+      for (let i = 0; i < sneakCount; i++) {
+        sneakDamage += Math.floor(Math.random() * 6) + 1;
+      }
+      total += sneakDamage;
+    }
+
     const totalDamage = Math.max(0, total + mod);
-    const result = { total: totalDamage, dice: total, mod, isCrit };
+    const result = {
+      total: totalDamage,
+      dice: total,
+      mod,
+      isCrit,
+      sneakDice: sneakDiceBase,
+      sneakDamage,
+    };
     setDamageRoll(result);
     setIsRolling(false);
     setPhase("damage_result");
@@ -606,33 +662,36 @@ export default function CombatDiceWindow({
                 </div>
               )}
             </div>
-            <div className="bg-[#050816] border border-[#37F2D1] text-[#37F2D1] px-4 py-1 rounded-full text-sm font-bold whitespace-nowrap z-20">
-              {actor?.name || "Actor"}
-            </div>
-            {/* Actor HP (actor always sees own HP) */}
-            {actor?.hit_points && (
-              <>
-                <div className="w-32 h-2 bg-gray-800 rounded-full overflow-hidden mt-1 border border-gray-700">
-                  <div
-                    className="h-full bg-green-500"
-                    style={{
-                      width: `${
-                        Math.min(
-                          100,
-                          ((actor.hit_points.current || 0) /
-                            (actor.hit_points.max || 1)) *
-                            100
-                        ) || 0
-                      }%`,
-                    }}
-                  />
+            {(() => {
+              const isActorPlayer = actor?.type !== 'monster' && actor?.type !== 'npc';
+              const bubble = isActorPlayer
+                ? 'bg-[#37F2D1]/20 text-[#37F2D1] border border-[#37F2D1]'
+                : 'bg-[#FF5722]/20 text-[#FF5722] border border-[#FF5722]';
+              return (
+                <div className={`px-4 py-1 rounded-full text-sm font-bold whitespace-nowrap z-20 ${bubble}`}>
+                  {actor?.name || "Actor"}
                 </div>
-                <span className="text-[10px] text-gray-400">
-                  {actor.hit_points.current || 0} / {actor.hit_points.max || 0}{" "}
-                  HP
-                </span>
-              </>
-            )}
+              );
+            })()}
+            {/* Actor HP (actor always sees own HP) — color driven by % */}
+            {actor?.hit_points && (() => {
+              const max = actor.hit_points.max || 0;
+              const current = actor.hit_points.current ?? max;
+              const pct = max > 0 ? Math.min(100, (current / max) * 100) : 0;
+              return (
+                <>
+                  <div className="w-32 h-2 bg-gray-800 rounded-full overflow-hidden mt-1 border border-gray-700">
+                    <div
+                      className={`h-full ${hpBarColor(pct)}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-gray-400">
+                    {current} / {max} HP
+                  </span>
+                </>
+              );
+            })()}
           </div>
         </div>
 
@@ -816,6 +875,11 @@ export default function CombatDiceWindow({
                           <span className="text-xs font-bold uppercase tracking-widest opacity-90">
                             Damage
                           </span>
+                          {damageRoll.sneakDice > 0 && (
+                            <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-yellow-300 drop-shadow">
+                              +{damageRoll.sneakDice}d6 Sneak
+                            </span>
+                          )}
                         </motion.div>
                       )}
                     </div>
@@ -998,37 +1062,40 @@ export default function CombatDiceWindow({
                 </div>
               )}
             </div>
-            <div className="bg-[#050816] border border-red-500 text-red-500 px-4 py-1 rounded-full text-sm font-bold whitespace-nowrap z-20">
-              {target?.name || "No Target"}
-            </div>
-
-            {/* Target HP: bar always for players, numbers only for GM or when target is a player */}
-            {target && target.hit_points && (
-              <>
-                {/* For players: they should see HP loss; for monsters, only bar (no numbers) for non-GM */}
-                <div className="w-32 h-2 bg-gray-800 rounded-full overflow-hidden mt-1 border border-gray-700">
-                  <div
-                    className="h-full bg-red-500"
-                    style={{
-                      width: `${
-                        Math.min(
-                          100,
-                          ((target.hit_points.current || 0) /
-                            (target.hit_points.max || 1)) *
-                            100
-                        ) || 0
-                      }%`,
-                    }}
-                  />
+            {(() => {
+              const isTargetPlayer = target?.type !== 'monster' && target?.type !== 'npc';
+              const bubble = isTargetPlayer
+                ? 'bg-[#37F2D1]/20 text-[#37F2D1] border border-[#37F2D1]'
+                : 'bg-[#FF5722]/20 text-[#FF5722] border border-[#FF5722]';
+              return (
+                <div className={`px-4 py-1 rounded-full text-sm font-bold whitespace-nowrap z-20 ${bubble}`}>
+                  {target?.name || "No Target"}
                 </div>
-                {(isGM || target.type === "player") && (
-                  <span className="text-[10px] text-gray-400">
-                    {target.hit_points.current || 0} /{" "}
-                    {target.hit_points.max || 0} HP
-                  </span>
-                )}
-              </>
-            )}
+              );
+            })()}
+
+            {/* Target HP — same green/yellow/red threshold palette as the
+                actor side. Numbers only for GM or when target is a player. */}
+            {target && target.hit_points && (() => {
+              const max = target.hit_points.max || 0;
+              const current = target.hit_points.current ?? max;
+              const pct = max > 0 ? Math.min(100, (current / max) * 100) : 0;
+              return (
+                <>
+                  <div className="w-32 h-2 bg-gray-800 rounded-full overflow-hidden mt-1 border border-gray-700">
+                    <div
+                      className={`h-full ${hpBarColor(pct)}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  {(isGM || target.type === "player") && (
+                    <span className="text-[10px] text-gray-400">
+                      {current} / {max} HP
+                    </span>
+                  )}
+                </>
+              );
+            })()}
           </div>
 
           {!isSpectator && (

@@ -1,27 +1,23 @@
 import React, { useState } from "react";
-import { X, Plus, Package, Wand2, Save, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, Plus, Package, Wand2, Save, Trash2, ChevronLeft, ChevronRight, UserPlus } from "lucide-react";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
 import { spellIcons, spellDetails } from "@/components/dnd5e/spellData";
 import { enrichMonster } from "./monsterEnrichment";
+import { readCombatQueue, writeCombatQueue, FACTION_STYLES, FACTIONS } from "@/utils/combatQueue";
+import { normalizeHp } from "@/components/combat/hpColor";
 
-const STORAGE_KEY = 'gm_monster_queue';
 const SAVED_LOADOUTS_KEY = 'gm_saved_monster_loadouts';
 
-export default function MonsterQueue({ 
-  monsters, 
-  npcs, 
+export default function CombatQueue({
+  monsters,
+  npcs,
   onSelectMonster,
-  campaignId 
+  onCreateNpc,
+  campaignId
 }) {
-  const [queue, setQueue] = useState(() => {
-    const saved = localStorage.getItem(`${STORAGE_KEY}_${campaignId}`);
-    try {
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.error("Failed to parse monster queue", e);
-      return [];
-    }
-  });
+  // Use the shared combat-queue helper so localStorage key + legacy
+  // migration live in one place.
+  const [queue, setQueue] = useState(() => readCombatQueue(campaignId));
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingMonster, setEditingMonster] = useState(null);
   const [savedLoadouts, setSavedLoadouts] = useState(() => {
@@ -37,41 +33,51 @@ export default function MonsterQueue({
 
   const saveQueue = (newQueue) => {
     setQueue(newQueue);
-    localStorage.setItem(`${STORAGE_KEY}_${campaignId}`, JSON.stringify(newQueue));
+    writeCombatQueue(campaignId, newQueue);
   };
 
   const addToQueue = (creature, options = {}) => {
-    const { quantity = 1, level } = options;
-    
+    const { quantity = 1, level, faction = 'enemy', charmDuration = null } = options;
+
     // Calculate how many we can add
     const canAddCount = Math.min(quantity, 12 - queue.length);
     if (canAddCount <= 0) return;
-    
-    const newMonsters = [];
+
+    const newCombatants = [];
     for (let i = 0; i < canAddCount; i++) {
-      // Clone and apply overrides
       const baseCreature = { ...creature };
       if (level) {
         baseCreature.level = level;
         if (baseCreature.stats) baseCreature.stats.level = level;
-        // If it was using CR, we might want to update the label or keep both?
-        // For now we just set level as requested.
       }
 
       const enriched = enrichMonster(baseCreature);
-      
-      const queuedMonster = {
+
+      // Normalize HP from whatever shape the source gave us into the
+      // canonical { current, max, temporary } PC shape so the HP bar
+      // renderers can read a single path. Handles SRD monster strings
+      // ("135 (18d10 + 36)") and nested stats.hit_points variants.
+      const normalizedHp = normalizeHp(enriched);
+
+      const queued = {
         ...enriched,
-        queueId: Date.now() + i, // Ensure unique IDs
-        // If enrichMonster didn't set them (fallback)
+        hit_points: normalizedHp,
+        queueId: Date.now() + i, // unique IDs per creature in the queue
         inventory: enriched.inventory || [],
         spells: enriched.spells || [],
-        equipped: enriched.equipped || {}
+        equipped: enriched.equipped || {},
+        // Faction + charm metadata. Empty charmDuration means the
+        // friendly status is permanent (summon, ranger companion,
+        // standing NPC ally, etc.).
+        faction,
+        originalFaction: faction === 'ally' && charmDuration ? 'enemy' : faction,
+        charmDuration:
+          faction === 'ally' && charmDuration ? Number(charmDuration) : null,
       };
-      newMonsters.push(queuedMonster);
+      newCombatants.push(queued);
     }
 
-    saveQueue([...queue, ...newMonsters]);
+    saveQueue([...queue, ...newCombatants]);
     setShowAddDialog(false);
   };
 
@@ -112,7 +118,7 @@ export default function MonsterQueue({
   return (
     <div className="rounded-[20px] bg-[#050816]/95 shadow-[0_14px_40px_rgba(0,0,0,0.7)] overflow-hidden">
       <div className="px-4 pt-2.5 pb-2 border-b border-[#111827] flex items-center justify-between">
-        <span className="text-[10px] tracking-[0.22em] uppercase text-slate-300">Monster Queue ({queue.length}/12)</span>
+        <span className="text-[10px] tracking-[0.22em] uppercase text-slate-300">Combat Queue ({queue.length}/12)</span>
         <button
           onClick={() => setShowAddDialog(true)}
           disabled={queue.length >= 12}
@@ -126,7 +132,7 @@ export default function MonsterQueue({
       <div className="px-4 py-3">
         {queue.length === 0 ? (
           <div className="text-center py-4">
-            <p className="text-slate-500 text-[11px]">No monsters queued. Add monsters to prep for combat.</p>
+            <p className="text-slate-500 text-[11px]">Combat queue is empty. Add monsters, NPCs, or allies to prep for combat.</p>
           </div>
         ) : (
           <div className="flex items-center gap-2">
@@ -140,14 +146,17 @@ export default function MonsterQueue({
             )}
             
             <div className="flex gap-2 overflow-hidden flex-1">
-              {queue.slice(scrollPosition, scrollPosition + visibleCount).map((monster) => (
+              {queue.slice(scrollPosition, scrollPosition + visibleCount).map((monster) => {
+                const factionKey = monster.faction || 'enemy';
+                const style = FACTION_STYLES[factionKey] || FACTION_STYLES.enemy;
+                return (
                 <div
                   key={monster.queueId}
                   className="relative group"
                 >
                   <button
                     onClick={() => onSelectMonster({ ...monster, type: monster.type || 'monster' })}
-                    className="w-14 h-14 rounded-xl bg-[#0b1220] border border-[#111827] hover:border-[#22c5f5]/50 overflow-hidden transition-all flex-shrink-0"
+                    className={`w-14 h-14 rounded-xl bg-[#0b1220] border-2 ${style.outline} hover:brightness-125 overflow-hidden transition-all flex-shrink-0`}
                   >
                     {monster.image_url || monster.avatar_url ? (
                       <img 
@@ -185,14 +194,26 @@ export default function MonsterQueue({
                     </button>
                   </div>
                   
+                  {/* Faction + charm badge */}
+                  {monster.charmDuration != null && (
+                    <div
+                      className={`absolute -bottom-1 -left-1 px-1 py-[1px] rounded-full text-[8px] font-bold ${style.pillStrong}`}
+                      title={`${style.label} — ${monster.charmDuration} turn${monster.charmDuration === 1 ? '' : 's'} left`}
+                    >
+                      ×{monster.charmDuration}
+                    </div>
+                  )}
+
                   {/* Name tooltip */}
                   <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-                    <div className="bg-[#1E2430] text-white px-2 py-1 rounded text-[9px] whitespace-nowrap border border-[#37F2D1]">
+                    <div className={`px-2 py-1 rounded text-[9px] whitespace-nowrap ${style.pill} border ${style.outline}`}>
                       {monster.name}
+                      <span className="ml-1 opacity-80">({style.label})</span>
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {canScrollRight && (
@@ -214,6 +235,7 @@ export default function MonsterQueue({
           npcs={npcs}
           onAdd={addToQueue}
           onClose={() => setShowAddDialog(false)}
+          onCreateNpc={onCreateNpc}
         />
       )}
 
@@ -235,22 +257,26 @@ export default function MonsterQueue({
   );
 }
 
-function AddMonsterDialog({ monsters, npcs, onAdd, onClose }) {
+function AddMonsterDialog({ monsters, npcs, onAdd, onClose, onCreateNpc }) {
   const [tab, setTab] = useState('monsters');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [customLevel, setCustomLevel] = useState('');
+  const [faction, setFaction] = useState('enemy');
+  const [charmTurns, setCharmTurns] = useState('');
 
-  const filtered = (tab === 'monsters' ? monsters : npcs).filter(c => 
+  const filtered = (tab === 'monsters' ? monsters : npcs).filter(c =>
     c.name?.toLowerCase().includes(search.toLowerCase())
   );
 
   const handleAdd = () => {
     if (!selected) return;
-    onAdd({ ...selected, type: tab === 'monsters' ? 'monster' : 'npc' }, { 
+    onAdd({ ...selected, type: tab === 'monsters' ? 'monster' : 'npc' }, {
       quantity: Math.max(1, parseInt(quantity) || 1),
-      level: customLevel || undefined 
+      level: customLevel || undefined,
+      faction,
+      charmDuration: faction === 'ally' && charmTurns ? Math.max(1, parseInt(charmTurns) || 0) : null,
     });
   };
 
@@ -318,11 +344,58 @@ function AddMonsterDialog({ monsters, npcs, onAdd, onClose }) {
               </div>
             </div>
 
+            {/* Faction picker — enemy / ally / neutral. Player is reserved
+                for real PC entries and isn't selectable here. */}
+            <div className="space-y-2">
+              <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Faction</label>
+              <div className="grid grid-cols-3 gap-2">
+                {FACTIONS.map((f) => {
+                  const style = FACTION_STYLES[f];
+                  const active = faction === f;
+                  return (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setFaction(f)}
+                      className={`h-10 rounded-lg text-xs font-bold uppercase tracking-wide transition-all border-2 ${
+                        active
+                          ? `${style.pillStrong} ${style.outline} shadow-[0_0_14px_rgba(0,0,0,0.5)]`
+                          : `${style.pill} border-transparent hover:${style.outline}`
+                      }`}
+                    >
+                      {style.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Charm duration — only meaningful for allies. Blank means
+                permanent (summoned creature, ongoing ally NPC). */}
+            {faction === 'ally' && (
+              <div className="space-y-2">
+                <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider">
+                  Charmed for how many turns?
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={charmTurns}
+                  onChange={(e) => setCharmTurns(e.target.value)}
+                  placeholder="Leave blank for permanent"
+                  className="w-full h-10 bg-[#1a1f2e] rounded-lg border border-[#111827] px-3 text-sm text-white focus:outline-none focus:border-[#22c55e]"
+                />
+                <p className="text-[10px] text-slate-500 italic">
+                  When the counter hits 0 they revert to Enemy.
+                </p>
+              </div>
+            )}
+
             <button
               onClick={handleAdd}
               className="w-full py-3 rounded-xl bg-[#22c5f5] hover:bg-[#38bdf8] text-[#050816] font-bold shadow-lg shadow-[#22c5f5]/20 transition-all hover:scale-[1.02] active:scale-95"
             >
-              Add to Queue
+              Add to Combat Queue
             </button>
           </div>
         </div>
@@ -334,7 +407,7 @@ function AddMonsterDialog({ monsters, npcs, onAdd, onClose }) {
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[200] p-6">
       <div className="bg-[#050816] rounded-2xl border border-[#22c5f5]/30 shadow-[0_24px_80px_rgba(0,0,0,0.9)] max-w-md w-full max-h-[70vh] overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b border-[#111827]">
-          <h3 className="text-lg font-bold">Add to Queue</h3>
+          <h3 className="text-lg font-bold">Add to Combat Queue</h3>
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-[#1a1f2e] hover:bg-[#22c5f5]/20 flex items-center justify-center">
             <X className="w-4 h-4" />
           </button>
@@ -363,6 +436,23 @@ function AddMonsterDialog({ monsters, npcs, onAdd, onClose }) {
             placeholder="Search..."
             className="w-full bg-[#1a1f2e] border border-[#111827] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#22c5f5]"
           />
+
+          {/* Quick-create NPC shortcut — only shown on the NPC tab.
+              The parent hands us a callback that navigates to the
+              Character Creator in NPC mode for the current campaign. */}
+          {tab === 'npcs' && typeof onCreateNpc === 'function' && (
+            <button
+              type="button"
+              onClick={() => {
+                onCreateNpc();
+                onClose();
+              }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-[#22c55e]/15 hover:bg-[#22c55e]/25 border border-[#22c55e]/40 text-[#22c55e] text-xs font-bold uppercase tracking-wide transition-colors"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              Create New NPC
+            </button>
+          )}
 
           <div className="max-h-[40vh] overflow-y-auto space-y-2 custom-scrollbar">
             {filtered.length === 0 ? (
