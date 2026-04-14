@@ -304,24 +304,38 @@ export default function GMPanel() {
   const [showEndCombatAlert, setShowEndCombatAlert] = useState(false);
   const [isTurnOrderAccepted, setIsTurnOrderAccepted] = useState(false);
 
+  // FIGHT button → stage 'arranging' → 'combat'. The order is taken
+  // from whatever the GM last dragged in the TurnOrderBar.
   const acceptTurnOrderMutation = useMutation({
-    mutationFn: () => base44.entities.Campaign.update(campaignId, { 
+    mutationFn: () => base44.entities.Campaign.update(campaignId, {
       combat_active: true,
       combat_data: {
+        ...(campaign?.combat_data || {}),
+        stage: 'combat',
         order: initiativeOrder,
         currentTurnIndex: 0,
-        round: 1
+        round: 1,
       }
     }),
     onSuccess: () => {
       const audio = new Audio('https://static.wixstatic.com/mp3/5cdfd8_1e1b1f8b2b074994ac92bc8ee2913586.wav');
       audio.volume = 0.5;
       audio.play().catch(e => console.log("Audio play failed", e));
-      
+
       setIsTurnOrderAccepted(true);
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
     }
   });
+
+  // Sync isTurnOrderAccepted from the campaign stage. Drag is unlocked
+  // during 'initiative' and 'arranging', locked during 'combat'. This
+  // makes refresh safe — the UI restores the right state even if the
+  // component remounts.
+  React.useEffect(() => {
+    const stage = campaign?.combat_data?.stage;
+    if (stage === 'combat') setIsTurnOrderAccepted(true);
+    else if (stage === 'initiative' || stage === 'arranging') setIsTurnOrderAccepted(false);
+  }, [campaign?.combat_data?.stage]);
 
   const endCombatMutation = useMutation({
     mutationFn: () => base44.entities.Campaign.update(campaignId, { 
@@ -492,7 +506,7 @@ export default function GMPanel() {
       return {
         id: `player-${p.user_id}`,
         name: char?.name || p.username,
-        avatar: char?.profile_avatar_url || p.avatar_url,
+        avatar: char?.profile_avatar_url || char?.avatar_url || char?.image_url || p.avatar_url,
         dexMod: mod,
         type: 'player',
         initiative: roll.total,
@@ -594,7 +608,9 @@ export default function GMPanel() {
   React.useEffect(() => {
     if (campaign?.combat_active) {
       setCombatActive(true);
-      setIsTurnOrderAccepted(true);
+      // isTurnOrderAccepted is now driven by combat_data.stage via a
+      // separate effect; don't force it true here or the drag-and-drop
+      // would lock during the initiative/arranging phases.
       if (campaign.combat_data?.order) {
         setInitiativeOrder(campaign.combat_data.order);
       }
@@ -913,6 +929,23 @@ export default function GMPanel() {
               isSpectator={!combatState.isOpen && !!campaign?.combat_data?.active_encounter}
               spectatorData={campaign?.combat_data?.active_encounter}
               sneakActive={sneakActive}
+
+              onViewTurnOrder={async () => {
+                // GM dismissed the rolled-initiative readout. Transition
+                // the campaign stage so the dice window closes and the
+                // TurnOrderBar takes over for drag-and-drop arrangement.
+                try {
+                  await base44.entities.Campaign.update(campaignId, {
+                    combat_data: {
+                      ...(campaign?.combat_data || {}),
+                      stage: 'arranging',
+                    },
+                  });
+                  queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
+                } catch (err) {
+                  console.error("Failed to advance to turn-order stage:", err);
+                }
+              }}
 
               onSwitchTarget={() => {
                 setCombatState(prev => ({ ...prev, isOpen: false, step: 'selecting_target' }));
