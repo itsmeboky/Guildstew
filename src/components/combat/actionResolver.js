@@ -63,6 +63,128 @@ const REACTION_SPELLS = new Set([
   "Hellish Rebuke",
 ]);
 
+// Base damage dice for spells that actually deal damage. Keyed by
+// spell name. Cantrip dice listed here are the level-1–4 tier; caller
+// can scale for higher caster levels via `getSpellDamageDice`. Multi-
+// roll spells (Scorching Ray, Eldritch Blast, Magic Missile) list dice
+// per ray / missile — the GM / renderer can multiply.
+const SPELL_DAMAGE_DICE = {
+  // --- Cantrips ---
+  "Acid Splash": "1d6",
+  "Chill Touch": "1d8",
+  "Eldritch Blast": "1d10",
+  "Fire Bolt": "1d10",
+  "Frostbite": "1d6",
+  "Infestation": "1d6",
+  "Magic Stone": "1d6",
+  "Poison Spray": "1d12",
+  "Produce Flame": "1d8",
+  "Ray of Frost": "1d8",
+  "Sacred Flame": "1d8",
+  "Shocking Grasp": "1d8",
+  "Sword Burst": "1d6",
+  "Thorn Whip": "1d6",
+  "Thunderclap": "1d6",
+  "Toll the Dead": "1d8",
+  "Vicious Mockery": "1d4",
+  "Word of Radiance": "1d6",
+  "Create Bonfire": "1d8",
+  "Control Flames": "1d8",
+  "Primal Savagery": "1d10",
+  // --- 1st Level ---
+  "Burning Hands": "3d6",
+  "Chromatic Orb": "3d8",
+  "Cure Wounds": "1d8",
+  "Ensnaring Strike": "1d6",
+  "Faerie Fire": "0",
+  "Guiding Bolt": "4d6",
+  "Hail of Thorns": "1d10",
+  "Healing Word": "1d4",
+  "Hellish Rebuke": "2d10",
+  "Ice Knife": "1d10",
+  "Inflict Wounds": "3d10",
+  "Magic Missile": "1d4+1",
+  "Ray of Sickness": "2d8",
+  "Searing Smite": "1d6",
+  "Thunderous Smite": "2d6",
+  "Thunderwave": "2d8",
+  "Witch Bolt": "1d12",
+  "Wrathful Smite": "1d6",
+  // --- 2nd Level ---
+  "Acid Arrow": "4d4",
+  "Aganazzar's Scorcher": "3d8",
+  "Cloud of Daggers": "4d4",
+  "Dragon's Breath": "3d6",
+  "Flame Blade": "3d6",
+  "Flaming Sphere": "2d6",
+  "Heat Metal": "2d8",
+  "Melf's Acid Arrow": "4d4",
+  "Mind Spike": "3d8",
+  "Moonbeam": "2d10",
+  "Scorching Ray": "2d6",
+  "Shatter": "3d8",
+  "Snilloc's Snowball Swarm": "3d6",
+  "Spiritual Weapon": "1d8",
+  // --- 3rd Level ---
+  "Call Lightning": "3d10",
+  "Conjure Barrage": "3d8",
+  "Erupting Earth": "3d12",
+  "Fireball": "8d6",
+  "Lightning Arrow": "4d8",
+  "Lightning Bolt": "8d6",
+  "Spirit Guardians": "3d8",
+  "Vampiric Touch": "3d6",
+  // --- 4th Level ---
+  "Blight": "8d8",
+  "Fire Shield": "2d8",
+  "Ice Storm": "4d6",
+  "Sickening Radiance": "4d10",
+  "Storm Sphere": "2d6",
+  "Vitriolic Sphere": "10d4",
+  "Wall of Fire": "5d8",
+  // --- 5th Level ---
+  "Cloudkill": "5d8",
+  "Cone of Cold": "8d8",
+  "Destructive Wave": "10d6",
+  "Flame Strike": "8d6",
+  "Immolation": "8d6",
+  "Insect Plague": "4d10",
+  "Steel Wind Strike": "6d10",
+  // --- 6th Level ---
+  "Chain Lightning": "10d8",
+  "Disintegrate": "10d6+40",
+  "Harm": "14d6",
+  "Investiture of Flame": "4d6",
+  "Investiture of Ice": "4d6",
+  "Sunbeam": "6d8",
+  // --- 7th Level ---
+  "Crown of Stars": "4d12",
+  "Delayed Blast Fireball": "12d6",
+  "Finger of Death": "7d8+30",
+  "Fire Storm": "7d10",
+  "Prismatic Spray": "10d6",
+  // --- 8th Level ---
+  "Abi-Dalzim's Horrid Wilting": "12d8",
+  "Earthquake": "5d6",
+  "Incendiary Cloud": "10d8",
+  // --- 9th Level ---
+  "Meteor Swarm": "40d6",
+  "Power Word Kill": "0",
+  "Psychic Scream": "14d6",
+};
+
+/**
+ * Return the base damage dice for a spell (e.g. "3d6"), or null if the
+ * spell isn't in the table / doesn't deal damage. Callers can decide
+ * how to upcast / scale by caster level.
+ */
+export function getSpellDamageDice(spellName) {
+  if (!spellName) return null;
+  const dice = SPELL_DAMAGE_DICE[spellName];
+  if (!dice || dice === "0") return null;
+  return dice;
+}
+
 // Spells categorized by whether they use attack rolls or saving throws
 const SPELL_ATTACK_SPELLS = new Set([
   // Cantrips

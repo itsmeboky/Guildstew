@@ -8,6 +8,7 @@ import {
   getSkillModifier,
   getSaveModifier,
   getSpellSaveDC,
+  getSpellDamageDice,
 } from "@/components/combat/actionResolver";
 import { hpBarColor } from "@/components/combat/hpColor";
 import { FACTION_STYLES, getFaction } from "@/utils/combatQueue";
@@ -290,19 +291,31 @@ export default function CombatDiceWindow({
       actor.proficiency_bonus || actor.stats?.proficiency_bonus || 2;
     const strMod = Math.floor((str - 10) / 2);
     const dexMod = Math.floor((dex - 10) / 2);
-    const isRanged =
-      weapon?.category?.includes?.("Ranged") ||
-      weapon?.properties?.includes?.("Finesse");
+    const isFinesse = !!weapon?.properties?.includes?.("Finesse");
+    const isRangedWeapon = !!weapon?.category?.includes?.("Ranged");
 
-    // Unarmed: Monk uses max(STR, DEX) for "the best of"; everyone else STR.
+    // Unarmed: Monk uses the best of STR/DEX (Martial Arts); everyone
+    // else just STR.
     if (isUnarmedAttack()) {
       return (isMonkActor() ? Math.max(strMod, dexMod) : strMod) + proficiency;
     }
-    // Explicit mode hints from the 4-state attack toggle.
-    if (selectedAction?.mode === "melee") return strMod + proficiency;
-    if (selectedAction?.mode === "ranged") return dexMod + proficiency;
-    // Fallback: ranged/finesse uses DEX, everything else STR.
-    return (isRanged ? dexMod : strMod) + proficiency;
+
+    // Explicit mode hints from the 4-state attack toggle take priority
+    // over property sniffing, but finesse still lets melee pick the
+    // higher of STR/DEX (that's the whole point of the property).
+    const mode = selectedAction?.mode;
+    if (mode === "ranged" || isRangedWeapon) {
+      // Ranged: always DEX. (Thrown finesse like a dagger is rare —
+      // the GM can switch to melee mode for that case.)
+      return dexMod + proficiency;
+    }
+    if (isFinesse) {
+      // Finesse weapons (rapier, shortsword, scimitar, whip, dagger,
+      // etc.) pick the higher of STR or DEX.
+      return Math.max(strMod, dexMod) + proficiency;
+    }
+    // Default melee: STR.
+    return strMod + proficiency;
   };
 
   const handleAttackRoll = () => {
@@ -356,22 +369,26 @@ export default function CombatDiceWindow({
       // Most spells don't add ability mod to damage; we can refine per-spell later.
       mod = 0;
     } else {
-      // Weapon / unarmed damage mod
+      // Weapon / unarmed damage mod. Same rules as the attack roll:
+      //   - Unarmed: STR (Monk gets max(STR, DEX)).
+      //   - Ranged weapon OR explicit ranged mode: DEX.
+      //   - Finesse weapon (melee): max(STR, DEX).
+      //   - Everything else: STR.
       const weapon = selectedAction?.weapon;
       const strMod = Math.floor(((actor?.attributes?.str || 10) - 10) / 2);
       const dexMod = Math.floor(((actor?.attributes?.dex || 10) - 10) / 2);
-      const isRanged =
-        weapon?.category?.includes?.("Ranged") ||
-        weapon?.properties?.includes?.("Finesse");
+      const isFinesse = !!weapon?.properties?.includes?.("Finesse");
+      const isRangedWeapon = !!weapon?.category?.includes?.("Ranged");
+      const mode = selectedAction?.mode;
 
       if (isUnarmedAttack()) {
         mod = isMonkActor() ? Math.max(strMod, dexMod) : strMod;
-      } else if (selectedAction?.mode === "melee") {
-        mod = strMod;
-      } else if (selectedAction?.mode === "ranged") {
+      } else if (mode === "ranged" || isRangedWeapon) {
         mod = dexMod;
+      } else if (isFinesse) {
+        mod = Math.max(strMod, dexMod);
       } else {
-        mod = isRanged ? dexMod : strMod;
+        mod = strMod;
       }
       // Off-hand: no positive ability mod unless they have Two-Weapon Fighting style
       if (isOffHand && mod > 0) mod = 0;
@@ -381,10 +398,20 @@ export default function CombatDiceWindow({
     let diceString;
     if (isUnarmedAttack()) {
       diceString = isMonkActor() ? monkMartialArtsDie() : "1d4";
-    } else {
+    } else if (selectedAction?.type === "spell") {
+      // Look the spell up by name first. Fall back to the weapon dice
+      // (some spells are treated as attack actions with a synthetic
+      // weapon attached) and finally 1d10 if we truly have no data.
+      const spellName =
+        selectedAction?.name ||
+        selectedAction?.spell?.name ||
+        selectedAction?.weapon?.name;
       diceString =
+        getSpellDamageDice(spellName) ||
         selectedAction?.weapon?.damage ||
-        (selectedAction?.type === "spell" ? "1d10" : "1d8");
+        "1d10";
+    } else {
+      diceString = selectedAction?.weapon?.damage || "1d8";
     }
     const match = diceString.match(/(\d+)d(\d+)/);
     let numDice = match ? parseInt(match[1], 10) : 1;
@@ -448,7 +475,38 @@ export default function CombatDiceWindow({
     const skill = resolved?.skill || "Athletics";
     const mod = getSkillModifier(actor, skill);
     const total = roll + mod;
-    const result = { total, d20: roll, mod, skill };
+
+    // Contested check: Grapple / Shove aren't flat DC checks — the
+    // target rolls back and the higher total wins (tie goes to the
+    // defender, per 5e). The target picks Athletics OR Acrobatics —
+    // whichever has the higher modifier for them.
+    let contested = null;
+    if (resolved?.contested && target) {
+      const options = ["Athletics", "Acrobatics"];
+      const best = options.reduce(
+        (acc, s) => {
+          const m = getSkillModifier(target, s);
+          return acc == null || m > acc.mod ? { skill: s, mod: m } : acc;
+        },
+        null,
+      );
+      const targetD20 = Math.floor(Math.random() * 20) + 1;
+      const targetMod = best?.mod || 0;
+      const targetTotal = targetD20 + targetMod;
+      // Tie goes to the defender (target) — the attacker must beat,
+      // not match, the contested roll.
+      const actorWins = total > targetTotal;
+      contested = {
+        targetName: target.name,
+        targetSkill: best?.skill || "Athletics",
+        targetD20,
+        targetMod,
+        targetTotal,
+        winner: actorWins ? "actor" : "target",
+      };
+    }
+
+    const result = { total, d20: roll, mod, skill, contested };
     setSkillCheckRoll(result);
     setIsRolling(false);
     setPhase("check_result");
@@ -921,7 +979,7 @@ export default function CombatDiceWindow({
                     </div>
                   )}
 
-                  {phase === "check_result" && skillCheckRoll && (
+                  {phase === "check_result" && skillCheckRoll && !skillCheckRoll.contested && (
                     <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
                       <motion.div
                         initial={{ scale: 0, y: 50 }}
@@ -940,6 +998,80 @@ export default function CombatDiceWindow({
                           {skillCheckRoll.mod >= 0 ? " + " : " − "}
                           {Math.abs(skillCheckRoll.mod)}
                         </span>
+                      </motion.div>
+                    </div>
+                  )}
+
+                  {phase === "check_result" && skillCheckRoll?.contested && (
+                    <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
+                      <motion.div
+                        initial={{ scale: 0, y: 30 }}
+                        animate={{ scale: 1, y: 0 }}
+                        transition={{ type: "spring", bounce: 0.5 }}
+                        className="flex items-center gap-4 z-50"
+                      >
+                        {/* Actor roll */}
+                        <div
+                          className={`w-32 h-32 rounded-full flex flex-col items-center justify-center shadow-[0_0_40px_rgba(0,0,0,0.7)] border-4 ${
+                            skillCheckRoll.contested.winner === 'actor'
+                              ? 'bg-gradient-to-br from-[#37F2D1] to-[#0ea5e9] text-[#050816] border-white'
+                              : 'bg-gradient-to-br from-slate-700 to-slate-900 text-white/70 border-slate-500'
+                          }`}
+                        >
+                          <span className="text-[9px] font-bold uppercase tracking-widest opacity-80">
+                            {skillCheckRoll.skill}
+                          </span>
+                          <span className="text-4xl font-black drop-shadow-md">
+                            {skillCheckRoll.total}
+                          </span>
+                          <span className="text-[9px] font-bold uppercase tracking-wider opacity-70">
+                            {skillCheckRoll.d20}
+                            {skillCheckRoll.mod >= 0 ? ' + ' : ' − '}
+                            {Math.abs(skillCheckRoll.mod)}
+                          </span>
+                        </div>
+
+                        <span className="text-white text-xs font-black uppercase tracking-widest drop-shadow">VS</span>
+
+                        {/* Target roll */}
+                        <div
+                          className={`w-32 h-32 rounded-full flex flex-col items-center justify-center shadow-[0_0_40px_rgba(0,0,0,0.7)] border-4 ${
+                            skillCheckRoll.contested.winner === 'target'
+                              ? 'bg-gradient-to-br from-red-500 to-red-800 text-white border-white'
+                              : 'bg-gradient-to-br from-slate-700 to-slate-900 text-white/70 border-slate-500'
+                          }`}
+                        >
+                          <span className="text-[9px] font-bold uppercase tracking-widest opacity-80 text-center px-1 truncate max-w-[110px]">
+                            {skillCheckRoll.contested.targetSkill}
+                          </span>
+                          <span className="text-4xl font-black drop-shadow-md">
+                            {skillCheckRoll.contested.targetTotal}
+                          </span>
+                          <span className="text-[9px] font-bold uppercase tracking-wider opacity-70">
+                            {skillCheckRoll.contested.targetD20}
+                            {skillCheckRoll.contested.targetMod >= 0 ? ' + ' : ' − '}
+                            {Math.abs(skillCheckRoll.contested.targetMod)}
+                          </span>
+                        </div>
+                      </motion.div>
+
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                        className="absolute bottom-6 left-1/2 -translate-x-1/2 text-center z-50"
+                      >
+                        <div
+                          className={`text-sm font-black uppercase tracking-widest px-4 py-1 rounded-full ${
+                            skillCheckRoll.contested.winner === 'actor'
+                              ? 'bg-[#37F2D1]/20 text-[#37F2D1] border border-[#37F2D1]/50'
+                              : 'bg-red-500/20 text-red-300 border border-red-500/50'
+                          }`}
+                        >
+                          {skillCheckRoll.contested.winner === 'actor'
+                            ? `${actor?.name || 'Actor'} wins the contest`
+                            : `${skillCheckRoll.contested.targetName} resists`}
+                        </div>
                       </motion.div>
                     </div>
                   )}
