@@ -424,27 +424,102 @@ export default function GMPanel() {
     else if (stage === 'initiative' || stage === 'arranging') setIsTurnOrderAccepted(false);
   }, [campaign?.combat_data?.stage]);
 
+  // Post-combat rest flow. After confirming End Combat, the GM picks
+  // Continue (no healing), Short Rest (half-HP restore + Warlock pact
+  // slots refresh) or Long Rest (full HP + all slots). The rest is
+  // applied to every campaign character — not just the ones that were
+  // in the encounter — because the whole party is typically resting
+  // together. Combat state is cleared regardless of which option runs.
+  const [showRestChoice, setShowRestChoice] = useState(false);
+
+  const clearCombatClientState = React.useCallback(() => {
+    setCombatActive(false);
+    setIsTurnOrderAccepted(false);
+    setInitiativeOrder([]);
+    setActiveConditions({});
+    setHiddenCharacters(new Set());
+    setSneakActive(false);
+    hidThisTurnRef.current = false;
+    prevActiveKeyRef.current = null;
+    setShowEndCombatAlert(false);
+    setShowRestChoice(false);
+  }, []);
+
   const endCombatMutation = useMutation({
-    mutationFn: () => base44.entities.Campaign.update(campaignId, { 
-      combat_active: false,
-      combat_data: null
-    }),
-    onSuccess: () => {
-      setCombatActive(false);
-      setIsTurnOrderAccepted(false);
-      setInitiativeOrder([]);
-      setActiveConditions({});
-      setHiddenCharacters(new Set());
-      setSneakActive(false);
-      hidThisTurnRef.current = false;
-      prevActiveKeyRef.current = null;
-      setShowEndCombatAlert(false);
+    mutationFn: async (restType /* 'none' | 'short' | 'long' */ = 'none') => {
+      // 1. Clear combat state on the campaign row.
+      await base44.entities.Campaign.update(campaignId, {
+        combat_active: false,
+        combat_data: null,
+      });
+
+      // 2. Apply the chosen rest to every PC. Long rest = full HP +
+      //    clear all spent slots. Short rest = restore up to half max
+      //    HP (pragmatic stand-in for hit-dice spending) and reset
+      //    Warlock pact slots only. Continue does neither.
+      if (restType === 'short' || restType === 'long') {
+        const updates = characters.map(async (c) => {
+          const hp = c.hit_points || {};
+          const max = Number.isFinite(hp.max) ? hp.max : 0;
+          const current = Number.isFinite(hp.current) ? hp.current : max;
+          let nextCurrent = current;
+          if (restType === 'long') {
+            nextCurrent = max;
+          } else if (restType === 'short' && max > 0) {
+            // Heal to at least half max HP, but never reduce current HP.
+            nextCurrent = Math.max(current, Math.ceil(max / 2));
+          }
+          const payload = {
+            hit_points: { ...hp, max, current: nextCurrent, temporary: 0 },
+          };
+          try {
+            await base44.entities.Character.update(c.id, payload);
+          } catch (err) {
+            console.error('Rest HP update failed for', c.name, err);
+          }
+        });
+        await Promise.all(updates);
+
+        // Clear in-memory spent spell slots. Long rest clears all,
+        // short rest clears slots only for Warlocks (pact magic).
+        setSpentSlotsByCharacter((prev) => {
+          if (restType === 'long') return {};
+          const next = { ...prev };
+          characters.forEach((c) => {
+            const cls = (c.class || '').toLowerCase();
+            if (cls === 'warlock') {
+              const key = c.id;
+              if (key in next) delete next[key];
+            }
+          });
+          return next;
+        });
+      }
+
+      return restType;
+    },
+    onSuccess: (restType) => {
+      clearCombatClientState();
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
-    }
+      queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
+      if (restType === 'long') toast.success('The party takes a long rest. HP and spells restored.');
+      else if (restType === 'short') toast.success('The party takes a short rest.');
+    },
+    onError: (err) => {
+      console.error('End combat failed:', err);
+      toast.error('Failed to end combat.');
+    },
   });
 
+  // "End Combat" first confirms via the alert, then swaps to the rest
+  // chooser. Confirming the alert closes it and opens the chooser.
   const handleEndCombat = () => {
-    endCombatMutation.mutate();
+    setShowEndCombatAlert(false);
+    setShowRestChoice(true);
+  };
+
+  const handleChooseRest = (restType) => {
+    endCombatMutation.mutate(restType);
   };
 
   // Patch a combatant's faction / charm fields in both the live
@@ -712,6 +787,12 @@ export default function GMPanel() {
 
   // Handler called when CombatActionBar cycles the attack toggle.
   const handleAttackModeChange = React.useCallback((nextMode) => {
+    // Hard lock during initiative setup — nobody acts before FIGHT.
+    const stage = campaign?.combat_data?.stage;
+    if (stage === 'initiative' || stage === 'arranging') {
+      toast.error("Combat hasn't started yet.");
+      return;
+    }
     // Guardrails: only check turn order / action economy when transitioning
     // from null → a mode (i.e. entering attack targeting). Cycling between
     // modes or cancelling is always allowed.
@@ -746,6 +827,7 @@ export default function GMPanel() {
     attackMode,
     campaign?.combat_active,
     campaign?.combat_data,
+    campaign?.combat_data?.stage,
     isActorsTurn,
     isGM,
     actionsState.action,
@@ -1631,7 +1713,25 @@ export default function GMPanel() {
               </div>
             </div>
 
-            {selectedDownedEntry ? (
+            {campaign?.combat_data?.stage === 'initiative' || campaign?.combat_data?.stage === 'arranging' ? (
+              // Combat hasn't actually started yet — the GM is still
+              // arranging the initiative order. Lock the whole action
+              // surface so nobody (GM included) can fire actions, pick
+              // targets, or roll anything. The only interactive element
+              // during this stage is the draggable TurnOrderBar + the
+              // FIGHT button above it.
+              <div className="relative z-20 rounded-[32px] bg-[#050816]/95 px-6 py-6 shadow-[0_20px_60px_rgba(0,0,0,0.75)] text-center">
+                <p className="text-[10px] uppercase tracking-[0.32em] text-[#37F2D1]/80 font-bold mb-2">
+                  Initiative Setup
+                </p>
+                <p className="text-white/80 text-sm">
+                  Arrange the turn order, then press <span className="text-[#37F2D1] font-bold">FIGHT</span> to begin combat.
+                </p>
+                <p className="text-slate-500 text-[11px] mt-2 italic">
+                  Actions are locked until combat starts.
+                </p>
+              </div>
+            ) : selectedDownedEntry ? (
               <DeathSavePanel
                 combatant={selectedDownedEntry}
                 isPlayer={selectedCharacter?.type === 'player'}
@@ -2187,18 +2287,64 @@ export default function GMPanel() {
           <AlertDialogHeader>
             <AlertDialogTitle>End Combat?</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-400">
-              Are you sure you want to end combat? This will clear the turn order.
+              This will clear the turn order. You'll then be asked whether the party takes a rest.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="bg-transparent border-gray-600 text-white hover:bg-gray-800 hover:text-white">Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleEndCombat}
               className="bg-red-600 hover:bg-red-700 text-white"
             >
               End Combat
             </AlertDialogAction>
           </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Post-combat rest chooser. Continue / Short Rest / Long Rest.
+          All three clear combat state; only the rests heal. */}
+      <AlertDialog
+        open={showRestChoice}
+        onOpenChange={(open) => {
+          if (!open && !endCombatMutation.isPending) setShowRestChoice(false);
+        }}
+      >
+        <AlertDialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>After the Battle</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
+              Does the party rest? Long Rest restores everyone to full HP and all spell slots.
+              Short Rest heals each character up to half their max HP and refreshes Warlock pact slots.
+              Continue just ends combat with no recovery.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid grid-cols-1 gap-3 mt-2">
+            <button
+              type="button"
+              disabled={endCombatMutation.isPending}
+              onClick={() => handleChooseRest('long')}
+              className="w-full bg-[#22c55e] hover:bg-[#16a34a] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl tracking-wide uppercase text-sm"
+            >
+              Long Rest
+            </button>
+            <button
+              type="button"
+              disabled={endCombatMutation.isPending}
+              onClick={() => handleChooseRest('short')}
+              className="w-full bg-[#eab308] hover:bg-[#ca8a04] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl tracking-wide uppercase text-sm"
+            >
+              Short Rest
+            </button>
+            <button
+              type="button"
+              disabled={endCombatMutation.isPending}
+              onClick={() => handleChooseRest('none')}
+              className="w-full bg-[#334155] hover:bg-[#475569] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl tracking-wide uppercase text-sm"
+            >
+              Continue (No Rest)
+            </button>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
     </div>

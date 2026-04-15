@@ -376,26 +376,35 @@ function CampaignPlayerPanelContent() {
 
           <div className="space-y-4">
             {campaign.combat_active && campaign.combat_data && (
-              <TurnOrderDisplay 
-                order={
-                  campaign.combat_data.stage === 'initiative' 
-                    ? (campaign.combat_data.order || []).filter(c => c.type === 'player') 
-                    : (campaign.combat_data.order || [])
-                } 
-                currentTurnIndex={
-                  campaign.combat_data.stage === 'initiative' 
-                    ? -1 
-                    : (campaign.combat_data.currentTurnIndex || 0)
-                }
-                onSelectTarget={(target) => {
-                  if (combatState.step === 'selecting_target') {
-                    setCombatState(prev => ({ ...prev, target, step: 'rolling', isOpen: true }));
-                  }
-                }}
-                selectionMode={combatState.step === 'selecting_target'}
-                characters={characters}
-                players={players}
-              />
+              campaign.combat_data.stage === 'initiative' || campaign.combat_data.stage === 'arranging' ? (
+                // Players must not see the GM arranging the turn order.
+                // During setup they get a waiting screen only.
+                <div className="relative z-10 rounded-[32px] bg-[#050816]/90 border border-[#1a1f2e] px-6 py-10 mb-3 text-center shadow-[0_20px_60px_rgba(0,0,0,0.65)]">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-14 h-14 rounded-full border-2 border-[#37F2D1]/50 border-t-[#37F2D1] animate-spin" />
+                    <p className="text-[10px] uppercase tracking-[0.32em] text-[#37F2D1]/80 font-bold">
+                      Preparing for Battle
+                    </p>
+                    <p className="text-white/80 text-sm max-w-xs">
+                      The GM is setting up combat. Hold your breath — the turn order will appear in a moment.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <TurnOrderDisplay
+                  order={campaign.combat_data.order || []}
+                  currentTurnIndex={campaign.combat_data.currentTurnIndex || 0}
+                  onSelectTarget={(target) => {
+                    if (combatState.step === 'selecting_target') {
+                      setCombatState(prev => ({ ...prev, target, step: 'rolling', isOpen: true }));
+                    }
+                  }}
+                  selectionMode={combatState.step === 'selecting_target'}
+                  characters={characters}
+                  players={players}
+                  hideInitiative={true}
+                />
+              )
             )}
             {/* End Turn Button for Players */}
             {isActorsTurn && campaign?.combat_active && !combatState.isOpen && campaign?.combat_data?.stage !== 'initiative' && (
@@ -1680,7 +1689,7 @@ function QuickSlots({ quickSlots, setQuickSlots, inventory }) {
   );
 }
 
-function TurnOrderDisplay({ order, currentTurnIndex, onSelectTarget, selectionMode, characters, players }) {
+function TurnOrderDisplay({ order, currentTurnIndex, onSelectTarget, selectionMode, characters, players, hideInitiative = false }) {
   const hasPlayedRef = React.useRef(false);
 
   // Play sound effects when order populates
@@ -1749,10 +1758,13 @@ function TurnOrderDisplay({ order, currentTurnIndex, onSelectTarget, selectionMo
                       {combatant.name?.[0]}
                     </div>
                   )}
-                  <div className="absolute bottom-0 inset-x-0 bg-black/80 text-[10px] text-center text-white font-bold py-0.5">
-                    {/* Hide initiative number for monsters */}
-                    {(combatant.type === 'player' || combatant.isPlayer) ? combatant.initiative : '?'}
-                  </div>
+                  {/* Initiative numbers are hidden on the player side so
+                      players can't tell the GM rearranged the order. */}
+                  {!hideInitiative && (
+                    <div className="absolute bottom-0 inset-x-0 bg-black/80 text-[10px] text-center text-white font-bold py-0.5">
+                      {(combatant.type === 'player' || combatant.isPlayer) ? combatant.initiative : '?'}
+                    </div>
+                  )}
                 </div>
                 
                 {/* HP Bar for Players */}
