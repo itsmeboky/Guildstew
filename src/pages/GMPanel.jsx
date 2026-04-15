@@ -164,6 +164,15 @@ export default function GMPanel() {
   // so the overlay takes over the screen until the roll resolves.
   const [dramaticDeathSaveKey, setDramaticDeathSaveKey] = useState(null);
 
+  // Leveled spells pass through a level picker before they reach the
+  // dice window. `pendingSpellCast` holds the raw action; when the
+  // user picks a level we call `runActionRef.current(actionWithCastLevel)`
+  // which re-enters the action bar's inline onActionClick handler.
+  // Cantrips (level 0 / undefined) bypass this entirely — they never
+  // show the picker and never spend slots.
+  const [pendingSpellCast, setPendingSpellCast] = useState(null);
+  const runActionRef = React.useRef(null);
+
   // Spell slots spent per character. Keyed by characterKey
   // (uniqueId / id), value is { 1: <spent>, 2: <spent>, ... }. Slots
   // persist across turns and combats — only a long rest should reset
@@ -1790,9 +1799,29 @@ export default function GMPanel() {
               maxSpellSlots={maxSpellSlots}
               spentSpellSlots={currentSpentSlots}
               onToggleSlot={handleToggleSlot}
-              onActionClick={(action) => {
+              onActionClick={((runAction) => {
+                // Always repoint the ref at the freshest closure so
+                // the level picker can re-enter this exact handler
+                // with a castLevel attached.
+                runActionRef.current = runAction;
+                return runAction;
+              })((action) => {
                 // Clicking any other action cancels attack-mode targeting.
                 if (attackMode !== null) setAttackMode(null);
+
+                // Level picker interception. Leveled spells (>=1st)
+                // without an explicit castLevel get held here so the
+                // player can choose a slot level first. Cantrips skip
+                // this because action.level is 0 or undefined.
+                if (
+                  action.type === 'spell' &&
+                  typeof action.level === 'number' &&
+                  action.level > 0 &&
+                  typeof action.castLevel !== 'number'
+                ) {
+                  setPendingSpellCast({ action });
+                  return;
+                }
 
                 // Resolve first so we know the cost — that determines
                 // whether the turn-order check even applies. Reactions
@@ -1829,12 +1858,15 @@ export default function GMPanel() {
 
                 // Spell slot gate — leveled spells (level > 0) require an
                 // available slot. Cantrips (level 0 / undefined) are free.
+                // We commit at castLevel (chosen in the picker), not the
+                // spell's base level, so upcasting spends the higher slot.
                 if (action.type === 'spell' && typeof action.level === 'number' && action.level > 0) {
                   const key = selectedCharacterKey;
-                  const max = maxSpellSlots[action.level] || 0;
-                  const already = (spentSlotsByCharacter[key] || {})[action.level] || 0;
+                  const slotLevel = typeof action.castLevel === 'number' ? action.castLevel : action.level;
+                  const max = maxSpellSlots[slotLevel] || 0;
+                  const already = (spentSlotsByCharacter[key] || {})[slotLevel] || 0;
                   if (max === 0 || already >= max) {
-                    toast.error(`No level ${action.level} spell slots remaining!`);
+                    toast.error(`No level ${slotLevel} spell slots remaining!`);
                     return;
                   }
                   // Commit the slot up-front. If the spell ultimately gets
@@ -1846,7 +1878,7 @@ export default function GMPanel() {
                         ...prev,
                         [key]: {
                           ...charSpent,
-                          [action.level]: (charSpent[action.level] || 0) + 1,
+                          [slotLevel]: (charSpent[slotLevel] || 0) + 1,
                         },
                       };
                     });
@@ -1892,7 +1924,7 @@ export default function GMPanel() {
                   // Skill checks without a target (like Hide) open the dice window directly.
                   setCombatState({ isOpen: true, step: 'rolling', action: enrichedAction, target: null });
                 }
-              }}
+              })}
             />
             )}
 
@@ -2376,6 +2408,90 @@ export default function GMPanel() {
               Continue (No Rest)
             </button>
           </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Leveled-spell cast level picker. Shows slot buttons from the
+          spell's base level up to the character's highest available
+          slot, greying out levels where every slot is spent. */}
+      <AlertDialog
+        open={!!pendingSpellCast}
+        onOpenChange={(open) => {
+          if (!open) setPendingSpellCast(null);
+        }}
+      >
+        <AlertDialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-sm">
+          {pendingSpellCast && (() => {
+            const pending = pendingSpellCast.action;
+            const baseLevel = pending.level;
+            const ordinal = (n) => {
+              const suffixes = ['th', 'st', 'nd', 'rd'];
+              const v = n % 100;
+              return `${n}${suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0]}`;
+            };
+            const charSpent = spentSlotsByCharacter[selectedCharacterKey] || {};
+            const levels = [];
+            for (let lvl = baseLevel; lvl <= 9; lvl++) {
+              const max = maxSpellSlots[lvl] || 0;
+              if (max === 0) continue;
+              const spent = charSpent[lvl] || 0;
+              levels.push({ lvl, max, spent, available: spent < max });
+            }
+            return (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-baseline gap-2">
+                    <span>{pending.name}</span>
+                    <span className="text-xs uppercase tracking-widest text-slate-400">
+                      {ordinal(baseLevel)}-level
+                    </span>
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="text-gray-400">
+                    Choose a spell slot to cast at. Casting above base level upcasts the spell.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  {levels.length === 0 ? (
+                    <p className="col-span-3 text-center text-sm text-red-400 py-4">
+                      No available slots for this spell.
+                    </p>
+                  ) : (
+                    levels.map(({ lvl, max, spent, available }) => (
+                      <button
+                        key={lvl}
+                        type="button"
+                        disabled={!available}
+                        onClick={() => {
+                          const action = { ...pending, castLevel: lvl };
+                          setPendingSpellCast(null);
+                          if (runActionRef.current) {
+                            runActionRef.current(action);
+                          }
+                        }}
+                        className={`flex flex-col items-center justify-center py-3 rounded-xl border transition-colors ${
+                          available
+                            ? 'bg-[#8B5CF6]/20 hover:bg-[#8B5CF6]/35 border-[#8B5CF6]/60 text-white'
+                            : 'bg-[#0b1220] border-slate-800 text-slate-600 cursor-not-allowed'
+                        }`}
+                      >
+                        <span className="text-sm font-black uppercase tracking-wide">
+                          {ordinal(lvl)}
+                        </span>
+                        <span className="text-[10px] opacity-80 mt-0.5">
+                          {max - spent}/{max} left
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+                <AlertDialogFooter className="mt-3">
+                  <AlertDialogCancel className="bg-transparent border-gray-600 text-white hover:bg-gray-800 hover:text-white">
+                    Cancel
+                  </AlertDialogCancel>
+                </AlertDialogFooter>
+              </>
+            );
+          })()}
         </AlertDialogContent>
       </AlertDialog>
     </div>
