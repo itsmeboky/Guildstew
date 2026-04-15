@@ -49,6 +49,7 @@ import {
 } from "@/components/combat/conditions";
 import { resolveAction, consumeActionCost, getSpellEffect } from "@/components/combat/actionResolver";
 import { hpBarColor, clampHp, normalizeHp } from "@/components/combat/hpColor";
+import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
 import { toast } from "sonner";
 import { useTurnContext } from "@/components/combat/useTurnContext";
 
@@ -542,6 +543,11 @@ export default function GMPanel() {
       audio.play().catch(e => console.log("Audio play failed", e));
 
       setIsTurnOrderAccepted(true);
+      logSystemEvent(campaignId, '— Round 1 —', { kind: 'round_divider', round: 1 });
+      logCombatEvent(campaignId, 'Turn order set. Round 1 begins.', {
+        event: 'combat_start',
+        category: 'round',
+      });
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
     }
   });
@@ -632,11 +638,28 @@ export default function GMPanel() {
       return restType;
     },
     onSuccess: (restType) => {
+      const rounds = campaign?.combat_data?.round || 0;
       clearCombatClientState();
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
       queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
-      if (restType === 'long') toast.success('The party takes a long rest. HP and spells restored.');
-      else if (restType === 'short') toast.success('The party takes a short rest.');
+      logCombatEvent(campaignId, `Combat ended. ${rounds} round${rounds === 1 ? '' : 's'}.`, {
+        event: 'combat_ended',
+        category: 'round',
+        rounds,
+      });
+      if (restType === 'long') {
+        toast.success('The party takes a long rest. HP and spells restored.');
+        logCombatEvent(campaignId, 'The party takes a long rest.', {
+          event: 'long_rest',
+          category: 'rest',
+        });
+      } else if (restType === 'short') {
+        toast.success('The party takes a short rest.');
+        logCombatEvent(campaignId, 'The party takes a short rest.', {
+          event: 'short_rest',
+          category: 'rest',
+        });
+      }
     },
     onError: (err) => {
       console.error('End combat failed:', err);
@@ -697,10 +720,21 @@ export default function GMPanel() {
           ? "lost (incapacitated)"
           : "ended";
         toast.error(`${existing.casterName || 'Caster'} ${reasonLabel} Concentration on ${existing.spell}.`);
+        logCombatEvent(
+          campaignId,
+          `${existing.casterName || 'Caster'} ${reasonLabel} concentration on ${existing.spell}!`,
+          {
+            event: 'concentration_end',
+            category: 'spell',
+            actor: existing.casterName,
+            spell: existing.spell,
+            reason,
+          },
+        );
         return next;
       });
     },
-    [],
+    [campaignId],
   );
 
   const startConcentration = React.useCallback(
@@ -901,12 +935,22 @@ export default function GMPanel() {
         .update(campaignId, { combat_data: newData })
         .catch(err => console.error('Move to fallen failed:', err));
       toast.error(`${target.name} has died.`);
+      logCombatEvent(campaignId, `${target.name} has fallen.`, {
+        event: 'death',
+        category: 'death_save',
+        target: target.name,
+      });
       return;
     }
 
     updateOrderCombatant(combatantKey, { deathSaves: next });
     if (next.stabilized && !existing.stabilized) {
       toast.success(`${target.name} is stabilized.`);
+      logCombatEvent(campaignId, `${target.name} has stabilized.`, {
+        event: 'stabilized',
+        category: 'death_save',
+        target: target.name,
+      });
     }
   }, [campaign?.combat_data, campaignId, queryClient, updateOrderCombatant]);
 
@@ -941,18 +985,56 @@ export default function GMPanel() {
         return { ...prev, [combatantKey]: current.filter(c => c !== 'Unconscious') };
       });
       toast.success(`${target.name} is back on their feet!`);
+      logCombatEvent(
+        campaignId,
+        `${target.name} rolls a natural 20 — BACK FROM THE BRINK!`,
+        {
+          event: 'death_save_nat20',
+          category: 'death_save',
+          target: target.name,
+        },
+      );
       return;
     }
     if (roll === 1) {
       applyDeathSaveChange(combatantKey, { failuresDelta: 2 });
+      logCombatEvent(
+        campaignId,
+        `${target.name} rolls a natural 1... two failures.`,
+        {
+          event: 'death_save_nat1',
+          category: 'death_save',
+          target: target.name,
+        },
+      );
       return;
     }
     if (roll >= 10) {
       applyDeathSaveChange(combatantKey, { successesDelta: 1 });
+      logCombatEvent(
+        campaignId,
+        `${target.name} death save: rolls ${roll} — SUCCESS`,
+        {
+          event: 'death_save_success',
+          category: 'death_save',
+          target: target.name,
+          roll,
+        },
+      );
       return;
     }
     applyDeathSaveChange(combatantKey, { failuresDelta: 1 });
-  }, [campaign?.combat_data, updateOrderCombatant, applyDeathSaveChange]);
+    logCombatEvent(
+      campaignId,
+      `${target.name} death save: rolls ${roll} — FAILURE`,
+      {
+        event: 'death_save_failure',
+        category: 'death_save',
+        target: target.name,
+        roll,
+      },
+    );
+  }, [campaignId, campaign?.combat_data, updateOrderCombatant, applyDeathSaveChange, applyHpToEntity]);
 
   const toggleCondition = (targetId, condition) => {
     setActiveConditions(prev => {
@@ -1133,7 +1215,29 @@ export default function GMPanel() {
         round: 1
       }
     });
-    
+
+    // Campaign log: combat start + each combatant's initiative roll.
+    logCombatEvent(campaignId, '⚔️ Combat started! Rolling initiative...', {
+      event: 'combat_started',
+      category: 'initiative',
+    });
+    allCombatants.forEach((c) => {
+      const sign = (c.initiativeMod || 0) >= 0 ? '+' : '−';
+      const absMod = Math.abs(c.initiativeMod || 0);
+      logCombatEvent(
+        campaignId,
+        `${c.name} rolls initiative: ${c.initiative} (${c.initiativeRoll} ${sign} ${absMod})`,
+        {
+          event: 'initiative_roll',
+          category: 'initiative',
+          actor: c.name,
+          roll: c.initiative,
+          raw: c.initiativeRoll,
+          mod: c.initiativeMod,
+        },
+      );
+    });
+
     setCombatActive(true);
     setIsTurnOrderAccepted(false);
   };
@@ -1215,6 +1319,28 @@ export default function GMPanel() {
     const activeCombatant = campaign?.combat_data?.order?.[0];
     const activeKey = activeCombatant?.uniqueId || activeCombatant?.id;
 
+    // Campaign log: round marker + turn notice. Only fire once per
+    // actual change (the effect retriggers whenever the order array
+    // recomputes, so gate on prevActiveKeyRef to avoid duplicates).
+    if (
+      campaign?.combat_active &&
+      activeCombatant &&
+      activeKey &&
+      prevActiveKeyRef.current !== activeKey
+    ) {
+      const prevRound = prevActiveKeyRef.current === null ? 0 : (prevActiveKeyRef.currentRound || 0);
+      const round = campaign?.combat_data?.round || 1;
+      if (round !== prevRound) {
+        logSystemEvent(campaignId, `— Round ${round} —`, { kind: 'round_divider', round });
+      }
+      logCombatEvent(
+        campaignId,
+        `${activeCombatant.name}'s turn.`,
+        { event: 'turn_start', category: 'turn', actor: activeCombatant.name, round },
+      );
+      prevActiveKeyRef.currentRound = round;
+    }
+
     // Auto-expire conditions at the start of the active combatant's
     // turn. Currently this only catches Dodging (autoExpire:
     // "start_of_next_turn") but any future condition with the same
@@ -1238,7 +1364,14 @@ export default function GMPanel() {
           campaign?.combat_data?.order?.find(
             (c) => (c.uniqueId || c.id) === activeKey,
           )?.name || 'Combatant';
-        expired.forEach((name) => toast(`${displayName} is no longer ${name}.`));
+        expired.forEach((name) => {
+          toast(`${displayName} is no longer ${name}.`);
+          logCombatEvent(
+            campaignId,
+            `${displayName} is no longer ${name}.`,
+            { event: 'condition_expired', category: 'condition', target: displayName, condition: name },
+          );
+        });
         return { ...prev, [activeKey]: remaining };
       });
     }
@@ -1608,12 +1741,42 @@ export default function GMPanel() {
                     return { ...prev, [data.targetId]: [...current, data.condition] };
                   });
                   toast(`Condition applied: ${data.condition}`);
+                  // Look up the target's display name from the order so
+                  // the log reads as a name, not a uuid.
+                  const targetEntity = campaign?.combat_data?.order?.find(
+                    (c) => (c.uniqueId || c.id) === data.targetId,
+                  );
+                  logCombatEvent(
+                    campaignId,
+                    `${targetEntity?.name || 'Target'} is now ${data.condition}.`,
+                    {
+                      event: 'condition_applied',
+                      category: 'condition',
+                      target: targetEntity?.name,
+                      condition: data.condition,
+                    },
+                  );
                 } else if (data.type === 'debuff_applied' && data.debuff) {
                   toast(`Debuff applied: ${data.debuff}`);
+                  logCombatEvent(campaignId, `Debuff applied: ${data.debuff}.`, {
+                    event: 'debuff_applied',
+                    category: 'condition',
+                    debuff: data.debuff,
+                  });
                 } else if (data.type === 'buff_applied' && data.buff) {
                   toast.success(`Buff applied: ${data.buff}`);
+                  logCombatEvent(campaignId, `Buff applied: ${data.buff}.`, {
+                    event: 'buff_applied',
+                    category: 'condition',
+                    buff: data.buff,
+                  });
                 } else if (data.type === 'utility_applied' && data.note) {
                   toast(`Spell effect: ${data.note}`);
+                  logCombatEvent(campaignId, `Spell effect: ${data.note}`, {
+                    event: 'utility_applied',
+                    category: 'spell',
+                    note: data.note,
+                  });
                 }
 
                 // Concentration start event fires from the dice window
@@ -1628,6 +1791,16 @@ export default function GMPanel() {
                     spellLevel: data.spellLevel,
                     targetIds: data.targetIds,
                   });
+                  logCombatEvent(
+                    campaignId,
+                    `${data.casterName || 'Caster'} is concentrating on ${data.spell}.`,
+                    {
+                      event: 'concentration_start',
+                      category: 'spell',
+                      actor: data.casterName,
+                      spell: data.spell,
+                    },
+                  );
                 }
 
                 if (data.type === 'damage') {
@@ -1732,6 +1905,45 @@ export default function GMPanel() {
                           console.error('Damage write-back failed:', err);
                           toast.error('Failed to update character HP');
                         });
+                      // Campaign log: damage / heal write line.
+                      if (delta > 0) {
+                        logCombatEvent(
+                          campaignId,
+                          `${resolvedChar.name} takes ${delta} damage. (${newCurrent}/${maxHp} HP)`,
+                          {
+                            event: 'damage_applied',
+                            category: 'damage',
+                            target: resolvedChar.name,
+                            damage: delta,
+                            current: newCurrent,
+                            max: maxHp,
+                          },
+                        );
+                        if (newCurrent === 0) {
+                          logCombatEvent(
+                            campaignId,
+                            `${resolvedChar.name} is DOWNED!`,
+                            {
+                              event: 'downed',
+                              category: 'death_save',
+                              target: resolvedChar.name,
+                            },
+                          );
+                        }
+                      } else if (delta < 0) {
+                        logCombatEvent(
+                          campaignId,
+                          `${resolvedChar.name} heals ${Math.abs(delta)} HP. (${newCurrent}/${maxHp} HP)`,
+                          {
+                            event: 'heal_applied',
+                            category: 'heal',
+                            target: resolvedChar.name,
+                            heal: Math.abs(delta),
+                            current: newCurrent,
+                            max: maxHp,
+                          },
+                        );
+                      }
                     }
                   }
 
@@ -1746,11 +1958,47 @@ export default function GMPanel() {
                           }
                           const maxHp = m.hit_points?.max || 10;
                           const currentHp = m.hit_points?.current ?? maxHp;
+                          const nextHp = clampHp(currentHp, maxHp, delta);
+                          // Campaign log entry for monster damage/heal.
+                          if (delta > 0) {
+                            logCombatEvent(
+                              campaignId,
+                              `${m.name} takes ${delta} damage. (${nextHp}/${maxHp} HP)`,
+                              {
+                                event: 'damage_applied',
+                                category: 'damage',
+                                target: m.name,
+                                damage: delta,
+                                current: nextHp,
+                                max: maxHp,
+                              },
+                            );
+                            if (nextHp === 0 && currentHp > 0) {
+                              logCombatEvent(campaignId, `${m.name} is DOWNED!`, {
+                                event: 'downed',
+                                category: 'death_save',
+                                target: m.name,
+                              });
+                            }
+                          } else if (delta < 0) {
+                            logCombatEvent(
+                              campaignId,
+                              `${m.name} heals ${Math.abs(delta)} HP. (${nextHp}/${maxHp} HP)`,
+                              {
+                                event: 'heal_applied',
+                                category: 'heal',
+                                target: m.name,
+                                heal: Math.abs(delta),
+                                current: nextHp,
+                                max: maxHp,
+                              },
+                            );
+                          }
                           return {
                             ...m,
                             hit_points: {
                               ...(m.hit_points || {}),
-                              current: clampHp(currentHp, maxHp, delta),
+                              current: nextHp,
                               max: maxHp,
                             },
                           };
@@ -2170,6 +2418,30 @@ export default function GMPanel() {
                   setActionsState(prev => consumeActionCost(prev, resolved.cost));
                   const featureSuffix = action.classFeature ? ` (${action.classFeature})` : '';
                   toast.success(`${selectedCharacter?.name || 'Character'} uses ${action.name}${featureSuffix}`);
+                  // Campaign log: plain action use, plus the special
+                  // "now Dodging" line for the Dodge action.
+                  logCombatEvent(
+                    campaignId,
+                    `${selectedCharacter?.name || 'Character'} uses ${action.name}${featureSuffix}.`,
+                    {
+                      event: 'action_use',
+                      category: 'turn',
+                      actor: selectedCharacter?.name,
+                      action: action.name,
+                    },
+                  );
+                  if (action.name === 'Dodge') {
+                    logCombatEvent(
+                      campaignId,
+                      `${selectedCharacter?.name || 'Character'} is now Dodging.`,
+                      {
+                        event: 'condition_applied',
+                        category: 'condition',
+                        target: selectedCharacter?.name,
+                        condition: 'Dodging',
+                      },
+                    );
+                  }
 
                   // Dodge leaves a visible "Dodging" condition label on the
                   // character until the start of their next turn. The

@@ -16,6 +16,7 @@ import {
 import { hpBarColor } from "@/components/combat/hpColor";
 import { FACTION_STYLES, getFaction } from "@/utils/combatQueue";
 import { getConditionModifiers } from "@/components/combat/conditions";
+import { logCombatEvent } from "@/utils/combatLog";
 
 const CLASS_SPELL_ABILITY = {
   Wizard: "int",
@@ -561,6 +562,49 @@ export default function CombatDiceWindow({
     setIsRolling(false);
     setPhase("attack_result");
     onRoll && onRoll({ type: "attack_result", roll: result });
+
+    // Campaign log — attack result line. Includes the advantage /
+    // disadvantage prefix and the pair-dice readout when relevant so
+    // the feed matches the on-screen animation.
+    if (campaignId) {
+      const targetAC = target?.stats?.armor_class || target?.armor_class || 10;
+      const willHit = d20 === 20 || result.total >= targetAC;
+      const weaponName =
+        selectedAction?.type === "spell"
+          ? selectedAction?.name || "spell"
+          : selectedAction?.weapon?.name ||
+            (selectedAction?.mode === "unarmed" ? "Unarmed" : "attack");
+      const advPrefix = hasAdvantage
+        ? " with advantage"
+        : hasDisadvantage
+        ? " with disadvantage"
+        : "";
+      const pairNote = pair
+        ? ` — rolls ${pair.dice[0]}, ${pair.dice[1]} — takes ${pair.dice[pair.chosen]}`
+        : ` — rolls ${d20}`;
+      const outcome = result.isCrit
+        ? "CRITICAL HIT!"
+        : willHit
+        ? "HIT!"
+        : "MISS!";
+      logCombatEvent(
+        campaignId,
+        `${actor?.name || "Actor"} attacks ${target?.name || "target"} with ${weaponName}${advPrefix}${pairNote} vs AC ${targetAC} — ${outcome}`,
+        {
+          event: willHit ? "attack_hit" : "attack_miss",
+          category: "attack",
+          actor: actor?.name,
+          target: target?.name,
+          weapon: weaponName,
+          roll: result.total,
+          d20,
+          ac: targetAC,
+          crit: result.isCrit,
+          advantage: hasAdvantage,
+          disadvantage: hasDisadvantage,
+        },
+      );
+    }
   };
 
   const handleDamageRoll = () => {
@@ -700,6 +744,47 @@ export default function CombatDiceWindow({
       });
     }
 
+    // Campaign log — damage roll line. Crits get a dramatic callout.
+    if (campaignId) {
+      const damageType =
+        spellEffect?.type ||
+        selectedAction?.weapon?.damage_type ||
+        (selectedAction?.type === "spell" ? "magical" : "weapon");
+      const weaponName =
+        selectedAction?.type === "spell"
+          ? selectedAction?.name || "spell"
+          : selectedAction?.weapon?.name ||
+            (isUnarmedAttack() ? "unarmed" : "weapon");
+      if (isCrit) {
+        logCombatEvent(
+          campaignId,
+          `CRITICAL HIT! ${actor?.name || "Actor"} deals ${totalDamage} ${damageType} damage to ${target?.name || "target"} with ${weaponName}!`,
+          {
+            event: "damage_roll_crit",
+            category: "damage",
+            actor: actor?.name,
+            target: target?.name,
+            weapon: weaponName,
+            damage: totalDamage,
+            crit: true,
+          },
+        );
+      } else {
+        logCombatEvent(
+          campaignId,
+          `${actor?.name || "Actor"} deals ${totalDamage} ${damageType} damage to ${target?.name || "target"} with ${weaponName}.`,
+          {
+            event: "damage_roll",
+            category: "damage",
+            actor: actor?.name,
+            target: target?.name,
+            weapon: weaponName,
+            damage: totalDamage,
+          },
+        );
+      }
+    }
+
     // damage_condition spells: after damage resolves, also broadcast
     // the condition so the parent can slap the label on the target.
     if (
@@ -765,6 +850,24 @@ export default function CombatDiceWindow({
         targetId: target.id,
       });
     }
+
+    // Campaign log — heal line. The HP write-through in GMPanel also
+    // emits a follow-up damage_applied line with the new current/max
+    // HP, so this one focuses on the cast context.
+    if (campaignId) {
+      logCombatEvent(
+        campaignId,
+        `${actor?.name || "Caster"} casts ${spellName || "a healing spell"} and heals ${target?.name || "target"} for ${total} HP.`,
+        {
+          event: "heal_roll",
+          category: "heal",
+          actor: actor?.name,
+          target: target?.name,
+          spell: spellName,
+          heal: total,
+        },
+      );
+    }
   };
 
   // === Effect-apply flow (buff / debuff / utility / condition w/o save) ===
@@ -794,6 +897,29 @@ export default function CombatDiceWindow({
     };
     setEffectApplied(applied);
     setPhase("effect_applied");
+
+    // Campaign log — the generic "X casts Y" line fires here so the
+    // player can see every spell cast in the feed, not just damage
+    // ones. Downstream condition_applied / buff_applied hooks from
+    // the parent log their own follow-ups.
+    if (campaignId && spellName) {
+      const castLevel =
+        typeof selectedAction?.castLevel === "number"
+          ? selectedAction.castLevel
+          : selectedAction?.level || 0;
+      const levelPhrase = castLevel > 0 ? ` at level ${castLevel}` : "";
+      logCombatEvent(
+        campaignId,
+        `${actor?.name || "Caster"} casts ${spellName}${levelPhrase}.`,
+        {
+          event: "spell_cast",
+          category: "spell",
+          actor: actor?.name,
+          spell: spellName,
+          castLevel,
+        },
+      );
+    }
 
     // Broadcast to the parent so it can add the condition tag /
     // toast, if this effect should track one.
@@ -932,6 +1058,43 @@ export default function CombatDiceWindow({
     setIsRolling(false);
     setPhase("check_result");
     onRoll && onRoll({ type: "check_result", roll: result });
+
+    // Campaign log — skill check result. Contested checks get a
+    // "actor total vs target total — WINS/LOSES" readout so the feed
+    // shows both rolls at a glance.
+    if (campaignId) {
+      if (contested) {
+        logCombatEvent(
+          campaignId,
+          `${actor?.name || "Actor"} rolls ${skill}: ${total} vs ${contested.targetName}'s ${contested.targetSkill}: ${contested.targetTotal} — ${contested.winner === "actor" ? `${skill.toUpperCase()} SUCCEEDS` : `${contested.targetName} resists`}`,
+          {
+            event: "skill_check_contested",
+            category: "attack",
+            actor: actor?.name,
+            target: contested.targetName,
+            skill,
+            total,
+            contestedTotal: contested.targetTotal,
+            winner: contested.winner,
+          },
+        );
+      } else {
+        const sign = mod >= 0 ? "+" : "−";
+        logCombatEvent(
+          campaignId,
+          `${actor?.name || "Actor"} rolls ${skill} check: ${total} (${d20} ${sign} ${Math.abs(mod)})`,
+          {
+            event: "skill_check",
+            category: "attack",
+            actor: actor?.name,
+            skill,
+            total,
+            d20,
+            mod,
+          },
+        );
+      }
+    }
   };
 
   // === Saving Throw flow (target rolls) ===
@@ -955,6 +1118,21 @@ export default function CombatDiceWindow({
       setSavingThrowRoll(result);
       setPhase("save_result");
       onRoll && onRoll({ type: "save_result", roll: result });
+      if (campaignId) {
+        const prefix = spellName ? `${spellName} — ` : "";
+        logCombatEvent(
+          campaignId,
+          `${prefix}${target?.name || "Target"} auto-fails ${saveAbility.toUpperCase()} save (DC ${dc}).`,
+          {
+            event: "save_auto_fail",
+            category: "spell",
+            target: target?.name,
+            ability: saveAbility,
+            dc,
+            spell: spellName,
+          },
+        );
+      }
       // Still trigger the condition-apply hooks that live in the
       // shared save-result handler.
       if (target?.id && onRoll && spellEffect) {
@@ -1019,6 +1197,25 @@ export default function CombatDiceWindow({
     setIsRolling(false);
     setPhase("save_result");
     onRoll && onRoll({ type: "save_result", roll: result });
+
+    // Campaign log — save result line. If the spell that triggered
+    // the save is known, tag it as "[Spell] — ...".
+    if (campaignId) {
+      const prefix = spellName ? `${spellName} — ` : "";
+      logCombatEvent(
+        campaignId,
+        `${prefix}${target?.name || "Target"} makes a ${saveAbility.toUpperCase()} saving throw: ${total} vs DC ${dc} — ${success ? "SAVED" : "FAIL"}!`,
+        {
+          event: success ? "save_success" : "save_fail",
+          category: "spell",
+          target: target?.name,
+          ability: saveAbility,
+          total,
+          dc,
+          spell: spellName,
+        },
+      );
+    }
 
     // If the target failed a save against a condition / debuff spell,
     // broadcast the apply hook so the parent can tag them. Damage
