@@ -220,9 +220,9 @@ function CampaignPlayerPanelContent() {
     enabled: !!campaignId
   });
 
-  const { data: fullSpellsList } = useQuery({
-    queryKey: ['dnd5e-spells'],
-    queryFn: () => fetchAllSpells().then(data => data.spells),
+  const { data: fullSpellsList = [] } = useQuery({
+    queryKey: ['dnd5e-spells', campaignId || 'global'],
+    queryFn: () => fetchAllSpells(campaignId).then(data => data.spells || []),
     staleTime: 1000 * 60 * 60
   });
 
@@ -811,6 +811,7 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
 
             {/* Active Encounter Dice Window (Spectator or Actor) */}
             <CombatDiceWindow
+              spellDataList={fullSpellsList}
               // Open if local state is open OR if there is ANY active encounter (Global Spectator)
               isOpen={
                 combatState.isOpen || 

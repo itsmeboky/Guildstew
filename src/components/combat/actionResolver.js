@@ -209,7 +209,15 @@ export function getSpellDamageDice(spellName) {
  *   debuff      → debuff description text
  *   note        → GM-only narrative blurb for utility spells
  */
-export const SPELL_EFFECTS = {
+/**
+ * Hardcoded fallback effects for the most common combat spells. The
+ * live database (campaign `spells` + global `dnd5e_spells`) is the
+ * primary source — every spell row gets auto-classified from its
+ * description via `classifySpellEffect`. This fallback only fills in
+ * spells where the auto-classifier might get it wrong or the spell
+ * hasn't been seeded yet.
+ */
+export const SPELL_EFFECTS_FALLBACK = {
   // DAMAGE spells — roll damage dice, subtract from target HP
   "Fire Bolt":        { effect: "damage", dice: "1d10", type: "fire", scaling: "cantrip" },
   "Eldritch Blast":   { effect: "damage", dice: "1d10", type: "force", scaling: "cantrip" },
@@ -304,9 +312,116 @@ export const SPELL_EFFECTS = {
  * spell isn't in the map (callers should fall back to the default
  * attack → damage pipeline with a 1d10 stand-in).
  */
-export function getSpellEffect(spellName) {
+/**
+ * Look up a spell's post-roll effect. Preferred order:
+ *   1. Hardcoded SPELL_EFFECTS_FALLBACK (curated for accuracy)
+ *   2. Auto-classified from the provided spell row's description
+ *   3. null (caller falls back to the generic damage pipeline)
+ *
+ * `spellData` is the row from the `spells` / `dnd5e_spells` table —
+ * callers typically look it up in the cached `fullSpellsList` query
+ * and pass it through.
+ */
+export function getSpellEffect(spellName, spellData = null) {
   if (!spellName) return null;
-  return SPELL_EFFECTS[spellName] || null;
+  if (SPELL_EFFECTS_FALLBACK[spellName]) return SPELL_EFFECTS_FALLBACK[spellName];
+  if (spellData) return classifySpellEffect(spellData);
+  return null;
+}
+
+/**
+ * Derive an effect descriptor for a spell by parsing its description
+ * text. This is the "auto-classifier" that powers the database-driven
+ * spell effects system — any spell row with a description gets a
+ * best-effort effect type even if it isn't in the hardcoded fallback.
+ *
+ * Priority:
+ *   heal > damage_condition > condition > damage > utility
+ *
+ * Returns the same shape as SPELL_EFFECTS_FALLBACK entries:
+ *   { effect, dice?, condition?, type?, addMod?, note? }
+ */
+export function classifySpellEffect(spell) {
+  if (!spell || typeof spell !== "object") return { effect: "utility", note: "GM describes the effect" };
+
+  // Exact name match wins even when called directly on a row.
+  if (spell.name && SPELL_EFFECTS_FALLBACK[spell.name]) {
+    return SPELL_EFFECTS_FALLBACK[spell.name];
+  }
+
+  const desc = (spell.description || "").toLowerCase();
+  if (!desc) {
+    return { effect: "utility", note: spell.description || "GM describes the effect" };
+  }
+
+  const diceMatch = desc.match(/(\d+d\d+)/);
+  const firstDice = diceMatch ? diceMatch[1] : null;
+
+  // --- Healing ---
+  const mentionsHeal =
+    desc.includes("heal") ||
+    (desc.includes("regain") && desc.includes("hit point")) ||
+    desc.includes("restore") && desc.includes("hit point");
+  if (mentionsHeal && !desc.includes("damage")) {
+    return {
+      effect: "heal",
+      dice: firstDice || "1d8",
+      addMod: desc.includes("spellcasting ability modifier"),
+    };
+  }
+
+  // --- Conditions ---
+  const CONDITION_KEYWORDS = {
+    paralyzed: "Paralyzed",
+    charmed: "Charmed",
+    frightened: "Frightened",
+    restrained: "Restrained",
+    blinded: "Blinded",
+    stunned: "Stunned",
+    poisoned: "Poisoned",
+    incapacitated: "Incapacitated",
+    prone: "Prone",
+    invisible: "Invisible",
+    petrified: "Petrified",
+    deafened: "Deafened",
+    grappled: "Grappled",
+  };
+  for (const [keyword, label] of Object.entries(CONDITION_KEYWORDS)) {
+    if (desc.includes(keyword)) {
+      // Damage + condition hybrid (Ray of Sickness, Contagion, etc.)
+      if (firstDice && (desc.includes("damage") || desc.includes("hit point"))) {
+        return { effect: "damage_condition", dice: firstDice, condition: label };
+      }
+      return { effect: "condition", condition: label };
+    }
+  }
+
+  // --- Damage ---
+  if (firstDice && desc.includes("damage")) {
+    const DAMAGE_TYPES = [
+      "fire",
+      "cold",
+      "lightning",
+      "thunder",
+      "acid",
+      "poison",
+      "necrotic",
+      "radiant",
+      "force",
+      "psychic",
+      "bludgeoning",
+      "piercing",
+      "slashing",
+    ];
+    const damageType = DAMAGE_TYPES.find((t) => desc.includes(t)) || "magical";
+    return { effect: "damage", dice: firstDice, type: damageType };
+  }
+
+  // --- Default: utility ---
+  return {
+    effect: "utility",
+    note: (spell.description || "").slice(0, 140) || "GM describes the effect",
+  };
 }
 
 /**

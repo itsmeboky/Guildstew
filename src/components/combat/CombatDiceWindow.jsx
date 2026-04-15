@@ -49,6 +49,7 @@ export default function CombatDiceWindow({
   spectatorData = null,
   sneakActive = false,
   onViewTurnOrder,
+  spellDataList = [],
 }) {
   const [selectedAction, setSelectedAction] = useState(initialAction);
   const [attackRoll, setAttackRoll] = useState(null);
@@ -81,7 +82,20 @@ export default function CombatDiceWindow({
         selectedAction?.spell?.name ||
         selectedAction?.weapon?.name
       : null;
-  const spellEffect = getSpellEffect(spellName);
+  // Look the spell row up in the cached list from the parent so the
+  // classifier can inspect the description. Fallback map still wins
+  // via getSpellEffect's internal precedence.
+  const spellData = React.useMemo(() => {
+    if (!spellName || !Array.isArray(spellDataList) || spellDataList.length === 0) {
+      return null;
+    }
+    return (
+      spellDataList.find(
+        (s) => s?.name && s.name.toLowerCase() === spellName.toLowerCase(),
+      ) || null
+    );
+  }, [spellName, spellDataList]);
+  const spellEffect = getSpellEffect(spellName, spellData);
   const casterLevel = actor?.level || actor?.stats?.level || 1;
 
   // Some spell effects override the resolver's rollType. Heal, buff

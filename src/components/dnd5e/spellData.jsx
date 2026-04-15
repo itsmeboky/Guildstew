@@ -338,11 +338,30 @@ export const spellIcons = {
   "Wall of Thorns": "https://base44.app/api/apps/6917dd35b600199681c5b960/files/public/6917dd35b600199681c5b960/e5bce076d_WallofThorns.png"
 };
 
-// Function to fetch all spells from API
-export async function fetchAllSpells() {
-  const { base44 } = await import('@/api/base44Client');
-  const response = await base44.functions.invoke('fetchDnd5eSpells');
-  return response.data;
+// Fetch all spell rows for autocomplete / tooltips / effect
+// classification. The old `fetchDnd5eSpells` Edge Function never
+// shipped, so invoking it threw CORS errors on every page that loaded
+// this query. The spells DO live in Supabase — the per-campaign
+// `spells` table is the live editable copy, and the global reference
+// `dnd5e_spells` table is the read-only catalog.
+export async function fetchAllSpells(campaignId) {
+  try {
+    if (campaignId) {
+      const { base44 } = await import('@/api/base44Client');
+      const spells = await base44.entities.Spell.filter({ campaign_id: campaignId });
+      return { spells: Array.isArray(spells) ? spells : [] };
+    }
+    const { supabase } = await import('@/api/supabaseClient');
+    const { data, error } = await supabase.from('dnd5e_spells').select('*');
+    if (error) {
+      console.error('fetchAllSpells: dnd5e_spells query failed', error);
+      return { spells: [] };
+    }
+    return { spells: data || [] };
+  } catch (err) {
+    console.error('fetchAllSpells failed', err);
+    return { spells: [] };
+  }
 }
 
 export const spellsByClass = {
