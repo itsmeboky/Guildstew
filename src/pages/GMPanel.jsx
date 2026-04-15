@@ -40,7 +40,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
-import { resolveAction, consumeActionCost } from "@/components/combat/actionResolver";
+import ConditionRing from "@/components/combat/ConditionRing";
+import {
+  CONDITIONS as DND_CONDITIONS,
+  CONDITION_COLORS,
+  isIncapacitated,
+  getNoActionConditionName,
+} from "@/components/combat/conditions";
+import { resolveAction, consumeActionCost, getSpellEffect } from "@/components/combat/actionResolver";
 import { hpBarColor, clampHp, normalizeHp } from "@/components/combat/hpColor";
 import { toast } from "sonner";
 import { useTurnContext } from "@/components/combat/useTurnContext";
@@ -137,6 +144,105 @@ export default function GMPanel() {
     queryFn: () => base44.auth.me()
   });
 
+  // === Campaign entity queries ======================================
+  // These used to live way further down the component (around line
+  // 1256). Moving them up here keeps every variable they declare
+  // available to every hook / callback defined below, so we don't
+  // keep tripping the "Cannot access X before initialization" TDZ
+  // trap when a useCallback deps array references them. Anything that
+  // needs this data MUST be declared below this block.
+  const { data: monsters = [] } = useQuery({
+    queryKey: ['campaignMonsters', campaignId],
+    queryFn: () => base44.entities.Monster.filter({ campaign_id: campaignId }),
+    enabled: !!campaignId
+  });
+
+  const { data: npcs = [] } = useQuery({
+    queryKey: ['campaignNPCs', campaignId],
+    queryFn: () => base44.entities.CampaignNPC.filter({ campaign_id: campaignId }),
+    enabled: !!campaignId
+  });
+
+  const { data: characters = [] } = useQuery({
+    queryKey: ['campaignCharacters', campaignId],
+    queryFn: async () => {
+      const chars = await base44.entities.Character.filter({ campaign_id: campaignId });
+      // Ensure full HP on load if not set
+      chars.forEach(c => {
+        if (c.hit_points && (c.hit_points.current === undefined || c.hit_points.current === null)) {
+           base44.entities.Character.update(c.id, {
+             hit_points: { ...c.hit_points, current: c.hit_points.max || 10 }
+           });
+        }
+      });
+      return chars;
+    },
+    enabled: !!campaignId
+  });
+
+  const { data: allUserProfiles = [] } = useQuery({
+    queryKey: ['allUserProfiles'],
+    queryFn: () => base44.entities.UserProfile.list(),
+    staleTime: 60000
+  });
+
+  // Fetch all spells for accurate tooltips + effect classification.
+  // Prefer the per-campaign `spells` table (the 89 with full details)
+  // when a campaign is loaded; fall back to the global `dnd5e_spells`
+  // catalog otherwise. fetchAllSpells() handles both paths — it used
+  // to invoke a dead Edge Function, see spellData.jsx.
+  const { data: fullSpellsList = [] } = useQuery({
+    queryKey: ['dnd5e-spells', campaignId || 'global'],
+    queryFn: () => fetchAllSpells(campaignId).then(data => data.spells || []),
+    staleTime: 1000 * 60 * 60, // 1 hour
+  });
+
+  const currentUserProfile = React.useMemo(() => {
+    return allUserProfiles.find(p => p.user_id === currentUser?.id);
+  }, [allUserProfiles, currentUser?.id]);
+
+  const players = React.useMemo(() => {
+    const playerMap = new Map();
+    const claimedCharacterIds = new Set();
+
+    // 1. Real players: those in campaign.player_ids with a matching profile.
+    if (campaign?.player_ids) {
+      const uniquePlayerIds = [...new Set(campaign.player_ids)];
+      uniquePlayerIds.forEach(playerId => {
+        const profile = allUserProfiles.find(u => u.user_id === playerId);
+        if (profile && !playerMap.has(playerId)) {
+          const character = characters.find(c => c.created_by === profile.email && c.campaign_id === campaignId);
+          if (character) claimedCharacterIds.add(character.id);
+          playerMap.set(playerId, { ...profile, character });
+        }
+      });
+    }
+
+    // 2. Orphan characters: any character in this campaign not already linked
+    // to a profile-based player. This covers test/seeded data, characters
+    // whose owners left the campaign, and GM-controlled NPCs. Each becomes
+    // a synthetic "ghost" player entry so the GM can see and control them
+    // through the same UI flows.
+    characters.forEach(char => {
+      if (char.campaign_id !== campaignId) return;
+      if (claimedCharacterIds.has(char.id)) return;
+      const ghostKey = `ghost-${char.id}`;
+      playerMap.set(ghostKey, {
+        user_id: ghostKey,
+        email: char.created_by || 'ghost@local',
+        username: char.name || 'Unclaimed',
+        avatar_url: char.profile_avatar_url,
+        profile_color_1: '#FF5722',
+        profile_color_2: '#37F2D1',
+        character: char,
+        isGhost: true,
+      });
+    });
+
+    return Array.from(playerMap.values());
+  }, [campaign?.player_ids, allUserProfiles, characters, campaignId]);
+  // =================================================================
+
   // The GM can always act, regardless of whose turn it is in the combat
   // tracker — they might be running a monster, possessing a player, or
   // just fixing something mid-session.
@@ -163,6 +269,32 @@ export default function GMPanel() {
   // on the inline DeathSavePanel; that records the monster's key here
   // so the overlay takes over the screen until the roll resolves.
   const [dramaticDeathSaveKey, setDramaticDeathSaveKey] = useState(null);
+
+  // Leveled spells pass through a level picker before they reach the
+  // dice window. `pendingSpellCast` holds the raw action; when the
+  // user picks a level we call `runActionRef.current(actionWithCastLevel)`
+  // which re-enters the action bar's inline onActionClick handler.
+  // Cantrips (level 0 / undefined) bypass this entirely — they never
+  // show the picker and never spend slots.
+  const [pendingSpellCast, setPendingSpellCast] = useState(null);
+  const runActionRef = React.useRef(null);
+
+  // Concentration tracking. Keyed by casterId →
+  //   { spell, spellLevel, targetIds[], casterName }
+  // A caster can only concentrate on one spell at a time — a new
+  // concentration drops the old one (targets lose the effect label).
+  // Damage triggers a CON save (DC = max(10, floor(damage/2))); on
+  // failure the concentration breaks.
+  const [concentrationByCharacter, setConcentrationByCharacter] = useState({});
+
+  // Ref that always points at the latest fullSpellsList query result.
+  // startConcentration (declared below) needs to look up a spell row
+  // but runs during render — and the query is declared ~700 lines
+  // later. Reading the ref avoids the TDZ trap that bit us when we
+  // referenced fullSpellsList directly in a deps array. The ref is
+  // updated right after the query declares at the bottom of this
+  // component (same pattern we use for charactersRef / playersRef).
+  const fullSpellsListRef = React.useRef([]);
 
   // Spell slots spent per character. Keyed by characterKey
   // (uniqueId / id), value is { 1: <spent>, 2: <spent>, ... }. Slots
@@ -439,6 +571,7 @@ export default function GMPanel() {
     setActiveConditions({});
     setHiddenCharacters(new Set());
     setSneakActive(false);
+    setConcentrationByCharacter({});
     hidThisTurnRef.current = false;
     prevActiveKeyRef.current = null;
     setShowEndCombatAlert(false);
@@ -521,6 +654,92 @@ export default function GMPanel() {
   const handleChooseRest = (restType) => {
     endCombatMutation.mutate(restType);
   };
+
+  // --- Concentration helpers ---------------------------------------
+  //
+  // Concentration is per-caster: a character can only hold one
+  // Concentration spell at a time. Starting a new one drops the old
+  // one (and removes the applied condition from every target that was
+  // affected). Dropping is also triggered by:
+  //   - the caster failing a CON save after taking damage
+  //   - the caster becoming incapacitated
+  //   - combat ending
+  //
+  // We deliberately keep the tracker local — no combat_data writeback
+  // in this pass — because conditions themselves are still local.
+  const breakConcentration = React.useCallback(
+    (casterId, reason) => {
+      setConcentrationByCharacter((prev) => {
+        const existing = prev[casterId];
+        if (!existing) return prev;
+        const next = { ...prev };
+        delete next[casterId];
+
+        // Clean up the spell's applied conditions on each target so
+        // the badge ring / toast goes away with the concentration.
+        if (existing.appliedCondition && existing.targetIds?.length) {
+          setActiveConditions((cur) => {
+            const updated = { ...cur };
+            for (const tid of existing.targetIds) {
+              const list = updated[tid] || [];
+              const pruned = list.filter((c) => c !== existing.appliedCondition);
+              if (pruned.length !== list.length) updated[tid] = pruned;
+            }
+            return updated;
+          });
+        }
+
+        const reasonLabel = reason === "new"
+          ? "dropped"
+          : reason === "damage"
+          ? "lost"
+          : reason === "incapacitated"
+          ? "lost (incapacitated)"
+          : "ended";
+        toast.error(`${existing.casterName || 'Caster'} ${reasonLabel} Concentration on ${existing.spell}.`);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const startConcentration = React.useCallback(
+    (payload) => {
+      if (!payload?.casterId || !payload.spell) return;
+      setConcentrationByCharacter((prev) => {
+        // If this caster already has a different concentration spell
+        // up, drop it first — same visual / toast flow.
+        const existing = prev[payload.casterId];
+        if (existing && existing.spell !== payload.spell) {
+          // Fire the cleanup side-effect asynchronously so we don't
+          // nest state updates inside the setter.
+          Promise.resolve().then(() => breakConcentration(payload.casterId, "new"));
+        }
+        // Snapshot which condition (if any) this spell applies so we
+        // can strip it from targets when the concentration drops.
+        // Reads from fullSpellsListRef (updated post-query) to avoid
+        // the TDZ — see the ref comment above.
+        const list = fullSpellsListRef.current || [];
+        const spellRow = list.find?.(
+          (s) => s?.name && s.name.toLowerCase() === payload.spell.toLowerCase(),
+        );
+        const effect = getSpellEffect(payload.spell, spellRow || null);
+        const appliedCondition = effect?.condition || null;
+        return {
+          ...prev,
+          [payload.casterId]: {
+            spell: payload.spell,
+            spellLevel: payload.spellLevel || 0,
+            targetIds: payload.targetIds || [],
+            casterName: payload.casterName || 'Caster',
+            appliedCondition,
+          },
+        };
+      });
+      toast(`${payload.casterName || 'Caster'} is concentrating on ${payload.spell}.`);
+    },
+    [breakConcentration],
+  );
 
   // Patch a combatant's faction / charm fields in both the live
   // combat_data.order (so the turn tracker UI + clients update
@@ -996,11 +1215,31 @@ export default function GMPanel() {
     const activeCombatant = campaign?.combat_data?.order?.[0];
     const activeKey = activeCombatant?.uniqueId || activeCombatant?.id;
 
+    // Auto-expire conditions at the start of the active combatant's
+    // turn. Currently this only catches Dodging (autoExpire:
+    // "start_of_next_turn") but any future condition with the same
+    // flag will expire through here too.
     if (activeKey) {
       setActiveConditions(prev => {
         const current = prev[activeKey] || [];
-        if (!current.includes('Dodging')) return prev;
-        return { ...prev, [activeKey]: current.filter(c => c !== 'Dodging') };
+        if (current.length === 0) return prev;
+        const expired = [];
+        const remaining = current.filter((name) => {
+          const cond = DND_CONDITIONS[name];
+          if (cond?.autoExpire === 'start_of_next_turn') {
+            expired.push(name);
+            return false;
+          }
+          return true;
+        });
+        if (expired.length === 0) return prev;
+        // Toast each expired condition so the GM / players notice.
+        const displayName =
+          campaign?.combat_data?.order?.find(
+            (c) => (c.uniqueId || c.id) === activeKey,
+          )?.name || 'Combatant';
+        expired.forEach((name) => toast(`${displayName} is no longer ${name}.`));
+        return { ...prev, [activeKey]: remaining };
       });
     }
 
@@ -1042,6 +1281,48 @@ export default function GMPanel() {
     prevActiveKeyRef.current = activeKey;
   }, [campaign?.combat_data?.currentTurnIndex, campaign?.combat_data?.round, campaign?.combat_data?.order?.[0]?.id]);
 
+  // Auto-advance when the active combatant is incapacitated (Paralyzed
+  // / Stunned / Petrified / Unconscious without a death save / plain
+  // Incapacitated). Waits 2s so the GM / players see the "can't act"
+  // card before the turn rotates. A downed PC still drops into the
+  // dramatic death save window via a different branch, so the
+  // incapacitated path here only fires when the combatant is alive
+  // but unable to act.
+  React.useEffect(() => {
+    if (campaign?.combat_data?.stage !== 'combat') return undefined;
+    const active = campaign?.combat_data?.order?.[0];
+    if (!active) return undefined;
+    const activeKey = active.uniqueId || active.id;
+    if (active.downed) return undefined; // death save flow handles this
+    const conditions = activeConditions[activeKey] || [];
+    if (!isIncapacitated(conditions)) return undefined;
+
+    // Incapacitated → drop any Concentration the combatant was
+    // holding. The break helper is a no-op when there's nothing.
+    if (concentrationByCharacter[activeKey]) {
+      breakConcentration(activeKey, 'incapacitated');
+    }
+
+    const timer = setTimeout(() => {
+      // Re-check state before advancing — the GM may have removed the
+      // condition during the delay.
+      const stillActive = campaign?.combat_data?.order?.[0];
+      if (!stillActive) return;
+      const stillKey = stillActive.uniqueId || stillActive.id;
+      if (stillKey !== activeKey) return;
+      const stillConditions = activeConditions[stillKey] || [];
+      if (!isIncapacitated(stillConditions)) return;
+      advanceTurn();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [
+    campaign?.combat_data?.stage,
+    campaign?.combat_data?.order?.[0]?.id,
+    campaign?.combat_data?.order?.[0]?.uniqueId,
+    activeConditions,
+    advanceTurn,
+  ]);
+
   // Sync equippedItems + monsterInventory whenever a different character is
   // selected/possessed. This is the single source of truth for both players
   // and monsters, so no matter which selection path fires (Possess dialog,
@@ -1071,99 +1352,16 @@ export default function GMPanel() {
     setMonsterInventory(Array.isArray(selectedCharacter.inventory) ? selectedCharacter.inventory : []);
   }, [selectedCharacter?.id, selectedCharacter?.uniqueId]);
 
-  const { data: monsters = [] } = useQuery({
-    queryKey: ['campaignMonsters', campaignId],
-    queryFn: () => base44.entities.Monster.filter({ campaign_id: campaignId }),
-    enabled: !!campaignId
-  });
-
-  const { data: npcs = [] } = useQuery({
-    queryKey: ['campaignNPCs', campaignId],
-    queryFn: () => base44.entities.CampaignNPC.filter({ campaign_id: campaignId }),
-    enabled: !!campaignId
-  });
-
-  const { data: characters = [] } = useQuery({
-    queryKey: ['campaignCharacters', campaignId],
-    queryFn: async () => {
-      const chars = await base44.entities.Character.filter({ campaign_id: campaignId });
-      // Ensure full HP on load if not set
-      chars.forEach(c => {
-        if (c.hit_points && (c.hit_points.current === undefined || c.hit_points.current === null)) {
-           base44.entities.Character.update(c.id, { 
-             hit_points: { ...c.hit_points, current: c.hit_points.max || 10 } 
-           });
-        }
-      });
-      return chars;
-    },
-    enabled: !!campaignId
-  });
-
-  const { data: allUserProfiles = [] } = useQuery({
-    queryKey: ['allUserProfiles'],
-    queryFn: () => base44.entities.UserProfile.list(),
-    staleTime: 60000
-  });
-
-  // Fetch all spells for accurate tooltips
-  const { data: fullSpellsList } = useQuery({
-    queryKey: ['dnd5e-spells'],
-    queryFn: () => fetchAllSpells().then(data => data.spells),
-    staleTime: 1000 * 60 * 60, // 1 hour
-  });
-
-  const currentUserProfile = React.useMemo(() => {
-    return allUserProfiles.find(p => p.user_id === currentUser?.id);
-  }, [allUserProfiles, currentUser?.id]);
-
-  const players = React.useMemo(() => {
-    const playerMap = new Map();
-    const claimedCharacterIds = new Set();
-
-    // 1. Real players: those in campaign.player_ids with a matching profile.
-    if (campaign?.player_ids) {
-      const uniquePlayerIds = [...new Set(campaign.player_ids)];
-      uniquePlayerIds.forEach(playerId => {
-        const profile = allUserProfiles.find(u => u.user_id === playerId);
-        if (profile && !playerMap.has(playerId)) {
-          const character = characters.find(c => c.created_by === profile.email && c.campaign_id === campaignId);
-          if (character) claimedCharacterIds.add(character.id);
-          playerMap.set(playerId, { ...profile, character });
-        }
-      });
-    }
-
-    // 2. Orphan characters: any character in this campaign not already linked
-    // to a profile-based player. This covers test/seeded data, characters
-    // whose owners left the campaign, and GM-controlled NPCs. Each becomes
-    // a synthetic "ghost" player entry so the GM can see and control them
-    // through the same UI flows.
-    characters.forEach(char => {
-      if (char.campaign_id !== campaignId) return;
-      if (claimedCharacterIds.has(char.id)) return;
-      const ghostKey = `ghost-${char.id}`;
-      playerMap.set(ghostKey, {
-        user_id: ghostKey,
-        email: char.created_by || 'ghost@local',
-        username: char.name || 'Unclaimed',
-        avatar_url: char.profile_avatar_url,
-        profile_color_1: '#FF5722',
-        profile_color_2: '#37F2D1',
-        character: char,
-        isGhost: true,
-      });
-    });
-
-    return Array.from(playerMap.values());
-  }, [campaign?.player_ids, allUserProfiles, characters, campaignId]);
-
-  // Keep the refs the death-save / heal helpers above read from in sync
-  // with the latest characters + players. Updating during render is fine
-  // — the helpers are only invoked from event handlers, by which time
-  // render has already committed and the refs hold current values.
+  // Keep the refs the death-save / heal / concentration helpers above
+  // read from in sync with the latest query results. The queries
+  // themselves are declared at the top of this component now — these
+  // refs used to be the only way to safely read them from callbacks
+  // defined above the queries. We keep the refs in place because the
+  // helpers that consume them (applyHpToEntity, startConcentration,
+  // etc.) still read via ref to stay insulated from re-render timing.
   charactersRef.current = characters;
   playersRef.current = players;
+  fullSpellsListRef.current = fullSpellsList;
 
   if (!campaign) {
     return <div className="min-h-screen flex items-center justify-center"><p className="text-gray-400">Loading...</p></div>;
@@ -1266,6 +1464,7 @@ export default function GMPanel() {
             )}
 
             <CombatDiceWindow
+              spellDataList={fullSpellsList}
               isOpen={
                 combatState.isOpen ||
                 (campaign?.combat_data?.stage === 'initiative') ||
@@ -1277,21 +1476,36 @@ export default function GMPanel() {
               }}
               actor={
                 (!combatState.isOpen && campaign?.combat_data?.active_encounter)
-                  ? { 
-                      name: campaign.combat_data.active_encounter.attackerName, 
+                  ? {
+                      name: campaign.combat_data.active_encounter.attackerName,
                       id: campaign.combat_data.active_encounter.attackerId,
-                      avatar_url: campaign.combat_data.active_encounter.attackerAvatar
+                      avatar_url: campaign.combat_data.active_encounter.attackerAvatar,
+                      conditions: activeConditions[campaign.combat_data.active_encounter.attackerId] || [],
                     }
                   : selectedCharacter
+                    ? {
+                        ...selectedCharacter,
+                        conditions: activeConditions[getCharacterKey(selectedCharacter)] || [],
+                      }
+                    : null
               }
               target={
                 (!combatState.isOpen && campaign?.combat_data?.active_encounter)
                   ? {
                       name: campaign.combat_data.active_encounter.targetName,
                       id: campaign.combat_data.active_encounter.targetId,
-                      avatar_url: campaign.combat_data.active_encounter.targetAvatar
+                      avatar_url: campaign.combat_data.active_encounter.targetAvatar,
+                      conditions: activeConditions[campaign.combat_data.active_encounter.targetId] || [],
                     }
                   : combatState.target
+                    ? {
+                        ...combatState.target,
+                        conditions:
+                          activeConditions[combatState.target?.id] ||
+                          activeConditions[combatState.target?.uniqueId] ||
+                          [],
+                      }
+                    : null
               }
               initialAction={
                 (!combatState.isOpen && campaign?.combat_data?.active_encounter)
@@ -1372,11 +1586,92 @@ export default function GMPanel() {
                   }
                 }
 
+                // Healing: rewrite the event into a damage event with a
+                // negative delta. clampHp handles the sign, so the HP
+                // write-through below handles both paths uniformly.
+                if (data.type === 'heal') {
+                  data = {
+                    ...data,
+                    type: 'damage',
+                    value: -Math.abs(data.value || 0),
+                  };
+                }
+
+                // Condition / debuff / buff hooks. Conditions now get
+                // auto-written to activeConditions so the portrait
+                // ring updates immediately. The GM can still manually
+                // untoggle via the CONDITIONS dialog.
+                if (data.type === 'condition_applied' && data.condition && data.targetId) {
+                  setActiveConditions((prev) => {
+                    const current = prev[data.targetId] || [];
+                    if (current.includes(data.condition)) return prev;
+                    return { ...prev, [data.targetId]: [...current, data.condition] };
+                  });
+                  toast(`Condition applied: ${data.condition}`);
+                } else if (data.type === 'debuff_applied' && data.debuff) {
+                  toast(`Debuff applied: ${data.debuff}`);
+                } else if (data.type === 'buff_applied' && data.buff) {
+                  toast.success(`Buff applied: ${data.buff}`);
+                } else if (data.type === 'utility_applied' && data.note) {
+                  toast(`Spell effect: ${data.note}`);
+                }
+
+                // Concentration start event fires from the dice window
+                // whenever a spell with a "Concentration, up to X"
+                // duration successfully takes effect. Route it into
+                // our tracker.
+                if (data.type === 'concentration_start' && data.casterId) {
+                  startConcentration({
+                    casterId: data.casterId,
+                    casterName: data.casterName,
+                    spell: data.spell,
+                    spellLevel: data.spellLevel,
+                    targetIds: data.targetIds,
+                  });
+                }
+
                 if (data.type === 'damage') {
                   // `delta` is positive for damage, negative for healing.
                   // clampHp in hpColor.js does current - delta bounded to [0, max].
                   const targetId = data.targetId;
                   const delta = data.value;
+
+                  // Concentration check: if the damage target is
+                  // concentrating on a spell, roll a silent CON save
+                  // (DC = max(10, floor(damage/2))). On failure the
+                  // concentration breaks and its applied condition is
+                  // removed from every target that was under it.
+                  if (targetId && delta > 0 && concentrationByCharacter[targetId]) {
+                    const dc = Math.max(10, Math.floor(delta / 2));
+                    // Try to find a CON save modifier on the entity.
+                    // Players / monsters both expose attributes.con or
+                    // stats.constitution; proficiency_bonus + con_save
+                    // proficient flags live on character objects.
+                    const order = campaign?.combat_data?.order || [];
+                    const entity = order.find((c) => (c.uniqueId || c.id) === targetId);
+                    const con =
+                      entity?.attributes?.con ||
+                      entity?.stats?.constitution ||
+                      10;
+                    const conMod = Math.floor((con - 10) / 2);
+                    const profBonus = entity?.proficiency_bonus || 2;
+                    const isProf = entity?.saves?.con || entity?.saving_throws?.con || false;
+                    const bonus = conMod + (isProf ? profBonus : 0);
+                    const d20 = Math.floor(Math.random() * 20) + 1;
+                    const total = d20 + bonus;
+                    const casterName = concentrationByCharacter[targetId].casterName || entity?.name || 'Caster';
+                    const spell = concentrationByCharacter[targetId].spell;
+                    if (total < dc) {
+                      toast.error(
+                        `${casterName} failed CON save (${total} vs DC ${dc}) — Concentration on ${spell} broken!`,
+                      );
+                      breakConcentration(targetId, 'damage');
+                    } else {
+                      toast(
+                        `${casterName} maintained Concentration on ${spell} (${total} vs DC ${dc}).`,
+                      );
+                    }
+                  }
 
                   // Taking damage reveals a hidden character.
                   if (targetId && delta > 0) {
@@ -1614,10 +1909,11 @@ export default function GMPanel() {
 
             <div className="flex justify-between items-end relative">
               {combatActive && (
-                <TurnOrderBar 
-                  order={initiativeOrder} 
-                  setOrder={setInitiativeOrder} 
-                  activeConditions={activeConditions} 
+                <TurnOrderBar
+                  order={initiativeOrder}
+                  setOrder={setInitiativeOrder}
+                  activeConditions={activeConditions}
+                  concentrationByCharacter={concentrationByCharacter}
                   onSelectTarget={(target) => {
                     if (combatState.step !== 'selecting_target') return;
                     // Faction-aware targeting: non-GMs get a confirmation
@@ -1744,6 +2040,30 @@ export default function GMPanel() {
                 onKill={() => applyDeathSaveChange(selectedCharacterKey, { failures: 3, dead: true })}
                 onShowDramatic={() => setDramaticDeathSaveKey(selectedCharacterKey)}
               />
+            ) : isIncapacitated(activeConditions[selectedCharacterKey] || []) ? (
+              // Incapacitated / Paralyzed / Stunned / Petrified /
+              // Unconscious — the character can't take actions. Show
+              // a status card instead of the action bar. The turn
+              // auto-advances after a short delay so the GM doesn't
+              // have to click END TURN.
+              <div className="relative z-20 rounded-[32px] bg-[#050816]/95 px-6 py-6 shadow-[0_20px_60px_rgba(0,0,0,0.75)] text-center">
+                <p className="text-[10px] uppercase tracking-[0.32em] text-red-400/90 font-bold mb-1">
+                  Can't Act
+                </p>
+                <p className="text-white text-lg font-black">
+                  {selectedCharacter?.name || 'This combatant'}
+                </p>
+                <p className="text-slate-400 text-sm mt-1">
+                  is{' '}
+                  <span className="text-red-300 font-bold">
+                    {getNoActionConditionName(activeConditions[selectedCharacterKey] || []) || 'Incapacitated'}
+                  </span>{' '}
+                  and cannot take actions or reactions.
+                </p>
+                <p className="text-slate-600 text-[10px] mt-2 italic">
+                  Turn will auto-advance in a moment.
+                </p>
+              </div>
             ) : (
             <CombatActionBar
               character={selectedCharacter ? { ...selectedCharacter, equipment: equippedItems } : null}
@@ -1759,9 +2079,29 @@ export default function GMPanel() {
               maxSpellSlots={maxSpellSlots}
               spentSpellSlots={currentSpentSlots}
               onToggleSlot={handleToggleSlot}
-              onActionClick={(action) => {
+              onActionClick={((runAction) => {
+                // Always repoint the ref at the freshest closure so
+                // the level picker can re-enter this exact handler
+                // with a castLevel attached.
+                runActionRef.current = runAction;
+                return runAction;
+              })((action) => {
                 // Clicking any other action cancels attack-mode targeting.
                 if (attackMode !== null) setAttackMode(null);
+
+                // Level picker interception. Leveled spells (>=1st)
+                // without an explicit castLevel get held here so the
+                // player can choose a slot level first. Cantrips skip
+                // this because action.level is 0 or undefined.
+                if (
+                  action.type === 'spell' &&
+                  typeof action.level === 'number' &&
+                  action.level > 0 &&
+                  typeof action.castLevel !== 'number'
+                ) {
+                  setPendingSpellCast({ action });
+                  return;
+                }
 
                 // Resolve first so we know the cost — that determines
                 // whether the turn-order check even applies. Reactions
@@ -1798,12 +2138,15 @@ export default function GMPanel() {
 
                 // Spell slot gate — leveled spells (level > 0) require an
                 // available slot. Cantrips (level 0 / undefined) are free.
+                // We commit at castLevel (chosen in the picker), not the
+                // spell's base level, so upcasting spends the higher slot.
                 if (action.type === 'spell' && typeof action.level === 'number' && action.level > 0) {
                   const key = selectedCharacterKey;
-                  const max = maxSpellSlots[action.level] || 0;
-                  const already = (spentSlotsByCharacter[key] || {})[action.level] || 0;
+                  const slotLevel = typeof action.castLevel === 'number' ? action.castLevel : action.level;
+                  const max = maxSpellSlots[slotLevel] || 0;
+                  const already = (spentSlotsByCharacter[key] || {})[slotLevel] || 0;
                   if (max === 0 || already >= max) {
-                    toast.error(`No level ${action.level} spell slots remaining!`);
+                    toast.error(`No level ${slotLevel} spell slots remaining!`);
                     return;
                   }
                   // Commit the slot up-front. If the spell ultimately gets
@@ -1815,7 +2158,7 @@ export default function GMPanel() {
                         ...prev,
                         [key]: {
                           ...charSpent,
-                          [action.level]: (charSpent[action.level] || 0) + 1,
+                          [slotLevel]: (charSpent[slotLevel] || 0) + 1,
                         },
                       };
                     });
@@ -1861,7 +2204,7 @@ export default function GMPanel() {
                   // Skill checks without a target (like Hide) open the dice window directly.
                   setCombatState({ isOpen: true, step: 'rolling', action: enrichedAction, target: null });
                 }
-              }}
+              })}
             />
             )}
 
@@ -2345,6 +2688,90 @@ export default function GMPanel() {
               Continue (No Rest)
             </button>
           </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Leveled-spell cast level picker. Shows slot buttons from the
+          spell's base level up to the character's highest available
+          slot, greying out levels where every slot is spent. */}
+      <AlertDialog
+        open={!!pendingSpellCast}
+        onOpenChange={(open) => {
+          if (!open) setPendingSpellCast(null);
+        }}
+      >
+        <AlertDialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-sm">
+          {pendingSpellCast && (() => {
+            const pending = pendingSpellCast.action;
+            const baseLevel = pending.level;
+            const ordinal = (n) => {
+              const suffixes = ['th', 'st', 'nd', 'rd'];
+              const v = n % 100;
+              return `${n}${suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0]}`;
+            };
+            const charSpent = spentSlotsByCharacter[selectedCharacterKey] || {};
+            const levels = [];
+            for (let lvl = baseLevel; lvl <= 9; lvl++) {
+              const max = maxSpellSlots[lvl] || 0;
+              if (max === 0) continue;
+              const spent = charSpent[lvl] || 0;
+              levels.push({ lvl, max, spent, available: spent < max });
+            }
+            return (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-baseline gap-2">
+                    <span>{pending.name}</span>
+                    <span className="text-xs uppercase tracking-widest text-slate-400">
+                      {ordinal(baseLevel)}-level
+                    </span>
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="text-gray-400">
+                    Choose a spell slot to cast at. Casting above base level upcasts the spell.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  {levels.length === 0 ? (
+                    <p className="col-span-3 text-center text-sm text-red-400 py-4">
+                      No available slots for this spell.
+                    </p>
+                  ) : (
+                    levels.map(({ lvl, max, spent, available }) => (
+                      <button
+                        key={lvl}
+                        type="button"
+                        disabled={!available}
+                        onClick={() => {
+                          const action = { ...pending, castLevel: lvl };
+                          setPendingSpellCast(null);
+                          if (runActionRef.current) {
+                            runActionRef.current(action);
+                          }
+                        }}
+                        className={`flex flex-col items-center justify-center py-3 rounded-xl border transition-colors ${
+                          available
+                            ? 'bg-[#8B5CF6]/20 hover:bg-[#8B5CF6]/35 border-[#8B5CF6]/60 text-white'
+                            : 'bg-[#0b1220] border-slate-800 text-slate-600 cursor-not-allowed'
+                        }`}
+                      >
+                        <span className="text-sm font-black uppercase tracking-wide">
+                          {ordinal(lvl)}
+                        </span>
+                        <span className="text-[10px] opacity-80 mt-0.5">
+                          {max - spent}/{max} left
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+                <AlertDialogFooter className="mt-3">
+                  <AlertDialogCancel className="bg-transparent border-gray-600 text-white hover:bg-gray-800 hover:text-white">
+                    Cancel
+                  </AlertDialogCancel>
+                </AlertDialogFooter>
+              </>
+            );
+          })()}
         </AlertDialogContent>
       </AlertDialog>
     </div>
@@ -4105,7 +4532,7 @@ function LogEntry({ name, time, text, highlight }) {
   );
 }
 
-function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selectionMode, isTurnOrderAccepted, getHp, isGM, onChangeFaction }) {
+function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharacter = {}, onSelectTarget, selectionMode, isTurnOrderAccepted, getHp, isGM, onChangeFaction }) {
   const hasPlayedRef = React.useRef(false);
   // Right-click context menu state. Stores the combatant whose portrait
   // was right-clicked plus screen coords so the menu floats there.
@@ -4254,9 +4681,9 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                               borderColor: computedBorderColor,
                             }}
                           >
-                            <div 
+                            <div
                               className="w-full h-full bg-cover bg-center"
-                              style={{ 
+                              style={{
                                 backgroundImage: combatant.avatar ? `url(${combatant.avatar})` : 'none',
                                 backgroundColor: '#1a1f2e'
                               }}
@@ -4267,6 +4694,25 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                                 </div>
                               )}
                             </div>
+                            {/* Animated condition rings wrap around the
+                                portrait — one ring per active condition,
+                                name arcs along the top and slowly spins. */}
+                            <ConditionRing conditions={conditions} size={80} />
+                            {/* Concentration pulsing glow — distinct
+                                from the condition rings. Shown when the
+                                combatant is concentrating on a spell. */}
+                            {concentrationByCharacter[combatant.uniqueId || combatant.id] && (
+                              <div
+                                className="absolute inset-0 rounded-full pointer-events-none"
+                                style={{
+                                  animation: 'gs-concentration-pulse 2.4s ease-in-out infinite',
+                                  borderRadius: '9999px',
+                                }}
+                                title={`Concentrating: ${
+                                  concentrationByCharacter[combatant.uniqueId || combatant.id].spell
+                                }`}
+                              />
+                            )}
                             <div
                               className="absolute bottom-0 inset-x-0 bg-black/80 text-[11px] text-center text-white font-bold py-0.5"
                               title={
