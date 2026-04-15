@@ -1,8 +1,42 @@
 import React, { useState, useEffect } from "react";
-import { Coins, Plus, Trash2, Dices, RefreshCw, ChevronRight, ChevronDown, Search, Package, X, User } from "lucide-react";
+import { Coins, Plus, Trash2, Dices, RefreshCw, ChevronRight, ChevronDown, Search, Package, X, User, Sparkles, Shield, Sword, Gem } from "lucide-react";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
 import { base44 } from "@/api/base44Client";
 import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
+import ItemTooltip from "@/components/shared/ItemTooltip";
+
+// D&D 5e DMG individual treasure tables. One table per CR bucket.
+// Dice expressions use "NdF" or "NdF*M" where M is a flat multiplier
+// (e.g. "4d6*100" means roll 4d6 and multiply by 100). A reasonable
+// approximation of the DMG's "Treasure by CR" pages — the GM can
+// always adjust after rolling.
+const INDIVIDUAL_TREASURE = {
+  "0-4":   { label: "CR 0 – 4",   cp: "5d6",      sp: "3d6",      gp: "2d6",      gems: false, gemValue: 0 },
+  "5-10":  { label: "CR 5 – 10",  cp: "4d6*100",  sp: "6d6*10",   gp: "3d6*10",   gems: true,  gemValue: 10 },
+  "11-16": { label: "CR 11 – 16", sp: "4d6*100",  gp: "1d6*100",  gems: true,     gemValue: 50 },
+  "17+":   { label: "CR 17+",     gp: "2d6*1000", gems: true,     gemValue: 500 },
+};
+
+// Named gemstones used for the "gems" column. We pick one at random
+// when the table calls for it; the gp value is set by the bucket.
+const GEM_NAMES = [
+  "Agate", "Amber", "Bloodstone", "Carnelian", "Citrine",
+  "Jade", "Lapis Lazuli", "Moonstone", "Obsidian", "Onyx",
+  "Pearl", "Quartz", "Star Sapphire", "Topaz", "Tourmaline",
+];
+
+// Tiny dice parser for the treasure tables. Accepts "NdF" or "NdF*M".
+function rollTreasureExpr(expr) {
+  if (!expr || typeof expr !== "string") return 0;
+  const match = expr.match(/^(\d+)d(\d+)(?:\*(\d+))?$/);
+  if (!match) return 0;
+  const n = parseInt(match[1], 10);
+  const f = parseInt(match[2], 10);
+  const mult = match[3] ? parseInt(match[3], 10) : 1;
+  let total = 0;
+  for (let i = 0; i < n; i++) total += Math.floor(Math.random() * f) + 1;
+  return total * mult;
+}
 
 const EMPTY_CURRENCY = { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 };
 
@@ -63,6 +97,7 @@ export default function LootManager({ campaignId, lootData, players, onUpdateLoo
   const [showItemSelector, setShowItemSelector] = useState(false);
   const [showMoneyInput, setShowMoneyInput] = useState(false);
   const [showManualDistribution, setShowManualDistribution] = useState(false);
+  const [showCrPicker, setShowCrPicker] = useState(false);
 
   useEffect(() => {
     if (lootData) {
@@ -316,11 +351,36 @@ export default function LootManager({ campaignId, lootData, players, onUpdateLoo
     setItems(newItems);
   };
 
-  const generateRandomLoot = (cr) => {
-    const randomGold = Math.floor(Math.random() * (cr * 10)) + 10;
-    setCurrency(prev => ({ ...prev, gp: prev.gp + randomGold }));
-    const randomItem = allItemsWithEnchanted[Math.floor(Math.random() * allItemsWithEnchanted.length)];
-    addItem(randomItem);
+  // Roll the DMG Individual Treasure table for a chosen CR bucket.
+  // Pops a small picker (in JSX below), then populates the pool with
+  // coins and — if the bucket includes gems — a random gemstone item.
+  const rollTreasureTable = (bucketKey) => {
+    const table = INDIVIDUAL_TREASURE[bucketKey];
+    if (!table) return;
+    const delta = { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 };
+    if (table.cp) delta.cp += rollTreasureExpr(table.cp);
+    if (table.sp) delta.sp += rollTreasureExpr(table.sp);
+    if (table.gp) delta.gp += rollTreasureExpr(table.gp);
+    setCurrency((prev) => ({
+      cp: (prev.cp || 0) + delta.cp,
+      sp: (prev.sp || 0) + delta.sp,
+      ep: prev.ep || 0,
+      gp: (prev.gp || 0) + delta.gp,
+      pp: prev.pp || 0,
+    }));
+    if (table.gems && table.gemValue > 0) {
+      const gemName = GEM_NAMES[Math.floor(Math.random() * GEM_NAMES.length)];
+      addItem({
+        name: `${gemName} (${table.gemValue} gp)`,
+        type: "Gemstone",
+        category: "treasure",
+        rarity: "common",
+        weight: 0,
+        cost: `${table.gemValue} gp`,
+        description: `A polished ${gemName.toLowerCase()} worth ${table.gemValue} gp.`,
+      });
+    }
+    setShowCrPicker(false);
   };
 
   return (
@@ -410,7 +470,7 @@ export default function LootManager({ campaignId, lootData, players, onUpdateLoo
           </span>
           <div className="flex gap-2">
             <button 
-              onClick={() => generateRandomLoot(5)} 
+              onClick={() => setShowCrPicker(true)}
               className="text-[10px] bg-[#1a1f2e] hover:bg-[#2A3441] text-slate-300 px-2 py-1 rounded border border-[#2A3441] flex items-center gap-1"
             >
               <Dices className="w-3 h-3" /> Random
@@ -427,19 +487,20 @@ export default function LootManager({ campaignId, lootData, players, onUpdateLoo
         <div className="grid grid-cols-5 gap-2 max-h-[150px] overflow-y-auto custom-scrollbar">
           {items.map((item, idx) => (
             <div key={idx} className="relative group">
-              <div className="w-12 h-12 rounded-lg bg-[#0b1220] border border-[#111827] flex items-center justify-center overflow-hidden" title={item.name}>
-                {itemIcons[item.name] ? (
-                  <img src={itemIcons[item.name]} alt={item.name} className="w-full h-full object-cover" />
+              <div className="w-12 h-12 rounded-lg bg-[#0b1220] border border-[#111827] flex items-center justify-center overflow-hidden">
+                {itemIcons[item.name] || item.image_url ? (
+                  <img src={itemIcons[item.name] || item.image_url} alt={item.name} className="w-full h-full object-cover" />
                 ) : (
                   <span className="text-[8px] text-center px-1 text-slate-400 line-clamp-2">{item.name}</span>
                 )}
               </div>
               <button
                 onClick={() => removeItem(idx)}
-                className="absolute -top-1 -right-1 bg-red-500 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute -top-1 -right-1 bg-red-500 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity z-20"
               >
                 ×
               </button>
+              <ItemTooltip item={item} />
             </div>
           ))}
           {items.length === 0 && (
@@ -473,6 +534,65 @@ export default function LootManager({ campaignId, lootData, players, onUpdateLoo
           }}
         />
       )}
+
+      {showCrPicker && (
+        <CRTreasurePicker
+          onClose={() => setShowCrPicker(false)}
+          onPick={rollTreasureTable}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * CR bucket picker. Four big buttons — one per DMG individual
+ * treasure table — that roll the dice and drop coins (+ an optional
+ * gemstone) straight into the loot pool.
+ */
+function CRTreasurePicker({ onClose, onPick }) {
+  return (
+    <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
+      <div className="bg-[#050816] border border-[#111827] rounded-2xl w-full max-w-md shadow-2xl">
+        <div className="p-4 border-b border-[#111827] flex justify-between items-center">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <Dices className="w-4 h-4 text-[#37F2D1]" />
+            Individual Treasure — roll by CR
+          </h3>
+          <button onClick={onClose}>
+            <X className="w-4 h-4 text-slate-500 hover:text-white" />
+          </button>
+        </div>
+        <div className="p-4 space-y-2">
+          <p className="text-[10px] text-slate-500 mb-2 leading-snug">
+            Based on the DMG individual treasure tables. Rolls coins
+            (and a gemstone in the higher buckets) and drops them into
+            the current loot pool. The GM can edit after.
+          </p>
+          {Object.entries(INDIVIDUAL_TREASURE).map(([key, table]) => {
+            const diceLine = [
+              table.cp && `${table.cp} cp`,
+              table.sp && `${table.sp} sp`,
+              table.gp && `${table.gp} gp`,
+              table.gems && "+ gem",
+            ]
+              .filter(Boolean)
+              .join("  •  ");
+            return (
+              <button
+                key={key}
+                onClick={() => onPick(key)}
+                className="w-full flex flex-col items-start gap-1 px-4 py-3 rounded-xl bg-[#0b1220] border border-[#111827] hover:border-[#37F2D1]/60 hover:bg-[#111827] transition-colors text-left"
+              >
+                <span className="text-xs font-black uppercase tracking-wide text-[#37F2D1]">
+                  {table.label}
+                </span>
+                <span className="text-[10px] text-slate-400">{diceLine}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -621,8 +741,9 @@ function TogglePill({ label, active, onClick }) {
 
 function ItemSelectorModal({ onClose, onSelect }) {
   const [search, setSearch] = useState("");
-  
-  const filtered = allItemsWithEnchanted.filter(i => 
+  const [showCustomForm, setShowCustomForm] = useState(false);
+
+  const filtered = allItemsWithEnchanted.filter(i =>
     i.name.toLowerCase().includes(search.toLowerCase())
   ).slice(0, 50);
 
@@ -631,42 +752,213 @@ function ItemSelectorModal({ onClose, onSelect }) {
       <div className="bg-[#050816] border border-[#111827] rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col">
         <div className="p-4 border-b border-[#111827] flex justify-between items-center">
           <h3 className="text-sm font-bold text-white">Add Item to Loot</h3>
-          <button onClick={onClose}><Trash2 className="w-4 h-4 text-slate-500 hover:text-white" /></button>
+          <button onClick={onClose}><X className="w-4 h-4 text-slate-500 hover:text-white" /></button>
         </div>
-        <div className="p-4">
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            <input 
-              autoFocus
-              type="text" 
-              placeholder="Search items..." 
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full bg-[#1a1f2e] border border-[#2A3441] rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:border-[#37F2D1] outline-none"
+        <div className="p-4 overflow-y-auto custom-scrollbar">
+          {showCustomForm ? (
+            <CustomItemForm
+              onCancel={() => setShowCustomForm(false)}
+              onCreate={(item) => {
+                onSelect(item);
+                setShowCustomForm(false);
+              }}
             />
-          </div>
-          <div className="space-y-2 max-h-[50vh] overflow-y-auto custom-scrollbar">
-            {filtered.map((item, idx) => (
+          ) : (
+            <>
               <button
-                key={idx}
-                onClick={() => onSelect(item)}
-                className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-[#1a1f2e] text-left group"
+                onClick={() => setShowCustomForm(true)}
+                className="w-full mb-3 flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20 transition-colors"
               >
-                <div className="w-10 h-10 rounded bg-[#0b1220] border border-[#111827] flex items-center justify-center overflow-hidden flex-shrink-0">
-                  {itemIcons[item.name] ? (
-                    <img src={itemIcons[item.name]} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <Package className="w-5 h-5 text-slate-600" />
-                  )}
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-slate-200 group-hover:text-white">{item.name}</div>
-                  <div className="text-[10px] text-slate-500">{item.type} • {item.rarity || 'Common'}</div>
-                </div>
+                <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
+                  <Sparkles className="w-3.5 h-3.5" /> Add Custom Item
+                </span>
+                <span className="text-[9px] text-amber-400/80">homebrew</span>
               </button>
-            ))}
-          </div>
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Search items..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full bg-[#1a1f2e] border border-[#2A3441] rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:border-[#37F2D1] outline-none"
+                />
+              </div>
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto custom-scrollbar">
+                {filtered.map((item, idx) => (
+                  <div key={idx} className="relative group">
+                    <button
+                      onClick={() => onSelect(item)}
+                      className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-[#1a1f2e] text-left"
+                    >
+                      <div className="w-10 h-10 rounded bg-[#0b1220] border border-[#111827] flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {itemIcons[item.name] ? (
+                          <img src={itemIcons[item.name]} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <Package className="w-5 h-5 text-slate-600" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-slate-200 group-hover:text-white truncate">{item.name}</div>
+                        <div className="text-[10px] text-slate-500">{item.type} • {item.rarity || 'Common'}</div>
+                      </div>
+                    </button>
+                    <ItemTooltip item={item} placement="left" />
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Ad-hoc custom item form. Creates a plain item object that mirrors
+ * the shape used by the itemData catalog + database rows, so the
+ * rest of the loot pipeline (tooltip, distribute, retract, player
+ * inventory) handles it identically. No image upload — a generic
+ * icon is chosen based on type at render time.
+ *
+ * Minimum: name. Everything else is optional but has reasonable
+ * defaults so a GM can slam one in mid-session without filling
+ * everything out.
+ */
+function CustomItemForm({ onCancel, onCreate }) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [type, setType] = useState("wondrous item");
+  const [rarity, setRarity] = useState("common");
+  const [weight, setWeight] = useState("");
+  const [cost, setCost] = useState("");
+
+  const canSubmit = name.trim().length > 0;
+  const handleSubmit = () => {
+    if (!canSubmit) return;
+    onCreate({
+      id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      name: name.trim(),
+      description: description.trim() || undefined,
+      type,
+      category: type === "weapon"
+        ? "weapons"
+        : type === "armor"
+        ? "armor"
+        : "adventuring gear",
+      rarity,
+      weight: weight ? parseFloat(weight) || 0 : 0,
+      cost: cost ? `${cost} gp` : undefined,
+      homebrew: true,
+    });
+  };
+
+  const RARITIES = ["common", "uncommon", "rare", "very rare", "legendary"];
+  const TYPES = ["weapon", "armor", "adventuring gear", "wondrous item", "potion", "scroll"];
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-amber-300">
+        <Sparkles className="w-3.5 h-3.5" />
+        Custom Item
+      </div>
+
+      <label className="flex flex-col gap-1">
+        <span className="text-[10px] uppercase tracking-wider text-slate-500">
+          Name <span className="text-red-400">*</span>
+        </span>
+        <input
+          autoFocus
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Warped Idol of the Deep"
+          className="bg-[#1a1f2e] border border-[#2A3441] rounded-lg px-3 py-2 text-sm text-white focus:border-amber-500 outline-none"
+        />
+      </label>
+
+      <label className="flex flex-col gap-1">
+        <span className="text-[10px] uppercase tracking-wider text-slate-500">Description</span>
+        <textarea
+          rows={3}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="What it looks like, what it does..."
+          className="bg-[#1a1f2e] border border-[#2A3441] rounded-lg px-3 py-2 text-xs text-white focus:border-amber-500 outline-none resize-none"
+        />
+      </label>
+
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-wider text-slate-500">Type</span>
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            className="bg-[#1a1f2e] border border-[#2A3441] rounded-lg px-2 py-2 text-xs text-white focus:border-amber-500 outline-none"
+          >
+            {TYPES.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-wider text-slate-500">Rarity</span>
+          <select
+            value={rarity}
+            onChange={(e) => setRarity(e.target.value)}
+            className="bg-[#1a1f2e] border border-[#2A3441] rounded-lg px-2 py-2 text-xs text-white focus:border-amber-500 outline-none"
+          >
+            {RARITIES.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-wider text-slate-500">Weight (lb)</span>
+          <input
+            type="number"
+            min="0"
+            step="0.1"
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
+            placeholder="0"
+            className="bg-[#1a1f2e] border border-[#2A3441] rounded-lg px-3 py-2 text-xs text-white focus:border-amber-500 outline-none"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-wider text-slate-500">Value (gp)</span>
+          <input
+            type="number"
+            min="0"
+            value={cost}
+            onChange={(e) => setCost(e.target.value)}
+            placeholder="0"
+            className="bg-[#1a1f2e] border border-[#2A3441] rounded-lg px-3 py-2 text-xs text-white focus:border-amber-500 outline-none"
+          />
+        </label>
+      </div>
+
+      <div className="flex gap-2 mt-1">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex-1 px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white hover:bg-[#1a1f2e] border border-transparent"
+        >
+          Back
+        </button>
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={!canSubmit}
+          className="flex-1 px-4 py-2 rounded-lg bg-amber-500 text-[#1E2430] hover:bg-amber-400 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Add to Loot
+        </button>
       </div>
     </div>
   );
