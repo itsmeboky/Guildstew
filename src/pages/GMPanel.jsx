@@ -40,7 +40,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
-import { resolveAction, consumeActionCost } from "@/components/combat/actionResolver";
+import ConditionRing from "@/components/combat/ConditionRing";
+import {
+  CONDITIONS as DND_CONDITIONS,
+  CONDITION_COLORS,
+  isIncapacitated,
+  getNoActionConditionName,
+} from "@/components/combat/conditions";
+import { resolveAction, consumeActionCost, getSpellEffect } from "@/components/combat/actionResolver";
 import { hpBarColor, clampHp, normalizeHp } from "@/components/combat/hpColor";
 import { toast } from "sonner";
 import { useTurnContext } from "@/components/combat/useTurnContext";
@@ -172,6 +179,14 @@ export default function GMPanel() {
   // show the picker and never spend slots.
   const [pendingSpellCast, setPendingSpellCast] = useState(null);
   const runActionRef = React.useRef(null);
+
+  // Concentration tracking. Keyed by casterId →
+  //   { spell, spellLevel, targetIds[], casterName }
+  // A caster can only concentrate on one spell at a time — a new
+  // concentration drops the old one (targets lose the effect label).
+  // Damage triggers a CON save (DC = max(10, floor(damage/2))); on
+  // failure the concentration breaks.
+  const [concentrationByCharacter, setConcentrationByCharacter] = useState({});
 
   // Spell slots spent per character. Keyed by characterKey
   // (uniqueId / id), value is { 1: <spent>, 2: <spent>, ... }. Slots
@@ -448,6 +463,7 @@ export default function GMPanel() {
     setActiveConditions({});
     setHiddenCharacters(new Set());
     setSneakActive(false);
+    setConcentrationByCharacter({});
     hidThisTurnRef.current = false;
     prevActiveKeyRef.current = null;
     setShowEndCombatAlert(false);
@@ -530,6 +546,89 @@ export default function GMPanel() {
   const handleChooseRest = (restType) => {
     endCombatMutation.mutate(restType);
   };
+
+  // --- Concentration helpers ---------------------------------------
+  //
+  // Concentration is per-caster: a character can only hold one
+  // Concentration spell at a time. Starting a new one drops the old
+  // one (and removes the applied condition from every target that was
+  // affected). Dropping is also triggered by:
+  //   - the caster failing a CON save after taking damage
+  //   - the caster becoming incapacitated
+  //   - combat ending
+  //
+  // We deliberately keep the tracker local — no combat_data writeback
+  // in this pass — because conditions themselves are still local.
+  const breakConcentration = React.useCallback(
+    (casterId, reason) => {
+      setConcentrationByCharacter((prev) => {
+        const existing = prev[casterId];
+        if (!existing) return prev;
+        const next = { ...prev };
+        delete next[casterId];
+
+        // Clean up the spell's applied conditions on each target so
+        // the badge ring / toast goes away with the concentration.
+        if (existing.appliedCondition && existing.targetIds?.length) {
+          setActiveConditions((cur) => {
+            const updated = { ...cur };
+            for (const tid of existing.targetIds) {
+              const list = updated[tid] || [];
+              const pruned = list.filter((c) => c !== existing.appliedCondition);
+              if (pruned.length !== list.length) updated[tid] = pruned;
+            }
+            return updated;
+          });
+        }
+
+        const reasonLabel = reason === "new"
+          ? "dropped"
+          : reason === "damage"
+          ? "lost"
+          : reason === "incapacitated"
+          ? "lost (incapacitated)"
+          : "ended";
+        toast.error(`${existing.casterName || 'Caster'} ${reasonLabel} Concentration on ${existing.spell}.`);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const startConcentration = React.useCallback(
+    (payload) => {
+      if (!payload?.casterId || !payload.spell) return;
+      setConcentrationByCharacter((prev) => {
+        // If this caster already has a different concentration spell
+        // up, drop it first — same visual / toast flow.
+        const existing = prev[payload.casterId];
+        if (existing && existing.spell !== payload.spell) {
+          // Fire the cleanup side-effect asynchronously so we don't
+          // nest state updates inside the setter.
+          Promise.resolve().then(() => breakConcentration(payload.casterId, "new"));
+        }
+        // Snapshot which condition (if any) this spell applies so we
+        // can strip it from targets when the concentration drops.
+        const spellRow = fullSpellsList?.find?.(
+          (s) => s?.name && s.name.toLowerCase() === payload.spell.toLowerCase(),
+        );
+        const effect = getSpellEffect(payload.spell, spellRow || null);
+        const appliedCondition = effect?.condition || null;
+        return {
+          ...prev,
+          [payload.casterId]: {
+            spell: payload.spell,
+            spellLevel: payload.spellLevel || 0,
+            targetIds: payload.targetIds || [],
+            casterName: payload.casterName || 'Caster',
+            appliedCondition,
+          },
+        };
+      });
+      toast(`${payload.casterName || 'Caster'} is concentrating on ${payload.spell}.`);
+    },
+    [breakConcentration, fullSpellsList],
+  );
 
   // Patch a combatant's faction / charm fields in both the live
   // combat_data.order (so the turn tracker UI + clients update
@@ -1005,11 +1104,31 @@ export default function GMPanel() {
     const activeCombatant = campaign?.combat_data?.order?.[0];
     const activeKey = activeCombatant?.uniqueId || activeCombatant?.id;
 
+    // Auto-expire conditions at the start of the active combatant's
+    // turn. Currently this only catches Dodging (autoExpire:
+    // "start_of_next_turn") but any future condition with the same
+    // flag will expire through here too.
     if (activeKey) {
       setActiveConditions(prev => {
         const current = prev[activeKey] || [];
-        if (!current.includes('Dodging')) return prev;
-        return { ...prev, [activeKey]: current.filter(c => c !== 'Dodging') };
+        if (current.length === 0) return prev;
+        const expired = [];
+        const remaining = current.filter((name) => {
+          const cond = DND_CONDITIONS[name];
+          if (cond?.autoExpire === 'start_of_next_turn') {
+            expired.push(name);
+            return false;
+          }
+          return true;
+        });
+        if (expired.length === 0) return prev;
+        // Toast each expired condition so the GM / players notice.
+        const displayName =
+          campaign?.combat_data?.order?.find(
+            (c) => (c.uniqueId || c.id) === activeKey,
+          )?.name || 'Combatant';
+        expired.forEach((name) => toast(`${displayName} is no longer ${name}.`));
+        return { ...prev, [activeKey]: remaining };
       });
     }
 
@@ -1050,6 +1169,48 @@ export default function GMPanel() {
     hidThisTurnRef.current = false;
     prevActiveKeyRef.current = activeKey;
   }, [campaign?.combat_data?.currentTurnIndex, campaign?.combat_data?.round, campaign?.combat_data?.order?.[0]?.id]);
+
+  // Auto-advance when the active combatant is incapacitated (Paralyzed
+  // / Stunned / Petrified / Unconscious without a death save / plain
+  // Incapacitated). Waits 2s so the GM / players see the "can't act"
+  // card before the turn rotates. A downed PC still drops into the
+  // dramatic death save window via a different branch, so the
+  // incapacitated path here only fires when the combatant is alive
+  // but unable to act.
+  React.useEffect(() => {
+    if (campaign?.combat_data?.stage !== 'combat') return undefined;
+    const active = campaign?.combat_data?.order?.[0];
+    if (!active) return undefined;
+    const activeKey = active.uniqueId || active.id;
+    if (active.downed) return undefined; // death save flow handles this
+    const conditions = activeConditions[activeKey] || [];
+    if (!isIncapacitated(conditions)) return undefined;
+
+    // Incapacitated → drop any Concentration the combatant was
+    // holding. The break helper is a no-op when there's nothing.
+    if (concentrationByCharacter[activeKey]) {
+      breakConcentration(activeKey, 'incapacitated');
+    }
+
+    const timer = setTimeout(() => {
+      // Re-check state before advancing — the GM may have removed the
+      // condition during the delay.
+      const stillActive = campaign?.combat_data?.order?.[0];
+      if (!stillActive) return;
+      const stillKey = stillActive.uniqueId || stillActive.id;
+      if (stillKey !== activeKey) return;
+      const stillConditions = activeConditions[stillKey] || [];
+      if (!isIncapacitated(stillConditions)) return;
+      advanceTurn();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [
+    campaign?.combat_data?.stage,
+    campaign?.combat_data?.order?.[0]?.id,
+    campaign?.combat_data?.order?.[0]?.uniqueId,
+    activeConditions,
+    advanceTurn,
+  ]);
 
   // Sync equippedItems + monsterInventory whenever a different character is
   // selected/possessed. This is the single source of truth for both players
@@ -1291,21 +1452,36 @@ export default function GMPanel() {
               }}
               actor={
                 (!combatState.isOpen && campaign?.combat_data?.active_encounter)
-                  ? { 
-                      name: campaign.combat_data.active_encounter.attackerName, 
+                  ? {
+                      name: campaign.combat_data.active_encounter.attackerName,
                       id: campaign.combat_data.active_encounter.attackerId,
-                      avatar_url: campaign.combat_data.active_encounter.attackerAvatar
+                      avatar_url: campaign.combat_data.active_encounter.attackerAvatar,
+                      conditions: activeConditions[campaign.combat_data.active_encounter.attackerId] || [],
                     }
                   : selectedCharacter
+                    ? {
+                        ...selectedCharacter,
+                        conditions: activeConditions[getCharacterKey(selectedCharacter)] || [],
+                      }
+                    : null
               }
               target={
                 (!combatState.isOpen && campaign?.combat_data?.active_encounter)
                   ? {
                       name: campaign.combat_data.active_encounter.targetName,
                       id: campaign.combat_data.active_encounter.targetId,
-                      avatar_url: campaign.combat_data.active_encounter.targetAvatar
+                      avatar_url: campaign.combat_data.active_encounter.targetAvatar,
+                      conditions: activeConditions[campaign.combat_data.active_encounter.targetId] || [],
                     }
                   : combatState.target
+                    ? {
+                        ...combatState.target,
+                        conditions:
+                          activeConditions[combatState.target?.id] ||
+                          activeConditions[combatState.target?.uniqueId] ||
+                          [],
+                      }
+                    : null
               }
               initialAction={
                 (!combatState.isOpen && campaign?.combat_data?.active_encounter)
@@ -1397,12 +1573,16 @@ export default function GMPanel() {
                   };
                 }
 
-                // Condition / debuff / buff hooks — display-only for now.
-                // The on-portrait badges are driven by activeConditions,
-                // which the GM toggles via the CONDITIONS dialog. We
-                // surface a toast so they know something landed, but
-                // don't auto-write the tag (avoids stomping GM choices).
-                if (data.type === 'condition_applied' && data.condition) {
+                // Condition / debuff / buff hooks. Conditions now get
+                // auto-written to activeConditions so the portrait
+                // ring updates immediately. The GM can still manually
+                // untoggle via the CONDITIONS dialog.
+                if (data.type === 'condition_applied' && data.condition && data.targetId) {
+                  setActiveConditions((prev) => {
+                    const current = prev[data.targetId] || [];
+                    if (current.includes(data.condition)) return prev;
+                    return { ...prev, [data.targetId]: [...current, data.condition] };
+                  });
                   toast(`Condition applied: ${data.condition}`);
                 } else if (data.type === 'debuff_applied' && data.debuff) {
                   toast(`Debuff applied: ${data.debuff}`);
@@ -1412,11 +1592,62 @@ export default function GMPanel() {
                   toast(`Spell effect: ${data.note}`);
                 }
 
+                // Concentration start event fires from the dice window
+                // whenever a spell with a "Concentration, up to X"
+                // duration successfully takes effect. Route it into
+                // our tracker.
+                if (data.type === 'concentration_start' && data.casterId) {
+                  startConcentration({
+                    casterId: data.casterId,
+                    casterName: data.casterName,
+                    spell: data.spell,
+                    spellLevel: data.spellLevel,
+                    targetIds: data.targetIds,
+                  });
+                }
+
                 if (data.type === 'damage') {
                   // `delta` is positive for damage, negative for healing.
                   // clampHp in hpColor.js does current - delta bounded to [0, max].
                   const targetId = data.targetId;
                   const delta = data.value;
+
+                  // Concentration check: if the damage target is
+                  // concentrating on a spell, roll a silent CON save
+                  // (DC = max(10, floor(damage/2))). On failure the
+                  // concentration breaks and its applied condition is
+                  // removed from every target that was under it.
+                  if (targetId && delta > 0 && concentrationByCharacter[targetId]) {
+                    const dc = Math.max(10, Math.floor(delta / 2));
+                    // Try to find a CON save modifier on the entity.
+                    // Players / monsters both expose attributes.con or
+                    // stats.constitution; proficiency_bonus + con_save
+                    // proficient flags live on character objects.
+                    const order = campaign?.combat_data?.order || [];
+                    const entity = order.find((c) => (c.uniqueId || c.id) === targetId);
+                    const con =
+                      entity?.attributes?.con ||
+                      entity?.stats?.constitution ||
+                      10;
+                    const conMod = Math.floor((con - 10) / 2);
+                    const profBonus = entity?.proficiency_bonus || 2;
+                    const isProf = entity?.saves?.con || entity?.saving_throws?.con || false;
+                    const bonus = conMod + (isProf ? profBonus : 0);
+                    const d20 = Math.floor(Math.random() * 20) + 1;
+                    const total = d20 + bonus;
+                    const casterName = concentrationByCharacter[targetId].casterName || entity?.name || 'Caster';
+                    const spell = concentrationByCharacter[targetId].spell;
+                    if (total < dc) {
+                      toast.error(
+                        `${casterName} failed CON save (${total} vs DC ${dc}) — Concentration on ${spell} broken!`,
+                      );
+                      breakConcentration(targetId, 'damage');
+                    } else {
+                      toast(
+                        `${casterName} maintained Concentration on ${spell} (${total} vs DC ${dc}).`,
+                      );
+                    }
+                  }
 
                   // Taking damage reveals a hidden character.
                   if (targetId && delta > 0) {
@@ -1654,10 +1885,11 @@ export default function GMPanel() {
 
             <div className="flex justify-between items-end relative">
               {combatActive && (
-                <TurnOrderBar 
-                  order={initiativeOrder} 
-                  setOrder={setInitiativeOrder} 
-                  activeConditions={activeConditions} 
+                <TurnOrderBar
+                  order={initiativeOrder}
+                  setOrder={setInitiativeOrder}
+                  activeConditions={activeConditions}
+                  concentrationByCharacter={concentrationByCharacter}
                   onSelectTarget={(target) => {
                     if (combatState.step !== 'selecting_target') return;
                     // Faction-aware targeting: non-GMs get a confirmation
@@ -1784,6 +2016,30 @@ export default function GMPanel() {
                 onKill={() => applyDeathSaveChange(selectedCharacterKey, { failures: 3, dead: true })}
                 onShowDramatic={() => setDramaticDeathSaveKey(selectedCharacterKey)}
               />
+            ) : isIncapacitated(activeConditions[selectedCharacterKey] || []) ? (
+              // Incapacitated / Paralyzed / Stunned / Petrified /
+              // Unconscious — the character can't take actions. Show
+              // a status card instead of the action bar. The turn
+              // auto-advances after a short delay so the GM doesn't
+              // have to click END TURN.
+              <div className="relative z-20 rounded-[32px] bg-[#050816]/95 px-6 py-6 shadow-[0_20px_60px_rgba(0,0,0,0.75)] text-center">
+                <p className="text-[10px] uppercase tracking-[0.32em] text-red-400/90 font-bold mb-1">
+                  Can't Act
+                </p>
+                <p className="text-white text-lg font-black">
+                  {selectedCharacter?.name || 'This combatant'}
+                </p>
+                <p className="text-slate-400 text-sm mt-1">
+                  is{' '}
+                  <span className="text-red-300 font-bold">
+                    {getNoActionConditionName(activeConditions[selectedCharacterKey] || []) || 'Incapacitated'}
+                  </span>{' '}
+                  and cannot take actions or reactions.
+                </p>
+                <p className="text-slate-600 text-[10px] mt-2 italic">
+                  Turn will auto-advance in a moment.
+                </p>
+              </div>
             ) : (
             <CombatActionBar
               character={selectedCharacter ? { ...selectedCharacter, equipment: equippedItems } : null}
@@ -4252,7 +4508,7 @@ function LogEntry({ name, time, text, highlight }) {
   );
 }
 
-function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selectionMode, isTurnOrderAccepted, getHp, isGM, onChangeFaction }) {
+function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharacter = {}, onSelectTarget, selectionMode, isTurnOrderAccepted, getHp, isGM, onChangeFaction }) {
   const hasPlayedRef = React.useRef(false);
   // Right-click context menu state. Stores the combatant whose portrait
   // was right-clicked plus screen coords so the menu floats there.
@@ -4401,9 +4657,9 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                               borderColor: computedBorderColor,
                             }}
                           >
-                            <div 
+                            <div
                               className="w-full h-full bg-cover bg-center"
-                              style={{ 
+                              style={{
                                 backgroundImage: combatant.avatar ? `url(${combatant.avatar})` : 'none',
                                 backgroundColor: '#1a1f2e'
                               }}
@@ -4414,6 +4670,25 @@ function TurnOrderBar({ order, setOrder, activeConditions, onSelectTarget, selec
                                 </div>
                               )}
                             </div>
+                            {/* Animated condition rings wrap around the
+                                portrait — one ring per active condition,
+                                name arcs along the top and slowly spins. */}
+                            <ConditionRing conditions={conditions} size={80} />
+                            {/* Concentration pulsing glow — distinct
+                                from the condition rings. Shown when the
+                                combatant is concentrating on a spell. */}
+                            {concentrationByCharacter[combatant.uniqueId || combatant.id] && (
+                              <div
+                                className="absolute inset-0 rounded-full pointer-events-none"
+                                style={{
+                                  animation: 'gs-concentration-pulse 2.4s ease-in-out infinite',
+                                  borderRadius: '9999px',
+                                }}
+                                title={`Concentrating: ${
+                                  concentrationByCharacter[combatant.uniqueId || combatant.id].spell
+                                }`}
+                              />
+                            )}
                             <div
                               className="absolute bottom-0 inset-x-0 bg-black/80 text-[11px] text-center text-white font-bold py-0.5"
                               title={

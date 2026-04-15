@@ -156,3 +156,16 @@ button:focus-visible {
     @apply bg-background text-foreground;
   }
 }
+
+/* Condition ring rotation. Named `gs-spin` so it doesn't collide with
+   Tailwind's built-in `animate-spin` keyframe. Consumed by the
+   ConditionRing SVG component and the concentration badge glow. */
+@keyframes gs-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes gs-concentration-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.7), 0 0 14px rgba(168, 85, 247, 0.45); }
+  50%      { box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.25), 0 0 22px rgba(168, 85, 247, 0.8); }
+}
