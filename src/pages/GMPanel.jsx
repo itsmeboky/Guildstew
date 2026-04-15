@@ -19,6 +19,7 @@ import { spellIcons, spellDetails as hardcodedSpellDetails, getCharacterSpellSlo
 import { Heart, Music, Circle, Triangle, Crosshair } from "lucide-react";
 import LootManager from "@/components/gm/LootManager";
 import MoneyCounter from "@/components/shared/MoneyCounter";
+import ItemTooltip from "@/components/shared/ItemTooltip";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
 import { computeArmorClass } from "@/components/dnd5e/armorClass";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
@@ -3844,6 +3845,8 @@ function EncumbranceBar({ inventory, strength }) {
 
 function InventorySlot({ item, isGM = false, isMoleWithAccess = false, onDragStart, draggable, onDrop }) {
   const [showTooltip, setShowTooltip] = useState(false);
+  // Hover delay — snappy but not twitchy. Matches the dice window
+  // tooltip behaviour so the panel feels consistent.
   
   // Hidden items are only visible to GM or mole with access
   const isHidden = item?.hidden;
@@ -3893,12 +3896,9 @@ function InventorySlot({ item, isGM = false, isMoleWithAccess = false, onDragSta
           ×
         </button>
       )}
-      {showTooltip && item && (
-        <div className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-[#1E2430] text-white px-2 py-1 rounded text-[10px] whitespace-nowrap z-50 shadow-xl border ${isHidden ? 'border-purple-500' : 'border-[#37F2D1]'}`}>
-          {isHidden && <span className="text-purple-400 mr-1">[Hidden]</span>}
-          {item.name}{item.quantity > 1 ? ` (x${item.quantity})` : ''} {draggable && '(drag to equip)'}
-        </div>
-      )}
+      {/* Rich item tooltip on hover — rarity-colored border, full
+          stats block (name/type/rarity/weight/cost/props/desc). */}
+      <ItemTooltip item={item} show={showTooltip && !!item} />
     </div>
   );
 }
