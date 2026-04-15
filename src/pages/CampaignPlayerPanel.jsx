@@ -220,9 +220,9 @@ function CampaignPlayerPanelContent() {
     enabled: !!campaignId
   });
 
-  const { data: fullSpellsList } = useQuery({
-    queryKey: ['dnd5e-spells'],
-    queryFn: () => fetchAllSpells().then(data => data.spells),
+  const { data: fullSpellsList = [] } = useQuery({
+    queryKey: ['dnd5e-spells', campaignId || 'global'],
+    queryFn: () => fetchAllSpells(campaignId).then(data => data.spells || []),
     staleTime: 1000 * 60 * 60
   });
 
@@ -811,6 +811,7 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
 
             {/* Active Encounter Dice Window (Spectator or Actor) */}
             <CombatDiceWindow
+              spellDataList={fullSpellsList}
               // Open if local state is open OR if there is ANY active encounter (Global Spectator)
               isOpen={
                 combatState.isOpen || 
@@ -909,6 +910,21 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
                   }
                 }
 
+                // Healing rewrites to a negative-value damage event so
+                // the HP write-through below handles both uniformly.
+                if (data.type === 'heal') {
+                  data = {
+                    ...data,
+                    type: 'damage',
+                    value: -Math.abs(data.value || 0),
+                  };
+                }
+
+                if (data.type === 'condition_applied' && data.condition) {
+                  // Players don't get to tag conditions themselves —
+                  // the GM sees the toast on their side. Skip here.
+                }
+
                 if (data.type === 'damage') {
                   // Apply damage (Characters only - Monsters handled by GM via listener)
                   const targetId = data.targetId || (campaignData?.combat_data?.active_encounter?.targetId);
@@ -922,7 +938,11 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
                     });
                     
                     if (char) {
-                      const newCurrent = Math.max(0, (char.hit_points?.current || char.hit_points?.max || 0) - damage);
+                      const maxHp = char.hit_points?.max || 0;
+                      const currentHp = char.hit_points?.current ?? maxHp;
+                      // Cap on both ends so heals don't exceed max and
+                      // damage doesn't go below zero.
+                      const newCurrent = Math.max(0, Math.min(maxHp, currentHp - damage));
                       base44.entities.Character.update(char.id, {
                         hit_points: { ...char.hit_points, current: newCurrent }
                       });

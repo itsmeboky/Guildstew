@@ -63,6 +63,473 @@ const REACTION_SPELLS = new Set([
   "Hellish Rebuke",
 ]);
 
+// Base damage dice for spells that actually deal damage. Keyed by
+// spell name. Cantrip dice listed here are the level-1–4 tier; caller
+// can scale for higher caster levels via `getSpellDamageDice`. Multi-
+// roll spells (Scorching Ray, Eldritch Blast, Magic Missile) list dice
+// per ray / missile — the GM / renderer can multiply.
+const SPELL_DAMAGE_DICE = {
+  // --- Cantrips ---
+  "Acid Splash": "1d6",
+  "Chill Touch": "1d8",
+  "Eldritch Blast": "1d10",
+  "Fire Bolt": "1d10",
+  "Frostbite": "1d6",
+  "Infestation": "1d6",
+  "Magic Stone": "1d6",
+  "Poison Spray": "1d12",
+  "Produce Flame": "1d8",
+  "Ray of Frost": "1d8",
+  "Sacred Flame": "1d8",
+  "Shocking Grasp": "1d8",
+  "Sword Burst": "1d6",
+  "Thorn Whip": "1d6",
+  "Thunderclap": "1d6",
+  "Toll the Dead": "1d8",
+  "Vicious Mockery": "1d4",
+  "Word of Radiance": "1d6",
+  "Create Bonfire": "1d8",
+  "Control Flames": "1d8",
+  "Primal Savagery": "1d10",
+  // --- 1st Level ---
+  "Burning Hands": "3d6",
+  "Chromatic Orb": "3d8",
+  "Cure Wounds": "1d8",
+  "Ensnaring Strike": "1d6",
+  "Faerie Fire": "0",
+  "Guiding Bolt": "4d6",
+  "Hail of Thorns": "1d10",
+  "Healing Word": "1d4",
+  "Hellish Rebuke": "2d10",
+  "Ice Knife": "1d10",
+  "Inflict Wounds": "3d10",
+  "Magic Missile": "1d4+1",
+  "Ray of Sickness": "2d8",
+  "Searing Smite": "1d6",
+  "Thunderous Smite": "2d6",
+  "Thunderwave": "2d8",
+  "Witch Bolt": "1d12",
+  "Wrathful Smite": "1d6",
+  // --- 2nd Level ---
+  "Acid Arrow": "4d4",
+  "Aganazzar's Scorcher": "3d8",
+  "Cloud of Daggers": "4d4",
+  "Dragon's Breath": "3d6",
+  "Flame Blade": "3d6",
+  "Flaming Sphere": "2d6",
+  "Heat Metal": "2d8",
+  "Melf's Acid Arrow": "4d4",
+  "Mind Spike": "3d8",
+  "Moonbeam": "2d10",
+  "Scorching Ray": "2d6",
+  "Shatter": "3d8",
+  "Snilloc's Snowball Swarm": "3d6",
+  "Spiritual Weapon": "1d8",
+  // --- 3rd Level ---
+  "Call Lightning": "3d10",
+  "Conjure Barrage": "3d8",
+  "Erupting Earth": "3d12",
+  "Fireball": "8d6",
+  "Lightning Arrow": "4d8",
+  "Lightning Bolt": "8d6",
+  "Spirit Guardians": "3d8",
+  "Vampiric Touch": "3d6",
+  // --- 4th Level ---
+  "Blight": "8d8",
+  "Fire Shield": "2d8",
+  "Ice Storm": "4d6",
+  "Sickening Radiance": "4d10",
+  "Storm Sphere": "2d6",
+  "Vitriolic Sphere": "10d4",
+  "Wall of Fire": "5d8",
+  // --- 5th Level ---
+  "Cloudkill": "5d8",
+  "Cone of Cold": "8d8",
+  "Destructive Wave": "10d6",
+  "Flame Strike": "8d6",
+  "Immolation": "8d6",
+  "Insect Plague": "4d10",
+  "Steel Wind Strike": "6d10",
+  // --- 6th Level ---
+  "Chain Lightning": "10d8",
+  "Disintegrate": "10d6+40",
+  "Harm": "14d6",
+  "Investiture of Flame": "4d6",
+  "Investiture of Ice": "4d6",
+  "Sunbeam": "6d8",
+  // --- 7th Level ---
+  "Crown of Stars": "4d12",
+  "Delayed Blast Fireball": "12d6",
+  "Finger of Death": "7d8+30",
+  "Fire Storm": "7d10",
+  "Prismatic Spray": "10d6",
+  // --- 8th Level ---
+  "Abi-Dalzim's Horrid Wilting": "12d8",
+  "Earthquake": "5d6",
+  "Incendiary Cloud": "10d8",
+  // --- 9th Level ---
+  "Meteor Swarm": "40d6",
+  "Power Word Kill": "0",
+  "Psychic Scream": "14d6",
+};
+
+/**
+ * Return the base damage dice for a spell (e.g. "3d6"), or null if the
+ * spell isn't in the table / doesn't deal damage. Callers can decide
+ * how to upcast / scale by caster level.
+ */
+export function getSpellDamageDice(spellName) {
+  if (!spellName) return null;
+  const dice = SPELL_DAMAGE_DICE[spellName];
+  if (!dice || dice === "0") return null;
+  return dice;
+}
+
+/**
+ * Post-resolution effect map. After a spell's attack / save finishes,
+ * look the spell up here to decide what ACTUALLY happens next:
+ *   - damage             → roll `dice` (optionally cantrip-scaled) and apply to target HP
+ *   - heal               → roll `dice` and ADD to target HP (caps at max)
+ *   - condition          → skip damage, apply a text label to the target
+ *   - damage_condition   → damage as above, then apply condition
+ *   - buff               → apply a buff label to the caster / ally
+ *   - debuff             → apply a debuff label to the target
+ *   - utility            → GM-narrated, just show the note
+ *
+ * Fields:
+ *   dice        → base dice string (e.g. "3d6", "2d8+4d6")
+ *   flat        → fixed amount (e.g. Heal = 70 HP)
+ *   type        → damage type label
+ *   scaling     → "cantrip" → getScaledDice scales with caster level
+ *   addMod      → heal spells add spellcasting ability mod to the result
+ *   autoHit     → skip the attack roll (Magic Missile)
+ *   multiAttack → this many attack rolls (Scorching Ray, Eldritch Blast)
+ *   condition   → label applied on success (e.g. "Paralyzed")
+ *   buff        → buff description text
+ *   debuff      → debuff description text
+ *   note        → GM-only narrative blurb for utility spells
+ */
+/**
+ * Hardcoded fallback effects for the most common combat spells. The
+ * live database (campaign `spells` + global `dnd5e_spells`) is the
+ * primary source — every spell row gets auto-classified from its
+ * description via `classifySpellEffect`. This fallback only fills in
+ * spells where the auto-classifier might get it wrong or the spell
+ * hasn't been seeded yet.
+ */
+export const SPELL_EFFECTS_FALLBACK = {
+  // DAMAGE spells — roll damage dice, subtract from target HP
+  "Fire Bolt":        { effect: "damage", dice: "1d10", type: "fire", scaling: "cantrip" },
+  "Eldritch Blast":   { effect: "damage", dice: "1d10", type: "force", scaling: "cantrip" },
+  "Sacred Flame":     { effect: "damage", dice: "1d8", type: "radiant", scaling: "cantrip" },
+  "Chill Touch":      { effect: "damage", dice: "1d8", type: "necrotic", scaling: "cantrip" },
+  "Ray of Frost":     { effect: "damage", dice: "1d8", type: "cold", scaling: "cantrip" },
+  "Acid Splash":      { effect: "damage", dice: "1d6", type: "acid", scaling: "cantrip" },
+  "Poison Spray":     { effect: "damage", dice: "1d12", type: "poison", scaling: "cantrip" },
+  "Shocking Grasp":   { effect: "damage", dice: "1d8", type: "lightning", scaling: "cantrip" },
+  "Thorn Whip":       { effect: "damage", dice: "1d6", type: "piercing", scaling: "cantrip" },
+  "Vicious Mockery":  { effect: "damage", dice: "1d4", type: "psychic", scaling: "cantrip" },
+  "Produce Flame":    { effect: "damage", dice: "1d8", type: "fire", scaling: "cantrip" },
+  "Burning Hands":    { effect: "damage", dice: "3d6", type: "fire", upcastPerLevel: "1d6" },
+  "Chromatic Orb":    { effect: "damage", dice: "3d8", type: "varies", upcastPerLevel: "1d8" },
+  "Guiding Bolt":     { effect: "damage", dice: "4d6", type: "radiant", upcastPerLevel: "1d6" },
+  "Inflict Wounds":   { effect: "damage", dice: "3d10", type: "necrotic", upcastPerLevel: "1d10" },
+  "Magic Missile":    { effect: "damage", dice: "3d4+3", type: "force", autoHit: true, upcastPerLevel: "1d4+1" },
+  "Thunderwave":      { effect: "damage", dice: "2d8", type: "thunder", upcastPerLevel: "1d8" },
+  "Shatter":          { effect: "damage", dice: "3d8", type: "thunder", upcastPerLevel: "1d8" },
+  "Scorching Ray":    { effect: "damage", dice: "2d6", type: "fire", multiAttack: 3 },
+  "Fireball":         { effect: "damage", dice: "8d6", type: "fire", upcastPerLevel: "1d6" },
+  "Lightning Bolt":   { effect: "damage", dice: "8d6", type: "lightning", upcastPerLevel: "1d6" },
+  "Call Lightning":   { effect: "damage", dice: "3d10", type: "lightning", upcastPerLevel: "1d10" },
+  "Ice Storm":        { effect: "damage", dice: "2d8+4d6", type: "bludgeoning+cold" },
+  "Blight":           { effect: "damage", dice: "8d8", type: "necrotic", upcastPerLevel: "1d8" },
+  "Cone of Cold":     { effect: "damage", dice: "8d8", type: "cold", upcastPerLevel: "1d8" },
+  "Cloudkill":        { effect: "damage", dice: "5d8", type: "poison", upcastPerLevel: "1d8" },
+
+  // DAMAGE + CONDITION
+  "Ray of Sickness":  { effect: "damage_condition", dice: "2d8", type: "poison", condition: "Poisoned", upcastPerLevel: "1d8" },
+
+  // HEALING spells — roll dice, ADD to target HP (capped at max)
+  "Cure Wounds":      { effect: "heal", dice: "1d8", addMod: true, upcastPerLevel: "1d8" },
+  "Healing Word":     { effect: "heal", dice: "1d4", addMod: true, upcastPerLevel: "1d4" },
+  "Mass Healing Word": { effect: "heal", dice: "1d4", addMod: true, upcastPerLevel: "1d4" },
+  "Mass Cure Wounds": { effect: "heal", dice: "3d8", addMod: true, upcastPerLevel: "1d8" },
+  "Heal":             { effect: "heal", flat: 70 },
+
+  // CONDITION-ONLY spells — apply a condition tag, no damage
+  "Hold Person":      { effect: "condition", condition: "Paralyzed" },
+  "Hold Monster":     { effect: "condition", condition: "Paralyzed" },
+  "Faerie Fire":      { effect: "condition", condition: "Outlined (advantage on attacks)" },
+  "Blindness/Deafness": { effect: "condition", condition: "Blinded" },
+  "Entangle":         { effect: "condition", condition: "Restrained" },
+  "Web":              { effect: "condition", condition: "Restrained" },
+  "Fear":             { effect: "condition", condition: "Frightened" },
+  "Charm Person":     { effect: "condition", condition: "Charmed" },
+  "Dominate Person":  { effect: "condition", condition: "Charmed" },
+  "Command":          { effect: "condition", condition: "Commanded" },
+  "Suggestion":       { effect: "condition", condition: "Charmed" },
+  "Hypnotic Pattern": { effect: "condition", condition: "Incapacitated" },
+  "Banishment":       { effect: "condition", condition: "Banished" },
+  "Polymorph":        { effect: "condition", condition: "Polymorphed" },
+  "Confusion":        { effect: "condition", condition: "Confused" },
+  "Crown of Madness": { effect: "condition", condition: "Charmed" },
+  "Bestow Curse":     { effect: "condition", condition: "Cursed" },
+  "Stinking Cloud":   { effect: "condition", condition: "Incapacitated" },
+  "Calm Emotions":    { effect: "condition", condition: "Calmed" },
+  "Enlarge/Reduce":   { effect: "condition", condition: "Enlarged/Reduced" },
+
+  // BUFF spells — apply a beneficial effect to self or ally
+  "Bless":            { effect: "buff", buff: "+1d4 attacks and saves" },
+  "Shield of Faith":  { effect: "buff", buff: "+2 AC" },
+  "Haste":            { effect: "buff", buff: "Hasted" },
+  "Greater Invisibility": { effect: "buff", buff: "Invisible" },
+  "Mage Armor":       { effect: "buff", buff: "AC = 13 + DEX" },
+  "Heroism":          { effect: "buff", buff: "Immune to Frightened, +spellmod temp HP per turn" },
+  "Shield":           { effect: "buff", buff: "+5 AC until next turn" },
+  "Blade Ward":       { effect: "buff", buff: "Resistance to bludgeoning/piercing/slashing" },
+
+  // DEBUFF — ongoing effects on enemies
+  "Bane":             { effect: "debuff", debuff: "-1d4 attacks and saves" },
+  "Hex":              { effect: "debuff", debuff: "+1d6 necrotic on hits, disadvantage on chosen ability" },
+  "Hunter's Mark":    { effect: "debuff", debuff: "+1d6 damage on hits" },
+
+  // UTILITY — no mechanical effect tracked, GM describes result
+  "Darkness":         { effect: "utility", note: "15ft radius magical darkness" },
+  "Silence":          { effect: "utility", note: "20ft radius no sound, blocks verbal spells" },
+  "Misty Step":       { effect: "utility", note: "Teleport 30ft" },
+  "Counterspell":     { effect: "utility", note: "Negate a spell being cast" },
+  "Dispel Magic":     { effect: "utility", note: "End one spell effect" },
+  "Detect Magic":     { effect: "utility", note: "Sense magic within 30ft" },
+  "Tongues":          { effect: "utility", note: "Understand any language" },
+  "Plant Growth":     { effect: "utility", note: "Area becomes difficult terrain" },
+  "Wall of Force":    { effect: "utility", note: "Invisible wall, nothing passes through" },
+  "Wall of Stone":    { effect: "utility", note: "Stone wall, 10 panels" },
+  "Wall of Fire":     { effect: "damage", dice: "5d8", type: "fire", note: "Creates wall, damages on entry or within 10ft" },
+};
+
+/**
+ * Return the resolved effect definition for a spell, or null if the
+ * spell isn't in the map (callers should fall back to the default
+ * attack → damage pipeline with a 1d10 stand-in).
+ */
+/**
+ * Look up a spell's post-roll effect. Preferred order:
+ *   1. Hardcoded SPELL_EFFECTS_FALLBACK (curated for accuracy)
+ *   2. Auto-classified from the provided spell row's description
+ *   3. null (caller falls back to the generic damage pipeline)
+ *
+ * `spellData` is the row from the `spells` / `dnd5e_spells` table —
+ * callers typically look it up in the cached `fullSpellsList` query
+ * and pass it through.
+ */
+export function getSpellEffect(spellName, spellData = null) {
+  if (!spellName) return null;
+  if (SPELL_EFFECTS_FALLBACK[spellName]) return SPELL_EFFECTS_FALLBACK[spellName];
+  if (spellData) return classifySpellEffect(spellData);
+  return null;
+}
+
+/**
+ * Derive an effect descriptor for a spell by parsing its description
+ * text. This is the "auto-classifier" that powers the database-driven
+ * spell effects system — any spell row with a description gets a
+ * best-effort effect type even if it isn't in the hardcoded fallback.
+ *
+ * Priority:
+ *   heal > damage_condition > condition > damage > utility
+ *
+ * Returns the same shape as SPELL_EFFECTS_FALLBACK entries:
+ *   { effect, dice?, condition?, type?, addMod?, note? }
+ */
+export function classifySpellEffect(spell) {
+  if (!spell || typeof spell !== "object") return { effect: "utility", note: "GM describes the effect" };
+
+  // Exact name match wins even when called directly on a row.
+  if (spell.name && SPELL_EFFECTS_FALLBACK[spell.name]) {
+    return SPELL_EFFECTS_FALLBACK[spell.name];
+  }
+
+  const desc = (spell.description || "").toLowerCase();
+  if (!desc) {
+    return { effect: "utility", note: spell.description || "GM describes the effect" };
+  }
+
+  const diceMatch = desc.match(/(\d+d\d+)/);
+  const firstDice = diceMatch ? diceMatch[1] : null;
+
+  // --- Higher level / upcast rule sniff ---
+  // "At Higher Levels. When you cast this spell using a spell slot of
+  // Nth level or higher, the damage/healing increases by 1d6 for each
+  // slot level above Nth." — grab the first extra-dice expression.
+  const upcastSection = desc.includes("higher level") || desc.includes("higher levels");
+  const upcastDiceMatch = upcastSection
+    ? desc.match(/increases? by (\d+d\d+)/i) ||
+      desc.match(/(\d+d\d+)\s+for each slot level above/i) ||
+      desc.match(/extra (\d+d\d+)/i)
+    : null;
+  const detectedUpcast = upcastDiceMatch ? upcastDiceMatch[1] : null;
+
+  // --- Healing ---
+  const mentionsHeal =
+    desc.includes("heal") ||
+    (desc.includes("regain") && desc.includes("hit point")) ||
+    (desc.includes("restore") && desc.includes("hit point"));
+  if (mentionsHeal && !desc.includes("damage")) {
+    return {
+      effect: "heal",
+      dice: firstDice || "1d8",
+      addMod: desc.includes("spellcasting ability modifier"),
+      ...(detectedUpcast ? { upcastPerLevel: detectedUpcast } : {}),
+    };
+  }
+
+  // --- Conditions ---
+  const CONDITION_KEYWORDS = {
+    paralyzed: "Paralyzed",
+    charmed: "Charmed",
+    frightened: "Frightened",
+    restrained: "Restrained",
+    blinded: "Blinded",
+    stunned: "Stunned",
+    poisoned: "Poisoned",
+    incapacitated: "Incapacitated",
+    prone: "Prone",
+    invisible: "Invisible",
+    petrified: "Petrified",
+    deafened: "Deafened",
+    grappled: "Grappled",
+  };
+  for (const [keyword, label] of Object.entries(CONDITION_KEYWORDS)) {
+    if (desc.includes(keyword)) {
+      // Damage + condition hybrid (Ray of Sickness, Contagion, etc.)
+      if (firstDice && (desc.includes("damage") || desc.includes("hit point"))) {
+        return {
+          effect: "damage_condition",
+          dice: firstDice,
+          condition: label,
+          ...(detectedUpcast ? { upcastPerLevel: detectedUpcast } : {}),
+        };
+      }
+      return { effect: "condition", condition: label };
+    }
+  }
+
+  // --- Damage ---
+  if (firstDice && desc.includes("damage")) {
+    const DAMAGE_TYPES = [
+      "fire",
+      "cold",
+      "lightning",
+      "thunder",
+      "acid",
+      "poison",
+      "necrotic",
+      "radiant",
+      "force",
+      "psychic",
+      "bludgeoning",
+      "piercing",
+      "slashing",
+    ];
+    const damageType = DAMAGE_TYPES.find((t) => desc.includes(t)) || "magical";
+    return {
+      effect: "damage",
+      dice: firstDice,
+      type: damageType,
+      ...(detectedUpcast ? { upcastPerLevel: detectedUpcast } : {}),
+    };
+  }
+
+  // --- Default: utility ---
+  return {
+    effect: "utility",
+    note: (spell.description || "").slice(0, 140) || "GM describes the effect",
+  };
+}
+
+/**
+ * Scale a cantrip's base dice by the caster's character level. Only
+ * the number of dice is multiplied — the face count stays the same.
+ *   L1–4  → ×1  (base)
+ *   L5–10 → ×2
+ *   L11–16→ ×3
+ *   L17+  → ×4
+ * Non-dice strings (e.g. "3d4+3", "2d8+4d6") are returned unchanged
+ * because cantrip scaling shouldn't apply to leveled spell dice.
+ */
+export function getScaledDice(baseDice, casterLevel) {
+  if (!baseDice || typeof baseDice !== "string") return baseDice;
+  const match = baseDice.match(/^(\d+)d(\d+)$/);
+  if (!match) return baseDice;
+  const faces = match[2];
+  let numDice = parseInt(match[1], 10);
+  const lvl = Number.isFinite(casterLevel) ? casterLevel : 1;
+  if (lvl >= 17) numDice *= 4;
+  else if (lvl >= 11) numDice *= 3;
+  else if (lvl >= 5) numDice *= 2;
+  return `${numDice}d${faces}`;
+}
+
+/**
+ * Upcast a leveled spell's damage / heal dice by `extraLevels` above
+ * its base. `upcastPerLevel` is the per-level increment from the
+ * SPELL_EFFECTS_FALLBACK entry (e.g. Fireball → "1d6", Magic Missile
+ * → "1d4+1"). If no upcast rule is provided we fall back to adding
+ * one base-face die per extra level, which is the most common 5e
+ * convention and a reasonable default the GM can mentally correct.
+ *
+ * Handles three forms:
+ *   base "NdF"           + per-level "MdF"       → collapse to "(N+M*k)dF"
+ *   base "NdF+X"         + per-level "MdF" or +X → append "+Mk dF" / "+X*k"
+ *   base with +flat      → append "+Mk*flat"
+ */
+export function getUpcastDice(baseDice, upcastPerLevel, extraLevels) {
+  if (!baseDice || typeof baseDice !== "string") return baseDice;
+  const levels = Math.max(0, Number.isFinite(extraLevels) ? extraLevels : 0);
+  if (levels === 0) return baseDice;
+
+  // Fallback: "+1 base face die per level" when no explicit rule.
+  let perLevel = upcastPerLevel;
+  if (!perLevel) {
+    const baseMatch = baseDice.match(/^(\d+)d(\d+)/);
+    if (!baseMatch) return baseDice;
+    perLevel = `1d${baseMatch[2]}`;
+  }
+
+  // Parse the per-level increment. Supports "NdF", "NdF+M", or bare "M".
+  const perDiceMatch = perLevel.match(/^(\d+)d(\d+)(?:\+(\d+))?$/);
+  const perFlatMatch = perLevel.match(/^\+?(\d+)$/);
+
+  // Detect whether the base is a simple "NdF" we can collapse into.
+  const simpleBaseMatch = baseDice.match(/^(\d+)d(\d+)$/);
+
+  if (perDiceMatch) {
+    const perN = parseInt(perDiceMatch[1], 10);
+    const perF = parseInt(perDiceMatch[2], 10);
+    const perFlat = perDiceMatch[3] ? parseInt(perDiceMatch[3], 10) : 0;
+    const extraDice = perN * levels;
+    const extraFlat = perFlat * levels;
+
+    if (simpleBaseMatch) {
+      const baseN = parseInt(simpleBaseMatch[1], 10);
+      const baseF = parseInt(simpleBaseMatch[2], 10);
+      if (baseF === perF && extraFlat === 0) {
+        return `${baseN + extraDice}d${baseF}`;
+      }
+    }
+    // Non-collapsible — append as a compound term.
+    const extra = extraFlat > 0 ? `${extraDice}d${perF}+${extraFlat}` : `${extraDice}d${perF}`;
+    return `${baseDice}+${extra}`;
+  }
+
+  if (perFlatMatch) {
+    const extraFlat = parseInt(perFlatMatch[1], 10) * levels;
+    return `${baseDice}+${extraFlat}`;
+  }
+
+  return baseDice;
+}
+
 // Spells categorized by whether they use attack rolls or saving throws
 const SPELL_ATTACK_SPELLS = new Set([
   // Cantrips
