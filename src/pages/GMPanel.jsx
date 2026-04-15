@@ -1372,6 +1372,32 @@ export default function GMPanel() {
                   }
                 }
 
+                // Healing: rewrite the event into a damage event with a
+                // negative delta. clampHp handles the sign, so the HP
+                // write-through below handles both paths uniformly.
+                if (data.type === 'heal') {
+                  data = {
+                    ...data,
+                    type: 'damage',
+                    value: -Math.abs(data.value || 0),
+                  };
+                }
+
+                // Condition / debuff / buff hooks — display-only for now.
+                // The on-portrait badges are driven by activeConditions,
+                // which the GM toggles via the CONDITIONS dialog. We
+                // surface a toast so they know something landed, but
+                // don't auto-write the tag (avoids stomping GM choices).
+                if (data.type === 'condition_applied' && data.condition) {
+                  toast(`Condition applied: ${data.condition}`);
+                } else if (data.type === 'debuff_applied' && data.debuff) {
+                  toast(`Debuff applied: ${data.debuff}`);
+                } else if (data.type === 'buff_applied' && data.buff) {
+                  toast.success(`Buff applied: ${data.buff}`);
+                } else if (data.type === 'utility_applied' && data.note) {
+                  toast(`Spell effect: ${data.note}`);
+                }
+
                 if (data.type === 'damage') {
                   // `delta` is positive for damage, negative for healing.
                   // clampHp in hpColor.js does current - delta bounded to [0, max].

@@ -185,6 +185,153 @@ export function getSpellDamageDice(spellName) {
   return dice;
 }
 
+/**
+ * Post-resolution effect map. After a spell's attack / save finishes,
+ * look the spell up here to decide what ACTUALLY happens next:
+ *   - damage             → roll `dice` (optionally cantrip-scaled) and apply to target HP
+ *   - heal               → roll `dice` and ADD to target HP (caps at max)
+ *   - condition          → skip damage, apply a text label to the target
+ *   - damage_condition   → damage as above, then apply condition
+ *   - buff               → apply a buff label to the caster / ally
+ *   - debuff             → apply a debuff label to the target
+ *   - utility            → GM-narrated, just show the note
+ *
+ * Fields:
+ *   dice        → base dice string (e.g. "3d6", "2d8+4d6")
+ *   flat        → fixed amount (e.g. Heal = 70 HP)
+ *   type        → damage type label
+ *   scaling     → "cantrip" → getScaledDice scales with caster level
+ *   addMod      → heal spells add spellcasting ability mod to the result
+ *   autoHit     → skip the attack roll (Magic Missile)
+ *   multiAttack → this many attack rolls (Scorching Ray, Eldritch Blast)
+ *   condition   → label applied on success (e.g. "Paralyzed")
+ *   buff        → buff description text
+ *   debuff      → debuff description text
+ *   note        → GM-only narrative blurb for utility spells
+ */
+export const SPELL_EFFECTS = {
+  // DAMAGE spells — roll damage dice, subtract from target HP
+  "Fire Bolt":        { effect: "damage", dice: "1d10", type: "fire", scaling: "cantrip" },
+  "Eldritch Blast":   { effect: "damage", dice: "1d10", type: "force", scaling: "cantrip" },
+  "Sacred Flame":     { effect: "damage", dice: "1d8", type: "radiant", scaling: "cantrip" },
+  "Chill Touch":      { effect: "damage", dice: "1d8", type: "necrotic", scaling: "cantrip" },
+  "Ray of Frost":     { effect: "damage", dice: "1d8", type: "cold", scaling: "cantrip" },
+  "Acid Splash":      { effect: "damage", dice: "1d6", type: "acid", scaling: "cantrip" },
+  "Poison Spray":     { effect: "damage", dice: "1d12", type: "poison", scaling: "cantrip" },
+  "Shocking Grasp":   { effect: "damage", dice: "1d8", type: "lightning", scaling: "cantrip" },
+  "Thorn Whip":       { effect: "damage", dice: "1d6", type: "piercing", scaling: "cantrip" },
+  "Vicious Mockery":  { effect: "damage", dice: "1d4", type: "psychic", scaling: "cantrip" },
+  "Produce Flame":    { effect: "damage", dice: "1d8", type: "fire", scaling: "cantrip" },
+  "Burning Hands":    { effect: "damage", dice: "3d6", type: "fire" },
+  "Chromatic Orb":    { effect: "damage", dice: "3d8", type: "varies" },
+  "Guiding Bolt":     { effect: "damage", dice: "4d6", type: "radiant" },
+  "Inflict Wounds":   { effect: "damage", dice: "3d10", type: "necrotic" },
+  "Magic Missile":    { effect: "damage", dice: "3d4+3", type: "force", autoHit: true },
+  "Thunderwave":      { effect: "damage", dice: "2d8", type: "thunder" },
+  "Shatter":          { effect: "damage", dice: "3d8", type: "thunder" },
+  "Scorching Ray":    { effect: "damage", dice: "2d6", type: "fire", multiAttack: 3 },
+  "Fireball":         { effect: "damage", dice: "8d6", type: "fire" },
+  "Lightning Bolt":   { effect: "damage", dice: "8d6", type: "lightning" },
+  "Call Lightning":   { effect: "damage", dice: "3d10", type: "lightning" },
+  "Ice Storm":        { effect: "damage", dice: "2d8+4d6", type: "bludgeoning+cold" },
+  "Blight":           { effect: "damage", dice: "8d8", type: "necrotic" },
+  "Cone of Cold":     { effect: "damage", dice: "8d8", type: "cold" },
+  "Cloudkill":        { effect: "damage", dice: "5d8", type: "poison" },
+
+  // DAMAGE + CONDITION
+  "Ray of Sickness":  { effect: "damage_condition", dice: "2d8", type: "poison", condition: "Poisoned" },
+
+  // HEALING spells — roll dice, ADD to target HP (capped at max)
+  "Cure Wounds":      { effect: "heal", dice: "1d8", addMod: true },
+  "Healing Word":     { effect: "heal", dice: "1d4", addMod: true },
+  "Mass Healing Word": { effect: "heal", dice: "1d4", addMod: true },
+  "Mass Cure Wounds": { effect: "heal", dice: "3d8", addMod: true },
+  "Heal":             { effect: "heal", flat: 70 },
+
+  // CONDITION-ONLY spells — apply a condition tag, no damage
+  "Hold Person":      { effect: "condition", condition: "Paralyzed" },
+  "Hold Monster":     { effect: "condition", condition: "Paralyzed" },
+  "Faerie Fire":      { effect: "condition", condition: "Outlined (advantage on attacks)" },
+  "Blindness/Deafness": { effect: "condition", condition: "Blinded" },
+  "Entangle":         { effect: "condition", condition: "Restrained" },
+  "Web":              { effect: "condition", condition: "Restrained" },
+  "Fear":             { effect: "condition", condition: "Frightened" },
+  "Charm Person":     { effect: "condition", condition: "Charmed" },
+  "Dominate Person":  { effect: "condition", condition: "Charmed" },
+  "Command":          { effect: "condition", condition: "Commanded" },
+  "Suggestion":       { effect: "condition", condition: "Charmed" },
+  "Hypnotic Pattern": { effect: "condition", condition: "Incapacitated" },
+  "Banishment":       { effect: "condition", condition: "Banished" },
+  "Polymorph":        { effect: "condition", condition: "Polymorphed" },
+  "Confusion":        { effect: "condition", condition: "Confused" },
+  "Crown of Madness": { effect: "condition", condition: "Charmed" },
+  "Bestow Curse":     { effect: "condition", condition: "Cursed" },
+  "Stinking Cloud":   { effect: "condition", condition: "Incapacitated" },
+  "Calm Emotions":    { effect: "condition", condition: "Calmed" },
+  "Enlarge/Reduce":   { effect: "condition", condition: "Enlarged/Reduced" },
+
+  // BUFF spells — apply a beneficial effect to self or ally
+  "Bless":            { effect: "buff", buff: "+1d4 attacks and saves" },
+  "Shield of Faith":  { effect: "buff", buff: "+2 AC" },
+  "Haste":            { effect: "buff", buff: "Hasted" },
+  "Greater Invisibility": { effect: "buff", buff: "Invisible" },
+  "Mage Armor":       { effect: "buff", buff: "AC = 13 + DEX" },
+  "Heroism":          { effect: "buff", buff: "Immune to Frightened, +spellmod temp HP per turn" },
+  "Shield":           { effect: "buff", buff: "+5 AC until next turn" },
+  "Blade Ward":       { effect: "buff", buff: "Resistance to bludgeoning/piercing/slashing" },
+
+  // DEBUFF — ongoing effects on enemies
+  "Bane":             { effect: "debuff", debuff: "-1d4 attacks and saves" },
+  "Hex":              { effect: "debuff", debuff: "+1d6 necrotic on hits, disadvantage on chosen ability" },
+  "Hunter's Mark":    { effect: "debuff", debuff: "+1d6 damage on hits" },
+
+  // UTILITY — no mechanical effect tracked, GM describes result
+  "Darkness":         { effect: "utility", note: "15ft radius magical darkness" },
+  "Silence":          { effect: "utility", note: "20ft radius no sound, blocks verbal spells" },
+  "Misty Step":       { effect: "utility", note: "Teleport 30ft" },
+  "Counterspell":     { effect: "utility", note: "Negate a spell being cast" },
+  "Dispel Magic":     { effect: "utility", note: "End one spell effect" },
+  "Detect Magic":     { effect: "utility", note: "Sense magic within 30ft" },
+  "Tongues":          { effect: "utility", note: "Understand any language" },
+  "Plant Growth":     { effect: "utility", note: "Area becomes difficult terrain" },
+  "Wall of Force":    { effect: "utility", note: "Invisible wall, nothing passes through" },
+  "Wall of Stone":    { effect: "utility", note: "Stone wall, 10 panels" },
+  "Wall of Fire":     { effect: "damage", dice: "5d8", type: "fire", note: "Creates wall, damages on entry or within 10ft" },
+};
+
+/**
+ * Return the resolved effect definition for a spell, or null if the
+ * spell isn't in the map (callers should fall back to the default
+ * attack → damage pipeline with a 1d10 stand-in).
+ */
+export function getSpellEffect(spellName) {
+  if (!spellName) return null;
+  return SPELL_EFFECTS[spellName] || null;
+}
+
+/**
+ * Scale a cantrip's base dice by the caster's character level. Only
+ * the number of dice is multiplied — the face count stays the same.
+ *   L1–4  → ×1  (base)
+ *   L5–10 → ×2
+ *   L11–16→ ×3
+ *   L17+  → ×4
+ * Non-dice strings (e.g. "3d4+3", "2d8+4d6") are returned unchanged
+ * because cantrip scaling shouldn't apply to leveled spell dice.
+ */
+export function getScaledDice(baseDice, casterLevel) {
+  if (!baseDice || typeof baseDice !== "string") return baseDice;
+  const match = baseDice.match(/^(\d+)d(\d+)$/);
+  if (!match) return baseDice;
+  const faces = match[2];
+  let numDice = parseInt(match[1], 10);
+  const lvl = Number.isFinite(casterLevel) ? casterLevel : 1;
+  if (lvl >= 17) numDice *= 4;
+  else if (lvl >= 11) numDice *= 3;
+  else if (lvl >= 5) numDice *= 2;
+  return `${numDice}d${faces}`;
+}
+
 // Spells categorized by whether they use attack rolls or saving throws
 const SPELL_ATTACK_SPELLS = new Set([
   // Cantrips
