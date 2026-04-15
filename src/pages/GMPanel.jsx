@@ -144,6 +144,105 @@ export default function GMPanel() {
     queryFn: () => base44.auth.me()
   });
 
+  // === Campaign entity queries ======================================
+  // These used to live way further down the component (around line
+  // 1256). Moving them up here keeps every variable they declare
+  // available to every hook / callback defined below, so we don't
+  // keep tripping the "Cannot access X before initialization" TDZ
+  // trap when a useCallback deps array references them. Anything that
+  // needs this data MUST be declared below this block.
+  const { data: monsters = [] } = useQuery({
+    queryKey: ['campaignMonsters', campaignId],
+    queryFn: () => base44.entities.Monster.filter({ campaign_id: campaignId }),
+    enabled: !!campaignId
+  });
+
+  const { data: npcs = [] } = useQuery({
+    queryKey: ['campaignNPCs', campaignId],
+    queryFn: () => base44.entities.CampaignNPC.filter({ campaign_id: campaignId }),
+    enabled: !!campaignId
+  });
+
+  const { data: characters = [] } = useQuery({
+    queryKey: ['campaignCharacters', campaignId],
+    queryFn: async () => {
+      const chars = await base44.entities.Character.filter({ campaign_id: campaignId });
+      // Ensure full HP on load if not set
+      chars.forEach(c => {
+        if (c.hit_points && (c.hit_points.current === undefined || c.hit_points.current === null)) {
+           base44.entities.Character.update(c.id, {
+             hit_points: { ...c.hit_points, current: c.hit_points.max || 10 }
+           });
+        }
+      });
+      return chars;
+    },
+    enabled: !!campaignId
+  });
+
+  const { data: allUserProfiles = [] } = useQuery({
+    queryKey: ['allUserProfiles'],
+    queryFn: () => base44.entities.UserProfile.list(),
+    staleTime: 60000
+  });
+
+  // Fetch all spells for accurate tooltips + effect classification.
+  // Prefer the per-campaign `spells` table (the 89 with full details)
+  // when a campaign is loaded; fall back to the global `dnd5e_spells`
+  // catalog otherwise. fetchAllSpells() handles both paths — it used
+  // to invoke a dead Edge Function, see spellData.jsx.
+  const { data: fullSpellsList = [] } = useQuery({
+    queryKey: ['dnd5e-spells', campaignId || 'global'],
+    queryFn: () => fetchAllSpells(campaignId).then(data => data.spells || []),
+    staleTime: 1000 * 60 * 60, // 1 hour
+  });
+
+  const currentUserProfile = React.useMemo(() => {
+    return allUserProfiles.find(p => p.user_id === currentUser?.id);
+  }, [allUserProfiles, currentUser?.id]);
+
+  const players = React.useMemo(() => {
+    const playerMap = new Map();
+    const claimedCharacterIds = new Set();
+
+    // 1. Real players: those in campaign.player_ids with a matching profile.
+    if (campaign?.player_ids) {
+      const uniquePlayerIds = [...new Set(campaign.player_ids)];
+      uniquePlayerIds.forEach(playerId => {
+        const profile = allUserProfiles.find(u => u.user_id === playerId);
+        if (profile && !playerMap.has(playerId)) {
+          const character = characters.find(c => c.created_by === profile.email && c.campaign_id === campaignId);
+          if (character) claimedCharacterIds.add(character.id);
+          playerMap.set(playerId, { ...profile, character });
+        }
+      });
+    }
+
+    // 2. Orphan characters: any character in this campaign not already linked
+    // to a profile-based player. This covers test/seeded data, characters
+    // whose owners left the campaign, and GM-controlled NPCs. Each becomes
+    // a synthetic "ghost" player entry so the GM can see and control them
+    // through the same UI flows.
+    characters.forEach(char => {
+      if (char.campaign_id !== campaignId) return;
+      if (claimedCharacterIds.has(char.id)) return;
+      const ghostKey = `ghost-${char.id}`;
+      playerMap.set(ghostKey, {
+        user_id: ghostKey,
+        email: char.created_by || 'ghost@local',
+        username: char.name || 'Unclaimed',
+        avatar_url: char.profile_avatar_url,
+        profile_color_1: '#FF5722',
+        profile_color_2: '#37F2D1',
+        character: char,
+        isGhost: true,
+      });
+    });
+
+    return Array.from(playerMap.values());
+  }, [campaign?.player_ids, allUserProfiles, characters, campaignId]);
+  // =================================================================
+
   // The GM can always act, regardless of whose turn it is in the combat
   // tracker — they might be running a monster, possessing a player, or
   // just fixing something mid-session.
@@ -1253,104 +1352,13 @@ export default function GMPanel() {
     setMonsterInventory(Array.isArray(selectedCharacter.inventory) ? selectedCharacter.inventory : []);
   }, [selectedCharacter?.id, selectedCharacter?.uniqueId]);
 
-  const { data: monsters = [] } = useQuery({
-    queryKey: ['campaignMonsters', campaignId],
-    queryFn: () => base44.entities.Monster.filter({ campaign_id: campaignId }),
-    enabled: !!campaignId
-  });
-
-  const { data: npcs = [] } = useQuery({
-    queryKey: ['campaignNPCs', campaignId],
-    queryFn: () => base44.entities.CampaignNPC.filter({ campaign_id: campaignId }),
-    enabled: !!campaignId
-  });
-
-  const { data: characters = [] } = useQuery({
-    queryKey: ['campaignCharacters', campaignId],
-    queryFn: async () => {
-      const chars = await base44.entities.Character.filter({ campaign_id: campaignId });
-      // Ensure full HP on load if not set
-      chars.forEach(c => {
-        if (c.hit_points && (c.hit_points.current === undefined || c.hit_points.current === null)) {
-           base44.entities.Character.update(c.id, { 
-             hit_points: { ...c.hit_points, current: c.hit_points.max || 10 } 
-           });
-        }
-      });
-      return chars;
-    },
-    enabled: !!campaignId
-  });
-
-  const { data: allUserProfiles = [] } = useQuery({
-    queryKey: ['allUserProfiles'],
-    queryFn: () => base44.entities.UserProfile.list(),
-    staleTime: 60000
-  });
-
-  // Fetch all spells for accurate tooltips + effect classification.
-  // Prefer the per-campaign `spells` table (the 89 with full details)
-  // when a campaign is loaded; fall back to the global `dnd5e_spells`
-  // catalog otherwise. fetchAllSpells() handles both paths — it used
-  // to invoke a dead Edge Function, see spellData.jsx.
-  const { data: fullSpellsList = [] } = useQuery({
-    queryKey: ['dnd5e-spells', campaignId || 'global'],
-    queryFn: () => fetchAllSpells(campaignId).then(data => data.spells || []),
-    staleTime: 1000 * 60 * 60, // 1 hour
-  });
-
-  const currentUserProfile = React.useMemo(() => {
-    return allUserProfiles.find(p => p.user_id === currentUser?.id);
-  }, [allUserProfiles, currentUser?.id]);
-
-  const players = React.useMemo(() => {
-    const playerMap = new Map();
-    const claimedCharacterIds = new Set();
-
-    // 1. Real players: those in campaign.player_ids with a matching profile.
-    if (campaign?.player_ids) {
-      const uniquePlayerIds = [...new Set(campaign.player_ids)];
-      uniquePlayerIds.forEach(playerId => {
-        const profile = allUserProfiles.find(u => u.user_id === playerId);
-        if (profile && !playerMap.has(playerId)) {
-          const character = characters.find(c => c.created_by === profile.email && c.campaign_id === campaignId);
-          if (character) claimedCharacterIds.add(character.id);
-          playerMap.set(playerId, { ...profile, character });
-        }
-      });
-    }
-
-    // 2. Orphan characters: any character in this campaign not already linked
-    // to a profile-based player. This covers test/seeded data, characters
-    // whose owners left the campaign, and GM-controlled NPCs. Each becomes
-    // a synthetic "ghost" player entry so the GM can see and control them
-    // through the same UI flows.
-    characters.forEach(char => {
-      if (char.campaign_id !== campaignId) return;
-      if (claimedCharacterIds.has(char.id)) return;
-      const ghostKey = `ghost-${char.id}`;
-      playerMap.set(ghostKey, {
-        user_id: ghostKey,
-        email: char.created_by || 'ghost@local',
-        username: char.name || 'Unclaimed',
-        avatar_url: char.profile_avatar_url,
-        profile_color_1: '#FF5722',
-        profile_color_2: '#37F2D1',
-        character: char,
-        isGhost: true,
-      });
-    });
-
-    return Array.from(playerMap.values());
-  }, [campaign?.player_ids, allUserProfiles, characters, campaignId]);
-
   // Keep the refs the death-save / heal / concentration helpers above
-  // read from in sync with the latest query results. Updating during
-  // render is fine — the helpers are only invoked from event handlers,
-  // by which time render has already committed and the refs hold
-  // current values. Using refs sidesteps the TDZ trap that would fire
-  // if we put `characters` / `fullSpellsList` in a useCallback deps
-  // array above its declaration.
+  // read from in sync with the latest query results. The queries
+  // themselves are declared at the top of this component now — these
+  // refs used to be the only way to safely read them from callbacks
+  // defined above the queries. We keep the refs in place because the
+  // helpers that consume them (applyHpToEntity, startConcentration,
+  // etc.) still read via ref to stay insulated from re-render timing.
   charactersRef.current = characters;
   playersRef.current = players;
   fullSpellsListRef.current = fullSpellsList;
