@@ -9,6 +9,8 @@ import {
   getSaveModifier,
   getSpellSaveDC,
   getSpellDamageDice,
+  getSpellEffect,
+  getScaledDice,
 } from "@/components/combat/actionResolver";
 import { hpBarColor } from "@/components/combat/hpColor";
 import { FACTION_STYLES, getFaction } from "@/utils/combatQueue";
@@ -51,6 +53,8 @@ export default function CombatDiceWindow({
   const [selectedAction, setSelectedAction] = useState(initialAction);
   const [attackRoll, setAttackRoll] = useState(null);
   const [damageRoll, setDamageRoll] = useState(null);
+  const [healRoll, setHealRoll] = useState(null);
+  const [effectApplied, setEffectApplied] = useState(null);
   const [skillCheckRoll, setSkillCheckRoll] = useState(null);
   const [savingThrowRoll, setSavingThrowRoll] = useState(null);
   const [isRolling, setIsRolling] = useState(false);
@@ -66,7 +70,83 @@ export default function CombatDiceWindow({
 
   // Flow type comes from the resolved action produced by actionResolver.resolveAction
   const resolved = selectedAction?.resolved || null;
-  const flowType = resolved?.rollType || "attack"; // attack | skill_check | saving_throw | no_roll
+  const baseFlowType = resolved?.rollType || "attack"; // attack | skill_check | saving_throw | no_roll
+
+  // Spell effect lookup — post-roll behaviour for known spells (damage,
+  // heal, condition, buff, debuff, utility). When null we fall back to
+  // the generic attack → damage pipeline.
+  const spellName =
+    selectedAction?.type === "spell"
+      ? selectedAction?.name ||
+        selectedAction?.spell?.name ||
+        selectedAction?.weapon?.name
+      : null;
+  const spellEffect = getSpellEffect(spellName);
+  const casterLevel = actor?.level || actor?.stats?.level || 1;
+
+  // Some spell effects override the resolver's rollType. Heal, buff
+  // and utility spells never need an attack roll or save even if the
+  // resolver classified them differently. For those we jump into a
+  // dedicated "heal" or "effect" flow.
+  let flowType = baseFlowType;
+  if (spellEffect) {
+    if (spellEffect.effect === "heal") flowType = "heal";
+    else if (
+      spellEffect.effect === "buff" ||
+      spellEffect.effect === "utility" ||
+      (spellEffect.effect === "condition" && baseFlowType !== "saving_throw") ||
+      (spellEffect.effect === "debuff" && baseFlowType !== "saving_throw")
+    ) {
+      flowType = "effect";
+    }
+    // Magic Missile (autoHit) still deals damage but skips the attack
+    // roll — treat it like an effect flow that rolls damage.
+    if (spellEffect.autoHit) flowType = "auto_damage";
+  }
+
+  // Parse a "NdF" / "NdF+M" / "NdF+NdF" style dice string into a number.
+  // Rolls deterministically via Math.random for simple forms, and just
+  // sums parts for compound dice. Used by heal and auto-damage flows.
+  const rollDiceString = React.useCallback((diceString) => {
+    if (!diceString || typeof diceString !== "string") return 0;
+    let total = 0;
+    // Split on '+' to handle things like "3d4+3" and "2d8+4d6".
+    const parts = diceString.split("+").map((p) => p.trim());
+    for (const part of parts) {
+      const diceMatch = part.match(/^(\d+)d(\d+)$/);
+      if (diceMatch) {
+        const n = parseInt(diceMatch[1], 10);
+        const f = parseInt(diceMatch[2], 10);
+        for (let i = 0; i < n; i++) {
+          total += Math.floor(Math.random() * f) + 1;
+        }
+        continue;
+      }
+      const flat = parseInt(part, 10);
+      if (Number.isFinite(flat)) total += flat;
+    }
+    return total;
+  }, []);
+
+  // Caster's spellcasting ability mod — used for heal spells with
+  // addMod: true. Mirrors the logic in getModifier's spell branch.
+  const getSpellAbilityMod = React.useCallback(() => {
+    if (!actor) return 0;
+    let ability = "int";
+    const charClass = actor.class || "";
+    for (const [cls, stat] of Object.entries(CLASS_SPELL_ABILITY)) {
+      if (charClass.includes(cls)) {
+        ability = stat;
+        break;
+      }
+    }
+    if (actor.spellcasting_ability) {
+      ability = actor.spellcasting_ability.toLowerCase().slice(0, 3);
+    }
+    const score =
+      actor.attributes?.[ability] || actor.stats?.[ability] || 10;
+    return Math.floor((score - 10) / 2);
+  }, [actor]);
 
   const diceRollerRef = useRef(null);
   const prevSpectatorDataRef = useRef(null);
@@ -122,6 +202,8 @@ export default function CombatDiceWindow({
     setSelectedAction(initialAction);
     setAttackRoll(null);
     setDamageRoll(null);
+    setHealRoll(null);
+    setEffectApplied(null);
     setSkillCheckRoll(null);
     setSavingThrowRoll(null);
     setInitiativeRoll(null);
@@ -399,30 +481,50 @@ export default function CombatDiceWindow({
     if (isUnarmedAttack()) {
       diceString = isMonkActor() ? monkMartialArtsDie() : "1d4";
     } else if (selectedAction?.type === "spell") {
-      // Look the spell up by name first. Fall back to the weapon dice
-      // (some spells are treated as attack actions with a synthetic
-      // weapon attached) and finally 1d10 if we truly have no data.
-      const spellName =
-        selectedAction?.name ||
-        selectedAction?.spell?.name ||
-        selectedAction?.weapon?.name;
+      // Prefer the SPELL_EFFECTS entry (with cantrip scaling) over the
+      // bare damage-dice table so things like Fire Bolt scale with
+      // caster level. Fall through to the legacy table and a 1d10
+      // safety net for unknown spells.
+      const effectDice = spellEffect?.dice;
+      const scaled =
+        spellEffect?.scaling === "cantrip"
+          ? getScaledDice(effectDice, casterLevel)
+          : effectDice;
       diceString =
+        scaled ||
         getSpellDamageDice(spellName) ||
         selectedAction?.weapon?.damage ||
         "1d10";
     } else {
       diceString = selectedAction?.weapon?.damage || "1d8";
     }
+    // Compound spell dice (e.g. "2d8+4d6" for Ice Storm, "3d4+3" for
+    // Magic Missile) aren't captured by the simple single-term regex
+    // below, so fall back to rollDiceString for any dice string that
+    // contains a '+'. Weapons only ever have a single term, so this
+    // only ever matters for spell damage.
+    const isCompoundDice = typeof diceString === "string" && diceString.includes("+");
+
+    let total;
+    let numDice;
     const match = diceString.match(/(\d+)d(\d+)/);
-    let numDice = match ? parseInt(match[1], 10) : 1;
     const faces = match ? parseInt(match[2], 10) : 8;
 
-    // Crit: double number of dice
-    if (isCrit) numDice *= 2;
+    if (isCompoundDice) {
+      numDice = match ? parseInt(match[1], 10) : 1;
+      // Crit still doubles dice on compound spell damage — roll the
+      // whole expression twice and sum.
+      total = rollDiceString(diceString);
+      if (isCrit) total += rollDiceString(diceString);
+    } else {
+      numDice = match ? parseInt(match[1], 10) : 1;
+      // Crit: double number of dice
+      if (isCrit) numDice *= 2;
 
-    let total = roll; // visible die
-    for (let i = 1; i < numDice; i++) {
-      total += Math.floor(Math.random() * faces) + 1;
+      total = roll; // visible die
+      for (let i = 1; i < numDice; i++) {
+        total += Math.floor(Math.random() * faces) + 1;
+      }
     }
 
     // Rogue Sneak Attack: add extra d6s when the sneak toggle is on, the
@@ -461,6 +563,168 @@ export default function CombatDiceWindow({
         targetId: target.id,
       });
     }
+
+    // damage_condition spells: after damage resolves, also broadcast
+    // the condition so the parent can slap the label on the target.
+    if (
+      spellEffect?.effect === "damage_condition" &&
+      spellEffect.condition &&
+      target?.id &&
+      onRoll
+    ) {
+      onRoll({
+        type: "condition_applied",
+        condition: spellEffect.condition,
+        targetId: target.id,
+      });
+    }
+  };
+
+  // === Heal flow ===
+  // Heal spells never have an attack roll or save — the caster spends
+  // the slot and rolls the dice directly. Flow: ready → rolling_heal
+  // → heal_result → DONE.
+  const handleHealRoll = () => {
+    setIsRolling(true);
+    setCurrentDice("d20"); // visual only; the real roll is computed below
+    setPhase("rolling_heal");
+    onRoll && onRoll({ type: "rolling_heal" });
+    // Roll + resolve immediately — the dice animation is just eye
+    // candy on the shared DiceRoller, there's no target d20 for heals.
+    setTimeout(() => onHealRollComplete(), 600);
+  };
+
+  const onHealRollComplete = () => {
+    const flat = spellEffect?.flat;
+    const baseDice = spellEffect?.dice;
+    const scaledDice =
+      spellEffect?.scaling === "cantrip"
+        ? getScaledDice(baseDice, casterLevel)
+        : baseDice;
+
+    let rolled = 0;
+    if (typeof flat === "number") {
+      rolled = flat;
+    } else if (scaledDice) {
+      rolled = rollDiceString(scaledDice);
+    } else {
+      rolled = rollDiceString("1d8"); // safe default
+    }
+
+    const mod = spellEffect?.addMod ? getSpellAbilityMod() : 0;
+    const total = Math.max(0, rolled + mod);
+    const result = {
+      total,
+      dice: rolled,
+      mod,
+      diceString: scaledDice || (typeof flat === "number" ? `${flat}` : "1d8"),
+    };
+    setHealRoll(result);
+    setIsRolling(false);
+    setPhase("heal_result");
+
+    if (target?.id && onRoll) {
+      onRoll({
+        type: "heal",
+        value: total,
+        detail: result,
+        targetId: target.id,
+      });
+    }
+  };
+
+  // === Effect-apply flow (buff / debuff / utility / condition w/o save) ===
+  // For spells that have no roll at all, jumping directly into an
+  // "effect_applied" phase lets the GM confirm the spell took effect
+  // and move on. The actual condition badge handling lives in the
+  // parent; we just ship the label text back.
+  const handleApplyEffect = () => {
+    if (!spellEffect) return;
+    const label =
+      spellEffect.effect === "condition"
+        ? `Applied: ${spellEffect.condition}`
+        : spellEffect.effect === "buff"
+        ? `Applied: ${spellEffect.buff}`
+        : spellEffect.effect === "debuff"
+        ? `Applied: ${spellEffect.debuff}`
+        : spellEffect.effect === "utility"
+        ? spellEffect.note || "Spell cast"
+        : "Spell cast";
+    const applied = {
+      label,
+      effect: spellEffect.effect,
+      condition: spellEffect.condition,
+      buff: spellEffect.buff,
+      debuff: spellEffect.debuff,
+      note: spellEffect.note,
+    };
+    setEffectApplied(applied);
+    setPhase("effect_applied");
+
+    // Broadcast to the parent so it can add the condition tag /
+    // toast, if this effect should track one.
+    if (onRoll) {
+      if (spellEffect.effect === "condition" && target?.id) {
+        onRoll({
+          type: "condition_applied",
+          condition: spellEffect.condition,
+          targetId: target.id,
+        });
+      } else if (spellEffect.effect === "debuff" && target?.id) {
+        onRoll({
+          type: "debuff_applied",
+          debuff: spellEffect.debuff,
+          targetId: target.id,
+        });
+      } else if (spellEffect.effect === "buff") {
+        onRoll({
+          type: "buff_applied",
+          buff: spellEffect.buff,
+          targetId: target?.id || actor?.id,
+        });
+      } else if (spellEffect.effect === "utility") {
+        onRoll({ type: "utility_applied", note: spellEffect.note });
+      }
+    }
+  };
+
+  // Auto-damage flow (Magic Missile — skips the attack roll). Works
+  // just like handleHealRoll but commits damage and routes through the
+  // normal damage_result phase so the existing render paths apply.
+  const handleAutoDamage = () => {
+    setIsRolling(true);
+    setCurrentDice("d20");
+    setPhase("rolling_damage");
+    onRoll && onRoll({ type: "rolling_damage" });
+    setTimeout(() => {
+      const baseDice = spellEffect?.dice || "1d10";
+      const scaled =
+        spellEffect?.scaling === "cantrip"
+          ? getScaledDice(baseDice, casterLevel)
+          : baseDice;
+      const total = rollDiceString(scaled);
+      const result = {
+        total,
+        dice: total,
+        mod: 0,
+        isCrit: false,
+        sneakDice: 0,
+        sneakDamage: 0,
+        diceString: scaled,
+      };
+      setDamageRoll(result);
+      setIsRolling(false);
+      setPhase("damage_result");
+
+      if (target?.id && onRoll) {
+        onRoll({
+          type: "damage",
+          value: total,
+          detail: result,
+          targetId: target.id,
+        });
+      }
+    }, 600);
   };
 
   // === Skill Check flow ===
@@ -539,6 +803,26 @@ export default function CombatDiceWindow({
     setIsRolling(false);
     setPhase("save_result");
     onRoll && onRoll({ type: "save_result", roll: result });
+
+    // If the target failed a save against a condition / debuff spell,
+    // broadcast the apply hook so the parent can tag them. Damage
+    // spells that call for a save (Fireball, Ice Storm, etc.) don't
+    // need this — they already flow through the damage pipeline.
+    if (!success && target?.id && onRoll && spellEffect) {
+      if (spellEffect.effect === "condition" && spellEffect.condition) {
+        onRoll({
+          type: "condition_applied",
+          condition: spellEffect.condition,
+          targetId: target.id,
+        });
+      } else if (spellEffect.effect === "debuff" && spellEffect.debuff) {
+        onRoll({
+          type: "debuff_applied",
+          debuff: spellEffect.debuff,
+          targetId: target.id,
+        });
+      }
+    }
   };
 
   const onInitiativeRollComplete = (roll) => {
@@ -974,8 +1258,59 @@ export default function CombatDiceWindow({
                               +{damageRoll.sneakDice}d6 Sneak
                             </span>
                           )}
+                          {spellEffect?.effect === "damage_condition" && spellEffect.condition && (
+                            <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-purple-200 drop-shadow">
+                              +{spellEffect.condition}
+                            </span>
+                          )}
                         </motion.div>
                       )}
+                    </div>
+                  )}
+
+                  {phase === "heal_result" && healRoll && (
+                    <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
+                      <motion.div
+                        initial={{ scale: 0, y: 50 }}
+                        animate={{ scale: 1, y: 0 }}
+                        transition={{ type: "spring", bounce: 0.5 }}
+                        className="bg-gradient-to-br from-[#22c55e] to-[#14532d] text-white w-36 h-36 rounded-full flex flex-col items-center justify-center shadow-[0_0_50px_rgba(34,197,94,0.8)] border-4 border-white z-50"
+                      >
+                        <span className="text-xs font-bold uppercase tracking-widest opacity-90">
+                          Healed
+                        </span>
+                        <span className="text-5xl font-black drop-shadow-md">
+                          +{healRoll.total}
+                        </span>
+                        <span className="text-[9px] font-bold uppercase tracking-wider opacity-80">
+                          {healRoll.dice}
+                          {healRoll.mod > 0 ? ` + ${healRoll.mod}` : ""}
+                        </span>
+                      </motion.div>
+                    </div>
+                  )}
+
+                  {phase === "effect_applied" && effectApplied && (
+                    <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
+                      <motion.div
+                        initial={{ scale: 0, y: 50 }}
+                        animate={{ scale: 1, y: 0 }}
+                        transition={{ type: "spring", bounce: 0.5 }}
+                        className={`${
+                          effectApplied.effect === "buff"
+                            ? "bg-gradient-to-br from-[#37F2D1] to-[#0ea5e9]"
+                            : effectApplied.effect === "utility"
+                            ? "bg-gradient-to-br from-slate-500 to-slate-800"
+                            : "bg-gradient-to-br from-[#8B5CF6] to-[#5b21b6]"
+                        } text-white w-56 min-h-[9rem] rounded-[2rem] flex flex-col items-center justify-center shadow-[0_0_50px_rgba(0,0,0,0.75)] border-4 border-white z-50 px-4 py-3`}
+                      >
+                        <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">
+                          Spell Cast
+                        </span>
+                        <span className="text-center text-sm font-black uppercase tracking-wide mt-1 drop-shadow leading-tight">
+                          {effectApplied.label}
+                        </span>
+                      </motion.div>
                     </div>
                   )}
 
@@ -1144,6 +1479,35 @@ export default function CombatDiceWindow({
                   </button>
                 )}
 
+                {phase === "ready" && flowType === "heal" && (
+                  <button
+                    onClick={handleHealRoll}
+                    disabled={isRolling || !target}
+                    className="w-full bg-[#22c55e] hover:bg-[#16a34a] disabled:opacity-50 disabled:cursor-not-allowed text-white text-2xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(34,197,94,0.4)] border-b-4 border-[#14532d] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
+                  >
+                    {isRolling ? "HEALING..." : "ROLL HEALING"}
+                  </button>
+                )}
+
+                {phase === "ready" && flowType === "auto_damage" && (
+                  <button
+                    onClick={handleAutoDamage}
+                    disabled={isRolling || !target}
+                    className="w-full bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-2xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(220,38,38,0.4)] border-b-4 border-red-800 active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
+                  >
+                    {isRolling ? "ROLLING..." : "ROLL DAMAGE"}
+                  </button>
+                )}
+
+                {phase === "ready" && flowType === "effect" && (
+                  <button
+                    onClick={handleApplyEffect}
+                    className="w-full bg-[#8B5CF6] hover:bg-[#7c4dff] text-white text-2xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(139,92,246,0.4)] border-b-4 border-[#5b21b6] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
+                  >
+                    CAST SPELL
+                  </button>
+                )}
+
                 {phase === "ready" && flowType === "skill_check" && (
                   <button
                     onClick={handleSkillCheckRoll}
@@ -1180,7 +1544,9 @@ export default function CombatDiceWindow({
                 {(phase === "damage_result" ||
                   (phase === "attack_result" && !isHit) ||
                   phase === "check_result" ||
-                  phase === "save_result") && (
+                  phase === "save_result" ||
+                  phase === "heal_result" ||
+                  phase === "effect_applied") && (
                   <div className="flex flex-col gap-3 pt-8">
                     <button
                       onClick={() => {
