@@ -39,6 +39,7 @@ import { canEquipToSlot } from "@/components/gm/equipmentRules";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
+import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
 import { resolveAction, consumeActionCost } from "@/components/combat/actionResolver";
 import { hpBarColor, clampHp, normalizeHp } from "@/components/combat/hpColor";
 import { toast } from "sonner";
@@ -156,6 +157,13 @@ export default function GMPanel() {
   // the targeting / dice-window flow (which weapon to fire) need it.
   const [attackMode, setAttackMode] = useState(null);
 
+  // When a downed PLAYER reaches their turn we automatically open the
+  // dramatic DeathSaveWindow. When a downed MONSTER reaches their turn
+  // the GM can opt into dramatic mode by clicking "Show Dramatic Roll"
+  // on the inline DeathSavePanel; that records the monster's key here
+  // so the overlay takes over the screen until the roll resolves.
+  const [dramaticDeathSaveKey, setDramaticDeathSaveKey] = useState(null);
+
   // Spell slots spent per character. Keyed by characterKey
   // (uniqueId / id), value is { 1: <spent>, 2: <spent>, ... }. Slots
   // persist across turns and combats — only a long rest should reset
@@ -193,6 +201,65 @@ export default function GMPanel() {
     return entry?.downed ? entry : null;
   }, [selectedCharacterKey, campaign?.combat_data?.order]);
   const isHidden = !!selectedCharacterKey && hiddenCharacters.has(selectedCharacterKey);
+
+  // Dramatic death-save overlay target. The window takes over the whole
+  // screen when EITHER:
+  //   - the active combatant (front of order[0]) is a downed player that
+  //     isn't dead/stabilized — their death save is always dramatic, OR
+  //   - the GM has explicitly opted a downed monster into dramatic mode
+  //     via `dramaticDeathSaveKey` (click "Show Dramatic Roll").
+  const activeDeathSaveTarget = React.useMemo(() => {
+    const order = campaign?.combat_data?.order || [];
+    if (!order.length) return null;
+
+    const isLiveSave = (entry) => {
+      if (!entry?.downed) return false;
+      const saves = entry.deathSaves || {};
+      return !saves.dead && !saves.stabilized;
+    };
+
+    const active = order[0];
+    const activeKey = active?.uniqueId || active?.id;
+    const activeIsPlayer = active?.type === 'player';
+    if (activeIsPlayer && isLiveSave(active)) {
+      return { combatant: active, key: activeKey, isPlayer: true, silent: false };
+    }
+
+    if (dramaticDeathSaveKey) {
+      const monster = order.find(
+        (c) => (c.uniqueId || c.id) === dramaticDeathSaveKey,
+      );
+      if (monster && isLiveSave(monster)) {
+        return {
+          combatant: monster,
+          key: monster.uniqueId || monster.id,
+          isPlayer: false,
+          silent: false,
+        };
+      }
+    }
+    return null;
+  }, [campaign?.combat_data?.order, dramaticDeathSaveKey]);
+
+  // Rotate combat_data.order[0] to the end of the queue and persist.
+  // Used after a downed PC's death save auto-advances their turn. Mirrors
+  // the END TURN button's behaviour (splice + push + currentTurnIndex=0).
+  const advanceTurn = React.useCallback(async () => {
+    if (!campaign?.combat_data?.order?.length) return;
+    const currentOrder = [...campaign.combat_data.order];
+    const [finished] = currentOrder.splice(0, 1);
+    currentOrder.push(finished);
+    const newData = { ...campaign.combat_data, order: currentOrder, currentTurnIndex: 0 };
+    queryClient.setQueryData(['campaign', campaignId], (old) =>
+      old ? { ...old, combat_data: newData } : old,
+    );
+    try {
+      await base44.entities.Campaign.update(campaignId, { combat_data: newData });
+    } catch (err) {
+      console.error('advanceTurn failed:', err);
+    }
+    queryClient.invalidateQueries(['campaign', campaignId]);
+  }, [campaign?.combat_data, campaignId, queryClient]);
 
   // If the selected character is no longer hidden (turn rolled over, attacked
   // while sneaking, or the GM switched to a different character) the Sneak
@@ -357,27 +424,102 @@ export default function GMPanel() {
     else if (stage === 'initiative' || stage === 'arranging') setIsTurnOrderAccepted(false);
   }, [campaign?.combat_data?.stage]);
 
+  // Post-combat rest flow. After confirming End Combat, the GM picks
+  // Continue (no healing), Short Rest (half-HP restore + Warlock pact
+  // slots refresh) or Long Rest (full HP + all slots). The rest is
+  // applied to every campaign character — not just the ones that were
+  // in the encounter — because the whole party is typically resting
+  // together. Combat state is cleared regardless of which option runs.
+  const [showRestChoice, setShowRestChoice] = useState(false);
+
+  const clearCombatClientState = React.useCallback(() => {
+    setCombatActive(false);
+    setIsTurnOrderAccepted(false);
+    setInitiativeOrder([]);
+    setActiveConditions({});
+    setHiddenCharacters(new Set());
+    setSneakActive(false);
+    hidThisTurnRef.current = false;
+    prevActiveKeyRef.current = null;
+    setShowEndCombatAlert(false);
+    setShowRestChoice(false);
+  }, []);
+
   const endCombatMutation = useMutation({
-    mutationFn: () => base44.entities.Campaign.update(campaignId, { 
-      combat_active: false,
-      combat_data: null
-    }),
-    onSuccess: () => {
-      setCombatActive(false);
-      setIsTurnOrderAccepted(false);
-      setInitiativeOrder([]);
-      setActiveConditions({});
-      setHiddenCharacters(new Set());
-      setSneakActive(false);
-      hidThisTurnRef.current = false;
-      prevActiveKeyRef.current = null;
-      setShowEndCombatAlert(false);
+    mutationFn: async (restType /* 'none' | 'short' | 'long' */ = 'none') => {
+      // 1. Clear combat state on the campaign row.
+      await base44.entities.Campaign.update(campaignId, {
+        combat_active: false,
+        combat_data: null,
+      });
+
+      // 2. Apply the chosen rest to every PC. Long rest = full HP +
+      //    clear all spent slots. Short rest = restore up to half max
+      //    HP (pragmatic stand-in for hit-dice spending) and reset
+      //    Warlock pact slots only. Continue does neither.
+      if (restType === 'short' || restType === 'long') {
+        const updates = characters.map(async (c) => {
+          const hp = c.hit_points || {};
+          const max = Number.isFinite(hp.max) ? hp.max : 0;
+          const current = Number.isFinite(hp.current) ? hp.current : max;
+          let nextCurrent = current;
+          if (restType === 'long') {
+            nextCurrent = max;
+          } else if (restType === 'short' && max > 0) {
+            // Heal to at least half max HP, but never reduce current HP.
+            nextCurrent = Math.max(current, Math.ceil(max / 2));
+          }
+          const payload = {
+            hit_points: { ...hp, max, current: nextCurrent, temporary: 0 },
+          };
+          try {
+            await base44.entities.Character.update(c.id, payload);
+          } catch (err) {
+            console.error('Rest HP update failed for', c.name, err);
+          }
+        });
+        await Promise.all(updates);
+
+        // Clear in-memory spent spell slots. Long rest clears all,
+        // short rest clears slots only for Warlocks (pact magic).
+        setSpentSlotsByCharacter((prev) => {
+          if (restType === 'long') return {};
+          const next = { ...prev };
+          characters.forEach((c) => {
+            const cls = (c.class || '').toLowerCase();
+            if (cls === 'warlock') {
+              const key = c.id;
+              if (key in next) delete next[key];
+            }
+          });
+          return next;
+        });
+      }
+
+      return restType;
+    },
+    onSuccess: (restType) => {
+      clearCombatClientState();
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
-    }
+      queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
+      if (restType === 'long') toast.success('The party takes a long rest. HP and spells restored.');
+      else if (restType === 'short') toast.success('The party takes a short rest.');
+    },
+    onError: (err) => {
+      console.error('End combat failed:', err);
+      toast.error('Failed to end combat.');
+    },
   });
 
+  // "End Combat" first confirms via the alert, then swaps to the rest
+  // chooser. Confirming the alert closes it and opens the chooser.
   const handleEndCombat = () => {
-    endCombatMutation.mutate();
+    setShowEndCombatAlert(false);
+    setShowRestChoice(true);
+  };
+
+  const handleChooseRest = (restType) => {
+    endCombatMutation.mutate(restType);
   };
 
   // Patch a combatant's faction / charm fields in both the live
@@ -551,13 +693,18 @@ export default function GMPanel() {
 
   // Roll a d20 death save for a downed combatant and apply the result.
   // 10+ = success, 9− = failure, nat 20 = revive to 1 HP, nat 1 = 2 failures.
-  const rollDeathSaveForCombatant = React.useCallback((combatantKey) => {
+  // Accepts an optional `providedRoll` so the DeathSaveWindow can pre-roll
+  // the d20 for its animation and then delegate state persistence here.
+  const rollDeathSaveForCombatant = React.useCallback((combatantKey, providedRoll) => {
     if (!combatantKey || !campaign?.combat_data?.order) return;
     const target = campaign.combat_data.order.find(c => (c.uniqueId || c.id) === combatantKey);
     if (!target || !target.downed) return;
     const existing = target.deathSaves || { successes: 0, failures: 0, stabilized: false, dead: false };
     if (existing.dead || existing.stabilized) return;
-    const roll = Math.floor(Math.random() * 20) + 1;
+    const roll =
+      Number.isFinite(providedRoll) && providedRoll >= 1 && providedRoll <= 20
+        ? providedRoll
+        : Math.floor(Math.random() * 20) + 1;
 
     if (roll === 20) {
       // Back on your feet with 1 HP.
@@ -640,6 +787,12 @@ export default function GMPanel() {
 
   // Handler called when CombatActionBar cycles the attack toggle.
   const handleAttackModeChange = React.useCallback((nextMode) => {
+    // Hard lock during initiative setup — nobody acts before FIGHT.
+    const stage = campaign?.combat_data?.stage;
+    if (stage === 'initiative' || stage === 'arranging') {
+      toast.error("Combat hasn't started yet.");
+      return;
+    }
     // Guardrails: only check turn order / action economy when transitioning
     // from null → a mode (i.e. entering attack targeting). Cycling between
     // modes or cancelling is always allowed.
@@ -674,6 +827,7 @@ export default function GMPanel() {
     attackMode,
     campaign?.combat_active,
     campaign?.combat_data,
+    campaign?.combat_data?.stage,
     isActorsTurn,
     isGM,
     actionsState.action,
@@ -835,6 +989,9 @@ export default function GMPanel() {
     setActionsState({ action: true, bonus: true, reaction: true, inspiration: false });
     setAttackMode(null);
     setSneakActive(false);
+    // A dramatic monster save belongs to the GM's active interaction —
+    // close it when the turn rotates so it doesn't stay on screen.
+    setDramaticDeathSaveKey(null);
 
     const activeCombatant = campaign?.combat_data?.order?.[0];
     const activeKey = activeCombatant?.uniqueId || activeCombatant?.id;
@@ -1084,9 +1241,33 @@ export default function GMPanel() {
               </div>
             )}
 
+            {activeDeathSaveTarget && (
+              <DeathSaveWindow
+                combatant={activeDeathSaveTarget.combatant}
+                canRoll={true}
+                silent={false}
+                onRoll={(d20) => {
+                  rollDeathSaveForCombatant(activeDeathSaveTarget.key, d20);
+                }}
+                onClose={() => {
+                  setDramaticDeathSaveKey(null);
+                  // Auto-advance the turn if this save belonged to the
+                  // active combatant (front of the queue). Monster
+                  // dramatic rolls the GM opened manually DON'T
+                  // auto-advance — the GM decides when to end the turn.
+                  const activeKey =
+                    campaign?.combat_data?.order?.[0]?.uniqueId ||
+                    campaign?.combat_data?.order?.[0]?.id;
+                  if (activeKey === activeDeathSaveTarget.key) {
+                    advanceTurn();
+                  }
+                }}
+              />
+            )}
+
             <CombatDiceWindow
               isOpen={
-                combatState.isOpen || 
+                combatState.isOpen ||
                 (campaign?.combat_data?.stage === 'initiative') ||
                 (!!campaign?.combat_data?.active_encounter && !combatState.isOpen)
               }
@@ -1532,13 +1713,36 @@ export default function GMPanel() {
               </div>
             </div>
 
-            {selectedDownedEntry ? (
+            {campaign?.combat_data?.stage === 'initiative' || campaign?.combat_data?.stage === 'arranging' ? (
+              // Combat hasn't actually started yet — the GM is still
+              // arranging the initiative order. Lock the whole action
+              // surface so nobody (GM included) can fire actions, pick
+              // targets, or roll anything. The only interactive element
+              // during this stage is the draggable TurnOrderBar + the
+              // FIGHT button above it.
+              <div className="relative z-20 rounded-[32px] bg-[#050816]/95 px-6 py-6 shadow-[0_20px_60px_rgba(0,0,0,0.75)] text-center">
+                <p className="text-[10px] uppercase tracking-[0.32em] text-[#37F2D1]/80 font-bold mb-2">
+                  Initiative Setup
+                </p>
+                <p className="text-white/80 text-sm">
+                  Arrange the turn order, then press <span className="text-[#37F2D1] font-bold">FIGHT</span> to begin combat.
+                </p>
+                <p className="text-slate-500 text-[11px] mt-2 italic">
+                  Actions are locked until combat starts.
+                </p>
+              </div>
+            ) : selectedDownedEntry ? (
               <DeathSavePanel
                 combatant={selectedDownedEntry}
                 isPlayer={selectedCharacter?.type === 'player'}
+                isActiveTurn={
+                  (campaign?.combat_data?.order?.[0]?.uniqueId ||
+                    campaign?.combat_data?.order?.[0]?.id) === selectedCharacterKey
+                }
                 onRoll={() => rollDeathSaveForCombatant(selectedCharacterKey)}
                 onAdjust={(change) => applyDeathSaveChange(selectedCharacterKey, change)}
                 onKill={() => applyDeathSaveChange(selectedCharacterKey, { failures: 3, dead: true })}
+                onShowDramatic={() => setDramaticDeathSaveKey(selectedCharacterKey)}
               />
             ) : (
             <CombatActionBar
@@ -2083,18 +2287,64 @@ export default function GMPanel() {
           <AlertDialogHeader>
             <AlertDialogTitle>End Combat?</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-400">
-              Are you sure you want to end combat? This will clear the turn order.
+              This will clear the turn order. You'll then be asked whether the party takes a rest.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="bg-transparent border-gray-600 text-white hover:bg-gray-800 hover:text-white">Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleEndCombat}
               className="bg-red-600 hover:bg-red-700 text-white"
             >
               End Combat
             </AlertDialogAction>
           </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Post-combat rest chooser. Continue / Short Rest / Long Rest.
+          All three clear combat state; only the rests heal. */}
+      <AlertDialog
+        open={showRestChoice}
+        onOpenChange={(open) => {
+          if (!open && !endCombatMutation.isPending) setShowRestChoice(false);
+        }}
+      >
+        <AlertDialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>After the Battle</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
+              Does the party rest? Long Rest restores everyone to full HP and all spell slots.
+              Short Rest heals each character up to half their max HP and refreshes Warlock pact slots.
+              Continue just ends combat with no recovery.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid grid-cols-1 gap-3 mt-2">
+            <button
+              type="button"
+              disabled={endCombatMutation.isPending}
+              onClick={() => handleChooseRest('long')}
+              className="w-full bg-[#22c55e] hover:bg-[#16a34a] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl tracking-wide uppercase text-sm"
+            >
+              Long Rest
+            </button>
+            <button
+              type="button"
+              disabled={endCombatMutation.isPending}
+              onClick={() => handleChooseRest('short')}
+              className="w-full bg-[#eab308] hover:bg-[#ca8a04] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl tracking-wide uppercase text-sm"
+            >
+              Short Rest
+            </button>
+            <button
+              type="button"
+              disabled={endCombatMutation.isPending}
+              onClick={() => handleChooseRest('none')}
+              className="w-full bg-[#334155] hover:bg-[#475569] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl tracking-wide uppercase text-sm"
+            >
+              Continue (No Rest)
+            </button>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
     </div>
@@ -3401,8 +3651,12 @@ function FallenCard({ combatant }) {
 // Replaces the CombatActionBar when the selected combatant is downed.
 // Players get a single "Roll Death Save" button. The GM also gets a
 // row of manual overrides for quick NPC resolution.
-function DeathSavePanel({ combatant, isPlayer, onRoll, onAdjust, onKill }) {
+function DeathSavePanel({ combatant, isPlayer, isActiveTurn, onRoll, onAdjust, onKill, onShowDramatic }) {
   const saves = combatant.deathSaves || { successes: 0, failures: 0, stabilized: false, dead: false };
+  // When it's a downed player's turn, the dramatic DeathSaveWindow takes
+  // over the full screen so the inline panel just shows a status line —
+  // the GM shouldn't be rolling on the player's behalf from this panel.
+  const playerOnTheirTurn = isPlayer && isActiveTurn && !saves.dead && !saves.stabilized;
 
   return (
     <div className="relative z-20 rounded-[32px] bg-[#050816]/95 px-6 py-5 shadow-[0_20px_60px_rgba(0,0,0,0.75)]">
@@ -3463,14 +3717,31 @@ function DeathSavePanel({ combatant, isPlayer, onRoll, onAdjust, onKill }) {
           </div>
         </div>
 
-        {!saves.dead && !saves.stabilized && (
+        {!saves.dead && !saves.stabilized && playerOnTheirTurn && (
+          <p className="text-center text-slate-400 text-xs italic">
+            Dramatic death save window is open — waiting on the player to roll.
+          </p>
+        )}
+
+        {!saves.dead && !saves.stabilized && !playerOnTheirTurn && (
           <div className="flex flex-col gap-2">
-            <button
-              onClick={onRoll}
-              className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] text-white text-lg font-black py-3 rounded-2xl shadow-[0_8px_24px_rgba(255,87,34,0.4)] border-b-4 border-[#c43e12] active:border-b-0 active:translate-y-0.5 transition-all"
-            >
-              ROLL DEATH SAVE (d20)
-            </button>
+            {!isPlayer && (
+              <button
+                onClick={onRoll}
+                className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] text-white text-lg font-black py-3 rounded-2xl shadow-[0_8px_24px_rgba(255,87,34,0.4)] border-b-4 border-[#c43e12] active:border-b-0 active:translate-y-0.5 transition-all"
+              >
+                ROLL DEATH SAVE (d20)
+              </button>
+            )}
+
+            {!isPlayer && (
+              <button
+                onClick={onShowDramatic}
+                className="w-full bg-[#1a1f2e] hover:bg-[#222738] text-purple-300 border border-purple-500/40 text-xs font-bold py-2 rounded-xl uppercase tracking-widest transition-colors"
+              >
+                Show Dramatic Roll
+              </button>
+            )}
 
             {!isPlayer && (
               <div className="grid grid-cols-2 gap-2 pt-1">
