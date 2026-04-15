@@ -503,9 +503,12 @@ export default function CombatDiceWindow({
       // the GM can switch to melee mode for that case.)
       return dexMod + proficiency;
     }
-    if (isFinesse) {
+    if (isFinesse || mode === "offhand") {
       // Finesse weapons (rapier, shortsword, scimitar, whip, dagger,
-      // etc.) pick the higher of STR or DEX.
+      // etc.) AND off-hand bonus attacks pick the higher of STR or
+      // DEX for the attack roll. The damage mod for off-hand is
+      // stripped in onDamageRollComplete unless the character has
+      // Two-Weapon Fighting style.
       return Math.max(strMod, dexMod) + proficiency;
     }
     // Default melee: STR.
@@ -630,6 +633,10 @@ export default function CombatDiceWindow({
 
   const onDamageRollComplete = (roll) => {
     let mod = 0;
+    // Off-hand flag lives on the action object when the GM panel
+    // fires the off-hand bonus attack. Fall back to the legacy
+    // top-level prop for callers that still pass it there.
+    const actionIsOffHand = !!selectedAction?.isOffHand || !!isOffHand;
 
     if (selectedAction?.type === "spell") {
       // Most spells don't add ability mod to damage; we can refine per-spell later.
@@ -651,13 +658,34 @@ export default function CombatDiceWindow({
         mod = isMonkActor() ? Math.max(strMod, dexMod) : strMod;
       } else if (mode === "ranged" || isRangedWeapon) {
         mod = dexMod;
-      } else if (isFinesse) {
+      } else if (isFinesse || mode === "offhand") {
+        // Off-hand attacks are almost always Light finesse weapons
+        // (dagger, shortsword, scimitar, handaxe), so treat them the
+        // same as finesse — pick the higher of STR/DEX for the ATTACK
+        // roll. The "no mod on damage" penalty lives below.
         mod = Math.max(strMod, dexMod);
       } else {
         mod = strMod;
       }
-      // Off-hand: no positive ability mod unless they have Two-Weapon Fighting style
-      if (isOffHand && mod > 0) mod = 0;
+      // Off-hand: no positive ability mod on DAMAGE unless the
+      // character has the Two-Weapon Fighting fighting style. We
+      // sniff a couple of common shapes so a PC tagged with the
+      // feature in any of them still keeps their damage mod.
+      if (actionIsOffHand && mod > 0) {
+        const hasTWF = (() => {
+          const style = actor?.fighting_style || actor?.fightingStyle || "";
+          if (typeof style === "string" && /two[-\s]?weapon/i.test(style)) return true;
+          const styles = actor?.fighting_styles || actor?.features || [];
+          if (Array.isArray(styles)) {
+            return styles.some((s) => {
+              const name = typeof s === "string" ? s : s?.name || "";
+              return /two[-\s]?weapon fighting/i.test(name);
+            });
+          }
+          return false;
+        })();
+        if (!hasTWF) mod = 0;
+      }
     }
 
     // Unarmed damage uses 1d4 (or Monk Martial Arts die), not the weapon damage.
