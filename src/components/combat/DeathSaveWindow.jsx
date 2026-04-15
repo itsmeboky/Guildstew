@@ -25,23 +25,22 @@ const ICONS = {
 const WHITE_TINT = { filter: "brightness(0) invert(1)" };
 
 // Sound effect URLs. These live in the `campaign-assets` Supabase bucket
-// under `dnd5e/audio/deathsave/`. If a file is missing, the corresponding
-// sound just silently fails — the window still functions.
+// under `dnd5e/sfx/`. Filenames are URL-encoded because the uploads
+// intentionally use human-readable names with spaces. If a file is
+// missing, the corresponding sound just silently fails — the window
+// still functions.
+const SFX_BASE =
+  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/sfx";
+
 const SOUND_URLS = {
-  heartbeat:
-    "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/audio/deathsave/heartbeat.mp3",
-  nat20:
-    "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/audio/deathsave/nat20.mp3",
-  nat1:
-    "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/audio/deathsave/nat1.mp3",
-  success:
-    "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/audio/deathsave/success.mp3",
-  failure:
-    "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/audio/deathsave/failure.mp3",
-  stabilized:
-    "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/audio/deathsave/stabilized.mp3",
-  dead:
-    "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/audio/deathsave/dead.mp3",
+  heartbeat: `${SFX_BASE}/Heart%20Beat.mp3`,
+  nat20: `${SFX_BASE}/Nat%2020%20(back%20from%20the%20brink).mp3`,
+  nat1: `${SFX_BASE}/Nat%201%20(double%20failure).wav`,
+  success: `${SFX_BASE}/Regular%20success%20(10+).wav`,
+  failure: `${SFX_BASE}/Regular%20failure%20(2-9).mp3`,
+  stabilizedMale: `${SFX_BASE}/Stabilized%20(3rd%20success)Male.mp3`,
+  stabilizedFemale: `${SFX_BASE}/Stabilized%20(3rd%20success)Female.mp3`,
+  dead: `${SFX_BASE}/Dead%20(3rd%20failure).wav`,
 };
 
 function makeAudio(url, { loop = false, volume = 0.7 } = {}) {
@@ -183,8 +182,20 @@ export default function DeathSaveWindow({
       const willDie = nextFailures >= 3;
 
       if (!silent && willStabilize) {
+        // Pick the stabilized sting based on the combatant's recorded
+        // gender / pronouns. Falls back to male if nothing usable is
+        // on the entity.
+        const g = (combatant.gender || combatant.pronouns || "").toString().toLowerCase();
+        const isFemale =
+          g.includes("female") ||
+          g === "f" ||
+          g.includes("she") ||
+          g.includes("her");
+        const stabilizedUrl = isFemale
+          ? SOUND_URLS.stabilizedFemale
+          : SOUND_URLS.stabilizedMale;
         queueTimeout(() => {
-          tryPlay(makeAudio(SOUND_URLS.stabilized, { volume: 0.7 }));
+          tryPlay(makeAudio(stabilizedUrl, { volume: 0.7 }));
         }, 900);
       }
       if (!silent && willDie) {
