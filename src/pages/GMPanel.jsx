@@ -1064,6 +1064,7 @@ export default function GMPanel() {
     const equipment = equippedItems || {};
     let effectiveMode = mode;
     let weapon = null;
+    let isOffHand = false;
 
     if (mode === 'melee') {
       weapon = equipment.weapon1 || null;
@@ -1071,8 +1072,16 @@ export default function GMPanel() {
     } else if (mode === 'ranged') {
       weapon = equipment.ranged || null;
       if (!weapon) effectiveMode = 'unarmed';
+    } else if (mode === 'offhand') {
+      // Two-weapon fighting bonus attack. Weapon 2 is the off-hand
+      // slot; we leave the mode tag as 'offhand' so downstream code
+      // (getModifier / damage flow) can branch and strip the damage
+      // modifier per 5e rules. isOffHand=true also flips the action
+      // cost from "action" to "bonus" in resolveAction.
+      weapon = equipment.weapon2 || null;
+      isOffHand = true;
+      if (!weapon) effectiveMode = 'unarmed';
     }
-    // mode === 'unarmed' always sends weapon: null
 
     if (effectiveMode === 'unarmed') weapon = null;
 
@@ -1081,11 +1090,33 @@ export default function GMPanel() {
       name: 'Attack',
       mode: effectiveMode,
       weapon,
-      isOffHand: false,
+      isOffHand,
     };
     const resolved = resolveAction(action, selectedCharacter);
     return { ...action, resolved };
   }, [equippedItems, selectedCharacter]);
+
+  // Handler fired by the action bar when the off-hand attack becomes
+  // available (main action spent + weapon2 equipped + bonus unused).
+  // We build an off-hand basic attack and route it straight into
+  // targeting mode — no mode cycling, no slot picker.
+  const handleOffhandAttack = React.useCallback(() => {
+    const action = buildAttackAction('offhand');
+    if (!action?.weapon) {
+      toast.error('No off-hand weapon equipped.');
+      return;
+    }
+    // GM always allowed; otherwise enforce turn gate.
+    if (campaign?.combat_active && campaign?.combat_data && !isGM && !isActorsTurn) {
+      toast.error("It's not this character's turn!");
+      return;
+    }
+    if (!actionsState.bonus) {
+      toast.error('No bonus action available this turn!');
+      return;
+    }
+    setCombatState({ isOpen: false, step: 'selecting_target', action, target: null });
+  }, [buildAttackAction, campaign?.combat_active, campaign?.combat_data, isGM, isActorsTurn, actionsState.bonus]);
 
   // Handler called when CombatActionBar cycles the attack toggle.
   const handleAttackModeChange = React.useCallback((nextMode) => {
@@ -2328,6 +2359,7 @@ export default function GMPanel() {
               maxSpellSlots={maxSpellSlots}
               spentSpellSlots={currentSpentSlots}
               onToggleSlot={handleToggleSlot}
+              onOffhandAttack={handleOffhandAttack}
               onActionClick={((runAction) => {
                 // Always repoint the ref at the freshest closure so
                 // the level picker can re-enter this exact handler
