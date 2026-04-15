@@ -15,6 +15,7 @@ import {
 } from "@/components/combat/actionResolver";
 import { hpBarColor } from "@/components/combat/hpColor";
 import { FACTION_STYLES, getFaction } from "@/utils/combatQueue";
+import { getConditionModifiers } from "@/components/combat/conditions";
 
 const CLASS_SPELL_ABILITY = {
   Wizard: "int",
@@ -59,6 +60,10 @@ export default function CombatDiceWindow({
   const [effectApplied, setEffectApplied] = useState(null);
   const [skillCheckRoll, setSkillCheckRoll] = useState(null);
   const [savingThrowRoll, setSavingThrowRoll] = useState(null);
+  // Pair of d20s used when the roll has advantage or disadvantage.
+  // rollPair = { dice: [d20a, d20b], chosen: 0|1 } on the attack /
+  // save / check result so the render can dim the unused die.
+  const [rollPair, setRollPair] = useState(null);
   const [isRolling, setIsRolling] = useState(false);
   // Phases:
   //  Attack:  ready → rolling_attack → attack_result → rolling_damage → damage_result
@@ -98,6 +103,47 @@ export default function CombatDiceWindow({
   }, [spellName, spellDataList]);
   const spellEffect = getSpellEffect(spellName, spellData);
   const casterLevel = actor?.level || actor?.stats?.level || 1;
+
+  // A spell requires Concentration if its duration field contains the
+  // word (e.g. "Concentration, up to 1 minute"). We also honour an
+  // explicit `concentration: true` flag on the spell row for edge
+  // cases where the duration is formatted oddly.
+  const requiresConcentration = React.useMemo(() => {
+    if (!spellData) return false;
+    if (spellData.concentration === true) return true;
+    const duration = (spellData.duration || "").toString().toLowerCase();
+    return duration.includes("concentration");
+  }, [spellData]);
+
+  // Condition-driven roll modifiers. Derived from actor.conditions /
+  // target.conditions arrays — the GM panel attaches these when it
+  // passes the combatants in. rollType is resolved below via flowType,
+  // so this memoizes as a callback and is called just-in-time in the
+  // roll handlers.
+  const computeConditionModifiers = React.useCallback(
+    (rollType) =>
+      getConditionModifiers(
+        actor,
+        target,
+        rollType,
+        selectedAction?.mode || null,
+      ),
+    [actor, target, selectedAction?.mode],
+  );
+
+  // Live preview for the banners above the roll button. We compute it
+  // based on the current flow so the GM sees disadvantage warnings
+  // before even pressing the roll button.
+  const previewRollType =
+    resolved?.rollType === "skill_check"
+      ? "skill_check"
+      : resolved?.rollType === "saving_throw"
+      ? "saving_throw"
+      : "attack";
+  const conditionPreview = React.useMemo(
+    () => getConditionModifiers(actor, target, previewRollType, selectedAction?.mode || null),
+    [actor, target, previewRollType, selectedAction?.mode],
+  );
 
   // Cast level: for a cantrip this is always 0 and we apply character-
   // level scaling. For a leveled spell this is the slot level the GM/
@@ -148,6 +194,25 @@ export default function CombatDiceWindow({
     // roll — treat it like an effect flow that rolls damage.
     if (spellEffect.autoHit) flowType = "auto_damage";
   }
+
+  // Shared helper — fire a concentration_start event when a spell
+  // with a Concentration duration successfully takes effect. Called
+  // from each apply site (effect_applied, save failure, damage hit).
+  const emitConcentrationStart = React.useCallback(() => {
+    if (!requiresConcentration || !onRoll) return;
+    if (!actor?.id || !spellName) return;
+    onRoll({
+      type: "concentration_start",
+      casterId: actor.id,
+      casterName: actor?.name,
+      spell: spellName,
+      spellLevel:
+        typeof selectedAction?.castLevel === "number"
+          ? selectedAction.castLevel
+          : selectedAction?.level || 0,
+      targetIds: target?.id ? [target.id] : [],
+    });
+  }, [requiresConcentration, onRoll, actor?.id, actor?.name, spellName, selectedAction, target?.id]);
 
   // Parse a "NdF" / "NdF+M" / "NdF+NdF" style dice string into a number.
   // Rolls deterministically via Math.random for simple forms, and just
@@ -252,6 +317,7 @@ export default function CombatDiceWindow({
     setSkillCheckRoll(null);
     setSavingThrowRoll(null);
     setInitiativeRoll(null);
+    setRollPair(null);
     setPhase("ready");
     setIsRolling(false);
     setCurrentDice("d20");
@@ -454,15 +520,44 @@ export default function CombatDiceWindow({
 
   const onAttackRollComplete = (roll) => {
     const mod = getModifier();
-    const nat20 = roll === 20;
+    const { hasAdvantage, hasDisadvantage, isAutoCrit } =
+      computeConditionModifiers("attack");
+
+    // Advantage / disadvantage: roll a second d20 silently, pick the
+    // higher / lower. The DiceRoller animation only ever shows one
+    // die, so the "paired" die is computed here and stored in
+    // rollPair for the result render.
+    let d20 = roll;
+    let pair = null;
+    if (hasAdvantage || hasDisadvantage) {
+      const second = Math.floor(Math.random() * 20) + 1;
+      const [a, b] = [roll, second];
+      const chosen = hasAdvantage
+        ? (a >= b ? 0 : 1)
+        : (a <= b ? 0 : 1);
+      d20 = chosen === 0 ? a : b;
+      pair = { dice: [a, b], chosen, mode: hasAdvantage ? "advantage" : "disadvantage" };
+    }
+
+    const nat20 = d20 === 20;
+    const total = d20 + mod;
+    // Auto-crit from conditions (Paralyzed / Unconscious melee) only
+    // applies IF the attack actually hits. Nat 20 always crits.
+    const willHit = nat20 || total >= (target?.stats?.armor_class || target?.armor_class || 10);
+    const isCritFlag = nat20 || (isAutoCrit && willHit);
     const result = {
-      total: roll + mod,
-      d20: roll,
+      total,
+      d20,
       mod,
-      isCrit: nat20,
+      isCrit: isCritFlag,
+      advantage: hasAdvantage,
+      disadvantage: hasDisadvantage,
+      autoCrit: isAutoCrit && willHit,
+      pair,
     };
-    setIsCrit(nat20);
+    setIsCrit(isCritFlag);
     setAttackRoll(result);
+    setRollPair(pair);
     setIsRolling(false);
     setPhase("attack_result");
     onRoll && onRoll({ type: "attack_result", roll: result });
@@ -618,6 +713,7 @@ export default function CombatDiceWindow({
         condition: spellEffect.condition,
         targetId: target.id,
       });
+      emitConcentrationStart();
     }
   };
 
@@ -724,6 +820,7 @@ export default function CombatDiceWindow({
         onRoll({ type: "utility_applied", note: spellEffect.note });
       }
     }
+    emitConcentrationStart();
   };
 
   // Auto-damage flow (Magic Missile — skips the attack roll). Works
@@ -773,7 +870,23 @@ export default function CombatDiceWindow({
   const onSkillCheckRollComplete = (roll) => {
     const skill = resolved?.skill || "Athletics";
     const mod = getSkillModifier(actor, skill);
-    const total = roll + mod;
+    const { hasAdvantage, hasDisadvantage } =
+      computeConditionModifiers("skill_check");
+
+    let d20 = roll;
+    let pair = null;
+    if (hasAdvantage || hasDisadvantage) {
+      const second = Math.floor(Math.random() * 20) + 1;
+      const [a, b] = [roll, second];
+      const chosen = hasAdvantage
+        ? (a >= b ? 0 : 1)
+        : (a <= b ? 0 : 1);
+      d20 = chosen === 0 ? a : b;
+      pair = { dice: [a, b], chosen, mode: hasAdvantage ? "advantage" : "disadvantage" };
+    }
+    setRollPair(pair);
+
+    const total = d20 + mod;
 
     // Contested check: Grapple / Shove aren't flat DC checks — the
     // target rolls back and the higher total wins (tie goes to the
@@ -805,7 +918,16 @@ export default function CombatDiceWindow({
       };
     }
 
-    const result = { total, d20: roll, mod, skill, contested };
+    const result = {
+      total,
+      d20,
+      mod,
+      skill,
+      contested,
+      advantage: hasAdvantage,
+      disadvantage: hasDisadvantage,
+      pair,
+    };
     setSkillCheckRoll(result);
     setIsRolling(false);
     setPhase("check_result");
@@ -814,6 +936,46 @@ export default function CombatDiceWindow({
 
   // === Saving Throw flow (target rolls) ===
   const handleSavingThrowRoll = () => {
+    const { isAutoFail } = computeConditionModifiers("saving_throw");
+    if (isAutoFail) {
+      // Skip the d20 animation entirely — the save is mechanically
+      // forced to fail. Synthesize a result and jump to save_result.
+      const saveAbility = resolved?.save || "dex";
+      const mod = getSaveModifier(target, saveAbility);
+      const dc = getSpellSaveDC(actor);
+      const result = {
+        total: 0,
+        d20: 0,
+        mod,
+        dc,
+        success: false,
+        ability: saveAbility,
+        autoFail: true,
+      };
+      setSavingThrowRoll(result);
+      setPhase("save_result");
+      onRoll && onRoll({ type: "save_result", roll: result });
+      // Still trigger the condition-apply hooks that live in the
+      // shared save-result handler.
+      if (target?.id && onRoll && spellEffect) {
+        if (spellEffect.effect === "condition" && spellEffect.condition) {
+          onRoll({
+            type: "condition_applied",
+            condition: spellEffect.condition,
+            targetId: target.id,
+          });
+          emitConcentrationStart();
+        } else if (spellEffect.effect === "debuff" && spellEffect.debuff) {
+          onRoll({
+            type: "debuff_applied",
+            debuff: spellEffect.debuff,
+            targetId: target.id,
+          });
+          emitConcentrationStart();
+        }
+      }
+      return;
+    }
     setIsRolling(true);
     setCurrentDice("d20");
     setPhase("rolling_save");
@@ -823,16 +985,35 @@ export default function CombatDiceWindow({
   const onSavingThrowRollComplete = (roll) => {
     const saveAbility = resolved?.save || "dex";
     const mod = getSaveModifier(target, saveAbility);
-    const total = roll + mod;
+    const { hasAdvantage, hasDisadvantage } =
+      computeConditionModifiers("saving_throw");
+
+    let d20 = roll;
+    let pair = null;
+    if (hasAdvantage || hasDisadvantage) {
+      const second = Math.floor(Math.random() * 20) + 1;
+      const [a, b] = [roll, second];
+      const chosen = hasAdvantage
+        ? (a >= b ? 0 : 1)
+        : (a <= b ? 0 : 1);
+      d20 = chosen === 0 ? a : b;
+      pair = { dice: [a, b], chosen, mode: hasAdvantage ? "advantage" : "disadvantage" };
+    }
+    setRollPair(pair);
+
+    const total = d20 + mod;
     const dc = getSpellSaveDC(actor);
     const success = total >= dc;
     const result = {
       total,
-      d20: roll,
+      d20,
       mod,
       dc,
       success,
       ability: saveAbility,
+      advantage: hasAdvantage,
+      disadvantage: hasDisadvantage,
+      pair,
     };
     setSavingThrowRoll(result);
     setIsRolling(false);
@@ -850,12 +1031,14 @@ export default function CombatDiceWindow({
           condition: spellEffect.condition,
           targetId: target.id,
         });
+        emitConcentrationStart();
       } else if (spellEffect.effect === "debuff" && spellEffect.debuff) {
         onRoll({
           type: "debuff_applied",
           debuff: spellEffect.debuff,
           targetId: target.id,
         });
+        emitConcentrationStart();
       }
     }
   };
@@ -1140,6 +1323,40 @@ export default function CombatDiceWindow({
                     exit={{ opacity: 0 }}
                     className="text-white font-bold text-2xl flex items-center gap-2 bg-black/50 px-6 py-2 rounded-full border border-white/10 backdrop-blur-md shadow-lg"
                   >
+                    {attackRoll.pair && (
+                      <span className="flex items-center gap-1 mr-1 text-sm">
+                        <span
+                          className={`px-1.5 py-0.5 rounded ${
+                            attackRoll.pair.chosen === 0
+                              ? attackRoll.pair.mode === "advantage"
+                                ? "bg-[#22c55e]/30 text-[#22c55e]"
+                                : "bg-red-500/30 text-red-300"
+                              : "text-slate-600 line-through"
+                          }`}
+                        >
+                          {attackRoll.pair.dice[0]}
+                        </span>
+                        <span className="text-slate-500 text-xs">
+                          {attackRoll.pair.mode === "advantage" ? "ADV" : "DIS"}
+                        </span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded ${
+                            attackRoll.pair.chosen === 1
+                              ? attackRoll.pair.mode === "advantage"
+                                ? "bg-[#22c55e]/30 text-[#22c55e]"
+                                : "bg-red-500/30 text-red-300"
+                              : "text-slate-600 line-through"
+                          }`}
+                        >
+                          {attackRoll.pair.dice[1]}
+                        </span>
+                      </span>
+                    )}
+                    {attackRoll.autoCrit && (
+                      <span className="text-yellow-300 text-[10px] uppercase tracking-widest mr-1">
+                        Auto-crit
+                      </span>
+                    )}
                     <span
                       className={
                         attackRoll.isCrit
@@ -1504,6 +1721,41 @@ export default function CombatDiceWindow({
               </div>
             ) : (
               <>
+                {phase === "ready" && conditionPreview.warnings.length > 0 && (
+                  <div className="w-full flex flex-col gap-1 mb-2">
+                    {conditionPreview.hasAdvantage && (
+                      <div className="w-full text-center text-[11px] font-black uppercase tracking-[0.22em] text-[#22c55e] bg-[#22c55e]/10 border border-[#22c55e]/50 rounded-lg py-1.5">
+                        Rolling with Advantage
+                      </div>
+                    )}
+                    {conditionPreview.hasDisadvantage && (
+                      <div className="w-full text-center text-[11px] font-black uppercase tracking-[0.22em] text-red-400 bg-red-500/10 border border-red-500/50 rounded-lg py-1.5">
+                        Rolling with Disadvantage
+                      </div>
+                    )}
+                    {conditionPreview.isAutoCrit && (
+                      <div className="w-full text-center text-[11px] font-black uppercase tracking-[0.22em] text-yellow-300 bg-yellow-400/10 border border-yellow-400/50 rounded-lg py-1.5">
+                        Auto-crit on melee hit
+                      </div>
+                    )}
+                    {conditionPreview.isAutoFail && flowType === "saving_throw" && (
+                      <div className="w-full text-center text-[11px] font-black uppercase tracking-[0.22em] text-red-300 bg-red-600/20 border border-red-500/60 rounded-lg py-1.5">
+                        Auto-Fail Save
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-0.5 max-h-24 overflow-y-auto rounded-lg bg-black/50 border border-yellow-500/30 px-2 py-1">
+                      {conditionPreview.warnings.map((w, i) => (
+                        <div
+                          key={i}
+                          className="text-[10px] text-yellow-200/90 leading-snug"
+                        >
+                          • {w}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {phase === "ready" && flowType === "attack" && (
                   <button
                     onClick={handleAttackRoll}
