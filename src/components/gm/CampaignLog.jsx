@@ -1,13 +1,18 @@
 import React, { useState, useRef, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Send, Dice6, Eye, EyeOff, ChevronDown } from "lucide-react";
+import { Send, Dice6, Eye, EyeOff, ChevronDown, Lock, MessageSquare, Swords, Filter } from "lucide-react";
 import moment from "moment";
+import { COMBAT_LOG_BORDER, COMBAT_LOG_GLYPH } from "@/utils/combatLog";
 
 export default function CampaignLog({ campaignId, currentUser, currentUserProfile, campaign, characters, allUserProfiles }) {
   const [message, setMessage] = useState("");
   const [isWhisper, setIsWhisper] = useState(false);
   const [isGmOnly, setIsGmOnly] = useState(false);
+  const [whisperTargetId, setWhisperTargetId] = useState(null);
+  // Feed filter: 'all' (default), 'chat' (player/GM messages only),
+  // or 'combat' (system + combat_log + dice_roll only).
+  const [feedFilter, setFeedFilter] = useState("all");
   const [autoScroll, setAutoScroll] = useState(true);
   const scrollRef = useRef(null);
   const queryClient = useQueryClient();
@@ -65,7 +70,7 @@ export default function CampaignLog({ campaignId, currentUser, currentUserProfil
   const handleSendMessage = () => {
     if (!message.trim()) return;
 
-    createEntryMutation.mutate({
+    const payload = {
       campaign_id: campaignId,
       type: "chat",
       user_id: currentUser?.id,
@@ -73,8 +78,13 @@ export default function CampaignLog({ campaignId, currentUser, currentUserProfil
       user_avatar: currentUserProfile?.avatar_url,
       content: message,
       is_whisper: isWhisper,
-      is_gm_only: isGmOnly
-    });
+      is_gm_only: isGmOnly,
+    };
+    if (isWhisper && whisperTargetId) {
+      payload.whisper_target_ids = [whisperTargetId];
+      payload.metadata = { whisper_to: whisperTargetId };
+    }
+    createEntryMutation.mutate(payload);
   };
 
   const handleKeyPress = (e) => {
@@ -84,14 +94,42 @@ export default function CampaignLog({ campaignId, currentUser, currentUserProfil
     }
   };
 
-  // Filter entries based on visibility
+  // Filter entries based on visibility + the user's feed filter.
+  // Visibility rules (must always be enforced):
+  //   - gm_only: only the GM / co-GMs see it
+  //   - whisper: only the sender, the GM, and the whisper_target_ids
+  //     see it
   const visibleEntries = logEntries.filter(entry => {
     if (entry.is_gm_only && !isGM) return false;
     if (entry.is_whisper && entry.user_id !== currentUser?.id && !isGM) {
       if (!entry.whisper_target_ids?.includes(currentUser?.id)) return false;
     }
+    if (feedFilter === "chat") {
+      // Only typed chat — hide combat_log, system dividers, dice_roll.
+      if (entry.type && entry.type !== "chat") return false;
+    } else if (feedFilter === "combat") {
+      // Only generated combat events and system notices — hide typed chat.
+      if (entry.type === "chat") return false;
+    }
     return true;
   });
+
+  // Player roster for the whisper target picker. We exclude the GM
+  // (they don't need to whisper themselves) and de-dupe by user_id.
+  const whisperTargets = React.useMemo(() => {
+    if (!campaign?.player_ids || !allUserProfiles) return [];
+    const seen = new Set();
+    const out = [];
+    campaign.player_ids.forEach((pid) => {
+      if (seen.has(pid)) return;
+      seen.add(pid);
+      const profile = allUserProfiles.find((p) => p.user_id === pid);
+      if (!profile) return;
+      if (pid === campaign.game_master_id) return;
+      out.push(profile);
+    });
+    return out;
+  }, [campaign?.player_ids, campaign?.game_master_id, allUserProfiles]);
 
   const formatTimestamp = (date) => {
     const m = moment(date);
@@ -109,6 +147,8 @@ export default function CampaignLog({ campaignId, currentUser, currentUserProfil
         return <SystemEntry entry={entry} formatTimestamp={formatTimestamp} />;
       case 'combat':
         return <CombatEntry entry={entry} formatTimestamp={formatTimestamp} />;
+      case 'combat_log':
+        return <CombatLogEntry entry={entry} formatTimestamp={formatTimestamp} />;
       default:
         return <ChatEntry entry={entry} formatTimestamp={formatTimestamp} isGM={isGM} displayInfo={displayInfo} />;
     }
@@ -116,8 +156,31 @@ export default function CampaignLog({ campaignId, currentUser, currentUserProfil
 
   return (
     <div className="h-full flex flex-col">
+      {/* Feed filter tabs */}
+      <div className="flex items-center gap-1 mb-2 pb-1 border-b border-[#111827]">
+        <Filter className="w-3 h-3 text-slate-500" />
+        {[
+          { id: 'all', label: 'All', icon: null },
+          { id: 'chat', label: 'Chat', icon: MessageSquare },
+          { id: 'combat', label: 'Combat', icon: Swords },
+        ].map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setFeedFilter(id)}
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider transition-colors ${
+              feedFilter === id
+                ? 'bg-[#22c5f5]/25 text-[#22c5f5] border border-[#22c5f5]/60'
+                : 'bg-transparent text-slate-500 border border-transparent hover:text-slate-300'
+            }`}
+          >
+            {Icon && <Icon className="w-3 h-3" />}
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* Log entries */}
-      <div 
+      <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto overflow-x-hidden space-y-2 custom-scrollbar"
         onScroll={(e) => {
@@ -155,11 +218,19 @@ export default function CampaignLog({ campaignId, currentUser, currentUserProfil
 
       {/* Input area */}
       <div className="pt-3 border-t border-[#111827] mt-2">
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
           {isGM && (
             <>
               <button
-                onClick={() => setIsWhisper(!isWhisper)}
+                onClick={() => {
+                  const next = !isWhisper;
+                  setIsWhisper(next);
+                  if (!next) setWhisperTargetId(null);
+                  // Whisper and GM Only are mutually exclusive — a
+                  // message can't be both private-to-GM and directed
+                  // at a specific player.
+                  if (next) setIsGmOnly(false);
+                }}
                 className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-colors ${
                   isWhisper ? 'bg-purple-500/30 text-purple-300' : 'bg-[#111827] text-slate-400 hover:text-slate-300'
                 }`}
@@ -167,12 +238,34 @@ export default function CampaignLog({ campaignId, currentUser, currentUserProfil
                 {isWhisper ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                 Whisper
               </button>
+              {isWhisper && (
+                <select
+                  value={whisperTargetId || ''}
+                  onChange={(e) => setWhisperTargetId(e.target.value || null)}
+                  className="bg-[#111827] border border-purple-500/40 text-purple-200 text-[10px] rounded px-1.5 py-1 focus:outline-none focus:border-purple-400"
+                >
+                  <option value="">to...</option>
+                  {whisperTargets.map((p) => (
+                    <option key={p.user_id} value={p.user_id}>
+                      {p.username || p.email || p.user_id}
+                    </option>
+                  ))}
+                </select>
+              )}
               <button
-                onClick={() => setIsGmOnly(!isGmOnly)}
+                onClick={() => {
+                  const next = !isGmOnly;
+                  setIsGmOnly(next);
+                  if (next) {
+                    setIsWhisper(false);
+                    setWhisperTargetId(null);
+                  }
+                }}
                 className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-colors ${
                   isGmOnly ? 'bg-amber-500/30 text-amber-300' : 'bg-[#111827] text-slate-400 hover:text-slate-300'
                 }`}
               >
+                <Lock className="w-3 h-3" />
                 GM Only
               </button>
             </>
@@ -290,11 +383,50 @@ function DiceRollEntry({ entry, formatTimestamp, displayInfo }) {
 }
 
 function SystemEntry({ entry, formatTimestamp }) {
+  const isRoundDivider = entry.metadata?.kind === 'round_divider';
+  if (isRoundDivider) {
+    return (
+      <div className="flex items-center gap-2 py-1">
+        <div className="flex-1 h-px bg-slate-700/60" />
+        <span className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] whitespace-nowrap">
+          {entry.content}
+        </span>
+        <div className="flex-1 h-px bg-slate-700/60" />
+      </div>
+    );
+  }
   return (
     <div className="text-center py-1">
       <span className="text-[10px] text-slate-500 bg-[#111827] px-3 py-1 rounded-full">
         {entry.content}
       </span>
+    </div>
+  );
+}
+
+/**
+ * Auto-generated combat events. Styled as compact, left-border-
+ * colored rows so they visually recede behind player chat and let
+ * the eye skim them quickly during a busy turn.
+ */
+function CombatLogEntry({ entry, formatTimestamp }) {
+  const category = entry.metadata?.category || 'misc';
+  const borderClass = COMBAT_LOG_BORDER[category] || COMBAT_LOG_BORDER.misc;
+  const glyph = COMBAT_LOG_GLYPH[category] || COMBAT_LOG_GLYPH.misc;
+  // Damage/crit flags drive subtle emphasis so the GM can spot the
+  // important lines in a sea of compact log rows.
+  const isCrit = entry.metadata?.crit;
+  return (
+    <div className={`pl-2 pr-1 py-0.5 border-l-2 bg-white/5 rounded-sm ${borderClass}`}>
+      <div className="flex items-start justify-between gap-2">
+        <p className={`text-[11px] leading-snug flex-1 ${isCrit ? 'text-yellow-200 font-bold' : 'text-slate-200'}`}>
+          <span className="mr-1">{glyph}</span>
+          {entry.content}
+        </p>
+        <span className="text-[9px] text-slate-500 flex-shrink-0 mt-0.5">
+          {formatTimestamp(entry.created_date)}
+        </span>
+      </div>
     </div>
   );
 }
