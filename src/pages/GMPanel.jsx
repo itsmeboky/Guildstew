@@ -188,6 +188,15 @@ export default function GMPanel() {
   // failure the concentration breaks.
   const [concentrationByCharacter, setConcentrationByCharacter] = useState({});
 
+  // Ref that always points at the latest fullSpellsList query result.
+  // startConcentration (declared below) needs to look up a spell row
+  // but runs during render — and the query is declared ~700 lines
+  // later. Reading the ref avoids the TDZ trap that bit us when we
+  // referenced fullSpellsList directly in a deps array. The ref is
+  // updated right after the query declares at the bottom of this
+  // component (same pattern we use for charactersRef / playersRef).
+  const fullSpellsListRef = React.useRef([]);
+
   // Spell slots spent per character. Keyed by characterKey
   // (uniqueId / id), value is { 1: <spent>, 2: <spent>, ... }. Slots
   // persist across turns and combats — only a long rest should reset
@@ -609,7 +618,10 @@ export default function GMPanel() {
         }
         // Snapshot which condition (if any) this spell applies so we
         // can strip it from targets when the concentration drops.
-        const spellRow = fullSpellsList?.find?.(
+        // Reads from fullSpellsListRef (updated post-query) to avoid
+        // the TDZ — see the ref comment above.
+        const list = fullSpellsListRef.current || [];
+        const spellRow = list.find?.(
           (s) => s?.name && s.name.toLowerCase() === payload.spell.toLowerCase(),
         );
         const effect = getSpellEffect(payload.spell, spellRow || null);
@@ -627,7 +639,7 @@ export default function GMPanel() {
       });
       toast(`${payload.casterName || 'Caster'} is concentrating on ${payload.spell}.`);
     },
-    [breakConcentration, fullSpellsList],
+    [breakConcentration],
   );
 
   // Patch a combatant's faction / charm fields in both the live
@@ -1332,12 +1344,16 @@ export default function GMPanel() {
     return Array.from(playerMap.values());
   }, [campaign?.player_ids, allUserProfiles, characters, campaignId]);
 
-  // Keep the refs the death-save / heal helpers above read from in sync
-  // with the latest characters + players. Updating during render is fine
-  // — the helpers are only invoked from event handlers, by which time
-  // render has already committed and the refs hold current values.
+  // Keep the refs the death-save / heal / concentration helpers above
+  // read from in sync with the latest query results. Updating during
+  // render is fine — the helpers are only invoked from event handlers,
+  // by which time render has already committed and the refs hold
+  // current values. Using refs sidesteps the TDZ trap that would fire
+  // if we put `characters` / `fullSpellsList` in a useCallback deps
+  // array above its declaration.
   charactersRef.current = characters;
   playersRef.current = players;
+  fullSpellsListRef.current = fullSpellsList;
 
   if (!campaign) {
     return <div className="min-h-screen flex items-center justify-center"><p className="text-gray-400">Loading...</p></div>;
