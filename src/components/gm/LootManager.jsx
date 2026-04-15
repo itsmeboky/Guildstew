@@ -2,6 +2,57 @@ import React, { useState, useEffect } from "react";
 import { Coins, Plus, Trash2, Dices, RefreshCw, ChevronRight, ChevronDown, Search, Package, X, User } from "lucide-react";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
 import { base44 } from "@/api/base44Client";
+import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
+
+const EMPTY_CURRENCY = { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 };
+
+// Sum two currency objects (nulls coerced to 0). Used by Split Gold Evenly.
+function addCurrency(a, b) {
+  return {
+    cp: (a?.cp || 0) + (b?.cp || 0),
+    sp: (a?.sp || 0) + (b?.sp || 0),
+    ep: (a?.ep || 0) + (b?.ep || 0),
+    gp: (a?.gp || 0) + (b?.gp || 0),
+    pp: (a?.pp || 0) + (b?.pp || 0),
+  };
+}
+
+// Subtract b from a, clamped at zero. Used by retraction so a player
+// can never end up with negative coins from a half-applied rollback.
+function subtractCurrency(a, b) {
+  return {
+    cp: Math.max(0, (a?.cp || 0) - (b?.cp || 0)),
+    sp: Math.max(0, (a?.sp || 0) - (b?.sp || 0)),
+    ep: Math.max(0, (a?.ep || 0) - (b?.ep || 0)),
+    gp: Math.max(0, (a?.gp || 0) - (b?.gp || 0)),
+    pp: Math.max(0, (a?.pp || 0) - (b?.pp || 0)),
+  };
+}
+
+// Split a pool of currency evenly among N players. Remainders stay in
+// the pool (the GM can manually hand them out or re-split later).
+function splitEvenly(pool, count) {
+  if (count <= 0) return { perPlayer: EMPTY_CURRENCY, remainder: { ...pool } };
+  const perPlayer = {};
+  const remainder = {};
+  for (const type of ["cp", "sp", "ep", "gp", "pp"]) {
+    const total = pool?.[type] || 0;
+    const each = Math.floor(total / count);
+    perPlayer[type] = each;
+    remainder[type] = total - each * count;
+  }
+  return { perPlayer, remainder };
+}
+
+// Human-readable currency summary, skipping zero coin types.
+function formatCurrencyDelta(currency) {
+  const parts = [];
+  for (const type of ["pp", "gp", "ep", "sp", "cp"]) {
+    const v = currency?.[type] || 0;
+    if (v > 0) parts.push(`${v} ${type.toUpperCase()}`);
+  }
+  return parts.length > 0 ? parts.join(", ") : "0";
+}
 
 export default function LootManager({ campaignId, lootData, players, onUpdateLoot }) {
   const [items, setItems] = useState(lootData?.items || []);
@@ -37,95 +88,221 @@ export default function LootManager({ campaignId, lootData, players, onUpdateLoo
     executeDistribution();
   };
 
+  // Audit of what was handed to each player on the last successful
+  // distribution. Used by Retract to subtract the right amounts / pull
+  // the right items back without a schema migration. Shape:
+  //   { [playerUserId]: { charId, currency, items: [itemObj, ...] } }
   const executeDistribution = (manualDistribution = null) => {
     let finalItems = [...items];
     let finalCurrency = { ...currency };
+    const audit = {}; // per-player delta for retraction
 
-    // Random Item Distribution (if ON)
-    if (settings.random_items && players && players.length > 0 && items.length > 0) {
-      const promises = [];
-      items.forEach(item => {
-        const randomPlayer = players[Math.floor(Math.random() * players.length)];
-        if (randomPlayer && randomPlayer.character) {
-          const char = randomPlayer.character;
-          const newInventory = [...(char.inventory || []), item];
-          promises.push(base44.entities.Character.update(char.id, { inventory: newInventory }));
-        }
-      });
-      finalItems = []; 
-      Promise.all(promises);
+    const noteForPlayer = (playerId, char) => {
+      if (!audit[playerId]) {
+        audit[playerId] = {
+          charId: char?.id,
+          charName: char?.name,
+          currency: { ...EMPTY_CURRENCY },
+          items: [],
+        };
+      }
+      return audit[playerId];
+    };
+
+    const promises = [];
+
+    // --- Split Gold Evenly (toggle ON) --------------------------------
+    // Divide the pool equally among eligible players. Remainders stay
+    // in the pool so the GM can hand them out manually.
+    if (settings.split_gold_evenly && players?.length > 0) {
+      const { perPlayer, remainder } = splitEvenly(finalCurrency, players.length);
+      const anyCoins = Object.values(perPlayer).some((v) => v > 0);
+      if (anyCoins) {
+        players.forEach((player) => {
+          if (!player?.character) return;
+          const char = player.character;
+          const entry = noteForPlayer(player.user_id, char);
+          entry.currency = addCurrency(entry.currency, perPlayer);
+          const newMoney = addCurrency(char.currency || EMPTY_CURRENCY, perPlayer);
+          promises.push(base44.entities.Character.update(char.id, { currency: newMoney }));
+        });
+        finalCurrency = remainder;
+      }
     }
 
-    // Manual Distribution Handling
+    // --- Random Item Distribution (toggle ON) -------------------------
+    if (settings.random_items && players?.length > 0 && finalItems.length > 0) {
+      finalItems.forEach((item) => {
+        const randomPlayer = players[Math.floor(Math.random() * players.length)];
+        if (!randomPlayer?.character) return;
+        const char = randomPlayer.character;
+        const entry = noteForPlayer(randomPlayer.user_id, char);
+        entry.items.push(item);
+        const newInventory = [...(char.inventory || []), item];
+        promises.push(base44.entities.Character.update(char.id, { inventory: newInventory }));
+      });
+      finalItems = [];
+    }
+
+    // --- Manual Distribution (GM-assigned from the modal) -------------
     if (manualDistribution) {
-      const promises = [];
-      
-      // 1. Distribute Currency
+      // 1. Currency
       if (manualDistribution.currency) {
         Object.entries(manualDistribution.currency).forEach(([playerId, amountObj]) => {
-          const player = players.find(p => p.user_id === playerId);
-          if (player && player.character) {
-            const char = player.character;
-            const current = char.currency || { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 };
-            const newMoney = { 
-              cp: current.cp + (amountObj.cp || 0),
-              sp: current.sp + (amountObj.sp || 0),
-              ep: current.ep + (amountObj.ep || 0),
-              gp: current.gp + (amountObj.gp || 0),
-              pp: current.pp + (amountObj.pp || 0)
-            };
-            promises.push(base44.entities.Character.update(char.id, { currency: newMoney }));
-          }
+          const player = players.find((p) => p.user_id === playerId);
+          if (!player?.character) return;
+          const char = player.character;
+          const entry = noteForPlayer(playerId, char);
+          entry.currency = addCurrency(entry.currency, amountObj);
+          const newMoney = addCurrency(char.currency || EMPTY_CURRENCY, amountObj);
+          promises.push(base44.entities.Character.update(char.id, { currency: newMoney }));
         });
-        // Clear distributed currency from pool
-        finalCurrency = { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 };
+        finalCurrency = EMPTY_CURRENCY;
       }
 
-      // 2. Distribute Items
+      // 2. Items
       if (manualDistribution.items) {
-        // manualDistribution.items is map of itemId -> playerId
-        const assignedItemIds = Object.keys(manualDistribution.items);
         const itemsToKeep = [];
-        
-        // Group items by player for fewer API calls
         const playerItems = {};
-
-        items.forEach(item => {
+        finalItems.forEach((item) => {
           const assignedTo = manualDistribution.items[item.id];
           if (assignedTo) {
             if (!playerItems[assignedTo]) playerItems[assignedTo] = [];
             playerItems[assignedTo].push(item);
           } else {
-            itemsToKeep.push(item); // Not assigned manually, keep in pool (or move to loot box)
+            itemsToKeep.push(item);
           }
         });
-
         Object.entries(playerItems).forEach(([playerId, pItems]) => {
-          const player = players.find(p => p.user_id === playerId);
-          if (player && player.character) {
-            const char = player.character;
-            const newInventory = [...(char.inventory || []), ...pItems];
-            promises.push(base44.entities.Character.update(char.id, { inventory: newInventory }));
-          }
+          const player = players.find((p) => p.user_id === playerId);
+          if (!player?.character) return;
+          const char = player.character;
+          const entry = noteForPlayer(playerId, char);
+          entry.items.push(...pItems);
+          const newInventory = [...(char.inventory || []), ...pItems];
+          promises.push(base44.entities.Character.update(char.id, { inventory: newInventory }));
         });
-
-        // Remaining items go to loot box if Random was OFF and they weren't manually assigned
         finalItems = itemsToKeep;
       }
-
-      Promise.all(promises);
     }
 
-    handleSave(true, finalItems, finalCurrency);
+    Promise.all(promises).catch((err) => {
+      console.error("Loot distribution write failed:", err);
+    });
+
+    // Campaign log — one banner + per-player rollup line. Fire-and-
+    // forget, same convention as the combat event helpers.
+    if (campaignId) {
+      logSystemEvent(campaignId, "Loot distributed to the party.", {
+        kind: "loot_distributed",
+      });
+      Object.entries(audit).forEach(([playerId, entry]) => {
+        const itemNames = entry.items.map((i) => i.name).filter(Boolean);
+        if (itemNames.length > 0) {
+          logCombatEvent(
+            campaignId,
+            `${entry.charName || "Player"} received ${itemNames.join(", ")}.`,
+            {
+              event: "loot_items",
+              category: "rest",
+              target: entry.charName,
+              items: itemNames,
+            },
+          );
+        }
+        const coinSummary = formatCurrencyDelta(entry.currency);
+        if (coinSummary !== "0") {
+          logCombatEvent(
+            campaignId,
+            `${entry.charName || "Player"} received ${coinSummary}.`,
+            {
+              event: "loot_currency",
+              category: "rest",
+              target: entry.charName,
+              currency: entry.currency,
+            },
+          );
+        }
+      });
+    }
+
+    handleSave(true, finalItems, finalCurrency, audit);
   };
 
-  const handleSave = (distributed = isDistributed, overrideItems = items, overrideCurrency = currency) => {
+  // Retract the last distribution. Reverses every character update
+  // recorded in lootData.last_distribution, toasts the players' return
+  // to their pre-loot state, and flips the distributed flag back off.
+  const retractDistribution = () => {
+    const snapshot = lootData?.last_distribution;
+    if (!snapshot || typeof snapshot !== "object") {
+      // No audit to reverse — degrade to just flipping the flag (best
+      // effort) so a pre-existing distribution can still be cleared.
+      handleSave(false);
+      return;
+    }
+
+    const promises = [];
+    let refundedItems = [...items];
+    let refundedCurrency = { ...currency };
+
+    Object.entries(snapshot).forEach(([playerId, entry]) => {
+      if (!entry?.charId) return;
+      const player = players?.find((p) => p.user_id === playerId);
+      const char = player?.character;
+      if (!char) return;
+
+      // Rewind currency.
+      if (entry.currency) {
+        const rolledBack = subtractCurrency(char.currency || EMPTY_CURRENCY, entry.currency);
+        promises.push(base44.entities.Character.update(char.id, { currency: rolledBack }));
+        refundedCurrency = addCurrency(refundedCurrency, entry.currency);
+      }
+
+      // Rewind items. Pull each distributed item by id (unique key
+      // assigned on add) from the player's inventory and drop it back
+      // into the loot pool.
+      if (entry.items?.length > 0) {
+        const removedIds = new Set(entry.items.map((i) => i.id));
+        const currentInv = char.inventory || [];
+        const newInv = currentInv.filter((i) => !removedIds.has(i.id));
+        promises.push(base44.entities.Character.update(char.id, { inventory: newInv }));
+        refundedItems = [...refundedItems, ...entry.items];
+      }
+    });
+
+    Promise.all(promises).catch((err) => {
+      console.error("Loot retraction write failed:", err);
+    });
+
+    if (campaignId) {
+      logSystemEvent(campaignId, "Loot retracted. Items and currency returned to the pool.", {
+        kind: "loot_retracted",
+      });
+    }
+
+    handleSave(false, refundedItems, refundedCurrency, null);
+  };
+
+  const handleSave = (
+    distributed = isDistributed,
+    overrideItems = items,
+    overrideCurrency = currency,
+    overrideAudit,
+  ) => {
     setIsDistributed(distributed);
+    setItems(overrideItems);
+    setCurrency(overrideCurrency);
     onUpdateLoot({
       items: overrideItems,
       currency: overrideCurrency,
       settings,
-      is_distributed: distributed
+      is_distributed: distributed,
+      // Persist the audit so Retract survives a page reload. `undefined`
+      // means "don't touch" (used by settings-only saves); null means
+      // "clear it" (Retract).
+      ...(overrideAudit === undefined
+        ? {}
+        : { last_distribution: overrideAudit }),
     });
   };
 
@@ -161,7 +338,7 @@ export default function LootManager({ campaignId, lootData, players, onUpdateLoo
         </button>
         {isDistributed && (
           <button
-            onClick={() => handleSave(false)}
+            onClick={retractDistribution}
             className="px-3 py-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 text-xs font-bold"
           >
             Retract

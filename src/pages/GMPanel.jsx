@@ -20,6 +20,7 @@ import { Heart, Music, Circle, Triangle, Crosshair } from "lucide-react";
 import LootManager from "@/components/gm/LootManager";
 import MoneyCounter from "@/components/shared/MoneyCounter";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
+import { computeArmorClass } from "@/components/dnd5e/armorClass";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { motion } from "framer-motion";
 import CampaignLog from "@/components/gm/CampaignLog";
@@ -2526,7 +2527,23 @@ export default function GMPanel() {
                       const color2 = player.profile_color_2 || "#37F2D1";
                       const currentHp = character?.hit_points?.current || 0;
                       const maxHp = character?.hit_points?.max || 0;
-                      const ac = character?.armor_class || 10;
+                      // Effective AC: derive from equipped armor + DEX
+                      // when the character has anything in their gear
+                      // slots, otherwise fall back to the static
+                      // `armor_class` field from their sheet.
+                      const equipped = character?.equipped || character?.equipment || {};
+                      const hasEquippedArmor =
+                        equipped && Object.values(equipped).some((i) => i?.category === 'armor');
+                      const computedAC = hasEquippedArmor
+                        ? computeArmorClass({
+                            equipped,
+                            dex:
+                              character?.attributes?.dex ||
+                              character?.stats?.dexterity ||
+                              10,
+                          }).total
+                        : null;
+                      const ac = computedAC || character?.armor_class || 10;
 
                       return (
                         <div
@@ -3597,42 +3614,46 @@ function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPosses
           </div>
 
           {/* Inventory Grid */}
-                      <div className="w-full pt-3 border-t border-[#111827] mt-2">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-3">
-                            <span className="text-[10px] tracking-[0.2em] uppercase text-slate-400">Inventory</span>
-                            <EncumbranceBar 
-                              inventory={(character?.type === 'monster' || character?.type === 'npc') ? monsterInventory : (character?.inventory || [])}
-                              strength={character?.attributes?.str || character?.stats?.strength || 10}
-                            />
-                          </div>
-                          <div className="flex-1 max-w-[140px] mx-2">
-                            <MoneyCounter 
-                              currency={character?.currency} 
-                              onChange={(newCurrency) => {
-                                if (character.type === 'monster' || character.type === 'npc') {
-                                  // Handle monster currency update locally or via separate mutation if needed
-                                  // For now we just have local state in selectedCharacter, 
-                                  // but ideally we'd update the monster entity or the campaign queue
-                                } else {
-                                  base44.entities.Character.update(character.id, { currency: newCurrency });
-                                  queryClient.invalidateQueries(['campaignCharacters']);
-                                }
-                              }}
-                              readOnly={character?.type === 'monster' || character?.type === 'npc'} // GMs can edit monster currency via other means usually
-                            />
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-slate-500">{inventorySlots} slots</span>
-                            <button
-                              onClick={() => setShowInventoryOrganizer(true)}
-                              className="w-5 h-5 rounded bg-[#111827] hover:bg-[#1a1f2e] flex items-center justify-center transition-colors"
-                              title="Organize Inventory"
-                            >
-                              <Settings className="w-3 h-3 text-[#37F2D1]" />
-                            </button>
-                          </div>
-                        </div>
+          <div className="w-full pt-3 border-t border-[#111827] mt-2">
+            {/* Row 1 — section title + slot count + organize button */}
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] tracking-[0.2em] uppercase text-slate-400">Inventory</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-slate-500">{inventorySlots} slots</span>
+                <button
+                  onClick={() => setShowInventoryOrganizer(true)}
+                  className="w-5 h-5 rounded bg-[#111827] hover:bg-[#1a1f2e] flex items-center justify-center transition-colors"
+                  title="Organize Inventory"
+                >
+                  <Settings className="w-3 h-3 text-[#37F2D1]" />
+                </button>
+              </div>
+            </div>
+            {/* Row 2 — encumbrance text left, wallet right. overflow-hidden
+                on the flex parent keeps the MoneyCounter from bleeding out
+                of the card when its editor pops open. */}
+            <div className="flex items-center justify-between mb-2 gap-2 overflow-hidden">
+              <EncumbranceBar
+                inventory={(character?.type === 'monster' || character?.type === 'npc') ? monsterInventory : (character?.inventory || [])}
+                strength={character?.attributes?.str || character?.stats?.strength || 10}
+              />
+              <div className="flex-shrink-0 max-w-[60%]">
+                <MoneyCounter
+                  currency={character?.currency}
+                  onChange={(newCurrency) => {
+                    if (character.type === 'monster' || character.type === 'npc') {
+                      // Handle monster currency update locally or via separate mutation if needed
+                      // For now we just have local state in selectedCharacter,
+                      // but ideally we'd update the monster entity or the campaign queue
+                    } else {
+                      base44.entities.Character.update(character.id, { currency: newCurrency });
+                      queryClient.invalidateQueries(['campaignCharacters']);
+                    }
+                  }}
+                  readOnly={character?.type === 'monster' || character?.type === 'npc'}
+                />
+              </div>
+            </div>
             <div 
               className="max-h-[140px] overflow-y-auto custom-scrollbar pr-1"
               onDragOver={(e) => e.preventDefault()}
@@ -3774,26 +3795,18 @@ function EncumbranceBar({ inventory, strength }) {
     return total + ((item.weight || 0) * (item.quantity || 1));
   }, 0);
   const maxWeight = strength * 15; // D&D 5e carrying capacity
-  const percentage = Math.min((currentWeight / maxWeight) * 100, 100);
-  
-  const getBarColor = () => {
-    if (percentage >= 100) return 'bg-red-500';
-    if (percentage >= 66) return 'bg-amber-500';
-    return 'bg-[#37F2D1]';
-  };
+  const percentage = maxWeight > 0 ? (currentWeight / maxWeight) * 100 : 0;
+  const color =
+    percentage >= 100
+      ? 'text-red-400'
+      : percentage >= 66
+      ? 'text-amber-400'
+      : 'text-slate-400';
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="w-20 h-2 rounded-full bg-[#111827] overflow-hidden">
-        <div 
-          className={`h-full ${getBarColor()} transition-all`} 
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
-      <span className={`text-[9px] ${percentage >= 100 ? 'text-red-400' : 'text-slate-500'}`}>
-        {currentWeight}/{maxWeight} lbs
-      </span>
-    </div>
+    <span className={`text-[10px] font-medium ${color} whitespace-nowrap flex-shrink-0`}>
+      {currentWeight}/{maxWeight} lbs
+    </span>
   );
 }
 
@@ -4556,7 +4569,23 @@ function MonsterStatBlock({ character, className, onActionClick }) {
   const languages = stats.languages || character.languages || '';
   const proficiencyBonus = stats.proficiency_bonus || character.proficiency_bonus || 2;
   
-  const ac = stats.armor_class || character.armor_class || 10;
+  // Prefer a derived AC when the character has anything in their
+  // equipment slots — armor + shield + DEX calculated per 5e rules.
+  // Falls back to the static armor_class field for monsters / sheets
+  // without an equipped map.
+  const equippedForAC = character.equipped || character.equipment || {};
+  const hasArmorEquipped =
+    equippedForAC && Object.values(equippedForAC).some((i) => i?.category === 'armor');
+  const computedACValue = hasArmorEquipped
+    ? computeArmorClass({
+        equipped: equippedForAC,
+        dex:
+          character.attributes?.dex ||
+          character.stats?.dexterity ||
+          10,
+      }).total
+    : null;
+  const ac = computedACValue || stats.armor_class || character.armor_class || 10;
   const hpObj = stats.hit_points || character.hit_points;
   const hp = typeof hpObj === 'object' ? (hpObj?.max || '?') : (hpObj || '?');
   const speed = stats.speed || character.speed || '30 ft.';
