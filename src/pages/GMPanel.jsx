@@ -1106,10 +1106,14 @@ export default function GMPanel() {
     staleTime: 60000
   });
 
-  // Fetch all spells for accurate tooltips
-  const { data: fullSpellsList } = useQuery({
-    queryKey: ['dnd5e-spells'],
-    queryFn: () => fetchAllSpells().then(data => data.spells),
+  // Fetch all spells for accurate tooltips + effect classification.
+  // Prefer the per-campaign `spells` table (the 89 with full details)
+  // when a campaign is loaded; fall back to the global `dnd5e_spells`
+  // catalog otherwise. fetchAllSpells() handles both paths — it used
+  // to invoke a dead Edge Function, see spellData.jsx.
+  const { data: fullSpellsList = [] } = useQuery({
+    queryKey: ['dnd5e-spells', campaignId || 'global'],
+    queryFn: () => fetchAllSpells(campaignId).then(data => data.spells || []),
     staleTime: 1000 * 60 * 60, // 1 hour
   });
 
@@ -1266,6 +1270,7 @@ export default function GMPanel() {
             )}
 
             <CombatDiceWindow
+              spellDataList={fullSpellsList}
               isOpen={
                 combatState.isOpen ||
                 (campaign?.combat_data?.stage === 'initiative') ||
