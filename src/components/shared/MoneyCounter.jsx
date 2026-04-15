@@ -66,11 +66,11 @@ export default function MoneyCounter({ currency, onChange, readOnly = false }) {
   }
 
   return (
-    <div 
+    <div
       onClick={() => !readOnly && setIsEditing(true)}
-      className={`bg-[#0b1220] rounded-xl px-3 py-2 border border-[#111827] flex items-center w-full ${!readOnly ? 'cursor-pointer hover:border-slate-600' : ''}`}
+      className={`bg-[#0b1220] rounded-lg px-1.5 py-1 border border-[#111827] flex items-center ${!readOnly ? 'cursor-pointer hover:border-slate-600' : ''}`}
     >
-      <div className="flex justify-between w-full gap-1">
+      <div className="flex items-center gap-1">
         {[
           { type: 'gp', color: 'text-yellow-500' },
           { type: 'sp', color: 'text-slate-400' },
@@ -78,11 +78,11 @@ export default function MoneyCounter({ currency, onChange, readOnly = false }) {
           { type: 'pp', color: 'text-slate-200' },
           { type: 'ep', color: 'text-slate-500' },
         ].map(({ type, color }) => (
-          <div key={type} className="flex flex-col items-center min-w-[32px]">
-            <span className={`text-[11px] font-bold ${localCurrency[type] > 0 ? 'text-white' : 'text-slate-600'}`}>
+          <div key={type} className="flex flex-col items-center min-w-[24px]">
+            <span className={`text-[10px] font-bold leading-none ${localCurrency[type] > 0 ? 'text-white' : 'text-slate-600'}`}>
               {formatAmount(localCurrency[type] || 0)}
             </span>
-            <span className={`text-[8px] uppercase font-bold ${color} mt-0.5`}>
+            <span className={`text-[7px] uppercase font-bold ${color} mt-0.5`}>
               {type}
             </span>
           </div>

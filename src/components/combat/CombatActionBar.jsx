@@ -75,6 +75,12 @@ export default function CombatActionBar({
   maxSpellSlots = {},
   spentSpellSlots = {},
   onToggleSlot,
+  // Off-hand bonus attack hook. GM panel fires this when the player
+  // has used their main action on a melee attack and a weapon is
+  // sitting in the Weapon 2 slot — clicking the attack button at that
+  // point should trigger an off-hand bonus-action attack, not cycle
+  // the normal attack mode.
+  onOffhandAttack,
 }) {
   // Internal state if not provided controlled
   const [localActions, setLocalActions] = useState({ action: true, bonus: true, reaction: true, inspiration: false });
@@ -101,14 +107,41 @@ export default function CombatActionBar({
   const equipment = character?.equipment || {};
   const meleeWeapon = equipment.weapon1;
   const rangedWeapon = equipment.ranged;
+  const offHandWeapon = equipment.weapon2;
 
   const attackIsTargeting = attackMode !== null && attackMode !== undefined;
+
+  // Off-hand bonus attack availability — D&D 5e two-weapon fighting.
+  // Becomes live ONLY when the main Action has been used this turn,
+  // the bonus action is still free, the character is wielding a
+  // weapon in the Weapon 2 slot, and they're not currently mid-cycle
+  // on another targeting mode. The attack button swaps its icon /
+  // tooltip / click behaviour when this is true so the GM sees at a
+  // glance that the next click fires an off-hand attack, not a main
+  // action. Dual Wielder feat + light-weapon restriction aren't
+  // enforced here — the GM can hand them any weapon in Weapon 2 and
+  // it'll work.
+  const offHandAvailable =
+    !isCreature &&
+    !!offHandWeapon &&
+    !attackIsTargeting &&
+    actions.action === false &&
+    actions.bonus === true;
 
   // 4-state cycle: null → 'melee' → 'ranged' → 'unarmed' → null
   // Clicking this button DOES NOT trigger an attack — it only cycles the
   // selected attack mode. The parent uses attackMode to enter targeting mode
   // and fires the attack when the GM clicks a combatant portrait.
   const handleAttackClick = () => {
+    // Off-hand path takes precedence: when the conditions above line
+    // up, a click fires the off-hand bonus attack instead of cycling
+    // the normal attack mode. The parent consumes the bonus action
+    // after resolution.
+    if (offHandAvailable && onOffhandAttack) {
+      onOffhandAttack(offHandWeapon);
+      return;
+    }
+
     // Monster / NPC with a declared primary action → single-click fire.
     // If the monster has no declared actions, fall through to the same
     // 4-state cycle characters use so the button always does something.
@@ -410,8 +443,15 @@ export default function CombatActionBar({
               />
             );
           })}
+          <div className="relative">
           <BasicActionSlot
             src={(() => {
+              // Off-hand preview — show the off-hand weapon icon (or a
+              // melee placeholder if we don't have one) so the player
+              // knows their next click is the bonus-action attack.
+              if (offHandAvailable) {
+                return offHandWeapon?.image_url || offHandWeapon?.image || PC_MELEE_ICON;
+              }
               // Icon reflects the currently-selected attack mode. When nothing
               // is selected we show the melee icon as the idle state (since
               // the first click will select melee). Monsters use their own
@@ -426,7 +466,9 @@ export default function CombatActionBar({
               return PC_MELEE_ICON;
             })()}
             tooltip={
-              isCreature
+              offHandAvailable
+                ? `Off-hand Attack — bonus action (${offHandWeapon?.name || 'Weapon 2'})`
+                : isCreature
                 ? `Attack (${(character?.actions?.[0]?.name) || 'Default'})`
                 : attackMode === 'ranged'
                 ? `Ranged Attack (${rangedWeapon?.name || 'No Ranged Weapon'})`
@@ -437,10 +479,18 @@ export default function CombatActionBar({
                 : `Attack — click to select (${meleeWeapon?.name || 'no melee'})`
             }
             toggleable={false}
-            isActive={attackIsTargeting}
+            isActive={offHandAvailable || attackIsTargeting}
             disabled={false}
             onClick={handleAttackClick}
           />
+          {offHandAvailable && (
+            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+              <span className="block text-[8px] font-black uppercase tracking-[0.18em] text-[#37F2D1] bg-black/90 border border-[#37F2D1]/70 rounded-full px-1.5 py-0.5 whitespace-nowrap">
+                Off-Hand
+              </span>
+            </div>
+          )}
+          </div>
         </div>
         <div className="h-10 w-[2px] bg-[#1e2636]" />
         

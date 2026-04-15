@@ -19,7 +19,9 @@ import { spellIcons, spellDetails as hardcodedSpellDetails, getCharacterSpellSlo
 import { Heart, Music, Circle, Triangle, Crosshair } from "lucide-react";
 import LootManager from "@/components/gm/LootManager";
 import MoneyCounter from "@/components/shared/MoneyCounter";
+import ItemTooltip from "@/components/shared/ItemTooltip";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
+import { computeArmorClass } from "@/components/dnd5e/armorClass";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { motion } from "framer-motion";
 import CampaignLog from "@/components/gm/CampaignLog";
@@ -49,6 +51,7 @@ import {
 } from "@/components/combat/conditions";
 import { resolveAction, consumeActionCost, getSpellEffect } from "@/components/combat/actionResolver";
 import { hpBarColor, clampHp, normalizeHp } from "@/components/combat/hpColor";
+import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
 import { toast } from "sonner";
 import { useTurnContext } from "@/components/combat/useTurnContext";
 
@@ -542,6 +545,11 @@ export default function GMPanel() {
       audio.play().catch(e => console.log("Audio play failed", e));
 
       setIsTurnOrderAccepted(true);
+      logSystemEvent(campaignId, '— Round 1 —', { kind: 'round_divider', round: 1 });
+      logCombatEvent(campaignId, 'Turn order set. Round 1 begins.', {
+        event: 'combat_start',
+        category: 'round',
+      });
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
     }
   });
@@ -632,11 +640,28 @@ export default function GMPanel() {
       return restType;
     },
     onSuccess: (restType) => {
+      const rounds = campaign?.combat_data?.round || 0;
       clearCombatClientState();
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
       queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
-      if (restType === 'long') toast.success('The party takes a long rest. HP and spells restored.');
-      else if (restType === 'short') toast.success('The party takes a short rest.');
+      logCombatEvent(campaignId, `Combat ended. ${rounds} round${rounds === 1 ? '' : 's'}.`, {
+        event: 'combat_ended',
+        category: 'round',
+        rounds,
+      });
+      if (restType === 'long') {
+        toast.success('The party takes a long rest. HP and spells restored.');
+        logCombatEvent(campaignId, 'The party takes a long rest.', {
+          event: 'long_rest',
+          category: 'rest',
+        });
+      } else if (restType === 'short') {
+        toast.success('The party takes a short rest.');
+        logCombatEvent(campaignId, 'The party takes a short rest.', {
+          event: 'short_rest',
+          category: 'rest',
+        });
+      }
     },
     onError: (err) => {
       console.error('End combat failed:', err);
@@ -697,10 +722,21 @@ export default function GMPanel() {
           ? "lost (incapacitated)"
           : "ended";
         toast.error(`${existing.casterName || 'Caster'} ${reasonLabel} Concentration on ${existing.spell}.`);
+        logCombatEvent(
+          campaignId,
+          `${existing.casterName || 'Caster'} ${reasonLabel} concentration on ${existing.spell}!`,
+          {
+            event: 'concentration_end',
+            category: 'spell',
+            actor: existing.casterName,
+            spell: existing.spell,
+            reason,
+          },
+        );
         return next;
       });
     },
-    [],
+    [campaignId],
   );
 
   const startConcentration = React.useCallback(
@@ -901,12 +937,22 @@ export default function GMPanel() {
         .update(campaignId, { combat_data: newData })
         .catch(err => console.error('Move to fallen failed:', err));
       toast.error(`${target.name} has died.`);
+      logCombatEvent(campaignId, `${target.name} has fallen.`, {
+        event: 'death',
+        category: 'death_save',
+        target: target.name,
+      });
       return;
     }
 
     updateOrderCombatant(combatantKey, { deathSaves: next });
     if (next.stabilized && !existing.stabilized) {
       toast.success(`${target.name} is stabilized.`);
+      logCombatEvent(campaignId, `${target.name} has stabilized.`, {
+        event: 'stabilized',
+        category: 'death_save',
+        target: target.name,
+      });
     }
   }, [campaign?.combat_data, campaignId, queryClient, updateOrderCombatant]);
 
@@ -941,18 +987,56 @@ export default function GMPanel() {
         return { ...prev, [combatantKey]: current.filter(c => c !== 'Unconscious') };
       });
       toast.success(`${target.name} is back on their feet!`);
+      logCombatEvent(
+        campaignId,
+        `${target.name} rolls a natural 20 — BACK FROM THE BRINK!`,
+        {
+          event: 'death_save_nat20',
+          category: 'death_save',
+          target: target.name,
+        },
+      );
       return;
     }
     if (roll === 1) {
       applyDeathSaveChange(combatantKey, { failuresDelta: 2 });
+      logCombatEvent(
+        campaignId,
+        `${target.name} rolls a natural 1... two failures.`,
+        {
+          event: 'death_save_nat1',
+          category: 'death_save',
+          target: target.name,
+        },
+      );
       return;
     }
     if (roll >= 10) {
       applyDeathSaveChange(combatantKey, { successesDelta: 1 });
+      logCombatEvent(
+        campaignId,
+        `${target.name} death save: rolls ${roll} — SUCCESS`,
+        {
+          event: 'death_save_success',
+          category: 'death_save',
+          target: target.name,
+          roll,
+        },
+      );
       return;
     }
     applyDeathSaveChange(combatantKey, { failuresDelta: 1 });
-  }, [campaign?.combat_data, updateOrderCombatant, applyDeathSaveChange]);
+    logCombatEvent(
+      campaignId,
+      `${target.name} death save: rolls ${roll} — FAILURE`,
+      {
+        event: 'death_save_failure',
+        category: 'death_save',
+        target: target.name,
+        roll,
+      },
+    );
+  }, [campaignId, campaign?.combat_data, updateOrderCombatant, applyDeathSaveChange, applyHpToEntity]);
 
   const toggleCondition = (targetId, condition) => {
     setActiveConditions(prev => {
@@ -981,6 +1065,7 @@ export default function GMPanel() {
     const equipment = equippedItems || {};
     let effectiveMode = mode;
     let weapon = null;
+    let isOffHand = false;
 
     if (mode === 'melee') {
       weapon = equipment.weapon1 || null;
@@ -988,8 +1073,16 @@ export default function GMPanel() {
     } else if (mode === 'ranged') {
       weapon = equipment.ranged || null;
       if (!weapon) effectiveMode = 'unarmed';
+    } else if (mode === 'offhand') {
+      // Two-weapon fighting bonus attack. Weapon 2 is the off-hand
+      // slot; we leave the mode tag as 'offhand' so downstream code
+      // (getModifier / damage flow) can branch and strip the damage
+      // modifier per 5e rules. isOffHand=true also flips the action
+      // cost from "action" to "bonus" in resolveAction.
+      weapon = equipment.weapon2 || null;
+      isOffHand = true;
+      if (!weapon) effectiveMode = 'unarmed';
     }
-    // mode === 'unarmed' always sends weapon: null
 
     if (effectiveMode === 'unarmed') weapon = null;
 
@@ -998,11 +1091,33 @@ export default function GMPanel() {
       name: 'Attack',
       mode: effectiveMode,
       weapon,
-      isOffHand: false,
+      isOffHand,
     };
     const resolved = resolveAction(action, selectedCharacter);
     return { ...action, resolved };
   }, [equippedItems, selectedCharacter]);
+
+  // Handler fired by the action bar when the off-hand attack becomes
+  // available (main action spent + weapon2 equipped + bonus unused).
+  // We build an off-hand basic attack and route it straight into
+  // targeting mode — no mode cycling, no slot picker.
+  const handleOffhandAttack = React.useCallback(() => {
+    const action = buildAttackAction('offhand');
+    if (!action?.weapon) {
+      toast.error('No off-hand weapon equipped.');
+      return;
+    }
+    // GM always allowed; otherwise enforce turn gate.
+    if (campaign?.combat_active && campaign?.combat_data && !isGM && !isActorsTurn) {
+      toast.error("It's not this character's turn!");
+      return;
+    }
+    if (!actionsState.bonus) {
+      toast.error('No bonus action available this turn!');
+      return;
+    }
+    setCombatState({ isOpen: false, step: 'selecting_target', action, target: null });
+  }, [buildAttackAction, campaign?.combat_active, campaign?.combat_data, isGM, isActorsTurn, actionsState.bonus]);
 
   // Handler called when CombatActionBar cycles the attack toggle.
   const handleAttackModeChange = React.useCallback((nextMode) => {
@@ -1133,7 +1248,29 @@ export default function GMPanel() {
         round: 1
       }
     });
-    
+
+    // Campaign log: combat start + each combatant's initiative roll.
+    logCombatEvent(campaignId, '⚔️ Combat started! Rolling initiative...', {
+      event: 'combat_started',
+      category: 'initiative',
+    });
+    allCombatants.forEach((c) => {
+      const sign = (c.initiativeMod || 0) >= 0 ? '+' : '−';
+      const absMod = Math.abs(c.initiativeMod || 0);
+      logCombatEvent(
+        campaignId,
+        `${c.name} rolls initiative: ${c.initiative} (${c.initiativeRoll} ${sign} ${absMod})`,
+        {
+          event: 'initiative_roll',
+          category: 'initiative',
+          actor: c.name,
+          roll: c.initiative,
+          raw: c.initiativeRoll,
+          mod: c.initiativeMod,
+        },
+      );
+    });
+
     setCombatActive(true);
     setIsTurnOrderAccepted(false);
   };
@@ -1215,6 +1352,28 @@ export default function GMPanel() {
     const activeCombatant = campaign?.combat_data?.order?.[0];
     const activeKey = activeCombatant?.uniqueId || activeCombatant?.id;
 
+    // Campaign log: round marker + turn notice. Only fire once per
+    // actual change (the effect retriggers whenever the order array
+    // recomputes, so gate on prevActiveKeyRef to avoid duplicates).
+    if (
+      campaign?.combat_active &&
+      activeCombatant &&
+      activeKey &&
+      prevActiveKeyRef.current !== activeKey
+    ) {
+      const prevRound = prevActiveKeyRef.current === null ? 0 : (prevActiveKeyRef.currentRound || 0);
+      const round = campaign?.combat_data?.round || 1;
+      if (round !== prevRound) {
+        logSystemEvent(campaignId, `— Round ${round} —`, { kind: 'round_divider', round });
+      }
+      logCombatEvent(
+        campaignId,
+        `${activeCombatant.name}'s turn.`,
+        { event: 'turn_start', category: 'turn', actor: activeCombatant.name, round },
+      );
+      prevActiveKeyRef.currentRound = round;
+    }
+
     // Auto-expire conditions at the start of the active combatant's
     // turn. Currently this only catches Dodging (autoExpire:
     // "start_of_next_turn") but any future condition with the same
@@ -1238,7 +1397,14 @@ export default function GMPanel() {
           campaign?.combat_data?.order?.find(
             (c) => (c.uniqueId || c.id) === activeKey,
           )?.name || 'Combatant';
-        expired.forEach((name) => toast(`${displayName} is no longer ${name}.`));
+        expired.forEach((name) => {
+          toast(`${displayName} is no longer ${name}.`);
+          logCombatEvent(
+            campaignId,
+            `${displayName} is no longer ${name}.`,
+            { event: 'condition_expired', category: 'condition', target: displayName, condition: name },
+          );
+        });
         return { ...prev, [activeKey]: remaining };
       });
     }
@@ -1608,12 +1774,42 @@ export default function GMPanel() {
                     return { ...prev, [data.targetId]: [...current, data.condition] };
                   });
                   toast(`Condition applied: ${data.condition}`);
+                  // Look up the target's display name from the order so
+                  // the log reads as a name, not a uuid.
+                  const targetEntity = campaign?.combat_data?.order?.find(
+                    (c) => (c.uniqueId || c.id) === data.targetId,
+                  );
+                  logCombatEvent(
+                    campaignId,
+                    `${targetEntity?.name || 'Target'} is now ${data.condition}.`,
+                    {
+                      event: 'condition_applied',
+                      category: 'condition',
+                      target: targetEntity?.name,
+                      condition: data.condition,
+                    },
+                  );
                 } else if (data.type === 'debuff_applied' && data.debuff) {
                   toast(`Debuff applied: ${data.debuff}`);
+                  logCombatEvent(campaignId, `Debuff applied: ${data.debuff}.`, {
+                    event: 'debuff_applied',
+                    category: 'condition',
+                    debuff: data.debuff,
+                  });
                 } else if (data.type === 'buff_applied' && data.buff) {
                   toast.success(`Buff applied: ${data.buff}`);
+                  logCombatEvent(campaignId, `Buff applied: ${data.buff}.`, {
+                    event: 'buff_applied',
+                    category: 'condition',
+                    buff: data.buff,
+                  });
                 } else if (data.type === 'utility_applied' && data.note) {
                   toast(`Spell effect: ${data.note}`);
+                  logCombatEvent(campaignId, `Spell effect: ${data.note}`, {
+                    event: 'utility_applied',
+                    category: 'spell',
+                    note: data.note,
+                  });
                 }
 
                 // Concentration start event fires from the dice window
@@ -1628,6 +1824,16 @@ export default function GMPanel() {
                     spellLevel: data.spellLevel,
                     targetIds: data.targetIds,
                   });
+                  logCombatEvent(
+                    campaignId,
+                    `${data.casterName || 'Caster'} is concentrating on ${data.spell}.`,
+                    {
+                      event: 'concentration_start',
+                      category: 'spell',
+                      actor: data.casterName,
+                      spell: data.spell,
+                    },
+                  );
                 }
 
                 if (data.type === 'damage') {
@@ -1732,6 +1938,45 @@ export default function GMPanel() {
                           console.error('Damage write-back failed:', err);
                           toast.error('Failed to update character HP');
                         });
+                      // Campaign log: damage / heal write line.
+                      if (delta > 0) {
+                        logCombatEvent(
+                          campaignId,
+                          `${resolvedChar.name} takes ${delta} damage. (${newCurrent}/${maxHp} HP)`,
+                          {
+                            event: 'damage_applied',
+                            category: 'damage',
+                            target: resolvedChar.name,
+                            damage: delta,
+                            current: newCurrent,
+                            max: maxHp,
+                          },
+                        );
+                        if (newCurrent === 0) {
+                          logCombatEvent(
+                            campaignId,
+                            `${resolvedChar.name} is DOWNED!`,
+                            {
+                              event: 'downed',
+                              category: 'death_save',
+                              target: resolvedChar.name,
+                            },
+                          );
+                        }
+                      } else if (delta < 0) {
+                        logCombatEvent(
+                          campaignId,
+                          `${resolvedChar.name} heals ${Math.abs(delta)} HP. (${newCurrent}/${maxHp} HP)`,
+                          {
+                            event: 'heal_applied',
+                            category: 'heal',
+                            target: resolvedChar.name,
+                            heal: Math.abs(delta),
+                            current: newCurrent,
+                            max: maxHp,
+                          },
+                        );
+                      }
                     }
                   }
 
@@ -1746,11 +1991,47 @@ export default function GMPanel() {
                           }
                           const maxHp = m.hit_points?.max || 10;
                           const currentHp = m.hit_points?.current ?? maxHp;
+                          const nextHp = clampHp(currentHp, maxHp, delta);
+                          // Campaign log entry for monster damage/heal.
+                          if (delta > 0) {
+                            logCombatEvent(
+                              campaignId,
+                              `${m.name} takes ${delta} damage. (${nextHp}/${maxHp} HP)`,
+                              {
+                                event: 'damage_applied',
+                                category: 'damage',
+                                target: m.name,
+                                damage: delta,
+                                current: nextHp,
+                                max: maxHp,
+                              },
+                            );
+                            if (nextHp === 0 && currentHp > 0) {
+                              logCombatEvent(campaignId, `${m.name} is DOWNED!`, {
+                                event: 'downed',
+                                category: 'death_save',
+                                target: m.name,
+                              });
+                            }
+                          } else if (delta < 0) {
+                            logCombatEvent(
+                              campaignId,
+                              `${m.name} heals ${Math.abs(delta)} HP. (${nextHp}/${maxHp} HP)`,
+                              {
+                                event: 'heal_applied',
+                                category: 'heal',
+                                target: m.name,
+                                heal: Math.abs(delta),
+                                current: nextHp,
+                                max: maxHp,
+                              },
+                            );
+                          }
                           return {
                             ...m,
                             hit_points: {
                               ...(m.hit_points || {}),
-                              current: clampHp(currentHp, maxHp, delta),
+                              current: nextHp,
                               max: maxHp,
                             },
                           };
@@ -2079,6 +2360,7 @@ export default function GMPanel() {
               maxSpellSlots={maxSpellSlots}
               spentSpellSlots={currentSpentSlots}
               onToggleSlot={handleToggleSlot}
+              onOffhandAttack={handleOffhandAttack}
               onActionClick={((runAction) => {
                 // Always repoint the ref at the freshest closure so
                 // the level picker can re-enter this exact handler
@@ -2170,6 +2452,30 @@ export default function GMPanel() {
                   setActionsState(prev => consumeActionCost(prev, resolved.cost));
                   const featureSuffix = action.classFeature ? ` (${action.classFeature})` : '';
                   toast.success(`${selectedCharacter?.name || 'Character'} uses ${action.name}${featureSuffix}`);
+                  // Campaign log: plain action use, plus the special
+                  // "now Dodging" line for the Dodge action.
+                  logCombatEvent(
+                    campaignId,
+                    `${selectedCharacter?.name || 'Character'} uses ${action.name}${featureSuffix}.`,
+                    {
+                      event: 'action_use',
+                      category: 'turn',
+                      actor: selectedCharacter?.name,
+                      action: action.name,
+                    },
+                  );
+                  if (action.name === 'Dodge') {
+                    logCombatEvent(
+                      campaignId,
+                      `${selectedCharacter?.name || 'Character'} is now Dodging.`,
+                      {
+                        event: 'condition_applied',
+                        category: 'condition',
+                        target: selectedCharacter?.name,
+                        condition: 'Dodging',
+                      },
+                    );
+                  }
 
                   // Dodge leaves a visible "Dodging" condition label on the
                   // character until the start of their next turn. The
@@ -2254,7 +2560,23 @@ export default function GMPanel() {
                       const color2 = player.profile_color_2 || "#37F2D1";
                       const currentHp = character?.hit_points?.current || 0;
                       const maxHp = character?.hit_points?.max || 0;
-                      const ac = character?.armor_class || 10;
+                      // Effective AC: derive from equipped armor + DEX
+                      // when the character has anything in their gear
+                      // slots, otherwise fall back to the static
+                      // `armor_class` field from their sheet.
+                      const equipped = character?.equipped || character?.equipment || {};
+                      const hasEquippedArmor =
+                        equipped && Object.values(equipped).some((i) => i?.category === 'armor');
+                      const computedAC = hasEquippedArmor
+                        ? computeArmorClass({
+                            equipped,
+                            dex:
+                              character?.attributes?.dex ||
+                              character?.stats?.dexterity ||
+                              10,
+                          }).total
+                        : null;
+                      const ac = computedAC || character?.armor_class || 10;
 
                       return (
                         <div
@@ -3325,42 +3647,46 @@ function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPosses
           </div>
 
           {/* Inventory Grid */}
-                      <div className="w-full pt-3 border-t border-[#111827] mt-2">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-3">
-                            <span className="text-[10px] tracking-[0.2em] uppercase text-slate-400">Inventory</span>
-                            <EncumbranceBar 
-                              inventory={(character?.type === 'monster' || character?.type === 'npc') ? monsterInventory : (character?.inventory || [])}
-                              strength={character?.attributes?.str || character?.stats?.strength || 10}
-                            />
-                          </div>
-                          <div className="flex-1 max-w-[140px] mx-2">
-                            <MoneyCounter 
-                              currency={character?.currency} 
-                              onChange={(newCurrency) => {
-                                if (character.type === 'monster' || character.type === 'npc') {
-                                  // Handle monster currency update locally or via separate mutation if needed
-                                  // For now we just have local state in selectedCharacter, 
-                                  // but ideally we'd update the monster entity or the campaign queue
-                                } else {
-                                  base44.entities.Character.update(character.id, { currency: newCurrency });
-                                  queryClient.invalidateQueries(['campaignCharacters']);
-                                }
-                              }}
-                              readOnly={character?.type === 'monster' || character?.type === 'npc'} // GMs can edit monster currency via other means usually
-                            />
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-slate-500">{inventorySlots} slots</span>
-                            <button
-                              onClick={() => setShowInventoryOrganizer(true)}
-                              className="w-5 h-5 rounded bg-[#111827] hover:bg-[#1a1f2e] flex items-center justify-center transition-colors"
-                              title="Organize Inventory"
-                            >
-                              <Settings className="w-3 h-3 text-[#37F2D1]" />
-                            </button>
-                          </div>
-                        </div>
+          <div className="w-full pt-3 border-t border-[#111827] mt-2">
+            {/* Row 1 — section title + slot count + organize button */}
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] tracking-[0.2em] uppercase text-slate-400">Inventory</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-slate-500">{inventorySlots} slots</span>
+                <button
+                  onClick={() => setShowInventoryOrganizer(true)}
+                  className="w-5 h-5 rounded bg-[#111827] hover:bg-[#1a1f2e] flex items-center justify-center transition-colors"
+                  title="Organize Inventory"
+                >
+                  <Settings className="w-3 h-3 text-[#37F2D1]" />
+                </button>
+              </div>
+            </div>
+            {/* Row 2 — encumbrance text left, wallet right. overflow-hidden
+                on the flex parent keeps the MoneyCounter from bleeding out
+                of the card when its editor pops open. */}
+            <div className="flex items-center justify-between mb-2 gap-2 overflow-hidden">
+              <EncumbranceBar
+                inventory={(character?.type === 'monster' || character?.type === 'npc') ? monsterInventory : (character?.inventory || [])}
+                strength={character?.attributes?.str || character?.stats?.strength || 10}
+              />
+              <div className="flex-shrink-0 max-w-[60%]">
+                <MoneyCounter
+                  currency={character?.currency}
+                  onChange={(newCurrency) => {
+                    if (character.type === 'monster' || character.type === 'npc') {
+                      // Handle monster currency update locally or via separate mutation if needed
+                      // For now we just have local state in selectedCharacter,
+                      // but ideally we'd update the monster entity or the campaign queue
+                    } else {
+                      base44.entities.Character.update(character.id, { currency: newCurrency });
+                      queryClient.invalidateQueries(['campaignCharacters']);
+                    }
+                  }}
+                  readOnly={character?.type === 'monster' || character?.type === 'npc'}
+                />
+              </div>
+            </div>
             <div 
               className="max-h-[140px] overflow-y-auto custom-scrollbar pr-1"
               onDragOver={(e) => e.preventDefault()}
@@ -3502,31 +3828,25 @@ function EncumbranceBar({ inventory, strength }) {
     return total + ((item.weight || 0) * (item.quantity || 1));
   }, 0);
   const maxWeight = strength * 15; // D&D 5e carrying capacity
-  const percentage = Math.min((currentWeight / maxWeight) * 100, 100);
-  
-  const getBarColor = () => {
-    if (percentage >= 100) return 'bg-red-500';
-    if (percentage >= 66) return 'bg-amber-500';
-    return 'bg-[#37F2D1]';
-  };
+  const percentage = maxWeight > 0 ? (currentWeight / maxWeight) * 100 : 0;
+  const color =
+    percentage >= 100
+      ? 'text-red-400'
+      : percentage >= 66
+      ? 'text-amber-400'
+      : 'text-slate-400';
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="w-20 h-2 rounded-full bg-[#111827] overflow-hidden">
-        <div 
-          className={`h-full ${getBarColor()} transition-all`} 
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
-      <span className={`text-[9px] ${percentage >= 100 ? 'text-red-400' : 'text-slate-500'}`}>
-        {currentWeight}/{maxWeight} lbs
-      </span>
-    </div>
+    <span className={`text-[10px] font-medium ${color} whitespace-nowrap flex-shrink-0`}>
+      {currentWeight}/{maxWeight} lbs
+    </span>
   );
 }
 
 function InventorySlot({ item, isGM = false, isMoleWithAccess = false, onDragStart, draggable, onDrop }) {
   const [showTooltip, setShowTooltip] = useState(false);
+  // Hover delay — snappy but not twitchy. Matches the dice window
+  // tooltip behaviour so the panel feels consistent.
   
   // Hidden items are only visible to GM or mole with access
   const isHidden = item?.hidden;
@@ -3576,12 +3896,9 @@ function InventorySlot({ item, isGM = false, isMoleWithAccess = false, onDragSta
           ×
         </button>
       )}
-      {showTooltip && item && (
-        <div className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-[#1E2430] text-white px-2 py-1 rounded text-[10px] whitespace-nowrap z-50 shadow-xl border ${isHidden ? 'border-purple-500' : 'border-[#37F2D1]'}`}>
-          {isHidden && <span className="text-purple-400 mr-1">[Hidden]</span>}
-          {item.name}{item.quantity > 1 ? ` (x${item.quantity})` : ''} {draggable && '(drag to equip)'}
-        </div>
-      )}
+      {/* Rich item tooltip on hover — rarity-colored border, full
+          stats block (name/type/rarity/weight/cost/props/desc). */}
+      <ItemTooltip item={item} show={showTooltip && !!item} />
     </div>
   );
 }
@@ -4284,7 +4601,23 @@ function MonsterStatBlock({ character, className, onActionClick }) {
   const languages = stats.languages || character.languages || '';
   const proficiencyBonus = stats.proficiency_bonus || character.proficiency_bonus || 2;
   
-  const ac = stats.armor_class || character.armor_class || 10;
+  // Prefer a derived AC when the character has anything in their
+  // equipment slots — armor + shield + DEX calculated per 5e rules.
+  // Falls back to the static armor_class field for monsters / sheets
+  // without an equipped map.
+  const equippedForAC = character.equipped || character.equipment || {};
+  const hasArmorEquipped =
+    equippedForAC && Object.values(equippedForAC).some((i) => i?.category === 'armor');
+  const computedACValue = hasArmorEquipped
+    ? computeArmorClass({
+        equipped: equippedForAC,
+        dex:
+          character.attributes?.dex ||
+          character.stats?.dexterity ||
+          10,
+      }).total
+    : null;
+  const ac = computedACValue || stats.armor_class || character.armor_class || 10;
   const hpObj = stats.hit_points || character.hit_points;
   const hp = typeof hpObj === 'object' ? (hpObj?.max || '?') : (hpObj || '?');
   const speed = stats.speed || character.speed || '30 ft.';
