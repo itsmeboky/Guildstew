@@ -230,30 +230,30 @@ export const SPELL_EFFECTS_FALLBACK = {
   "Thorn Whip":       { effect: "damage", dice: "1d6", type: "piercing", scaling: "cantrip" },
   "Vicious Mockery":  { effect: "damage", dice: "1d4", type: "psychic", scaling: "cantrip" },
   "Produce Flame":    { effect: "damage", dice: "1d8", type: "fire", scaling: "cantrip" },
-  "Burning Hands":    { effect: "damage", dice: "3d6", type: "fire" },
-  "Chromatic Orb":    { effect: "damage", dice: "3d8", type: "varies" },
-  "Guiding Bolt":     { effect: "damage", dice: "4d6", type: "radiant" },
-  "Inflict Wounds":   { effect: "damage", dice: "3d10", type: "necrotic" },
-  "Magic Missile":    { effect: "damage", dice: "3d4+3", type: "force", autoHit: true },
-  "Thunderwave":      { effect: "damage", dice: "2d8", type: "thunder" },
-  "Shatter":          { effect: "damage", dice: "3d8", type: "thunder" },
+  "Burning Hands":    { effect: "damage", dice: "3d6", type: "fire", upcastPerLevel: "1d6" },
+  "Chromatic Orb":    { effect: "damage", dice: "3d8", type: "varies", upcastPerLevel: "1d8" },
+  "Guiding Bolt":     { effect: "damage", dice: "4d6", type: "radiant", upcastPerLevel: "1d6" },
+  "Inflict Wounds":   { effect: "damage", dice: "3d10", type: "necrotic", upcastPerLevel: "1d10" },
+  "Magic Missile":    { effect: "damage", dice: "3d4+3", type: "force", autoHit: true, upcastPerLevel: "1d4+1" },
+  "Thunderwave":      { effect: "damage", dice: "2d8", type: "thunder", upcastPerLevel: "1d8" },
+  "Shatter":          { effect: "damage", dice: "3d8", type: "thunder", upcastPerLevel: "1d8" },
   "Scorching Ray":    { effect: "damage", dice: "2d6", type: "fire", multiAttack: 3 },
-  "Fireball":         { effect: "damage", dice: "8d6", type: "fire" },
-  "Lightning Bolt":   { effect: "damage", dice: "8d6", type: "lightning" },
-  "Call Lightning":   { effect: "damage", dice: "3d10", type: "lightning" },
+  "Fireball":         { effect: "damage", dice: "8d6", type: "fire", upcastPerLevel: "1d6" },
+  "Lightning Bolt":   { effect: "damage", dice: "8d6", type: "lightning", upcastPerLevel: "1d6" },
+  "Call Lightning":   { effect: "damage", dice: "3d10", type: "lightning", upcastPerLevel: "1d10" },
   "Ice Storm":        { effect: "damage", dice: "2d8+4d6", type: "bludgeoning+cold" },
-  "Blight":           { effect: "damage", dice: "8d8", type: "necrotic" },
-  "Cone of Cold":     { effect: "damage", dice: "8d8", type: "cold" },
-  "Cloudkill":        { effect: "damage", dice: "5d8", type: "poison" },
+  "Blight":           { effect: "damage", dice: "8d8", type: "necrotic", upcastPerLevel: "1d8" },
+  "Cone of Cold":     { effect: "damage", dice: "8d8", type: "cold", upcastPerLevel: "1d8" },
+  "Cloudkill":        { effect: "damage", dice: "5d8", type: "poison", upcastPerLevel: "1d8" },
 
   // DAMAGE + CONDITION
-  "Ray of Sickness":  { effect: "damage_condition", dice: "2d8", type: "poison", condition: "Poisoned" },
+  "Ray of Sickness":  { effect: "damage_condition", dice: "2d8", type: "poison", condition: "Poisoned", upcastPerLevel: "1d8" },
 
   // HEALING spells — roll dice, ADD to target HP (capped at max)
-  "Cure Wounds":      { effect: "heal", dice: "1d8", addMod: true },
-  "Healing Word":     { effect: "heal", dice: "1d4", addMod: true },
-  "Mass Healing Word": { effect: "heal", dice: "1d4", addMod: true },
-  "Mass Cure Wounds": { effect: "heal", dice: "3d8", addMod: true },
+  "Cure Wounds":      { effect: "heal", dice: "1d8", addMod: true, upcastPerLevel: "1d8" },
+  "Healing Word":     { effect: "heal", dice: "1d4", addMod: true, upcastPerLevel: "1d4" },
+  "Mass Healing Word": { effect: "heal", dice: "1d4", addMod: true, upcastPerLevel: "1d4" },
+  "Mass Cure Wounds": { effect: "heal", dice: "3d8", addMod: true, upcastPerLevel: "1d8" },
   "Heal":             { effect: "heal", flat: 70 },
 
   // CONDITION-ONLY spells — apply a condition tag, no damage
@@ -357,16 +357,29 @@ export function classifySpellEffect(spell) {
   const diceMatch = desc.match(/(\d+d\d+)/);
   const firstDice = diceMatch ? diceMatch[1] : null;
 
+  // --- Higher level / upcast rule sniff ---
+  // "At Higher Levels. When you cast this spell using a spell slot of
+  // Nth level or higher, the damage/healing increases by 1d6 for each
+  // slot level above Nth." — grab the first extra-dice expression.
+  const upcastSection = desc.includes("higher level") || desc.includes("higher levels");
+  const upcastDiceMatch = upcastSection
+    ? desc.match(/increases? by (\d+d\d+)/i) ||
+      desc.match(/(\d+d\d+)\s+for each slot level above/i) ||
+      desc.match(/extra (\d+d\d+)/i)
+    : null;
+  const detectedUpcast = upcastDiceMatch ? upcastDiceMatch[1] : null;
+
   // --- Healing ---
   const mentionsHeal =
     desc.includes("heal") ||
     (desc.includes("regain") && desc.includes("hit point")) ||
-    desc.includes("restore") && desc.includes("hit point");
+    (desc.includes("restore") && desc.includes("hit point"));
   if (mentionsHeal && !desc.includes("damage")) {
     return {
       effect: "heal",
       dice: firstDice || "1d8",
       addMod: desc.includes("spellcasting ability modifier"),
+      ...(detectedUpcast ? { upcastPerLevel: detectedUpcast } : {}),
     };
   }
 
@@ -390,7 +403,12 @@ export function classifySpellEffect(spell) {
     if (desc.includes(keyword)) {
       // Damage + condition hybrid (Ray of Sickness, Contagion, etc.)
       if (firstDice && (desc.includes("damage") || desc.includes("hit point"))) {
-        return { effect: "damage_condition", dice: firstDice, condition: label };
+        return {
+          effect: "damage_condition",
+          dice: firstDice,
+          condition: label,
+          ...(detectedUpcast ? { upcastPerLevel: detectedUpcast } : {}),
+        };
       }
       return { effect: "condition", condition: label };
     }
@@ -414,7 +432,12 @@ export function classifySpellEffect(spell) {
       "slashing",
     ];
     const damageType = DAMAGE_TYPES.find((t) => desc.includes(t)) || "magical";
-    return { effect: "damage", dice: firstDice, type: damageType };
+    return {
+      effect: "damage",
+      dice: firstDice,
+      type: damageType,
+      ...(detectedUpcast ? { upcastPerLevel: detectedUpcast } : {}),
+    };
   }
 
   // --- Default: utility ---
@@ -445,6 +468,66 @@ export function getScaledDice(baseDice, casterLevel) {
   else if (lvl >= 11) numDice *= 3;
   else if (lvl >= 5) numDice *= 2;
   return `${numDice}d${faces}`;
+}
+
+/**
+ * Upcast a leveled spell's damage / heal dice by `extraLevels` above
+ * its base. `upcastPerLevel` is the per-level increment from the
+ * SPELL_EFFECTS_FALLBACK entry (e.g. Fireball → "1d6", Magic Missile
+ * → "1d4+1"). If no upcast rule is provided we fall back to adding
+ * one base-face die per extra level, which is the most common 5e
+ * convention and a reasonable default the GM can mentally correct.
+ *
+ * Handles three forms:
+ *   base "NdF"           + per-level "MdF"       → collapse to "(N+M*k)dF"
+ *   base "NdF+X"         + per-level "MdF" or +X → append "+Mk dF" / "+X*k"
+ *   base with +flat      → append "+Mk*flat"
+ */
+export function getUpcastDice(baseDice, upcastPerLevel, extraLevels) {
+  if (!baseDice || typeof baseDice !== "string") return baseDice;
+  const levels = Math.max(0, Number.isFinite(extraLevels) ? extraLevels : 0);
+  if (levels === 0) return baseDice;
+
+  // Fallback: "+1 base face die per level" when no explicit rule.
+  let perLevel = upcastPerLevel;
+  if (!perLevel) {
+    const baseMatch = baseDice.match(/^(\d+)d(\d+)/);
+    if (!baseMatch) return baseDice;
+    perLevel = `1d${baseMatch[2]}`;
+  }
+
+  // Parse the per-level increment. Supports "NdF", "NdF+M", or bare "M".
+  const perDiceMatch = perLevel.match(/^(\d+)d(\d+)(?:\+(\d+))?$/);
+  const perFlatMatch = perLevel.match(/^\+?(\d+)$/);
+
+  // Detect whether the base is a simple "NdF" we can collapse into.
+  const simpleBaseMatch = baseDice.match(/^(\d+)d(\d+)$/);
+
+  if (perDiceMatch) {
+    const perN = parseInt(perDiceMatch[1], 10);
+    const perF = parseInt(perDiceMatch[2], 10);
+    const perFlat = perDiceMatch[3] ? parseInt(perDiceMatch[3], 10) : 0;
+    const extraDice = perN * levels;
+    const extraFlat = perFlat * levels;
+
+    if (simpleBaseMatch) {
+      const baseN = parseInt(simpleBaseMatch[1], 10);
+      const baseF = parseInt(simpleBaseMatch[2], 10);
+      if (baseF === perF && extraFlat === 0) {
+        return `${baseN + extraDice}d${baseF}`;
+      }
+    }
+    // Non-collapsible — append as a compound term.
+    const extra = extraFlat > 0 ? `${extraDice}d${perF}+${extraFlat}` : `${extraDice}d${perF}`;
+    return `${baseDice}+${extra}`;
+  }
+
+  if (perFlatMatch) {
+    const extraFlat = parseInt(perFlatMatch[1], 10) * levels;
+    return `${baseDice}+${extraFlat}`;
+  }
+
+  return baseDice;
 }
 
 // Spells categorized by whether they use attack rolls or saving throws

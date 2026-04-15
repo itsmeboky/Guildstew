@@ -11,6 +11,7 @@ import {
   getSpellDamageDice,
   getSpellEffect,
   getScaledDice,
+  getUpcastDice,
 } from "@/components/combat/actionResolver";
 import { hpBarColor } from "@/components/combat/hpColor";
 import { FACTION_STYLES, getFaction } from "@/utils/combatQueue";
@@ -97,6 +98,36 @@ export default function CombatDiceWindow({
   }, [spellName, spellDataList]);
   const spellEffect = getSpellEffect(spellName, spellData);
   const casterLevel = actor?.level || actor?.stats?.level || 1;
+
+  // Cast level: for a cantrip this is always 0 and we apply character-
+  // level scaling. For a leveled spell this is the slot level the GM/
+  // player chose (defaults to the spell's base level if unspecified).
+  const baseSpellLevel =
+    typeof selectedAction?.level === "number" ? selectedAction.level : 0;
+  const castLevel =
+    typeof selectedAction?.castLevel === "number"
+      ? selectedAction.castLevel
+      : baseSpellLevel;
+
+  // Resolve the actual dice string for this spell instance, honoring
+  // cantrip scaling and upcasting. Called from both the damage path
+  // and the heal path so behaviour stays consistent.
+  const getEffectiveSpellDice = React.useCallback(
+    (baseDice) => {
+      if (!baseDice) return baseDice;
+      // Cantrips auto-scale with character level; they never upcast.
+      if (spellEffect?.scaling === "cantrip") {
+        return getScaledDice(baseDice, casterLevel);
+      }
+      // Leveled spells: apply upcast when cast above base.
+      const extraLevels = Math.max(0, castLevel - baseSpellLevel);
+      if (extraLevels > 0) {
+        return getUpcastDice(baseDice, spellEffect?.upcastPerLevel, extraLevels);
+      }
+      return baseDice;
+    },
+    [spellEffect, casterLevel, castLevel, baseSpellLevel],
+  );
 
   // Some spell effects override the resolver's rollType. Heal, buff
   // and utility spells never need an attack roll or save even if the
@@ -495,15 +526,11 @@ export default function CombatDiceWindow({
     if (isUnarmedAttack()) {
       diceString = isMonkActor() ? monkMartialArtsDie() : "1d4";
     } else if (selectedAction?.type === "spell") {
-      // Prefer the SPELL_EFFECTS entry (with cantrip scaling) over the
-      // bare damage-dice table so things like Fire Bolt scale with
-      // caster level. Fall through to the legacy table and a 1d10
-      // safety net for unknown spells.
+      // Prefer the SPELL_EFFECTS entry (with cantrip scaling AND
+      // upcasting) over the bare damage-dice table. Fall through to
+      // the legacy table and a 1d10 safety net for unknown spells.
       const effectDice = spellEffect?.dice;
-      const scaled =
-        spellEffect?.scaling === "cantrip"
-          ? getScaledDice(effectDice, casterLevel)
-          : effectDice;
+      const scaled = getEffectiveSpellDice(effectDice);
       diceString =
         scaled ||
         getSpellDamageDice(spellName) ||
@@ -611,10 +638,7 @@ export default function CombatDiceWindow({
   const onHealRollComplete = () => {
     const flat = spellEffect?.flat;
     const baseDice = spellEffect?.dice;
-    const scaledDice =
-      spellEffect?.scaling === "cantrip"
-        ? getScaledDice(baseDice, casterLevel)
-        : baseDice;
+    const scaledDice = getEffectiveSpellDice(baseDice);
 
     let rolled = 0;
     if (typeof flat === "number") {
@@ -712,10 +736,7 @@ export default function CombatDiceWindow({
     onRoll && onRoll({ type: "rolling_damage" });
     setTimeout(() => {
       const baseDice = spellEffect?.dice || "1d10";
-      const scaled =
-        spellEffect?.scaling === "cantrip"
-          ? getScaledDice(baseDice, casterLevel)
-          : baseDice;
+      const scaled = getEffectiveSpellDice(baseDice);
       const total = rollDiceString(scaled);
       const result = {
         total,
