@@ -208,8 +208,10 @@ export function getNoActionConditionName(conditionNames = []) {
  *
  * rollType: "attack" | "skill_check" | "saving_throw"
  * attackMode: "melee" | "ranged" | "unarmed" (only relevant for attack)
+ * saveAbility: "str" | "dex" | "con" | ... (only relevant for saving_throw)
+ *              special value "concentration" flags a concentration save.
  */
-export function getConditionModifiers(actor, target, rollType, attackMode) {
+export function getConditionModifiers(actor, target, rollType, attackMode, saveAbility = null) {
   const warnings = [];
   let hasAdvantage = false;
   let hasDisadvantage = false;
@@ -218,6 +220,27 @@ export function getConditionModifiers(actor, target, rollType, attackMode) {
 
   const actorConditions = actor?.conditions || [];
   const targetConditions = target?.conditions || [];
+
+  // Helpers to read feats / class / level from any of the shapes a
+  // character row might arrive in (live sheet, combat_data.order
+  // entry, legacy stats block).
+  const actorFeats = Array.isArray(actor?.feats)
+    ? actor.feats
+    : Array.isArray(actor?.features)
+      ? actor.features
+      : Array.isArray(actor?.class_features)
+        ? actor.class_features
+        : Array.isArray(actor?.metadata?.feats)
+          ? actor.metadata.feats
+          : [];
+  const hasFeat = (name) => actorFeats.some((f) => {
+    const n = typeof f === 'string' ? f : f?.name;
+    return typeof n === 'string' && n.toLowerCase() === name.toLowerCase();
+  });
+  const actorClass = (actor?.class || actor?.stats?.class || '').toString();
+  const actorLevel = actor?.level || actor?.stats?.level || 1;
+  const actorExhaustion = actor?.exhaustion || 0;
+  const normalizedSave = (saveAbility || '').toString().toLowerCase();
 
   // --- Actor conditions (affect their own rolls) ---
   for (const condName of actorConditions) {
@@ -298,6 +321,55 @@ export function getConditionModifiers(actor, target, rollType, attackMode) {
         );
       }
     }
+  }
+
+  // --- Feats (Tier 3) ---
+  // War Caster: advantage on concentration saving throws.
+  if (hasFeat('War Caster') && rollType === 'saving_throw' && normalizedSave === 'concentration') {
+    hasAdvantage = true;
+    warnings.push(`${actor?.name || 'Actor'} has advantage on concentration saves (War Caster)`);
+  }
+
+  // --- Class passives (Tier 3) ---
+  // Barbarian Danger Sense (level 2+): advantage on DEX saves unless
+  // Blinded, Deafened, or Incapacitated.
+  if (/barbarian/i.test(actorClass) && actorLevel >= 2 && rollType === 'saving_throw') {
+    const isDexSave = normalizedSave === 'dex';
+    const blocked =
+      actorConditions.includes('Blinded') ||
+      actorConditions.includes('Deafened') ||
+      actorConditions.includes('Incapacitated');
+    if (isDexSave && !blocked) {
+      hasAdvantage = true;
+      warnings.push(`${actor?.name || 'Actor'} has advantage on DEX saves (Danger Sense)`);
+    }
+  }
+
+  // --- Exhaustion (Tier 3) ---
+  // Cumulative per 5e PHB p.291.
+  if (actorExhaustion >= 1 && rollType === 'skill_check') {
+    hasDisadvantage = true;
+    warnings.push(`${actor?.name || 'Actor'} has disadvantage on checks (Exhaustion ${actorExhaustion})`);
+  }
+  if (actorExhaustion >= 3 && rollType === 'attack') {
+    hasDisadvantage = true;
+    warnings.push(`${actor?.name || 'Actor'} has disadvantage on attacks (Exhaustion ${actorExhaustion})`);
+  }
+  if (actorExhaustion >= 3 && rollType === 'saving_throw') {
+    hasDisadvantage = true;
+    warnings.push(`${actor?.name || 'Actor'} has disadvantage on saves (Exhaustion ${actorExhaustion})`);
+  }
+  if (actorExhaustion >= 2) {
+    warnings.push(`${actor?.name || 'Actor'}'s speed is halved (Exhaustion ${actorExhaustion})`);
+  }
+  if (actorExhaustion >= 4) {
+    warnings.push(`${actor?.name || 'Actor'}'s HP maximum is halved (Exhaustion ${actorExhaustion})`);
+  }
+  if (actorExhaustion >= 5) {
+    warnings.push(`${actor?.name || 'Actor'}'s speed is 0 (Exhaustion ${actorExhaustion})`);
+  }
+  if (actorExhaustion >= 6) {
+    warnings.push(`${actor?.name || 'Actor'} dies from exhaustion!`);
   }
 
   // 5e rule: Advantage + Disadvantage → roll normally.

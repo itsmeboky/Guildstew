@@ -95,6 +95,9 @@ export default function CombatActionBar({
   // mutate spentSlots in addition to classResources.
   onConvertSlotToSP,
   onConvertSPToSlot,
+  // Lucky feat pip click handler. 'spend' | 'restore' like the
+  // sibling resource dots.
+  onToggleLuck,
   // Off-hand bonus attack hook. GM panel fires this when the player
   // has used their main action on a melee attack and a weapon is
   // sitting in the Weapon 2 slot — clicking the attack button at that
@@ -262,6 +265,25 @@ export default function CombatActionBar({
   }, [character]);
   const sorceryCurrent = sorceryMax > 0
     ? Math.max(0, Math.min(sorceryMax, classResources.sorceryPointsRemaining ?? sorceryMax))
+    : 0;
+
+  // Lucky feat — 3 gold dots (long rest recharge). Surfaces only for
+  // characters with the feat on their sheet.
+  const luckyMax = React.useMemo(() => {
+    if (!character) return 0;
+    const feats = Array.isArray(character.feats)
+      ? character.feats
+      : Array.isArray(character.features)
+        ? character.features
+        : [];
+    const hasLucky = feats.some((f) => {
+      const n = typeof f === 'string' ? f : f?.name;
+      return typeof n === 'string' && n.toLowerCase() === 'lucky';
+    });
+    return hasLucky ? 3 : 0;
+  }, [character]);
+  const luckyCurrent = luckyMax > 0
+    ? Math.max(0, Math.min(luckyMax, classResources.luckyPointsRemaining ?? luckyMax))
     : 0;
   const initiative = character?.initiative || 0;
   const speed = character?.speed || 30;
@@ -495,6 +517,55 @@ export default function CombatActionBar({
       });
     }
 
+    // --- Tier 3 feats (read from character.feats; fall back to
+    //     features/class_features for characters that still store
+    //     them loosely). ---
+    const featsList = Array.isArray(character.feats)
+      ? character.feats
+      : Array.isArray(character.features)
+        ? character.features
+        : [];
+    const hasFeat = (name) => featsList.some((f) => {
+      const n = typeof f === 'string' ? f : f?.name;
+      return typeof n === 'string' && n.toLowerCase() === name.toLowerCase();
+    });
+
+    // Great Weapon Master / Sharpshooter — Power Attack toggle
+    // (-5 to hit / +10 damage). Enabled while the corresponding
+    // weapon is equipped; we show the button regardless so the
+    // player can pre-toggle it, and the damage window enforces the
+    // weapon gate.
+    if (hasFeat('Great Weapon Master') || hasFeat('Sharpshooter')) {
+      const isOn = !!classResources.powerAttackActive;
+      list.push({
+        id: 'powerAttack',
+        name: 'Power',
+        pattern: 'toggle',
+        classKey: (character.class || '').trim() || 'Fighter',
+        active: isOn,
+        cost: 'free',
+      });
+    }
+
+    // Polearm Master — bonus-action butt-end attack (1d4). Only
+    // qualifies when the main weapon is a glaive / halberd / pike /
+    // quarterstaff / spear. Shown whenever the feat is present; if
+    // the wielded weapon doesn't qualify the handler toasts an
+    // error.
+    if (hasFeat('Polearm Master')) {
+      const w1 = character.equipped?.weapon1 || character.equipment?.weapon1;
+      const w1name = (w1?.name || '').toLowerCase();
+      const pamWeapon = /glaive|halberd|quarterstaff|spear|pike/.test(w1name);
+      list.push({
+        id: 'polearmMaster',
+        name: 'Butt End',
+        pattern: 'oneclick',
+        classKey: (character.class || '').trim() || 'Fighter',
+        disabled: !pamWeapon || !actions.bonus || !actions.action,
+        cost: 'bonus',
+      });
+    }
+
     // Bard
     if (clsLower.includes('bard')) {
       const chaMod = Math.max(1, Math.floor(((character.attributes?.cha || 10) - 10) / 2));
@@ -585,7 +656,7 @@ export default function CombatActionBar({
           dots for casters. Dividers between sections. Same click-to-
           correct semantics for each: clicking a filled glyph spends
           one, clicking an empty one restores. */}
-      {(kiMax > 0 || sorceryMax > 0 || Object.keys(maxSpellSlots).length > 0) && (
+      {(kiMax > 0 || sorceryMax > 0 || luckyMax > 0 || Object.keys(maxSpellSlots).length > 0) && (
         <div className="flex items-center gap-3 mb-3 px-1 flex-wrap">
           {sorceryMax > 0 && (
             <>
@@ -636,6 +707,38 @@ export default function CombatActionBar({
                   )}
                 </div>
               )}
+              {(kiMax > 0 || luckyMax > 0 || Object.keys(maxSpellSlots).length > 0) && (
+                <div className="h-10 w-[2px] bg-[#1e2636]" />
+              )}
+            </>
+          )}
+          {luckyMax > 0 && (
+            <>
+              <span className="text-[9px] uppercase tracking-[0.22em] text-[#fbbf24] font-bold">
+                Luck
+              </span>
+              <div className="flex items-center gap-0.5">
+                {Array.from({ length: luckyMax }).map((_, i) => {
+                  const isFilled = i < luckyCurrent;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        if (!onToggleLuck) return;
+                        onToggleLuck(isFilled ? 'spend' : 'restore');
+                      }}
+                      title={`Lucky point ${i + 1} — ${isFilled ? 'available' : 'spent'}`}
+                      className={`text-sm leading-none transition-colors ${
+                        isFilled
+                          ? 'text-[#fbbf24] hover:text-[#fde68a] drop-shadow-[0_0_4px_rgba(251,191,36,0.7)]'
+                          : 'text-[#1e293b] hover:text-[#334155]'
+                      }`}
+                    >
+                      ●
+                    </button>
+                  );
+                })}
+              </div>
               {(kiMax > 0 || Object.keys(maxSpellSlots).length > 0) && (
                 <div className="h-10 w-[2px] bg-[#1e2636]" />
               )}
