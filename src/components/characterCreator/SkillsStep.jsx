@@ -5,48 +5,31 @@ import { Check, Star, HelpCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { getBackgroundSkills } from "@/components/dnd5e/backgroundData";
 import { racialSkills } from "@/components/dnd5e/raceData";
-import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
+import {
+  abilityModifier,
+  ALL_SKILLS,
+  SKILL_ABILITIES,
+  CLASS_SKILL_CHOICES,
+} from '@/components/dnd5e/dnd5eRules';
 
-const allSkills = [
-  "Athletics",
-  "Acrobatics", "Sleight of Hand", "Stealth",
-  "Arcana", "History", "Investigation", "Nature", "Religion",
-  "Animal Handling", "Insight", "Medicine", "Perception", "Survival",
-  "Deception", "Intimidation", "Performance", "Persuasion"
-];
+// Derived from the registry so every component reads from one source.
+const allSkills = ALL_SKILLS;
 
-const classSkillOptions = {
-  Barbarian: ["Animal Handling", "Athletics", "Intimidation", "Nature", "Perception", "Survival"],
-  Bard: ["Acrobatics", "Animal Handling", "Arcana", "Athletics", "Deception", "History", "Insight", "Intimidation", "Investigation", "Medicine", "Nature", "Perception", "Performance", "Persuasion", "Religion", "Sleight of Hand", "Stealth", "Survival"],
-  Cleric: ["History", "Insight", "Medicine", "Persuasion", "Religion"],
-  Druid: ["Arcana", "Animal Handling", "Insight", "Medicine", "Nature", "Perception", "Religion", "Survival"],
-  Fighter: ["Acrobatics", "Animal Handling", "Athletics", "History", "Insight", "Intimidation", "Perception", "Survival"],
-  Monk: ["Acrobatics", "Athletics", "History", "Insight", "Religion", "Stealth"],
-  Paladin: ["Athletics", "Insight", "Intimidation", "Medicine", "Persuasion", "Religion"],
-  Ranger: ["Animal Handling", "Athletics", "Insight", "Investigation", "Nature", "Perception", "Stealth", "Survival"],
-  Rogue: ["Acrobatics", "Athletics", "Deception", "Insight", "Intimidation", "Investigation", "Perception", "Performance", "Persuasion", "Sleight of Hand", "Stealth"],
-  Sorcerer: ["Arcana", "Deception", "Insight", "Intimidation", "Persuasion", "Religion"],
-  Warlock: ["Arcana", "Deception", "History", "Intimidation", "Investigation", "Nature", "Religion"],
-  Wizard: ["Arcana", "History", "Insight", "Investigation", "Medicine", "Religion"]
-};
-
-const classSkillCounts = {
-  Barbarian: 2, Bard: 3, Cleric: 2, Druid: 2, Fighter: 2, Monk: 2,
-  Paladin: 2, Ranger: 3, Rogue: 4, Sorcerer: 2, Warlock: 2, Wizard: 2
-};
+// CLASS_SKILL_CHOICES shape: { Barbarian: { count: 2, from: [...] }, ... }
+const classSkillOptions = Object.fromEntries(
+  Object.entries(CLASS_SKILL_CHOICES).map(([cls, v]) => [cls, v.from || []])
+);
+const classSkillCounts = Object.fromEntries(
+  Object.entries(CLASS_SKILL_CHOICES).map(([cls, v]) => [cls, v.count || 2])
+);
 
 const classExpertiseCount = {
   Rogue: 2,
   Bard: 2
 };
 
-const skillAbilityMap = {
-  "Athletics": "str",
-  "Acrobatics": "dex", "Sleight of Hand": "dex", "Stealth": "dex",
-  "Arcana": "int", "History": "int", "Investigation": "int", "Nature": "int", "Religion": "int",
-  "Animal Handling": "wis", "Insight": "wis", "Medicine": "wis", "Perception": "wis", "Survival": "wis",
-  "Deception": "cha", "Intimidation": "cha", "Performance": "cha", "Persuasion": "cha"
-};
+// Re-use the registry's SKILL_ABILITIES (lowercase ability keys).
+const skillAbilityMap = SKILL_ABILITIES;
 
 export default function SkillsStep({ characterData, updateCharacterData }) {
   const [selectedSkills, setSelectedSkills] = useState(characterData.skills || {});
