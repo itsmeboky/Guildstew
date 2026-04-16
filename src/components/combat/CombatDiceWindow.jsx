@@ -53,6 +53,7 @@ export default function CombatDiceWindow({
   onViewTurnOrder,
   spellDataList = [],
   extraAttackInfo = null, // { current: 2, total: 3 } → "Attack 2 of 3"
+  homebrewRules = null,   // campaign.homebrew_rules — for getRule() overrides
 }) {
   const [selectedAction, setSelectedAction] = useState(initialAction);
   const [attackRoll, setAttackRoll] = useState(null);
@@ -256,7 +257,7 @@ export default function CombatDiceWindow({
     }
     const score =
       actor.attributes?.[ability] || actor.stats?.[ability] || 10;
-    return Math.floor((score - 10) / 2);
+    return abilMod(score);
   }, [actor]);
 
   const diceRollerRef = useRef(null);
@@ -470,7 +471,7 @@ export default function CombatDiceWindow({
       }
       const score =
         actor.attributes?.[ability] || actor.stats?.[ability] || 10;
-      const mod = Math.floor((score - 10) / 2);
+      const mod = abilMod(score);
       const prof =
         actor.proficiency_bonus || actor.stats?.proficiency_bonus || 2;
       return mod + prof;
@@ -481,8 +482,8 @@ export default function CombatDiceWindow({
     const dex = actor.attributes?.dex || actor.stats?.dexterity || 10;
     const proficiency =
       actor.proficiency_bonus || actor.stats?.proficiency_bonus || 2;
-    const strMod = Math.floor((str - 10) / 2);
-    const dexMod = Math.floor((dex - 10) / 2);
+    const strMod = abilMod(str);
+    const dexMod = abilMod(dex);
     const isFinesse = !!weapon?.properties?.includes?.("Finesse");
     const isRangedWeapon = !!weapon?.category?.includes?.("Ranged");
 
@@ -646,8 +647,8 @@ export default function CombatDiceWindow({
       //   - Finesse weapon (melee): max(STR, DEX).
       //   - Everything else: STR.
       const weapon = selectedAction?.weapon;
-      const strMod = Math.floor(((actor?.attributes?.str || 10) - 10) / 2);
-      const dexMod = Math.floor(((actor?.attributes?.dex || 10) - 10) / 2);
+      const strMod = abilMod(actor?.attributes?.str || 10);
+      const dexMod = abilMod(actor?.attributes?.dex || 10);
       const isFinesse = !!weapon?.properties?.includes?.("Finesse");
       const isRangedWeapon = !!weapon?.category?.includes?.("Ranged");
       const mode = selectedAction?.mode;
@@ -1268,7 +1269,7 @@ export default function CombatDiceWindow({
 
   const onInitiativeRollComplete = (roll) => {
     const dex = actor?.attributes?.dex || 10;
-    const mod = Math.floor((dex - 10) / 2);
+    const mod = abilMod(dex);
     const total = roll + mod;
     const result = { total, dice: roll, mod };
     setInitiativeRoll(result);

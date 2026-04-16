@@ -34,6 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
 import {
   classFeatureDescriptions,
   languageDescriptions,
@@ -1889,7 +1890,7 @@ function PlayerStatBlock({ character, className }) {
   if (!character) return null;
 
   const getModifierValue = (score) => {
-    return Math.floor((score - 10) / 2);
+    return abilityModifier(score);
   };
 
   const calculateModifier = (score) => {

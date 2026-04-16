@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Heart, Music, Circle, Triangle, Zap, Plus, Settings, Play } from "lucide-react";
 import { spellIcons } from "@/components/dnd5e/spellData";
 import { hpBarColor } from "@/components/combat/hpColor";
+import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
 
 const basicActionIcons = [
   { name: "Dash", url: "https://static.wixstatic.com/media/5cdfd8_02e46386022f4a57bb7537e0459427ea~mv2.png" },
@@ -21,7 +22,7 @@ export default function PlayerCenterPanel({ character }) {
   // Attributes
   const attributes = character.attributes || { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
   const getMod = (score) => {
-    const mod = Math.floor((score - 10) / 2);
+    const mod = abilityModifier(score);
     return mod >= 0 ? `+${mod}` : `${mod}`;
   };
 
