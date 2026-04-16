@@ -32,21 +32,13 @@ export default function CreateCampaign() {
 
   const createCampaignMutation = useMutation({
     mutationFn: async (data) => {
+      // Campaign creation — D&D 5e content (monsters, items, spells)
+      // is auto-seeded by a database trigger, so no Edge Function
+      // invocations are needed here. The legacy preloadDnd5eMonsters
+      // / preloadDnd5eItems calls that used to live here were Edge
+      // Functions that never shipped and threw CORS on every campaign
+      // create.
       const campaign = await base44.entities.Campaign.create(data);
-      
-      // Auto-preload D&D 5e content if it's a D&D 5e campaign
-      if (data.system === 'D&D 5e' || data.system === 'Dungeons and Dragons 5e') {
-        try {
-          // Preload in parallel for speed
-          await Promise.all([
-            base44.functions.invoke('preloadDnd5eMonsters', { campaign_id: campaign.id }),
-            base44.functions.invoke('preloadDnd5eItems', { campaign_id: campaign.id })
-          ]);
-        } catch (error) {
-          console.error('Failed to preload D&D content:', error);
-        }
-      }
-      
       return campaign;
     },
     onSuccess: (campaign) => {

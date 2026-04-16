@@ -298,7 +298,12 @@ export default function CharacterLibrary() {
           <div
             className="w-full h-full bg-top bg-cover rounded-2xl shadow-2xl"
             style={{
-              backgroundImage: `url(${selectedCharacter.avatar_url || 'https://via.placeholder.com/800x1000'})`,
+              // Avatar falls through to a dark gradient if the
+              // character has no portrait — no more via.placeholder
+              // hits that were failing in dev.
+              backgroundImage: selectedCharacter.avatar_url
+                ? `url(${selectedCharacter.avatar_url})`
+                : 'linear-gradient(135deg, #1a1f2e 0%, #2A3441 50%, #050816 100%)',
               maxWidth: '600px'
             }}
           />

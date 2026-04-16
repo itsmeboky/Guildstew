@@ -73,7 +73,9 @@ export default function CampaignItems() {
   });
 
   const handleCreateNew = () => {
-    setEditingItem({ name: "", description: "", rarity: "common", type: "Item" });
+    // Explicitly flag homebrew items as non-system so the seeded
+    // read-only SRD items stay distinct from things the GM added.
+    setEditingItem({ name: "", description: "", rarity: "common", type: "Item", is_system: false });
   };
 
   const handleSave = () => {
@@ -284,8 +286,12 @@ export default function CampaignItems() {
                   onClick={() => setSelectedItem(item)}
                   className="bg-[#2A3441] rounded-xl overflow-hidden cursor-pointer hover:scale-105 transition-transform"
                 >
-                  {item.image_url ? (
-                    <img src={item.image_url} alt={item.name} className="w-full h-48 object-cover" />
+                  {(item.icon_url || item.image_url) ? (
+                    <img
+                      src={item.icon_url || item.image_url}
+                      alt={item.name}
+                      className="w-full h-48 object-cover"
+                    />
                   ) : (
                     <div className="w-full h-48 bg-[#1E2430] flex items-center justify-center">
                       <Package className="w-16 h-16 text-gray-600" />
@@ -519,16 +525,36 @@ export default function CampaignItems() {
               ) : (
                 <div>
                   <div className="flex justify-between items-start mb-6">
-                    {selectedItem.image_url && (
-                      <img src={selectedItem.image_url} alt={selectedItem.name} className="w-48 h-48 rounded-lg object-cover" />
+                    {/* Prefer icon_url when the row has one (DB seeded
+                        items usually do); fall back to image_url (set
+                        when the GM uploads a custom image). */}
+                    {(selectedItem.icon_url || selectedItem.image_url) && (
+                      <img
+                        src={selectedItem.icon_url || selectedItem.image_url}
+                        alt={selectedItem.name}
+                        className="w-48 h-48 rounded-lg object-cover"
+                      />
                     )}
                     <div className="flex gap-2">
-                      <Button onClick={() => setEditingItem(selectedItem)} variant="outline">
-                        Edit
-                      </Button>
-                      <Button onClick={() => deleteItemMutation.mutate(selectedItem.id)} variant="outline" className="text-red-400">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      {/* System items come from the DB seed (252 SRD
+                          rows). The DB trigger rejects deletes on
+                          is_system=true, so we also hide the button
+                          so the GM doesn't get a confusing error. */}
+                      {!selectedItem.is_system && (
+                        <>
+                          <Button onClick={() => setEditingItem(selectedItem)} variant="outline">
+                            Edit
+                          </Button>
+                          <Button onClick={() => deleteItemMutation.mutate(selectedItem.id)} variant="outline" className="text-red-400">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </>
+                      )}
+                      {selectedItem.is_system && (
+                        <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 self-center px-2">
+                          Read-only (SRD)
+                        </div>
+                      )}
                       <Button onClick={() => setSelectedItem(null)} variant="outline">
                         Close
                       </Button>
