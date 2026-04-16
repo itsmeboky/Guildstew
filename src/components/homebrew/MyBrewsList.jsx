@@ -304,17 +304,43 @@ function AddToCampaignDialog({ brew, currentUser, onClose }) {
   }, [installedRows]);
 
   const attachMutation = useMutation({
-    mutationFn: ({ campaignId }) =>
-      base44.entities.CampaignHomebrew.create({
+    mutationFn: async ({ campaignId }) => {
+      // Different brew categories land in different campaign
+      // libraries: rule mods link through campaign_homebrew; custom
+      // items drop into campaign_items with is_system=false so they
+      // appear in the item library, loot pool, and equipment slots.
+      if (brew.category === "custom_item") {
+        const mods = brew.modifications || {};
+        await base44.entities.CampaignItem.create({
+          campaign_id: campaignId,
+          name: mods.name || brew.title || "Custom Item",
+          type: mods.type || "Wondrous Item",
+          rarity: (mods.rarity || "Common").toLowerCase().replace(/ /g, "_"),
+          description: mods.description || brew.description || "",
+          properties: mods,
+          image_url: mods.image_url || brew.cover_image_url || null,
+          is_system: false,
+        });
+        // Still record the install so MyBrews can show a checkmark.
+        return base44.entities.CampaignHomebrew.create({
+          campaign_id: campaignId,
+          homebrew_id: brew.id,
+          enabled: true,
+          added_by: userId,
+        });
+      }
+      return base44.entities.CampaignHomebrew.create({
         campaign_id: campaignId,
         homebrew_id: brew.id,
         enabled: true,
         added_by: userId,
-      }),
+      });
+    },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["campaignsWithBrew", brew?.id] });
       queryClient.invalidateQueries({ queryKey: ["campaignHomebrew", vars.campaignId] });
       queryClient.invalidateQueries({ queryKey: ["campaignHomebrewMods", vars.campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaignItems", vars.campaignId] });
       toast.success("Added to campaign");
     },
     onError: (err) => {
