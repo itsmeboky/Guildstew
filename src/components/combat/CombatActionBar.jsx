@@ -1,7 +1,12 @@
 import React, { useState } from "react";
-import { Heart, Circle, Triangle, Music, Zap, ChevronLeft, ChevronRight } from "lucide-react";
+import { Heart, Circle, Triangle, Music, Zap, ChevronLeft, ChevronRight, Flame, Swords, ShieldPlus, Bolt } from "lucide-react";
 import { spellIcons, spellDetails as hardcodedSpellDetails } from "@/components/dnd5e/spellData";
 import { hpBarColor } from "@/components/combat/hpColor";
+import {
+  RAGES_PER_DAY,
+  kiPoints,
+  CLASS_ABILITY_MECHANICS,
+} from "@/components/dnd5e/dnd5eRules";
 
 const PC_ICON_BASE = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/abilities/basic%20actions";
 const MONSTER_ICON_BASE = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/monsters/monster%20abilities";
@@ -81,6 +86,13 @@ export default function CombatActionBar({
   // point should trigger an off-hand bonus-action attack, not cycle
   // the normal attack mode.
   onOffhandAttack,
+  // Class ability resources + handler. classResources is the per-
+  // character resource object from combat_data.classResources.
+  // onClassAbility(abilityName, payload?) is called when the player
+  // clicks a class ability button — the parent (GMPanel / PlayerPanel)
+  // handles the effect, resource decrement, and persistence.
+  classResources = {},
+  onClassAbility,
 }) {
   // Internal state if not provided controlled
   const [localActions, setLocalActions] = useState({ action: true, bonus: true, reaction: true, inspiration: false });
@@ -258,6 +270,116 @@ export default function CombatActionBar({
 
     return list;
   }, [character, isCreature]);
+
+  // Class abilities that appear in the spell/ability row.
+  // Pattern 1 (Toggle): Rage, Reckless Attack
+  // Pattern 2 (One-Click): Second Wind, Action Surge, Flurry, Bardic Inspiration
+  const classAbilities = React.useMemo(() => {
+    if (!character || isCreature) return [];
+    const cls = (character.class || character.stats?.class || '');
+    const clsLower = cls.toLowerCase();
+    const level = character.level || character.stats?.level || 1;
+    const list = [];
+
+    // Barbarian
+    if (clsLower.includes('barbarian')) {
+      list.push({
+        id: 'rage',
+        name: 'Rage',
+        pattern: 'toggle',
+        classKey: 'Barbarian',
+        active: !!classResources.isRaging,
+        usesRemaining: classResources.ragesRemaining ?? (RAGES_PER_DAY[level] || 2),
+        usesMax: RAGES_PER_DAY[level] || 2,
+        disabled: (classResources.ragesRemaining ?? 1) <= 0 && !classResources.isRaging,
+        cost: 'bonus',
+      });
+      if (level >= 2) {
+        list.push({
+          id: 'reckless',
+          name: 'Reckless',
+          pattern: 'toggle',
+          classKey: 'Barbarian',
+          active: !!classResources.recklessActive,
+          cost: 'free',
+        });
+      }
+    }
+
+    // Fighter
+    if (clsLower.includes('fighter')) {
+      list.push({
+        id: 'secondWind',
+        name: 'Second Wind',
+        pattern: 'oneclick',
+        classKey: 'Fighter',
+        disabled: !!classResources.secondWindUsed,
+        cost: 'bonus',
+      });
+      if (level >= 2) {
+        const maxSurge = level >= 17 ? 2 : 1;
+        list.push({
+          id: 'actionSurge',
+          name: 'Action Surge',
+          pattern: 'oneclick',
+          classKey: 'Fighter',
+          usesRemaining: classResources.actionSurgeRemaining ?? maxSurge,
+          usesMax: maxSurge,
+          disabled: (classResources.actionSurgeRemaining ?? 1) <= 0,
+          cost: 'free',
+        });
+      }
+    }
+
+    // Monk
+    if (clsLower.includes('monk') && level >= 2) {
+      const maxKi = kiPoints(level);
+      list.push({
+        id: 'flurry',
+        name: 'Flurry',
+        pattern: 'oneclick',
+        classKey: 'Monk',
+        disabled: (classResources.kiRemaining ?? maxKi) < 1 || !actions.bonus,
+        cost: 'bonus',
+        kiCost: 1,
+      });
+      if (level >= 5) {
+        list.push({
+          id: 'stunningStrike',
+          name: 'Stunning Strike',
+          pattern: 'posthit', // not rendered as a button — handled in CombatDiceWindow
+          classKey: 'Monk',
+        });
+      }
+    }
+
+    // Paladin
+    if (clsLower.includes('paladin') && level >= 2) {
+      list.push({
+        id: 'divineSmite',
+        name: 'Divine Smite',
+        pattern: 'posthit', // not rendered as a button — handled in CombatDiceWindow
+        classKey: 'Paladin',
+      });
+    }
+
+    // Bard
+    if (clsLower.includes('bard')) {
+      const chaMod = Math.max(1, Math.floor(((character.attributes?.cha || 10) - 10) / 2));
+      list.push({
+        id: 'bardicInspiration',
+        name: 'Inspire',
+        pattern: 'oneclick',
+        classKey: 'Bard',
+        usesRemaining: classResources.bardicInspirationRemaining ?? chaMod,
+        usesMax: chaMod,
+        disabled: (classResources.bardicInspirationRemaining ?? 1) <= 0 || !actions.bonus,
+        cost: 'bonus',
+      });
+    }
+
+    return list;
+  }, [character, isCreature, classResources, actions.bonus]);
 
   // Quick lookup so we can grab icon URLs by action name when rendering
   // class bonus action entries. basicActionIcons is the canonical list.
@@ -541,6 +663,51 @@ export default function CombatActionBar({
                         });
                     }}
                   />
+                );
+              })}
+              <div className="h-10 w-[2px] bg-[#1e2636] flex-shrink-0" />
+            </>
+          )}
+
+          {/* Class abilities (Rage, Second Wind, Action Surge, Flurry, Inspire) */}
+          {classAbilities.filter(a => a.pattern !== 'posthit').length > 0 && (
+            <>
+              {classAbilities.filter(a => a.pattern !== 'posthit').map((ability) => {
+                const tint = CLASS_TINT[ability.classKey] || '';
+                const isToggle = ability.pattern === 'toggle';
+                const isActive = isToggle && ability.active;
+                return (
+                  <div key={ability.id} className="relative flex-shrink-0">
+                    <button
+                      title={ability.name}
+                      disabled={ability.disabled}
+                      onClick={() => onClassAbility && onClassAbility(ability.id, ability)}
+                      className={`w-11 h-11 rounded-xl border-2 flex flex-col items-center justify-center transition-all text-[8px] font-black uppercase tracking-wider leading-none ${
+                        ability.disabled
+                          ? 'bg-[#0b1220] border-[#111827] text-slate-600 opacity-50 cursor-not-allowed'
+                          : isActive
+                          ? 'bg-gradient-to-br from-[#FF5722]/30 to-[#ef4444]/20 border-[#FF5722] text-[#FF5722] shadow-[0_0_12px_rgba(255,87,34,0.5)]'
+                          : 'bg-[#0b1220] border-[#1e293b] text-slate-300 hover:border-[#37F2D1]/60 hover:text-white cursor-pointer'
+                      }`}
+                      style={!isActive && !ability.disabled && tint ? { filter: tint } : undefined}
+                    >
+                      <span className="text-[9px] leading-tight">{ability.name}</span>
+                    </button>
+                    {/* Use counter badge */}
+                    {ability.usesMax != null && (
+                      <div className="absolute -bottom-1 -right-1 min-w-[16px] h-[14px] bg-black/90 border border-white/30 rounded-full flex items-center justify-center px-0.5">
+                        <span className="text-[8px] font-bold text-white leading-none">
+                          {ability.usesRemaining ?? '?'}/{ability.usesMax}
+                        </span>
+                      </div>
+                    )}
+                    {/* Used indicator for single-use abilities */}
+                    {ability.pattern === 'oneclick' && ability.usesMax == null && ability.disabled && (
+                      <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/60">
+                        <span className="text-[8px] text-slate-500 font-bold">USED</span>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
               <div className="h-10 w-[2px] bg-[#1e2636] flex-shrink-0" />
