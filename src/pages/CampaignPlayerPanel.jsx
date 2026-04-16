@@ -1522,7 +1522,8 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
                     targetId &&
                     (targetId === myCharacterKey || targetId === `player-${user?.id}`)
                   ) {
-                    const dc = Math.max(10, Math.floor(damage / 2));
+                    const { CONCENTRATION } = await import('@/components/dnd5e/dnd5eRules');
+                    const dc = CONCENTRATION.saveDC(damage);
                     const spell = concentrationByCharacter[myCharacterKey].spell;
                     toast(`Concentration check on ${spell}! CON save DC ${dc}.`);
                   }
