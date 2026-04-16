@@ -77,7 +77,14 @@ export default function CampaignMaps() {
   };
 
   const handleImageUpload = async (file) => {
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    // Scope the upload under `<campaignId>/maps/` inside the
+    // campaign-assets bucket so map images are grouped per-campaign
+    // and easy to clean up when a campaign is deleted.
+    const { file_url } = await base44.integrations.Core.UploadFile({
+      file,
+      bucket: 'campaign-assets',
+      path: `${campaignId}/maps`,
+    });
     setEditingMap({ ...editingMap, image_url: file_url });
   };
 
