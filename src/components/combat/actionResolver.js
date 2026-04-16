@@ -619,7 +619,10 @@ export function resolveAction(action, actor) {
   // === SPELL ACTIONS ===
   if (action.type === "spell") {
     const spellName = typeof action.name === "string" ? action.name : action.spell?.name || action.name;
-    const cost = getSpellCost(spellName);
+    // Metamagic (Quickened Spell, etc.) and feature overrides flag the
+    // action with `costOverride`; honour that so the downstream gate
+    // charges the correct resource.
+    const cost = action.costOverride || getSpellCost(spellName);
     
     // Spell attack (d20 vs AC)
     if (SPELL_ATTACK_SPELLS.has(spellName)) {
