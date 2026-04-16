@@ -35,6 +35,7 @@ import GMPanel from './pages/GMPanel';
 import BackendAdmin from './pages/BackendAdmin';
 import DiceCalibrator from './pages/DiceCalibrator';
 import CampaignPanel from './pages/CampaignPanel';
+import Brewery from './pages/Brewery';
 import __Layout from './Layout.jsx';
 
 
@@ -76,6 +77,7 @@ export const PAGES = {
     "BackendAdmin": BackendAdmin,
     "DiceCalibrator": DiceCalibrator,
     "CampaignPanel": CampaignPanel,
+    "Brewery": Brewery,
 }
 
 export const pagesConfig = {
