@@ -15,6 +15,22 @@ export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatConversationId, setChatConversationId] = useState(null);
+
+  // Cross-component channel: any page (e.g. Friends) can dispatch a
+  // custom event to open the chat panel with a specific conversation
+  // pre-selected. The event carries { conversationId } as detail.
+  React.useEffect(() => {
+    const handler = (e) => {
+      const cid = e.detail?.conversationId;
+      if (cid) {
+        setChatConversationId(cid);
+        setIsChatOpen(true);
+      }
+    };
+    window.addEventListener('open-chat-conversation', handler);
+    return () => window.removeEventListener('open-chat-conversation', handler);
+  }, []);
   const [isDiceRollerOpen, setIsDiceRollerOpen] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
     account: false,
@@ -721,14 +737,16 @@ export default function Layout({ children, currentPageName }) {
 
       <div className="fixed bottom-6 right-6 flex items-center gap-3 bg-[#2A3441] rounded-full p-2 shadow-lg z-30">
         <button
-          onClick={() => setIsChatOpen(!isChatOpen)}
-          className="w-12 h-12 bg-[#FF5722] rounded-full flex items-center justify-center hover:bg-[#FF6B3D] transition-colors"
+          onClick={() => {
+            setIsChatOpen(!isChatOpen);
+            // Clear the pending conversation when closing so re-opening
+            // later doesn't jump to an old DM.
+            if (isChatOpen) setChatConversationId(null);
+          }}
+          className="relative w-12 h-12 bg-[#FF5722] rounded-2xl rounded-br-sm flex items-center justify-center hover:bg-[#FF6B3D] transition-colors shadow-[0_4px_12px_rgba(255,87,34,0.5)]"
+          title="Chat"
         >
-          <div className="flex gap-1">
-            <div className="w-1.5 h-1.5 bg-white rounded-full" />
-            <div className="w-1.5 h-1.5 bg-white rounded-full" />
-            <div className="w-1.5 h-1.5 bg-white rounded-full" />
-          </div>
+          <MessageSquare className="w-5 h-5 text-white" />
         </button>
         <button
           onClick={() => setIsDiceRollerOpen(!isDiceRollerOpen)}
@@ -743,7 +761,14 @@ export default function Layout({ children, currentPageName }) {
         </button>
         </div>
 
-      <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+      <ChatPanel
+        isOpen={isChatOpen}
+        onClose={() => {
+          setIsChatOpen(false);
+          setChatConversationId(null);
+        }}
+        initialConversationId={chatConversationId}
+      />
       <DiceRoller 
         isOpen={isDiceRollerOpen} 
         onClose={() => setIsDiceRollerOpen(false)} 

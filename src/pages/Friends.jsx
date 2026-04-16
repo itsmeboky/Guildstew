@@ -226,9 +226,16 @@ export default function Friends() {
         last_message_at: new Date().toISOString()
       });
     },
-    onSuccess: () => {
+    onSuccess: (conversation) => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
-      toast.success('Chat opened! Click the chat button in bottom right.');
+      queryClient.invalidateQueries({ queryKey: ['chatConversations'] });
+      // Dispatch a custom event so Layout.jsx's chat panel opens
+      // with this specific conversation pre-selected.
+      window.dispatchEvent(
+        new CustomEvent('open-chat-conversation', {
+          detail: { conversationId: conversation.id },
+        }),
+      );
     }
   });
   
