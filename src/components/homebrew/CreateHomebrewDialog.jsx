@@ -22,10 +22,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Upload, Code, Eye, RotateCcw, X } from "lucide-react";
+import { Upload, Code, Eye, RotateCcw, X, Plus, Trash, ChevronUp, ChevronDown } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { uploadFile } from "@/utils/uploadFile";
-import { getRule, DAMAGE_TYPES, WEAPON_PROPERTIES } from "@/components/dnd5e/dnd5eRules";
+import {
+  getRule,
+  DAMAGE_TYPES,
+  WEAPON_PROPERTIES,
+  SPELL_SCHOOLS,
+  CLASS_HIT_DICE,
+} from "@/components/dnd5e/dnd5eRules";
+import { CONDITION_COLORS } from "@/components/combat/conditions";
 import { supabase } from "@/api/supabaseClient";
 
 /**
@@ -48,8 +55,112 @@ import { supabase } from "@/api/supabaseClient";
 // full item record.
 const CONTENT_TYPES = [
   { value: "rule_modification", label: "Rule Modification", description: "Change how an existing rule works." },
-  { value: "custom_item", label: "Custom Item", description: "Weapon, armor, potion, or wondrous item." },
+  { value: "custom_item",       label: "Custom Item",        description: "Weapon, armor, potion, or wondrous item." },
+  { value: "custom_monster",    label: "Custom Monster",     description: "A new creature with a full stat block." },
+  { value: "custom_spell",      label: "Custom Spell",       description: "A new spell with effects and upcasting." },
+  { value: "custom_ability",    label: "Custom Ability",     description: "A class feature, racial trait, or general ability." },
 ];
+
+// Ability-score order used throughout the monster form.
+const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"];
+
+// Skills keyed by ability — used to auto-calc modifiers when a
+// proficiency is toggled on the monster form.
+const SKILLS_BY_ABILITY = {
+  str: ["Athletics"],
+  dex: ["Acrobatics", "Sleight of Hand", "Stealth"],
+  int: ["Arcana", "History", "Investigation", "Nature", "Religion"],
+  wis: ["Animal Handling", "Insight", "Medicine", "Perception", "Survival"],
+  cha: ["Deception", "Intimidation", "Performance", "Persuasion"],
+  con: [],
+};
+const ALL_SKILLS = Object.values(SKILLS_BY_ABILITY).flat().sort();
+
+// CR options covering the fractional values plus 0-30 integers.
+const CR_OPTIONS = ["0", "1/8", "1/4", "1/2",
+  ...Array.from({ length: 30 }, (_, i) => String(i + 1))];
+
+const SIZE_OPTIONS = ["Tiny", "Small", "Medium", "Large", "Huge", "Gargantuan"];
+
+const CREATURE_TYPES = [
+  "Aberration", "Beast", "Celestial", "Construct", "Dragon", "Elemental",
+  "Fey", "Fiend", "Giant", "Humanoid", "Monstrosity", "Ooze", "Plant", "Undead",
+];
+
+const ALIGNMENTS = [
+  "Lawful Good", "Neutral Good", "Chaotic Good",
+  "Lawful Neutral", "True Neutral", "Chaotic Neutral",
+  "Lawful Evil", "Neutral Evil", "Chaotic Evil",
+  "Unaligned", "Any Alignment",
+];
+
+const SAVE_ABILITIES = ["STR", "DEX", "CON", "INT", "WIS", "CHA"];
+
+const CASTING_TIMES = [
+  "1 action", "1 bonus action", "1 reaction", "1 minute", "10 minutes", "1 hour", "8 hours",
+];
+
+const SPELL_CLASSES = Object.keys(CLASS_HIT_DICE);
+
+const SPELL_EFFECT_TYPES = ["Damage", "Healing", "Condition", "Buff", "Debuff", "Utility"];
+
+const ABILITY_SOURCE_TYPES = ["Class Feature", "Racial Feature", "General Ability"];
+const ABILITY_COSTS = ["Action", "Bonus Action", "Reaction", "Free", "Passive"];
+const ABILITY_USES = ["At Will", "1/Short Rest", "1/Long Rest", "Proficiency/Long Rest", "Ki", "Spell Slot"];
+const ABILITY_EFFECT_TYPES = ["Damage", "Healing", "Condition", "Buff", "Utility"];
+
+const BLANK_MONSTER = {
+  name: "",
+  size: "Medium",
+  creature_type: "Humanoid",
+  alignment: "True Neutral",
+  cr: "1",
+  armor_class: 12,
+  hit_points: "30 (4d8 + 12)",
+  speed: "30 ft",
+  stats: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
+  saves: [],
+  skills: [],
+  damage_resistances: [],
+  damage_immunities: [],
+  damage_vulnerabilities: [],
+  condition_immunities: [],
+  senses: "",
+  languages: "",
+  image_url: "",
+  description: "",
+  actions: [],
+};
+
+const BLANK_SPELL = {
+  name: "",
+  level: 0,
+  school: "Evocation",
+  casting_time: "1 action",
+  range: "60 feet",
+  components: { v: true, s: true, m: false, material: "" },
+  duration: "Instantaneous",
+  description: "",
+  higher_levels: "",
+  classes: [],
+  effect_type: "Damage",
+  dice: "",
+  damage_type: "fire",
+  save: "",
+  upcast_bonus: "",
+};
+
+const BLANK_ABILITY = {
+  name: "",
+  source_type: "Class Feature",
+  class: "Fighter",
+  level_requirement: 1,
+  description: "",
+  cost: "Action",
+  uses: "At Will",
+  effect_type: "Utility",
+  mechanical_effect: "",
+};
 
 // Item types the creator can pick; the form below reveals different
 // extra fields per choice. Keep in sync with the campaign_items type
@@ -131,14 +242,26 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
   // the `modifications` JSONB for custom_item brews.
   const [item, setItem] = useState(BLANK_ITEM);
 
+  // Custom-monster / custom-spell / custom-ability state. Each holds
+  // the full record for its type and is serialized on save.
+  const [monster, setMonster] = useState(BLANK_MONSTER);
+  const [spell, setSpell] = useState(BLANK_SPELL);
+  const [ability, setAbility] = useState(BLANK_ABILITY);
+
   // Populate state whenever the dialog opens / the brew prop changes.
   useEffect(() => {
     if (!open) return;
-    const incomingType = brew?.category === "custom_item" ? "custom_item" : "rule_modification";
+    const CATEGORY_TO_TYPE = {
+      custom_item: "custom_item",
+      custom_monster: "custom_monster",
+      custom_spell: "custom_spell",
+      custom_ability: "custom_ability",
+    };
+    const incomingType = CATEGORY_TO_TYPE[brew?.category] || "rule_modification";
     setContentType(incomingType);
     setTitle(brew?.title || "");
     setCategory(
-      brew?.category && brew.category !== "custom_item" ? brew.category : "combat_rules",
+      brew?.category && !CATEGORY_TO_TYPE[brew.category] ? brew.category : "combat_rules",
     );
     setGameSystem(brew?.game_system || "dnd5e");
     setDescription(brew?.description || "");
@@ -146,16 +269,28 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
     setTags(Array.isArray(brew?.tags) ? brew.tags : []);
     setTagDraft("");
     setCoverImageUrl(brew?.cover_image_url || "");
+    // Reset every type-specific slot to its blank template first so
+    // swapping content types in edit mode doesn't leak state from a
+    // previous brew.
+    setItem(BLANK_ITEM);
+    setMonster(BLANK_MONSTER);
+    setSpell(BLANK_SPELL);
+    setAbility(BLANK_ABILITY);
+    setModifications({});
     if (incomingType === "custom_item") {
       setItem(itemFromModifications(brew?.modifications));
-      setModifications({});
+    } else if (incomingType === "custom_monster") {
+      setMonster(monsterFromModifications(brew?.modifications));
+    } else if (incomingType === "custom_spell") {
+      setSpell(spellFromModifications(brew?.modifications));
+    } else if (incomingType === "custom_ability") {
+      setAbility(abilityFromModifications(brew?.modifications));
     } else {
       setModifications(
         brew?.modifications && typeof brew.modifications === "object" && !Array.isArray(brew.modifications)
           ? JSON.parse(JSON.stringify(brew.modifications))
           : {},
       );
-      setItem(BLANK_ITEM);
     }
     setShowJson(false);
     setJsonError(null);
@@ -169,10 +304,23 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const isCustomItem = contentType === "custom_item";
-      const effectiveTitle = isCustomItem ? (item.name || title).trim() : title.trim();
-      const effectiveDescription = isCustomItem ? (item.description || description).trim() : description.trim();
-      if (!effectiveTitle) throw new Error(isCustomItem ? "Item name is required" : "Title is required");
+      const isCustomItem    = contentType === "custom_item";
+      const isCustomMonster = contentType === "custom_monster";
+      const isCustomSpell   = contentType === "custom_spell";
+      const isCustomAbility = contentType === "custom_ability";
+      const typeName =
+        isCustomItem    ? item.name :
+        isCustomMonster ? monster.name :
+        isCustomSpell   ? spell.name :
+        isCustomAbility ? ability.name : "";
+      const effectiveTitle = (typeName || title).trim();
+      const typeDesc =
+        isCustomItem    ? item.description :
+        isCustomMonster ? monster.description :
+        isCustomSpell   ? spell.description :
+        isCustomAbility ? ability.description : "";
+      const effectiveDescription = (typeDesc || description).trim();
+      if (!effectiveTitle) throw new Error(`${CONTENT_TYPES.find(t => t.value === contentType)?.label || "Content"} name is required`);
       if (!effectiveDescription) throw new Error("Description is required");
 
       // Pull current auth user for creator_id.
@@ -181,14 +329,23 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
       const userId = authData.user.id;
 
       // Build the modifications blob. For rule mods we save the delta
-      // tree directly; for custom items we serialize the relevant
-      // fields based on the chosen item type and drop the unused
-      // defaults so the JSONB stays readable.
+      // tree directly; for every custom content type the form has its
+      // own serializer that trims defaults and returns a database-
+      // ready object matching the downstream table schema.
       let mods;
       let effectiveCategory;
       if (isCustomItem) {
         mods = buildItemModifications(item);
         effectiveCategory = "custom_item";
+      } else if (contentType === "custom_monster") {
+        mods = buildMonsterModifications(monster);
+        effectiveCategory = "custom_monster";
+      } else if (contentType === "custom_spell") {
+        mods = buildSpellModifications(spell);
+        effectiveCategory = "custom_spell";
+      } else if (contentType === "custom_ability") {
+        mods = buildAbilityModifications(ability);
+        effectiveCategory = "custom_ability";
       } else {
         mods = modifications;
         effectiveCategory = category;
@@ -201,7 +358,11 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
         category: effectiveCategory,
         game_system: gameSystem,
         version: version || "1.0.0",
-        cover_image_url: coverImageUrl || (isCustomItem ? item.image_url : null) || null,
+        cover_image_url:
+          coverImageUrl
+          || (isCustomItem ? item.image_url : null)
+          || (isCustomMonster ? monster.image_url : null)
+          || null,
         tags,
         modifications: mods,
       };
@@ -467,6 +628,24 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
           {contentType === "custom_item" && (
             <Section title="Item">
               <CustomItemForm item={item} setItem={setItem} />
+            </Section>
+          )}
+
+          {contentType === "custom_monster" && (
+            <Section title="Monster">
+              <CustomMonsterForm monster={monster} setMonster={setMonster} />
+            </Section>
+          )}
+
+          {contentType === "custom_spell" && (
+            <Section title="Spell">
+              <CustomSpellForm spell={spell} setSpell={setSpell} />
+            </Section>
+          )}
+
+          {contentType === "custom_ability" && (
+            <Section title="Ability">
+              <CustomAbilityForm ability={ability} setAbility={setAbility} />
             </Section>
           )}
         </div>
@@ -1240,5 +1419,555 @@ export function buildItemModifications(item) {
     };
   }
   return base;
+}
+
+// ─────────────────────────────────────────────
+// Custom Monster form. Renders the base stat block + a repeatable
+// Actions section. Saves a full monsters-table-shaped record into
+// the modifications JSONB.
+// ─────────────────────────────────────────────
+
+function abilityMod(score) {
+  const s = Number(score);
+  if (!Number.isFinite(s)) return 0;
+  return Math.floor((s - 10) / 2);
+}
+
+function formatMod(n) {
+  return n >= 0 ? `+${n}` : `${n}`;
+}
+
+function CustomMonsterForm({ monster, setMonster }) {
+  const patch = (fields) => setMonster((prev) => ({ ...prev, ...fields }));
+  const toggleInList = (key, value) => {
+    const cur = Array.isArray(monster[key]) ? [...monster[key]] : [];
+    const idx = cur.indexOf(value);
+    if (idx === -1) cur.push(value);
+    else cur.splice(idx, 1);
+    patch({ [key]: cur });
+  };
+
+  const setAbility = (key, value) => {
+    const next = { ...(monster.stats || {}) };
+    next[key] = Number(value) || 0;
+    patch({ stats: next });
+  };
+
+  // Actions list helpers. Monster actions are a repeatable list —
+  // the user can add / remove / reorder entries freely.
+  const actions = Array.isArray(monster.actions) ? monster.actions : [];
+  const setActions = (next) => patch({ actions: next });
+  const addAction = () => setActions([
+    ...actions,
+    { name: "", description: "", attack_bonus: "", damage: "", damage_type: "bludgeoning", reach: "" },
+  ]);
+  const updateAction = (idx, fields) => {
+    const next = actions.map((a, i) => (i === idx ? { ...a, ...fields } : a));
+    setActions(next);
+  };
+  const removeAction = (idx) => setActions(actions.filter((_, i) => i !== idx));
+  const moveAction = (idx, direction) => {
+    const target = idx + direction;
+    if (target < 0 || target >= actions.length) return;
+    const next = [...actions];
+    const [moved] = next.splice(idx, 1);
+    next.splice(target, 0, moved);
+    setActions(next);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* --- Identity --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Field label="Name" required>
+          <Input
+            value={monster.name || ""}
+            onChange={(e) => patch({ name: e.target.value })}
+            placeholder="e.g., Shadow Wyrm"
+            className="bg-[#0b1220] border-slate-700 text-white"
+          />
+        </Field>
+        <Field label="Challenge Rating">
+          <Select value={monster.cr} onValueChange={(v) => patch({ cr: v })}>
+            <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+            <SelectContent className="max-h-72">
+              {CR_OPTIONS.map((cr) => (
+                <SelectItem key={cr} value={cr}>CR {cr}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Size">
+          <Select value={monster.size} onValueChange={(v) => patch({ size: v })}>
+            <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {SIZE_OPTIONS.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Creature type">
+          <Select value={monster.creature_type} onValueChange={(v) => patch({ creature_type: v })}>
+            <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+            <SelectContent className="max-h-72">
+              {CREATURE_TYPES.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Alignment">
+          <Select value={monster.alignment} onValueChange={(v) => patch({ alignment: v })}>
+            <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+            <SelectContent className="max-h-72">
+              {ALIGNMENTS.map((a) => (<SelectItem key={a} value={a}>{a}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Armor Class">
+          <Input
+            type="number" min={0}
+            value={monster.armor_class ?? 0}
+            onChange={(e) => patch({ armor_class: Number(e.target.value) || 0 })}
+            className="bg-[#0b1220] border-slate-700 text-white"
+          />
+        </Field>
+        <Field label="Hit Points">
+          <Input
+            value={monster.hit_points || ""}
+            onChange={(e) => patch({ hit_points: e.target.value })}
+            placeholder='e.g., 135 (18d10 + 36)'
+            className="bg-[#0b1220] border-slate-700 text-white"
+          />
+        </Field>
+        <Field label="Speed">
+          <Input
+            value={monster.speed || ""}
+            onChange={(e) => patch({ speed: e.target.value })}
+            placeholder="e.g., 30 ft, fly 60 ft"
+            className="bg-[#0b1220] border-slate-700 text-white"
+          />
+        </Field>
+      </div>
+
+      {/* --- Ability scores with live modifier display --- */}
+      <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3">
+        <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold mb-2">Ability Scores</h4>
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+          {ABILITY_KEYS.map((key) => {
+            const value = monster.stats?.[key] ?? 10;
+            const mod = abilityMod(value);
+            return (
+              <div key={key} className="flex flex-col items-center">
+                <Label className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">
+                  {key}
+                </Label>
+                <Input
+                  type="number" min={1} max={30}
+                  value={value}
+                  onChange={(e) => setAbility(key, e.target.value)}
+                  className="bg-[#0b1220] border-slate-700 text-white text-center"
+                />
+                <span className="text-[10px] text-[#37F2D1] font-black mt-0.5">{formatMod(mod)}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* --- Saving throws + skills --- */}
+      <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3 space-y-3">
+        <Field label="Saving Throw Proficiencies">
+          <div className="flex flex-wrap gap-1.5">
+            {SAVE_ABILITIES.map((s) => {
+              const active = Array.isArray(monster.saves) && monster.saves.includes(s.toLowerCase());
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => toggleInList("saves", s.toLowerCase())}
+                  className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded border transition-colors ${
+                    active
+                      ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                      : "bg-[#0b1220] border-slate-700 text-slate-300 hover:border-[#37F2D1]/60"
+                  }`}
+                >
+                  {s}
+                </button>
+              );
+            })}
+          </div>
+        </Field>
+
+        <Field label="Skills">
+          <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+            {ALL_SKILLS.map((skill) => {
+              const active = Array.isArray(monster.skills) && monster.skills.includes(skill);
+              // Find the governing ability so we can show the derived
+              // modifier preview right on the chip.
+              const ability = Object.keys(SKILLS_BY_ABILITY).find(
+                (k) => SKILLS_BY_ABILITY[k].includes(skill),
+              );
+              const score = monster.stats?.[ability] ?? 10;
+              const modPreview = abilityMod(score);
+              return (
+                <button
+                  key={skill}
+                  type="button"
+                  onClick={() => toggleInList("skills", skill)}
+                  className={`text-[10px] font-semibold px-2 py-1 rounded border transition-colors ${
+                    active
+                      ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                      : "bg-[#0b1220] border-slate-700 text-slate-300 hover:border-[#37F2D1]/60"
+                  }`}
+                  title={`${skill} (${(ability || "").toUpperCase()} ${formatMod(modPreview)})`}
+                >
+                  {skill} <span className="opacity-70">{formatMod(modPreview)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Field>
+      </div>
+
+      {/* --- Damage + condition profile --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <ChipMultiSelect
+          label="Damage Resistances"
+          options={DAMAGE_TYPES}
+          values={monster.damage_resistances}
+          onChange={(next) => patch({ damage_resistances: next })}
+        />
+        <ChipMultiSelect
+          label="Damage Immunities"
+          options={DAMAGE_TYPES}
+          values={monster.damage_immunities}
+          onChange={(next) => patch({ damage_immunities: next })}
+        />
+        <ChipMultiSelect
+          label="Damage Vulnerabilities"
+          options={DAMAGE_TYPES}
+          values={monster.damage_vulnerabilities}
+          onChange={(next) => patch({ damage_vulnerabilities: next })}
+        />
+        <ChipMultiSelect
+          label="Condition Immunities"
+          options={Object.keys(CONDITION_COLORS)}
+          values={monster.condition_immunities}
+          onChange={(next) => patch({ condition_immunities: next })}
+        />
+      </div>
+
+      {/* --- Senses + languages --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Field label="Senses">
+          <Input
+            value={monster.senses || ""}
+            onChange={(e) => patch({ senses: e.target.value })}
+            placeholder="darkvision 120 ft, passive Perception 16"
+            className="bg-[#0b1220] border-slate-700 text-white"
+          />
+        </Field>
+        <Field label="Languages">
+          <Input
+            value={monster.languages || ""}
+            onChange={(e) => patch({ languages: e.target.value })}
+            placeholder="Common, Draconic"
+            className="bg-[#0b1220] border-slate-700 text-white"
+          />
+        </Field>
+      </div>
+
+      <Field label="Image">
+        <HomebrewImageUpload
+          url={monster.image_url}
+          onChange={(url) => patch({ image_url: url })}
+          path="homebrew/monsters"
+        />
+      </Field>
+
+      <Field label="Description">
+        <Textarea
+          value={monster.description || ""}
+          onChange={(e) => patch({ description: e.target.value })}
+          placeholder="Flavor text, lore, behavior…"
+          rows={3}
+          className="bg-[#0b1220] border-slate-700 text-white"
+        />
+      </Field>
+
+      {/* --- Actions repeater --- */}
+      <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Actions</h4>
+          <Button type="button" variant="outline" size="sm" onClick={addAction}>
+            <Plus className="w-3 h-3 mr-1" /> Add Action
+          </Button>
+        </div>
+        {actions.length === 0 ? (
+          <p className="text-[11px] text-slate-500 italic text-center py-3">
+            No actions yet. Click "Add Action" to add Bite, Breath Weapon, etc.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {actions.map((action, idx) => (
+              <div key={idx} className="bg-[#0b1220] border border-[#1e293b] rounded-lg p-2 space-y-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => moveAction(idx, -1)}
+                    disabled={idx === 0}
+                    className="text-slate-400 hover:text-white disabled:opacity-30"
+                    title="Move up"
+                  >
+                    <ChevronUp className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveAction(idx, 1)}
+                    disabled={idx === actions.length - 1}
+                    className="text-slate-400 hover:text-white disabled:opacity-30"
+                    title="Move down"
+                  >
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                  <Input
+                    value={action.name || ""}
+                    onChange={(e) => updateAction(idx, { name: e.target.value })}
+                    placeholder="Action name (e.g., Bite)"
+                    className="bg-[#050816] border-slate-700 text-white flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeAction(idx)}
+                    className="text-slate-400 hover:text-red-400"
+                    title="Remove"
+                  >
+                    <Trash className="w-3 h-3" />
+                  </button>
+                </div>
+                <Textarea
+                  value={action.description || ""}
+                  onChange={(e) => updateAction(idx, { description: e.target.value })}
+                  placeholder="Description / trigger / effect…"
+                  rows={2}
+                  className="bg-[#050816] border-slate-700 text-white text-xs"
+                />
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div>
+                    <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Atk bonus</Label>
+                    <Input
+                      type="number"
+                      value={action.attack_bonus ?? ""}
+                      onChange={(e) => updateAction(idx, { attack_bonus: e.target.value === "" ? "" : Number(e.target.value) })}
+                      placeholder="blank for none"
+                      className="bg-[#050816] border-slate-700 text-white text-xs"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Damage</Label>
+                    <Input
+                      value={action.damage || ""}
+                      onChange={(e) => updateAction(idx, { damage: e.target.value })}
+                      placeholder="2d6+4"
+                      className="bg-[#050816] border-slate-700 text-white text-xs"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Type</Label>
+                    <Select
+                      value={action.damage_type || "bludgeoning"}
+                      onValueChange={(v) => updateAction(idx, { damage_type: v })}
+                    >
+                      <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {DAMAGE_TYPES.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Reach / Range</Label>
+                    <Input
+                      value={action.reach || ""}
+                      onChange={(e) => updateAction(idx, { reach: e.target.value })}
+                      placeholder="5 ft / 60/120 ft"
+                      className="bg-[#050816] border-slate-700 text-white text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Small reusable chip-style multi-select. Used across the monster
+// form for damage type / condition lists.
+function ChipMultiSelect({ label, options, values, onChange }) {
+  const selected = Array.isArray(values) ? values : [];
+  const toggle = (value) => {
+    const idx = selected.indexOf(value);
+    const next = [...selected];
+    if (idx === -1) next.push(value);
+    else next.splice(idx, 1);
+    onChange(next);
+  };
+  return (
+    <Field label={label}>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((opt) => {
+          const active = selected.includes(opt);
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => toggle(opt)}
+              className={`text-[10px] font-semibold px-2 py-1 rounded border transition-colors capitalize ${
+                active
+                  ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                  : "bg-[#0b1220] border-slate-700 text-slate-300 hover:border-[#37F2D1]/60"
+              }`}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+    </Field>
+  );
+}
+
+// Shared image-upload control. Same behavior as ItemImageUpload but
+// parameterized on the storage path so monster covers land in
+// campaign-assets/homebrew/monsters/.
+function HomebrewImageUpload({ url, onChange, path }) {
+  const [uploading, setUploading] = useState(false);
+  const handle = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { file_url } = await uploadFile(file, "campaign-assets", path || "homebrew");
+      onChange(file_url);
+    } catch (err) {
+      toast.error("Image upload failed");
+      console.error(err);
+    } finally {
+      setUploading(false);
+    }
+  };
+  return (
+    <div className="flex items-center gap-3">
+      {url && (
+        <img src={url} alt="" className="w-16 h-16 rounded object-cover border border-slate-700" />
+      )}
+      <label className="inline-flex items-center gap-2 cursor-pointer bg-[#0b1220] border border-slate-700 hover:border-[#37F2D1] rounded-lg px-3 py-2 text-xs font-semibold text-slate-300">
+        <Upload className="w-3 h-3" />
+        {uploading ? "Uploading..." : url ? "Replace" : "Upload"}
+        <input type="file" accept="image/*" className="hidden" onChange={handle} disabled={uploading} />
+      </label>
+      {url && (
+        <button type="button" onClick={() => onChange("")} className="text-xs text-slate-400 hover:text-red-400">Remove</button>
+      )}
+    </div>
+  );
+}
+
+export function monsterFromModifications(mods) {
+  if (!mods || typeof mods !== "object") return { ...BLANK_MONSTER };
+  return {
+    ...BLANK_MONSTER,
+    ...mods,
+    stats: { ...BLANK_MONSTER.stats, ...(mods.stats || mods.abilities || {}) },
+    saves: Array.isArray(mods.saves || mods.saving_throws) ? (mods.saves || mods.saving_throws) : [],
+    skills: Array.isArray(mods.skills) ? mods.skills : [],
+    damage_resistances:    Array.isArray(mods.damage_resistances)    ? mods.damage_resistances    : [],
+    damage_immunities:     Array.isArray(mods.damage_immunities)     ? mods.damage_immunities     : [],
+    damage_vulnerabilities:Array.isArray(mods.damage_vulnerabilities)? mods.damage_vulnerabilities: [],
+    condition_immunities:  Array.isArray(mods.condition_immunities)  ? mods.condition_immunities  : [],
+    actions: Array.isArray(mods.actions) ? mods.actions : [],
+    // `cr` and `challenge_rating` are used interchangeably — honour
+    // whichever the caller stored.
+    cr: String(mods.cr ?? mods.challenge_rating ?? "1"),
+  };
+}
+
+export function buildMonsterModifications(monster) {
+  if (!monster || typeof monster !== "object") return {};
+  const actions = Array.isArray(monster.actions) ? monster.actions.map((a) => ({
+    name: a.name || "",
+    description: a.description || "",
+    attack_bonus: a.attack_bonus === "" || a.attack_bonus === null || a.attack_bonus === undefined
+      ? null
+      : Number(a.attack_bonus),
+    damage: a.damage || "",
+    damage_type: a.damage_type || "",
+    reach: a.reach || "",
+  })) : [];
+  return {
+    name: monster.name || "",
+    size: monster.size || "Medium",
+    // Both keys kept so downstream readers that expect either work.
+    type: monster.creature_type || "Humanoid",
+    creature_type: monster.creature_type || "Humanoid",
+    alignment: monster.alignment || "True Neutral",
+    cr: String(monster.cr ?? "1"),
+    challenge_rating: String(monster.cr ?? "1"),
+    armor_class: Number(monster.armor_class) || 0,
+    hit_points: monster.hit_points || "",
+    speed: monster.speed || "",
+    abilities: { ...(monster.stats || {}) },
+    stats: { ...(monster.stats || {}) },
+    saving_throws: Array.isArray(monster.saves) ? monster.saves : [],
+    saves: Array.isArray(monster.saves) ? monster.saves : [],
+    skills: Array.isArray(monster.skills) ? monster.skills : [],
+    damage_resistances:    Array.isArray(monster.damage_resistances)    ? monster.damage_resistances    : [],
+    damage_immunities:     Array.isArray(monster.damage_immunities)     ? monster.damage_immunities     : [],
+    damage_vulnerabilities:Array.isArray(monster.damage_vulnerabilities)? monster.damage_vulnerabilities: [],
+    condition_immunities:  Array.isArray(monster.condition_immunities)  ? monster.condition_immunities  : [],
+    senses: monster.senses || "",
+    languages: monster.languages || "",
+    image_url: monster.image_url || "",
+    description: monster.description || "",
+    actions,
+  };
+}
+
+// Placeholder serializers for Custom Spell / Custom Ability. These
+// are referenced by the init / save branches so future form work
+// can land without touching that plumbing. They currently pass the
+// input through untouched so any pre-existing spell/ability brew
+// round-trips cleanly.
+export function spellFromModifications(mods) {
+  if (!mods || typeof mods !== "object") return { ...BLANK_SPELL };
+  return { ...BLANK_SPELL, ...mods };
+}
+export function buildSpellModifications(spell) {
+  return { ...(spell || {}) };
+}
+export function abilityFromModifications(mods) {
+  if (!mods || typeof mods !== "object") return { ...BLANK_ABILITY };
+  return { ...BLANK_ABILITY, ...mods };
+}
+export function buildAbilityModifications(ability) {
+  return { ...(ability || {}) };
+}
+
+// Temporary stubs for the not-yet-implemented Custom Spell and
+// Custom Ability forms. Keep the placeholders as inert panels so
+// the dialog renders without crashing if a user picks those types.
+function CustomSpellForm() {
+  return (
+    <p className="text-xs text-slate-400 italic text-center py-4">
+      Custom Spell form coming in the next homebrew pass.
+    </p>
+  );
+}
+function CustomAbilityForm() {
+  return (
+    <p className="text-xs text-slate-400 italic text-center py-4">
+      Custom Ability form coming in the next homebrew pass.
+    </p>
+  );
 }
 

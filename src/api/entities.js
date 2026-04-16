@@ -83,6 +83,7 @@ export const entities = {
   CampaignInvitation:   createEntity('campaign_invitations'),
   CampaignItem:         createEntity('campaign_items'),
   CampaignLogEntry:     createEntity('campaign_log_entries'),
+  CampaignAbility:      createEntity('campaign_abilities'),
   CampaignHomebrew:     createEntity('campaign_homebrew'),
   CampaignMap:          createEntity('campaign_maps'),
   CampaignNPC:          createEntity('campaign_npcs'),
