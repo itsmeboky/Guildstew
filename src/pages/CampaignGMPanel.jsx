@@ -119,34 +119,25 @@ export default function CampaignGMPanel() {
     }
   });
 
+  // Preload mutations used to invoke Edge Functions that never
+  // shipped (preloadDnd5eMonsters / preloadDnd5eItems). Game data is
+  // now auto-seeded by a database trigger on campaign creation, so
+  // these mutations are no-ops kept only so the useEffect call sites
+  // below don't need to be restructured. If a campaign needs a reseed
+  // it happens at the DB layer.
   const preloadMonstersMutation = useMutation({
-    mutationFn: async () => {
-      return base44.functions.invoke('preloadDnd5eMonsters', { campaign_id: campaignId });
-    }
+    mutationFn: async () => null,
   });
 
   const preloadItemsMutation = useMutation({
-    mutationFn: async () => {
-      return base44.functions.invoke('preloadDnd5eItems', { campaign_id: campaignId });
-    }
+    mutationFn: async () => null,
   });
 
   useEffect(() => {
-    if (campaign && (campaign.system === 'D&D 5e' || campaign.system === 'Dungeons and Dragons 5e')) {
-      // Check and preload monsters if missing
-      base44.entities.Monster.filter({ campaign_id: campaignId }, null, 1).then(monsters => {
-        if (monsters.length === 0 && !preloadMonstersMutation.isPending && !preloadMonstersMutation.isSuccess) {
-          preloadMonstersMutation.mutate();
-        }
-      });
-      
-      // Check and preload items if missing
-      base44.entities.CampaignItem.filter({ campaign_id: campaignId }, null, 1).then(items => {
-        if (items.length === 0 && !preloadItemsMutation.isPending && !preloadItemsMutation.isSuccess) {
-          preloadItemsMutation.mutate();
-        }
-      });
-    }
+    // Intentionally empty: the database trigger seeds every D&D 5e
+    // campaign with its monsters and items at creation time. We used
+    // to check here and call dead Edge Functions, which produced CORS
+    // errors on every GM panel mount.
   }, [campaign, campaignId]);
 
   const handleStartSession = () => {

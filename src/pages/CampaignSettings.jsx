@@ -177,37 +177,12 @@ export default function CampaignSettings() {
     }
   });
 
-  const preloadMonstersMutation = useMutation({
-    mutationFn: async () => {
-      return base44.functions.invoke('preloadDnd5eMonsters', { campaign_id: campaignId });
-    },
-    onSuccess: (res) => {
-      if (res.data?.error) {
-        toast.error(res.data.error);
-      } else {
-        toast.success(`Preloaded ${res.data?.monsters_created || 0} monsters!`);
-      }
-    },
-    onError: () => {
-      toast.error('Failed to preload monsters');
-    }
-  });
-
-  const preloadItemsMutation = useMutation({
-    mutationFn: async () => {
-      return base44.functions.invoke('preloadDnd5eItems', { campaign_id: campaignId });
-    },
-    onSuccess: (res) => {
-      if (res.data?.error) {
-        toast.error(res.data.error);
-      } else {
-        toast.success(`Preloaded ${res.data?.items_created || 0} items!`);
-      }
-    },
-    onError: () => {
-      toast.error('Failed to preload items');
-    }
-  });
+  // Legacy preload flows used to call Edge Functions that never
+  // shipped. D&D 5e content is now seeded by a DB trigger at campaign
+  // creation, so these mutations are kept as inert stubs and the
+  // settings tab below renders a one-line notice instead of buttons.
+  const preloadMonstersMutation = { isPending: false, mutate: () => {} };
+  const preloadItemsMutation = { isPending: false, mutate: () => {} };
 
   const handleImageUpload = (field, file) => {
     if (file) {
@@ -822,68 +797,24 @@ export default function CampaignSettings() {
             </div>
           </TabsContent>
 
-          {/* Game Content Tab (D&D 5e Only) */}
+          {/* Game Content Tab (D&D 5e Only).
+              This used to house manual preload buttons for monsters
+              and items. D&D 5e content is now auto-seeded by a
+              database trigger on campaign creation, so the tab just
+              reports that status. Left in place so the tabs don't
+              shift when a campaign uses the D&D 5e system. */}
           {(campaign.system === 'D&D 5e' || campaign.system === 'Dungeons and Dragons 5e') && (
             <TabsContent value="content" className="space-y-6">
               <div className="bg-[#2A3441] rounded-xl p-6">
                 <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
                   <Database className="w-6 h-6" />
-                  Preload Game Content
+                  Game Content
                 </h2>
-                <p className="text-gray-400 mb-6">
-                  If your campaign is missing the standard D&D 5e content (Monsters or Items), you can manually load them here. 
-                  This is useful for campaigns created before the automatic preloading was added.
+                <p className="text-gray-400">
+                  D&amp;D 5e monsters, items, and spells are automatically seeded into your campaign when it's created.
+                  There's nothing to preload here — the full SRD library is already available in the Monster Library,
+                  Items, and Spells tabs.
                 </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-[#1E2430] p-5 rounded-xl border border-gray-700">
-                    <h3 className="text-xl font-bold mb-2 text-white">Monster Manual</h3>
-                    <p className="text-sm text-gray-400 mb-4">
-                      Loads all standard SRD monsters into your Combat Queue library.
-                    </p>
-                    <Button 
-                      onClick={() => preloadMonstersMutation.mutate()} 
-                      disabled={preloadMonstersMutation.isPending}
-                      className="w-full bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430]"
-                    >
-                      {preloadMonstersMutation.isPending ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          Loading Monsters...
-                        </>
-                      ) : (
-                        <>
-                          <Database className="w-4 h-4 mr-2" />
-                          Load Monsters
-                        </>
-                      )}
-                    </Button>
-                  </div>
-
-                  <div className="bg-[#1E2430] p-5 rounded-xl border border-gray-700">
-                    <h3 className="text-xl font-bold mb-2 text-white">Item Library</h3>
-                    <p className="text-sm text-gray-400 mb-4">
-                      Loads all standard SRD items (weapons, armor, gear) into your Campaign Items.
-                    </p>
-                    <Button 
-                      onClick={() => preloadItemsMutation.mutate()} 
-                      disabled={preloadItemsMutation.isPending}
-                      className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] text-white"
-                    >
-                      {preloadItemsMutation.isPending ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          Loading Items...
-                        </>
-                      ) : (
-                        <>
-                          <Database className="w-4 h-4 mr-2" />
-                          Load Items
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
               </div>
             </TabsContent>
           )}
