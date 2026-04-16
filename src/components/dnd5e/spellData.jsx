@@ -683,78 +683,25 @@ export function getSpellSlots(className, level, multiclasses = []) {
   return result;
 }
 
-// Full Caster Progression Table (Bard, Cleric, Druid, Sorcerer, Wizard)
-const fullCasterTable = [
-  [2],                      // 1
-  [3],                      // 2
-  [4, 2],                   // 3
-  [4, 3],                   // 4
-  [4, 3, 2],                // 5
-  [4, 3, 3],                // 6
-  [4, 3, 3, 1],             // 7
-  [4, 3, 3, 2],             // 8
-  [4, 3, 3, 3, 1],          // 9
-  [4, 3, 3, 3, 2],          // 10
-  [4, 3, 3, 3, 2, 1],       // 11
-  [4, 3, 3, 3, 2, 1],       // 12
-  [4, 3, 3, 3, 2, 1, 1],    // 13
-  [4, 3, 3, 3, 2, 1, 1],    // 14
-  [4, 3, 3, 3, 2, 1, 1, 1], // 15
-  [4, 3, 3, 3, 2, 1, 1, 1], // 16
-  [4, 3, 3, 3, 2, 1, 1, 1, 1], // 17
-  [4, 3, 3, 3, 3, 1, 1, 1, 1], // 18
-  [4, 3, 3, 3, 3, 2, 1, 1, 1], // 19
-  [4, 3, 3, 3, 3, 2, 2, 1, 1]  // 20
-];
+// Spell slot progression tables — delegated to the single source of
+// truth in dnd5eRules.js. The local arrays are built from the registry
+// at module load so every function that indexes by [level - 1] keeps
+// working without signature changes.
+import {
+  FULL_CASTER_SLOTS as _FULL_SLOTS,
+  WARLOCK_PACT_SLOTS as _PACT_SLOTS,
+  halfCasterSlots as _halfCasterSlots,
+  cantripsKnown as _registryCantripsKnown,
+} from '@/components/dnd5e/dnd5eRules';
 
-// Half Caster Progression (Paladin, Ranger)
-const halfCasterTable = [
-  [],                       // 1
-  [2],                      // 2
-  [3],                      // 3
-  [3],                      // 4
-  [4, 2],                   // 5
-  [4, 2],                   // 6
-  [4, 3],                   // 7
-  [4, 3],                   // 8
-  [4, 3, 2],                // 9
-  [4, 3, 2],                // 10
-  [4, 3, 3],                // 11
-  [4, 3, 3],                // 12
-  [4, 3, 3, 1],             // 13
-  [4, 3, 3, 1],             // 14
-  [4, 3, 3, 2],             // 15
-  [4, 3, 3, 2],             // 16
-  [4, 3, 3, 3, 1],          // 17
-  [4, 3, 3, 3, 1],          // 18
-  [4, 3, 3, 3, 2],          // 19
-  [4, 3, 3, 3, 2]           // 20
-];
-
-// Warlock Table (Slot Level is handled differently, they have X slots of level Y)
-// format: { count: slots, level: slotLevel }
-const warlockTable = [
-  { count: 1, level: 1 }, // 1
-  { count: 2, level: 1 }, // 2
-  { count: 2, level: 2 }, // 3
-  { count: 2, level: 2 }, // 4
-  { count: 2, level: 3 }, // 5
-  { count: 2, level: 3 }, // 6
-  { count: 2, level: 4 }, // 7
-  { count: 2, level: 4 }, // 8
-  { count: 2, level: 5 }, // 9
-  { count: 2, level: 5 }, // 10
-  { count: 3, level: 5 }, // 11
-  { count: 3, level: 5 }, // 12
-  { count: 3, level: 5 }, // 13
-  { count: 3, level: 5 }, // 14
-  { count: 3, level: 5 }, // 15
-  { count: 3, level: 5 }, // 16
-  { count: 4, level: 5 }, // 17
-  { count: 4, level: 5 }, // 18
-  { count: 4, level: 5 }, // 19
-  { count: 4, level: 5 }  // 20
-];
+// Convert registry's { level: [slots...] } into a 0-indexed array of
+// arrays so the existing [level - 1] indexing still works.
+const fullCasterTable = Array.from({ length: 20 }, (_, i) => _FULL_SLOTS[i + 1] || []);
+const halfCasterTable = Array.from({ length: 20 }, (_, i) => _halfCasterSlots(i + 1));
+const warlockTable = Array.from({ length: 20 }, (_, i) => {
+  const pact = _PACT_SLOTS[i + 1] || { slots: 0, level: 0 };
+  return { count: pact.slots, level: pact.level };
+});
 
 // Sorcerer Cantrips Known: 1-3: 4, 4-9: 5, 10+: 6
 // Bard/Druid/Cleric/Wizard/Warlock Cantrips Known differ slightly but 2-4 is average.
