@@ -79,11 +79,13 @@ export default function Layout({ children, currentPageName }) {
   const { data: campaignInvitations } = useQuery({
     queryKey: ['campaignInvitations', user?.id],
     queryFn: async () => {
-      const invites = await base44.entities.CampaignInvitation.filter({ user_id: user?.id, status: 'pending' });
+      // Table column is invited_user_id, not user_id.
+      const invites = await base44.entities.CampaignInvitation.filter({ invited_user_id: user?.id, status: 'pending' });
       return invites;
     },
     enabled: !!user?.id,
-    staleTime: 30000,
+    staleTime: 10000,
+    refetchInterval: 10000,
     initialData: []
   });
 

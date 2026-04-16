@@ -42,7 +42,7 @@ export default function JoinCampaign() {
 
   const { data: invitations } = useQuery({
     queryKey: ['campaignInvitations', user?.id],
-    queryFn: () => base44.entities.CampaignInvitation.filter({ user_id: user?.id, status: 'pending' }),
+    queryFn: () => base44.entities.CampaignInvitation.filter({ invited_user_id: user?.id, status: 'pending' }),
     enabled: !!user?.id,
     refetchInterval: 5000,
     initialData: []
