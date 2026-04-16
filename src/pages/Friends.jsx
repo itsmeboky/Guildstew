@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { supabase } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,31 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+
+/**
+ * Search user_profiles directly via Supabase. Replaces the dead
+ * `searchUsers` Edge Function that used to throw CORS on every
+ * keystroke. Returns an array of profile objects identical to what
+ * the old function returned.
+ */
+async function searchUsers(searchQuery, excludeUserIds = []) {
+  if (!searchQuery || !searchQuery.trim()) return [];
+  const term = searchQuery.trim();
+  let query = supabase
+    .from('user_profiles')
+    .select('*')
+    .or(`username.ilike.%${term}%,email.ilike.%${term}%`)
+    .limit(20);
+  if (excludeUserIds.length > 0) {
+    query = query.not('user_id', 'in', `(${excludeUserIds.join(',')})`);
+  }
+  const { data, error } = await query;
+  if (error) {
+    console.error('searchUsers query failed:', error);
+    return [];
+  }
+  return data || [];
+}
 
 export default function Friends() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -36,14 +62,8 @@ export default function Friends() {
     queryFn: () => base44.auth.me()
   });
 
-  // Sync user profile on mount
-  React.useEffect(() => {
-    if (user) {
-      base44.functions.invoke('syncUserProfiles').catch(() => {});
-    }
-  }, [user]);
-
-  console.log('Current User B:', user);
+  // NOTE: the old `syncUserProfiles` Edge Function call has been
+  // removed. Profile syncing is handled by AuthContext.jsx on login.
 
 
 
@@ -60,7 +80,6 @@ export default function Friends() {
     );
   }, [allFriendships, user]);
 
-  console.log('Filtered Friendships for User B:', friendships);
 
   const handleAddFriend = (friendData) => {
     const currentUserAge = user?.age;
@@ -260,7 +279,6 @@ export default function Friends() {
     return Array.from(requestMap.values());
   }, [friendships, user?.id]);
 
-  console.log('Pending Requests for User B:', pendingRequests);
 
   // Play notification sound when new friend request arrives
   useEffect(() => {
@@ -325,14 +343,7 @@ export default function Friends() {
 
   const { data: searchResults = [], isLoading: isSearching } = useQuery({
     queryKey: ['searchUsers', searchQuery, allFriendUserIds],
-    queryFn: async () => {
-      if (!searchQuery || searchQuery.length === 0) return [];
-      const response = await base44.functions.invoke('searchUsers', {
-        searchQuery,
-        excludeUserIds: allFriendUserIds
-      });
-      return response.data?.results || [];
-    },
+    queryFn: () => searchUsers(searchQuery, allFriendUserIds),
     enabled: !!user && searchQuery.length > 0,
     initialData: []
   });
