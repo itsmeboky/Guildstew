@@ -1,6 +1,6 @@
 /**
  * D&D 5e Action Resolver
- * 
+ *
  * Categorizes actions into their correct roll type so the combat system
  * routes to the right dice flow instead of treating everything as an attack.
  * 
@@ -16,6 +16,14 @@
  *   "reaction"     → uses the Reaction (not tracked per-turn in action bar, but noted)
  *   "free"         → doesn't cost anything (toggling non-lethal, etc.)
  */
+
+import {
+  abilityModifier,
+  proficiencyBonus,
+  SKILL_ABILITIES,
+  SPELLCASTING_ABILITY,
+  CLASS_SAVING_THROWS,
+} from '@/components/dnd5e/dnd5eRules';
 
 // Actions from the CombatActionBar and what they actually are
 const BASIC_ACTION_TYPES = {
@@ -771,24 +779,18 @@ export function getAttackModifier(actor, action, resolvedAction) {
  */
 export function getSpellSaveDC(actor) {
   if (!actor) return 13;
-  const profBonus = actor.proficiency_bonus || 2;
+  const profBonus = actor.proficiency_bonus || proficiencyBonus(actor.level || 1);
   const spellAbility = getSpellcastingAbility(actor);
-  const abilityMod = Math.floor(((actor.attributes?.[spellAbility] || 10) - 10) / 2);
-  return 8 + profBonus + abilityMod;
+  const abilMod = abilityModifier(actor.attributes?.[spellAbility] || 10);
+  return 8 + profBonus + abilMod;
 }
 
 /**
  * Get the spellcasting ability for a class.
  */
 export function getSpellcastingAbility(actor) {
-  const CLASS_SPELL_ABILITY = {
-    Wizard: "int", Artificer: "int",
-    Cleric: "wis", Druid: "wis", Ranger: "wis", Monk: "wis",
-    Bard: "cha", Paladin: "cha", Sorcerer: "cha", Warlock: "cha",
-  };
-  
   const charClass = actor?.class || actor?.stats?.class || "";
-  return CLASS_SPELL_ABILITY[charClass] || "cha";
+  return SPELLCASTING_ABILITY[charClass] || "cha";
 }
 
 /**
@@ -796,41 +798,43 @@ export function getSpellcastingAbility(actor) {
  */
 export function getSkillModifier(actor, skillName) {
   if (!actor) return 0;
-  
-  const SKILL_ABILITIES = {
-    "Athletics": "str",
-    "Acrobatics": "dex", "Sleight of Hand": "dex", "Stealth": "dex",
-    "Arcana": "int", "History": "int", "Investigation": "int", "Nature": "int", "Religion": "int",
-    "Animal Handling": "wis", "Insight": "wis", "Medicine": "wis", "Perception": "wis", "Survival": "wis",
-    "Deception": "cha", "Intimidation": "cha", "Performance": "cha", "Persuasion": "cha",
-  };
-  
+
   const ability = SKILL_ABILITIES[skillName] || "str";
-  const abilityMod = Math.floor(((actor.attributes?.[ability] || 10) - 10) / 2);
-  const profBonus = actor.proficiency_bonus || 2;
-  
+  const abilityMod = abilityModifier(actor.attributes?.[ability] || 10);
+  const profBonus = actor.proficiency_bonus || proficiencyBonus(actor.level || 1);
+
   const skills = actor.skills || {};
   const expertise = actor.expertise || [];
-  
+
   const isProficient = skills[skillName];
   const hasExpertise = expertise.includes(skillName);
-  
+
   if (hasExpertise) return abilityMod + (profBonus * 2);
   if (isProficient) return abilityMod + profBonus;
   return abilityMod;
 }
 
 /**
- * Get the saving throw modifier for a target.
+ * Get the saving throw modifier for a target. Uses CLASS_SAVING_THROWS
+ * from the registry when the target has a class field but no explicit
+ * saving_throws proficiency map.
  */
 export function getSaveModifier(target, saveAbility) {
   if (!target) return 0;
-  
-  const abilityMod = Math.floor(((target.attributes?.[saveAbility] || 10) - 10) / 2);
-  const profBonus = target.proficiency_bonus || 2;
-  
+
+  const abilMod = abilityModifier(target.attributes?.[saveAbility] || 10);
+  const profBonus = target.proficiency_bonus || proficiencyBonus(target.level || 1);
+
+  // Check explicit saving_throws map first (character sheet data).
   const savingThrows = target.saving_throws || {};
-  const isProficient = savingThrows[saveAbility];
-  
-  return isProficient ? abilityMod + profBonus : abilityMod;
+  let isProficient = savingThrows[saveAbility];
+
+  // Fall back to class-based proficiency from the registry if the
+  // character has a class but no explicit saving_throws map.
+  if (isProficient === undefined && target.class) {
+    const classSaves = CLASS_SAVING_THROWS[target.class] || [];
+    isProficient = classSaves.includes(saveAbility);
+  }
+
+  return isProficient ? abilMod + profBonus : abilMod;
 }
