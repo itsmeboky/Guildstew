@@ -22,15 +22,28 @@
  * `slotMap` to point at the right ones.
  */
 
+import {
+  abilityModifier,
+  ARMOR_TABLE as REGISTRY_ARMOR_TABLE,
+  unarmoredDefense as registryUnarmoredDefense,
+} from '@/components/dnd5e/dnd5eRules';
+
 const LIGHT_ARMOR = /light\s*armor/i;
 const MEDIUM_ARMOR = /medium\s*armor/i;
 const HEAVY_ARMOR = /heavy\s*armor/i;
 const SHIELD = /shield/i;
 
-function parseBaseAC(armorClassString) {
-  if (!armorClassString) return 0;
-  const match = String(armorClassString).match(/\d+/);
-  return match ? parseInt(match[0], 10) : 0;
+function parseBaseAC(armorClassString, itemName) {
+  // Try the textual field first ("11 + Dex modifier").
+  if (armorClassString) {
+    const match = String(armorClassString).match(/\d+/);
+    if (match) return parseInt(match[0], 10);
+  }
+  // Fall back to the registry's ARMOR_TABLE if the item has a known name.
+  if (itemName && REGISTRY_ARMOR_TABLE[itemName]) {
+    return REGISTRY_ARMOR_TABLE[itemName].ac || 0;
+  }
+  return 0;
 }
 
 function parseShieldBonus(armorClassString) {
@@ -69,7 +82,7 @@ function armorKindFromItem(item) {
  */
 export function computeArmorClass({ equipped, dex, baseAC = 10 }) {
   const dexScore = Number.isFinite(dex) ? dex : 10;
-  const dexMod = Math.floor((dexScore - 10) / 2);
+  const dexMod = abilityModifier(dexScore);
 
   // Collect every armor/shield item the character is wearing. We scan
   // every slot so a shield worn on an off-hand slot still counts.
@@ -105,7 +118,7 @@ export function computeArmorClass({ equipped, dex, baseAC = 10 }) {
     bodyAC = baseAC + dexMod;
     kind = "unarmored";
   } else {
-    const armorBase = parseBaseAC(bodyArmor.armorClass);
+    const armorBase = parseBaseAC(bodyArmor.armorClass, bodyArmor.name);
     kind = armorKindFromItem(bodyArmor) || "light";
     breakdown.armor = { name: bodyArmor.name, base: armorBase, kind };
     if (kind === "light") {

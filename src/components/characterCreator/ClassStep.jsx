@@ -8,6 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Upload, User, Move, ZoomIn, ZoomOut, Save, Pencil } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
+import {
+  CLASS_HIT_DICE,
+  CLASS_SAVING_THROWS,
+  CLASS_PRIMARY_ABILITY,
+  CLASS_ARMOR_PROFICIENCIES,
+  CLASS_WEAPON_PROFICIENCIES,
+  ABILITY_NAMES,
+} from '@/components/dnd5e/dnd5eRules';
 import { Slider } from "@/components/ui/slider";
 import { motion } from "framer-motion";
 
@@ -133,6 +141,18 @@ const classes = [
     icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/94cfaa28a_Wizard1.png"
   }
 ];
+
+// Overlay registry rules data onto the presentation array so the
+// render always shows the canonical hit die, saves, etc. from the
+// single source of truth without losing descriptions / icons.
+classes.forEach((cls) => {
+  const name = cls.name;
+  cls.hitDie = `d${CLASS_HIT_DICE[name] || 8}`;
+  cls.primaryAbility = ABILITY_NAMES[CLASS_PRIMARY_ABILITY[name]] || cls.primaryAbility;
+  cls.savingThrows = (CLASS_SAVING_THROWS[name] || []).map(
+    (ab) => ABILITY_NAMES[ab] || ab,
+  );
+});
 
 const alignments = [
   {

@@ -4,6 +4,18 @@ import { Label } from "@/components/ui/label";
 import { ChevronLeft, ChevronRight, Flame, Shield, Eye, Sword, Wind, Droplet, Heart } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { motion, AnimatePresence } from "framer-motion";
+import { RACES } from '@/components/dnd5e/dnd5eRules';
+
+// Helper: read the registry's ability bonuses for a race name and
+// format them as a human-readable string for display. Falls back to
+// an empty string if the race isn't in the registry.
+function getRegistryBonuses(raceName) {
+  const data = RACES[raceName];
+  if (!data?.abilityBonuses) return '';
+  return Object.entries(data.abilityBonuses)
+    .map(([ab, val]) => `+${val} ${ab.toUpperCase()}`)
+    .join(', ');
+}
 
 const races = [
   {

@@ -52,6 +52,15 @@ import {
 import { resolveAction, consumeActionCost, getSpellEffect } from "@/components/combat/actionResolver";
 import { hpBarColor, clampHp, normalizeHp } from "@/components/combat/hpColor";
 import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
+import {
+  abilityModifier,
+  proficiencyBonus,
+  CONCENTRATION,
+  applyDamageModifiers,
+  attacksPerAction,
+  getRule,
+  DEATH_RULES,
+} from "@/components/dnd5e/dnd5eRules";
 import { toast } from "sonner";
 import { useTurnContext } from "@/components/combat/useTurnContext";
 
@@ -265,6 +274,19 @@ export default function GMPanel() {
   // Owned by GMPanel because both CombatActionBar (display + cycling) and
   // the targeting / dice-window flow (which weapon to fire) need it.
   const [attackMode, setAttackMode] = useState(null);
+
+  // Extra Attack tracking (M). When the Attack action resolves, the
+  // counter starts at attacksPerAction(class, level) and decrements
+  // after each attack resolves. While > 0, the onActionComplete
+  // handler re-enters targeting instead of closing the dice window.
+  // totalExtraAttacks stores the max for a "Attack X of Y" label.
+  const [remainingAttacks, setRemainingAttacks] = useState(0);
+  const [totalExtraAttacks, setTotalExtraAttacks] = useState(0);
+
+  // (S) Bonus action spell restriction. When a bonus action spell
+  // is cast this turn, the only other spell the character can cast
+  // is a cantrip with a casting time of 1 action.
+  const [bonusActionSpellCast, setBonusActionSpellCast] = useState(false);
 
   // When a downed PLAYER reaches their turn we automatically open the
   // dramatic DeathSaveWindow. When a downed MONSTER reaches their turn
@@ -1033,7 +1055,9 @@ export default function GMPanel() {
       );
       return;
     }
-    if (roll >= 10) {
+    // (K) Death save DC — homebrew override. Default DC 10 per PHB.
+    const deathSaveDC = getRule(campaign?.homebrew_rules, 'combat.death_saves.dc') ?? DEATH_RULES.death_saves.dc;
+    if (roll >= deathSaveDC) {
       applyDeathSaveChange(combatantKey, { successesDelta: 1 });
       logCombatEvent(
         campaignId,
@@ -1202,7 +1226,7 @@ export default function GMPanel() {
     const playerCombatants = players.map(p => {
       const char = p.character;
       const dex = char?.attributes?.dex || 10;
-      const mod = Math.floor((dex - 10) / 2);
+      const mod = abilityModifier(dex);
       const roll = rollD20(mod);
       const hp = normalizeHp(char);
       return {
@@ -1232,7 +1256,7 @@ export default function GMPanel() {
     const monsterCombatants = queuedCombatants.map(m => {
       const stats = m.stats || m;
       const dex = stats.dex || stats.attributes?.dex || 10;
-      const mod = Math.floor((dex - 10) / 2);
+      const mod = abilityModifier(dex);
       const roll = rollD20(mod);
       const hp = normalizeHp(m);
       return {
@@ -1367,6 +1391,9 @@ export default function GMPanel() {
     setActionsState({ action: true, bonus: true, reaction: true, inspiration: false });
     setAttackMode(null);
     setSneakActive(false);
+    setRemainingAttacks(0);
+    setTotalExtraAttacks(0);
+    setBonusActionSpellCast(false);
     // A dramatic monster save belongs to the GM's active interaction —
     // close it when the turn rotates so it doesn't stay on screen.
     setDramaticDeathSaveKey(null);
@@ -1775,11 +1802,17 @@ export default function GMPanel() {
               isGM={true}
               mode={campaign?.combat_data?.stage === 'initiative' ? 'initiative' : 'combat'}
               campaignId={campaignId}
-              
+              homebrewRules={campaign?.homebrew_rules}
+
               // Spectator Props
               isSpectator={!combatState.isOpen && !!campaign?.combat_data?.active_encounter}
               spectatorData={campaign?.combat_data?.active_encounter}
               sneakActive={sneakActive}
+              extraAttackInfo={
+                totalExtraAttacks > 1
+                  ? { current: totalExtraAttacks - remainingAttacks, total: totalExtraAttacks }
+                  : null
+              }
 
               onViewTurnOrder={async () => {
                 // GM dismissed the rolled-initiative readout. Transition
@@ -1941,7 +1974,7 @@ export default function GMPanel() {
                   // concentration breaks and its applied condition is
                   // removed from every target that was under it.
                   if (targetId && delta > 0 && concentrationByCharacter[targetId]) {
-                    const dc = Math.max(10, Math.floor(delta / 2));
+                    const dc = CONCENTRATION.saveDC(delta);
                     // Try to find a CON save modifier on the entity.
                     // Players / monsters both expose attributes.con or
                     // stats.constitution; proficiency_bonus + con_save
@@ -1952,7 +1985,7 @@ export default function GMPanel() {
                       entity?.attributes?.con ||
                       entity?.stats?.constitution ||
                       10;
-                    const conMod = Math.floor((con - 10) / 2);
+                    const conMod = abilityModifier(con);
                     const profBonus = entity?.proficiency_bonus || 2;
                     const isProf = entity?.saves?.con || entity?.saving_throws?.con || false;
                     const bonus = conMod + (isProf ? profBonus : 0);
@@ -2018,11 +2051,53 @@ export default function GMPanel() {
                   if (resolvedChar) {
                     const maxHp = resolvedChar.hit_points?.max || 0;
                     const currentHp = resolvedChar.hit_points?.current ?? maxHp;
-                    const newCurrent = clampHp(currentHp, maxHp, delta);
+
+                    // (N) Damage resistance / vulnerability / immunity.
+                    // Monster data uses stats.damage_resistances etc. Player
+                    // characters carry resistances on their own object (race
+                    // features, spells, etc.). Only applies to positive damage.
+                    let effectiveDelta = delta;
+                    if (delta > 0) {
+                      const damageType = data.detail?.damageType || data.detail?.type || null;
+                      if (damageType) {
+                        const rawDmg = delta;
+                        effectiveDelta = applyDamageModifiers(
+                          rawDmg,
+                          damageType,
+                          resolvedChar.resistances || resolvedChar.stats?.damage_resistances || [],
+                          resolvedChar.vulnerabilities || resolvedChar.stats?.damage_vulnerabilities || [],
+                          resolvedChar.immunities || resolvedChar.stats?.damage_immunities || [],
+                        );
+                        if (effectiveDelta !== rawDmg) {
+                          const label = effectiveDelta < rawDmg ? 'resists' : 'is vulnerable to';
+                          logCombatEvent(
+                            campaignId,
+                            `${resolvedChar.name} ${label} ${damageType} damage! ${rawDmg} → ${effectiveDelta}`,
+                            { event: 'damage_modified', category: 'damage', target: resolvedChar.name, raw: rawDmg, final: effectiveDelta, damageType },
+                          );
+                        }
+                      }
+                    }
+
+                    // (T) Temp HP absorbs damage before real HP.
+                    let tempHp = resolvedChar.hit_points?.temporary || 0;
+                    let remainingDelta = effectiveDelta;
+                    if (remainingDelta > 0 && tempHp > 0) {
+                      const absorbed = Math.min(tempHp, remainingDelta);
+                      tempHp -= absorbed;
+                      remainingDelta -= absorbed;
+                      if (absorbed > 0) {
+                        logCombatEvent(campaignId, `${resolvedChar.name}'s temporary HP absorbs ${absorbed} damage.`, {
+                          event: 'temp_hp_absorbed', category: 'damage', target: resolvedChar.name, absorbed,
+                        });
+                      }
+                    }
+
+                    const newCurrent = clampHp(currentHp, maxHp, remainingDelta);
                     if (newCurrent !== currentHp) {
                       base44.entities.Character
                         .update(resolvedChar.id, {
-                          hit_points: { ...(resolvedChar.hit_points || {}), current: newCurrent },
+                          hit_points: { ...(resolvedChar.hit_points || {}), current: newCurrent, temporary: tempHp },
                         })
                         .then(() => {
                           queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
@@ -2206,11 +2281,81 @@ export default function GMPanel() {
                 }
               }}
               onActionComplete={() => {
+                const isAttackAction = combatState.action?.name === 'Attack';
+                const isMainHandAttack = isAttackAction && !combatState.action?.isOffHand;
+
+                // (M) Extra Attack: on the FIRST attack of the Action,
+                // initialize the counter from the registry. On subsequent
+                // attacks, decrement it. While remaining > 0, re-enter
+                // targeting mode instead of closing the dice window so
+                // the character can pick a new target for their next hit.
+                if (isMainHandAttack) {
+                  if (remainingAttacks === 0 && totalExtraAttacks === 0) {
+                    // First attack of this Action — initialize counter.
+                    const total = attacksPerAction(
+                      selectedCharacter?.class,
+                      selectedCharacter?.level || selectedCharacter?.stats?.level || 1,
+                    );
+                    if (total > 1) {
+                      setRemainingAttacks(total - 1); // -1 because first just resolved
+                      setTotalExtraAttacks(total);
+                      // Consume the action cost on the FIRST attack only.
+                      const resolvedCost = combatState.action?.resolved?.cost;
+                      if (resolvedCost) {
+                        setActionsState(prev => consumeActionCost(prev, resolvedCost));
+                      }
+                      // Sneak attack reveals on the first hit.
+                      if (sneakActive) {
+                        const key = getCharacterKey(selectedCharacter);
+                        if (key) {
+                          setHiddenCharacters(prev => {
+                            if (!prev.has(key)) return prev;
+                            const next = new Set(prev);
+                            next.delete(key);
+                            return next;
+                          });
+                        }
+                        setSneakActive(false);
+                      }
+                      // Re-enter targeting for the next attack.
+                      const action = buildAttackAction(combatState.action?.mode || 'melee');
+                      setCombatState({ isOpen: false, step: 'selecting_target', action, target: null });
+                      // Clear the active encounter so spectators don't see stale data.
+                      if (campaign?.combat_data?.active_encounter) {
+                        base44.entities.Campaign.update(campaignId, {
+                          combat_data: { ...campaign.combat_data, active_encounter: null },
+                        }).catch(() => {});
+                      }
+                      return; // Don't fall through to the normal close path.
+                    }
+                  } else if (remainingAttacks > 0) {
+                    // Subsequent attacks — decrement counter.
+                    const left = remainingAttacks - 1;
+                    setRemainingAttacks(left);
+                    if (left > 0) {
+                      const action = buildAttackAction(combatState.action?.mode || 'melee');
+                      setCombatState({ isOpen: false, step: 'selecting_target', action, target: null });
+                      if (campaign?.combat_data?.active_encounter) {
+                        base44.entities.Campaign.update(campaignId, {
+                          combat_data: { ...campaign.combat_data, active_encounter: null },
+                        }).catch(() => {});
+                      }
+                      return; // More attacks left — stay in the targeting loop.
+                    }
+                    // Last attack resolved → fall through to normal close.
+                    setTotalExtraAttacks(0);
+                  }
+                }
+
                 // Consume the action's cost now that it has been resolved
+                // (or for single-attack characters, on the only attack).
                 const resolvedCost = combatState.action?.resolved?.cost;
-                if (resolvedCost) {
+                if (resolvedCost && totalExtraAttacks <= 1) {
                   setActionsState(prev => consumeActionCost(prev, resolvedCost));
                 }
+                // Reset Extra Attack counter in case it wasn't already.
+                setRemainingAttacks(0);
+                setTotalExtraAttacks(0);
                 // Attack resolved → leave attack-mode selection
                 setAttackMode(null);
 
@@ -2509,6 +2654,27 @@ export default function GMPanel() {
                 if (resolved.cost === "bonus" && !actionsState.bonus) {
                   toast.error("No bonus action available this turn!");
                   return;
+                }
+
+                // (S) Bonus action spell restriction. D&D 5e PHB p.202:
+                // if you cast a spell as a bonus action, you can only
+                // cast a cantrip with a casting time of 1 action as
+                // your other spell this turn. Track via
+                // bonusActionSpellCast flag.
+                if (action.type === 'spell') {
+                  const isBA = resolved.cost === 'bonus';
+                  const isCantrip = !action.level || action.level === 0;
+                  if (isBA) {
+                    setBonusActionSpellCast(true);
+                  }
+                  if (bonusActionSpellCast && !isBA && !isCantrip) {
+                    toast.error('You already cast a bonus action spell — you can only cast a cantrip this turn.');
+                    return;
+                  }
+                  // Also enforce the reverse: if you cast a leveled
+                  // action spell first and then try a bonus action
+                  // spell, that's fine per RAW. The restriction only
+                  // applies to the action spell AFTER a BA spell.
                 }
 
                 // Spell slot gate — leveled spells (level > 0) require an
@@ -4662,7 +4828,7 @@ function MonsterStatBlock({ character, className, onActionClick }) {
   
   const getMod = (score) => {
     if (!score) return '+0';
-    const mod = Math.floor((score - 10) / 2);
+    const mod = abilityModifier(score);
     return mod >= 0 ? `+${mod}` : `${mod}`;
   };
 

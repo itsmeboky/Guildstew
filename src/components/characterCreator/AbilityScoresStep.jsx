@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dices, HelpCircle, X } from "lucide-react";
 import { getRacialAbilityBonuses } from "@/components/dnd5e/raceData";
+import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
 
 const abilities = [
   { key: "str", name: "Strength", description: "Physical power, athleticism, and carrying capacity" },
@@ -39,7 +40,7 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
   const racialBonuses = getRacialAbilityBonuses(characterData.race, characterData.subrace);
 
   const calculateModifier = (score) => {
-    const mod = Math.floor((score - 10) / 2);
+    const mod = abilityModifier(score);
     return mod >= 0 ? `+${mod}` : `${mod}`;
   };
 

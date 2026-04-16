@@ -17,21 +17,20 @@ import { hpBarColor } from "@/components/combat/hpColor";
 import { FACTION_STYLES, getFaction } from "@/utils/combatQueue";
 import { getConditionModifiers } from "@/components/combat/conditions";
 import { logCombatEvent } from "@/utils/combatLog";
+import {
+  abilityModifier as abilMod,
+  proficiencyBonus as profBonus,
+  SPELLCASTING_ABILITY,
+  CLASS_SAVING_THROWS,
+  sneakAttackDice as registrySneakAttackDice,
+  cantripScaling as registryCantripScaling,
+  CONCENTRATION,
+  getRule,
+  MONK_MARTIAL_ARTS_DIE,
+} from "@/components/dnd5e/dnd5eRules";
 
-const CLASS_SPELL_ABILITY = {
-  Wizard: "int",
-  Artificer: "int",
-  "Fighter (Eldritch Knight)": "int",
-  "Rogue (Arcane Trickster)": "int",
-  Cleric: "wis",
-  Druid: "wis",
-  Ranger: "wis",
-  Monk: "wis",
-  Bard: "cha",
-  Paladin: "cha",
-  Sorcerer: "cha",
-  Warlock: "cha",
-};
+// Alias so the existing in-file lookups don't need renaming.
+const CLASS_SPELL_ABILITY = SPELLCASTING_ABILITY;
 
 export default function CombatDiceWindow({
   isOpen,
@@ -53,6 +52,8 @@ export default function CombatDiceWindow({
   sneakActive = false,
   onViewTurnOrder,
   spellDataList = [],
+  extraAttackInfo = null, // { current: 2, total: 3 } → "Attack 2 of 3"
+  homebrewRules = null,   // campaign.homebrew_rules — for getRule() overrides
 }) {
   const [selectedAction, setSelectedAction] = useState(initialAction);
   const [attackRoll, setAttackRoll] = useState(null);
@@ -256,7 +257,7 @@ export default function CombatDiceWindow({
     }
     const score =
       actor.attributes?.[ability] || actor.stats?.[ability] || 10;
-    return Math.floor((score - 10) / 2);
+    return abilMod(score);
   }, [actor]);
 
   const diceRollerRef = useRef(null);
@@ -422,13 +423,11 @@ export default function CombatDiceWindow({
     return cls.includes("monk");
   };
 
-  // Monk Martial Arts die scales with level.
+  // Monk Martial Arts die scales with level — from the registry.
   const monkMartialArtsDie = () => {
     const level = actor?.level || actor?.stats?.level || 1;
-    if (level >= 17) return "1d10";
-    if (level >= 11) return "1d8";
-    if (level >= 5) return "1d6";
-    return "1d4";
+    const dieFaces = MONK_MARTIAL_ARTS_DIE[level] || 4;
+    return `1d${dieFaces}`;
   };
 
   // Rogue Sneak Attack dice count. Requirements:
@@ -450,7 +449,7 @@ export default function CombatDiceWindow({
     const isRangedWeapon = !!weapon?.category?.includes?.("Ranged");
     if (!isFinesse && !isRangedWeapon) return 0;
     const level = actor?.level || actor?.stats?.level || 1;
-    return Math.ceil(level / 2);
+    return registrySneakAttackDice(level);
   };
 
   // Attack modifier (weapon or spell)
@@ -472,7 +471,7 @@ export default function CombatDiceWindow({
       }
       const score =
         actor.attributes?.[ability] || actor.stats?.[ability] || 10;
-      const mod = Math.floor((score - 10) / 2);
+      const mod = abilMod(score);
       const prof =
         actor.proficiency_bonus || actor.stats?.proficiency_bonus || 2;
       return mod + prof;
@@ -483,8 +482,8 @@ export default function CombatDiceWindow({
     const dex = actor.attributes?.dex || actor.stats?.dexterity || 10;
     const proficiency =
       actor.proficiency_bonus || actor.stats?.proficiency_bonus || 2;
-    const strMod = Math.floor((str - 10) / 2);
-    const dexMod = Math.floor((dex - 10) / 2);
+    const strMod = abilMod(str);
+    const dexMod = abilMod(dex);
     const isFinesse = !!weapon?.properties?.includes?.("Finesse");
     const isRangedWeapon = !!weapon?.category?.includes?.("Ranged");
 
@@ -648,8 +647,8 @@ export default function CombatDiceWindow({
       //   - Finesse weapon (melee): max(STR, DEX).
       //   - Everything else: STR.
       const weapon = selectedAction?.weapon;
-      const strMod = Math.floor(((actor?.attributes?.str || 10) - 10) / 2);
-      const dexMod = Math.floor(((actor?.attributes?.dex || 10) - 10) / 2);
+      const strMod = abilMod(actor?.attributes?.str || 10);
+      const dexMod = abilMod(actor?.attributes?.dex || 10);
       const isFinesse = !!weapon?.properties?.includes?.("Finesse");
       const isRangedWeapon = !!weapon?.category?.includes?.("Ranged");
       const mode = selectedAction?.mode;
@@ -718,20 +717,58 @@ export default function CombatDiceWindow({
     const match = diceString.match(/(\d+)d(\d+)/);
     const faces = match ? parseInt(match[2], 10) : 8;
 
+    // (L) Critical hit homebrew override. Check campaign.homebrew_rules
+    // for alternate crit rules before applying the default double-dice.
+    const critMaxAll = getRule(homebrewRules, 'combat.critical_hits.max_all');
+    const critMaxFirst = getRule(homebrewRules, 'combat.critical_hits.max_first_roll_second');
+
     if (isCompoundDice) {
       numDice = match ? parseInt(match[1], 10) : 1;
-      // Crit still doubles dice on compound spell damage — roll the
-      // whole expression twice and sum.
       total = rollDiceString(diceString);
-      if (isCrit) total += rollDiceString(diceString);
+      if (isCrit) {
+        if (critMaxAll) {
+          // Maximize ALL dice — roll the expression and set each die to max.
+          const maxMatch = diceString.match(/(\d+)d(\d+)/g);
+          let maxTotal = 0;
+          (maxMatch || []).forEach(term => {
+            const m = term.match(/(\d+)d(\d+)/);
+            if (m) maxTotal += parseInt(m[1]) * parseInt(m[2]) * 2;
+          });
+          total = maxTotal;
+        } else {
+          total += rollDiceString(diceString);
+        }
+      }
     } else {
       numDice = match ? parseInt(match[1], 10) : 1;
-      // Crit: double number of dice
-      if (isCrit) numDice *= 2;
 
-      total = roll; // visible die
-      for (let i = 1; i < numDice; i++) {
-        total += Math.floor(Math.random() * faces) + 1;
+      if (isCrit) {
+        if (critMaxAll) {
+          // Max all: every die shows its maximum face.
+          numDice *= 2;
+          total = numDice * faces;
+        } else if (critMaxFirst) {
+          // Max first set, roll second set normally.
+          const maxFirst = numDice * faces;
+          let rolledSecond = roll;
+          for (let i = 1; i < numDice; i++) {
+            rolledSecond += Math.floor(Math.random() * faces) + 1;
+          }
+          total = maxFirst + rolledSecond;
+          numDice *= 2; // for display purposes
+        } else {
+          // Default: double the number of dice.
+          numDice *= 2;
+          total = roll;
+          for (let i = 1; i < numDice; i++) {
+            total += Math.floor(Math.random() * faces) + 1;
+          }
+        }
+      } else {
+        total = roll;
+        for (let i = 1; i < numDice; i++) {
+          total += Math.floor(Math.random() * faces) + 1;
+        }
       }
     }
 
@@ -1270,7 +1307,7 @@ export default function CombatDiceWindow({
 
   const onInitiativeRollComplete = (roll) => {
     const dex = actor?.attributes?.dex || 10;
-    const mod = Math.floor((dex - 10) / 2);
+    const mod = abilMod(dex);
     const total = roll + mod;
     const result = { total, dice: roll, mod };
     setInitiativeRoll(result);
@@ -1982,13 +2019,20 @@ export default function CombatDiceWindow({
                 )}
 
                 {phase === "ready" && flowType === "attack" && (
-                  <button
-                    onClick={handleAttackRoll}
-                    disabled={isRolling || !target}
-                    className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] disabled:opacity-50 disabled:cursor-not-allowed text-white text-2xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(255,87,34,0.4)] border-b-4 border-[#c43e12] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
-                  >
-                    {isRolling ? "ROLLING..." : "ROLL ATTACK"}
-                  </button>
+                  <div className="w-full flex flex-col items-center gap-2">
+                    {extraAttackInfo && (
+                      <div className="text-[10px] uppercase tracking-[0.3em] text-[#37F2D1] font-black bg-[#37F2D1]/10 border border-[#37F2D1]/40 rounded-full px-4 py-1">
+                        Attack {extraAttackInfo.current} of {extraAttackInfo.total}
+                      </div>
+                    )}
+                    <button
+                      onClick={handleAttackRoll}
+                      disabled={isRolling || !target}
+                      className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] disabled:opacity-50 disabled:cursor-not-allowed text-white text-2xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(255,87,34,0.4)] border-b-4 border-[#c43e12] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
+                    >
+                      {isRolling ? "ROLLING..." : "ROLL ATTACK"}
+                    </button>
+                  </div>
                 )}
 
                 {phase === "ready" && flowType === "heal" && (
