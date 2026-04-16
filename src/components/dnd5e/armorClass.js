@@ -69,7 +69,7 @@ function armorKindFromItem(item) {
  */
 export function computeArmorClass({ equipped, dex, baseAC = 10 }) {
   const dexScore = Number.isFinite(dex) ? dex : 10;
-  const dexMod = Math.floor((dexScore - 10) / 2);
+  const dexMod = abilityModifier(dexScore);
 
   // Collect every armor/shield item the character is wearing. We scan
   // every slot so a shield worn on an off-hand slot still counts.

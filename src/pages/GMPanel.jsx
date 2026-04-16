@@ -281,6 +281,11 @@ export default function GMPanel() {
   const [remainingAttacks, setRemainingAttacks] = useState(0);
   const [totalExtraAttacks, setTotalExtraAttacks] = useState(0);
 
+  // (S) Bonus action spell restriction. When a bonus action spell
+  // is cast this turn, the only other spell the character can cast
+  // is a cantrip with a casting time of 1 action.
+  const [bonusActionSpellCast, setBonusActionSpellCast] = useState(false);
+
   // When a downed PLAYER reaches their turn we automatically open the
   // dramatic DeathSaveWindow. When a downed MONSTER reaches their turn
   // the GM can opt into dramatic mode by clicking "Show Dramatic Roll"
@@ -1217,7 +1222,7 @@ export default function GMPanel() {
     const playerCombatants = players.map(p => {
       const char = p.character;
       const dex = char?.attributes?.dex || 10;
-      const mod = Math.floor((dex - 10) / 2);
+      const mod = abilityModifier(dex);
       const roll = rollD20(mod);
       const hp = normalizeHp(char);
       return {
@@ -1247,7 +1252,7 @@ export default function GMPanel() {
     const monsterCombatants = queuedCombatants.map(m => {
       const stats = m.stats || m;
       const dex = stats.dex || stats.attributes?.dex || 10;
-      const mod = Math.floor((dex - 10) / 2);
+      const mod = abilityModifier(dex);
       const roll = rollD20(mod);
       const hp = normalizeHp(m);
       return {
@@ -1384,6 +1389,7 @@ export default function GMPanel() {
     setSneakActive(false);
     setRemainingAttacks(0);
     setTotalExtraAttacks(0);
+    setBonusActionSpellCast(false);
     // A dramatic monster save belongs to the GM's active interaction —
     // close it when the turn rotates so it doesn't stay on screen.
     setDramaticDeathSaveKey(null);
@@ -1792,7 +1798,8 @@ export default function GMPanel() {
               isGM={true}
               mode={campaign?.combat_data?.stage === 'initiative' ? 'initiative' : 'combat'}
               campaignId={campaignId}
-              
+              homebrewRules={campaign?.homebrew_rules}
+
               // Spectator Props
               isSpectator={!combatState.isOpen && !!campaign?.combat_data?.active_encounter}
               spectatorData={campaign?.combat_data?.active_encounter}
@@ -1974,7 +1981,7 @@ export default function GMPanel() {
                       entity?.attributes?.con ||
                       entity?.stats?.constitution ||
                       10;
-                    const conMod = Math.floor((con - 10) / 2);
+                    const conMod = abilityModifier(con);
                     const profBonus = entity?.proficiency_bonus || 2;
                     const isProf = entity?.saves?.con || entity?.saving_throws?.con || false;
                     const bonus = conMod + (isProf ? profBonus : 0);
@@ -2643,6 +2650,27 @@ export default function GMPanel() {
                 if (resolved.cost === "bonus" && !actionsState.bonus) {
                   toast.error("No bonus action available this turn!");
                   return;
+                }
+
+                // (S) Bonus action spell restriction. D&D 5e PHB p.202:
+                // if you cast a spell as a bonus action, you can only
+                // cast a cantrip with a casting time of 1 action as
+                // your other spell this turn. Track via
+                // bonusActionSpellCast flag.
+                if (action.type === 'spell') {
+                  const isBA = resolved.cost === 'bonus';
+                  const isCantrip = !action.level || action.level === 0;
+                  if (isBA) {
+                    setBonusActionSpellCast(true);
+                  }
+                  if (bonusActionSpellCast && !isBA && !isCantrip) {
+                    toast.error('You already cast a bonus action spell — you can only cast a cantrip this turn.');
+                    return;
+                  }
+                  // Also enforce the reverse: if you cast a leveled
+                  // action spell first and then try a bonus action
+                  // spell, that's fine per RAW. The restriction only
+                  // applies to the action spell AFTER a BA spell.
                 }
 
                 // Spell slot gate — leveled spells (level > 0) require an
@@ -4796,7 +4824,7 @@ function MonsterStatBlock({ character, className, onActionClick }) {
   
   const getMod = (score) => {
     if (!score) return '+0';
-    const mod = Math.floor((score - 10) / 2);
+    const mod = abilityModifier(score);
     return mod >= 0 ? `+${mod}` : `${mod}`;
   };
 

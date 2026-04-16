@@ -5,6 +5,7 @@ import { Check, Star, HelpCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { getBackgroundSkills } from "@/components/dnd5e/backgroundData";
 import { racialSkills } from "@/components/dnd5e/raceData";
+import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
 
 const allSkills = [
   "Athletics",
@@ -128,7 +129,7 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
     }
   };
 
-  const calculateModifier = (score) => Math.floor((score - 10) / 2);
+  const calculateModifier = (score) => abilityModifier(score);
   const proficiencyBonus = Math.floor((characterData.level - 1) / 4) + 2;
 
   const getSkillModifier = (skill) => {

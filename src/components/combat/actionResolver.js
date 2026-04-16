@@ -751,13 +751,13 @@ export function getAttackModifier(actor, action, resolvedAction) {
   if (!actor) return 0;
   
   const profBonus = actor.proficiency_bonus || 2;
-  const strMod = Math.floor(((actor.attributes?.str || 10) - 10) / 2);
-  const dexMod = Math.floor(((actor.attributes?.dex || 10) - 10) / 2);
+  const strMod = abilityModifier(actor.attributes?.str || 10);
+  const dexMod = abilityModifier(actor.attributes?.dex || 10);
   
   // Spell attack
   if (resolvedAction?.attackType === "spell") {
     const spellAbility = getSpellcastingAbility(actor);
-    const abilityMod = Math.floor(((actor.attributes?.[spellAbility] || 10) - 10) / 2);
+    const abilityMod = abilityModifier(actor.attributes?.[spellAbility] || 10);
     return profBonus + abilityMod;
   }
   

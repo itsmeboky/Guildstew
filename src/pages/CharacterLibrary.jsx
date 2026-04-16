@@ -28,6 +28,7 @@ import { classHitDice } from "@/components/dnd5e/characterCalculations";
 import { spellDetails, spellIcons } from "@/components/dnd5e/spellData";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
 
 const skillAbilityMap = {
   "Athletics": "Str",
@@ -174,12 +175,12 @@ export default function CharacterLibrary() {
   // and removed from the left panel character card logic.
 
   const calculateModifier = (score) => {
-    const mod = Math.floor((score - 10) / 2);
+    const mod = abilityModifier(score);
     return mod >= 0 ? `+${mod}` : `${mod}`;
   };
 
   const getModifierValue = (score) => {
-    return Math.floor((score - 10) / 2);
+    return abilityModifier(score);
   };
 
   const getSavingThrowModifier = (abilityKey) => {

@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { User } from "lucide-react";
 import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
 import { spellDetails } from "@/components/dnd5e/spellData";
+import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
 
 const classes = [
   { name: "Barbarian", icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/a6652f2d8_Barbarian1.png" },
@@ -99,7 +100,7 @@ export default function ReviewStep({ characterData }) {
   const [hoveredItem, setHoveredItem] = useState(null);
 
   const calculateModifier = (score) => {
-    const mod = Math.floor((score - 10) / 2);
+    const mod = abilityModifier(score);
     return mod >= 0 ? `+${mod}` : `${mod}`;
   };
 
@@ -110,9 +111,9 @@ export default function ReviewStep({ characterData }) {
   };
 
   const profBonus = Math.floor((characterData.level - 1) / 4) + 2;
-  const conMod = Math.floor((characterData.attributes.con - 10) / 2);
+  const conMod = abilityModifier(characterData.attributes.con);
   const maxHP = 10 + conMod;
-  const ac = 10 + Math.floor((characterData.attributes.dex - 10) / 2);
+  const ac = 10 + abilityModifier(characterData.attributes.dex);
 
   const primaryClassLevel = characterData.level - (characterData.multiclasses || []).reduce((sum, mc) => sum + (mc.level || 0), 0);
   const primaryFeatures = getClassFeaturesForLevel(characterData.class, primaryClassLevel) || [];
