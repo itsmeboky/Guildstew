@@ -1234,6 +1234,59 @@ export default function GMPanel() {
     toast.success(`${target.name} gains Bardic Inspiration (${die})`);
   }, [campaign?.combat_data, campaignId, queryClient]);
 
+  // Persist an exhaustion level on a combatant in combat_data.order.
+  // Effects auto-apply via getConditionModifiers reading actor.exhaustion.
+  const setCombatantExhaustion = React.useCallback((combatantKey, level) => {
+    if (!campaign?.combat_data?.order || !combatantKey) return;
+    const newOrder = campaign.combat_data.order.map((c) => {
+      const ck = c.uniqueId || c.id;
+      if (ck !== combatantKey) return c;
+      if (level <= 0) {
+        const { exhaustion: _e, ...rest } = c;
+        return rest;
+      }
+      return { ...c, exhaustion: level };
+    });
+    const newData = { ...campaign.combat_data, order: newOrder };
+    queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: newData } : old);
+    base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+    const target = newOrder.find((c) => (c.uniqueId || c.id) === combatantKey);
+    if (target) {
+      logCombatEvent(campaignId, `${target.name} — Exhaustion level ${level}.`, {
+        event: 'exhaustion_set', category: 'condition', target: target.name, level,
+      });
+      toast(level > 0 ? `${target.name}: Exhaustion ${level}` : `${target.name} is no longer exhausted.`);
+    }
+  }, [campaign?.combat_data, campaignId, queryClient]);
+
+  // Grant or clear DM inspiration on a combatant. Stored as
+  // `hasInspiration: true` so the dice window can surface the
+  // advantage prompt and the portrait renders the ★ badge.
+  const setCombatantInspiration = React.useCallback((combatantKey, granted) => {
+    if (!campaign?.combat_data?.order || !combatantKey) return;
+    const newOrder = campaign.combat_data.order.map((c) => {
+      const ck = c.uniqueId || c.id;
+      if (ck !== combatantKey) return c;
+      if (!granted) {
+        const { hasInspiration: _i, ...rest } = c;
+        return rest;
+      }
+      return { ...c, hasInspiration: true };
+    });
+    const newData = { ...campaign.combat_data, order: newOrder };
+    queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: newData } : old);
+    base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+    const target = newOrder.find((c) => (c.uniqueId || c.id) === combatantKey);
+    if (target) {
+      logCombatEvent(campaignId, granted
+        ? `${target.name} gains Inspiration!`
+        : `${target.name}'s Inspiration cleared.`,
+        { event: 'inspiration', category: 'buff', target: target.name, granted }
+      );
+      toast(granted ? `${target.name}: Inspiration ★` : `${target.name}: Inspiration cleared`);
+    }
+  }, [campaign?.combat_data, campaignId, queryClient]);
+
   // Consume a stored Bardic Inspiration on a combatant. Strips the
   // bardicInspiration key back off their combat_data.order entry so
   // the badge disappears and subsequent rolls don't retrigger.
@@ -1650,6 +1703,27 @@ export default function GMPanel() {
     base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
   }, [selectedCharacterKey, selectedCharacter, campaign?.combat_data, campaignId, queryClient]);
 
+  // Lucky feat pip click handler (GM correction of the 3-point
+  // pool). Resets on long rest.
+  const handleToggleLuck = React.useCallback((mode) => {
+    if (!selectedCharacterKey || !campaign?.combat_data) return;
+    const cd = campaign.combat_data;
+    const res = cd.classResources?.[selectedCharacterKey] || {};
+    const max = 3;
+    const curr = res.luckyPointsRemaining ?? max;
+    let next = curr;
+    if (mode === 'spend') next = Math.max(0, curr - 1);
+    else if (mode === 'restore') next = Math.min(max, curr + 1);
+    if (next === curr) return;
+    const newRes = {
+      ...(cd.classResources || {}),
+      [selectedCharacterKey]: { ...res, luckyPointsRemaining: next },
+    };
+    const newData = { ...cd, classResources: newRes };
+    queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: newData } : old);
+    base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+  }, [selectedCharacterKey, campaign?.combat_data, campaignId, queryClient]);
+
   // Manual ki adjustment (GM clicks a diamond to correct the count).
   // Writes through combat_data.classResources so both panels see the
   // change immediately.
@@ -1813,6 +1887,50 @@ export default function GMPanel() {
           return;
         }
         setWildShapeOpen(true);
+        break;
+      }
+      case 'powerAttack': {
+        // GWM / Sharpshooter -5/+10 toggle. Persists on class
+        // resources so the dice window can read it when rolling.
+        const next = !res.powerAttackActive;
+        writeResources({ powerAttackActive: next });
+        if (next) {
+          logCombatEvent(campaignId, `${char?.name} takes a powerful swing/shot! (-5 to hit, +10 damage)`, {
+            event: 'power_attack_on', category: 'attack', actor: char?.name,
+          });
+          toast.success(`Power Attack ON (${char?.name})`);
+        } else {
+          toast(`Power Attack OFF (${char?.name})`);
+        }
+        break;
+      }
+      case 'polearmMaster': {
+        // Polearm Master butt-end attack — 1d4 + STR bonus-action
+        // melee attack. Requires a qualifying weapon.
+        const w1 = equippedItems?.weapon1;
+        const w1name = (w1?.name || '').toLowerCase();
+        if (!/glaive|halberd|quarterstaff|spear|pike/.test(w1name)) {
+          toast.error('Polearm Master needs a glaive, halberd, quarterstaff, spear, or pike.');
+          return;
+        }
+        if (!actionsState.bonus) { toast.error('No bonus action available!'); return; }
+        const action = buildAttackAction('melee');
+        if (!action) return;
+        action.name = 'Butt End';
+        action.isPolearmMaster = true;
+        action.costOverride = 'bonus';
+        // Swap the weapon's damage dice to 1d4 bludgeoning for this
+        // strike. We deep-clone the weapon so the rest of the game
+        // sees the original damage.
+        if (action.weapon) {
+          action.weapon = { ...action.weapon, damage: '1d4', damage_type: 'bludgeoning' };
+        } else {
+          action.weapon = { name: 'Butt End', damage: '1d4', damage_type: 'bludgeoning', properties: [] };
+        }
+        setCombatState({ isOpen: false, step: 'selecting_target', action, target: null });
+        logCombatEvent(campaignId, `${char?.name} readies a butt-end strike.`, {
+          event: 'polearm_master', category: 'attack', actor: char?.name,
+        });
         break;
       }
       case 'bardicInspiration': {
@@ -2577,6 +2695,22 @@ export default function GMPanel() {
                 const actorKey = getCharacterKey(selectedCharacter);
                 if (actorKey) clearBardicInspiration(actorKey);
               }}
+              onLuckySpend={() => {
+                // Decrement the Lucky pool on the actor's classResources.
+                const key = getCharacterKey(selectedCharacter);
+                if (!key) return;
+                const cd = campaign?.combat_data || {};
+                const cr = cd.classResources?.[key] || {};
+                const left = Math.max(0, (cr.luckyPointsRemaining ?? 3) - 1);
+                const newRes = { ...(cd.classResources || {}), [key]: { ...cr, luckyPointsRemaining: left } };
+                const newData = { ...cd, classResources: newRes };
+                queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: newData } : old);
+                base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+              }}
+              onInspirationUse={() => {
+                const actorKey = getCharacterKey(selectedCharacter);
+                if (actorKey) setCombatantInspiration(actorKey, false);
+              }}
               homebrewRules={campaign?.homebrew_rules}
 
               // Spectator Props
@@ -2764,19 +2898,84 @@ export default function GMPanel() {
                     const profBonus = entity?.proficiency_bonus || 2;
                     const isProf = entity?.saves?.con || entity?.saving_throws?.con || false;
                     const bonus = conMod + (isProf ? profBonus : 0);
-                    const d20 = Math.floor(Math.random() * 20) + 1;
+                    // Tier 3: War Caster — advantage on concentration
+                    // saves. Roll 2d20 take higher.
+                    const feats = Array.isArray(entity?.feats) ? entity.feats
+                      : Array.isArray(entity?.features) ? entity.features : [];
+                    const hasWarCaster = feats.some((f) => {
+                      const n = typeof f === 'string' ? f : f?.name;
+                      return typeof n === 'string' && n.toLowerCase() === 'war caster';
+                    });
+                    let d20 = Math.floor(Math.random() * 20) + 1;
+                    if (hasWarCaster) {
+                      const second = Math.floor(Math.random() * 20) + 1;
+                      d20 = Math.max(d20, second);
+                    }
                     const total = d20 + bonus;
                     const casterName = concentrationByCharacter[targetId].casterName || entity?.name || 'Caster';
                     const spell = concentrationByCharacter[targetId].spell;
                     if (total < dc) {
                       toast.error(
-                        `${casterName} failed CON save (${total} vs DC ${dc}) — Concentration on ${spell} broken!`,
+                        `${casterName} failed CON save (${total} vs DC ${dc})${hasWarCaster ? ' (War Caster)' : ''} — Concentration on ${spell} broken!`,
                       );
                       breakConcentration(targetId, 'damage');
                     } else {
                       toast(
-                        `${casterName} maintained Concentration on ${spell} (${total} vs DC ${dc}).`,
+                        `${casterName} maintained Concentration on ${spell} (${total} vs DC ${dc})${hasWarCaster ? ' (War Caster)' : ''}.`,
                       );
+                    }
+                  }
+
+                  // Tier 3: Sentinel — a melee hit taken as a reaction
+                  // (opportunity attack) sets the target's speed to
+                  // 0 for the turn. OA targeting isn't fully wired
+                  // yet; we key on action.resolved.cost === 'reaction'
+                  // + melee mode, which covers any reaction attack
+                  // the GM fires through the dice window. Disengage
+                  // bypass for Sentinel needs the full OA flow —
+                  // note for future work.
+                  {
+                    const actionCost = combatState.action?.resolved?.cost || combatState.action?.costOverride;
+                    const isMelee = combatState.action?.mode === 'melee' || combatState.action?.mode === 'unarmed';
+                    const attackerFeats = Array.isArray(selectedCharacter?.feats) ? selectedCharacter.feats
+                      : Array.isArray(selectedCharacter?.features) ? selectedCharacter.features : [];
+                    const hasSentinel = attackerFeats.some((f) => {
+                      const n = typeof f === 'string' ? f : f?.name;
+                      return typeof n === 'string' && n.toLowerCase() === 'sentinel';
+                    });
+                    if (hasSentinel && isMelee && actionCost === 'reaction' && targetId) {
+                      setActiveConditions((prev) => {
+                        const cur = prev[targetId] || [];
+                        if (cur.includes('Grappled')) return prev; // already speed 0
+                        return { ...prev, [targetId]: [...cur, 'Grappled'] };
+                      });
+                      logCombatEvent(campaignId, `${data.detail?.targetName || 'Target'}'s movement is halted by ${selectedCharacter?.name || 'Actor'}! (Sentinel)`, {
+                        event: 'sentinel_halt', category: 'condition', actor: selectedCharacter?.name, target: targetId,
+                      });
+                    }
+                  }
+
+                  // Tier 3: Great Weapon Master — crit or kill with a
+                  // melee weapon grants a free bonus-action melee
+                  // attack. We just surface a toast so the GM can
+                  // click the melee attack again (action economy
+                  // keeps bonus open).
+                  {
+                    const orderForGWM = campaign?.combat_data?.order || [];
+                    const tgt = orderForGWM.find((c) => (c.uniqueId || c.id) === targetId);
+                    const tgtHp = tgt?.hit_points?.current ?? 0;
+                    const killed = data.value >= tgtHp;
+                    if (data.detail?.isCrit || killed) {
+                      const attackerFeats = Array.isArray(selectedCharacter?.feats) ? selectedCharacter.feats
+                        : Array.isArray(selectedCharacter?.features) ? selectedCharacter.features : [];
+                      const hasGWM = attackerFeats.some((f) => {
+                        const n = typeof f === 'string' ? f : f?.name;
+                        return typeof n === 'string' && n.toLowerCase() === 'great weapon master';
+                      });
+                      const wasMelee = combatState.action?.mode === 'melee' || combatState.action?.mode === 'offhand';
+                      if (hasGWM && wasMelee && actionsState.bonus) {
+                        toast.success('Great Weapon Master: Bonus action melee attack!');
+                      }
                     }
                   }
 
@@ -3244,6 +3443,8 @@ export default function GMPanel() {
                   }}
                   isGM={isGM}
                   onChangeFaction={updateCombatantFaction}
+                  onSetExhaustion={setCombatantExhaustion}
+                  onGrantInspiration={setCombatantInspiration}
                   selectionMode={combatState.step === 'selecting_target'}
                   isTurnOrderAccepted={isTurnOrderAccepted}
                   // Pass helpers to lookup HP. Everything flows through
@@ -3399,6 +3600,7 @@ export default function GMPanel() {
               onToggleSorceryPoint={handleToggleSorceryPoint}
               onConvertSlotToSP={() => setFontOfMagicDirection('slotToSP')}
               onConvertSPToSlot={() => setFontOfMagicDirection('spToSlot')}
+              onToggleLuck={handleToggleLuck}
               onActionClick={((runAction) => {
                 // Always repoint the ref at the freshest closure so
                 // the level picker can re-enter this exact handler
@@ -6461,7 +6663,7 @@ function LogEntry({ name, time, text, highlight }) {
   );
 }
 
-function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharacter = {}, onSelectTarget, selectionMode, isTurnOrderAccepted, getHp, isGM, onChangeFaction }) {
+function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharacter = {}, onSelectTarget, selectionMode, isTurnOrderAccepted, getHp, isGM, onChangeFaction, onSetExhaustion, onGrantInspiration }) {
   const hasPlayedRef = React.useRef(false);
   // Right-click context menu state. Stores the combatant whose portrait
   // was right-clicked plus screen coords so the menu floats there.
@@ -6609,6 +6811,33 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
                               title={`Bardic Inspiration (${combatant.bardicInspiration.die})${combatant.bardicInspiration.fromName ? ` — from ${combatant.bardicInspiration.fromName}` : ''}`}
                             >
                               ♪
+                            </div>
+                          )}
+
+                          {/* Inspiration badge — gold ★ on top-left when
+                              the character has DM inspiration. */}
+                          {combatant.hasInspiration && !combatant.bardicInspiration && (
+                            <div
+                              className="absolute -top-1 -left-1 text-[11px] font-black z-30 rounded-full w-5 h-5 flex items-center justify-center shadow-[0_0_10px_rgba(250,204,21,0.9)]"
+                              style={{
+                                backgroundColor: '#facc15',
+                                color: '#1f1303',
+                                border: '1.5px solid #fde68a',
+                              }}
+                              title="Inspiration (advantage on one roll)"
+                            >
+                              ★
+                            </div>
+                          )}
+
+                          {/* Exhaustion badge — small numbered pip in the
+                              bottom-left corner when exhaustion > 0. */}
+                          {(combatant.exhaustion || 0) > 0 && (
+                            <div
+                              className="absolute -bottom-1 -left-1 text-[10px] font-black z-30 rounded-full w-5 h-5 flex items-center justify-center bg-red-800 text-white border border-red-300 shadow-[0_0_6px_rgba(153,27,27,0.9)]"
+                              title={`Exhaustion level ${combatant.exhaustion}`}
+                            >
+                              {combatant.exhaustion}
                             </div>
                           )}
 
@@ -6775,7 +7004,7 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
           faction applies it via the parent-supplied callback. */}
       {factionMenu && (
         <div
-          className="fixed z-[200] bg-[#050816] border-2 border-[#37F2D1]/30 rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-2 min-w-[160px]"
+          className="fixed z-[200] bg-[#050816] border-2 border-[#37F2D1]/30 rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-2 min-w-[180px] max-h-[80vh] overflow-y-auto"
           style={{ left: factionMenu.x, top: factionMenu.y }}
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
@@ -6810,6 +7039,64 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
               </button>
             );
           })}
+
+          {/* Exhaustion (levels 0-6). Effects auto-apply via
+              conditions.js; we only persist the level here. */}
+          <div className="text-[9px] uppercase tracking-[0.22em] text-slate-500 font-bold px-2 pt-3 pb-1 border-t border-[#111827] mt-2 mb-1">
+            Exhaustion
+          </div>
+          <div className="grid grid-cols-7 gap-1 px-1 mb-1">
+            {[0, 1, 2, 3, 4, 5, 6].map((lvl) => {
+              const current = (factionMenu.combatant.exhaustion || 0) === lvl;
+              return (
+                <button
+                  key={lvl}
+                  type="button"
+                  onClick={() => {
+                    if (onSetExhaustion) {
+                      onSetExhaustion(
+                        factionMenu.combatant.uniqueId || factionMenu.combatant.id,
+                        lvl,
+                      );
+                    }
+                    setFactionMenu(null);
+                  }}
+                  className={`text-[11px] font-black rounded transition-colors py-1 ${
+                    current ? 'bg-red-700 text-white' : 'bg-[#111827] text-slate-300 hover:bg-red-700/30'
+                  }`}
+                >
+                  {lvl}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Grant Inspiration — GM gives the target a single-use
+              advantage die. ★ badge renders on the portrait until the
+              character spends it. */}
+          <div className="text-[9px] uppercase tracking-[0.22em] text-slate-500 font-bold px-2 pt-3 pb-1 border-t border-[#111827] mt-2 mb-1">
+            Inspiration
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (onGrantInspiration) {
+                onGrantInspiration(
+                  factionMenu.combatant.uniqueId || factionMenu.combatant.id,
+                  !factionMenu.combatant.hasInspiration,
+                );
+              }
+              setFactionMenu(null);
+            }}
+            className={`w-full text-left text-xs font-semibold px-3 py-1.5 rounded-lg mb-0.5 flex items-center gap-2 transition-colors ${
+              factionMenu.combatant.hasInspiration
+                ? 'bg-yellow-500 text-black'
+                : 'bg-[#111827] text-yellow-400 hover:bg-yellow-500/30'
+            }`}
+          >
+            <span>★</span>
+            {factionMenu.combatant.hasInspiration ? 'Clear Inspiration' : 'Grant Inspiration'}
+          </button>
         </div>
       )}
     </div>

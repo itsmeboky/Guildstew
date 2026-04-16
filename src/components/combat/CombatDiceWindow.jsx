@@ -30,6 +30,7 @@ import {
   divineSmiteDice,
   spellSaveDC as spellSaveDCFn,
   getSpellSlots as getSpellSlotsFromRegistry,
+  COVER,
 } from "@/components/dnd5e/dnd5eRules";
 
 // Alias so the existing in-file lookups don't need renaming.
@@ -77,6 +78,11 @@ export default function CombatDiceWindow({
   onDivineSmite,
   onStunningStrike,
   onBardicInspirationUse,
+  // Tier 3 consume callbacks. onLuckySpend decrements
+  // classResources.luckyPointsRemaining in the parent; onInspirationUse
+  // strips the hasInspiration flag from the actor combatant.
+  onLuckySpend,
+  onInspirationUse,
 }) {
   const [selectedAction, setSelectedAction] = useState(initialAction);
   const [attackRoll, setAttackRoll] = useState(null);
@@ -112,6 +118,16 @@ export default function CombatDiceWindow({
   // consume the die to add to the roll. `inspirationUsed` prevents
   // double-consumption if the user clicks more than once.
   const [inspirationConsumed, setInspirationConsumed] = useState(false);
+  // Tier 3 resource prompts — independent toggles so Lucky + DM
+  // Inspiration + Bardic Inspiration can coexist without fighting.
+  const [luckyConsumed, setLuckyConsumed] = useState(false);
+  const [inspirationDiceUsed, setInspirationDiceUsed] = useState(false);
+  // Cover selector (per-attack). Applied to the target's AC when
+  // rolling the attack. Not persisted on the combatant.
+  const [targetCover, setTargetCover] = useState('none');
+  // Uncanny Dodge decision (defender side). null = pending, 'use' =
+  // reaction spent / halve damage, 'skip' = take full.
+  const [uncannyDodge, setUncannyDodge] = useState(null);
 
   // Flow type comes from the resolved action produced by actionResolver.resolveAction
   const resolved = selectedAction?.resolved || null;
@@ -159,12 +175,13 @@ export default function CombatDiceWindow({
   // so this memoizes as a callback and is called just-in-time in the
   // roll handlers.
   const computeConditionModifiers = React.useCallback(
-    (rollType) =>
+    (rollType, saveAbility = null) =>
       getConditionModifiers(
         actor,
         target,
         rollType,
         selectedAction?.mode || null,
+        saveAbility,
       ),
     [actor, target, selectedAction?.mode],
   );
@@ -364,6 +381,10 @@ export default function CombatDiceWindow({
     setPostHitDecisions({});
     setBonusDamage(null);
     setInspirationConsumed(false);
+    setLuckyConsumed(false);
+    setInspirationDiceUsed(false);
+    setTargetCover('none');
+    setUncannyDodge(null);
   }, [isOpen, initialAction, mode]);
 
   // Spectator sync (follow campaign.combat_data.active_encounter)
@@ -493,6 +514,33 @@ export default function CombatDiceWindow({
   };
 
   // Attack modifier (weapon or spell)
+  // Power Attack qualification — a weapon attack eligible for the
+  // GWM / Sharpshooter toggle. GWM needs a Heavy melee weapon,
+  // Sharpshooter needs a ranged weapon. Used by both attack and
+  // damage flows below.
+  const getPowerAttackKind = () => {
+    if (!actor) return null;
+    const active = !!actor?.classResources?.powerAttackActive;
+    if (!active) return null;
+    if (selectedAction?.type === 'spell') return null;
+    const feats = Array.isArray(actor?.feats)
+      ? actor.feats
+      : Array.isArray(actor?.features) ? actor.features : [];
+    const hasFeat = (n) => feats.some((f) => {
+      const name = typeof f === 'string' ? f : f?.name;
+      return typeof name === 'string' && name.toLowerCase() === n.toLowerCase();
+    });
+    const weapon = selectedAction?.weapon;
+    const props = Array.isArray(weapon?.properties) ? weapon.properties : [];
+    const mode = selectedAction?.mode;
+    const isHeavyMelee = (mode === 'melee' || mode === 'offhand') &&
+      props.some((p) => /heavy/i.test(String(p)));
+    const isRanged = mode === 'ranged' || !!weapon?.category?.includes?.('Ranged');
+    if (hasFeat('Great Weapon Master') && isHeavyMelee) return 'gwm';
+    if (hasFeat('Sharpshooter') && isRanged) return 'sharpshooter';
+    return null;
+  };
+
   const getModifier = () => {
     if (!actor) return 0;
 
@@ -527,39 +575,36 @@ export default function CombatDiceWindow({
     const isFinesse = !!weapon?.properties?.includes?.("Finesse");
     const isRangedWeapon = !!weapon?.category?.includes?.("Ranged");
 
+    let attackMod;
+
     // Unarmed: Monk uses the best of STR/DEX (Martial Arts); everyone
     // else just STR.
     if (isUnarmedAttack()) {
-      return (isMonkActor() ? Math.max(strMod, dexMod) : strMod) + proficiency;
+      attackMod = (isMonkActor() ? Math.max(strMod, dexMod) : strMod) + proficiency;
+    } else {
+      // Explicit mode hints from the 4-state attack toggle take priority
+      // over property sniffing, but finesse still lets melee pick the
+      // higher of STR/DEX (that's the whole point of the property).
+      const mode = selectedAction?.mode;
+      if (mode === "ranged" || isRangedWeapon) {
+        // Ranged: always DEX. (Thrown finesse like a dagger is rare —
+        // the GM can switch to melee mode for that case.)
+        // (I) Fighting Style: Archery → +2 to ranged attack rolls.
+        const archeryBonus = /archery/i.test(actor?.fighting_style || actor?.fightingStyle || '') ? 2 : 0;
+        attackMod = dexMod + proficiency + archeryBonus;
+      } else if (isFinesse || mode === "offhand") {
+        // Finesse weapons + off-hand bonus attacks pick max(STR, DEX)
+        // for the attack roll. Off-hand damage is stripped in
+        // onDamageRollComplete unless Two-Weapon Fighting is set.
+        attackMod = Math.max(strMod, dexMod) + proficiency;
+      } else {
+        // Default melee: STR.
+        attackMod = strMod + proficiency;
+      }
     }
 
-    // Explicit mode hints from the 4-state attack toggle take priority
-    // over property sniffing, but finesse still lets melee pick the
-    // higher of STR/DEX (that's the whole point of the property).
-    const mode = selectedAction?.mode;
-    if (mode === "ranged" || isRangedWeapon) {
-      // Ranged: always DEX. (Thrown finesse like a dagger is rare —
-      // the GM can switch to melee mode for that case.)
-      // (I) Fighting Style: Archery → +2 to ranged attack rolls.
-      const archeryBonus = /archery/i.test(actor?.fighting_style || actor?.fightingStyle || '') ? 2 : 0;
-      return dexMod + proficiency + archeryBonus;
-    }
-    if (isFinesse || mode === "offhand") {
-      // Finesse weapons (rapier, shortsword, scimitar, whip, dagger,
-      // etc.) AND off-hand bonus attacks pick the higher of STR or
-      // DEX for the attack roll. The damage mod for off-hand is
-      // stripped in onDamageRollComplete unless the character has
-      // Two-Weapon Fighting style.
-      return Math.max(strMod, dexMod) + proficiency;
-    }
-    // Default melee: STR.
-    let attackMod = strMod + proficiency;
-
-    // (I) Fighting Style: Archery — +2 to ranged attack rolls.
-    const fStyle = actor?.fighting_style || actor?.fightingStyle || '';
-    if (/archery/i.test(fStyle) && (mode === 'ranged' || isRangedWeapon)) {
-      attackMod += 2;
-    }
+    // Tier 3: Power Attack (GWM / Sharpshooter) — -5 to hit.
+    if (getPowerAttackKind()) attackMod -= 5;
     return attackMod;
   };
 
@@ -636,7 +681,10 @@ export default function CombatDiceWindow({
     const total = d20 + mod;
     // Auto-crit from conditions (Paralyzed / Unconscious melee) only
     // applies IF the attack actually hits. Nat 20 always crits.
-    const willHit = nat20 || total >= (target?.stats?.armor_class || target?.armor_class || 10);
+    const baseAC = target?.stats?.armor_class || target?.armor_class || 10;
+    const coverBonus = COVER?.[targetCover]?.acBonus || 0;
+    const effectiveAC = baseAC + (Number.isFinite(coverBonus) ? coverBonus : 0);
+    const willHit = nat20 || total >= effectiveAC;
     const isCritFlag = nat20 || (isAutoCrit && willHit);
     const result = {
       total,
@@ -672,7 +720,7 @@ export default function CombatDiceWindow({
     // disadvantage prefix and the pair-dice readout when relevant so
     // the feed matches the on-screen animation.
     if (campaignId) {
-      const targetAC = target?.stats?.armor_class || target?.armor_class || 10;
+      const targetAC = effectiveAC;
       const willHit = d20 === 20 || result.total >= targetAC;
       const weaponName =
         selectedAction?.type === "spell"
@@ -777,6 +825,87 @@ export default function CombatDiceWindow({
       rollKind: kind,
     });
   }, [actor, attackRoll, skillCheckRoll, savingThrowRoll, inspirationConsumed, target, campaignId, onBardicInspirationUse, onRoll, computePostHitOptions]);
+
+  // Lucky feat — roll a second d20, keep whichever the player wants.
+  // For simplicity we always take the better of the two rolls
+  // automatically. On an attack the improved total is re-evaluated
+  // against the target's AC (cover applied).
+  const rollLuckyReroll = React.useCallback((kind) => {
+    if (luckyConsumed) return;
+    const reroll = Math.floor(Math.random() * 20) + 1;
+    setLuckyConsumed(true);
+    const targetAC = (target?.stats?.armor_class || target?.armor_class || 10) +
+      (COVER?.[targetCover]?.acBonus || 0);
+    if (kind === 'attack' && attackRoll) {
+      const bestD20 = Math.max(attackRoll.d20, reroll);
+      const newTotal = bestD20 + attackRoll.mod;
+      const willHit = bestD20 === 20 || newTotal >= targetAC;
+      setAttackRoll({ ...attackRoll, d20: bestD20, total: newTotal, luckyReroll: reroll, isCrit: bestD20 === 20 || attackRoll.isCrit });
+      if (willHit) {
+        const opts = computePostHitOptions();
+        if (opts.length > 0) {
+          setPostHitOptions(opts);
+          const decisions = {};
+          for (const o of opts) decisions[o] = null;
+          setPostHitDecisions(decisions);
+        }
+      }
+    } else if (kind === 'skill' && skillCheckRoll) {
+      const bestD20 = Math.max(skillCheckRoll.d20, reroll);
+      setSkillCheckRoll({ ...skillCheckRoll, d20: bestD20, total: bestD20 + skillCheckRoll.mod, luckyReroll: reroll });
+    } else if (kind === 'save' && savingThrowRoll) {
+      const bestD20 = Math.max(savingThrowRoll.d20, reroll);
+      const newTotal = bestD20 + savingThrowRoll.mod;
+      setSavingThrowRoll({ ...savingThrowRoll, d20: bestD20, total: newTotal, success: newTotal >= savingThrowRoll.dc, luckyReroll: reroll });
+    }
+    if (campaignId) {
+      logCombatEvent(campaignId, `${actor?.name || 'Actor'} uses Lucky! Rolls ${reroll}, takes the better.`, {
+        event: 'lucky_reroll', category: 'roll', actor: actor?.name, reroll,
+      });
+    }
+    if (typeof onLuckySpend === 'function') onLuckySpend();
+    onRoll && onRoll({ type: 'lucky_reroll', actorId: actor?.id, reroll });
+  }, [actor, attackRoll, skillCheckRoll, savingThrowRoll, target, targetCover, luckyConsumed, campaignId, onRoll, onLuckySpend, computePostHitOptions]);
+
+  // DM Inspiration — reroll with advantage. Rolls a fresh d20 and
+  // keeps the higher. Strips hasInspiration via callback so the ★
+  // badge disappears.
+  const useInspirationAdvantage = React.useCallback((kind) => {
+    if (inspirationDiceUsed) return;
+    const reroll = Math.floor(Math.random() * 20) + 1;
+    setInspirationDiceUsed(true);
+    const targetAC = (target?.stats?.armor_class || target?.armor_class || 10) +
+      (COVER?.[targetCover]?.acBonus || 0);
+    if (kind === 'attack' && attackRoll) {
+      const bestD20 = Math.max(attackRoll.d20, reroll);
+      const newTotal = bestD20 + attackRoll.mod;
+      const willHit = bestD20 === 20 || newTotal >= targetAC;
+      setAttackRoll({ ...attackRoll, d20: bestD20, total: newTotal, inspirationReroll: reroll, isCrit: bestD20 === 20 || attackRoll.isCrit });
+      if (willHit) {
+        const opts = computePostHitOptions();
+        if (opts.length > 0) {
+          setPostHitOptions(opts);
+          const decisions = {};
+          for (const o of opts) decisions[o] = null;
+          setPostHitDecisions(decisions);
+        }
+      }
+    } else if (kind === 'skill' && skillCheckRoll) {
+      const bestD20 = Math.max(skillCheckRoll.d20, reroll);
+      setSkillCheckRoll({ ...skillCheckRoll, d20: bestD20, total: bestD20 + skillCheckRoll.mod });
+    } else if (kind === 'save' && savingThrowRoll) {
+      const bestD20 = Math.max(savingThrowRoll.d20, reroll);
+      const newTotal = bestD20 + savingThrowRoll.mod;
+      setSavingThrowRoll({ ...savingThrowRoll, d20: bestD20, total: newTotal, success: newTotal >= savingThrowRoll.dc });
+    }
+    if (campaignId) {
+      logCombatEvent(campaignId, `${actor?.name || 'Actor'} uses Inspiration! Advantage on the roll.`, {
+        event: 'inspiration_used', category: 'buff', actor: actor?.name, reroll,
+      });
+    }
+    if (typeof onInspirationUse === 'function') onInspirationUse();
+    onRoll && onRoll({ type: 'inspiration_used', actorId: actor?.id, reroll });
+  }, [actor, attackRoll, skillCheckRoll, savingThrowRoll, target, targetCover, inspirationDiceUsed, campaignId, onRoll, onInspirationUse, computePostHitOptions]);
 
   const handleSmiteChoice = (slotLevel) => {
     if (slotLevel === 'skip') {
@@ -947,6 +1076,9 @@ export default function CombatDiceWindow({
         const hasOffhandWeapon = actor?.equipment?.weapon2;
         if (!hasOffhandWeapon) mod += 2;
       }
+      // Tier 3: Power Attack (GWM / Sharpshooter) — +10 damage when
+      // the toggle is on and the weapon qualifies.
+      if (getPowerAttackKind()) mod += 10;
     }
 
     // Unarmed damage uses 1d4 (or Monk Martial Arts die), not the weapon damage.
@@ -1116,7 +1248,12 @@ export default function CombatDiceWindow({
       }
     }
 
-    const totalDamage = Math.max(0, total + mod);
+    let totalDamage = Math.max(0, total + mod);
+    // Tier 3: Uncanny Dodge — target halves damage as a reaction.
+    const uncannyHalved = uncannyDodge === 'use';
+    if (uncannyHalved) {
+      totalDamage = Math.floor(totalDamage / 2);
+    }
     const result = {
       total: totalDamage,
       dice: total,
@@ -1129,7 +1266,13 @@ export default function CombatDiceWindow({
       bonusDamage: bonusDamage
         ? { ...bonusDamage, total: bonusDamageTotal, rolls: bonusDamageRolls }
         : undefined,
+      uncannyDodgeUsed: uncannyHalved,
     };
+    if (uncannyHalved && campaignId) {
+      logCombatEvent(campaignId, `${target?.name || 'Target'} uses Uncanny Dodge! Damage halved from ${total + mod} to ${totalDamage}.`, {
+        event: 'uncanny_dodge_applied', category: 'reaction', target: target?.name, from: total + mod, to: totalDamage,
+      });
+    }
     setDamageRoll(result);
     setIsRolling(false);
     setPhase("damage_result");
@@ -1563,7 +1706,7 @@ export default function CombatDiceWindow({
     const saveAbility = resolved?.save || "dex";
     const mod = getSaveModifier(target, saveAbility);
     const { hasAdvantage, hasDisadvantage } =
-      computeConditionModifiers("saving_throw");
+      computeConditionModifiers("saving_throw", saveAbility);
 
     let d20 = roll;
     let pair = null;
@@ -1649,7 +1792,9 @@ export default function CombatDiceWindow({
     onRoll && onRoll({ type: "initiative", value: total });
   };
 
-  const targetAC = target?.stats?.armor_class || target?.armor_class || 10;
+  const baseTargetAC = target?.stats?.armor_class || target?.armor_class || 10;
+  const coverAcBonus = COVER?.[targetCover]?.acBonus || 0;
+  const targetAC = baseTargetAC + (Number.isFinite(coverAcBonus) ? coverAcBonus : 0);
   const isHit =
     attackRoll && (attackRoll.isCrit || attackRoll.total >= targetAC);
 
@@ -2289,7 +2434,7 @@ export default function CombatDiceWindow({
                   )}
 
                   {phase === "save_result" && savingThrowRoll && (
-                    <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
+                    <div className="absolute inset-0 pointer-events-none z-20 flex flex-col items-center justify-center gap-2">
                       <motion.div
                         initial={{ scale: 0, y: 50 }}
                         animate={{ scale: 1, y: 0 }}
@@ -2313,6 +2458,24 @@ export default function CombatDiceWindow({
                           {savingThrowRoll.success ? "SAVED" : "FAILED"}
                         </span>
                       </motion.div>
+                      {(() => {
+                        // Tier 3: Evasion — Monk/Rogue level 7+ on a
+                        // DEX save. Success = no damage, fail = half.
+                        const tgt = target;
+                        if (!tgt) return null;
+                        const tgtClass = (tgt.class || tgt.stats?.class || '').toString();
+                        const tgtLvl = tgt.level || tgt.stats?.level || 0;
+                        const hasEvasion =
+                          (/monk/i.test(tgtClass) || /rogue/i.test(tgtClass)) &&
+                          tgtLvl >= 7;
+                        if (!hasEvasion) return null;
+                        if ((savingThrowRoll.ability || '').toLowerCase() !== 'dex') return null;
+                        return (
+                          <div className="bg-black/80 border border-[#37F2D1] rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-[#37F2D1]">
+                            Evasion — {savingThrowRoll.success ? 'No damage!' : 'Half damage!'}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </AnimatePresence>
@@ -2380,6 +2543,85 @@ export default function CombatDiceWindow({
                     </div>
                   </div>
                 )}
+
+                {/* Lucky feat — spend a point to roll a second d20
+                    and pick the better (or worse) result. */}
+                {(() => {
+                  if (isSpectator) return null;
+                  const feats = Array.isArray(actor?.feats) ? actor.feats
+                    : Array.isArray(actor?.features) ? actor.features : [];
+                  const hasLucky = feats.some((f) => {
+                    const n = typeof f === 'string' ? f : f?.name;
+                    return typeof n === 'string' && n.toLowerCase() === 'lucky';
+                  });
+                  if (!hasLucky) return null;
+                  const luckyLeft = actor?.classResources?.luckyPointsRemaining ?? 3;
+                  if (luckyLeft <= 0 || luckyConsumed) return null;
+                  let kind = null;
+                  if (phase === 'attack_result' && attackRoll) kind = 'attack';
+                  else if (phase === 'check_result' && skillCheckRoll) kind = 'skill';
+                  else if (phase === 'save_result' && savingThrowRoll) kind = 'save';
+                  if (!kind) return null;
+                  return (
+                    <div className="w-full bg-gradient-to-r from-[#facc15]/15 to-[#f59e0b]/10 border border-[#facc15]/50 rounded-2xl p-3 flex items-center justify-between gap-2 mb-3">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-[0.22em] text-[#facc15] font-black">
+                          ● Lucky ({luckyLeft} left)
+                        </span>
+                        <span className="text-[11px] text-white font-bold">Roll an extra d20, take the better.</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => rollLuckyReroll(kind)}
+                          className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-[#facc15] text-[#050816] hover:bg-[#fde68a]"
+                        >
+                          Spend
+                        </button>
+                        <button
+                          onClick={() => setLuckyConsumed(true)}
+                          className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600"
+                        >
+                          Keep
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Inspiration — DM-granted advantage on a single d20. */}
+                {(() => {
+                  if (isSpectator) return null;
+                  if (!actor?.hasInspiration || inspirationDiceUsed) return null;
+                  let kind = null;
+                  if (phase === 'attack_result' && attackRoll) kind = 'attack';
+                  else if (phase === 'check_result' && skillCheckRoll) kind = 'skill';
+                  else if (phase === 'save_result' && savingThrowRoll) kind = 'save';
+                  if (!kind) return null;
+                  return (
+                    <div className="w-full bg-gradient-to-r from-[#facc15]/20 to-[#eab308]/10 border border-[#facc15]/60 rounded-2xl p-3 flex items-center justify-between gap-2 mb-3">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-[0.22em] text-[#facc15] font-black">
+                          ★ Inspiration
+                        </span>
+                        <span className="text-[11px] text-white font-bold">Reroll with advantage?</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => useInspirationAdvantage(kind)}
+                          className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-[#facc15] text-[#050816] hover:bg-[#fde68a]"
+                        >
+                          Use
+                        </button>
+                        <button
+                          onClick={() => setInspirationDiceUsed(true)}
+                          className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Bardic Inspiration prompt — surfaces whenever the
                     actor has an unspent inspiration die and they've
@@ -2494,6 +2736,68 @@ export default function CombatDiceWindow({
 
                 {phase === "attack_result" && isHit && (
                   <div className="flex flex-col gap-3">
+                    {/* Uncanny Dodge — defender-side reaction. Rogue
+                        level 5+ not blinded can halve the damage of
+                        an attack they can see. Appears as a prompt
+                        next to the Divine Smite / Stunning Strike
+                        attacker prompts. */}
+                    {(() => {
+                      const tgt = target;
+                      if (!tgt) return null;
+                      const tgtClass = (tgt.class || tgt.stats?.class || '').toString();
+                      const tgtLvl = tgt.level || tgt.stats?.level || 0;
+                      const isRogue5 = /rogue/i.test(tgtClass) && tgtLvl >= 5;
+                      if (!isRogue5) return null;
+                      const tgtConds = tgt.conditions || [];
+                      if (tgtConds.includes('Blinded')) return null;
+                      return (
+                        <div className="bg-black/40 border border-[#38bdf8]/60 rounded-2xl p-3">
+                          <div className="text-[11px] uppercase tracking-[0.22em] text-[#38bdf8] font-black mb-1">
+                            🛡 Uncanny Dodge — {tgt.name}?
+                          </div>
+                          <p className="text-[10px] text-slate-400 mb-2">
+                            Halve this damage (Reaction)?
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              disabled={uncannyDodge !== null}
+                              onClick={() => {
+                                setUncannyDodge('use');
+                                if (campaignId) {
+                                  logCombatEvent(
+                                    campaignId,
+                                    `${tgt.name} uses Uncanny Dodge! (Reaction)`,
+                                    { event: 'uncanny_dodge_use', category: 'reaction', target: tgt.name }
+                                  );
+                                }
+                              }}
+                              className={`flex-1 text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg border transition-colors ${
+                                uncannyDodge === 'use'
+                                  ? 'bg-[#38bdf8] text-[#050816] border-[#38bdf8]'
+                                  : uncannyDodge !== null
+                                  ? 'bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed'
+                                  : 'bg-[#38bdf8]/10 text-[#38bdf8] border-[#38bdf8]/60 hover:bg-[#38bdf8]/25'
+                              }`}
+                            >
+                              Use (Reaction)
+                            </button>
+                            <button
+                              disabled={uncannyDodge !== null}
+                              onClick={() => setUncannyDodge('skip')}
+                              className={`flex-1 text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg border transition-colors ${
+                                uncannyDodge === 'skip'
+                                  ? 'bg-slate-600 text-white border-slate-400'
+                                  : uncannyDodge !== null
+                                  ? 'bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed'
+                                  : 'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700'
+                              }`}
+                            >
+                              Skip
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     {postHitOptions.length > 0 && (
                       <div className="flex flex-col gap-3 bg-black/40 border border-white/10 rounded-2xl p-3">
                         {postHitOptions.includes('divine_smite') && (() => {
@@ -2680,6 +2984,47 @@ export default function CombatDiceWindow({
                 </div>
               );
             })()}
+
+            {/* Cover selector — per-attack AC bonus. Shown for attack
+                flows only; persists for the duration of the current
+                dice window. Full cover cancels the attack. */}
+            {!isSpectator && target && flowType === 'attack' && phase === 'ready' && (
+              <div className="flex flex-wrap items-center justify-center gap-1 mt-1 max-w-[220px]">
+                {[
+                  { key: 'none',           label: 'No Cover' },
+                  { key: 'half',           label: '½ +2' },
+                  { key: 'three_quarters', label: '¾ +5' },
+                  { key: 'full',           label: 'Full' },
+                ].map(({ key, label }) => {
+                  const selected = targetCover === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        if (key === 'full') {
+                          // Full cover = can't target.
+                          if (onClose) onClose();
+                          return;
+                        }
+                        setTargetCover(key);
+                      }}
+                      className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors ${
+                        selected
+                          ? 'bg-[#38bdf8] text-[#050816] border-[#38bdf8]'
+                          : 'bg-black/60 border-slate-600 text-slate-300 hover:border-[#38bdf8]/60'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {targetCover !== 'none' && (
+              <div className="text-[9px] text-[#38bdf8] font-bold uppercase tracking-wider mt-0.5">
+                vs AC {targetAC} (base {baseTargetAC} + {coverAcBonus} cover)
+              </div>
+            )}
 
             {/* Target HP — same green/yellow/red threshold palette as the
                 actor side. Numbers only for GM or when target is a player. */}
