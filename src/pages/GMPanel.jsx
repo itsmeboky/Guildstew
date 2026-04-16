@@ -60,7 +60,17 @@ import {
   attacksPerAction,
   getRule,
   DEATH_RULES,
+  RAGE_DAMAGE_BONUS,
+  RAGES_PER_DAY,
+  FIGHTING_STYLES,
+  kiPoints,
+  CLASS_ABILITY_MECHANICS,
 } from "@/components/dnd5e/dnd5eRules";
+import {
+  initClassResources,
+  getClassResources,
+  rageDamageBonus,
+} from "@/components/combat/classResources";
 import { toast } from "sonner";
 import { useTurnContext } from "@/components/combat/useTurnContext";
 
@@ -1165,6 +1175,155 @@ export default function GMPanel() {
     setCombatState({ isOpen: false, step: 'selecting_target', action, target: null });
   }, [buildAttackAction, campaign?.combat_active, campaign?.combat_data, isGM, isActorsTurn, actionsState.bonus]);
 
+  // Class ability handler — dispatches Rage, Reckless, Second Wind,
+  // Action Surge, Flurry of Blows, Bardic Inspiration clicks from the
+  // CombatActionBar ability row. Reads and writes classResources in
+  // combat_data so changes persist across both panels.
+  const handleClassAbility = React.useCallback((abilityId) => {
+    if (!selectedCharacterKey || !campaign?.combat_data) return;
+    const cd = campaign.combat_data;
+    const res = cd.classResources?.[selectedCharacterKey] || {};
+    const char = selectedCharacter;
+    const level = char?.level || char?.stats?.level || 1;
+
+    const writeResources = (patch) => {
+      const newRes = { ...(cd.classResources || {}), [selectedCharacterKey]: { ...res, ...patch } };
+      const newData = { ...cd, classResources: newRes };
+      queryClient.setQueryData(['campaign', campaignId], (old) =>
+        old ? { ...old, combat_data: newData } : old,
+      );
+      base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+    };
+
+    switch (abilityId) {
+      case 'rage': {
+        if (res.isRaging) {
+          // Toggle OFF
+          writeResources({ isRaging: false });
+          setActiveConditions((prev) => {
+            const cur = prev[selectedCharacterKey] || [];
+            return { ...prev, [selectedCharacterKey]: cur.filter((c) => c !== 'Raging') };
+          });
+          logCombatEvent(campaignId, `${char?.name}'s rage ends.`, { event: 'rage_end', category: 'condition', actor: char?.name });
+          toast(`${char?.name}'s rage ends.`);
+        } else {
+          if ((res.ragesRemaining ?? 1) <= 0) { toast.error('No rages remaining!'); return; }
+          if (!actionsState.bonus) { toast.error('No bonus action available!'); return; }
+          setActionsState((prev) => ({ ...prev, bonus: false }));
+          writeResources({
+            isRaging: true,
+            ragesRemaining: (res.ragesRemaining ?? (RAGES_PER_DAY[level] || 2)) - 1,
+            rageDamageBonus: rageDamageBonus(level),
+          });
+          setActiveConditions((prev) => {
+            const cur = prev[selectedCharacterKey] || [];
+            if (cur.includes('Raging')) return prev;
+            return { ...prev, [selectedCharacterKey]: [...cur, 'Raging'] };
+          });
+          logCombatEvent(campaignId, `${char?.name} enters a RAGE!`, { event: 'rage_start', category: 'condition', actor: char?.name });
+          toast.success(`${char?.name} enters a RAGE!`);
+        }
+        break;
+      }
+      case 'reckless': {
+        const next = !res.recklessActive;
+        writeResources({ recklessActive: next });
+        if (next) {
+          logCombatEvent(campaignId, `${char?.name} attacks recklessly!`, { event: 'reckless_attack', category: 'attack', actor: char?.name });
+          toast(`${char?.name} attacks recklessly!`);
+        }
+        break;
+      }
+      case 'secondWind': {
+        if (res.secondWindUsed) { toast.error('Second Wind already used!'); return; }
+        if (!actionsState.bonus) { toast.error('No bonus action available!'); return; }
+        setActionsState((prev) => ({ ...prev, bonus: false }));
+        // Roll 1d10 + fighter level
+        const roll = Math.floor(Math.random() * 10) + 1;
+        const healAmount = roll + level;
+        const hp = char?.hit_points || {};
+        const maxHp = hp.max || 0;
+        const current = hp.current ?? maxHp;
+        const newCurrent = Math.min(maxHp, current + healAmount);
+        if (char?.id) {
+          base44.entities.Character.update(char.id, {
+            hit_points: { ...hp, current: newCurrent },
+          }).catch(console.error);
+          queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
+        }
+        writeResources({ secondWindUsed: true });
+        logCombatEvent(campaignId, `${char?.name} uses Second Wind, healing ${healAmount} HP! (${newCurrent}/${maxHp} HP)`, {
+          event: 'second_wind', category: 'heal', actor: char?.name, heal: healAmount,
+        });
+        toast.success(`Second Wind! ${char?.name} heals ${healAmount} HP (${roll} + ${level})`);
+        break;
+      }
+      case 'actionSurge': {
+        if ((res.actionSurgeRemaining ?? 0) <= 0) { toast.error('No Action Surge uses remaining!'); return; }
+        setActionsState((prev) => ({ ...prev, action: true }));
+        writeResources({ actionSurgeRemaining: (res.actionSurgeRemaining ?? 1) - 1 });
+        logCombatEvent(campaignId, `${char?.name} uses Action Surge!`, { event: 'action_surge', category: 'turn', actor: char?.name });
+        toast.success(`Action Surge! ${char?.name} gains an extra action!`);
+        break;
+      }
+      case 'flurry': {
+        const maxKi = kiPoints(level);
+        if ((res.kiRemaining ?? maxKi) < 1) { toast.error('Not enough ki!'); return; }
+        if (!actionsState.bonus) { toast.error('No bonus action available!'); return; }
+        setActionsState((prev) => ({ ...prev, bonus: false }));
+        writeResources({ kiRemaining: (res.kiRemaining ?? maxKi) - 1 });
+        // Set up 2 unarmed strikes using the Extra Attack counter
+        setRemainingAttacks(2);
+        setTotalExtraAttacks(2);
+        const action = buildAttackAction('unarmed');
+        if (action) {
+          action.name = 'Flurry of Blows';
+          action.isFlurry = true;
+        }
+        setCombatState({ isOpen: false, step: 'selecting_target', action, target: null });
+        logCombatEvent(campaignId, `${char?.name} unleashes a Flurry of Blows!`, { event: 'flurry_of_blows', category: 'attack', actor: char?.name });
+        toast.success(`${char?.name} unleashes a Flurry of Blows!`);
+        break;
+      }
+      case 'bardicInspiration': {
+        if ((res.bardicInspirationRemaining ?? 1) <= 0) { toast.error('No Bardic Inspiration uses remaining!'); return; }
+        if (!actionsState.bonus) { toast.error('No bonus action available!'); return; }
+        // Enter targeting mode for an ally
+        setActionsState((prev) => ({ ...prev, bonus: false }));
+        writeResources({ bardicInspirationRemaining: (res.bardicInspirationRemaining ?? 1) - 1 });
+        // Determine die size from level
+        const dieLevels = CLASS_ABILITY_MECHANICS['Bardic Inspiration']?.die || { 1: 'd6' };
+        let die = 'd6';
+        for (const [lvl, d] of Object.entries(dieLevels).sort((a, b) => Number(b[0]) - Number(a[0]))) {
+          if (level >= Number(lvl)) { die = d; break; }
+        }
+        toast.success(`${char?.name} inspires with a ${die}! Select an ally.`);
+        logCombatEvent(campaignId, `${char?.name} grants Bardic Inspiration (${die})!`, {
+          event: 'bardic_inspiration', category: 'spell', actor: char?.name, die,
+        });
+        // TODO: Enter ally-targeting mode and store the inspiration die on the target.
+        // For now the log and resource decrement work; the targeting needs the same
+        // re-enter-targeting pattern as Extra Attack.
+        break;
+      }
+      default:
+        break;
+    }
+  }, [
+    selectedCharacterKey,
+    selectedCharacter,
+    campaign?.combat_data,
+    campaignId,
+    queryClient,
+    actionsState,
+    setActionsState,
+    setActiveConditions,
+    buildAttackAction,
+    setRemainingAttacks,
+    setTotalExtraAttacks,
+    setCombatState,
+  ]);
+
   // Handler called when CombatActionBar cycles the attack toggle.
   const handleAttackModeChange = React.useCallback((nextMode) => {
     // Hard lock during initiative setup — nobody acts before FIGHT.
@@ -1283,15 +1442,28 @@ export default function GMPanel() {
       return Math.random() - 0.5;
     });
 
-    // Start Initiative Phase
+    // Start Initiative Phase. Initialize classResources for every
+    // combatant so ability buttons can read from combat_data.
+    const initialResources = {};
+    allCombatants.forEach((c) => {
+      const key = c.uniqueId || c.id;
+      // Player combatants carry class + level; monsters don't.
+      if (c.type === 'player' || c.class) {
+        // Look up the underlying character for attribute data.
+        const charData = characters.find(ch => ch.id === key || ch.name === c.name) || c;
+        initialResources[key] = initClassResources({ ...charData, ...c });
+      }
+    });
+
     base44.entities.Campaign.update(campaignId, {
       combat_active: true,
       combat_data: {
         stage: 'initiative',
-        order: allCombatants, // Provisional order, will be updated as players roll
+        order: allCombatants,
         rolls: {},
         currentTurnIndex: 0,
-        round: 1
+        round: 1,
+        classResources: initialResources,
       }
     });
 
@@ -2599,6 +2771,8 @@ export default function GMPanel() {
               spentSpellSlots={currentSpentSlots}
               onToggleSlot={handleToggleSlot}
               onOffhandAttack={handleOffhandAttack}
+              classResources={campaign?.combat_data?.classResources?.[selectedCharacterKey] || {}}
+              onClassAbility={handleClassAbility}
               onActionClick={((runAction) => {
                 // Always repoint the ref at the freshest closure so
                 // the level picker can re-enter this exact handler
@@ -2608,6 +2782,13 @@ export default function GMPanel() {
               })((action) => {
                 // Clicking any other action cancels attack-mode targeting.
                 if (attackMode !== null) setAttackMode(null);
+
+                // Rage blocks ALL spell casting.
+                const charRes = campaign?.combat_data?.classResources?.[selectedCharacterKey] || {};
+                if (action.type === 'spell' && charRes.isRaging) {
+                  toast.error("Can't cast spells while raging!");
+                  return;
+                }
 
                 // Level picker interception. Leveled spells (>=1st)
                 // without an explicit castLevel get held here so the
