@@ -22,6 +22,26 @@ import MoneyCounter from "@/components/shared/MoneyCounter";
 import ItemTooltip from "@/components/shared/ItemTooltip";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
 import { computeArmorClass } from "@/components/dnd5e/armorClass";
+
+// Helpers to extract the character's fighting-style names from any of
+// the several shapes a sheet might use. Used by AC (Defense +1) and
+// weapon damage (Great Weapon Fighting, Dueling, Archery, etc.).
+function collectFightingStyles(character) {
+  if (!character) return [];
+  const out = [];
+  const primary = character.fighting_style || character.fightingStyle;
+  if (primary) out.push(typeof primary === 'string' ? primary : primary.name);
+  const arr = character.fighting_styles;
+  if (Array.isArray(arr)) {
+    for (const s of arr) out.push(typeof s === 'string' ? s : s?.name);
+  }
+  const feats = character.features;
+  if (Array.isArray(feats)) {
+    for (const s of feats) out.push(typeof s === 'string' ? s : s?.name);
+  }
+  return out.filter(Boolean);
+}
+
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { motion } from "framer-motion";
 import CampaignLog from "@/components/gm/CampaignLog";
@@ -1177,6 +1197,73 @@ export default function GMPanel() {
 
   // Class ability handler — dispatches Rage, Reckless, Second Wind,
   // Action Surge, Flurry of Blows, Bardic Inspiration clicks from the
+  // Bardic Inspiration application. Stores { die, fromName } on the
+  // target combatant inside combat_data.order so the TurnOrderBar can
+  // render a ♪ badge and the CombatDiceWindow can offer the +die
+  // prompt on the target's next d20. The resource has already been
+  // decremented by handleClassAbility before we enter targeting.
+  const applyBardicInspiration = React.useCallback((target, die, fromName) => {
+    if (!campaign?.combat_data?.order) return;
+    const targetKey = target.uniqueId || target.id;
+    if (!targetKey) return;
+    const newOrder = campaign.combat_data.order.map((c) => {
+      const ck = c.uniqueId || c.id;
+      if (ck !== targetKey) return c;
+      return { ...c, bardicInspiration: { die, fromName } };
+    });
+    const newData = { ...campaign.combat_data, order: newOrder };
+    queryClient.setQueryData(['campaign', campaignId], (old) =>
+      old ? { ...old, combat_data: newData } : old,
+    );
+    base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+    toast.success(`${target.name} gains Bardic Inspiration (${die})`);
+  }, [campaign?.combat_data, campaignId, queryClient]);
+
+  // Consume a stored Bardic Inspiration on a combatant. Strips the
+  // bardicInspiration key back off their combat_data.order entry so
+  // the badge disappears and subsequent rolls don't retrigger.
+  const clearBardicInspiration = React.useCallback((combatantKey) => {
+    if (!campaign?.combat_data?.order || !combatantKey) return;
+    const newOrder = campaign.combat_data.order.map((c) => {
+      const ck = c.uniqueId || c.id;
+      if (ck !== combatantKey) return c;
+      const { bardicInspiration: _b, ...rest } = c;
+      return rest;
+    });
+    const newData = { ...campaign.combat_data, order: newOrder };
+    queryClient.setQueryData(['campaign', campaignId], (old) =>
+      old ? { ...old, combat_data: newData } : old,
+    );
+    base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+  }, [campaign?.combat_data, campaignId, queryClient]);
+
+  // Manual ki adjustment (GM clicks a diamond to correct the count).
+  // Writes through combat_data.classResources so both panels see the
+  // change immediately.
+  const handleToggleKi = React.useCallback((mode) => {
+    if (!selectedCharacterKey || !campaign?.combat_data) return;
+    const cd = campaign.combat_data;
+    const res = cd.classResources?.[selectedCharacterKey] || {};
+    const char = selectedCharacter;
+    if (!char) return;
+    const level = char.level || char.stats?.level || 1;
+    const maxKi = kiPoints(level) || 0;
+    const curr = res.kiRemaining ?? maxKi;
+    let next = curr;
+    if (mode === 'spend') next = Math.max(0, curr - 1);
+    else if (mode === 'restore') next = Math.min(maxKi, curr + 1);
+    if (next === curr) return;
+    const newRes = {
+      ...(cd.classResources || {}),
+      [selectedCharacterKey]: { ...res, kiRemaining: next },
+    };
+    const newData = { ...cd, classResources: newRes };
+    queryClient.setQueryData(['campaign', campaignId], (old) =>
+      old ? { ...old, combat_data: newData } : old,
+    );
+    base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+  }, [selectedCharacterKey, selectedCharacter, campaign?.combat_data, campaignId, queryClient]);
+
   // CombatActionBar ability row. Reads and writes classResources in
   // combat_data so changes persist across both panels.
   const handleClassAbility = React.useCallback((abilityId) => {
@@ -1288,22 +1375,35 @@ export default function GMPanel() {
       case 'bardicInspiration': {
         if ((res.bardicInspirationRemaining ?? 1) <= 0) { toast.error('No Bardic Inspiration uses remaining!'); return; }
         if (!actionsState.bonus) { toast.error('No bonus action available!'); return; }
-        // Enter targeting mode for an ally
-        setActionsState((prev) => ({ ...prev, bonus: false }));
-        writeResources({ bardicInspirationRemaining: (res.bardicInspirationRemaining ?? 1) - 1 });
-        // Determine die size from level
+        // Determine die size from level (5: d8, 10: d10, 15: d12).
         const dieLevels = CLASS_ABILITY_MECHANICS['Bardic Inspiration']?.die || { 1: 'd6' };
         let die = 'd6';
         for (const [lvl, d] of Object.entries(dieLevels).sort((a, b) => Number(b[0]) - Number(a[0]))) {
           if (level >= Number(lvl)) { die = d; break; }
         }
+        // Enter ally-targeting mode. The bonus action and resource
+        // decrement are committed up-front (same pattern as leveled
+        // spells); cancelling the targeting still burns the use. The
+        // onSelectTarget path filters the click to ally/player
+        // factions and stores the inspiration on the chosen combatant.
+        setActionsState((prev) => ({ ...prev, bonus: false }));
+        writeResources({ bardicInspirationRemaining: (res.bardicInspirationRemaining ?? 1) - 1 });
         toast.success(`${char?.name} inspires with a ${die}! Select an ally.`);
         logCombatEvent(campaignId, `${char?.name} grants Bardic Inspiration (${die})!`, {
           event: 'bardic_inspiration', category: 'spell', actor: char?.name, die,
         });
-        // TODO: Enter ally-targeting mode and store the inspiration die on the target.
-        // For now the log and resource decrement work; the targeting needs the same
-        // re-enter-targeting pattern as Extra Attack.
+        setCombatState({
+          isOpen: false,
+          step: 'selecting_target',
+          action: {
+            type: 'bardic_inspiration',
+            name: 'Bardic Inspiration',
+            die,
+            fromName: char?.name,
+            fromKey: selectedCharacterKey,
+          },
+          target: null,
+        });
         break;
       }
       default:
@@ -1944,6 +2044,16 @@ export default function GMPanel() {
                     ? {
                         ...selectedCharacter,
                         conditions: activeConditions[getCharacterKey(selectedCharacter)] || [],
+                        // Give the dice window live access to the
+                        // actor's classResources + any inspiration
+                        // stored on their combat_data.order entry.
+                        classResources:
+                          campaign?.combat_data?.classResources?.[
+                            getCharacterKey(selectedCharacter)
+                          ] || {},
+                        bardicInspiration: (campaign?.combat_data?.order || [])
+                          .find((c) => (c.uniqueId || c.id) === getCharacterKey(selectedCharacter))
+                          ?.bardicInspiration,
                       }
                     : null
               }
@@ -1974,6 +2084,55 @@ export default function GMPanel() {
               isGM={true}
               mode={campaign?.combat_data?.stage === 'initiative' ? 'initiative' : 'combat'}
               campaignId={campaignId}
+              spentSlots={currentSpentSlots}
+              onDivineSmite={(slotLevel) => {
+                // Spend the Paladin's spell slot the same way the
+                // spell picker does — through setSpentSlotsByCharacter.
+                const key = selectedCharacterKey;
+                if (!key) return;
+                setSpentSlotsByCharacter((prev) => {
+                  const charSpent = prev[key] || {};
+                  return {
+                    ...prev,
+                    [key]: {
+                      ...charSpent,
+                      [slotLevel]: (charSpent[slotLevel] || 0) + 1,
+                    },
+                  };
+                });
+              }}
+              onStunningStrike={({ saved }) => {
+                // Decrement ki (persists via combat_data.classResources)
+                // and apply the Stunned condition on save failure.
+                const key = selectedCharacterKey;
+                if (!key) return;
+                const cd = campaign?.combat_data || {};
+                const res = cd.classResources?.[key] || {};
+                const newRes = {
+                  ...(cd.classResources || {}),
+                  [key]: { ...res, kiRemaining: Math.max(0, (res.kiRemaining ?? 0) - 1) },
+                };
+                const newData = { ...cd, classResources: newRes };
+                queryClient.setQueryData(['campaign', campaignId], (old) =>
+                  old ? { ...old, combat_data: newData } : old,
+                );
+                base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+                if (!saved && combatState.target) {
+                  const tKey = combatState.target.uniqueId || combatState.target.id;
+                  if (tKey) {
+                    setActiveConditions((prev) => {
+                      const cur = prev[tKey] || [];
+                      if (cur.includes('Stunned')) return prev;
+                      return { ...prev, [tKey]: [...cur, 'Stunned'] };
+                    });
+                  }
+                }
+              }}
+              onBardicInspirationUse={() => {
+                // Strip the inspiration off the actor combatant.
+                const actorKey = getCharacterKey(selectedCharacter);
+                if (actorKey) clearBardicInspiration(actorKey);
+              }}
               homebrewRules={campaign?.homebrew_rules}
 
               // Spectator Props
@@ -2607,6 +2766,25 @@ export default function GMPanel() {
                   concentrationByCharacter={concentrationByCharacter}
                   onSelectTarget={(target) => {
                     if (combatState.step !== 'selecting_target') return;
+                    // Bardic Inspiration: ally-only targeting. Store
+                    // the inspiration die on the target combatant in
+                    // combat_data.order and exit targeting mode.
+                    if (combatState.action?.type === 'bardic_inspiration') {
+                      const targetFaction = getFaction(target);
+                      if (targetFaction !== 'player' && targetFaction !== 'ally') {
+                        toast.error('Bardic Inspiration can only target allies.');
+                        return;
+                      }
+                      const targetKey = target.uniqueId || target.id;
+                      const fromKey = combatState.action.fromKey;
+                      if (targetKey && fromKey && targetKey === fromKey) {
+                        toast.error('You cannot target yourself.');
+                        return;
+                      }
+                      applyBardicInspiration(target, combatState.action.die, combatState.action.fromName);
+                      setCombatState({ step: 'idle', isOpen: false, action: null, target: null });
+                      return;
+                    }
                     // Faction-aware targeting: non-GMs get a confirmation
                     // prompt when the target is an ally or a neutral.
                     // GMs can always target anything.
@@ -2773,6 +2951,7 @@ export default function GMPanel() {
               onOffhandAttack={handleOffhandAttack}
               classResources={campaign?.combat_data?.classResources?.[selectedCharacterKey] || {}}
               onClassAbility={handleClassAbility}
+              onToggleKi={handleToggleKi}
               onActionClick={((runAction) => {
                 // Always repoint the ref at the freshest closure so
                 // the level picker can re-enter this exact handler
@@ -3014,6 +3193,7 @@ export default function GMPanel() {
                               character?.attributes?.dex ||
                               character?.stats?.dexterity ||
                               10,
+                            fightingStyles: collectFightingStyles(character),
                           }).total
                         : null;
                       const ac = computedAC || character?.armor_class || 10;
@@ -5055,6 +5235,7 @@ function MonsterStatBlock({ character, className, onActionClick }) {
           character.attributes?.dex ||
           character.stats?.dexterity ||
           10,
+        fightingStyles: collectFightingStyles(character),
       }).total
     : null;
   const ac = computedACValue || stats.armor_class || character.armor_class || 10;
@@ -5436,6 +5617,23 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
                               title={`Charmed — ${combatant.charmDuration} turn${combatant.charmDuration === 1 ? '' : 's'} left`}
                             >
                               ×{combatant.charmDuration}
+                            </div>
+                          )}
+
+                          {/* Bardic Inspiration badge — a small ♪ in the
+                              Bard class tint when the combatant holds an
+                              unspent inspiration die. */}
+                          {combatant.bardicInspiration && (
+                            <div
+                              className="absolute -top-1 -left-1 text-[10px] font-black z-30 rounded-full w-5 h-5 flex items-center justify-center shadow-[0_0_8px_rgba(252,211,77,0.8)]"
+                              style={{
+                                backgroundColor: '#fbbf24',
+                                color: '#1f1303',
+                                border: '1.5px solid #fde68a',
+                              }}
+                              title={`Bardic Inspiration (${combatant.bardicInspiration.die})${combatant.bardicInspiration.fromName ? ` — from ${combatant.bardicInspiration.fromName}` : ''}`}
+                            >
+                              ♪
                             </div>
                           )}
 
