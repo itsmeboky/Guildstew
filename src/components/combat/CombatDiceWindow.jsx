@@ -17,21 +17,20 @@ import { hpBarColor } from "@/components/combat/hpColor";
 import { FACTION_STYLES, getFaction } from "@/utils/combatQueue";
 import { getConditionModifiers } from "@/components/combat/conditions";
 import { logCombatEvent } from "@/utils/combatLog";
+import {
+  abilityModifier as abilMod,
+  proficiencyBonus as profBonus,
+  SPELLCASTING_ABILITY,
+  CLASS_SAVING_THROWS,
+  sneakAttackDice as registrySneakAttackDice,
+  cantripScaling as registryCantripScaling,
+  CONCENTRATION,
+  getRule,
+  MONK_MARTIAL_ARTS_DIE,
+} from "@/components/dnd5e/dnd5eRules";
 
-const CLASS_SPELL_ABILITY = {
-  Wizard: "int",
-  Artificer: "int",
-  "Fighter (Eldritch Knight)": "int",
-  "Rogue (Arcane Trickster)": "int",
-  Cleric: "wis",
-  Druid: "wis",
-  Ranger: "wis",
-  Monk: "wis",
-  Bard: "cha",
-  Paladin: "cha",
-  Sorcerer: "cha",
-  Warlock: "cha",
-};
+// Alias so the existing in-file lookups don't need renaming.
+const CLASS_SPELL_ABILITY = SPELLCASTING_ABILITY;
 
 export default function CombatDiceWindow({
   isOpen,
@@ -422,13 +421,11 @@ export default function CombatDiceWindow({
     return cls.includes("monk");
   };
 
-  // Monk Martial Arts die scales with level.
+  // Monk Martial Arts die scales with level — from the registry.
   const monkMartialArtsDie = () => {
     const level = actor?.level || actor?.stats?.level || 1;
-    if (level >= 17) return "1d10";
-    if (level >= 11) return "1d8";
-    if (level >= 5) return "1d6";
-    return "1d4";
+    const dieFaces = MONK_MARTIAL_ARTS_DIE[level] || 4;
+    return `1d${dieFaces}`;
   };
 
   // Rogue Sneak Attack dice count. Requirements:
@@ -450,7 +447,7 @@ export default function CombatDiceWindow({
     const isRangedWeapon = !!weapon?.category?.includes?.("Ranged");
     if (!isFinesse && !isRangedWeapon) return 0;
     const level = actor?.level || actor?.stats?.level || 1;
-    return Math.ceil(level / 2);
+    return registrySneakAttackDice(level);
   };
 
   // Attack modifier (weapon or spell)
