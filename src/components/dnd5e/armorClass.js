@@ -79,8 +79,11 @@ function armorKindFromItem(item) {
  * @param {number} opts.dex        - DEX ability score (10 if missing)
  * @param {number} [opts.baseAC]   - natural AC for monsters / custom
  *                                    shells (defaults to 10)
+ * @param {Array}  [opts.fightingStyles] - list of fighting-style names
+ *                                    (strings or {name}). "Defense"
+ *                                    grants +1 AC while wearing armor.
  */
-export function computeArmorClass({ equipped, dex, baseAC = 10 }) {
+export function computeArmorClass({ equipped, dex, baseAC = 10, fightingStyles = [] }) {
   const dexScore = Number.isFinite(dex) ? dex : 10;
   const dexMod = abilityModifier(dexScore);
 
@@ -138,7 +141,20 @@ export function computeArmorClass({ equipped, dex, baseAC = 10 }) {
     breakdown.shield = { name: shield.name, bonus: shieldBonus };
   }
 
-  const total = bodyAC + shieldBonus;
+  // Fighting Style: Defense — +1 AC while wearing armor.
+  let defenseBonus = 0;
+  if (bodyArmor && Array.isArray(fightingStyles) && fightingStyles.length > 0) {
+    const hasDefense = fightingStyles.some((s) => {
+      const name = typeof s === 'string' ? s : s?.name || '';
+      return /^\s*defense\s*$/i.test(name);
+    });
+    if (hasDefense) defenseBonus = 1;
+  }
+  if (defenseBonus > 0) {
+    breakdown.defense = defenseBonus;
+  }
+
+  const total = bodyAC + shieldBonus + defenseBonus;
   breakdown.total = total;
   breakdown.kind = kind;
   return breakdown;
