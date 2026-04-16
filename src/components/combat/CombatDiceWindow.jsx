@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { RefreshCw, X, Swords } from "lucide-react";
+import { RefreshCw, X, Swords, Music } from "lucide-react";
 import DiceRoller from "@/components/dice/DiceRoller";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
@@ -27,6 +27,9 @@ import {
   CONCENTRATION,
   getRule,
   MONK_MARTIAL_ARTS_DIE,
+  divineSmiteDice,
+  spellSaveDC as spellSaveDCFn,
+  getSpellSlots as getSpellSlotsFromRegistry,
 } from "@/components/dnd5e/dnd5eRules";
 
 // Alias so the existing in-file lookups don't need renaming.
@@ -54,6 +57,26 @@ export default function CombatDiceWindow({
   spellDataList = [],
   extraAttackInfo = null, // { current: 2, total: 3 } → "Attack 2 of 3"
   homebrewRules = null,   // campaign.homebrew_rules — for getRule() overrides
+  // Post-hit class features (Divine Smite, Stunning Strike, Bardic
+  // Inspiration consumption). These hooks let the parent spend the
+  // resource, apply conditions, and update combat_data.
+  //
+  //   spentSlots           : { [level]: spentCount } — caller's map of
+  //                          spell slots already burned this combat.
+  //                          Used to determine which Paladin slots are
+  //                          available for Divine Smite.
+  //   onDivineSmite        : (slotLevel) => void — caller should spend
+  //                          the slot in its own state/store.
+  //   onStunningStrike     : ({ saved, dc, roll }) => void — caller
+  //                          should decrement ki, apply the Stunned
+  //                          condition on save failure, and log.
+  //   onBardicInspirationUse : ({ roll, newTotal, rollKind }) => void
+  //                          Caller removes the inspiration from the
+  //                          actor combatant record.
+  spentSlots = {},
+  onDivineSmite,
+  onStunningStrike,
+  onBardicInspirationUse,
 }) {
   const [selectedAction, setSelectedAction] = useState(initialAction);
   const [attackRoll, setAttackRoll] = useState(null);
@@ -76,6 +99,19 @@ export default function CombatDiceWindow({
   const [currentDice, setCurrentDice] = useState("d20");
   const [campaignConfig, setCampaignConfig] = useState(null);
   const [initiativeRoll, setInitiativeRoll] = useState(null);
+  // Post-hit prompt state. postHitOptions is a set of strings the
+  // actor qualifies for on this hit ('divine_smite', 'stunning_strike').
+  // postHitDecisions tracks whether each prompt has been resolved
+  // (null = pending). bonusDamage carries the extra dice Divine Smite
+  // will add on top of weapon damage.
+  const [postHitOptions, setPostHitOptions] = useState([]);
+  const [postHitDecisions, setPostHitDecisions] = useState({});
+  const [bonusDamage, setBonusDamage] = useState(null);
+  // Bardic Inspiration prompt — shown after any d20 roll when the
+  // actor has `actor.bardicInspiration` set. The player can opt to
+  // consume the die to add to the roll. `inspirationUsed` prevents
+  // double-consumption if the user clicks more than once.
+  const [inspirationConsumed, setInspirationConsumed] = useState(false);
 
   // Flow type comes from the resolved action produced by actionResolver.resolveAction
   const resolved = selectedAction?.resolved || null;
@@ -324,6 +360,10 @@ export default function CombatDiceWindow({
     setIsRolling(false);
     setCurrentDice("d20");
     setIsCrit(false);
+    setPostHitOptions([]);
+    setPostHitDecisions({});
+    setBonusDamage(null);
+    setInspirationConsumed(false);
   }, [isOpen, initialAction, mode]);
 
   // Spectator sync (follow campaign.combat_data.active_encounter)
@@ -523,6 +563,47 @@ export default function CombatDiceWindow({
     return attackMod;
   };
 
+  // Paladin spell-slot availability for Divine Smite. The caller hands
+  // us their spentSlots map and we compute how many slots remain at
+  // each level using the registry's getSpellSlots table.
+  const getPaladinSlotsLeft = React.useCallback(() => {
+    const actorClass = actor?.class || actor?.stats?.class || '';
+    if (!/paladin/i.test(String(actorClass))) return [];
+    const level = actor?.level || actor?.stats?.level || 1;
+    const slotsTable = getSpellSlotsFromRegistry('Paladin', level);
+    if (!Array.isArray(slotsTable)) return [];
+    return slotsTable.map((max, idx) => {
+      const slotLevel = idx + 1;
+      const spent = (spentSlots || {})[slotLevel] || 0;
+      return { slotLevel, max, spent, remaining: Math.max(0, max - spent) };
+    }).filter((s) => s.max > 0);
+  }, [actor, spentSlots]);
+
+  const computePostHitOptions = React.useCallback(() => {
+    const opts = [];
+    const actorClass = actor?.class || actor?.stats?.class || '';
+    const actorLevel = actor?.level || actor?.stats?.level || 1;
+    const mode = selectedAction?.mode;
+    // Both Divine Smite and Stunning Strike are "hit with a melee
+    // weapon attack" effects — we include Monk unarmed strikes since
+    // those count as melee weapon attacks for feature purposes.
+    const isMelee = mode === 'melee' || mode === 'unarmed' || mode === 'offhand';
+    if (!isMelee) return opts;
+    if (selectedAction?.type === 'spell') return opts;
+
+    // Divine Smite: Paladin 2+, any spell slot available.
+    if (/paladin/i.test(String(actorClass)) && actorLevel >= 2) {
+      const slots = getPaladinSlotsLeft();
+      if (slots.some((s) => s.remaining > 0)) opts.push('divine_smite');
+    }
+    // Stunning Strike: Monk 5+, at least 1 ki remaining.
+    if (/monk/i.test(String(actorClass)) && actorLevel >= 5) {
+      const kiRemaining = actor?.classResources?.kiRemaining ?? 0;
+      if (kiRemaining > 0) opts.push('stunning_strike');
+    }
+    return opts;
+  }, [actor, selectedAction, getPaladinSlotsLeft]);
+
   const handleAttackRoll = () => {
     setIsRolling(true);
     setCurrentDice("d20");
@@ -574,6 +655,19 @@ export default function CombatDiceWindow({
     setPhase("attack_result");
     onRoll && onRoll({ type: "attack_result", roll: result });
 
+    // On a hit, check whether the attacker qualifies for any post-hit
+    // class features (Divine Smite, Stunning Strike). If so, surface
+    // them as prompts alongside the ROLL DAMAGE button.
+    if (willHit) {
+      const opts = computePostHitOptions();
+      if (opts.length > 0) {
+        setPostHitOptions(opts);
+        const decisions = {};
+        for (const o of opts) decisions[o] = null;
+        setPostHitDecisions(decisions);
+      }
+    }
+
     // Campaign log — attack result line. Includes the advantage /
     // disadvantage prefix and the pair-dice readout when relevant so
     // the feed matches the on-screen animation.
@@ -616,6 +710,149 @@ export default function CombatDiceWindow({
         },
       );
     }
+  };
+
+  // Divine Smite decision. Clicking a slot level commits that slot,
+  // queues up the radiant dice as bonus damage, and marks the smite
+  // decision resolved. The actual dice roll happens inside the normal
+  // damage flow, which reads bonusDamage off state.
+  // Bardic Inspiration consumption. Rolls the stored die, adds it to
+  // the current roll's total, recomputes success/failure, and asks
+  // the parent to strip the inspiration off the actor combatant. Only
+  // available once per roll.
+  const rollBardicInspiration = React.useCallback((kind) => {
+    const insp = actor?.bardicInspiration;
+    if (!insp?.die || inspirationConsumed) return;
+    const faces = parseInt(String(insp.die).replace(/\D/g, ''), 10) || 8;
+    const rolled = Math.floor(Math.random() * faces) + 1;
+
+    let newTotal = 0;
+    if (kind === 'attack' && attackRoll) {
+      newTotal = attackRoll.total + rolled;
+      const targetAC = target?.stats?.armor_class || target?.armor_class || 10;
+      const willHit = attackRoll.d20 === 20 || newTotal >= targetAC;
+      setAttackRoll({ ...attackRoll, total: newTotal, inspirationBonus: rolled });
+      // Re-evaluate post-hit options if the roll just flipped to hit.
+      if (willHit && !((attackRoll.d20 === 20) || (attackRoll.total >= targetAC))) {
+        const opts = computePostHitOptions();
+        if (opts.length > 0) {
+          setPostHitOptions(opts);
+          const decisions = {};
+          for (const o of opts) decisions[o] = null;
+          setPostHitDecisions(decisions);
+        }
+      }
+    } else if (kind === 'skill' && skillCheckRoll) {
+      newTotal = skillCheckRoll.total + rolled;
+      setSkillCheckRoll({ ...skillCheckRoll, total: newTotal, inspirationBonus: rolled });
+    } else if (kind === 'save' && savingThrowRoll) {
+      newTotal = savingThrowRoll.total + rolled;
+      const success = newTotal >= savingThrowRoll.dc;
+      setSavingThrowRoll({ ...savingThrowRoll, total: newTotal, success, inspirationBonus: rolled });
+    }
+
+    setInspirationConsumed(true);
+    if (campaignId) {
+      logCombatEvent(
+        campaignId,
+        `${actor?.name || 'Actor'} uses Bardic Inspiration! +${rolled} (new total: ${newTotal})`,
+        {
+          event: 'bardic_inspiration_used',
+          category: 'spell',
+          actor: actor?.name,
+          die: insp.die,
+          roll: rolled,
+          newTotal,
+        },
+      );
+    }
+    if (typeof onBardicInspirationUse === 'function') {
+      onBardicInspirationUse({ roll: rolled, newTotal, rollKind: kind });
+    }
+    onRoll && onRoll({
+      type: 'bardic_inspiration_used',
+      actorId: actor?.id || actor?.uniqueId,
+      roll: rolled,
+      newTotal,
+      rollKind: kind,
+    });
+  }, [actor, attackRoll, skillCheckRoll, savingThrowRoll, inspirationConsumed, target, campaignId, onBardicInspirationUse, onRoll, computePostHitOptions]);
+
+  const handleSmiteChoice = (slotLevel) => {
+    if (slotLevel === 'skip') {
+      setPostHitDecisions((prev) => ({ ...prev, divine_smite: 'skip' }));
+      return;
+    }
+    const tType = (target?.stats?.type || target?.creature_type || '').toString().toLowerCase();
+    const isUndeadOrFiend = /undead|fiend/.test(tType);
+    const dice = divineSmiteDice(slotLevel, isUndeadOrFiend);
+    setBonusDamage({ dice, type: 'radiant', label: 'Divine Smite', slotLevel });
+    setPostHitDecisions((prev) => ({ ...prev, divine_smite: slotLevel }));
+    if (typeof onDivineSmite === 'function') onDivineSmite(slotLevel);
+    if (campaignId) {
+      logCombatEvent(
+        campaignId,
+        `${actor?.name || 'Actor'} calls upon divine power! (+${dice} radiant)`,
+        {
+          event: 'divine_smite',
+          category: 'attack',
+          actor: actor?.name,
+          target: target?.name,
+          slotLevel,
+          dice,
+          isUndeadOrFiend,
+        },
+      );
+    }
+    onRoll && onRoll({
+      type: 'divine_smite',
+      slotLevel,
+      dice,
+    });
+  };
+
+  // Stunning Strike decision. Clicking Spend Ki rolls the target's CON
+  // save silently, resolves success/failure, and signals the parent to
+  // decrement ki and apply the Stunned condition on failure.
+  const handleStunningStrike = (spend) => {
+    if (!spend) {
+      setPostHitDecisions((prev) => ({ ...prev, stunning_strike: 'skip' }));
+      return;
+    }
+    const actorLevel = actor?.level || actor?.stats?.level || 1;
+    const actorWis = actor?.attributes?.wis || actor?.stats?.wisdom || 10;
+    const dc = spellSaveDCFn(profBonus(actorLevel), abilMod(actorWis));
+    const conMod = abilMod(
+      target?.attributes?.con ||
+      target?.stats?.constitution ||
+      target?.constitution ||
+      10,
+    );
+    // Target CON save proficiency — if the target is proficient add
+    // their proficiency bonus (CR-derived for monsters, level-derived
+    // for characters). We don't track target proficiencies in detail,
+    // so fall back to just their CON mod.
+    const d20 = Math.floor(Math.random() * 20) + 1;
+    const total = d20 + conMod;
+    const saved = total >= dc;
+    setPostHitDecisions((prev) => ({ ...prev, stunning_strike: saved ? 'saved' : 'stunned' }));
+    if (typeof onStunningStrike === 'function') {
+      onStunningStrike({ saved, dc, roll: total, d20, conMod });
+    }
+    if (campaignId) {
+      const line = saved
+        ? `${target?.name || 'Target'} resists the stunning blow. (CON save ${total} vs DC ${dc})`
+        : `${target?.name || 'Target'} is Stunned! (CON save ${total} vs DC ${dc})`;
+      logCombatEvent(campaignId, line, {
+        event: saved ? 'stunning_strike_resisted' : 'stunning_strike_hit',
+        category: 'condition',
+        actor: actor?.name,
+        target: target?.name,
+        total,
+        dc,
+      });
+    }
+    onRoll && onRoll({ type: 'stunning_strike', saved, dc, roll: total });
   };
 
   const handleDamageRoll = () => {
@@ -747,6 +984,12 @@ export default function CombatDiceWindow({
     const critMaxAll = getRule(homebrewRules, 'combat.critical_hits.max_all');
     const critMaxFirst = getRule(homebrewRules, 'combat.critical_hits.max_first_roll_second');
 
+    // Per-die breakdown for the non-compound weapon branch. We keep
+    // each die's face + value so Great Weapon Fighting can reroll 1s
+    // and 2s and the UI can render the "~1~ → 4" strikethroughs.
+    let rolledDice = null;
+    let gwfRerolls = 0;
+
     if (isCompoundDice) {
       numDice = match ? parseInt(match[1], 10) : 1;
       total = rollDiceString(diceString);
@@ -766,35 +1009,75 @@ export default function CombatDiceWindow({
       }
     } else {
       numDice = match ? parseInt(match[1], 10) : 1;
+      rolledDice = [];
 
       if (isCrit) {
         if (critMaxAll) {
           // Max all: every die shows its maximum face.
           numDice *= 2;
-          total = numDice * faces;
+          for (let i = 0; i < numDice; i++) {
+            rolledDice.push({ faces, value: faces });
+          }
         } else if (critMaxFirst) {
           // Max first set, roll second set normally.
-          const maxFirst = numDice * faces;
-          let rolledSecond = roll;
-          for (let i = 1; i < numDice; i++) {
-            rolledSecond += Math.floor(Math.random() * faces) + 1;
+          for (let i = 0; i < numDice; i++) {
+            rolledDice.push({ faces, value: faces });
           }
-          total = maxFirst + rolledSecond;
+          rolledDice.push({ faces, value: roll });
+          for (let i = 1; i < numDice; i++) {
+            rolledDice.push({ faces, value: Math.floor(Math.random() * faces) + 1 });
+          }
           numDice *= 2; // for display purposes
         } else {
           // Default: double the number of dice.
           numDice *= 2;
-          total = roll;
+          rolledDice.push({ faces, value: roll });
           for (let i = 1; i < numDice; i++) {
-            total += Math.floor(Math.random() * faces) + 1;
+            rolledDice.push({ faces, value: Math.floor(Math.random() * faces) + 1 });
           }
         }
       } else {
-        total = roll;
+        rolledDice.push({ faces, value: roll });
         for (let i = 1; i < numDice; i++) {
-          total += Math.floor(Math.random() * faces) + 1;
+          rolledDice.push({ faces, value: Math.floor(Math.random() * faces) + 1 });
         }
       }
+
+      // Fighting Style: Great Weapon Fighting — reroll 1s and 2s on a
+      // weapon attack with a Two-Handed (or Versatile) melee weapon,
+      // taking the new roll even if it's also low. Skip when crits are
+      // set to max-all (no point rerolling a maxed die).
+      if (!critMaxAll && selectedAction?.type !== 'spell') {
+        const weapon = selectedAction?.weapon;
+        const weaponProps = Array.isArray(weapon?.properties) ? weapon.properties : [];
+        const isTwoHanded = weaponProps.some(
+          (p) => /two[-\s]?handed/i.test(String(p)) || /versatile/i.test(String(p))
+        );
+        const styles = [];
+        const primary = actor?.fighting_style || actor?.fightingStyle || '';
+        if (primary) styles.push(typeof primary === 'string' ? primary : primary?.name || '');
+        const arr = actor?.fighting_styles;
+        if (Array.isArray(arr)) {
+          for (const s of arr) styles.push(typeof s === 'string' ? s : s?.name || '');
+        }
+        const feats = actor?.features;
+        if (Array.isArray(feats)) {
+          for (const s of feats) styles.push(typeof s === 'string' ? s : s?.name || '');
+        }
+        const hasGWF = styles.some((s) => /great\s*weapon\s*fighting/i.test(String(s)));
+        if (hasGWF && isTwoHanded) {
+          rolledDice = rolledDice.map((d) => {
+            if (d.value <= 2) {
+              const reroll = Math.floor(Math.random() * d.faces) + 1;
+              gwfRerolls += 1;
+              return { ...d, original: d.value, value: reroll, rerolled: true };
+            }
+            return d;
+          });
+        }
+      }
+
+      total = rolledDice.reduce((s, d) => s + d.value, 0);
     }
 
     // Rogue Sneak Attack: add extra d6s when the sneak toggle is on, the
@@ -812,6 +1095,27 @@ export default function CombatDiceWindow({
       total += sneakDamage;
     }
 
+    // Divine Smite / other post-hit bonus damage (radiant, etc.). The
+    // dice expression lives on bonusDamage.dice (e.g. "3d8"). Crit
+    // doubles these dice the same as the weapon damage.
+    let bonusDamageTotal = 0;
+    let bonusDamageRolls = null;
+    if (bonusDamage?.dice) {
+      const bMatch = bonusDamage.dice.match(/^(\d+)d(\d+)$/);
+      if (bMatch) {
+        const bN = parseInt(bMatch[1], 10);
+        const bF = parseInt(bMatch[2], 10);
+        const totalDice = isCrit ? bN * 2 : bN;
+        bonusDamageRolls = [];
+        for (let i = 0; i < totalDice; i++) {
+          const v = Math.floor(Math.random() * bF) + 1;
+          bonusDamageRolls.push(v);
+          bonusDamageTotal += v;
+        }
+        total += bonusDamageTotal;
+      }
+    }
+
     const totalDamage = Math.max(0, total + mod);
     const result = {
       total: totalDamage,
@@ -820,6 +1124,11 @@ export default function CombatDiceWindow({
       isCrit,
       sneakDice: sneakDiceBase,
       sneakDamage,
+      rolledDice: rolledDice || undefined,
+      gwfRerolls,
+      bonusDamage: bonusDamage
+        ? { ...bonusDamage, total: bonusDamageTotal, rolls: bonusDamageRolls }
+        : undefined,
     };
     setDamageRoll(result);
     setIsRolling(false);
@@ -1780,29 +2089,58 @@ export default function CombatDiceWindow({
                       )}
 
                       {damageRoll && (
-                        <motion.div
-                          initial={{ scale: 0, y: 50 }}
-                          animate={{ scale: 1, y: 0 }}
-                          transition={{ type: "spring", bounce: 0.5 }}
-                          className="bg-gradient-to-br from-red-600 to-red-800 text-white w-32 h-32 rounded-full flex flex-col items-center justify-center shadow-[0_0_50px_rgba(220,38,38,0.8)] border-4 border-white z-50"
-                        >
-                          <span className="text-5xl font-black drop-shadow-md">
-                            {damageRoll.total}
-                          </span>
-                          <span className="text-xs font-bold uppercase tracking-widest opacity-90">
-                            Damage
-                          </span>
-                          {damageRoll.sneakDice > 0 && (
-                            <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-yellow-300 drop-shadow">
-                              +{damageRoll.sneakDice}d6 Sneak
+                        <div className="flex flex-col items-center gap-2">
+                          <motion.div
+                            initial={{ scale: 0, y: 50 }}
+                            animate={{ scale: 1, y: 0 }}
+                            transition={{ type: "spring", bounce: 0.5 }}
+                            className="bg-gradient-to-br from-red-600 to-red-800 text-white w-32 h-32 rounded-full flex flex-col items-center justify-center shadow-[0_0_50px_rgba(220,38,38,0.8)] border-4 border-white z-50"
+                          >
+                            <span className="text-5xl font-black drop-shadow-md">
+                              {damageRoll.total}
                             </span>
-                          )}
-                          {spellEffect?.effect === "damage_condition" && spellEffect.condition && (
-                            <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-purple-200 drop-shadow">
-                              +{spellEffect.condition}
+                            <span className="text-xs font-bold uppercase tracking-widest opacity-90">
+                              Damage
                             </span>
+                            {damageRoll.sneakDice > 0 && (
+                              <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-yellow-300 drop-shadow">
+                                +{damageRoll.sneakDice}d6 Sneak
+                              </span>
+                            )}
+                            {damageRoll.bonusDamage?.label && (
+                              <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-[#fbbf24] drop-shadow">
+                                +{damageRoll.bonusDamage.dice} {damageRoll.bonusDamage.label}
+                              </span>
+                            )}
+                            {spellEffect?.effect === "damage_condition" && spellEffect.condition && (
+                              <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-purple-200 drop-shadow">
+                                +{spellEffect.condition}
+                              </span>
+                            )}
+                          </motion.div>
+                          {damageRoll.gwfRerolls > 0 && Array.isArray(damageRoll.rolledDice) && (
+                            <div className="mt-2 flex flex-wrap items-center justify-center gap-1 bg-black/60 border border-yellow-500/40 rounded-full px-3 py-1 max-w-xs pointer-events-auto">
+                              <span className="text-[9px] font-bold uppercase tracking-widest text-yellow-300 mr-1">
+                                GWF
+                              </span>
+                              {damageRoll.rolledDice.map((d, i) => (
+                                <span key={i} className="text-[10px] font-mono">
+                                  {d.rerolled ? (
+                                    <>
+                                      <span className="line-through text-red-300">{d.original}</span>
+                                      <span className="text-yellow-200"> → {d.value}</span>
+                                    </>
+                                  ) : (
+                                    <span className="text-slate-300">{d.value}</span>
+                                  )}
+                                  {i < damageRoll.rolledDice.length - 1 && (
+                                    <span className="text-slate-600">, </span>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
                           )}
-                        </motion.div>
+                        </div>
                       )}
                     </div>
                   )}
@@ -2043,6 +2381,47 @@ export default function CombatDiceWindow({
                   </div>
                 )}
 
+                {/* Bardic Inspiration prompt — surfaces whenever the
+                    actor has an unspent inspiration die and they've
+                    just completed a d20 roll (attack, skill, save).
+                    Consuming adds the roll to the d20 total and may
+                    flip the outcome. */}
+                {(() => {
+                  const insp = actor?.bardicInspiration;
+                  if (!insp?.die || inspirationConsumed || isSpectator) return null;
+                  let kind = null;
+                  if (phase === 'attack_result' && attackRoll) kind = 'attack';
+                  else if (phase === 'check_result' && skillCheckRoll) kind = 'skill';
+                  else if (phase === 'save_result' && savingThrowRoll) kind = 'save';
+                  if (!kind) return null;
+                  return (
+                    <div className="w-full bg-gradient-to-r from-[#fbbf24]/20 to-[#f59e0b]/10 border border-[#fbbf24]/50 rounded-2xl p-3 flex items-center justify-between gap-2 mb-3">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-[0.22em] text-[#fbbf24] font-black flex items-center gap-1">
+                          <Music className="w-3 h-3" /> Bardic Inspiration
+                        </span>
+                        <span className="text-[11px] text-white font-bold">
+                          Use inspiration? +{insp.die}
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => rollBardicInspiration(kind)}
+                          className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-[#fbbf24] text-[#050816] hover:bg-[#fde68a] transition-colors"
+                        >
+                          Use
+                        </button>
+                        <button
+                          onClick={() => setInspirationConsumed(true)}
+                          className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {phase === "ready" && flowType === "attack" && (
                   <div className="w-full flex flex-col items-center gap-2">
                     {extraAttackInfo && (
@@ -2114,12 +2493,125 @@ export default function CombatDiceWindow({
                 )}
 
                 {phase === "attack_result" && isHit && (
-                  <button
-                    onClick={handleDamageRoll}
-                    className="w-full bg-red-600 hover:bg-red-500 text-white text-2xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(220,38,38,0.4)] border-b-4 border-red-800 active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
-                  >
-                    ROLL DAMAGE
-                  </button>
+                  <div className="flex flex-col gap-3">
+                    {postHitOptions.length > 0 && (
+                      <div className="flex flex-col gap-3 bg-black/40 border border-white/10 rounded-2xl p-3">
+                        {postHitOptions.includes('divine_smite') && (() => {
+                          const decided = postHitDecisions.divine_smite;
+                          const slots = getPaladinSlotsLeft();
+                          return (
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[11px] uppercase tracking-[0.22em] text-[#fbbf24] font-black flex items-center gap-1">
+                                  <Swords className="w-3 h-3" /> Divine Smite?
+                                </span>
+                                {decided !== null && (
+                                  <span className="text-[9px] uppercase tracking-widest text-slate-400">
+                                    {decided === 'skip' ? 'Skipped' : `L${decided} slot spent`}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-slate-400 mb-2">
+                                Expend a spell slot for extra radiant damage.
+                              </p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {slots.map(({ slotLevel, remaining }) => {
+                                  const disabled = remaining <= 0 || decided !== null;
+                                  const selected = decided === slotLevel;
+                                  return (
+                                    <button
+                                      key={slotLevel}
+                                      disabled={disabled}
+                                      onClick={() => handleSmiteChoice(slotLevel)}
+                                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 rounded-lg border transition-colors ${
+                                        selected
+                                          ? 'bg-[#fbbf24] text-[#050816] border-[#fbbf24]'
+                                          : disabled
+                                          ? 'bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed'
+                                          : 'bg-[#fbbf24]/10 text-[#fbbf24] border-[#fbbf24]/60 hover:bg-[#fbbf24]/25'
+                                      }`}
+                                    >
+                                      L{slotLevel} ({remaining})
+                                    </button>
+                                  );
+                                })}
+                                <button
+                                  disabled={decided !== null}
+                                  onClick={() => handleSmiteChoice('skip')}
+                                  className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 rounded-lg border transition-colors ${
+                                    decided === 'skip'
+                                      ? 'bg-slate-600 text-white border-slate-400'
+                                      : decided !== null
+                                      ? 'bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed'
+                                      : 'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700'
+                                  }`}
+                                >
+                                  No Smite
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {postHitOptions.includes('stunning_strike') && (() => {
+                          const decided = postHitDecisions.stunning_strike;
+                          const kiRemaining = actor?.classResources?.kiRemaining ?? 0;
+                          const canSpend = kiRemaining > 0 && decided === null;
+                          return (
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[11px] uppercase tracking-[0.22em] text-[#37F2D1] font-black">
+                                  💥 Stunning Strike? (1 ki)
+                                </span>
+                                {decided !== null && (
+                                  <span className="text-[9px] uppercase tracking-widest text-slate-400">
+                                    {decided === 'skip' ? 'Skipped' : decided === 'saved' ? 'Resisted' : 'Stunned!'}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-slate-400 mb-2">
+                                Target makes CON save or is Stunned until end of your next turn.
+                              </p>
+                              <div className="flex gap-2">
+                                <button
+                                  disabled={!canSpend}
+                                  onClick={() => handleStunningStrike(true)}
+                                  className={`flex-1 text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg border transition-colors ${
+                                    decided === 'saved' || decided === 'stunned'
+                                      ? 'bg-[#37F2D1] text-[#050816] border-[#37F2D1]'
+                                      : canSpend
+                                      ? 'bg-[#37F2D1]/10 text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/25'
+                                      : 'bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed'
+                                  }`}
+                                >
+                                  Spend Ki
+                                </button>
+                                <button
+                                  disabled={decided !== null}
+                                  onClick={() => handleStunningStrike(false)}
+                                  className={`flex-1 text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg border transition-colors ${
+                                    decided === 'skip'
+                                      ? 'bg-slate-600 text-white border-slate-400'
+                                      : decided !== null
+                                      ? 'bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed'
+                                      : 'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700'
+                                  }`}
+                                >
+                                  Skip
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                    <button
+                      onClick={handleDamageRoll}
+                      className="w-full bg-red-600 hover:bg-red-500 text-white text-2xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(220,38,38,0.4)] border-b-4 border-red-800 active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
+                    >
+                      ROLL DAMAGE
+                    </button>
+                  </div>
                 )}
 
                 {(phase === "damage_result" ||
