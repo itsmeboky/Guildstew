@@ -20,7 +20,7 @@ const classes = [
     primaryAbility: "Strength",
     savingThrows: ["Strength", "Constitution"],
     features: ["Rage", "Unarmored Defense"],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/a6652f2d8_Barbarian1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/a6652f2d8_Barbarian1.png"
   },
   {
     name: "Bard",
@@ -30,7 +30,7 @@ const classes = [
     primaryAbility: "Charisma",
     savingThrows: ["Dexterity", "Charisma"],
     features: ["Spellcasting", "Bardic Inspiration"],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/cbe7f7dba_Bard1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/cbe7f7dba_Bard1.png"
   },
   {
     name: "Cleric",
@@ -40,7 +40,7 @@ const classes = [
     primaryAbility: "Wisdom",
     savingThrows: ["Wisdom", "Charisma"],
     features: ["Spellcasting", "Divine Domain"],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/15fe6ef24_Cleric1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/15fe6ef24_Cleric1.png"
   },
   {
     name: "Druid",
@@ -50,7 +50,7 @@ const classes = [
     primaryAbility: "Wisdom",
     savingThrows: ["Intelligence", "Wisdom"],
     features: ["Spellcasting", "Wild Shape"],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/ef43c9ff2_Druid1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/ef43c9ff2_Druid1.png"
   },
   {
     name: "Fighter",
@@ -60,7 +60,7 @@ const classes = [
     primaryAbility: "Strength or Dexterity",
     savingThrows: ["Strength", "Constitution"],
     features: ["Fighting Style", "Second Wind"],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/5e1b2cd68_Fighter1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/5e1b2cd68_Fighter1.png"
   },
   {
     name: "Monk",
@@ -70,7 +70,7 @@ const classes = [
     primaryAbility: "Dexterity & Wisdom",
     savingThrows: ["Strength", "Dexterity"],
     features: ["Unarmored Defense", "Martial Arts"],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/f2e85e13a_Monk1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/f2e85e13a_Monk1.png"
   },
   {
     name: "Paladin",
@@ -80,7 +80,7 @@ const classes = [
     primaryAbility: "Strength & Charisma",
     savingThrows: ["Wisdom", "Charisma"],
     features: ["Divine Sense", "Lay on Hands"],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/1eb7cd2f2_Paladin1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/1eb7cd2f2_Paladin1.png"
   },
   {
     name: "Ranger",
@@ -90,7 +90,7 @@ const classes = [
     primaryAbility: "Dexterity & Wisdom",
     savingThrows: ["Strength", "Dexterity"],
     features: ["Favored Enemy", "Natural Explorer"],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/748e5be38_Ranger1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/748e5be38_Ranger1.png"
   },
   {
     name: "Rogue",
@@ -100,7 +100,7 @@ const classes = [
     primaryAbility: "Dexterity",
     savingThrows: ["Dexterity", "Intelligence"],
     features: ["Sneak Attack", "Thieves' Cant"],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/a66f2aac1_Rogue1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/a66f2aac1_Rogue1.png"
   },
   {
     name: "Sorcerer",
@@ -110,7 +110,7 @@ const classes = [
     primaryAbility: "Charisma",
     savingThrows: ["Constitution", "Charisma"],
     features: ["Spellcasting", "Sorcerous Origin"],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/6f5b501db_Sorceror1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/6f5b501db_Sorceror1.png"
   },
   {
     name: "Warlock",
@@ -120,7 +120,7 @@ const classes = [
     primaryAbility: "Charisma",
     savingThrows: ["Wisdom", "Charisma"],
     features: ["Otherworldly Patron", "Pact Magic"],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/184c98268_Warlock1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/184c98268_Warlock1.png"
   },
   {
     name: "Wizard",
@@ -130,7 +130,7 @@ const classes = [
     primaryAbility: "Intelligence",
     savingThrows: ["Intelligence", "Wisdom"],
     features: ["Spellcasting", "Arcane Recovery"],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/94cfaa28a_Wizard1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/94cfaa28a_Wizard1.png"
   }
 ];
 
