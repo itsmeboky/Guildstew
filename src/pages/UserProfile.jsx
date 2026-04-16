@@ -17,6 +17,8 @@ import { createPageUrl } from "@/utils";
 import { motion } from "framer-motion";
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
 import { Link } from "react-router-dom";
+import PostComments from "@/components/profile/PostComments";
+import { uploadFile } from "@/utils/uploadFile";
 
 export default function UserProfile() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -229,7 +231,7 @@ export default function UserProfile() {
     mutationFn: async (data) => {
       let imageUrl = null;
       if (postImage) {
-        const { file_url } = await base44.integrations.Core.UploadFile({ file: postImage });
+        const { file_url } = await uploadFile(postImage, 'avatars', `${currentUser?.id || 'anon'}/posts`);
         imageUrl = file_url;
       }
 
@@ -268,6 +270,51 @@ export default function UserProfile() {
       queryClient.invalidateQueries({ queryKey: ['userPosts', userId] });
       setNewPost("");
       setPostImage(null);
+    }
+  });
+
+  // Visitors can still like + comment on another user's posts but
+  // can't edit or delete them (those buttons aren't rendered here).
+  const likePostMutation = useMutation({
+    mutationFn: ({ postId, likes }) => base44.entities.Post.update(postId, { likes }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userPosts', userId] });
+    }
+  });
+  const handleLikePost = (post) => {
+    if (!currentUser?.id) return;
+    const likes = Array.isArray(post.likes) ? post.likes : [];
+    const hasLiked = likes.includes(currentUser.id);
+    const nextLikes = hasLiked
+      ? likes.filter((id) => id !== currentUser.id)
+      : [...likes, currentUser.id];
+    likePostMutation.mutate({ postId: post.id, likes: nextLikes });
+  };
+  const addCommentMutation = useMutation({
+    mutationFn: async ({ post, content }) => {
+      const comments = Array.isArray(post.comments) ? post.comments : [];
+      const next = [...comments, {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        user_id: currentUser?.id,
+        username: currentUser?.username || currentUser?.full_name || 'Unknown',
+        avatar_url: currentUser?.avatar_url || null,
+        content,
+        created_at: new Date().toISOString(),
+      }];
+      return base44.entities.Post.update(post.id, { comments: next });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userPosts', userId] });
+    }
+  });
+  const deleteCommentMutation = useMutation({
+    mutationFn: async ({ post, commentId }) => {
+      const comments = Array.isArray(post.comments) ? post.comments : [];
+      const next = comments.filter((c) => c.id !== commentId);
+      return base44.entities.Post.update(post.id, { comments: next });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userPosts', userId] });
     }
   });
 
@@ -612,15 +659,25 @@ export default function UserProfile() {
                         </a>
                       )}
                       <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-1 text-gray-400">
-                          <Heart className={`w-5 h-5 ${hasLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                        <button
+                          type="button"
+                          onClick={() => handleLikePost(post)}
+                          disabled={!currentUser?.id || likePostMutation.isPending}
+                          className={`flex items-center gap-1 transition-colors ${
+                            hasLiked ? 'text-red-500' : 'text-gray-400 hover:text-red-500'
+                          }`}
+                        >
+                          <Heart className={`w-5 h-5 ${hasLiked ? 'fill-current' : ''}`} />
                           <span className="text-sm">{(post.likes || []).length}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-gray-400">
-                          <MessageCircle className="w-5 h-5" />
-                          <span className="text-sm">0</span>
-                        </div>
+                        </button>
                       </div>
+                      <PostComments
+                        post={post}
+                        currentUser={currentUser}
+                        onAddComment={(content) => addCommentMutation.mutate({ post, content })}
+                        onDeleteComment={(commentId) => deleteCommentMutation.mutate({ post, commentId })}
+                        adding={addCommentMutation.isPending}
+                      />
                     </motion.div>
                   );
                 })}

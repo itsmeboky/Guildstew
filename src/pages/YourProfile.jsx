@@ -11,6 +11,8 @@ import { motion } from "framer-motion";
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
 import { Link } from "react-router-dom";
 import EditProfileDialog from "@/components/profile/EditProfileDialog";
+import PostComments from "@/components/profile/PostComments";
+import { uploadFile } from "@/utils/uploadFile";
 
 export default function YourProfile() {
   const [editingBio, setEditingBio] = useState(false);
@@ -157,7 +159,7 @@ console.log('PROFILE PAGE USER:', user)
     mutationFn: async (data) => {
       let imageUrl = null;
       if (postImage) {
-        const { file_url } = await base44.integrations.Core.UploadFile({ file: postImage });
+        const { file_url } = await uploadFile(postImage, 'avatars', `${user.id}/posts`);
         imageUrl = file_url;
       }
 
@@ -219,6 +221,36 @@ console.log('PROFILE PAGE USER:', user)
 
   const deletePostMutation = useMutation({
     mutationFn: (postId) => base44.entities.Post.delete(postId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userPosts'] });
+    }
+  });
+
+  // Comments live as a JSONB array on the post row itself. Appending
+  // a new comment is a JSONB array set — read current, push, write.
+  const addCommentMutation = useMutation({
+    mutationFn: async ({ post, content }) => {
+      const comments = Array.isArray(post.comments) ? post.comments : [];
+      const next = [...comments, {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        user_id: user.id,
+        username: user.username || user.full_name || 'Unknown',
+        avatar_url: user.avatar_url || null,
+        content,
+        created_at: new Date().toISOString(),
+      }];
+      return base44.entities.Post.update(post.id, { comments: next });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userPosts'] });
+    }
+  });
+  const deleteCommentMutation = useMutation({
+    mutationFn: async ({ post, commentId }) => {
+      const comments = Array.isArray(post.comments) ? post.comments : [];
+      const next = comments.filter((c) => c.id !== commentId);
+      return base44.entities.Post.update(post.id, { comments: next });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userPosts'] });
     }
@@ -687,11 +719,14 @@ console.log('PROFILE PAGE USER:', user)
                           <Heart className={`w-5 h-5 ${hasLiked ? 'fill-current' : ''}`} />
                           <span className="text-sm">{(post.likes || []).length}</span>
                         </button>
-                        <button className="flex items-center gap-1 text-gray-400 hover:text-[#37F2D1] transition-colors">
-                          <MessageCircle className="w-5 h-5" />
-                          <span className="text-sm">0</span>
-                        </button>
                       </div>
+                      <PostComments
+                        post={post}
+                        currentUser={user}
+                        onAddComment={(content) => addCommentMutation.mutate({ post, content })}
+                        onDeleteComment={(commentId) => deleteCommentMutation.mutate({ post, commentId })}
+                        adding={addCommentMutation.isPending}
+                      />
                     </motion.div>
                   );
                 })}
