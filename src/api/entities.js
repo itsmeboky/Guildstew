@@ -109,6 +109,7 @@ export const entities = {
   Sect:                 createEntity('sects'),
   SessionReminder:      createEntity('session_reminders'),
   Spell:                createEntity('spells'),
+  TradeOffer:           createEntity('trade_offers'),
   User:                 createEntity('user_profiles'),
   UserProfile:          createEntity('user_profiles'),
   WorldLoreComment:     createEntity('world_lore_comments'),
