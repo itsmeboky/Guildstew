@@ -141,13 +141,26 @@ const BLANK_SPELL = {
   components: { v: true, s: true, m: false, material: "" },
   duration: "Instantaneous",
   description: "",
-  higher_levels: "",
+  higher_level: "",
   classes: [],
   effect_type: "Damage",
-  dice: "",
+  // Damage-specific
+  damage_dice: "",
   damage_type: "fire",
-  save: "",
-  upcast_bonus: "",
+  resolution: "save",      // 'save' | 'attack'
+  save: "DEX",             // which save to roll when resolution === 'save'
+  half_on_save: true,      // half damage on a successful save
+  cantrip_scaling: false,
+  upcast_per_level: "",    // text expr, e.g., "1d6 per level above 3rd"
+  // Healing-specific
+  healing_dice: "",
+  add_spell_mod: true,
+  // Condition-specific
+  condition_applied: "Frightened",
+  condition_save: "WIS",
+  condition_duration: "1 minute",
+  // Buff / debuff / utility narrative
+  effect_description: "",
 };
 
 const BLANK_ABILITY = {
@@ -1938,12 +1951,120 @@ export function buildMonsterModifications(monster) {
 // can land without touching that plumbing. They currently pass the
 // input through untouched so any pre-existing spell/ability brew
 // round-trips cleanly.
+// Components may arrive as either an object ({v,s,m,material}) or a
+// concatenated string ("V, S, M (a pinch of sulfur)"). Normalize on
+// load so the form always edits the object shape.
+function parseComponents(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return {
+      v: !!value.v,
+      s: !!value.s,
+      m: !!value.m,
+      material: value.material || "",
+    };
+  }
+  const str = typeof value === "string" ? value : "";
+  const upper = str.toUpperCase();
+  const matMatch = str.match(/\(([^)]+)\)/);
+  return {
+    v: /\bV\b/.test(upper),
+    s: /\bS\b/.test(upper),
+    m: /\bM\b/.test(upper),
+    material: matMatch ? matMatch[1].trim() : "",
+  };
+}
+
+function formatComponents(c) {
+  if (!c) return "";
+  const parts = [];
+  if (c.v) parts.push("V");
+  if (c.s) parts.push("S");
+  if (c.m) parts.push("M");
+  let out = parts.join(", ");
+  if (c.m && c.material) out += ` (${c.material})`;
+  return out;
+}
+
 export function spellFromModifications(mods) {
   if (!mods || typeof mods !== "object") return { ...BLANK_SPELL };
-  return { ...BLANK_SPELL, ...mods };
+  return {
+    ...BLANK_SPELL,
+    ...mods,
+    // Favor the explicit keys from the registry but fall back to
+    // legacy aliases that older brews might have stored.
+    higher_level: mods.higher_level || mods.higher_levels || "",
+    components: parseComponents(mods.components),
+    classes: Array.isArray(mods.classes) ? mods.classes : [],
+    damage_dice: mods.damage_dice || mods.dice || mods.damage || "",
+    healing_dice: mods.healing_dice || mods.healing || "",
+    effect_type:
+      mods.effect_type
+      || (mods.damage ? "Damage" : mods.healing ? "Healing" : "Utility"),
+    resolution: mods.resolution
+      || (mods.attack_roll ? "attack" : mods.save ? "save" : "save"),
+    save: (mods.save || "DEX").toString().toUpperCase(),
+    condition_save: (mods.condition_save || "WIS").toString().toUpperCase(),
+  };
 }
+
 export function buildSpellModifications(spell) {
-  return { ...(spell || {}) };
+  if (!spell || typeof spell !== "object") return {};
+  const base = {
+    name: spell.name || "",
+    level: Number(spell.level) || 0,
+    school: spell.school || "Evocation",
+    casting_time: spell.casting_time || "1 action",
+    range: spell.range || "",
+    components: formatComponents(spell.components),
+    components_detail: { ...(spell.components || {}) }, // keep structured form for downstream consumers
+    duration: spell.duration || "Instantaneous",
+    description: spell.description || "",
+    higher_level: spell.higher_level || "",
+    classes: Array.isArray(spell.classes) ? spell.classes : [],
+    effect_type: (spell.effect_type || "Utility").toLowerCase(),
+    source: "homebrew",
+  };
+  const effect = (spell.effect_type || "").toLowerCase();
+  if (effect === "damage") {
+    return {
+      ...base,
+      damage: spell.damage_dice || "",
+      damage_dice: spell.damage_dice || "",
+      damage_type: spell.damage_type || "",
+      save: spell.resolution === "save" ? (spell.save || "DEX") : null,
+      attack_roll: spell.resolution === "attack",
+      half_on_save: spell.resolution === "save" ? !!spell.half_on_save : undefined,
+      cantrip_scaling: Number(spell.level) === 0 ? !!spell.cantrip_scaling : false,
+      upcast_per_level: spell.upcast_per_level || "",
+    };
+  }
+  if (effect === "healing") {
+    return {
+      ...base,
+      healing: spell.healing_dice || "",
+      healing_dice: spell.healing_dice || "",
+      add_spell_mod: !!spell.add_spell_mod,
+      upcast_per_level: spell.upcast_per_level || "",
+    };
+  }
+  if (effect === "condition") {
+    return {
+      ...base,
+      condition: spell.condition_applied || "",
+      condition_applied: spell.condition_applied || "",
+      save: spell.condition_save || "WIS",
+      condition_duration: spell.condition_duration || "",
+    };
+  }
+  if (effect === "buff" || effect === "debuff") {
+    return {
+      ...base,
+      effect_description: spell.effect_description || "",
+    };
+  }
+  // Utility — nothing extra to serialize beyond the narrative fields
+  // already captured by base.
+  return base;
 }
 export function abilityFromModifications(mods) {
   if (!mods || typeof mods !== "object") return { ...BLANK_ABILITY };
@@ -1953,16 +2074,340 @@ export function buildAbilityModifications(ability) {
   return { ...(ability || {}) };
 }
 
-// Temporary stubs for the not-yet-implemented Custom Spell and
-// Custom Ability forms. Keep the placeholders as inert panels so
-// the dialog renders without crashing if a user picks those types.
-function CustomSpellForm() {
+function CustomSpellForm({ spell, setSpell }) {
+  const patch = (fields) => setSpell((prev) => ({ ...prev, ...fields }));
+  const patchComponent = (key, value) => patch({
+    components: { ...(spell.components || {}), [key]: value },
+  });
+  const toggleClass = (cls) => {
+    const cur = Array.isArray(spell.classes) ? [...spell.classes] : [];
+    const idx = cur.indexOf(cls);
+    if (idx === -1) cur.push(cls);
+    else cur.splice(idx, 1);
+    patch({ classes: cur });
+  };
+
+  const effect = (spell.effect_type || "Utility").toLowerCase();
+  const isCantrip = Number(spell.level) === 0;
+
   return (
-    <p className="text-xs text-slate-400 italic text-center py-4">
-      Custom Spell form coming in the next homebrew pass.
-    </p>
+    <div className="space-y-4">
+      {/* --- Identity --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Field label="Name" required>
+          <Input
+            value={spell.name || ""}
+            onChange={(e) => patch({ name: e.target.value })}
+            placeholder="e.g., Arcane Barrage"
+            className="bg-[#0b1220] border-slate-700 text-white"
+          />
+        </Field>
+        <Field label="Level">
+          <Select
+            value={String(spell.level ?? 0)}
+            onValueChange={(v) => {
+              const n = Number(v);
+              // Leaving cantrip scaling on for a leveled spell would
+              // be a contradiction — flip it off on level change.
+              patch({ level: n, cantrip_scaling: n === 0 ? spell.cantrip_scaling : false });
+            }}
+          >
+            <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 10 }).map((_, i) => (
+                <SelectItem key={i} value={String(i)}>
+                  {i === 0 ? "Cantrip (0)" : `Level ${i}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="School">
+          <Select value={spell.school} onValueChange={(v) => patch({ school: v })}>
+            <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {SPELL_SCHOOLS.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Casting Time">
+          <Select value={spell.casting_time} onValueChange={(v) => patch({ casting_time: v })}>
+            <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {CASTING_TIMES.map((ct) => (<SelectItem key={ct} value={ct}>{ct}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Range">
+          <Input
+            value={spell.range || ""}
+            onChange={(e) => patch({ range: e.target.value })}
+            placeholder='e.g., 60 feet, Self, Touch, Self (30-foot cone)'
+            className="bg-[#0b1220] border-slate-700 text-white"
+          />
+        </Field>
+        <Field label="Duration">
+          <Input
+            value={spell.duration || ""}
+            onChange={(e) => patch({ duration: e.target.value })}
+            placeholder="Instantaneous, Concentration, up to 1 minute, 1 hour"
+            className="bg-[#0b1220] border-slate-700 text-white"
+          />
+        </Field>
+      </div>
+
+      {/* --- Components --- */}
+      <Field label="Components">
+        <div className="flex flex-wrap items-center gap-3">
+          {[
+            { key: "v", label: "V" },
+            { key: "s", label: "S" },
+            { key: "m", label: "M" },
+          ].map(({ key, label }) => {
+            const active = !!spell.components?.[key];
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => patchComponent(key, !active)}
+                className={`text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded border transition-colors ${
+                  active
+                    ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                    : "bg-[#0b1220] border-slate-700 text-slate-300 hover:border-[#37F2D1]/60"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+          {spell.components?.m && (
+            <Input
+              value={spell.components?.material || ""}
+              onChange={(e) => patchComponent("material", e.target.value)}
+              placeholder="e.g., a pinch of sulfur"
+              className="bg-[#0b1220] border-slate-700 text-white flex-1 min-w-[200px]"
+            />
+          )}
+        </div>
+      </Field>
+
+      {/* --- Description + upcast narrative --- */}
+      <Field label="Description" required>
+        <Textarea
+          value={spell.description || ""}
+          onChange={(e) => patch({ description: e.target.value })}
+          placeholder="What does this spell do? Save / attack details go here."
+          rows={4}
+          className="bg-[#0b1220] border-slate-700 text-white"
+        />
+      </Field>
+      <Field label="At Higher Levels">
+        <Textarea
+          value={spell.higher_level || ""}
+          onChange={(e) => patch({ higher_level: e.target.value })}
+          placeholder="What changes when cast using a higher-level slot? (optional)"
+          rows={2}
+          className="bg-[#0b1220] border-slate-700 text-white"
+        />
+      </Field>
+
+      {/* --- Classes --- */}
+      <Field label="Classes that can learn this spell">
+        <div className="flex flex-wrap gap-1.5">
+          {SPELL_CLASSES.map((cls) => {
+            const active = Array.isArray(spell.classes) && spell.classes.includes(cls);
+            return (
+              <button
+                key={cls}
+                type="button"
+                onClick={() => toggleClass(cls)}
+                className={`text-[10px] font-semibold px-2 py-1 rounded border transition-colors ${
+                  active
+                    ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                    : "bg-[#0b1220] border-slate-700 text-slate-300 hover:border-[#37F2D1]/60"
+                }`}
+              >
+                {cls}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+
+      {/* --- Mechanical effect --- */}
+      <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3 space-y-3">
+        <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Mechanical Effect</h4>
+        <Field label="Effect type">
+          <Select value={spell.effect_type} onValueChange={(v) => patch({ effect_type: v })}>
+            <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {SPELL_EFFECT_TYPES.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </Field>
+
+        {effect === "damage" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Field label="Damage dice">
+              <Input
+                value={spell.damage_dice || ""}
+                onChange={(e) => patch({ damage_dice: e.target.value })}
+                placeholder="e.g., 8d6"
+                className="bg-[#0b1220] border-slate-700 text-white"
+              />
+            </Field>
+            <Field label="Damage type">
+              <Select value={spell.damage_type} onValueChange={(v) => patch({ damage_type: v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DAMAGE_TYPES.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Resolution">
+              <RadioGroup
+                value={spell.resolution || "save"}
+                onValueChange={(v) => patch({ resolution: v })}
+                className="flex gap-3 mt-1"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem id="res-attack" value="attack" />
+                  <Label htmlFor="res-attack" className="text-xs text-slate-200">Spell Attack Roll</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem id="res-save" value="save" />
+                  <Label htmlFor="res-save" className="text-xs text-slate-200">Saving Throw</Label>
+                </div>
+              </RadioGroup>
+            </Field>
+            {spell.resolution === "save" && (
+              <Field label="Save ability">
+                <Select value={spell.save} onValueChange={(v) => patch({ save: v })}>
+                  <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SAVE_ABILITIES.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
+            {spell.resolution === "save" && (
+              <Field label="Half damage on save">
+                <div className="flex items-center gap-2 h-10">
+                  <Switch
+                    checked={!!spell.half_on_save}
+                    onCheckedChange={(c) => patch({ half_on_save: c })}
+                  />
+                  <span className="text-xs text-slate-300">{spell.half_on_save ? "Yes" : "No"}</span>
+                </div>
+              </Field>
+            )}
+            {isCantrip ? (
+              <Field label="Cantrip scaling (5/11/17)">
+                <div className="flex items-center gap-2 h-10">
+                  <Switch
+                    checked={!!spell.cantrip_scaling}
+                    onCheckedChange={(c) => patch({ cantrip_scaling: c })}
+                  />
+                  <span className="text-xs text-slate-300">{spell.cantrip_scaling ? "Scales with character level" : "No scaling"}</span>
+                </div>
+              </Field>
+            ) : (
+              <Field label="Upcast bonus">
+                <Input
+                  value={spell.upcast_per_level || ""}
+                  onChange={(e) => patch({ upcast_per_level: e.target.value })}
+                  placeholder='e.g., 1d6 per level above 3rd'
+                  className="bg-[#0b1220] border-slate-700 text-white"
+                />
+              </Field>
+            )}
+          </div>
+        )}
+
+        {effect === "healing" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Field label="Healing dice">
+              <Input
+                value={spell.healing_dice || ""}
+                onChange={(e) => patch({ healing_dice: e.target.value })}
+                placeholder="e.g., 1d8"
+                className="bg-[#0b1220] border-slate-700 text-white"
+              />
+            </Field>
+            <Field label="Add spellcasting modifier">
+              <div className="flex items-center gap-2 h-10">
+                <Switch
+                  checked={!!spell.add_spell_mod}
+                  onCheckedChange={(c) => patch({ add_spell_mod: c })}
+                />
+                <span className="text-xs text-slate-300">{spell.add_spell_mod ? "Yes" : "No"}</span>
+              </div>
+            </Field>
+            <Field label="Upcast bonus">
+              <Input
+                value={spell.upcast_per_level || ""}
+                onChange={(e) => patch({ upcast_per_level: e.target.value })}
+                placeholder='e.g., 1d8 per level above 1st'
+                className="bg-[#0b1220] border-slate-700 text-white"
+              />
+            </Field>
+          </div>
+        )}
+
+        {effect === "condition" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Field label="Condition applied">
+              <Select value={spell.condition_applied} onValueChange={(v) => patch({ condition_applied: v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent className="max-h-64">
+                  {Object.keys(CONDITION_COLORS).map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Save to resist">
+              <Select value={spell.condition_save} onValueChange={(v) => patch({ condition_save: v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SAVE_ABILITIES.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Duration">
+              <Input
+                value={spell.condition_duration || ""}
+                onChange={(e) => patch({ condition_duration: e.target.value })}
+                placeholder="e.g., 1 minute"
+                className="bg-[#0b1220] border-slate-700 text-white"
+              />
+            </Field>
+          </div>
+        )}
+
+        {(effect === "buff" || effect === "debuff") && (
+          <Field label="Effect description">
+            <Textarea
+              value={spell.effect_description || ""}
+              onChange={(e) => patch({ effect_description: e.target.value })}
+              placeholder="What does the buff / debuff do? Mechanical details go here."
+              rows={3}
+              className="bg-[#0b1220] border-slate-700 text-white"
+            />
+          </Field>
+        )}
+
+        {effect === "utility" && (
+          <p className="text-[11px] text-slate-500 italic">
+            Utility spells have no extra mechanical fields — the description captures the effect.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
+
+// Placeholder for the Custom Ability form — lands in the next pass.
 function CustomAbilityForm() {
   return (
     <p className="text-xs text-slate-400 italic text-center py-4">

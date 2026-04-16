@@ -332,6 +332,23 @@ function AddToCampaignDialog({ brew, currentUser, onClose }) {
           is_system: false,
           is_active: true,
         });
+      } else if (brew.category === "custom_spell") {
+        const mods = brew.modifications || {};
+        await base44.entities.Spell.create({
+          campaign_id: campaignId,
+          name: mods.name || brew.title || "Custom Spell",
+          level: Number(mods.level ?? 0),
+          school: mods.school || "Evocation",
+          casting_time: mods.casting_time || "1 action",
+          range: mods.range || "",
+          components: mods.components || "",
+          duration: mods.duration || "Instantaneous",
+          description: mods.description || brew.description || "",
+          higher_level: mods.higher_level || mods.higher_levels || "",
+          classes: Array.isArray(mods.classes) ? mods.classes : [],
+          source: "homebrew",
+          is_system: false,
+        });
       }
       // Every attach path also records the install so MyBrews can
       // surface the checkmark.
@@ -349,6 +366,8 @@ function AddToCampaignDialog({ brew, currentUser, onClose }) {
       queryClient.invalidateQueries({ queryKey: ["campaignItems", vars.campaignId] });
       queryClient.invalidateQueries({ queryKey: ["monsters", vars.campaignId] });
       queryClient.invalidateQueries({ queryKey: ["campaignMonsters", vars.campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaignSpells", vars.campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["spells", vars.campaignId] });
       toast.success("Added to campaign");
     },
     onError: (err) => {
