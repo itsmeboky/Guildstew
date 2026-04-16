@@ -1,3 +1,64 @@
+/* === Font face declarations ===
+   Cream: heading / display font for nav, section titles, CTAs.
+   OpenDyslexic: accessibility replacement for everything when
+   the dyslexic-friendly toggle is active. Both are loaded from
+   the Supabase storage bucket so they work in dev and prod
+   without bundling. */
+
+@font-face {
+  font-family: 'Cream';
+  src: url('https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/fonts/Cream/cream-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/fonts/OpenDyslexic/OpenDyslexic-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/fonts/OpenDyslexic/OpenDyslexic-Italic.otf') format('opentype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/fonts/OpenDyslexic/OpenDyslexic-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/fonts/OpenDyslexic/OpenDyslexic-BoldItalic.otf') format('opentype');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* === Font mode CSS custom properties ===
+   Default: Cream headings, Roboto body. When the root element
+   carries data-font-mode="dyslexic", every text switches to
+   OpenDyslexic automatically. */
+:root {
+  --font-heading: 'Cream', 'Georgia', serif;
+  --font-body: 'Roboto', 'Helvetica', 'Arial', sans-serif;
+}
+
+:root[data-font-mode="dyslexic"] {
+  --font-heading: 'OpenDyslexic', 'Comic Sans MS', sans-serif;
+  --font-body: 'OpenDyslexic', 'Comic Sans MS', sans-serif;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -168,4 +229,15 @@ button:focus-visible {
 @keyframes gs-concentration-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.7), 0 0 14px rgba(168, 85, 247, 0.45); }
   50%      { box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.25), 0 0 22px rgba(168, 85, 247, 0.8); }
+}
+
+/* === Base font assignments ===
+   body → Roboto (or OpenDyslexic in dyslexic mode)
+   headings → Cream (or OpenDyslexic in dyslexic mode) */
+body {
+  font-family: var(--font-body);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
 }
