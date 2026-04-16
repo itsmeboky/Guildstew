@@ -60,7 +60,14 @@ import {
   attacksPerAction,
   getRule,
   DEATH_RULES,
+  RAGE_DAMAGE_BONUS,
+  FIGHTING_STYLES,
 } from "@/components/dnd5e/dnd5eRules";
+import {
+  initClassResources,
+  getClassResources,
+  rageDamageBonus,
+} from "@/components/combat/classResources";
 import { toast } from "sonner";
 import { useTurnContext } from "@/components/combat/useTurnContext";
 
@@ -1283,15 +1290,28 @@ export default function GMPanel() {
       return Math.random() - 0.5;
     });
 
-    // Start Initiative Phase
+    // Start Initiative Phase. Initialize classResources for every
+    // combatant so ability buttons can read from combat_data.
+    const initialResources = {};
+    allCombatants.forEach((c) => {
+      const key = c.uniqueId || c.id;
+      // Player combatants carry class + level; monsters don't.
+      if (c.type === 'player' || c.class) {
+        // Look up the underlying character for attribute data.
+        const charData = characters.find(ch => ch.id === key || ch.name === c.name) || c;
+        initialResources[key] = initClassResources({ ...charData, ...c });
+      }
+    });
+
     base44.entities.Campaign.update(campaignId, {
       combat_active: true,
       combat_data: {
         stage: 'initiative',
-        order: allCombatants, // Provisional order, will be updated as players roll
+        order: allCombatants,
         rolls: {},
         currentTurnIndex: 0,
-        round: 1
+        round: 1,
+        classResources: initialResources,
       }
     });
 

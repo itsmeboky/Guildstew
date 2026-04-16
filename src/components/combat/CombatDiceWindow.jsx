@@ -500,7 +500,9 @@ export default function CombatDiceWindow({
     if (mode === "ranged" || isRangedWeapon) {
       // Ranged: always DEX. (Thrown finesse like a dagger is rare —
       // the GM can switch to melee mode for that case.)
-      return dexMod + proficiency;
+      // (I) Fighting Style: Archery → +2 to ranged attack rolls.
+      const archeryBonus = /archery/i.test(actor?.fighting_style || actor?.fightingStyle || '') ? 2 : 0;
+      return dexMod + proficiency + archeryBonus;
     }
     if (isFinesse || mode === "offhand") {
       // Finesse weapons (rapier, shortsword, scimitar, whip, dagger,
@@ -511,7 +513,14 @@ export default function CombatDiceWindow({
       return Math.max(strMod, dexMod) + proficiency;
     }
     // Default melee: STR.
-    return strMod + proficiency;
+    let attackMod = strMod + proficiency;
+
+    // (I) Fighting Style: Archery — +2 to ranged attack rolls.
+    const fStyle = actor?.fighting_style || actor?.fightingStyle || '';
+    if (/archery/i.test(fStyle) && (mode === 'ranged' || isRangedWeapon)) {
+      attackMod += 2;
+    }
+    return attackMod;
   };
 
   const handleAttackRoll = () => {
@@ -684,6 +693,22 @@ export default function CombatDiceWindow({
           return false;
         })();
         if (!hasTWF) mod = 0;
+      }
+
+      // (A) Rage damage bonus — melee STR attacks only.
+      if (actor?.classResources?.isRaging && !isRangedWeapon && mode !== 'ranged') {
+        const rageBonus = actor.classResources.rageDamageBonus || 2;
+        mod += rageBonus;
+      }
+
+      // (I) Fighting Style: Dueling — +2 damage when wielding a
+      // melee weapon in one hand and no other weapon.
+      const fightingStyle = actor?.fighting_style || actor?.fightingStyle || '';
+      if (/dueling/i.test(fightingStyle) && !isRangedWeapon && !actionIsOffHand && weapon) {
+        // "One hand, no other weapons" — we approximate by checking
+        // no weapon2 is equipped. Shield doesn't count as a weapon.
+        const hasOffhandWeapon = actor?.equipment?.weapon2;
+        if (!hasOffhandWeapon) mod += 2;
       }
     }
 
