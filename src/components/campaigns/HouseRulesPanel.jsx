@@ -6,9 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { RotateCcw, Trash2, Swords, Moon, UserCircle, Sparkles } from "lucide-react";
+import { RotateCcw, Trash2, Swords, Moon, UserCircle, Sparkles, FlaskConical, ExternalLink } from "lucide-react";
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 import { base44 } from "@/api/base44Client";
 import { MODIFIABLE_RULES, getRule } from "@/components/dnd5e/dnd5eRules";
+import CreateHomebrewDialog from "@/components/homebrew/CreateHomebrewDialog";
 
 /**
  * House Rules editor. Reads every modifiable rule from the registry
@@ -199,6 +202,22 @@ const SECTIONS = [
 export default function HouseRulesPanel({ campaign, campaignId, canEdit = true }) {
   const queryClient = useQueryClient();
   const rules = useMemo(() => normalizeRules(campaign?.homebrew_rules), [campaign?.homebrew_rules]);
+  const [creatingCustom, setCreatingCustom] = React.useState(false);
+  // Stable seed object handed to the homebrew creator dialog. The
+  // dialog's reset-on-brew-change effect re-fires whenever this
+  // identity changes, so we only regenerate it when the drawer opens
+  // — not on every render.
+  const customSeed = useMemo(() => {
+    if (!creatingCustom) return null;
+    return {
+      modifications: rules,
+      game_system: "dnd5e",
+      category: "combat_rules",
+      version: "1.0.0",
+      tags: [],
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [creatingCustom]);
 
   // Installed Brewery homebrew (per-campaign join rows).
   const { data: installedHomebrew = [] } = useQuery({
@@ -366,6 +385,43 @@ export default function HouseRulesPanel({ campaign, campaignId, canEdit = true }
           </div>
         )}
       </div>
+
+      {/* Share / create CTA. Opens the homebrew creator pre-filled
+          with whatever overrides are already set on this campaign, so
+          a GM can turn their tweaks into a shareable Brewery pack. */}
+      <div className="bg-[#2A3441] rounded-xl p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <FlaskConical className="w-8 h-8 text-[#37F2D1] flex-shrink-0" />
+          <div>
+            <h3 className="text-lg font-bold">Share these rules with the community</h3>
+            <p className="text-[11px] text-slate-400">
+              Package your tweaks as a Brewery pack. Drafts are private until you publish.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCreatingCustom(true)}
+            disabled={!canEdit}
+            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold px-4 py-2 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Create Custom Rule
+          </button>
+          <Link
+            to={createPageUrl("Brewery")}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[#37F2D1] hover:text-white"
+          >
+            Open The Brewery <ExternalLink className="w-3 h-3" />
+          </Link>
+        </div>
+      </div>
+
+      <CreateHomebrewDialog
+        open={creatingCustom}
+        onClose={() => setCreatingCustom(false)}
+        brew={customSeed}
+      />
     </div>
   );
 }
