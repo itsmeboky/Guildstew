@@ -386,7 +386,20 @@ export default function Layout({ children, currentPageName }) {
     });
   };
 
-  const useDyslexicFont = user?.accessibility_dyslexic_font || false;
+  // Font mode: read from localStorage (fast path) on mount, then
+  // sync from the user's profile (persistent path) when it loads.
+  // The CSS custom properties in index.css switch every font in the
+  // app via the data-font-mode attribute on <html>.
+  React.useEffect(() => {
+    const stored = localStorage.getItem('gs-font-mode');
+    const profileMode = user?.accessibility_dyslexic_font ? 'dyslexic' : null;
+    const mode = stored || profileMode || 'default';
+    document.documentElement.setAttribute('data-font-mode', mode);
+    // Sync localStorage from profile on first load so they agree.
+    if (profileMode && !stored) {
+      localStorage.setItem('gs-font-mode', mode);
+    }
+  }, [user?.accessibility_dyslexic_font]);
   const isDarkMode = user?.accessibility_dark_mode !== false;
 
   useEffect(() => {
@@ -407,25 +420,7 @@ export default function Layout({ children, currentPageName }) {
   return (
     <div className={`min-h-screen ${isWorldLorePage ? 'text-white' : isDarkMode ? 'bg-[#1E2430] text-white' : 'bg-gray-50 text-gray-900'}`}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=OpenDyslexic&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
-
-        @font-face {
-          font-family: 'Cream';
-          src: url('FONT_URL_HERE') format('opentype');
-          font-weight: 600;
-          font-style: normal;
-        }
-
-        body, p, span, div, input, select, textarea, button {
-          font-family: ${useDyslexicFont ? "'OpenDyslexic', 'Comic Sans MS', sans-serif" : "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"};
-          font-weight: 400;
-        }
-
-        h1, h2, h3, h4, h5, h6 {
-          font-family: ${useDyslexicFont ? "'OpenDyslexic', 'Comic Sans MS', sans-serif" : "'Cream', 'Inter', sans-serif"};
-          font-weight: 600;
-        }
 
         .world-lore-expanded .max-w-6xl {
           max-width: 90rem !important;

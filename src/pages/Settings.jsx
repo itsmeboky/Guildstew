@@ -392,7 +392,14 @@ export default function Settings() {
                   </div>
                   <Switch
                     checked={accessibilityData.accessibility_dyslexic_font}
-                    onCheckedChange={(checked) => setAccessibilityData({ ...accessibilityData, accessibility_dyslexic_font: checked })}
+                    onCheckedChange={(checked) => {
+                      setAccessibilityData({ ...accessibilityData, accessibility_dyslexic_font: checked });
+                      // Instantly apply the font mode so the user sees
+                      // the change before the profile save round-trips.
+                      const mode = checked ? 'dyslexic' : 'default';
+                      localStorage.setItem('gs-font-mode', mode);
+                      document.documentElement.setAttribute('data-font-mode', mode);
+                    }}
                   />
                 </div>
 
