@@ -321,14 +321,60 @@ function AddToCampaignDialog({ brew, currentUser, onClose }) {
           image_url: mods.image_url || brew.cover_image_url || null,
           is_system: false,
         });
-        // Still record the install so MyBrews can show a checkmark.
-        return base44.entities.CampaignHomebrew.create({
+      } else if (brew.category === "custom_monster") {
+        const mods = brew.modifications || {};
+        await base44.entities.Monster.create({
           campaign_id: campaignId,
-          homebrew_id: brew.id,
-          enabled: true,
-          added_by: userId,
+          name: mods.name || brew.title || "Custom Monster",
+          description: mods.description || brew.description || "",
+          stats: mods,
+          image_url: mods.image_url || brew.cover_image_url || null,
+          is_system: false,
+          is_active: true,
         });
+      } else if (brew.category === "custom_spell") {
+        const mods = brew.modifications || {};
+        await base44.entities.Spell.create({
+          campaign_id: campaignId,
+          name: mods.name || brew.title || "Custom Spell",
+          level: Number(mods.level ?? 0),
+          school: mods.school || "Evocation",
+          casting_time: mods.casting_time || "1 action",
+          range: mods.range || "",
+          components: mods.components || "",
+          duration: mods.duration || "Instantaneous",
+          description: mods.description || brew.description || "",
+          higher_level: mods.higher_level || mods.higher_levels || "",
+          classes: Array.isArray(mods.classes) ? mods.classes : [],
+          source: "homebrew",
+          is_system: false,
+        });
+      } else if (brew.category === "custom_ability") {
+        const mods = brew.modifications || {};
+        // The CampaignAbility entity is wired in the adapter; the
+        // underlying table is campaign_abilities.
+        try {
+          await base44.entities.CampaignAbility.create({
+            campaign_id: campaignId,
+            name: mods.name || brew.title || "Custom Ability",
+            description: mods.description || brew.description || "",
+            type: mods.type || "General Ability",
+            class_name: mods.type === "Class Feature" ? (mods.class || null) : null,
+            level: Number(mods.level) || 1,
+            properties: mods,
+            is_system: false,
+          });
+        } catch (err) {
+          // Table may not exist in every environment yet. Surface a
+          // friendlier error but still let the campaign_homebrew
+          // join row get written so My Brews can show the install
+          // checkmark.
+          console.warn("CampaignAbility create failed:", err?.message || err);
+          toast.error("campaign_abilities table unavailable — install recorded but row not created.");
+        }
       }
+      // Every attach path also records the install so MyBrews can
+      // surface the checkmark.
       return base44.entities.CampaignHomebrew.create({
         campaign_id: campaignId,
         homebrew_id: brew.id,
@@ -341,6 +387,11 @@ function AddToCampaignDialog({ brew, currentUser, onClose }) {
       queryClient.invalidateQueries({ queryKey: ["campaignHomebrew", vars.campaignId] });
       queryClient.invalidateQueries({ queryKey: ["campaignHomebrewMods", vars.campaignId] });
       queryClient.invalidateQueries({ queryKey: ["campaignItems", vars.campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["monsters", vars.campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaignMonsters", vars.campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaignSpells", vars.campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["spells", vars.campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaignAbilities", vars.campaignId] });
       toast.success("Added to campaign");
     },
     onError: (err) => {

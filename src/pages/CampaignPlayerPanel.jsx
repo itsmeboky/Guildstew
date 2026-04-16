@@ -21,6 +21,9 @@ import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
 import { useTurnContext } from "@/components/combat/useTurnContext";
 import { hpBarColor } from "@/components/combat/hpColor";
 import { resolveAction, consumeActionCost } from "@/components/combat/actionResolver";
+import TradeOfferDialog from "@/components/trade/TradeOfferDialog";
+import TradesPanel from "@/components/trade/TradesPanel";
+import { Handshake } from "lucide-react";
 import { getConditionModifiers } from "@/components/combat/conditions";
 import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
 import { toast } from "sonner";
@@ -197,6 +200,9 @@ function CampaignPlayerPanelContent() {
     target: null,
     isOffHand: false
   });
+  // Trade dialog target (null = closed). Clicking a Trade button on
+  // another player's adventurer card sets this to their character.
+  const [tradeTarget, setTradeTarget] = useState(null);
 
   // Action Resource State
   const [actionsState, setActionsState] = useState({ action: true, bonus: true, reaction: true, inspiration: false });
@@ -981,18 +987,48 @@ function CampaignPlayerPanelContent() {
                                 <span className="text-[10px] text-slate-400">{currentHp}/{maxHp} HP</span>
                               </div>
                               <div className="h-1.5 w-full bg-[#111827] rounded-full overflow-hidden">
-                                <div 
-                                  className="h-full bg-gradient-to-r from-red-500 to-green-500" 
+                                <div
+                                  className="h-full bg-gradient-to-r from-red-500 to-green-500"
                                   style={{ width: `${Math.min((currentHp / maxHp) * 100, 100)}%` }}
                                 />
                               </div>
                             </div>
+                            {/* Trade button — only shown on other
+                                players' cards. Stops propagation so
+                                the outer select-target click handler
+                                doesn't fire while trading. */}
+                            {char?.id && myCharacter?.id && char.id !== myCharacter.id && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTradeTarget(char);
+                                }}
+                                className="mt-1 w-full inline-flex items-center justify-center gap-1 text-[10px] font-black uppercase tracking-wider bg-[#37F2D1]/10 hover:bg-[#37F2D1]/25 border border-[#37F2D1]/40 text-[#37F2D1] rounded-full py-1"
+                              >
+                                <Handshake className="w-3 h-3" />
+                                Trade
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
                     })}
                   </div>
                 </SectionCard>
+
+                {/* Trades — pending + history scoped to this player's
+                    character. Only renders for players with a
+                    character and a live campaign. */}
+                {myCharacter?.id && (
+                  <SectionCard title="Trades">
+                    <TradesPanel
+                      campaignId={campaignId}
+                      viewingCharacterId={myCharacter.id}
+                      characters={players.map((p) => p.character).filter(Boolean)}
+                    />
+                  </SectionCard>
+                )}
 
                 <SectionCard title="Companions">
                   <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar">
@@ -1110,6 +1146,17 @@ function CampaignPlayerPanelContent() {
           order. The window handles the rolling animation + heartbeat
           sfx, then hands the d20 back to applyPlayerDeathSave to sync
           the result through to combat_data. */}
+      {tradeTarget && myCharacter && (
+        <TradeOfferDialog
+          open={!!tradeTarget}
+          onClose={() => setTradeTarget(null)}
+          campaignId={campaignId}
+          myCharacter={myCharacter}
+          targetCharacter={tradeTarget}
+          senderUserId={user?.id}
+        />
+      )}
+
       {activeDeathSaveTarget && (
         <DeathSaveWindow
           combatant={activeDeathSaveTarget.combatant}
