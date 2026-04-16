@@ -7,6 +7,7 @@ import {
   kiPoints,
   CLASS_ABILITY_MECHANICS,
 } from "@/components/dnd5e/dnd5eRules";
+import { computeArmorClass } from "@/components/dnd5e/armorClass";
 
 const PC_ICON_BASE = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/abilities/basic%20actions";
 const MONSTER_ICON_BASE = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/monsters/monster%20abilities";
@@ -80,6 +81,11 @@ export default function CombatActionBar({
   maxSpellSlots = {},
   spentSpellSlots = {},
   onToggleSlot,
+  // Ki diamond click handler (Monk). Called with 'spend' | 'restore' so
+  // the GM can correct a miscount by clicking a diamond. Max ki is
+  // derived from monk level via kiPoints(); current ki lives on
+  // classResources.kiRemaining.
+  onToggleKi,
   // Off-hand bonus attack hook. GM panel fires this when the player
   // has used their main action on a melee attack and a weapon is
   // sitting in the Weapon 2 slot — clicking the attack button at that
@@ -178,7 +184,61 @@ export default function CombatActionBar({
   const [hoveredSpell, setHoveredSpell] = useState(null);
   const [hoverTimer, setHoverTimer] = useState(null);
 
-  const ac = character?.armor_class || 10;
+  // Effective AC: prefer a computation that accounts for equipped
+  // armor/shield + DEX + Fighting Style: Defense (+1 when armored).
+  // Falls back to the static character.armor_class field when the
+  // character has no equipped armor (e.g. monsters, sheets without
+  // gear slots).
+  const fightingStylesList = React.useMemo(() => {
+    if (!character) return [];
+    const out = [];
+    const primary = character.fighting_style || character.fightingStyle;
+    if (primary) out.push(typeof primary === 'string' ? primary : primary.name);
+    const arr = character.fighting_styles;
+    if (Array.isArray(arr)) {
+      for (const s of arr) out.push(typeof s === 'string' ? s : s?.name);
+    }
+    const feats = character.features;
+    if (Array.isArray(feats)) {
+      for (const s of feats) out.push(typeof s === 'string' ? s : s?.name);
+    }
+    return out.filter(Boolean);
+  }, [character]);
+  const ac = React.useMemo(() => {
+    if (!character) return 10;
+    const equipped = character.equipped || character.equipment || {};
+    const hasArmor = Object.values(equipped).some((i) => i?.category === 'armor');
+    if (!hasArmor) return character.armor_class || 10;
+    const dexScore =
+      character.attributes?.dex ||
+      character.stats?.dexterity ||
+      10;
+    try {
+      const breakdown = computeArmorClass({
+        equipped,
+        dex: dexScore,
+        fightingStyles: fightingStylesList,
+      });
+      return breakdown.total || character.armor_class || 10;
+    } catch {
+      return character.armor_class || 10;
+    }
+  }, [character, fightingStylesList]);
+  // Ki diamond row — only shown for Monks (level 2+). Max comes from
+  // the level-keyed kiPoints() table; current is whatever the class-
+  // resources block says (falls back to max when undefined so we don't
+  // show the row as fully spent before initialisation).
+  const kiMax = React.useMemo(() => {
+    if (!character) return 0;
+    const cls = (character.class || character.stats?.class || '').toString();
+    if (!/monk/i.test(cls)) return 0;
+    const level = character.level || character.stats?.level || 1;
+    if (level < 2) return 0;
+    return kiPoints(level);
+  }, [character]);
+  const kiCurrent = kiMax > 0
+    ? Math.max(0, Math.min(kiMax, classResources.kiRemaining ?? kiMax))
+    : 0;
   const initiative = character?.initiative || 0;
   const speed = character?.speed || 30;
   const currentHp = character?.hit_points?.current || 0;
@@ -448,50 +508,87 @@ export default function CombatActionBar({
         </div>
       </div>
 
-      {/* Spell slot tracker. Renders a compact row of dots per spell level
-          — filled = available, hollow = spent. Only shown when the
-          character has any spell slots at all (casters only). Clicking a
-          dot toggles it for manual corrections. */}
-      {Object.keys(maxSpellSlots).length > 0 && (
+      {/* Resource tracker row — Ki diamonds for Monks (level 2+),
+          spell slot dots for casters. Divider between the two when a
+          character has both (multiclass). Same click-to-correct
+          semantics for both: clicking a filled glyph spends one,
+          clicking an empty one restores. */}
+      {(kiMax > 0 || Object.keys(maxSpellSlots).length > 0) && (
         <div className="flex items-center gap-3 mb-3 px-1">
-          <span className="text-[9px] uppercase tracking-[0.22em] text-slate-400 font-bold">
-            Spell Slots
-          </span>
-          <div className="flex items-center gap-3 flex-wrap">
-            {Object.keys(maxSpellSlots)
-              .map((k) => Number(k))
-              .filter((level) => level > 0 && maxSpellSlots[level] > 0)
-              .sort((a, b) => a - b)
-              .map((level) => {
-                const max = maxSpellSlots[level];
-                const spent = spentSpellSlots[level] || 0;
-                return (
-                  <div key={level} className="flex items-center gap-1">
-                    <span className="text-[9px] text-slate-500 font-semibold">
-                      L{level}
-                    </span>
-                    {Array.from({ length: max }).map((_, i) => {
-                      const isFilled = i < max - spent;
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => {
-                            if (!onToggleSlot) return;
-                            onToggleSlot(level, isFilled ? 'spend' : 'restore');
-                          }}
-                          title={`Level ${level} slot — ${isFilled ? 'available' : 'spent'}`}
-                          className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                            isFilled
-                              ? 'bg-[#6366f1] hover:bg-[#818cf8] shadow-[0_0_6px_rgba(99,102,241,0.6)]'
-                              : 'bg-[#1e293b] hover:bg-[#334155] border border-[#334155]'
-                          }`}
-                        />
-                      );
-                    })}
-                  </div>
-                );
-              })}
-          </div>
+          {kiMax > 0 && (
+            <>
+              <span className="text-[9px] uppercase tracking-[0.22em] text-[#37F2D1] font-bold">
+                Ki
+              </span>
+              <div className="flex items-center gap-0.5">
+                {Array.from({ length: kiMax }).map((_, i) => {
+                  const isFilled = i < kiCurrent;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        if (!onToggleKi) return;
+                        onToggleKi(isFilled ? 'spend' : 'restore');
+                      }}
+                      title={`Ki point ${i + 1} — ${isFilled ? 'available' : 'spent'}`}
+                      className={`text-base leading-none transition-colors ${
+                        isFilled
+                          ? 'text-[#37F2D1] hover:text-[#a7f5e6] drop-shadow-[0_0_4px_rgba(55,242,209,0.7)]'
+                          : 'text-[#1e293b] hover:text-[#334155]'
+                      }`}
+                    >
+                      {isFilled ? '◆' : '◇'}
+                    </button>
+                  );
+                })}
+              </div>
+              {Object.keys(maxSpellSlots).length > 0 && (
+                <div className="h-10 w-[2px] bg-[#1e2636]" />
+              )}
+            </>
+          )}
+          {Object.keys(maxSpellSlots).length > 0 && (
+            <>
+              <span className="text-[9px] uppercase tracking-[0.22em] text-slate-400 font-bold">
+                Spell Slots
+              </span>
+              <div className="flex items-center gap-3 flex-wrap">
+                {Object.keys(maxSpellSlots)
+                  .map((k) => Number(k))
+                  .filter((level) => level > 0 && maxSpellSlots[level] > 0)
+                  .sort((a, b) => a - b)
+                  .map((level) => {
+                    const max = maxSpellSlots[level];
+                    const spent = spentSpellSlots[level] || 0;
+                    return (
+                      <div key={level} className="flex items-center gap-1">
+                        <span className="text-[9px] text-slate-500 font-semibold">
+                          L{level}
+                        </span>
+                        {Array.from({ length: max }).map((_, i) => {
+                          const isFilled = i < max - spent;
+                          return (
+                            <button
+                              key={i}
+                              onClick={() => {
+                                if (!onToggleSlot) return;
+                                onToggleSlot(level, isFilled ? 'spend' : 'restore');
+                              }}
+                              title={`Level ${level} slot — ${isFilled ? 'available' : 'spent'}`}
+                              className={`w-2.5 h-2.5 rounded-full transition-colors ${
+                                isFilled
+                                  ? 'bg-[#6366f1] hover:bg-[#818cf8] shadow-[0_0_6px_rgba(99,102,241,0.6)]'
+                                  : 'bg-[#1e293b] hover:bg-[#334155] border border-[#334155]'
+                              }`}
+                            />
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+              </div>
+            </>
+          )}
         </div>
       )}
 
