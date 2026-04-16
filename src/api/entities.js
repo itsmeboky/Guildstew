@@ -91,6 +91,7 @@ export const entities = {
   HomebrewRule:         createEntity('homebrew_rules'),
   HomebrewReview:       createEntity('homebrew_reviews'),
   Character:            createEntity('characters'),
+  CharacterStat:        createEntity('character_stats'),
   ChatConversation:     createEntity('chat_conversations'),
   Constellation:        createEntity('constellations'),
   Deity:                createEntity('deities'),
