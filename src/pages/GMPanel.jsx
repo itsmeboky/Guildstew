@@ -73,6 +73,7 @@ import { resolveAction, consumeActionCost, getSpellEffect } from "@/components/c
 import { hpBarColor, clampHp, normalizeHp } from "@/components/combat/hpColor";
 import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
 import { trackStat, ensureCharacterStats } from "@/utils/characterStats";
+import { checkAchievementsForCombatants } from "@/utils/achievementChecker";
 import {
   abilityModifier,
   proficiencyBonus,
@@ -772,6 +773,12 @@ export default function GMPanel() {
 
   const endCombatMutation = useMutation({
     mutationFn: async (restType /* 'none' | 'short' | 'long' */ = 'none') => {
+      // P.I.E. — snapshot the order BEFORE clearing combat_data so
+      // we can run achievement checks against every player who was
+      // in the fight. Achievements depend on lifetime stats so we
+      // run the check whether or not the GM picked a rest.
+      const orderSnapshot = (campaign?.combat_data?.order || []).slice();
+
       // 1. Clear combat state on the campaign row.
       await base44.entities.Campaign.update(campaignId, {
         combat_active: false,
@@ -822,13 +829,39 @@ export default function GMPanel() {
         });
       }
 
-      return restType;
+      // Achievement checks for every player who saw combat. Each
+      // check is sequential (per-character) but the outer Promise
+      // resolves once they all finish — toast notifications fire
+      // from the success handler so we don't block this mutation
+      // on UI work.
+      const combatants = [];
+      for (const entry of orderSnapshot) {
+        const charId = resolveCharacterIdFromCombatant(entry);
+        if (!charId) continue;
+        const player = players.find((p) => p.character?.id === charId);
+        const userId = player?.user_id || null;
+        // Skip ghost / orphan characters — no user_id means we
+        // can't write into the achievements table for them.
+        if (!userId || String(userId).startsWith('ghost-')) continue;
+        combatants.push({ userId, characterId: charId, name: entry?.name });
+      }
+      let awards = [];
+      if (combatants.length > 0) {
+        try {
+          awards = await checkAchievementsForCombatants(combatants, campaignId);
+        } catch (err) {
+          console.error('Achievement evaluation failed:', err);
+        }
+      }
+
+      return { restType, awards };
     },
-    onSuccess: (restType) => {
+    onSuccess: ({ restType, awards } = {}) => {
       const rounds = campaign?.combat_data?.round || 0;
       clearCombatClientState();
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
       queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
+      queryClient.invalidateQueries({ queryKey: ['achievements'] });
       logCombatEvent(campaignId, `Combat ended. ${rounds} round${rounds === 1 ? '' : 's'}.`, {
         event: 'combat_ended',
         category: 'round',
@@ -846,6 +879,30 @@ export default function GMPanel() {
           event: 'short_rest',
           category: 'rest',
         });
+      }
+      // Surface freshly-earned achievements as celebratory toasts.
+      // We log them too so the campaign feed has a record alongside
+      // the combat summary.
+      for (const award of (awards || [])) {
+        toast.custom((t) => (
+          <div className="bg-[#1a1f2e] border border-[#37F2D1] rounded-lg p-4 shadow-xl flex items-center gap-3 max-w-sm">
+            <span className="text-3xl">{award.icon || '🏆'}</span>
+            <div>
+              <div className="text-[#37F2D1] font-bold text-xs uppercase tracking-wider">
+                Achievement Unlocked!
+              </div>
+              <div className="text-white font-bold">{award.title}</div>
+              <div className="text-slate-400 text-xs">{award.description}</div>
+              {award.combatantName && (
+                <div className="text-slate-500 text-[10px] mt-1">— {award.combatantName}</div>
+              )}
+            </div>
+          </div>
+        ), { duration: 6000 });
+        logCombatEvent(campaignId,
+          `🏆 ${award.combatantName || 'A hero'} earned: ${award.title}`,
+          { event: 'achievement_earned', category: 'achievement', achievement: award.achievement_key },
+        );
       }
     },
     onError: (err) => {
