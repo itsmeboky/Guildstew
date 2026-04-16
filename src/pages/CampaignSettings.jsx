@@ -3,11 +3,12 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, ArrowLeft, Download, Users, Shield, FileText, Image as ImageIcon, UserPlus, Trash2, AlertCircle, Bell, Clock, Trophy, Database, RefreshCw } from "lucide-react";
+import { Upload, ArrowLeft, Download, Users, Shield, FileText, Image as ImageIcon, UserPlus, Trash2, AlertCircle, Bell, Clock, Trophy, Database, RefreshCw, Dice6 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { canModifySettings, isMainGM } from "@/components/campaigns/permissions";
 import ImagePositionEditor from "@/components/campaigns/ImagePositionEditor";
+import HouseRulesPanel from "@/components/campaigns/HouseRulesPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -374,6 +375,12 @@ export default function CampaignSettings() {
               <TabsTrigger value="content" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
                 <Database className="w-4 h-4 mr-2" />
                 Game Content
+              </TabsTrigger>
+            )}
+            {(campaign.system === 'D&D 5e' || campaign.system === 'Dungeons and Dragons 5e') && (
+              <TabsTrigger value="houseRules" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
+                <Dice6 className="w-4 h-4 mr-2" />
+                House Rules
               </TabsTrigger>
             )}
           </TabsList>
@@ -837,6 +844,16 @@ export default function CampaignSettings() {
                   Items, and Spells tabs.
                 </p>
               </div>
+            </TabsContent>
+          )}
+
+          {(campaign.system === 'D&D 5e' || campaign.system === 'Dungeons and Dragons 5e') && (
+            <TabsContent value="houseRules" className="space-y-6">
+              <HouseRulesPanel
+                campaign={campaign}
+                campaignId={campaignId}
+                canEdit={canModifySettings(campaign, user?.id)}
+              />
             </TabsContent>
           )}
         </Tabs>

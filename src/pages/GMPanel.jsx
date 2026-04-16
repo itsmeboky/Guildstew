@@ -85,6 +85,12 @@ import {
   FIGHTING_STYLES,
   kiPoints,
   CLASS_ABILITY_MECHANICS,
+  layOnHandsPool,
+  WILD_SHAPE,
+  HEALING_POTIONS,
+  spellSaveDC,
+  getSpellSlots as getSpellSlotsRegistry,
+  deepMergeRules,
 } from "@/components/dnd5e/dnd5eRules";
 import {
   initClassResources,
@@ -180,6 +186,59 @@ export default function GMPanel() {
     enabled: !!campaignId,
     refetchInterval: (data) => (data?.combat_active || data?.combat_data?.stage === 'initiative') ? 1000 : 2000
   });
+
+  // Installed Brewery homebrew for this campaign. Each row pairs a
+  // homebrew pack with its enabled flag. Enabled packs' `modifications`
+  // JSONB gets deep-merged onto campaign.homebrew_rules to form the
+  // effective override tree every `getRule()` call honours.
+  const { data: installedHomebrew = [] } = useQuery({
+    queryKey: ['campaignHomebrewMods', campaignId],
+    queryFn: async () => {
+      try {
+        const rows = await base44.entities.CampaignHomebrew.filter({ campaign_id: campaignId });
+        if (!rows?.length) return [];
+        const packs = await Promise.all(
+          rows.map((r) =>
+            base44.entities.HomebrewRule
+              .filter({ id: r.homebrew_id })
+              .then((arr) => (arr[0] ? { ...r, _pack: arr[0] } : null))
+              .catch(() => null),
+          ),
+        );
+        return packs.filter(Boolean);
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!campaignId,
+    initialData: [],
+    staleTime: 30000,
+  });
+
+  // Parse the campaign's raw homebrew_rules (JSONB or legacy string)
+  // into a plain object and merge every enabled Brewery pack on top.
+  // The resulting `effectiveRules` is what every `getRule()` call and
+  // CombatDiceWindow.homebrewRules prop should consume.
+  const effectiveRules = React.useMemo(() => {
+    const raw = campaign?.homebrew_rules;
+    let rules = {};
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      rules = JSON.parse(JSON.stringify(raw));
+    } else if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) rules = parsed;
+      } catch { /* ignore — legacy freeform text */ }
+    }
+    for (const row of installedHomebrew) {
+      if (!row?.enabled) continue;
+      const mods = row._pack?.modifications;
+      if (mods && typeof mods === 'object' && !Array.isArray(mods)) {
+        deepMergeRules(rules, mods);
+      }
+    }
+    return rules;
+  }, [campaign?.homebrew_rules, installedHomebrew]);
 
   const { data: currentUser } = useQuery({
     queryKey: ['currentUser'],
@@ -333,6 +392,16 @@ export default function GMPanel() {
   // show the picker and never spend slots.
   const [pendingSpellCast, setPendingSpellCast] = useState(null);
   const runActionRef = React.useRef(null);
+
+  // Tier 2 class-ability modals (Sorcerer Font of Magic, Paladin Lay
+  // on Hands, Cleric Turn Undead, Druid Wild Shape, Sorcerer
+  // Metamagic). Each holds the pending action's context so the modal
+  // can read the actor / targets / pool when rendering.
+  const [fontOfMagicDirection, setFontOfMagicDirection] = useState(null); // 'slotToSP' | 'spToSlot' | null
+  const [layOnHandsOpen, setLayOnHandsOpen] = useState(false);
+  const [turnUndeadOpen, setTurnUndeadOpen] = useState(false);
+  const [wildShapeOpen, setWildShapeOpen] = useState(false);
+  const [pendingMetamagic, setPendingMetamagic] = useState(null); // { action, castLevel, options }
 
   // Concentration tracking. Keyed by casterId →
   //   { spell, spellLevel, targetIds[], casterName }
@@ -679,7 +748,8 @@ export default function GMPanel() {
           const current = Number.isFinite(hp.current) ? hp.current : max;
           let nextCurrent = current;
           if (restType === 'long') {
-            nextCurrent = max;
+            const fullHeal = getRule(effectiveRules, 'resting.full_hp_on_long_rest') !== false;
+            nextCurrent = fullHeal ? max : Math.max(current, Math.ceil(max / 2));
           } else if (restType === 'short' && max > 0) {
             // Heal to at least half max HP, but never reduce current HP.
             nextCurrent = Math.max(current, Math.ceil(max / 2));
@@ -1086,7 +1156,7 @@ export default function GMPanel() {
       return;
     }
     // (K) Death save DC — homebrew override. Default DC 10 per PHB.
-    const deathSaveDC = getRule(campaign?.homebrew_rules, 'combat.death_saves.dc') ?? DEATH_RULES.death_saves.dc;
+    const deathSaveDC = getRule(effectiveRules, 'combat.death_saves.dc') ?? DEATH_RULES.death_saves.dc;
     if (roll >= deathSaveDC) {
       applyDeathSaveChange(combatantKey, { successesDelta: 1 });
       logCombatEvent(
@@ -1219,6 +1289,59 @@ export default function GMPanel() {
     toast.success(`${target.name} gains Bardic Inspiration (${die})`);
   }, [campaign?.combat_data, campaignId, queryClient]);
 
+  // Persist an exhaustion level on a combatant in combat_data.order.
+  // Effects auto-apply via getConditionModifiers reading actor.exhaustion.
+  const setCombatantExhaustion = React.useCallback((combatantKey, level) => {
+    if (!campaign?.combat_data?.order || !combatantKey) return;
+    const newOrder = campaign.combat_data.order.map((c) => {
+      const ck = c.uniqueId || c.id;
+      if (ck !== combatantKey) return c;
+      if (level <= 0) {
+        const { exhaustion: _e, ...rest } = c;
+        return rest;
+      }
+      return { ...c, exhaustion: level };
+    });
+    const newData = { ...campaign.combat_data, order: newOrder };
+    queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: newData } : old);
+    base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+    const target = newOrder.find((c) => (c.uniqueId || c.id) === combatantKey);
+    if (target) {
+      logCombatEvent(campaignId, `${target.name} — Exhaustion level ${level}.`, {
+        event: 'exhaustion_set', category: 'condition', target: target.name, level,
+      });
+      toast(level > 0 ? `${target.name}: Exhaustion ${level}` : `${target.name} is no longer exhausted.`);
+    }
+  }, [campaign?.combat_data, campaignId, queryClient]);
+
+  // Grant or clear DM inspiration on a combatant. Stored as
+  // `hasInspiration: true` so the dice window can surface the
+  // advantage prompt and the portrait renders the ★ badge.
+  const setCombatantInspiration = React.useCallback((combatantKey, granted) => {
+    if (!campaign?.combat_data?.order || !combatantKey) return;
+    const newOrder = campaign.combat_data.order.map((c) => {
+      const ck = c.uniqueId || c.id;
+      if (ck !== combatantKey) return c;
+      if (!granted) {
+        const { hasInspiration: _i, ...rest } = c;
+        return rest;
+      }
+      return { ...c, hasInspiration: true };
+    });
+    const newData = { ...campaign.combat_data, order: newOrder };
+    queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: newData } : old);
+    base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+    const target = newOrder.find((c) => (c.uniqueId || c.id) === combatantKey);
+    if (target) {
+      logCombatEvent(campaignId, granted
+        ? `${target.name} gains Inspiration!`
+        : `${target.name}'s Inspiration cleared.`,
+        { event: 'inspiration', category: 'buff', target: target.name, granted }
+      );
+      toast(granted ? `${target.name}: Inspiration ★` : `${target.name}: Inspiration cleared`);
+    }
+  }, [campaign?.combat_data, campaignId, queryClient]);
+
   // Consume a stored Bardic Inspiration on a combatant. Strips the
   // bardicInspiration key back off their combat_data.order entry so
   // the badge disappears and subsequent rolls don't retrigger.
@@ -1236,6 +1359,425 @@ export default function GMPanel() {
     );
     base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
   }, [campaign?.combat_data, campaignId, queryClient]);
+
+  // Lay on Hands: heal a target for `amount` HP (capped at max) OR
+  // spend 5 HP from the pool to remove a disease/poison condition.
+  // Consumes the paladin's action. Updates the pool in
+  // combat_data.classResources.
+  const applyLayOnHands = React.useCallback(({ targetKey, amount, cure }) => {
+    const char = selectedCharacter;
+    if (!char || !selectedCharacterKey) return;
+    const level = char.level || char.stats?.level || 1;
+    const maxPool = layOnHandsPool(level);
+    const cd = campaign?.combat_data || {};
+    const res = cd.classResources?.[selectedCharacterKey] || {};
+    const pool = res.layOnHandsRemaining ?? maxPool;
+    const cost = cure ? 5 : Math.max(0, Math.min(pool, amount || 0));
+    if (cost <= 0) { toast.error('Nothing to spend.'); return; }
+    if (cost > pool) { toast.error(`Only ${pool} HP in the pool.`); return; }
+    // Spend the action and decrement the pool.
+    setActionsState((prev) => ({ ...prev, action: false }));
+    const newPool = pool - cost;
+    const newRes = {
+      ...(cd.classResources || {}),
+      [selectedCharacterKey]: { ...res, layOnHandsRemaining: newPool },
+    };
+    const newData = { ...cd, classResources: newRes };
+    queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: newData } : old);
+    base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+
+    // Apply the heal / cure. Players heal via Character entity; NPCs
+    // / monsters heal via combat_queue order. We match the pattern
+    // existing heal paths use.
+    const target = (cd.order || []).find(c => (c.uniqueId || c.id) === targetKey);
+    const targetName = target?.name || 'target';
+    if (cure) {
+      // Strip one disease / poison condition. Active conditions
+      // state is authoritative here.
+      setActiveConditions((prev) => {
+        const cur = prev[targetKey] || [];
+        const next = cur.filter((c) => !/poison|disease/i.test(c));
+        if (next.length === cur.length) return prev;
+        return { ...prev, [targetKey]: next };
+      });
+      logCombatEvent(campaignId, `${char.name} cures ${targetName} of disease/poison. (Pool: ${newPool}/${maxPool})`, {
+        event: 'lay_on_hands_cure',
+        category: 'heal',
+        actor: char.name,
+        target: targetName,
+      });
+      toast.success(`${char.name} cures ${targetName}.`);
+      return;
+    }
+    // Heal amount on target. Players use Character entity update;
+    // NPC/monster/queue entries use setInitiativeOrder via the combat
+    // data order. We update combat_data.order regardless so spectators
+    // see it live.
+    const hpNow = target?.hit_points?.current ?? 0;
+    const hpMax = target?.hit_points?.max ?? 0;
+    const newCurrent = Math.min(hpMax, hpNow + cost);
+    const updatedOrder = (cd.order || []).map((c) => {
+      if ((c.uniqueId || c.id) !== targetKey) return c;
+      return { ...c, hit_points: { ...(c.hit_points || {}), current: newCurrent } };
+    });
+    const dataWithOrder = { ...newData, order: updatedOrder };
+    queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: dataWithOrder } : old);
+    base44.entities.Campaign.update(campaignId, { combat_data: dataWithOrder }).catch(console.error);
+    // If the target is a DB-backed character, persist HP there too.
+    const targetCharId = target?.characterId || (typeof target?.id === 'string' && target.id.startsWith('player-') ? null : null);
+    if (targetCharId) {
+      base44.entities.Character.update(targetCharId, {
+        hit_points: { ...(target?.hit_points || {}), current: newCurrent },
+      }).catch(console.error);
+      queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
+    }
+    logCombatEvent(campaignId, `${char.name} lays on hands, healing ${targetName} for ${cost} HP. (Pool: ${newPool}/${maxPool})`, {
+      event: 'lay_on_hands', category: 'heal', actor: char.name, target: targetName, heal: cost,
+    });
+    toast.success(`${char.name} heals ${targetName} for ${cost} HP.`);
+  }, [selectedCharacter, selectedCharacterKey, campaign?.combat_data, campaignId, queryClient, setActionsState, setActiveConditions]);
+
+  // Turn Undead: each selected enemy combatant rolls a WIS save vs
+  // the cleric's spell save DC. Failures gain the Turned condition
+  // (1 minute). At cleric level 5+ the Destroy Undead threshold kills
+  // low-CR undead outright.
+  const applyTurnUndead = React.useCallback((selections) => {
+    const char = selectedCharacter;
+    if (!char || !selectedCharacterKey) return;
+    const level = char.level || char.stats?.level || 1;
+    const wisScore = char.attributes?.wis || char.stats?.wisdom || 10;
+    const dc = spellSaveDC(proficiencyBonus(level), abilityModifier(wisScore));
+    // Destroy Undead CR threshold (Cleric level → max CR). The table
+    // uses mixed strings ('1/2') and numbers, so parse conservatively.
+    const thresholdsTable = CLASS_ABILITY_MECHANICS['Destroy Undead']?.crThresholds || {};
+    let destroyCR = -1;
+    for (const [lvl, cr] of Object.entries(thresholdsTable).sort((a, b) => Number(b[0]) - Number(a[0]))) {
+      if (level >= Number(lvl)) {
+        destroyCR = typeof cr === 'string' ? (() => {
+          const parts = cr.split('/');
+          return parts.length === 2 ? Number(parts[0]) / Number(parts[1]) : Number(cr);
+        })() : cr;
+        break;
+      }
+    }
+    setActionsState((prev) => ({ ...prev, action: false }));
+    const cd = campaign?.combat_data || {};
+    const res = cd.classResources?.[selectedCharacterKey] || {};
+    const maxCD = level >= 18 ? 3 : level >= 6 ? 2 : 1;
+    const newRes = {
+      ...(cd.classResources || {}),
+      [selectedCharacterKey]: { ...res, channelDivinityRemaining: Math.max(0, (res.channelDivinityRemaining ?? maxCD) - 1) },
+    };
+    const newData = { ...cd, classResources: newRes };
+    queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: newData } : old);
+    base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+    logCombatEvent(campaignId, `${char.name} channels divine energy! Turn Undead!`, {
+      event: 'turn_undead', category: 'spell', actor: char.name, dc,
+    });
+    for (const { combatant, isUndead } of selections) {
+      if (!isUndead) continue;
+      const wisMod = abilityModifier(combatant.attributes?.wis || combatant.stats?.wisdom || combatant.wisdom || 10);
+      const d20 = Math.floor(Math.random() * 20) + 1;
+      const total = d20 + wisMod;
+      const saved = total >= dc;
+      const undeadCR = typeof combatant.cr === 'string' ? (() => {
+        const parts = combatant.cr.split('/');
+        return parts.length === 2 ? Number(parts[0]) / Number(parts[1]) : Number(combatant.cr);
+      })() : (combatant.cr ?? combatant.challenge_rating ?? 99);
+      const combatantKey = combatant.uniqueId || combatant.id;
+      if (saved) {
+        logCombatEvent(campaignId, `${combatant.name} resists the turning. (WIS ${total} vs DC ${dc})`, {
+          event: 'turn_undead_resisted', category: 'condition', target: combatant.name,
+        });
+        continue;
+      }
+      if (destroyCR >= 0 && undeadCR <= destroyCR) {
+        logCombatEvent(campaignId, `${combatant.name} is destroyed by divine power!`, {
+          event: 'destroy_undead', category: 'condition', target: combatant.name,
+        });
+        toast.success(`${combatant.name} destroyed!`);
+        // TODO: mark as defeated — out of scope for this integration.
+        continue;
+      }
+      if (combatantKey) {
+        setActiveConditions((prev) => {
+          const cur = prev[combatantKey] || [];
+          if (cur.includes('Turned')) return prev;
+          return { ...prev, [combatantKey]: [...cur, 'Turned'] };
+        });
+      }
+      logCombatEvent(campaignId, `${combatant.name} is Turned! (WIS ${total} vs DC ${dc})`, {
+        event: 'turn_undead_hit', category: 'condition', target: combatant.name,
+      });
+    }
+  }, [selectedCharacter, selectedCharacterKey, campaign?.combat_data, campaignId, queryClient, setActionsState, setActiveConditions]);
+
+  // Wild Shape: store the pre-transform HP, swap the druid's HP with
+  // the beast's, stash the beast on classResources.wildShapeForm. A
+  // revert later restores the stored HP (minus any overflow damage
+  // to the beast form).
+  const applyWildShape = React.useCallback((beastName, beast, isElemental) => {
+    const char = selectedCharacter;
+    if (!char || !selectedCharacterKey) return;
+    const level = char.level || char.stats?.level || 1;
+    const isMoon = /circle\s*of\s*the\s*moon/i.test(char.subclass || '');
+    const cd = campaign?.combat_data || {};
+    const res = cd.classResources?.[selectedCharacterKey] || {};
+    if (isElemental) {
+      // Costs 2 spell slots. Burn the two highest-level slots still
+      // available (simplest automation policy).
+      const charSpent = spentSlotsByCharacter[selectedCharacterKey] || {};
+      const nextSpent = { ...charSpent };
+      let toSpend = 2;
+      for (let lvl = 9; lvl >= 1 && toSpend > 0; lvl--) {
+        const max = maxSpellSlots[lvl] || 0;
+        let remaining = max - (nextSpent[lvl] || 0);
+        while (remaining > 0 && toSpend > 0) {
+          nextSpent[lvl] = (nextSpent[lvl] || 0) + 1;
+          remaining -= 1;
+          toSpend -= 1;
+        }
+      }
+      if (toSpend > 0) { toast.error('Need 2 spell slots to shift into an elemental.'); return; }
+      setSpentSlotsByCharacter((prev) => ({ ...prev, [selectedCharacterKey]: nextSpent }));
+    }
+    const preHP = char.hit_points?.current ?? 0;
+    if (isMoon) setActionsState((prev) => ({ ...prev, bonus: false }));
+    else setActionsState((prev) => ({ ...prev, action: false }));
+    const newRes = {
+      ...(cd.classResources || {}),
+      [selectedCharacterKey]: {
+        ...res,
+        wildShapeRemaining: Math.max(0, (res.wildShapeRemaining ?? 2) - 1),
+        wildShapeForm: { name: beastName, ...beast, isElemental },
+        preWildShapeHP: preHP,
+        preWildShapeMaxHP: char.hit_points?.max ?? preHP,
+      },
+    };
+    // Also overwrite HP on the combat_data.order entry so portraits
+    // show the beast HP bar.
+    const updatedOrder = (cd.order || []).map((c) => {
+      if ((c.uniqueId || c.id) !== selectedCharacterKey) return c;
+      return { ...c, hit_points: { current: beast.hp, max: beast.hp }, wildShapeForm: beastName };
+    });
+    const newData = { ...cd, classResources: newRes, order: updatedOrder };
+    queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: newData } : old);
+    base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+    logCombatEvent(campaignId, `${char.name} transforms into a ${beastName}!`, {
+      event: 'wild_shape', category: 'transform', actor: char.name, beast: beastName,
+    });
+    toast.success(`${char.name} → ${beastName}`);
+  }, [selectedCharacter, selectedCharacterKey, campaign?.combat_data, campaignId, queryClient, setActionsState, spentSlotsByCharacter, maxSpellSlots]);
+
+  const revertWildShape = React.useCallback((excessDamage = 0) => {
+    const char = selectedCharacter;
+    if (!char || !selectedCharacterKey) return;
+    const cd = campaign?.combat_data || {};
+    const res = cd.classResources?.[selectedCharacterKey] || {};
+    const form = res.wildShapeForm;
+    if (!form) return;
+    const restoredHP = Math.max(0, (res.preWildShapeHP ?? char.hit_points?.current ?? 0) - excessDamage);
+    const preMax = res.preWildShapeMaxHP ?? char.hit_points?.max ?? restoredHP;
+    const { wildShapeForm: _w, preWildShapeHP: _p, preWildShapeMaxHP: _pm, ...restCleaned } = res;
+    const newRes = {
+      ...(cd.classResources || {}),
+      [selectedCharacterKey]: restCleaned,
+    };
+    const updatedOrder = (cd.order || []).map((c) => {
+      if ((c.uniqueId || c.id) !== selectedCharacterKey) return c;
+      const { wildShapeForm: _rm, ...rest } = c;
+      return { ...rest, hit_points: { current: restoredHP, max: preMax } };
+    });
+    const newData = { ...cd, classResources: newRes, order: updatedOrder };
+    queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: newData } : old);
+    base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+    logCombatEvent(campaignId, `${char.name} reverts to their natural form.`, {
+      event: 'wild_shape_revert', category: 'transform', actor: char.name,
+    });
+    toast(`${char.name} reverts from ${form.name}.`);
+  }, [selectedCharacter, selectedCharacterKey, campaign?.combat_data, campaignId, queryClient]);
+
+  // Healing potion consumption. Rolls the potion's dice, heals the
+  // currently-selected character (capped at max HP), decrements the
+  // potion stack from inventory, and consumes the appropriate action
+  // economy slot (action / bonus) per the campaign's homebrew rules.
+  const drinkHealingPotion = React.useCallback((item, source) => {
+    const char = selectedCharacter;
+    if (!char || !item?.name) return;
+    const potion = HEALING_POTIONS[item.name];
+    if (!potion) return;
+    // Action-economy gate — homebrew may allow a self-drink as a
+    // bonus action; otherwise it's the default "action".
+    const costKey = getRule(effectiveRules, 'combat.healing_potions.action_cost') ?? 'action';
+    if (costKey === 'action' && !actionsState.action) {
+      toast.error('No action available this turn!');
+      return;
+    }
+    if (costKey === 'bonus' && !actionsState.bonus) {
+      toast.error('No bonus action available this turn!');
+      return;
+    }
+    setActionsState((prev) => ({ ...prev, [costKey]: false }));
+
+    // Roll the potion's healing dice. Simple NdF+M parser (the
+    // HEALING_POTIONS entries are all this shape).
+    const dice = potion.healing || '2d4+2';
+    let total = 0;
+    const parts = dice.split('+').map(s => s.trim());
+    for (const p of parts) {
+      const m = p.match(/^(\d+)d(\d+)$/);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        const f = parseInt(m[2], 10);
+        for (let i = 0; i < n; i++) total += Math.floor(Math.random() * f) + 1;
+      } else {
+        const flat = parseInt(p, 10);
+        if (Number.isFinite(flat)) total += flat;
+      }
+    }
+
+    // Apply the heal. Cap at max HP.
+    const hp = char.hit_points || {};
+    const maxHP = hp.max || 0;
+    const current = hp.current ?? maxHP;
+    const newCurrent = Math.min(maxHP, current + total);
+    if (char.id && char.type !== 'monster' && char.type !== 'npc') {
+      base44.entities.Character.update(char.id, {
+        hit_points: { ...hp, current: newCurrent },
+      }).catch(console.error);
+      queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
+    }
+    // Also update combat_data.order entry (spectator-visible HP).
+    const cd = campaign?.combat_data || {};
+    const updatedOrder = (cd.order || []).map((c) => {
+      if ((c.uniqueId || c.id) !== selectedCharacterKey) return c;
+      return { ...c, hit_points: { ...(c.hit_points || {}), current: newCurrent, max: maxHP } };
+    });
+    if (updatedOrder.length) {
+      const newData = { ...cd, order: updatedOrder };
+      queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: newData } : old);
+      base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+    }
+
+    // Remove one from inventory. Monster/NPC: mutate the local
+    // monsterInventory state. Player: update their character record.
+    if (source?.monsterIdx !== undefined) {
+      setMonsterInventory((prev) => {
+        const next = [...prev];
+        const it = next[source.monsterIdx];
+        if (!it) return prev;
+        if ((it.quantity || 1) > 1) next[source.monsterIdx] = { ...it, quantity: it.quantity - 1 };
+        else next.splice(source.monsterIdx, 1);
+        return next;
+      });
+    } else if (source?.inventoryIdx !== undefined && char.id) {
+      const inventory = Array.isArray(char.inventory) ? [...char.inventory] : [];
+      const it = inventory[source.inventoryIdx];
+      if (it) {
+        if ((it.quantity || 1) > 1) inventory[source.inventoryIdx] = { ...it, quantity: it.quantity - 1 };
+        else inventory.splice(source.inventoryIdx, 1);
+        base44.entities.Character.update(char.id, { inventory }).catch(console.error);
+        queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
+      }
+    }
+
+    logCombatEvent(campaignId, `${char.name} drinks a ${item.name}, healing ${total} HP! (${newCurrent}/${maxHP} HP)`, {
+      event: 'healing_potion', category: 'heal', actor: char.name, potion: item.name, heal: total,
+    });
+    toast.success(`${char.name} drinks ${item.name}: +${total} HP`);
+  }, [selectedCharacter, selectedCharacterKey, campaign?.combat_data, effectiveRules, campaignId, queryClient, actionsState, setActionsState, setMonsterInventory]);
+
+  // Apply a chosen metamagic to a pending spell action. Spends SP
+  // and mutates the action (e.g. Quickened changes cost, Twinned
+  // tags it for re-target, Heightened flags disadvantage on the
+  // save). Returns the updated action.
+  const applyMetamagic = React.useCallback((action, metamagic) => {
+    if (!metamagic || metamagic === 'none') return action;
+    const char = selectedCharacter;
+    if (!char || !selectedCharacterKey) return action;
+    const cd = campaign?.combat_data || {};
+    const res = cd.classResources?.[selectedCharacterKey] || {};
+    const level = char.level || char.stats?.level || 1;
+    const spLeft = res.sorceryPointsRemaining ?? level;
+    const metamagicDef = CLASS_ABILITY_MECHANICS['Metamagic']?.options || {};
+    const rawCost = metamagicDef[metamagic]?.cost;
+    let cost = typeof rawCost === 'number'
+      ? rawCost
+      : (metamagic === 'Twinned Spell' ? Math.max(1, action.castLevel || action.level || 1) : 1);
+    if (spLeft < cost) { toast.error('Not enough sorcery points.'); return action; }
+    const newRes = {
+      ...(cd.classResources || {}),
+      [selectedCharacterKey]: { ...res, sorceryPointsRemaining: spLeft - cost },
+    };
+    const newData = { ...cd, classResources: newRes };
+    queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: newData } : old);
+    base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+    const next = { ...action, metamagic };
+    if (metamagic === 'Quickened Spell') {
+      next.costOverride = 'bonus';
+      if (next.resolved) next.resolved = { ...next.resolved, cost: 'bonus' };
+    }
+    if (metamagic === 'Twinned Spell') next.metamagic_twinned = true;
+    if (metamagic === 'Heightened Spell') next.metamagic_heightened = true;
+    if (metamagic === 'Empowered Spell') next.metamagic_empowered = true;
+    if (metamagic === 'Careful Spell') {
+      const chaMod = abilityModifier(char.attributes?.cha || 10);
+      next.metamagic_careful_count = Math.max(1, chaMod);
+    }
+    logCombatEvent(campaignId, `${char.name} applies ${metamagic} (${cost} SP).`, {
+      event: 'metamagic', category: 'spell', actor: char.name, metamagic, cost,
+    });
+    toast(`${metamagic} (${cost} SP)`);
+    return next;
+  }, [selectedCharacter, selectedCharacterKey, campaign?.combat_data, campaignId, queryClient]);
+
+  // Manual sorcery-point adjustment (GM clicks a diamond to correct
+  // the count). Max SP = sorcerer level.
+  const handleToggleSorceryPoint = React.useCallback((mode) => {
+    if (!selectedCharacterKey || !campaign?.combat_data) return;
+    const cd = campaign.combat_data;
+    const res = cd.classResources?.[selectedCharacterKey] || {};
+    const char = selectedCharacter;
+    if (!char) return;
+    const level = char.level || char.stats?.level || 1;
+    const maxSP = /sorcerer/i.test(char.class || '') ? level : 0;
+    if (maxSP <= 0) return;
+    const curr = res.sorceryPointsRemaining ?? maxSP;
+    let next = curr;
+    if (mode === 'spend') next = Math.max(0, curr - 1);
+    else if (mode === 'restore') next = Math.min(maxSP, curr + 1);
+    if (next === curr) return;
+    const newRes = {
+      ...(cd.classResources || {}),
+      [selectedCharacterKey]: { ...res, sorceryPointsRemaining: next },
+    };
+    const newData = { ...cd, classResources: newRes };
+    queryClient.setQueryData(['campaign', campaignId], (old) =>
+      old ? { ...old, combat_data: newData } : old,
+    );
+    base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+  }, [selectedCharacterKey, selectedCharacter, campaign?.combat_data, campaignId, queryClient]);
+
+  // Lucky feat pip click handler (GM correction of the 3-point
+  // pool). Resets on long rest.
+  const handleToggleLuck = React.useCallback((mode) => {
+    if (!selectedCharacterKey || !campaign?.combat_data) return;
+    const cd = campaign.combat_data;
+    const res = cd.classResources?.[selectedCharacterKey] || {};
+    const max = 3;
+    const curr = res.luckyPointsRemaining ?? max;
+    let next = curr;
+    if (mode === 'spend') next = Math.max(0, curr - 1);
+    else if (mode === 'restore') next = Math.min(max, curr + 1);
+    if (next === curr) return;
+    const newRes = {
+      ...(cd.classResources || {}),
+      [selectedCharacterKey]: { ...res, luckyPointsRemaining: next },
+    };
+    const newData = { ...cd, classResources: newRes };
+    queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: newData } : old);
+    base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+  }, [selectedCharacterKey, campaign?.combat_data, campaignId, queryClient]);
 
   // Manual ki adjustment (GM clicks a diamond to correct the count).
   // Writes through combat_data.classResources so both panels see the
@@ -1370,6 +1912,80 @@ export default function GMPanel() {
         setCombatState({ isOpen: false, step: 'selecting_target', action, target: null });
         logCombatEvent(campaignId, `${char?.name} unleashes a Flurry of Blows!`, { event: 'flurry_of_blows', category: 'attack', actor: char?.name });
         toast.success(`${char?.name} unleashes a Flurry of Blows!`);
+        break;
+      }
+      case 'layOnHands': {
+        const maxPool = layOnHandsPool(level);
+        const pool = res.layOnHandsRemaining ?? maxPool;
+        if (pool <= 0) { toast.error('Lay on Hands pool is empty!'); return; }
+        if (!actionsState.action) { toast.error('No action available this turn!'); return; }
+        setLayOnHandsOpen(true);
+        break;
+      }
+      case 'turnUndead': {
+        const maxCD = level >= 18 ? 3 : level >= 6 ? 2 : 1;
+        if ((res.channelDivinityRemaining ?? maxCD) <= 0) { toast.error('No Channel Divinity uses remaining!'); return; }
+        if (!actionsState.action) { toast.error('No action available this turn!'); return; }
+        setTurnUndeadOpen(true);
+        break;
+      }
+      case 'wildShape': {
+        const isMoon = /circle\s*of\s*the\s*moon/i.test(char?.subclass || '');
+        // If the druid is already transformed, clicking reverts them.
+        if (res.wildShapeForm) {
+          revertWildShape();
+          break;
+        }
+        if ((res.wildShapeRemaining ?? 2) <= 0) { toast.error('No Wild Shape uses remaining!'); return; }
+        if (isMoon ? !actionsState.bonus : !actionsState.action) {
+          toast.error(`No ${isMoon ? 'bonus action' : 'action'} available this turn!`);
+          return;
+        }
+        setWildShapeOpen(true);
+        break;
+      }
+      case 'powerAttack': {
+        // GWM / Sharpshooter -5/+10 toggle. Persists on class
+        // resources so the dice window can read it when rolling.
+        const next = !res.powerAttackActive;
+        writeResources({ powerAttackActive: next });
+        if (next) {
+          logCombatEvent(campaignId, `${char?.name} takes a powerful swing/shot! (-5 to hit, +10 damage)`, {
+            event: 'power_attack_on', category: 'attack', actor: char?.name,
+          });
+          toast.success(`Power Attack ON (${char?.name})`);
+        } else {
+          toast(`Power Attack OFF (${char?.name})`);
+        }
+        break;
+      }
+      case 'polearmMaster': {
+        // Polearm Master butt-end attack — 1d4 + STR bonus-action
+        // melee attack. Requires a qualifying weapon.
+        const w1 = equippedItems?.weapon1;
+        const w1name = (w1?.name || '').toLowerCase();
+        if (!/glaive|halberd|quarterstaff|spear|pike/.test(w1name)) {
+          toast.error('Polearm Master needs a glaive, halberd, quarterstaff, spear, or pike.');
+          return;
+        }
+        if (!actionsState.bonus) { toast.error('No bonus action available!'); return; }
+        const action = buildAttackAction('melee');
+        if (!action) return;
+        action.name = 'Butt End';
+        action.isPolearmMaster = true;
+        action.costOverride = 'bonus';
+        // Swap the weapon's damage dice to 1d4 bludgeoning for this
+        // strike. We deep-clone the weapon so the rest of the game
+        // sees the original damage.
+        if (action.weapon) {
+          action.weapon = { ...action.weapon, damage: '1d4', damage_type: 'bludgeoning' };
+        } else {
+          action.weapon = { name: 'Butt End', damage: '1d4', damage_type: 'bludgeoning', properties: [] };
+        }
+        setCombatState({ isOpen: false, step: 'selecting_target', action, target: null });
+        logCombatEvent(campaignId, `${char?.name} readies a butt-end strike.`, {
+          event: 'polearm_master', category: 'attack', actor: char?.name,
+        });
         break;
       }
       case 'bardicInspiration': {
@@ -1966,8 +2582,8 @@ export default function GMPanel() {
 
       <div className="-mt-16 px-6 pb-10">
         <div className="grid grid-cols-[320px,minmax(0,1fr)] gap-6">
-          <CharacterPanel 
-            character={selectedCharacter} 
+          <CharacterPanel
+            character={selectedCharacter}
             onSelectCharacter={() => setShowCharacterSelector(true)}
             isPossessed={isPossessed}
             setIsPossessed={setIsPossessed}
@@ -1979,6 +2595,7 @@ export default function GMPanel() {
             setEquippedItems={setEquippedItems}
             onRollInitiative={rollInitiative}
             onManageConditions={() => setShowConditionManager(true)}
+            onDrinkPotion={drinkHealingPotion}
           />
 
           <div className="space-y-4">
@@ -2133,7 +2750,23 @@ export default function GMPanel() {
                 const actorKey = getCharacterKey(selectedCharacter);
                 if (actorKey) clearBardicInspiration(actorKey);
               }}
-              homebrewRules={campaign?.homebrew_rules}
+              onLuckySpend={() => {
+                // Decrement the Lucky pool on the actor's classResources.
+                const key = getCharacterKey(selectedCharacter);
+                if (!key) return;
+                const cd = campaign?.combat_data || {};
+                const cr = cd.classResources?.[key] || {};
+                const left = Math.max(0, (cr.luckyPointsRemaining ?? 3) - 1);
+                const newRes = { ...(cd.classResources || {}), [key]: { ...cr, luckyPointsRemaining: left } };
+                const newData = { ...cd, classResources: newRes };
+                queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: newData } : old);
+                base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+              }}
+              onInspirationUse={() => {
+                const actorKey = getCharacterKey(selectedCharacter);
+                if (actorKey) setCombatantInspiration(actorKey, false);
+              }}
+              homebrewRules={effectiveRules}
 
               // Spectator Props
               isSpectator={!combatState.isOpen && !!campaign?.combat_data?.active_encounter}
@@ -2320,19 +2953,84 @@ export default function GMPanel() {
                     const profBonus = entity?.proficiency_bonus || 2;
                     const isProf = entity?.saves?.con || entity?.saving_throws?.con || false;
                     const bonus = conMod + (isProf ? profBonus : 0);
-                    const d20 = Math.floor(Math.random() * 20) + 1;
+                    // Tier 3: War Caster — advantage on concentration
+                    // saves. Roll 2d20 take higher.
+                    const feats = Array.isArray(entity?.feats) ? entity.feats
+                      : Array.isArray(entity?.features) ? entity.features : [];
+                    const hasWarCaster = feats.some((f) => {
+                      const n = typeof f === 'string' ? f : f?.name;
+                      return typeof n === 'string' && n.toLowerCase() === 'war caster';
+                    });
+                    let d20 = Math.floor(Math.random() * 20) + 1;
+                    if (hasWarCaster) {
+                      const second = Math.floor(Math.random() * 20) + 1;
+                      d20 = Math.max(d20, second);
+                    }
                     const total = d20 + bonus;
                     const casterName = concentrationByCharacter[targetId].casterName || entity?.name || 'Caster';
                     const spell = concentrationByCharacter[targetId].spell;
                     if (total < dc) {
                       toast.error(
-                        `${casterName} failed CON save (${total} vs DC ${dc}) — Concentration on ${spell} broken!`,
+                        `${casterName} failed CON save (${total} vs DC ${dc})${hasWarCaster ? ' (War Caster)' : ''} — Concentration on ${spell} broken!`,
                       );
                       breakConcentration(targetId, 'damage');
                     } else {
                       toast(
-                        `${casterName} maintained Concentration on ${spell} (${total} vs DC ${dc}).`,
+                        `${casterName} maintained Concentration on ${spell} (${total} vs DC ${dc})${hasWarCaster ? ' (War Caster)' : ''}.`,
                       );
+                    }
+                  }
+
+                  // Tier 3: Sentinel — a melee hit taken as a reaction
+                  // (opportunity attack) sets the target's speed to
+                  // 0 for the turn. OA targeting isn't fully wired
+                  // yet; we key on action.resolved.cost === 'reaction'
+                  // + melee mode, which covers any reaction attack
+                  // the GM fires through the dice window. Disengage
+                  // bypass for Sentinel needs the full OA flow —
+                  // note for future work.
+                  {
+                    const actionCost = combatState.action?.resolved?.cost || combatState.action?.costOverride;
+                    const isMelee = combatState.action?.mode === 'melee' || combatState.action?.mode === 'unarmed';
+                    const attackerFeats = Array.isArray(selectedCharacter?.feats) ? selectedCharacter.feats
+                      : Array.isArray(selectedCharacter?.features) ? selectedCharacter.features : [];
+                    const hasSentinel = attackerFeats.some((f) => {
+                      const n = typeof f === 'string' ? f : f?.name;
+                      return typeof n === 'string' && n.toLowerCase() === 'sentinel';
+                    });
+                    if (hasSentinel && isMelee && actionCost === 'reaction' && targetId) {
+                      setActiveConditions((prev) => {
+                        const cur = prev[targetId] || [];
+                        if (cur.includes('Grappled')) return prev; // already speed 0
+                        return { ...prev, [targetId]: [...cur, 'Grappled'] };
+                      });
+                      logCombatEvent(campaignId, `${data.detail?.targetName || 'Target'}'s movement is halted by ${selectedCharacter?.name || 'Actor'}! (Sentinel)`, {
+                        event: 'sentinel_halt', category: 'condition', actor: selectedCharacter?.name, target: targetId,
+                      });
+                    }
+                  }
+
+                  // Tier 3: Great Weapon Master — crit or kill with a
+                  // melee weapon grants a free bonus-action melee
+                  // attack. We just surface a toast so the GM can
+                  // click the melee attack again (action economy
+                  // keeps bonus open).
+                  {
+                    const orderForGWM = campaign?.combat_data?.order || [];
+                    const tgt = orderForGWM.find((c) => (c.uniqueId || c.id) === targetId);
+                    const tgtHp = tgt?.hit_points?.current ?? 0;
+                    const killed = data.value >= tgtHp;
+                    if (data.detail?.isCrit || killed) {
+                      const attackerFeats = Array.isArray(selectedCharacter?.feats) ? selectedCharacter.feats
+                        : Array.isArray(selectedCharacter?.features) ? selectedCharacter.features : [];
+                      const hasGWM = attackerFeats.some((f) => {
+                        const n = typeof f === 'string' ? f : f?.name;
+                        return typeof n === 'string' && n.toLowerCase() === 'great weapon master';
+                      });
+                      const wasMelee = combatState.action?.mode === 'melee' || combatState.action?.mode === 'offhand';
+                      if (hasGWM && wasMelee && actionsState.bonus) {
+                        toast.success('Great Weapon Master: Bonus action melee attack!');
+                      }
                     }
                   }
 
@@ -2800,6 +3498,8 @@ export default function GMPanel() {
                   }}
                   isGM={isGM}
                   onChangeFaction={updateCombatantFaction}
+                  onSetExhaustion={setCombatantExhaustion}
+                  onGrantInspiration={setCombatantInspiration}
                   selectionMode={combatState.step === 'selecting_target'}
                   isTurnOrderAccepted={isTurnOrderAccepted}
                   // Pass helpers to lookup HP. Everything flows through
@@ -2952,6 +3652,10 @@ export default function GMPanel() {
               classResources={campaign?.combat_data?.classResources?.[selectedCharacterKey] || {}}
               onClassAbility={handleClassAbility}
               onToggleKi={handleToggleKi}
+              onToggleSorceryPoint={handleToggleSorceryPoint}
+              onConvertSlotToSP={() => setFontOfMagicDirection('slotToSP')}
+              onConvertSPToSlot={() => setFontOfMagicDirection('spToSlot')}
+              onToggleLuck={handleToggleLuck}
               onActionClick={((runAction) => {
                 // Always repoint the ref at the freshest closure so
                 // the level picker can re-enter this exact handler
@@ -2968,6 +3672,16 @@ export default function GMPanel() {
                   toast.error("Can't cast spells while raging!");
                   return;
                 }
+                // Wild Shape blocks spells too (until Beast Spells at
+                // Druid 18 — we leave that exception for the user's
+                // sheet data to drive via a feature flag).
+                if (action.type === 'spell' && charRes.wildShapeForm) {
+                  const level = selectedCharacter?.level || 1;
+                  if (level < 18) {
+                    toast.error("Can't cast spells while in Wild Shape!");
+                    return;
+                  }
+                }
 
                 // Level picker interception. Leveled spells (>=1st)
                 // without an explicit castLevel get held here so the
@@ -2981,6 +3695,25 @@ export default function GMPanel() {
                 ) {
                   setPendingSpellCast({ action });
                   return;
+                }
+
+                // Sorcerer — Metamagic prompt. Shown AFTER the level
+                // has been chosen (cantrips skip straight through)
+                // and BEFORE resolution / targeting. `metamagicChosen`
+                // is set on the action once the picker resolves; we
+                // skip the picker on the second pass through this
+                // handler.
+                if (
+                  action.type === 'spell' &&
+                  /sorcerer/i.test(selectedCharacter?.class || '') &&
+                  (selectedCharacter?.level || 1) >= 3 &&
+                  !action.metamagicChosen
+                ) {
+                  const sp = charRes.sorceryPointsRemaining ?? 0;
+                  if (sp > 0) {
+                    setPendingMetamagic({ action: { ...action, metamagicChosen: true }, castLevel: action.castLevel || action.level });
+                    return;
+                  }
                 }
 
                 // Resolve first so we know the cost — that determines
@@ -3633,6 +4366,201 @@ export default function GMPanel() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Sorcerer — Font of Magic conversion picker. Direction flag
+          controls whether we're converting a slot into sorcery points
+          or the reverse. Both moves cost a bonus action. */}
+      <AlertDialog
+        open={!!fontOfMagicDirection}
+        onOpenChange={(open) => { if (!open) setFontOfMagicDirection(null); }}
+      >
+        <AlertDialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-md">
+          {fontOfMagicDirection && (() => {
+            const char = selectedCharacter;
+            const level = char?.level || char?.stats?.level || 1;
+            const res = campaign?.combat_data?.classResources?.[selectedCharacterKey] || {};
+            const spTable = CLASS_ABILITY_MECHANICS['Font of Magic'] || {};
+            const toPoints = spTable.convertSlotToPoints || {};
+            const toSlot = spTable.convertPointsToSlot || {};
+            const sp = res.sorceryPointsRemaining ?? level;
+            const charSpent = spentSlotsByCharacter[selectedCharacterKey] || {};
+            const isSlotToSP = fontOfMagicDirection === 'slotToSP';
+            return (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    {isSlotToSP ? 'Spell Slot → Sorcery Points' : 'Sorcery Points → Spell Slot'}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="text-gray-400">
+                    Costs a bonus action. {isSlotToSP
+                      ? 'Expend a slot to gain sorcery points.'
+                      : `Spend sorcery points to create a slot. You have ${sp} SP.`}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="grid grid-cols-2 gap-2 mt-3">
+                  {isSlotToSP ? (
+                    Object.entries(toPoints).map(([lvl, points]) => {
+                      const slotLvl = Number(lvl);
+                      const max = maxSpellSlots[slotLvl] || 0;
+                      const spent = charSpent[slotLvl] || 0;
+                      const available = max > 0 && spent < max;
+                      return (
+                        <button
+                          key={lvl}
+                          disabled={!available}
+                          onClick={() => {
+                            if (!actionsState.bonus) { toast.error('No bonus action available!'); return; }
+                            if (!selectedCharacterKey) return;
+                            setActionsState((prev) => ({ ...prev, bonus: false }));
+                            setSpentSlotsByCharacter((prev) => {
+                              const cs = prev[selectedCharacterKey] || {};
+                              return { ...prev, [selectedCharacterKey]: { ...cs, [slotLvl]: (cs[slotLvl] || 0) + 1 } };
+                            });
+                            const cd = campaign?.combat_data || {};
+                            const curRes = cd.classResources?.[selectedCharacterKey] || {};
+                            const maxSP = level;
+                            const newSP = Math.min(maxSP, (curRes.sorceryPointsRemaining ?? maxSP) + points);
+                            const newRes = { ...(cd.classResources || {}), [selectedCharacterKey]: { ...curRes, sorceryPointsRemaining: newSP } };
+                            const newData = { ...cd, classResources: newRes };
+                            queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: newData } : old);
+                            base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+                            logCombatEvent(campaignId, `${char?.name} converts a ${slotLvl === 1 ? '1st' : slotLvl === 2 ? '2nd' : slotLvl === 3 ? '3rd' : `${slotLvl}th`}-level slot into ${points} sorcery points.`, { event: 'font_of_magic', category: 'spell', actor: char?.name });
+                            toast.success(`Gained ${points} sorcery points (now ${newSP}/${maxSP}).`);
+                            setFontOfMagicDirection(null);
+                          }}
+                          className={`flex flex-col items-center justify-center py-3 rounded-xl border transition-colors ${
+                            available
+                              ? 'bg-[#a855f7]/20 hover:bg-[#a855f7]/35 border-[#a855f7]/60 text-white'
+                              : 'bg-[#0b1220] border-slate-800 text-slate-600 cursor-not-allowed'
+                          }`}
+                        >
+                          <span className="text-sm font-black">L{slotLvl} slot → {points} SP</span>
+                          <span className="text-[10px] opacity-80 mt-0.5">{max - spent}/{max} left</span>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    Object.entries(toSlot).map(([pts, lvl]) => {
+                      const cost = Number(pts);
+                      const slotLvl = Number(lvl);
+                      const enough = sp >= cost;
+                      return (
+                        <button
+                          key={pts}
+                          disabled={!enough}
+                          onClick={() => {
+                            if (!actionsState.bonus) { toast.error('No bonus action available!'); return; }
+                            if (!selectedCharacterKey) return;
+                            setActionsState((prev) => ({ ...prev, bonus: false }));
+                            const cd = campaign?.combat_data || {};
+                            const curRes = cd.classResources?.[selectedCharacterKey] || {};
+                            const newSP = Math.max(0, (curRes.sorceryPointsRemaining ?? level) - cost);
+                            const newRes = { ...(cd.classResources || {}), [selectedCharacterKey]: { ...curRes, sorceryPointsRemaining: newSP } };
+                            const newData = { ...cd, classResources: newRes };
+                            queryClient.setQueryData(['campaign', campaignId], (old) => old ? { ...old, combat_data: newData } : old);
+                            base44.entities.Campaign.update(campaignId, { combat_data: newData }).catch(console.error);
+                            // Restore one slot at the chosen level (decrement spent).
+                            setSpentSlotsByCharacter((prev) => {
+                              const cs = prev[selectedCharacterKey] || {};
+                              const curSpent = cs[slotLvl] || 0;
+                              return { ...prev, [selectedCharacterKey]: { ...cs, [slotLvl]: Math.max(0, curSpent - 1) } };
+                            });
+                            logCombatEvent(campaignId, `${char?.name} spends ${cost} sorcery points to create a ${slotLvl === 1 ? '1st' : slotLvl === 2 ? '2nd' : slotLvl === 3 ? '3rd' : `${slotLvl}th`}-level slot.`, { event: 'font_of_magic', category: 'spell', actor: char?.name });
+                            toast.success(`Created L${slotLvl} slot (${newSP} SP left).`);
+                            setFontOfMagicDirection(null);
+                          }}
+                          className={`flex flex-col items-center justify-center py-3 rounded-xl border transition-colors ${
+                            enough
+                              ? 'bg-[#a855f7]/20 hover:bg-[#a855f7]/35 border-[#a855f7]/60 text-white'
+                              : 'bg-[#0b1220] border-slate-800 text-slate-600 cursor-not-allowed'
+                          }`}
+                        >
+                          <span className="text-sm font-black">{cost} SP → L{slotLvl}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                <AlertDialogFooter className="mt-3">
+                  <AlertDialogCancel className="bg-transparent border-gray-600 text-white hover:bg-gray-800 hover:text-white">
+                    Cancel
+                  </AlertDialogCancel>
+                </AlertDialogFooter>
+              </>
+            );
+          })()}
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Paladin — Lay on Hands. Select target + HP amount, or cure
+          disease/poison (5 HP from pool). */}
+      {layOnHandsOpen && selectedCharacter && (
+        <LayOnHandsModal
+          onClose={() => setLayOnHandsOpen(false)}
+          paladin={selectedCharacter}
+          pool={(campaign?.combat_data?.classResources?.[selectedCharacterKey]?.layOnHandsRemaining) ?? layOnHandsPool(selectedCharacter?.level || 1)}
+          maxPool={layOnHandsPool(selectedCharacter?.level || 1)}
+          allies={(campaign?.combat_data?.order || []).filter(c => {
+            const f = getFaction(c);
+            return f === 'player' || f === 'ally';
+          })}
+          onConfirm={({ targetKey, amount, cure }) => {
+            applyLayOnHands({ targetKey, amount, cure });
+            setLayOnHandsOpen(false);
+          }}
+        />
+      )}
+
+      {/* Cleric — Turn Undead. Checkbox list of enemy undead within
+          range (GM picks). WIS saves; Destroy Undead threshold kills
+          low-CR undead outright. */}
+      {turnUndeadOpen && selectedCharacter && (
+        <TurnUndeadModal
+          onClose={() => setTurnUndeadOpen(false)}
+          cleric={selectedCharacter}
+          enemies={(campaign?.combat_data?.order || []).filter(c => {
+            const f = getFaction(c);
+            return f === 'hostile' || f === 'enemy';
+          })}
+          onConfirm={(selections) => {
+            applyTurnUndead(selections);
+            setTurnUndeadOpen(false);
+          }}
+        />
+      )}
+
+      {/* Druid — Wild Shape beast form selector. Filtered by the
+          druid's level (Moon Druid gets higher CR caps + elementals
+          at level 10). */}
+      {wildShapeOpen && selectedCharacter && (
+        <WildShapeModal
+          onClose={() => setWildShapeOpen(false)}
+          druid={selectedCharacter}
+          availableSlots={maxSpellSlots}
+          spentSlots={spentSlotsByCharacter[selectedCharacterKey] || {}}
+          onConfirm={(beastName, beast, isElemental) => {
+            applyWildShape(beastName, beast, isElemental);
+            setWildShapeOpen(false);
+          }}
+        />
+      )}
+
+      {/* Sorcerer — Metamagic picker. Shown after spell-level pick
+          (leveled) or immediately on cantrip click. Options the
+          sorcerer doesn't have enough SP for are greyed out. */}
+      {pendingMetamagic && (
+        <MetamagicModal
+          pending={pendingMetamagic}
+          sp={(campaign?.combat_data?.classResources?.[selectedCharacterKey]?.sorceryPointsRemaining) ?? (selectedCharacter?.level || 0)}
+          known={(selectedCharacter?.metamagic) || null}
+          onClose={() => setPendingMetamagic(null)}
+          onApply={(metamagic) => {
+            const updatedAction = applyMetamagic(pendingMetamagic.action, metamagic);
+            setPendingMetamagic(null);
+            if (runActionRef.current && updatedAction) runActionRef.current(updatedAction);
+          }}
+        />
+      )}
+
       {/* Leveled-spell cast level picker. Shows slot buttons from the
           spell's base level up to the character's highest available
           slot, greying out levels where every slot is spent. */}
@@ -3717,6 +4645,292 @@ export default function GMPanel() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Tier 2 ability modals. These are plain functions, not React.memo'd,
+// because they always mount fresh when opened (state is driven by the
+// parent's open/close flags).
+// ─────────────────────────────────────────────
+
+function LayOnHandsModal({ onClose, paladin, pool, maxPool, allies, onConfirm }) {
+  const [targetKey, setTargetKey] = useState(null);
+  const [amount, setAmount] = useState(1);
+  // Self is always a valid target. Build the combined list.
+  const selfEntry = {
+    uniqueId: paladin?.uniqueId || paladin?.id,
+    id: paladin?.id,
+    name: `${paladin?.name} (self)`,
+    __isSelf: true,
+  };
+  const allTargets = [selfEntry, ...allies.filter(a => (a.uniqueId || a.id) !== (paladin?.uniqueId || paladin?.id))];
+  return (
+    <AlertDialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <AlertDialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Lay on Hands — Pool: {pool}/{maxPool}</AlertDialogTitle>
+          <AlertDialogDescription className="text-gray-400">
+            Heal a target (self or ally) or spend 5 HP to cure one disease/poison.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="space-y-3 mt-2">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400 mb-1">Target</div>
+            <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto custom-scrollbar">
+              {allTargets.map((t) => {
+                const key = t.uniqueId || t.id;
+                const selected = targetKey === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setTargetKey(key)}
+                    className={`text-[10px] font-bold px-2 py-1 rounded border transition-colors ${
+                      selected
+                        ? 'bg-[#fbbf24] text-[#050816] border-[#fbbf24]'
+                        : 'bg-[#0b1220] border-slate-700 text-slate-300 hover:border-[#fbbf24]/60'
+                    }`}
+                  >
+                    {t.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400 mb-1">HP to heal</div>
+            <input
+              type="number"
+              min={1}
+              max={pool}
+              value={amount}
+              onChange={(e) => setAmount(Number(e.target.value) || 0)}
+              className="w-full bg-[#0b1220] border border-slate-700 rounded-lg px-3 py-2 text-white"
+            />
+            <div className="text-[9px] text-slate-500 mt-1">Max per heal: {pool}</div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              disabled={!targetKey || amount <= 0 || amount > pool}
+              onClick={() => onConfirm({ targetKey, amount, cure: false })}
+              className="flex-1 bg-[#fbbf24] hover:bg-[#fde68a] disabled:opacity-40 disabled:cursor-not-allowed text-[#050816] font-black py-2 rounded-xl text-sm"
+            >
+              Heal {amount}
+            </button>
+            <button
+              disabled={!targetKey || pool < 5}
+              onClick={() => onConfirm({ targetKey, amount: 5, cure: true })}
+              className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black py-2 rounded-xl text-sm"
+            >
+              Cure Disease/Poison (5 HP)
+            </button>
+          </div>
+        </div>
+        <AlertDialogFooter className="mt-3">
+          <AlertDialogCancel className="bg-transparent border-gray-600 text-white hover:bg-gray-800 hover:text-white">Cancel</AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function TurnUndeadModal({ onClose, cleric, enemies, onConfirm }) {
+  const [selections, setSelections] = useState(() => enemies.map(() => false));
+  const toggle = (i) => setSelections((prev) => prev.map((v, idx) => idx === i ? !v : v));
+  return (
+    <AlertDialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <AlertDialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Turn Undead — {cleric?.name}</AlertDialogTitle>
+          <AlertDialogDescription className="text-gray-400">
+            Tick each undead within 30 ft. They each roll a WIS save vs your spell DC.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="max-h-64 overflow-y-auto custom-scrollbar space-y-1 mt-2">
+          {enemies.length === 0 ? (
+            <p className="text-center text-sm text-slate-500 py-4">No enemies in combat.</p>
+          ) : (
+            enemies.map((e, i) => (
+              <label
+                key={e.uniqueId || e.id || i}
+                className="flex items-center gap-2 p-2 rounded bg-[#0b1220] border border-slate-800 hover:border-slate-600 cursor-pointer"
+              >
+                <input type="checkbox" checked={selections[i]} onChange={() => toggle(i)} />
+                <span className="text-sm text-white flex-1">{e.name}</span>
+                {e.cr != null && (
+                  <span className="text-[9px] text-slate-500">CR {e.cr}</span>
+                )}
+              </label>
+            ))
+          )}
+        </div>
+        <AlertDialogFooter className="mt-3">
+          <AlertDialogCancel className="bg-transparent border-gray-600 text-white hover:bg-gray-800 hover:text-white">Cancel</AlertDialogCancel>
+          <button
+            onClick={() => onConfirm(enemies.map((e, i) => ({ combatant: e, isUndead: selections[i] })))}
+            className="bg-[#eab308] hover:bg-[#ca8a04] text-white font-bold px-4 py-2 rounded-lg text-sm"
+          >
+            Channel Divinity
+          </button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function WildShapeModal({ onClose, druid, availableSlots, spentSlots, onConfirm }) {
+  const [tab, setTab] = useState('beasts');
+  const level = druid?.level || druid?.stats?.level || 1;
+  const isMoon = /circle\s*of\s*the\s*moon/i.test(druid?.subclass || '');
+  // Determine max CR the druid can assume.
+  let maxCRNumeric = 0;
+  if (isMoon) {
+    if (level >= 6) maxCRNumeric = Math.floor(level / 3);
+    else maxCRNumeric = 1;
+  } else {
+    const limits = Object.entries(WILD_SHAPE.crLimits).sort((a, b) => Number(b[0]) - Number(a[0]));
+    for (const [lvl, data] of limits) {
+      if (level >= Number(lvl)) {
+        maxCRNumeric = typeof data.maxCR === 'string' ? (() => {
+          const parts = data.maxCR.split('/');
+          return parts.length === 2 ? Number(parts[0]) / Number(parts[1]) : Number(data.maxCR);
+        })() : data.maxCR;
+        break;
+      }
+    }
+  }
+  const parseCR = (cr) => {
+    if (typeof cr === 'number') return cr;
+    if (typeof cr === 'string') {
+      const parts = cr.split('/');
+      return parts.length === 2 ? Number(parts[0]) / Number(parts[1]) : Number(cr);
+    }
+    return 99;
+  };
+  const beasts = Object.entries(WILD_SHAPE.commonBeastForms).filter(([, b]) => parseCR(b.cr) <= maxCRNumeric);
+  const elementalUnlocked = isMoon && level >= 10;
+  const elementals = Object.entries(WILD_SHAPE.elementalForms);
+
+  // Sum available slots to show the 2-slot cost in context.
+  const slotsAvailable = Object.keys(availableSlots || {}).reduce((sum, lvl) => {
+    const max = availableSlots[lvl] || 0;
+    const spent = (spentSlots || {})[lvl] || 0;
+    return sum + Math.max(0, max - spent);
+  }, 0);
+
+  return (
+    <AlertDialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <AlertDialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-2xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Wild Shape — {druid?.name}</AlertDialogTitle>
+          <AlertDialogDescription className="text-gray-400">
+            Choose a form to assume. Max CR: {maxCRNumeric}{isMoon ? ' (Moon Druid)' : ''}.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {elementalUnlocked && (
+          <div className="flex gap-1 bg-[#0b1220] rounded-lg p-0.5 mt-2">
+            <button
+              onClick={() => setTab('beasts')}
+              className={`flex-1 px-2 py-1 rounded-md text-[10px] font-semibold uppercase ${tab === 'beasts' ? 'bg-[#22c5f5] text-white' : 'text-slate-400'}`}
+            >
+              Beasts
+            </button>
+            <button
+              onClick={() => setTab('elementals')}
+              className={`flex-1 px-2 py-1 rounded-md text-[10px] font-semibold uppercase ${tab === 'elementals' ? 'bg-[#22c5f5] text-white' : 'text-slate-400'}`}
+            >
+              Elementals (2 slots — {slotsAvailable} available)
+            </button>
+          </div>
+        )}
+        <div className="max-h-96 overflow-y-auto custom-scrollbar mt-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {(tab === 'elementals' ? elementals : beasts).map(([name, beast]) => {
+              const canAfford = tab === 'elementals' ? slotsAvailable >= 2 : true;
+              return (
+                <button
+                  key={name}
+                  disabled={!canAfford}
+                  onClick={() => onConfirm(name, beast, tab === 'elementals')}
+                  className={`flex flex-col items-start p-2 rounded-lg border text-left transition-colors ${
+                    canAfford
+                      ? 'bg-[#0b1220] border-[#22c55e]/40 hover:bg-[#22c55e]/15 hover:border-[#22c55e] text-white'
+                      : 'bg-[#0b1220] border-slate-800 text-slate-600 cursor-not-allowed'
+                  }`}
+                >
+                  <span className="text-sm font-black">{name}</span>
+                  <span className="text-[10px] text-slate-400">CR {beast.cr} · {beast.size}</span>
+                  <span className="text-[10px] text-slate-300 mt-1">AC {beast.ac} · HP {beast.hp}</span>
+                  <span className="text-[10px] text-slate-400">{beast.speed}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <AlertDialogFooter className="mt-3">
+          <AlertDialogCancel className="bg-transparent border-gray-600 text-white hover:bg-gray-800 hover:text-white">Cancel</AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function MetamagicModal({ pending, sp, known, onClose, onApply }) {
+  const options = CLASS_ABILITY_MECHANICS['Metamagic']?.options || {};
+  const entries = Object.entries(options);
+  return (
+    <AlertDialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <AlertDialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Apply Metamagic?</AlertDialogTitle>
+          <AlertDialogDescription className="text-gray-400">
+            Spending sorcery points modifies the spell. You have {sp} SP.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="space-y-1.5 mt-2">
+          {entries.map(([name, opt]) => {
+            // TODO: filter against `known` array (character.metamagic)
+            // when that field is populated by the character creator.
+            if (known && Array.isArray(known) && !known.includes(name)) return null;
+            const numericCost = typeof opt.cost === 'number'
+              ? opt.cost
+              : (name === 'Twinned Spell'
+                ? Math.max(1, pending.castLevel || pending.action?.level || 1)
+                : 1);
+            const canAfford = sp >= numericCost;
+            return (
+              <button
+                key={name}
+                disabled={!canAfford}
+                onClick={() => onApply(name)}
+                className={`w-full flex items-start justify-between gap-3 p-2 rounded-lg border text-left transition-colors ${
+                  canAfford
+                    ? 'bg-[#a855f7]/15 border-[#a855f7]/50 hover:bg-[#a855f7]/30 text-white'
+                    : 'bg-[#0b1220] border-slate-800 text-slate-600 cursor-not-allowed'
+                }`}
+              >
+                <div>
+                  <div className="text-sm font-black">{name}</div>
+                  <div className="text-[10px] text-slate-400 leading-snug">{opt.description}</div>
+                </div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-[#a855f7] whitespace-nowrap">
+                  {typeof opt.cost === 'number' ? `${opt.cost} SP` : opt.cost}
+                </div>
+              </button>
+            );
+          })}
+          <button
+            onClick={() => onApply('none')}
+            className="w-full p-2 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-300 text-sm font-bold text-center"
+          >
+            No Metamagic
+          </button>
+        </div>
+        <AlertDialogFooter className="mt-3">
+          <AlertDialogCancel className="bg-transparent border-gray-600 text-white hover:bg-gray-800 hover:text-white">Cancel</AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -4003,7 +5217,7 @@ function getSilhouetteImage(character) {
   return 'https://static.wixstatic.com/media/5cdfd8_35e9f29559bd43239470a098001a1fe5~mv2.png';
 }
 
-function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPossessed, players, onPossessPlayer, monsterInventory, setMonsterInventory, equippedItems, setEquippedItems, onRollInitiative, onManageConditions }) {
+function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPossessed, players, onPossessPlayer, monsterInventory, setMonsterInventory, equippedItems, setEquippedItems, onRollInitiative, onManageConditions, onDrinkPotion }) {
   const [showQuickEquip, setShowQuickEquip] = useState(false);
   const [draggedItem, setDraggedItem] = useState(null);
 
@@ -4319,15 +5533,20 @@ function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPosses
                     ? (monsterInventory[idx] || null)
                     : (inventoryOrder[idx] || null);
                   return (
-                    <InventorySlot 
-                      key={idx} 
-                      item={item} 
+                    <InventorySlot
+                      key={idx}
+                      item={item}
                       isGM={true}
                       onDragStart={isMonsterOrNpc ? () => handleDragStart(item, 'inventory', idx) : undefined}
                       draggable={isMonsterOrNpc && !!item}
                       onDrop={isMonsterOrNpc ? (droppedItem) => {
                         setMonsterInventory(prev => prev.filter((_, i) => i !== idx));
                       } : undefined}
+                      onUse={(usedItem) => {
+                        if (!onDrinkPotion) return;
+                        if (isMonsterOrNpc) onDrinkPotion(usedItem, { monsterIdx: idx });
+                        else onDrinkPotion(usedItem, { inventoryIdx: idx });
+                      }}
                     />
                   );
                 })}
@@ -4463,14 +5682,18 @@ function EncumbranceBar({ inventory, strength }) {
   );
 }
 
-function InventorySlot({ item, isGM = false, isMoleWithAccess = false, onDragStart, draggable, onDrop }) {
+function InventorySlot({ item, isGM = false, isMoleWithAccess = false, onDragStart, draggable, onDrop, onUse }) {
   const [showTooltip, setShowTooltip] = useState(false);
   // Hover delay — snappy but not twitchy. Matches the dice window
   // tooltip behaviour so the panel feels consistent.
-  
+
   // Hidden items are only visible to GM or mole with access
   const isHidden = item?.hidden;
   const canSee = !isHidden || isGM || isMoleWithAccess;
+  // A potion shows an extra "Use" button on hover so the GM can drink
+  // it without dragging. Match by name so homebrew potions with the
+  // canonical key names work out of the box.
+  const isHealingPotion = !!item && typeof item.name === 'string' && HEALING_POTIONS[item.name];
   
   if (item && !canSee) {
     return (
@@ -4514,6 +5737,15 @@ function InventorySlot({ item, isGM = false, isMoleWithAccess = false, onDragSta
           title="Drop item"
         >
           ×
+        </button>
+      )}
+      {item && isHealingPotion && onUse && (
+        <button
+          onClick={() => onUse(item)}
+          className="absolute -bottom-1 -right-1 px-1 py-[1px] rounded bg-[#22c55e]/90 hover:bg-[#22c55e] text-white text-[8px] font-black uppercase tracking-wider items-center justify-center hidden group-hover:flex z-10"
+          title="Drink potion"
+        >
+          Use
         </button>
       )}
       {/* Rich item tooltip on hover — rarity-colored border, full
@@ -5486,7 +6718,7 @@ function LogEntry({ name, time, text, highlight }) {
   );
 }
 
-function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharacter = {}, onSelectTarget, selectionMode, isTurnOrderAccepted, getHp, isGM, onChangeFaction }) {
+function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharacter = {}, onSelectTarget, selectionMode, isTurnOrderAccepted, getHp, isGM, onChangeFaction, onSetExhaustion, onGrantInspiration }) {
   const hasPlayedRef = React.useRef(false);
   // Right-click context menu state. Stores the combatant whose portrait
   // was right-clicked plus screen coords so the menu floats there.
@@ -5634,6 +6866,33 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
                               title={`Bardic Inspiration (${combatant.bardicInspiration.die})${combatant.bardicInspiration.fromName ? ` — from ${combatant.bardicInspiration.fromName}` : ''}`}
                             >
                               ♪
+                            </div>
+                          )}
+
+                          {/* Inspiration badge — gold ★ on top-left when
+                              the character has DM inspiration. */}
+                          {combatant.hasInspiration && !combatant.bardicInspiration && (
+                            <div
+                              className="absolute -top-1 -left-1 text-[11px] font-black z-30 rounded-full w-5 h-5 flex items-center justify-center shadow-[0_0_10px_rgba(250,204,21,0.9)]"
+                              style={{
+                                backgroundColor: '#facc15',
+                                color: '#1f1303',
+                                border: '1.5px solid #fde68a',
+                              }}
+                              title="Inspiration (advantage on one roll)"
+                            >
+                              ★
+                            </div>
+                          )}
+
+                          {/* Exhaustion badge — small numbered pip in the
+                              bottom-left corner when exhaustion > 0. */}
+                          {(combatant.exhaustion || 0) > 0 && (
+                            <div
+                              className="absolute -bottom-1 -left-1 text-[10px] font-black z-30 rounded-full w-5 h-5 flex items-center justify-center bg-red-800 text-white border border-red-300 shadow-[0_0_6px_rgba(153,27,27,0.9)]"
+                              title={`Exhaustion level ${combatant.exhaustion}`}
+                            >
+                              {combatant.exhaustion}
                             </div>
                           )}
 
@@ -5800,7 +7059,7 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
           faction applies it via the parent-supplied callback. */}
       {factionMenu && (
         <div
-          className="fixed z-[200] bg-[#050816] border-2 border-[#37F2D1]/30 rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-2 min-w-[160px]"
+          className="fixed z-[200] bg-[#050816] border-2 border-[#37F2D1]/30 rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-2 min-w-[180px] max-h-[80vh] overflow-y-auto"
           style={{ left: factionMenu.x, top: factionMenu.y }}
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
@@ -5835,6 +7094,64 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
               </button>
             );
           })}
+
+          {/* Exhaustion (levels 0-6). Effects auto-apply via
+              conditions.js; we only persist the level here. */}
+          <div className="text-[9px] uppercase tracking-[0.22em] text-slate-500 font-bold px-2 pt-3 pb-1 border-t border-[#111827] mt-2 mb-1">
+            Exhaustion
+          </div>
+          <div className="grid grid-cols-7 gap-1 px-1 mb-1">
+            {[0, 1, 2, 3, 4, 5, 6].map((lvl) => {
+              const current = (factionMenu.combatant.exhaustion || 0) === lvl;
+              return (
+                <button
+                  key={lvl}
+                  type="button"
+                  onClick={() => {
+                    if (onSetExhaustion) {
+                      onSetExhaustion(
+                        factionMenu.combatant.uniqueId || factionMenu.combatant.id,
+                        lvl,
+                      );
+                    }
+                    setFactionMenu(null);
+                  }}
+                  className={`text-[11px] font-black rounded transition-colors py-1 ${
+                    current ? 'bg-red-700 text-white' : 'bg-[#111827] text-slate-300 hover:bg-red-700/30'
+                  }`}
+                >
+                  {lvl}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Grant Inspiration — GM gives the target a single-use
+              advantage die. ★ badge renders on the portrait until the
+              character spends it. */}
+          <div className="text-[9px] uppercase tracking-[0.22em] text-slate-500 font-bold px-2 pt-3 pb-1 border-t border-[#111827] mt-2 mb-1">
+            Inspiration
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (onGrantInspiration) {
+                onGrantInspiration(
+                  factionMenu.combatant.uniqueId || factionMenu.combatant.id,
+                  !factionMenu.combatant.hasInspiration,
+                );
+              }
+              setFactionMenu(null);
+            }}
+            className={`w-full text-left text-xs font-semibold px-3 py-1.5 rounded-lg mb-0.5 flex items-center gap-2 transition-colors ${
+              factionMenu.combatant.hasInspiration
+                ? 'bg-yellow-500 text-black'
+                : 'bg-[#111827] text-yellow-400 hover:bg-yellow-500/30'
+            }`}
+          >
+            <span>★</span>
+            {factionMenu.combatant.hasInspiration ? 'Clear Inspiration' : 'Grant Inspiration'}
+          </button>
         </div>
       )}
     </div>

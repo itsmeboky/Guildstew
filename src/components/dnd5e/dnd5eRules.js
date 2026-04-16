@@ -1116,17 +1116,20 @@ export function getCampaignRules(campaignRules) {
   return deepMerge(structuredClone(MODIFIABLE_RULES), campaignRules || {});
 }
 
-function deepMerge(target, source) {
+export function deepMergeRules(target, source) {
+  if (!source || typeof source !== 'object') return target;
   for (const key of Object.keys(source)) {
     if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-      if (!target[key]) target[key] = {};
-      deepMerge(target[key], source[key]);
+      if (!target[key] || typeof target[key] !== 'object' || Array.isArray(target[key])) target[key] = {};
+      deepMergeRules(target[key], source[key]);
     } else {
       target[key] = source[key];
     }
   }
   return target;
 }
+// Keep the old name available to existing internal callers.
+const deepMerge = deepMergeRules;
 // ============================================================================
 // D&D 5e RULES REGISTRY — PART 2
 // ============================================================================
