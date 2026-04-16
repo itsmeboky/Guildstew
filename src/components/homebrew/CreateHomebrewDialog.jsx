@@ -106,7 +106,14 @@ const SPELL_EFFECT_TYPES = ["Damage", "Healing", "Condition", "Buff", "Debuff", 
 
 const ABILITY_SOURCE_TYPES = ["Class Feature", "Racial Feature", "General Ability"];
 const ABILITY_COSTS = ["Action", "Bonus Action", "Reaction", "Free", "Passive"];
-const ABILITY_USES = ["At Will", "1/Short Rest", "1/Long Rest", "Proficiency/Long Rest", "Ki", "Spell Slot"];
+const ABILITY_USES = [
+  "At Will",
+  "1/Short Rest",
+  "1/Long Rest",
+  "2/Long Rest",
+  "Proficiency Bonus/Long Rest",
+  "Special",
+];
 const ABILITY_EFFECT_TYPES = ["Damage", "Healing", "Condition", "Buff", "Utility"];
 
 const BLANK_MONSTER = {
@@ -165,14 +172,14 @@ const BLANK_SPELL = {
 
 const BLANK_ABILITY = {
   name: "",
-  source_type: "Class Feature",
+  type: "Class Feature",
   class: "Fighter",
-  level_requirement: 1,
+  level: 1,
   description: "",
   cost: "Action",
   uses: "At Will",
   effect_type: "Utility",
-  mechanical_effect: "",
+  image_url: "",
 };
 
 // Item types the creator can pick; the form below reveals different
@@ -2068,10 +2075,33 @@ export function buildSpellModifications(spell) {
 }
 export function abilityFromModifications(mods) {
   if (!mods || typeof mods !== "object") return { ...BLANK_ABILITY };
-  return { ...BLANK_ABILITY, ...mods };
+  // Honour legacy field names a prior stub saved under different keys.
+  return {
+    ...BLANK_ABILITY,
+    ...mods,
+    type: mods.type || mods.source_type || "Class Feature",
+    class: mods.class || mods.class_name || "Fighter",
+    level: Number(mods.level ?? mods.level_requirement ?? 1),
+    image_url: mods.image_url || "",
+  };
 }
+
 export function buildAbilityModifications(ability) {
-  return { ...(ability || {}) };
+  if (!ability || typeof ability !== "object") return {};
+  const type = ability.type || "Class Feature";
+  const base = {
+    name: ability.name || "",
+    type,
+    level: Number(ability.level) || 1,
+    description: ability.description || "",
+    cost: ability.cost || "Action",
+    uses: ability.uses || "At Will",
+    effect_type: ability.effect_type || "Utility",
+    image_url: ability.image_url || "",
+  };
+  // Only class features carry a class key.
+  if (type === "Class Feature") base.class = ability.class || "Fighter";
+  return base;
 }
 
 function CustomSpellForm({ spell, setSpell }) {
@@ -2407,12 +2437,99 @@ function CustomSpellForm({ spell, setSpell }) {
   );
 }
 
-// Placeholder for the Custom Ability form — lands in the next pass.
-function CustomAbilityForm() {
+function CustomAbilityForm({ ability, setAbility }) {
+  const patch = (fields) => setAbility((prev) => ({ ...prev, ...fields }));
+  const isClassFeature = ability.type === "Class Feature";
+
   return (
-    <p className="text-xs text-slate-400 italic text-center py-4">
-      Custom Ability form coming in the next homebrew pass.
-    </p>
+    <div className="space-y-4">
+      {/* --- Identity --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Field label="Name" required>
+          <Input
+            value={ability.name || ""}
+            onChange={(e) => patch({ name: e.target.value })}
+            placeholder="e.g., Thunderous Rebuke"
+            className="bg-[#0b1220] border-slate-700 text-white"
+          />
+        </Field>
+        <Field label="Type">
+          <Select value={ability.type} onValueChange={(v) => patch({ type: v })}>
+            <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {ABILITY_SOURCE_TYPES.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </Field>
+        {isClassFeature && (
+          <Field label="Class">
+            <Select value={ability.class} onValueChange={(v) => patch({ class: v })}>
+              <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+              <SelectContent className="max-h-72">
+                {SPELL_CLASSES.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
+        <Field label="Level requirement">
+          <Input
+            type="number" min={1} max={20}
+            value={ability.level ?? 1}
+            onChange={(e) => patch({ level: Number(e.target.value) || 1 })}
+            className="bg-[#0b1220] border-slate-700 text-white"
+          />
+        </Field>
+      </div>
+
+      <Field label="Description" required>
+        <Textarea
+          value={ability.description || ""}
+          onChange={(e) => patch({ description: e.target.value })}
+          placeholder="What does the ability do, narratively and mechanically?"
+          rows={4}
+          className="bg-[#0b1220] border-slate-700 text-white"
+        />
+      </Field>
+
+      {/* --- Mechanical shape --- */}
+      <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3 space-y-3">
+        <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Action Economy</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Field label="Action cost">
+            <Select value={ability.cost} onValueChange={(v) => patch({ cost: v })}>
+              <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ABILITY_COSTS.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Uses">
+            <Select value={ability.uses} onValueChange={(v) => patch({ uses: v })}>
+              <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ABILITY_USES.map((u) => (<SelectItem key={u} value={u}>{u}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Effect type">
+            <Select value={ability.effect_type} onValueChange={(v) => patch({ effect_type: v })}>
+              <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ABILITY_EFFECT_TYPES.map((e) => (<SelectItem key={e} value={e}>{e}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+      </div>
+
+      <Field label="Image">
+        <HomebrewImageUpload
+          url={ability.image_url}
+          onChange={(url) => patch({ image_url: url })}
+          path="homebrew/abilities"
+        />
+      </Field>
+    </div>
   );
 }
 
