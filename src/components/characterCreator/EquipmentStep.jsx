@@ -4,24 +4,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
+import { STARTING_EQUIPMENT } from '@/components/dnd5e/dnd5eRules';
 
-const startingEquipment = {
-  Barbarian: ["Greataxe", "2 Handaxes", "Explorer's Pack", "4 Javelins"],
-  Bard: ["Rapier", "Lute", "Leather Armor", "Dagger", "Entertainer's Pack"],
-  Cleric: ["Mace", "Scale Mail", "Light Crossbow", "Priest's Pack", "Shield", "Holy Symbol"],
-  Druid: ["Wooden Shield", "Scimitar", "Leather Armor", "Explorer's Pack", "Druidic Focus"],
-  Fighter: ["Chain Mail", "Longsword", "Shield", "Light Crossbow", "Dungeoneer's Pack"],
-  Monk: ["Shortsword", "Dungeoneer's Pack", "10 Darts"],
-  Paladin: ["Martial Weapon", "Shield", "5 Javelins", "Chain Mail", "Priest's Pack", "Holy Symbol"],
-  Ranger: ["Scale Mail", "Longbow", "20 Arrows", "Shortsword", "Shortsword", "Explorer's Pack"],
-  Rogue: ["Rapier", "Shortbow", "20 Arrows", "Leather Armor", "Burglar's Pack", "Thieves' Tools", "2 Daggers"],
-  Sorcerer: ["Light Crossbow", "Component Pouch", "Dungeoneer's Pack", "2 Daggers"],
-  Warlock: ["Light Crossbow", "Component Pouch", "Scholar's Pack", "Leather Armor", "Dagger", "Dagger"],
-  Wizard: ["Quarterstaff", "Component Pouch", "Scholar's Pack", "Spellbook"]
-};
+// Build a flat string array from the registry's STARTING_EQUIPMENT
+// so the existing grid render keeps working. STARTING_EQUIPMENT has
+// { fixed: [...], choices: [...], startingGold: { dice, multiplier } }
+// per class. We combine fixed items + first option of each choice
+// into a display-friendly flat list.
+function getDefaultEquipment(className) {
+  const entry = STARTING_EQUIPMENT[className];
+  if (!entry) return [];
+  const items = [...(entry.fixed || [])];
+  (entry.choices || []).forEach((choice) => {
+    // Each choice is an array of options — pick the first as default
+    if (Array.isArray(choice) && choice.length > 0) {
+      const first = Array.isArray(choice[0]) ? choice[0] : [choice[0]];
+      items.push(...first);
+    }
+  });
+  return items;
+}
 
 export default function EquipmentStep({ characterData, updateCharacterData }) {
-  const classEquipment = startingEquipment[characterData.class] || [];
+  const classEquipment = getDefaultEquipment(characterData.class);
 
   const addInventoryItem = () => {
     const newItem = { name: "", quantity: 1, weight: 0, description: "" };

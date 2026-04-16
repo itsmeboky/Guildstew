@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { User } from "lucide-react";
 import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
 import { spellDetails } from "@/components/dnd5e/spellData";
-import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
+import { abilityModifier, proficiencyBonus, CLASS_HIT_DICE } from '@/components/dnd5e/dnd5eRules';
 
 const classes = [
   { name: "Barbarian", icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/a6652f2d8_Barbarian1.png" },
@@ -110,9 +110,10 @@ export default function ReviewStep({ characterData }) {
     return 'text-white';
   };
 
-  const profBonus = Math.floor((characterData.level - 1) / 4) + 2;
+  const profBonus = proficiencyBonus(characterData.level);
+  const hitDie = CLASS_HIT_DICE[characterData.class] || 10;
   const conMod = abilityModifier(characterData.attributes.con);
-  const maxHP = 10 + conMod;
+  const maxHP = hitDie + conMod;
   const ac = 10 + abilityModifier(characterData.attributes.dex);
 
   const primaryClassLevel = characterData.level - (characterData.multiclasses || []).reduce((sum, mc) => sum + (mc.level || 0), 0);
