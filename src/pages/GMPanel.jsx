@@ -90,6 +90,7 @@ import {
   HEALING_POTIONS,
   spellSaveDC,
   getSpellSlots as getSpellSlotsRegistry,
+  deepMergeRules,
 } from "@/components/dnd5e/dnd5eRules";
 import {
   initClassResources,
@@ -185,6 +186,59 @@ export default function GMPanel() {
     enabled: !!campaignId,
     refetchInterval: (data) => (data?.combat_active || data?.combat_data?.stage === 'initiative') ? 1000 : 2000
   });
+
+  // Installed Brewery homebrew for this campaign. Each row pairs a
+  // homebrew pack with its enabled flag. Enabled packs' `modifications`
+  // JSONB gets deep-merged onto campaign.homebrew_rules to form the
+  // effective override tree every `getRule()` call honours.
+  const { data: installedHomebrew = [] } = useQuery({
+    queryKey: ['campaignHomebrewMods', campaignId],
+    queryFn: async () => {
+      try {
+        const rows = await base44.entities.CampaignHomebrew.filter({ campaign_id: campaignId });
+        if (!rows?.length) return [];
+        const packs = await Promise.all(
+          rows.map((r) =>
+            base44.entities.HomebrewRule
+              .filter({ id: r.homebrew_id })
+              .then((arr) => (arr[0] ? { ...r, _pack: arr[0] } : null))
+              .catch(() => null),
+          ),
+        );
+        return packs.filter(Boolean);
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!campaignId,
+    initialData: [],
+    staleTime: 30000,
+  });
+
+  // Parse the campaign's raw homebrew_rules (JSONB or legacy string)
+  // into a plain object and merge every enabled Brewery pack on top.
+  // The resulting `effectiveRules` is what every `getRule()` call and
+  // CombatDiceWindow.homebrewRules prop should consume.
+  const effectiveRules = React.useMemo(() => {
+    const raw = campaign?.homebrew_rules;
+    let rules = {};
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      rules = JSON.parse(JSON.stringify(raw));
+    } else if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) rules = parsed;
+      } catch { /* ignore — legacy freeform text */ }
+    }
+    for (const row of installedHomebrew) {
+      if (!row?.enabled) continue;
+      const mods = row._pack?.modifications;
+      if (mods && typeof mods === 'object' && !Array.isArray(mods)) {
+        deepMergeRules(rules, mods);
+      }
+    }
+    return rules;
+  }, [campaign?.homebrew_rules, installedHomebrew]);
 
   const { data: currentUser } = useQuery({
     queryKey: ['currentUser'],
@@ -694,7 +748,8 @@ export default function GMPanel() {
           const current = Number.isFinite(hp.current) ? hp.current : max;
           let nextCurrent = current;
           if (restType === 'long') {
-            nextCurrent = max;
+            const fullHeal = getRule(effectiveRules, 'resting.full_hp_on_long_rest') !== false;
+            nextCurrent = fullHeal ? max : Math.max(current, Math.ceil(max / 2));
           } else if (restType === 'short' && max > 0) {
             // Heal to at least half max HP, but never reduce current HP.
             nextCurrent = Math.max(current, Math.ceil(max / 2));
@@ -1101,7 +1156,7 @@ export default function GMPanel() {
       return;
     }
     // (K) Death save DC — homebrew override. Default DC 10 per PHB.
-    const deathSaveDC = getRule(campaign?.homebrew_rules, 'combat.death_saves.dc') ?? DEATH_RULES.death_saves.dc;
+    const deathSaveDC = getRule(effectiveRules, 'combat.death_saves.dc') ?? DEATH_RULES.death_saves.dc;
     if (roll >= deathSaveDC) {
       applyDeathSaveChange(combatantKey, { successesDelta: 1 });
       logCombatEvent(
@@ -1553,7 +1608,7 @@ export default function GMPanel() {
     if (!potion) return;
     // Action-economy gate — homebrew may allow a self-drink as a
     // bonus action; otherwise it's the default "action".
-    const costKey = getRule(campaign?.homebrew_rules, 'combat.healing_potions.action_cost') ?? 'action';
+    const costKey = getRule(effectiveRules, 'combat.healing_potions.action_cost') ?? 'action';
     if (costKey === 'action' && !actionsState.action) {
       toast.error('No action available this turn!');
       return;
@@ -1630,7 +1685,7 @@ export default function GMPanel() {
       event: 'healing_potion', category: 'heal', actor: char.name, potion: item.name, heal: total,
     });
     toast.success(`${char.name} drinks ${item.name}: +${total} HP`);
-  }, [selectedCharacter, selectedCharacterKey, campaign?.combat_data, campaign?.homebrew_rules, campaignId, queryClient, actionsState, setActionsState, setMonsterInventory]);
+  }, [selectedCharacter, selectedCharacterKey, campaign?.combat_data, effectiveRules, campaignId, queryClient, actionsState, setActionsState, setMonsterInventory]);
 
   // Apply a chosen metamagic to a pending spell action. Spends SP
   // and mutates the action (e.g. Quickened changes cost, Twinned
@@ -2711,7 +2766,7 @@ export default function GMPanel() {
                 const actorKey = getCharacterKey(selectedCharacter);
                 if (actorKey) setCombatantInspiration(actorKey, false);
               }}
-              homebrewRules={campaign?.homebrew_rules}
+              homebrewRules={effectiveRules}
 
               // Spectator Props
               isSpectator={!combatState.isOpen && !!campaign?.combat_data?.active_encounter}
