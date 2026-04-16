@@ -83,6 +83,11 @@ export default function CombatDiceWindow({
   // strips the hasInspiration flag from the actor combatant.
   onLuckySpend,
   onInspirationUse,
+  // P.I.E. stat tracker — (field, amount?) → void. Parent passes a
+  // closure that already knows the actor's characterId + campaignId
+  // so the dice window only has to fire field names. Defaults to a
+  // no-op so the dice window still works in isolation / Storybook.
+  onStat = () => {},
 }) {
   const [selectedAction, setSelectedAction] = useState(initialAction);
   const [attackRoll, setAttackRoll] = useState(null);
@@ -654,6 +659,11 @@ export default function CombatDiceWindow({
     setCurrentDice("d20");
     setPhase("rolling_attack");
     onRoll && onRoll({ type: "rolling_attack" });
+    // P.I.E. — track non-cantrip spell casts. Cantrips have level 0
+    // / undefined; leveled spells fire spells_cast.
+    if (selectedAction?.type === 'spell' && Number(selectedAction.level || 0) > 0) {
+      onStat('spells_cast');
+    }
   };
 
   const onAttackRollComplete = (roll) => {
@@ -702,6 +712,17 @@ export default function CombatDiceWindow({
     setIsRolling(false);
     setPhase("attack_result");
     onRoll && onRoll({ type: "attack_result", roll: result });
+
+    // P.I.E. — fire-and-forget stat tracking. Parent already
+    // scopes onStat to the actor's character + campaign.
+    if (d20 === 20) onStat('nat_20s');
+    else if (d20 === 1) onStat('nat_1s');
+    if (willHit) {
+      onStat('attacks_hit');
+      if (isCritFlag) onStat('crits_landed');
+    } else {
+      onStat('attacks_missed');
+    }
 
     // On a hit, check whether the attacker qualifies for any post-hit
     // class features (Divine Smite, Stunning Strike). If so, surface
@@ -1353,6 +1374,9 @@ export default function CombatDiceWindow({
     setCurrentDice("d20"); // visual only; the real roll is computed below
     setPhase("rolling_heal");
     onRoll && onRoll({ type: "rolling_heal" });
+    if (selectedAction?.type === 'spell' && Number(selectedAction.level || 0) > 0) {
+      onStat('spells_cast');
+    }
     // Roll + resolve immediately — the dice animation is just eye
     // candy on the shared DiceRoller, there's no target d20 for heals.
     setTimeout(() => onHealRollComplete(), 600);
@@ -1419,6 +1443,9 @@ export default function CombatDiceWindow({
   // parent; we just ship the label text back.
   const handleApplyEffect = () => {
     if (!spellEffect) return;
+    if (selectedAction?.type === 'spell' && Number(selectedAction.level || 0) > 0) {
+      onStat('spells_cast');
+    }
     const label =
       spellEffect.effect === "condition"
         ? `Applied: ${spellEffect.condition}`
@@ -1553,6 +1580,8 @@ export default function CombatDiceWindow({
       pair = { dice: [a, b], chosen, mode: hasAdvantage ? "advantage" : "disadvantage" };
     }
     setRollPair(pair);
+    if (d20 === 20) onStat('nat_20s');
+    else if (d20 === 1) onStat('nat_1s');
 
     const total = d20 + mod;
 
@@ -1641,6 +1670,9 @@ export default function CombatDiceWindow({
 
   // === Saving Throw flow (target rolls) ===
   const handleSavingThrowRoll = () => {
+    if (selectedAction?.type === 'spell' && Number(selectedAction.level || 0) > 0) {
+      onStat('spells_cast');
+    }
     const { isAutoFail } = computeConditionModifiers("saving_throw");
     if (isAutoFail) {
       // Skip the d20 animation entirely — the save is mechanically
@@ -1720,6 +1752,9 @@ export default function CombatDiceWindow({
       pair = { dice: [a, b], chosen, mode: hasAdvantage ? "advantage" : "disadvantage" };
     }
     setRollPair(pair);
+    // P.I.E. — saving throws are rolled by the *target*, but we
+    // only have the actor's onStat closure here. Skip nat-tracking
+    // for saves to avoid mis-attributing rolls.
 
     const total = d20 + mod;
     const dc = getSpellSaveDC(actor);
