@@ -179,7 +179,13 @@ function CampaignPlayerPanelContent() {
   const [nonLethalActive, setNonLethalActive] = useState(false);
   const [quickSlots, setQuickSlots] = useState(Array(7).fill(null));
   const [equippedItems, setEquippedItems] = useState({});
-  const [activeConditions, setActiveConditions] = useState({});
+  // NOTE: Player Panel is READ-ONLY for activeConditions and
+  // concentrationByCharacter. GMPanel owns both maps and debounces
+  // them onto campaign.combat_data. We derive them fresh from the
+  // campaign query below so they refresh every time the 1-2s poll
+  // brings in a new copy. Do NOT call a local setter — any local
+  // condition change must be written directly through a targeted
+  // Campaign.update instead.
   const [draggedItem, setDraggedItem] = useState(null); // Lifted drag state
 
   // Combat State
@@ -245,6 +251,47 @@ function CampaignPlayerPanelContent() {
   const myCharacter = React.useMemo(() => {
     return characters.find(c => c.created_by === user?.email && c.campaign_id === campaignId);
   }, [characters, user, campaignId]);
+
+  // Read-only views of the GM panel's combat state. GMPanel writes
+  // both of these to combat_data with a 500ms debounce; here we just
+  // derive them fresh on every render so the existing campaign
+  // query poll hydrates them. Any write that the player needs to
+  // make (Dodge self-apply, etc.) must go through a direct targeted
+  // Campaign.update — see handlePlayerApplyCondition below.
+  const activeConditions = React.useMemo(
+    () => campaign?.combat_data?.activeConditions || {},
+    [campaign?.combat_data?.activeConditions],
+  );
+  const concentrationByCharacter = React.useMemo(
+    () => campaign?.combat_data?.concentrationByCharacter || {},
+    [campaign?.combat_data?.concentrationByCharacter],
+  );
+
+  // Player-side condition write. Targeted Campaign.update — reads
+  // the latest combat_data off the query cache so we don't clobber
+  // any concurrent order / round change from the GM. Used by the
+  // Dodge action so the player can apply Dodging to themselves
+  // without depending on the GM to see and echo it.
+  const applyPlayerCondition = React.useCallback(async (targetKey, conditionName) => {
+    if (!targetKey || !conditionName || !campaignId) return;
+    const latest = queryClient.getQueryData(['campaign', campaignId]);
+    const combatData = latest?.combat_data || {};
+    const current = combatData.activeConditions || {};
+    const existing = current[targetKey] || [];
+    if (existing.includes(conditionName)) return;
+    const next = {
+      ...current,
+      [targetKey]: [...existing, conditionName],
+    };
+    try {
+      await base44.entities.Campaign.update(campaignId, {
+        combat_data: { ...combatData, activeConditions: next },
+      });
+      queryClient.invalidateQueries(['campaign', campaignId]);
+    } catch (err) {
+      console.error('applyPlayerCondition failed:', err);
+    }
+  }, [campaignId, queryClient]);
 
   // Turn-context — computed up here (instead of further down where
   // it used to live) because several handlers below reference
@@ -597,6 +644,8 @@ function CampaignPlayerPanelContent() {
           campaignData={campaign}
           myConditions={myConditions}
           activeConditions={activeConditions}
+          concentrationByCharacter={concentrationByCharacter}
+          myCharacterKey={myCharacterKey}
           onHideSuccess={() => {
             // A successful Hide skill check unlocks the Sneak toggle
             // on the action bar. Rogue Sneak Attack dice fire on
@@ -683,6 +732,31 @@ function CampaignPlayerPanelContent() {
                 >
                   END TURN
                 </button>
+              </div>
+            )}
+
+            {/* Concentration banner — shown above the action bar
+                whenever this player's character is holding a
+                Concentration spell. Data comes from combat_data via
+                the read-only concentrationByCharacter memo, so it
+                stays in sync with whatever the GM last persisted. */}
+            {!combatState.isOpen && myCharacterKey && concentrationByCharacter[myCharacterKey] && (
+              <div
+                className="relative z-10 rounded-2xl border-2 border-purple-500/70 bg-[#0b1220] px-4 py-2 mb-2 flex items-center gap-3"
+                style={{ animation: 'gs-concentration-pulse 2.4s ease-in-out infinite' }}
+              >
+                <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+                <div className="flex-1">
+                  <div className="text-[9px] uppercase tracking-[0.22em] text-purple-300 font-bold">
+                    Concentrating
+                  </div>
+                  <div className="text-sm text-white font-black">
+                    {concentrationByCharacter[myCharacterKey].spell}
+                  </div>
+                </div>
+                <div className="text-[9px] text-purple-200/70 uppercase tracking-widest">
+                  Take damage? Make a CON save.
+                </div>
               </div>
             )}
 
@@ -798,11 +872,12 @@ function CampaignPlayerPanelContent() {
                       );
                     }
                     if (action.name === 'Dodge' && myCharacterKey) {
-                      setActiveConditions((prev) => {
-                        const current = prev[myCharacterKey] || [];
-                        if (current.includes('Dodging')) return prev;
-                        return { ...prev, [myCharacterKey]: [...current, 'Dodging'] };
-                      });
+                      // Player-side write goes through combat_data
+                      // directly so the GM (and every other player)
+                      // sees the Dodging tag immediately on the next
+                      // poll. There is no local activeConditions
+                      // setter — GMPanel is the sole reducer.
+                      applyPlayerCondition(myCharacterKey, 'Dodging');
                       if (campaignId) {
                         logCombatEvent(
                           campaignId,
@@ -1138,7 +1213,7 @@ function CampaignPlayerPanelContent() {
 
 // --- Shared Components (Copied/Adapted from GMPanel) ---
 
-function CharacterPanel({ character, user, guildHall, equippedItems, setEquippedItems, inventory, onLootDrop, draggedItem, setDraggedItem, combatState, setCombatState, campaignData, myConditions = [], activeConditions = {}, onHideSuccess }) {
+function CharacterPanel({ character, user, guildHall, equippedItems, setEquippedItems, inventory, onLootDrop, draggedItem, setDraggedItem, combatState, setCombatState, campaignData, myConditions = [], activeConditions = {}, concentrationByCharacter = {}, myCharacterKey, onHideSuccess }) {
   const queryClient = useQueryClient();
   const [showInventoryOrganizer, setShowInventoryOrganizer] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
@@ -1432,7 +1507,25 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
                   // Apply damage (Characters only - Monsters handled by GM via listener)
                   const targetId = data.targetId || (campaignData?.combat_data?.active_encounter?.targetId);
                   const damage = data.value;
-                  
+
+                  // Concentration visual warning — if the player is
+                  // holding a Concentration spell and just took damage,
+                  // surface the CON save DC as a toast. The actual
+                  // save is rolled on the GM side (combat_data is the
+                  // source of truth); this is just a heads-up so the
+                  // player knows a check is coming.
+                  if (
+                    damage > 0 &&
+                    myCharacterKey &&
+                    concentrationByCharacter?.[myCharacterKey] &&
+                    targetId &&
+                    (targetId === myCharacterKey || targetId === `player-${user?.id}`)
+                  ) {
+                    const dc = Math.max(10, Math.floor(damage / 2));
+                    const spell = concentrationByCharacter[myCharacterKey].spell;
+                    toast(`Concentration check on ${spell}! CON save DC ${dc}.`);
+                  }
+
                   if (targetId && targetId.startsWith('player-')) {
                     const userId = targetId.replace('player-', '');
                     const char = characters.find(c => {

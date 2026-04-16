@@ -290,6 +290,28 @@ export default function GMPanel() {
   // failure the concentration breaks.
   const [concentrationByCharacter, setConcentrationByCharacter] = useState({});
 
+  // --- Combat data sync ---------------------------------------------
+  //
+  // activeConditions and concentrationByCharacter are the GM-panel
+  // source of truth. The Player Panel can't reach into this local
+  // state, so we persist both maps onto campaign.combat_data and
+  // refresh the Player Panel via the existing 1-2s campaign query
+  // poll. The rules are strict:
+  //   - GMPanel is the ONLY writer. Any panel (player) that wants to
+  //     apply a condition must write directly to combat_data itself,
+  //     not go through this local state.
+  //   - Writes are debounced 500ms so a burst of condition toggles
+  //     collapses to a single Campaign.update call.
+  //   - We read latest combat_data off the query cache at write time
+  //     (not off closure), so we never clobber a concurrent order /
+  //     round / currentTurnIndex update.
+  //   - A one-shot hydration pulls pre-existing maps out of
+  //     combat_data on mount (GM reloading mid-combat) before the
+  //     write side turns on, via hydratedCombatDataRef.
+  const hydratedCombatDataRef = React.useRef(false);
+  const conditionsWriteTimerRef = React.useRef(null);
+  const concentrationWriteTimerRef = React.useRef(null);
+
   // Ref that always points at the latest fullSpellsList query result.
   // startConcentration (declared below) needs to look up a spell row
   // but runs during render — and the query is declared ~700 lines
@@ -1488,6 +1510,77 @@ export default function GMPanel() {
     activeConditions,
     advanceTurn,
   ]);
+
+  // --- Combat data sync: hydration (runs once when the campaign
+  // query first loads) -----------------------------------------------
+  // If the GM is reopening the panel mid-combat, pull any previously
+  // persisted activeConditions / concentrationByCharacter out of the
+  // combat_data JSON column and seed the local state with it. Guarded
+  // by hydratedCombatDataRef so it only runs once per mount — the
+  // write-side effects check the same ref so we don't immediately
+  // write the hydrated data back.
+  React.useEffect(() => {
+    if (hydratedCombatDataRef.current) return;
+    if (!campaign?.combat_data) return;
+    const persistedConditions = campaign.combat_data.activeConditions;
+    const persistedConcentration = campaign.combat_data.concentrationByCharacter;
+    if (persistedConditions && typeof persistedConditions === 'object') {
+      setActiveConditions(persistedConditions);
+    }
+    if (persistedConcentration && typeof persistedConcentration === 'object') {
+      setConcentrationByCharacter(persistedConcentration);
+    }
+    hydratedCombatDataRef.current = true;
+  }, [campaign?.combat_data]);
+
+  // --- Combat data sync: debounced writes ---------------------------
+  // Whenever local activeConditions changes, schedule a write to
+  // combat_data.activeConditions 500ms later. Rapid successive
+  // toggles collapse to a single write. The combat_data spread is
+  // read off the query cache at write time to avoid clobbering any
+  // concurrent round / order update.
+  React.useEffect(() => {
+    if (!hydratedCombatDataRef.current) return;
+    if (!campaign?.combat_active || !campaignId) return;
+    if (conditionsWriteTimerRef.current) {
+      clearTimeout(conditionsWriteTimerRef.current);
+    }
+    conditionsWriteTimerRef.current = setTimeout(() => {
+      const latest = queryClient.getQueryData(['campaign', campaignId]);
+      const combatData = latest?.combat_data || {};
+      base44.entities.Campaign
+        .update(campaignId, {
+          combat_data: { ...combatData, activeConditions },
+        })
+        .catch((err) => console.error('activeConditions write failed:', err));
+    }, 500);
+    return () => {
+      if (conditionsWriteTimerRef.current) clearTimeout(conditionsWriteTimerRef.current);
+    };
+  }, [activeConditions, campaign?.combat_active, campaignId, queryClient]);
+
+  // Same pattern for concentrationByCharacter. Debounced separately
+  // so a concentration start + condition apply (which often happen
+  // in the same frame) each get their own write.
+  React.useEffect(() => {
+    if (!hydratedCombatDataRef.current) return;
+    if (!campaign?.combat_active || !campaignId) return;
+    if (concentrationWriteTimerRef.current) {
+      clearTimeout(concentrationWriteTimerRef.current);
+    }
+    concentrationWriteTimerRef.current = setTimeout(() => {
+      const latest = queryClient.getQueryData(['campaign', campaignId]);
+      const combatData = latest?.combat_data || {};
+      base44.entities.Campaign
+        .update(campaignId, {
+          combat_data: { ...combatData, concentrationByCharacter },
+        })
+        .catch((err) => console.error('concentrationByCharacter write failed:', err));
+    }, 500);
+    return () => {
+      if (concentrationWriteTimerRef.current) clearTimeout(concentrationWriteTimerRef.current);
+    };
+  }, [concentrationByCharacter, campaign?.combat_active, campaignId, queryClient]);
 
   // Sync equippedItems + monsterInventory whenever a different character is
   // selected/possessed. This is the single source of truth for both players
