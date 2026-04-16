@@ -324,7 +324,7 @@ export default function CampaignSettings() {
 
   const invitedUsers = invitations
     .filter(inv => inv.status === 'pending')
-    .map(inv => allUserProfiles.find(u => u.user_id === inv.user_id))
+    .map(inv => allUserProfiles.find(u => u.user_id === inv.invited_user_id))
     .filter(Boolean);
 
   return (
@@ -446,6 +446,27 @@ export default function CampaignSettings() {
 
           {/* Co-GMs & Mole Tab */}
           <TabsContent value="coDMs" className="space-y-6">
+            {/* Invite Players shortcut — prominent link to the
+                CampaignInvite page so the GM doesn't have to
+                navigate away from settings to add people. */}
+            <div className="bg-[#2A3441] rounded-xl p-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-white mb-1">Invite Players</h2>
+                <p className="text-gray-400 text-sm">
+                  Send invites to your friends or share a join link.
+                  {campaign?.player_ids?.length > 0 &&
+                    ` ${campaign.player_ids.length} player${campaign.player_ids.length === 1 ? '' : 's'} in campaign.`}
+                </p>
+              </div>
+              <Button
+                onClick={() => navigate(createPageUrl("CampaignInvite") + `?id=${campaignId}`)}
+                className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] font-bold"
+              >
+                <UserPlus className="w-4 h-4 mr-2" />
+                Invite Players
+              </Button>
+            </div>
+
             <div className="bg-[#2A3441] rounded-xl p-6">
               <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
                 <Users className="w-6 h-6" />
