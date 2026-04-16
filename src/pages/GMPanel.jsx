@@ -52,6 +52,13 @@ import {
 import { resolveAction, consumeActionCost, getSpellEffect } from "@/components/combat/actionResolver";
 import { hpBarColor, clampHp, normalizeHp } from "@/components/combat/hpColor";
 import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
+import {
+  abilityModifier,
+  proficiencyBonus,
+  CONCENTRATION,
+  applyDamageModifiers,
+  attacksPerAction,
+} from "@/components/dnd5e/dnd5eRules";
 import { toast } from "sonner";
 import { useTurnContext } from "@/components/combat/useTurnContext";
 
@@ -1941,7 +1948,7 @@ export default function GMPanel() {
                   // concentration breaks and its applied condition is
                   // removed from every target that was under it.
                   if (targetId && delta > 0 && concentrationByCharacter[targetId]) {
-                    const dc = Math.max(10, Math.floor(delta / 2));
+                    const dc = CONCENTRATION.saveDC(delta);
                     // Try to find a CON save modifier on the entity.
                     // Players / monsters both expose attributes.con or
                     // stats.constitution; proficiency_bonus + con_save
@@ -2018,11 +2025,53 @@ export default function GMPanel() {
                   if (resolvedChar) {
                     const maxHp = resolvedChar.hit_points?.max || 0;
                     const currentHp = resolvedChar.hit_points?.current ?? maxHp;
-                    const newCurrent = clampHp(currentHp, maxHp, delta);
+
+                    // (N) Damage resistance / vulnerability / immunity.
+                    // Monster data uses stats.damage_resistances etc. Player
+                    // characters carry resistances on their own object (race
+                    // features, spells, etc.). Only applies to positive damage.
+                    let effectiveDelta = delta;
+                    if (delta > 0) {
+                      const damageType = data.detail?.damageType || data.detail?.type || null;
+                      if (damageType) {
+                        const rawDmg = delta;
+                        effectiveDelta = applyDamageModifiers(
+                          rawDmg,
+                          damageType,
+                          resolvedChar.resistances || resolvedChar.stats?.damage_resistances || [],
+                          resolvedChar.vulnerabilities || resolvedChar.stats?.damage_vulnerabilities || [],
+                          resolvedChar.immunities || resolvedChar.stats?.damage_immunities || [],
+                        );
+                        if (effectiveDelta !== rawDmg) {
+                          const label = effectiveDelta < rawDmg ? 'resists' : 'is vulnerable to';
+                          logCombatEvent(
+                            campaignId,
+                            `${resolvedChar.name} ${label} ${damageType} damage! ${rawDmg} → ${effectiveDelta}`,
+                            { event: 'damage_modified', category: 'damage', target: resolvedChar.name, raw: rawDmg, final: effectiveDelta, damageType },
+                          );
+                        }
+                      }
+                    }
+
+                    // (T) Temp HP absorbs damage before real HP.
+                    let tempHp = resolvedChar.hit_points?.temporary || 0;
+                    let remainingDelta = effectiveDelta;
+                    if (remainingDelta > 0 && tempHp > 0) {
+                      const absorbed = Math.min(tempHp, remainingDelta);
+                      tempHp -= absorbed;
+                      remainingDelta -= absorbed;
+                      if (absorbed > 0) {
+                        logCombatEvent(campaignId, `${resolvedChar.name}'s temporary HP absorbs ${absorbed} damage.`, {
+                          event: 'temp_hp_absorbed', category: 'damage', target: resolvedChar.name, absorbed,
+                        });
+                      }
+                    }
+
+                    const newCurrent = clampHp(currentHp, maxHp, remainingDelta);
                     if (newCurrent !== currentHp) {
                       base44.entities.Character
                         .update(resolvedChar.id, {
-                          hit_points: { ...(resolvedChar.hit_points || {}), current: newCurrent },
+                          hit_points: { ...(resolvedChar.hit_points || {}), current: newCurrent, temporary: tempHp },
                         })
                         .then(() => {
                           queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
