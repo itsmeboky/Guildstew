@@ -27,7 +27,7 @@ const races = [
       { icon: Shield, name: "Damage Resistance", description: "You have resistance to the damage type associated with your draconic ancestry, taking half damage from that type." },
       { icon: Eye, name: "Darkvision", description: "You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light." }
     ],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/d987fae82_dragonbornraceicon.png",
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/d987fae82_dragonbornraceicon.png",
     image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=800&h=800&fit=crop"
   },
   {
@@ -44,7 +44,7 @@ const races = [
       { icon: Shield, name: "Fey Ancestry", description: "You have advantage on saving throws against being charmed, and magic can't put you to sleep." },
       { icon: Wind, name: "Trance", description: "Elves don't need to sleep. Instead, they meditate deeply for 4 hours a day, remaining semiconscious." }
     ],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/f696b9d6e_elfraceicon.png",
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/f696b9d6e_elfraceicon.png",
     image: "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=800&h=800&fit=crop"
   },
   {
@@ -60,7 +60,7 @@ const races = [
       { icon: Shield, name: "Dwarven Resilience", description: "You have advantage on saving throws against poison, and resistance against poison damage." },
       { icon: Sword, name: "Stonecunning", description: "You have proficiency in History checks related to the origin of stonework, gaining double your proficiency bonus." }
     ],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/7b31ed2b9_dwarfraceicon.png",
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/7b31ed2b9_dwarfraceicon.png",
     image: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=800&h=800&fit=crop"
   },
   {
@@ -75,7 +75,7 @@ const races = [
       { icon: Shield, name: "Extra Skill", description: "Humans gain proficiency in one additional skill of their choice." },
       { icon: Sword, name: "Ambitious", description: "Humans are driven to achieve greatness and adapt quickly to any challenge." }
     ],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/72c27f140_humanraceicon.png",
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/72c27f140_humanraceicon.png",
     image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&h=800&fit=crop"
   },
   {
@@ -91,7 +91,7 @@ const races = [
       { icon: Shield, name: "Brave", description: "You have advantage on saving throws against being frightened." },
       { icon: Wind, name: "Nimble", description: "You can move through the space of any creature that is of a size larger than yours." }
     ],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/1f05e3073_halflingraceicon.png",
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/1f05e3073_halflingraceicon.png",
     image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=800&h=800&fit=crop"
   },
   {
@@ -114,7 +114,7 @@ const races = [
       { icon: Flame, name: "Hellish Resistance", description: "You have resistance to fire damage." },
       { icon: Droplet, name: "Infernal Legacy", description: "You know the thaumaturgy cantrip. At 3rd level, you can cast hellish rebuke once per long rest." }
     ],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/bf4ea2436_TieflingRaceIcon.png",
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/bf4ea2436_TieflingRaceIcon.png",
     image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&h=800&fit=crop"
   },
   {
@@ -132,7 +132,7 @@ const races = [
       { icon: Shield, name: "Fey Ancestry", description: "You have advantage on saving throws against being charmed, and magic can't put you to sleep." },
       { icon: Heart, name: "Heritage Trait", description: "Standard Half-Elf gains Skill Versatility. Half-High Elf gains Elf Weapon Training and a cantrip. Half-Wood Elf gains increased speed and Mask of the Wild. Half-Drow gains Superior Darkvision and Drow Magic." }
     ],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/297cad9ca_halfelfraceicon.png",
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/297cad9ca_halfelfraceicon.png",
     image: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=800&h=800&fit=crop"
   },
   {
@@ -147,7 +147,7 @@ const races = [
       { icon: Shield, name: "Relentless Endurance", description: "When you are reduced to 0 hit points but not killed outright, you can drop to 1 hit point instead. You can't use this feature again until you finish a long rest." },
       { icon: Sword, name: "Savage Attacks", description: "When you score a critical hit with a melee weapon attack, you can roll one of the weapon's damage dice one additional time and add it to the extra damage." }
     ],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/d4a087969_halforcraceicon.png",
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/d4a087969_halforcraceicon.png",
     image: "https://images.unsplash.com/photo-1542909168-82c3e7fdca44?w=800&h=800&fit=crop"
   },
   {
@@ -163,7 +163,7 @@ const races = [
       { icon: Shield, name: "Gnome Cunning", description: "You have advantage on all Intelligence, Wisdom, and Charisma saving throws against magic." },
       { icon: Wind, name: "Small Size", description: "Gnomes are between 3 and 4 feet tall. Your small size grants you unique advantages in certain situations." }
     ],
-    icon: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/c56fbbc80_gnomeraceicon.png",
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/c56fbbc80_gnomeraceicon.png",
     image: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=800&h=800&fit=crop"
   }
 ];

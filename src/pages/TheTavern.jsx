@@ -10,7 +10,7 @@ import CreatorCard from "@/components/workshop/CreatorCard";
 
 const HERO_BANNERS = [
   {
-    image: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/1f9516a5f_Karliah.png",
+    image: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/tavern/1f9516a5f_Karliah.png",
     title: "Whip Up Something New",
     buttonText: "BECOME A CREATOR",
     buttonAction: "create",
@@ -18,7 +18,7 @@ const HERO_BANNERS = [
     alignRight: true
   },
   {
-    image: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/057be99da_KidsonBikes.png",
+    image: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/tavern/057be99da_KidsonBikes.png",
     title: "KIDS ON BIKES",
     buttonText: "AVAILABLE NOW",
     buttonAction: "product",
@@ -26,7 +26,7 @@ const HERO_BANNERS = [
     alignRight: false
   },
   {
-    image: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/b72150a33_MorkBorg.png",
+    image: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/tavern/b72150a33_MorkBorg.png",
     title: "TAKE ON THE APOCALYPSE",
     buttonText: "CHECK OUT MORKBORG",
     buttonAction: "product",

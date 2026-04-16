@@ -73,7 +73,7 @@ export default function Landing() {
       className="min-h-screen w-full flex items-center justify-center relative"
       style={{
         backgroundImage:
-          "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/168af6bd5_bggggg1.png')",
+          "url('https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/168af6bd5_bggggg1.png')",
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}
@@ -83,7 +83,7 @@ export default function Landing() {
           {/* Logo */}
           <div className="flex justify-center mb-8">
             <img
-              src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/90f5ad509_GuildStewLogoOfficialForRedditWhite1.png"
+              src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/branding/90f5ad509_GuildStewLogoOfficialForRedditWhite1.png"
               alt="Guildstew"
               className="h-32 w-auto"
             />

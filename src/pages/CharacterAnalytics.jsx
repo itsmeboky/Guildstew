@@ -121,7 +121,7 @@ export default function CharacterAnalytics() {
         {/* Center - Character Portrait */}
         <div className="flex-1 flex items-end justify-center pb-0 relative">
           <img 
-            src={character.avatar_url || "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/ca3bdbe6d_Test12.png"}
+            src={character.avatar_url || "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/ca3bdbe6d_Test12.png"}
             alt={character.name}
             className="h-[90%] object-contain drop-shadow-2xl"
           />

@@ -451,7 +451,7 @@ export default function Layout({ children, currentPageName }) {
       <header className={`${isDarkMode ? 'bg-[#FF5722]' : 'bg-[#FF5722]'} h-16 flex items-center justify-between px-6 relative z-20`}>
         <Link to={createPageUrl("Home")} className="flex items-center gap-3">
           <LazyImage 
-            src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/d93253ec3_image.png" 
+            src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/branding/d93253ec3_image.png" 
             alt="Guildstew" 
             className="h-10 w-auto bg-transparent"
             objectFit="contain"
@@ -748,7 +748,7 @@ export default function Layout({ children, currentPageName }) {
           className="w-12 h-12 bg-[#37F2D1] rounded-full flex items-center justify-center hover:bg-[#2dd9bd] transition-colors overflow-hidden"
         >
           <LazyImage 
-            src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/4c2bdffd3_diceicon.png" 
+            src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/4c2bdffd3_diceicon.png" 
             alt="Dice" 
             className="w-8 h-8 bg-transparent"
             objectFit="contain"
