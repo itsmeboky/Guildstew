@@ -32,13 +32,25 @@ export default function CreateCampaign() {
 
   const createCampaignMutation = useMutation({
     mutationFn: async (data) => {
-      // Campaign creation — D&D 5e content (monsters, items, spells)
-      // is auto-seeded by a database trigger, so no Edge Function
-      // invocations are needed here. The legacy preloadDnd5eMonsters
-      // / preloadDnd5eItems calls that used to live here were Edge
-      // Functions that never shipped and threw CORS on every campaign
-      // create.
       const campaign = await base44.entities.Campaign.create(data);
+
+      // Auto-create a group chat for the campaign so the GM and
+      // future players have an out-of-game coordination channel
+      // from the moment the campaign exists.
+      try {
+        await base44.entities.ChatConversation.create({
+          campaign_id: campaign.id,
+          type: 'group',
+          participant_ids: [data.game_master_id || user?.id],
+          name: campaign.title || campaign.name || 'Campaign Chat',
+          last_message: '',
+          last_message_at: new Date().toISOString(),
+        });
+      } catch (err) {
+        // Don't block campaign creation if the chat row fails.
+        console.error('Failed to create campaign group chat:', err);
+      }
+
       return campaign;
     },
     onSuccess: (campaign) => {

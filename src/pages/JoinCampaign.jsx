@@ -85,6 +85,27 @@ export default function JoinCampaign() {
       }
       
       await base44.entities.CampaignInvitation.update(inviteId, { status: 'accepted' });
+
+      // Add the player to the campaign's group chat so they can see
+      // the out-of-game coordination channel immediately after joining.
+      try {
+        const campaignChats = await base44.entities.ChatConversation.filter({
+          campaign_id: invite.campaign_id,
+          type: 'group',
+        });
+        if (campaignChats.length > 0) {
+          const chat = campaignChats[0];
+          const participants = chat.participant_ids || [];
+          if (!participants.includes(user.id)) {
+            await base44.entities.ChatConversation.update(chat.id, {
+              participant_ids: [...participants, user.id],
+            });
+          }
+        }
+      } catch (err) {
+        // Don't block campaign join if the chat update fails.
+        console.error('Failed to join campaign group chat:', err);
+      }
     },
     onSuccess: () => {
       const campaignId = selectedInvite?.campaign_id;
