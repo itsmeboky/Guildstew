@@ -321,14 +321,20 @@ function AddToCampaignDialog({ brew, currentUser, onClose }) {
           image_url: mods.image_url || brew.cover_image_url || null,
           is_system: false,
         });
-        // Still record the install so MyBrews can show a checkmark.
-        return base44.entities.CampaignHomebrew.create({
+      } else if (brew.category === "custom_monster") {
+        const mods = brew.modifications || {};
+        await base44.entities.Monster.create({
           campaign_id: campaignId,
-          homebrew_id: brew.id,
-          enabled: true,
-          added_by: userId,
+          name: mods.name || brew.title || "Custom Monster",
+          description: mods.description || brew.description || "",
+          stats: mods,
+          image_url: mods.image_url || brew.cover_image_url || null,
+          is_system: false,
+          is_active: true,
         });
       }
+      // Every attach path also records the install so MyBrews can
+      // surface the checkmark.
       return base44.entities.CampaignHomebrew.create({
         campaign_id: campaignId,
         homebrew_id: brew.id,
@@ -341,6 +347,8 @@ function AddToCampaignDialog({ brew, currentUser, onClose }) {
       queryClient.invalidateQueries({ queryKey: ["campaignHomebrew", vars.campaignId] });
       queryClient.invalidateQueries({ queryKey: ["campaignHomebrewMods", vars.campaignId] });
       queryClient.invalidateQueries({ queryKey: ["campaignItems", vars.campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["monsters", vars.campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaignMonsters", vars.campaignId] });
       toast.success("Added to campaign");
     },
     onError: (err) => {
