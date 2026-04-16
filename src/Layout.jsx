@@ -173,7 +173,8 @@ export default function Layout({ children, currentPageName }) {
     { name: "YOUR PROFILE", path: createPageUrl("YourProfile"), badge: pendingRequestsCount + newAchievementsCount },
     { name: "CAMPAIGNS", path: createPageUrl("Campaigns"), badge: pendingInvitesCount },
     { name: "CHARACTER LIBRARY", path: createPageUrl("CharacterLibrary") },
-    { name: "WORKSHOP", path: createPageUrl("Workshop") }
+    { name: "WORKSHOP", path: createPageUrl("Workshop") },
+    { name: "BREWERY", path: createPageUrl("Brewery") },
   ];
 
   const isPlayMode = currentPageName === "WatchLive" || currentPageName === "Campaigns";
