@@ -39,6 +39,8 @@ export const CONDITION_COLORS = {
   Stunned: "#facc15",
   Unconscious: "#1e293b",
   Dodging: "#37F2D1",
+  Raging: "#ef4444",
+  Reckless: "#f97316",
 };
 
 export const CONDITIONS = {
@@ -150,6 +152,21 @@ export const CONDITIONS = {
     mechanical: [
       { type: "disadvantage_against", on: "attack_rolls", reason: "Dodging" },
       { type: "advantage", on: "dex_saves", reason: "Dodging" },
+    ],
+    autoExpire: "start_of_next_turn",
+  },
+  Raging: {
+    description: "Advantage on STR checks and saves. Resistance to physical damage. Bonus melee damage. Can't cast spells.",
+    mechanical: [
+      { type: "advantage", on: "str_checks", reason: "Raging" },
+      { type: "advantage", on: "str_saves", reason: "Raging" },
+    ],
+  },
+  Reckless: {
+    description: "Advantage on all STR melee attacks this turn. Attacks against you have advantage until your next turn.",
+    mechanical: [
+      { type: "advantage", on: "attack_rolls", reason: "Reckless Attack" },
+      { type: "advantage_against", on: "attack_rolls", reason: "Reckless — attacks against have advantage" },
     ],
     autoExpire: "start_of_next_turn",
   },
