@@ -23,6 +23,7 @@ import {
   SKILL_ABILITIES,
   SPELLCASTING_ABILITY,
   CLASS_SAVING_THROWS,
+  cantripScaling,
 } from '@/components/dnd5e/dnd5eRules';
 
 // Actions from the CombatActionBar and what they actually are
@@ -469,13 +470,8 @@ export function getScaledDice(baseDice, casterLevel) {
   if (!baseDice || typeof baseDice !== "string") return baseDice;
   const match = baseDice.match(/^(\d+)d(\d+)$/);
   if (!match) return baseDice;
-  const faces = match[2];
-  let numDice = parseInt(match[1], 10);
-  const lvl = Number.isFinite(casterLevel) ? casterLevel : 1;
-  if (lvl >= 17) numDice *= 4;
-  else if (lvl >= 11) numDice *= 3;
-  else if (lvl >= 5) numDice *= 2;
-  return `${numDice}d${faces}`;
+  const multiplier = cantripScaling(casterLevel);
+  return `${parseInt(match[1], 10) * multiplier}d${match[2]}`;
 }
 
 /**
