@@ -645,11 +645,15 @@ export default function UserProfile() {
                     whileHover={{ scale: 1.02 }}
                     className="relative h-24 rounded-lg overflow-hidden cursor-pointer border-2 border-[#FF5722]/30 hover:border-[#37F2D1] hover:shadow-lg hover:shadow-[#37F2D1]/50 transition-all"
                   >
-                    <img
-                      src={campaign.cover_image_url || 'https://via.placeholder.com/300x200'}
-                      alt={campaign.title}
-                      className="w-full h-full object-cover"
-                    />
+                    {campaign.cover_image_url ? (
+                      <img
+                        src={campaign.cover_image_url}
+                        alt={campaign.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-[#1a1f2e] via-[#2A3441] to-[#050816]" />
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex flex-col justify-end p-3">
                       <h4 className="text-white font-bold text-sm truncate">{campaign.title}</h4>
                       <p className="text-gray-300 text-xs">{campaign.system}</p>
