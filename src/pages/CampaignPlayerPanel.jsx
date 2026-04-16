@@ -17,8 +17,23 @@ import CampaignLog from "@/components/gm/CampaignLog";
 import { canEquipToSlot } from "@/components/gm/equipmentRules";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
+import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
 import { useTurnContext } from "@/components/combat/useTurnContext";
 import { hpBarColor } from "@/components/combat/hpColor";
+import { resolveAction, consumeActionCost } from "@/components/combat/actionResolver";
+import { getConditionModifiers } from "@/components/combat/conditions";
+import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   classFeatureDescriptions,
   languageDescriptions,
@@ -179,6 +194,23 @@ function CampaignPlayerPanelContent() {
   // Action Resource State
   const [actionsState, setActionsState] = useState({ action: true, bonus: true, reaction: true, inspiration: false });
 
+  // 4-state attack mode toggle (mirrors GMPanel) so the
+  // CombatActionBar can drive targeting on the player side too.
+  const [attackMode, setAttackMode] = useState(null);
+
+  // Sneak / Hide — a successful Hide skill check unlocks the sneak
+  // toggle and gives Rogues their Sneak Attack dice on the next hit.
+  const [hiddenCharacters, setHiddenCharacters] = useState(() => new Set());
+  const [sneakActive, setSneakActive] = useState(false);
+
+  // Leveled spells pass through a level picker before the dice
+  // window opens. Cantrips (level 0) skip it.
+  const [pendingSpellCast, setPendingSpellCast] = useState(null);
+  const runActionRef = React.useRef(null);
+
+  // Spell slot tracker. Keyed by character id → { 1: spent, 2: spent, ... }
+  const [spentSlotsByCharacter, setSpentSlotsByCharacter] = useState({});
+
   // Track previous turn to reset actions
   const prevTurnIndexRef = React.useRef();
 
@@ -213,6 +245,218 @@ function CampaignPlayerPanelContent() {
   const myCharacter = React.useMemo(() => {
     return characters.find(c => c.created_by === user?.email && c.campaign_id === campaignId);
   }, [characters, user, campaignId]);
+
+  // Turn-context — computed up here (instead of further down where
+  // it used to live) because several handlers below reference
+  // isActorsTurn in their useCallback dep arrays, and dep arrays
+  // evaluate eagerly during render. Any variable a dep references
+  // must be declared above the hook that lists it.
+  const { isActorsTurn } = useTurnContext({
+    campaign,
+    actor: myCharacter ? { ...myCharacter, user_id: user?.id } : null,
+  });
+
+  // Canonical key for this player's character — used as the
+  // lookup for conditions, spell slots, hidden flag, etc.
+  const myCharacterKey = myCharacter?.id || (user?.id ? `player-${user.id}` : null);
+  const myConditions = React.useMemo(() => {
+    if (!myCharacterKey) return [];
+    return activeConditions[myCharacterKey] || [];
+  }, [activeConditions, myCharacterKey]);
+  const isMeHidden = !!myCharacterKey && hiddenCharacters.has(myCharacterKey);
+
+  // Sneak auto-clears when the character is no longer hidden (a
+  // mirror of the GMPanel behaviour: attacking / taking damage /
+  // cycling turns without re-hiding reveals the character).
+  React.useEffect(() => {
+    if (!isMeHidden && sneakActive) setSneakActive(false);
+  }, [isMeHidden, sneakActive]);
+
+  // Spell slots for the player's character. Full / half / pact /
+  // warlock all handled by getCharacterSpellSlots — returns {} for
+  // non-casters, which hides the slot tracker row entirely.
+  const maxSpellSlots = React.useMemo(
+    () => (myCharacter ? getCharacterSpellSlots(myCharacter) : {}),
+    [myCharacter],
+  );
+  const currentSpentSlots = React.useMemo(
+    () => (myCharacterKey ? spentSlotsByCharacter[myCharacterKey] || {} : {}),
+    [spentSlotsByCharacter, myCharacterKey],
+  );
+
+  // Is the player's character downed and currently on their turn?
+  // Triggers the dramatic death save overlay — mirrors GMPanel's
+  // activeDeathSaveTarget derivation but scoped to just the logged-
+  // in player.
+  const activeDeathSaveTarget = React.useMemo(() => {
+    const order = campaign?.combat_data?.order || [];
+    if (!order.length || !myCharacterKey) return null;
+    const active = order[0];
+    const activeKey = active?.uniqueId || active?.id;
+    if (activeKey !== myCharacterKey && active?.id !== myCharacterKey) return null;
+    if (!active?.downed) return null;
+    const saves = active.deathSaves || {};
+    if (saves.dead || saves.stabilized) return null;
+    return { combatant: active, key: activeKey };
+  }, [campaign?.combat_data?.order, myCharacterKey]);
+
+  // Rotate combat_data.order[0] to the end of the queue. Used after
+  // the player's death save auto-advances their turn.
+  const advanceTurn = React.useCallback(async () => {
+    if (!campaign?.combat_data?.order?.length) return;
+    const currentOrder = [...campaign.combat_data.order];
+    const [finished] = currentOrder.splice(0, 1);
+    currentOrder.push(finished);
+    try {
+      await base44.entities.Campaign.update(campaignId, {
+        combat_data: { ...campaign.combat_data, order: currentOrder, currentTurnIndex: 0 },
+      });
+      queryClient.invalidateQueries(['campaign', campaignId]);
+    } catch (err) {
+      console.error('advanceTurn failed:', err);
+    }
+  }, [campaign?.combat_data, campaignId, queryClient]);
+
+  // Apply a death save roll to the player's entry on combat_data.order.
+  // Writes through to the campaign so the GM sees the result in real
+  // time. Mirrors GMPanel.rollDeathSaveForCombatant.
+  const applyPlayerDeathSave = React.useCallback(async (d20) => {
+    if (!activeDeathSaveTarget || !campaign?.combat_data?.order) return;
+    const order = [...campaign.combat_data.order];
+    const idx = order.findIndex((c) => (c.uniqueId || c.id) === activeDeathSaveTarget.key);
+    if (idx === -1) return;
+    const target = order[idx];
+    const existing = target.deathSaves || { successes: 0, failures: 0, stabilized: false, dead: false };
+    let next = { ...existing };
+    if (d20 === 20) {
+      next = { successes: 0, failures: 0, stabilized: false, dead: false };
+      order[idx] = { ...target, downed: false, deathSaves: next, hit_points: { ...(target.hit_points || {}), current: 1 } };
+    } else if (d20 === 1) {
+      next.failures = Math.min(3, existing.failures + 2);
+      if (next.failures >= 3) next.dead = true;
+      order[idx] = { ...target, deathSaves: next };
+    } else if (d20 >= 10) {
+      next.successes = Math.min(3, existing.successes + 1);
+      if (next.successes >= 3) next.stabilized = true;
+      order[idx] = { ...target, deathSaves: next };
+    } else {
+      next.failures = Math.min(3, existing.failures + 1);
+      if (next.failures >= 3) next.dead = true;
+      order[idx] = { ...target, deathSaves: next };
+    }
+    try {
+      await base44.entities.Campaign.update(campaignId, {
+        combat_data: { ...campaign.combat_data, order },
+      });
+      queryClient.invalidateQueries(['campaign', campaignId]);
+    } catch (err) {
+      console.error('death save write failed:', err);
+    }
+    // Log the result so the GM and other players see it too.
+    if (campaignId) {
+      const name = target.name || myCharacter?.name || 'Player';
+      if (d20 === 20) {
+        logCombatEvent(campaignId, `${name} rolls a natural 20 — BACK FROM THE BRINK!`, { event: 'death_save_nat20', category: 'death_save', target: name });
+      } else if (d20 === 1) {
+        logCombatEvent(campaignId, `${name} rolls a natural 1... two failures.`, { event: 'death_save_nat1', category: 'death_save', target: name });
+      } else if (d20 >= 10) {
+        logCombatEvent(campaignId, `${name} death save: rolls ${d20} — SUCCESS`, { event: 'death_save_success', category: 'death_save', target: name, roll: d20 });
+      } else {
+        logCombatEvent(campaignId, `${name} death save: rolls ${d20} — FAILURE`, { event: 'death_save_failure', category: 'death_save', target: name, roll: d20 });
+      }
+    }
+  }, [activeDeathSaveTarget, campaign?.combat_data, campaignId, queryClient, myCharacter?.name]);
+
+  // GM-click-a-dot override — spend or restore a slot manually. Same
+  // API shape as GMPanel's handleToggleSlot so the action bar doesn't
+  // know which panel it's rendered in.
+  const handleToggleSlot = React.useCallback((level, mode) => {
+    const key = myCharacterKey;
+    if (!key) return;
+    const max = maxSpellSlots[level] || 0;
+    setSpentSlotsByCharacter((prev) => {
+      const charSpent = prev[key] || {};
+      const curr = charSpent[level] || 0;
+      let next = curr;
+      if (mode === 'spend') next = Math.min(max, curr + 1);
+      else if (mode === 'restore') next = Math.max(0, curr - 1);
+      if (next === curr) return prev;
+      return { ...prev, [key]: { ...charSpent, [level]: next } };
+    });
+  }, [myCharacterKey, maxSpellSlots]);
+
+  // Build a basic attack action (melee / ranged / unarmed / offhand)
+  // mirroring GMPanel's buildAttackAction. Weapon slots come from
+  // equippedItems which is the player's own equipment state.
+  const buildAttackAction = React.useCallback((mode) => {
+    if (!mode) return null;
+    const equipment = equippedItems || {};
+    let effectiveMode = mode;
+    let weapon = null;
+    let isOffHand = false;
+    if (mode === 'melee') {
+      weapon = equipment.weapon1 || null;
+      if (!weapon) effectiveMode = 'unarmed';
+    } else if (mode === 'ranged') {
+      weapon = equipment.ranged || null;
+      if (!weapon) effectiveMode = 'unarmed';
+    } else if (mode === 'offhand') {
+      weapon = equipment.weapon2 || null;
+      isOffHand = true;
+      if (!weapon) effectiveMode = 'unarmed';
+    }
+    if (effectiveMode === 'unarmed') weapon = null;
+    const action = { type: 'basic', name: 'Attack', mode: effectiveMode, weapon, isOffHand };
+    const resolved = resolveAction(action, myCharacter);
+    return { ...action, resolved };
+  }, [equippedItems, myCharacter]);
+
+  const handleAttackModeChange = React.useCallback((nextMode) => {
+    const stage = campaign?.combat_data?.stage;
+    if (stage === 'initiative' || stage === 'arranging') {
+      toast.error("Combat hasn't started yet.");
+      return;
+    }
+    if (attackMode === null && nextMode !== null) {
+      if (campaign?.combat_active && campaign?.combat_data && !isActorsTurn) {
+        toast.error("It's not your turn!");
+        return;
+      }
+      if (!actionsState.action) {
+        toast.error('No action available this turn!');
+        return;
+      }
+    }
+    setAttackMode(nextMode);
+    if (nextMode === null) {
+      setCombatState((prev) => {
+        if (prev.action?.name === 'Attack' && prev.step === 'selecting_target') {
+          return { isOpen: false, step: 'idle', action: null, target: null, isOffHand: false };
+        }
+        return prev;
+      });
+    } else {
+      const action = buildAttackAction(nextMode);
+      setCombatState({ isOpen: false, step: 'selecting_target', action, target: null, isOffHand: false });
+    }
+  }, [attackMode, campaign?.combat_active, campaign?.combat_data, isActorsTurn, actionsState.action, buildAttackAction]);
+
+  const handleOffhandAttack = React.useCallback(() => {
+    const action = buildAttackAction('offhand');
+    if (!action?.weapon) {
+      toast.error('No off-hand weapon equipped.');
+      return;
+    }
+    if (campaign?.combat_active && campaign?.combat_data && !isActorsTurn) {
+      toast.error("It's not your turn!");
+      return;
+    }
+    if (!actionsState.bonus) {
+      toast.error('No bonus action available this turn!');
+      return;
+    }
+    setCombatState({ isOpen: false, step: 'selecting_target', action, target: null, isOffHand: true });
+  }, [buildAttackAction, campaign?.combat_active, campaign?.combat_data, isActorsTurn, actionsState.bonus]);
 
   const { data: guildHall } = useQuery({
     queryKey: ['guildHall', campaignId],
@@ -285,11 +529,6 @@ function CampaignPlayerPanelContent() {
     return allUserProfiles.find(p => p.user_id === user?.id);
   }, [allUserProfiles, user?.id]);
 
-  const { isActorsTurn } = useTurnContext({ 
-    campaign, 
-    actor: myCharacter ? { ...myCharacter, user_id: user?.id } : null 
-  });
-
   // Reset actions on new turn
   useEffect(() => {
      const currentIndex = campaign?.combat_data?.currentTurnIndex;
@@ -356,6 +595,20 @@ function CampaignPlayerPanelContent() {
           combatState={combatState}
           setCombatState={setCombatState}
           campaignData={campaign}
+          myConditions={myConditions}
+          activeConditions={activeConditions}
+          onHideSuccess={() => {
+            // A successful Hide skill check unlocks the Sneak toggle
+            // on the action bar. Rogue Sneak Attack dice fire on
+            // the next attack while Sneak is active.
+            if (myCharacterKey) {
+              setHiddenCharacters((prev) => {
+                const next = new Set(prev);
+                next.add(myCharacterKey);
+                return next;
+              });
+            }
+          }}
           onLootDrop={async (item, lootIndex) => {
               // 1. Add to character
               const newInventory = [...(myCharacter.inventory || []), item];
@@ -434,28 +687,152 @@ function CampaignPlayerPanelContent() {
             )}
 
             {!combatState.isOpen && campaign?.combat_data?.stage !== 'initiative' && (
-              <CombatActionBar 
-                character={myCharacter ? { ...myCharacter, equipment: equippedItems } : null} 
+              <CombatActionBar
+                character={myCharacter ? { ...myCharacter, equipment: equippedItems } : null}
                 actionsState={actionsState}
                 setActionsState={setActionsState}
-                onActionClick={(action) => {
-                  // Turn order enforcement
-                  if (campaign?.combat_active && campaign?.combat_data) {
+                attackMode={attackMode}
+                onAttackModeChange={handleAttackModeChange}
+                isHidden={isMeHidden}
+                sneakActive={sneakActive}
+                onSneakToggle={(next) => setSneakActive(next)}
+                nonLethalActive={nonLethalActive}
+                onNonLethalToggle={setNonLethalActive}
+                maxSpellSlots={maxSpellSlots}
+                spentSpellSlots={currentSpentSlots}
+                onToggleSlot={handleToggleSlot}
+                onOffhandAttack={handleOffhandAttack}
+                onActionClick={((runAction) => {
+                  // Refresh the ref each render so the level picker
+                  // can re-enter the exact same closure with a
+                  // castLevel attached — same pattern GMPanel uses.
+                  runActionRef.current = runAction;
+                  return runAction;
+                })((action) => {
+                  // Any non-attack click cancels attack-mode targeting.
+                  if (attackMode !== null) setAttackMode(null);
+
+                  // Leveled spell level picker — cantrips (level 0 /
+                  // undefined) bypass the picker and flow straight
+                  // through.
+                  if (
+                    action.type === 'spell' &&
+                    typeof action.level === 'number' &&
+                    action.level > 0 &&
+                    typeof action.castLevel !== 'number'
+                  ) {
+                    setPendingSpellCast({ action });
+                    return;
+                  }
+
+                  // Resolve the action so we know its cost / roll
+                  // type before we apply any gates. Same priority as
+                  // GMPanel: reactions bypass the turn check, every
+                  // other cost obeys it.
+                  const resolved = resolveAction(action, myCharacter);
+                  const enrichedAction = { ...action, resolved };
+
+                  if (resolved.cost === 'reaction') {
+                    if (!actionsState.reaction) {
+                      toast.error('Reaction already used this round!');
+                      return;
+                    }
+                  } else if (campaign?.combat_active && campaign?.combat_data) {
                     if (!isActorsTurn) {
-                      alert("It's not your turn!");
+                      toast.error("It's not your turn!");
                       return;
                     }
                   }
 
-                  const requiresTarget = ['Attack', 'Help', 'Use Object'].includes(action.name) || action.type === 'spell';
-                  const isOffHand = action.isOffHand || false;
-
-                  if (requiresTarget) {
-                    setCombatState({ isOpen: false, step: 'selecting_target', action, target: null, isOffHand });
-                  } else {
-                    setCombatState({ isOpen: true, step: 'rolling', action, target: null, isOffHand }); 
+                  if (resolved.cost === 'action' && !actionsState.action) {
+                    toast.error('No action available this turn!');
+                    return;
                   }
-                }}
+                  if (resolved.cost === 'bonus' && !actionsState.bonus) {
+                    toast.error('No bonus action available this turn!');
+                    return;
+                  }
+
+                  // Spell slot gate — leveled spells require a slot
+                  // at the chosen cast level. Commit it up front.
+                  if (action.type === 'spell' && typeof action.level === 'number' && action.level > 0) {
+                    const key = myCharacterKey;
+                    const slotLevel = typeof action.castLevel === 'number' ? action.castLevel : action.level;
+                    const max = maxSpellSlots[slotLevel] || 0;
+                    const already = (spentSlotsByCharacter[key] || {})[slotLevel] || 0;
+                    if (max === 0 || already >= max) {
+                      toast.error(`No level ${slotLevel} spell slots remaining!`);
+                      return;
+                    }
+                    if (key) {
+                      setSpentSlotsByCharacter((prev) => {
+                        const charSpent = prev[key] || {};
+                        return {
+                          ...prev,
+                          [key]: {
+                            ...charSpent,
+                            [slotLevel]: (charSpent[slotLevel] || 0) + 1,
+                          },
+                        };
+                      });
+                    }
+                  }
+
+                  // No-roll actions — consume the cost, toast, log,
+                  // close any targeting state. Dodge also applies
+                  // the "Dodging" condition locally.
+                  if (resolved.rollType === 'no_roll') {
+                    setActionsState((prev) => consumeActionCost(prev, resolved.cost));
+                    const featureSuffix = action.classFeature ? ` (${action.classFeature})` : '';
+                    toast.success(`${myCharacter?.name || 'You'} use ${action.name}${featureSuffix}`);
+                    if (campaignId) {
+                      logCombatEvent(
+                        campaignId,
+                        `${myCharacter?.name || 'Player'} uses ${action.name}${featureSuffix}.`,
+                        {
+                          event: 'action_use',
+                          category: 'turn',
+                          actor: myCharacter?.name,
+                          action: action.name,
+                        },
+                      );
+                    }
+                    if (action.name === 'Dodge' && myCharacterKey) {
+                      setActiveConditions((prev) => {
+                        const current = prev[myCharacterKey] || [];
+                        if (current.includes('Dodging')) return prev;
+                        return { ...prev, [myCharacterKey]: [...current, 'Dodging'] };
+                      });
+                      if (campaignId) {
+                        logCombatEvent(
+                          campaignId,
+                          `${myCharacter?.name || 'Player'} is now Dodging.`,
+                          {
+                            event: 'condition_applied',
+                            category: 'condition',
+                            target: myCharacter?.name,
+                            condition: 'Dodging',
+                          },
+                        );
+                      }
+                    }
+                    setCombatState({ isOpen: false, step: 'idle', action: null, target: null, isOffHand: false });
+                    return;
+                  }
+
+                  // Modifier toggles (Non-Lethal) — no cost, no window.
+                  if (resolved.rollType === 'modifier') {
+                    return;
+                  }
+
+                  // Targeted actions → targeting mode. Untargeted
+                  // (Hide, etc.) → dice window directly.
+                  if (resolved.requiresTarget) {
+                    setCombatState({ isOpen: false, step: 'selecting_target', action: enrichedAction, target: null, isOffHand: !!action.isOffHand });
+                  } else {
+                    setCombatState({ isOpen: true, step: 'rolling', action: enrichedAction, target: null, isOffHand: !!action.isOffHand });
+                  }
+                })}
               />
             )}
 
@@ -651,13 +1028,117 @@ function CampaignPlayerPanelContent() {
           </div>
         </div>
       </div>
+
+      {/* Dramatic death save overlay — only renders when the player's
+          own character is downed and it's their turn in the initiative
+          order. The window handles the rolling animation + heartbeat
+          sfx, then hands the d20 back to applyPlayerDeathSave to sync
+          the result through to combat_data. */}
+      {activeDeathSaveTarget && (
+        <DeathSaveWindow
+          combatant={activeDeathSaveTarget.combatant}
+          canRoll={true}
+          silent={false}
+          onRoll={(d20) => applyPlayerDeathSave(d20)}
+          onClose={() => {
+            // Auto-advance the turn once the dramatic roll finishes.
+            // The GMPanel copy of this flow does the same thing — one
+            // death save per turn, then move on.
+            advanceTurn();
+          }}
+        />
+      )}
+
+      {/* Leveled-spell cast level picker. Clicking a 1st+ level spell
+          opens this dialog with a button per available slot level.
+          Cantrips skip the picker entirely (gated in onActionClick). */}
+      <AlertDialog
+        open={!!pendingSpellCast}
+        onOpenChange={(open) => {
+          if (!open) setPendingSpellCast(null);
+        }}
+      >
+        <AlertDialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-sm">
+          {pendingSpellCast && (() => {
+            const pending = pendingSpellCast.action;
+            const baseLevel = pending.level;
+            const ordinal = (n) => {
+              const suffixes = ['th', 'st', 'nd', 'rd'];
+              const v = n % 100;
+              return `${n}${suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0]}`;
+            };
+            const charSpent = spentSlotsByCharacter[myCharacterKey] || {};
+            const levels = [];
+            for (let lvl = baseLevel; lvl <= 9; lvl++) {
+              const max = maxSpellSlots[lvl] || 0;
+              if (max === 0) continue;
+              const spent = charSpent[lvl] || 0;
+              levels.push({ lvl, max, spent, available: spent < max });
+            }
+            return (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-baseline gap-2">
+                    <span>{pending.name}</span>
+                    <span className="text-xs uppercase tracking-widest text-slate-400">
+                      {ordinal(baseLevel)}-level
+                    </span>
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="text-gray-400">
+                    Choose a spell slot to cast at. Casting above base level upcasts the spell.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  {levels.length === 0 ? (
+                    <p className="col-span-3 text-center text-sm text-red-400 py-4">
+                      No available slots for this spell.
+                    </p>
+                  ) : (
+                    levels.map(({ lvl, max, spent, available }) => (
+                      <button
+                        key={lvl}
+                        type="button"
+                        disabled={!available}
+                        onClick={() => {
+                          const action = { ...pending, castLevel: lvl };
+                          setPendingSpellCast(null);
+                          if (runActionRef.current) {
+                            runActionRef.current(action);
+                          }
+                        }}
+                        className={`flex flex-col items-center justify-center py-3 rounded-xl border transition-colors ${
+                          available
+                            ? 'bg-[#8B5CF6]/20 hover:bg-[#8B5CF6]/35 border-[#8B5CF6]/60 text-white'
+                            : 'bg-[#0b1220] border-slate-800 text-slate-600 cursor-not-allowed'
+                        }`}
+                      >
+                        <span className="text-sm font-black uppercase tracking-wide">
+                          {ordinal(lvl)}
+                        </span>
+                        <span className="text-[10px] opacity-80 mt-0.5">
+                          {max - spent}/{max} left
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+                <AlertDialogFooter className="mt-3">
+                  <AlertDialogCancel className="bg-transparent border-gray-600 text-white hover:bg-gray-800 hover:text-white">
+                    Cancel
+                  </AlertDialogCancel>
+                </AlertDialogFooter>
+              </>
+            );
+          })()}
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
 // --- Shared Components (Copied/Adapted from GMPanel) ---
 
-function CharacterPanel({ character, user, guildHall, equippedItems, setEquippedItems, inventory, onLootDrop, draggedItem, setDraggedItem, combatState, setCombatState, campaignData }) {
+function CharacterPanel({ character, user, guildHall, equippedItems, setEquippedItems, inventory, onLootDrop, draggedItem, setDraggedItem, combatState, setCombatState, campaignData, myConditions = [], activeConditions = {}, onHideSuccess }) {
   const queryClient = useQueryClient();
   const [showInventoryOrganizer, setShowInventoryOrganizer] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
@@ -822,12 +1303,15 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
               actor={
                 // If spectator (not our local combat state), actor is from DB.
                 (!combatState.isOpen && campaignData?.combat_data?.active_encounter)
-                  ? { 
-                      name: campaignData.combat_data.active_encounter.attackerName, 
+                  ? {
+                      name: campaignData.combat_data.active_encounter.attackerName,
                       avatar_url: campaignData.combat_data.active_encounter.attackerAvatar,
-                      id: campaignData.combat_data.active_encounter.attackerId
+                      id: campaignData.combat_data.active_encounter.attackerId,
+                      conditions: activeConditions[campaignData.combat_data.active_encounter.attackerId] || [],
                     }
                   : character
+                    ? { ...character, conditions: myConditions }
+                    : null
               }
               target={
                 // If spectator, target is from DB.
@@ -835,9 +1319,18 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
                   ? {
                       name: campaignData.combat_data.active_encounter.targetName,
                       id: campaignData.combat_data.active_encounter.targetId,
-                      avatar_url: campaignData.combat_data.active_encounter.targetAvatar
+                      avatar_url: campaignData.combat_data.active_encounter.targetAvatar,
+                      conditions: activeConditions[campaignData.combat_data.active_encounter.targetId] || [],
                     }
                   : combatState.target
+                    ? {
+                        ...combatState.target,
+                        conditions:
+                          activeConditions[combatState.target?.id] ||
+                          activeConditions[combatState.target?.uniqueId] ||
+                          [],
+                      }
+                    : null
               }
               initialAction={
                 (!combatState.isOpen && campaignData?.combat_data?.active_encounter)
@@ -887,6 +1380,16 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
                         updateCombatEncounter({ ...currentEncounter, ...updates });
                       }
                    }
+                }
+
+                // Hide success unlocks the Sneak toggle. The check is
+                // resolved via CombatDiceWindow's skill check flow,
+                // which emits check_result when it lands.
+                if (
+                  data.type === 'check_result' &&
+                  combatState.action?.name === 'Hide'
+                ) {
+                  if (typeof onHideSuccess === 'function') onHideSuccess();
                 }
 
                 if (data.type === 'initiative') {
