@@ -72,6 +72,8 @@ import {
 import { resolveAction, consumeActionCost, getSpellEffect } from "@/components/combat/actionResolver";
 import { hpBarColor, clampHp, normalizeHp } from "@/components/combat/hpColor";
 import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
+import { trackStat, ensureCharacterStats } from "@/utils/characterStats";
+import { checkAchievementsForCombatants } from "@/utils/achievementChecker";
 import {
   abilityModifier,
   proficiencyBonus,
@@ -468,6 +470,35 @@ export default function GMPanel() {
   const getCharacterKey = React.useCallback((c) => c?.uniqueId || c?.id || null, []);
   const selectedCharacterKey = getCharacterKey(selectedCharacter);
 
+  // Resolve a combat_data.order entry (or any combatant-shaped
+  // object) into the underlying Character.id when the entry is a
+  // player. Used by the stat tracker so monster damage doesn't
+  // churn character_stats. Returns null for monsters / NPCs / any
+  // entry we can't trace back to a real character row.
+  const resolveCharacterIdFromCombatant = React.useCallback((c) => {
+    if (!c) return null;
+    if (typeof c === 'string') {
+      // Direct id string from the order entry. "player-<userId>"
+      // → look up via players. "ghost-<charId>" / "player-ghost-
+      // <charId>" → strip the prefix.
+      if (c.startsWith('player-ghost-')) return c.slice('player-ghost-'.length);
+      if (c.startsWith('ghost-')) return c.slice('ghost-'.length);
+      if (c.startsWith('player-')) {
+        const userId = c.slice('player-'.length);
+        const player = players.find((p) => p.user_id === userId);
+        return player?.character?.id || null;
+      }
+      // Bare character id passed directly.
+      return c;
+    }
+    if (c.type && c.type !== 'player') return null;
+    if (c.characterId) return c.characterId;
+    if (c.character_id) return c.character_id;
+    if (c.character?.id) return c.character.id;
+    if (c.id) return resolveCharacterIdFromCombatant(c.id);
+    return null;
+  }, [players]);
+
   // If the currently-selected combatant is downed, pull their live
   // death-save state from combat_data.order so the render can swap the
   // action bar out for a death save panel.
@@ -688,6 +719,17 @@ export default function GMPanel() {
       audio.play().catch(e => console.log("Audio play failed", e));
 
       setIsTurnOrderAccepted(true);
+      // Pre-create CharacterStat rows for every player character in
+      // the order so first-event writes don't race the row-create.
+      // Fire-and-forget — combat starts even if stat seeding fails.
+      try {
+        const order = (campaign?.combat_data?.order || initiativeOrder || []);
+        for (const c of order) {
+          const charId = resolveCharacterIdFromCombatant(c);
+          if (charId) ensureCharacterStats(charId, campaignId).catch(() => {});
+        }
+      } catch (err) { /* never block combat */ }
+
       logSystemEvent(campaignId, '— Round 1 —', { kind: 'round_divider', round: 1 });
       logCombatEvent(campaignId, 'Turn order set. Round 1 begins.', {
         event: 'combat_start',
@@ -731,6 +773,12 @@ export default function GMPanel() {
 
   const endCombatMutation = useMutation({
     mutationFn: async (restType /* 'none' | 'short' | 'long' */ = 'none') => {
+      // P.I.E. — snapshot the order BEFORE clearing combat_data so
+      // we can run achievement checks against every player who was
+      // in the fight. Achievements depend on lifetime stats so we
+      // run the check whether or not the GM picked a rest.
+      const orderSnapshot = (campaign?.combat_data?.order || []).slice();
+
       // 1. Clear combat state on the campaign row.
       await base44.entities.Campaign.update(campaignId, {
         combat_active: false,
@@ -781,13 +829,39 @@ export default function GMPanel() {
         });
       }
 
-      return restType;
+      // Achievement checks for every player who saw combat. Each
+      // check is sequential (per-character) but the outer Promise
+      // resolves once they all finish — toast notifications fire
+      // from the success handler so we don't block this mutation
+      // on UI work.
+      const combatants = [];
+      for (const entry of orderSnapshot) {
+        const charId = resolveCharacterIdFromCombatant(entry);
+        if (!charId) continue;
+        const player = players.find((p) => p.character?.id === charId);
+        const userId = player?.user_id || null;
+        // Skip ghost / orphan characters — no user_id means we
+        // can't write into the achievements table for them.
+        if (!userId || String(userId).startsWith('ghost-')) continue;
+        combatants.push({ userId, characterId: charId, name: entry?.name });
+      }
+      let awards = [];
+      if (combatants.length > 0) {
+        try {
+          awards = await checkAchievementsForCombatants(combatants, campaignId);
+        } catch (err) {
+          console.error('Achievement evaluation failed:', err);
+        }
+      }
+
+      return { restType, awards };
     },
-    onSuccess: (restType) => {
+    onSuccess: ({ restType, awards } = {}) => {
       const rounds = campaign?.combat_data?.round || 0;
       clearCombatClientState();
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
       queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
+      queryClient.invalidateQueries({ queryKey: ['achievements'] });
       logCombatEvent(campaignId, `Combat ended. ${rounds} round${rounds === 1 ? '' : 's'}.`, {
         event: 'combat_ended',
         category: 'round',
@@ -805,6 +879,30 @@ export default function GMPanel() {
           event: 'short_rest',
           category: 'rest',
         });
+      }
+      // Surface freshly-earned achievements as celebratory toasts.
+      // We log them too so the campaign feed has a record alongside
+      // the combat summary.
+      for (const award of (awards || [])) {
+        toast.custom((t) => (
+          <div className="bg-[#1a1f2e] border border-[#37F2D1] rounded-lg p-4 shadow-xl flex items-center gap-3 max-w-sm">
+            <span className="text-3xl">{award.icon || '🏆'}</span>
+            <div>
+              <div className="text-[#37F2D1] font-bold text-xs uppercase tracking-wider">
+                Achievement Unlocked!
+              </div>
+              <div className="text-white font-bold">{award.title}</div>
+              <div className="text-slate-400 text-xs">{award.description}</div>
+              {award.combatantName && (
+                <div className="text-slate-500 text-[10px] mt-1">— {award.combatantName}</div>
+              )}
+            </div>
+          </div>
+        ), { duration: 6000 });
+        logCombatEvent(campaignId,
+          `🏆 ${award.combatantName || 'A hero'} earned: ${award.title}`,
+          { event: 'achievement_earned', category: 'achievement', achievement: award.achievement_key },
+        );
       }
     },
     onError: (err) => {
@@ -1114,6 +1212,13 @@ export default function GMPanel() {
       Number.isFinite(providedRoll) && providedRoll >= 1 && providedRoll <= 20
         ? providedRoll
         : Math.floor(Math.random() * 20) + 1;
+    // P.I.E. — every death-save roll counts as either a pass or a
+    // fail. Nat 20 is also a pass (revives), nat 1 is two failures.
+    const downedCharId = resolveCharacterIdFromCombatant(target);
+    if (downedCharId) {
+      if (roll >= 10 || roll === 20) trackStat(downedCharId, campaignId, 'death_saves_passed');
+      else trackStat(downedCharId, campaignId, 'death_saves_failed', roll === 1 ? 2 : 1);
+    }
 
     if (roll === 20) {
       // Back on your feet with 1 HP.
@@ -2302,6 +2407,14 @@ export default function GMPanel() {
       const round = campaign?.combat_data?.round || 1;
       if (round !== prevRound) {
         logSystemEvent(campaignId, `— Round ${round} —`, { kind: 'round_divider', round });
+        // P.I.E. — bump rounds_in_combat for every player
+        // character in the order. Skips monsters/NPCs because
+        // resolveCharacterIdFromCombatant returns null for them.
+        const order = campaign?.combat_data?.order || [];
+        for (const c of order) {
+          const charId = resolveCharacterIdFromCombatant(c);
+          if (charId) trackStat(charId, campaignId, 'rounds_in_combat');
+        }
       }
       logCombatEvent(
         campaignId,
@@ -2750,6 +2863,18 @@ export default function GMPanel() {
                 const actorKey = getCharacterKey(selectedCharacter);
                 if (actorKey) clearBardicInspiration(actorKey);
               }}
+              onStat={(field, amount = 1) => {
+                // Closure scopes the tracker to the current actor
+                // (selectedCharacter for player turns, the
+                // active_encounter attacker for spectator playback)
+                // and the active campaign.
+                const actorCharId =
+                  selectedCharacter?.id
+                  || resolveCharacterIdFromCombatant(
+                      campaign?.combat_data?.active_encounter?.attackerId
+                    );
+                if (actorCharId) trackStat(actorCharId, campaignId, field, amount);
+              }}
               onLuckySpend={() => {
                 // Decrement the Lucky pool on the actor's classResources.
                 const key = getCharacterKey(selectedCharacter);
@@ -2846,6 +2971,13 @@ export default function GMPanel() {
                 // negative delta. clampHp handles the sign, so the HP
                 // write-through below handles both paths uniformly.
                 if (data.type === 'heal') {
+                  // P.I.E. — record before rewrite so the damage
+                  // path doesn't see this as a damage stat.
+                  const healAmount = Math.abs(data.value || 0);
+                  const healerCharId = selectedCharacter?.id || null;
+                  if (healerCharId && healAmount > 0) {
+                    trackStat(healerCharId, campaignId, 'total_healing_done', healAmount);
+                  }
                   data = {
                     ...data,
                     type: 'damage',
@@ -2879,6 +3011,11 @@ export default function GMPanel() {
                       condition: data.condition,
                     },
                   );
+                  // Stats: attacker inflicted, target received.
+                  const attackerCharId = selectedCharacter?.id || null;
+                  if (attackerCharId) trackStat(attackerCharId, campaignId, 'conditions_inflicted');
+                  const tgtCharId = resolveCharacterIdFromCombatant(data.targetId);
+                  if (tgtCharId) trackStat(tgtCharId, campaignId, 'conditions_received');
                 } else if (data.type === 'debuff_applied' && data.debuff) {
                   toast(`Debuff applied: ${data.debuff}`);
                   logCombatEvent(campaignId, `Debuff applied: ${data.debuff}.`, {
@@ -3015,12 +3152,13 @@ export default function GMPanel() {
                   // attack. We just surface a toast so the GM can
                   // click the melee attack again (action economy
                   // keeps bonus open).
+                  let _killed = false;
                   {
                     const orderForGWM = campaign?.combat_data?.order || [];
                     const tgt = orderForGWM.find((c) => (c.uniqueId || c.id) === targetId);
                     const tgtHp = tgt?.hit_points?.current ?? 0;
-                    const killed = data.value >= tgtHp;
-                    if (data.detail?.isCrit || killed) {
+                    _killed = data.value >= tgtHp && data.value > 0;
+                    if (data.detail?.isCrit || _killed) {
                       const attackerFeats = Array.isArray(selectedCharacter?.feats) ? selectedCharacter.feats
                         : Array.isArray(selectedCharacter?.features) ? selectedCharacter.features : [];
                       const hasGWM = attackerFeats.some((f) => {
@@ -3032,6 +3170,20 @@ export default function GMPanel() {
                         toast.success('Great Weapon Master: Bonus action melee attack!');
                       }
                     }
+                  }
+
+                  // P.I.E. Chart stat tracking — fire-and-forget so
+                  // a slow stats write never stalls combat. We track:
+                  //   - Damage dealt by the attacker (when player)
+                  //   - Damage taken by the target (when player)
+                  //   - Kills credited to the attacker (when player
+                  //     and target dropped to 0)
+                  if (delta > 0) {
+                    const attackerCharId = selectedCharacter?.id || null;
+                    if (attackerCharId) trackStat(attackerCharId, campaignId, 'total_damage_dealt', delta);
+                    const targetCharId = resolveCharacterIdFromCombatant(targetId);
+                    if (targetCharId) trackStat(targetCharId, campaignId, 'total_damage_taken', delta);
+                    if (_killed && attackerCharId) trackStat(attackerCharId, campaignId, 'kills');
                   }
 
                   // Taking damage reveals a hidden character.
@@ -3274,6 +3426,11 @@ export default function GMPanel() {
                         const failuresDelta = isCritDamage ? 2 : 1;
                         applyDeathSaveChange(targetId, { failuresDelta });
                       } else if (delta > 0 && !wasDowned && newCurrent <= 0) {
+                        // P.I.E. — first drop to 0 HP this combat
+                        // counts as a "downed" event for the
+                        // character (skipped for monsters).
+                        const downedCharId = resolveCharacterIdFromCombatant(orderEntry);
+                        if (downedCharId) trackStat(downedCharId, campaignId, 'times_downed');
                         // Freshly dropped to 0. Non-lethal → immediate
                         // stabilize (Knocked Out). Otherwise initialize
                         // the death save tracker.
