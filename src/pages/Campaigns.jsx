@@ -31,7 +31,7 @@ export default function Campaigns() {
       <div 
         className="h-96 bg-cover bg-center relative"
         style={{ 
-          backgroundImage: 'url(https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/3893844b8_Plaaay1.png)',
+          backgroundImage: 'url(https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/3893844b8_Plaaay1.png)',
           backgroundSize: 'cover',
           backgroundPosition: 'center'
         }}
