@@ -86,6 +86,15 @@ export default function CombatActionBar({
   // derived from monk level via kiPoints(); current ki lives on
   // classResources.kiRemaining.
   onToggleKi,
+  // Sorcery point diamond click handler (Sorcerer). Same
+  // spend/restore semantics as the ki diamonds.
+  onToggleSorceryPoint,
+  // Font of Magic conversion triggers. onConvertSlotToSP opens a
+  // slot picker modal at the parent level; onConvertSPToSlot opens
+  // the reverse picker. Both live on GMPanel because they need to
+  // mutate spentSlots in addition to classResources.
+  onConvertSlotToSP,
+  onConvertSPToSlot,
   // Off-hand bonus attack hook. GM panel fires this when the player
   // has used their main action on a melee attack and a weapon is
   // sitting in the Weapon 2 slot — clicking the attack button at that
@@ -238,6 +247,21 @@ export default function CombatActionBar({
   }, [character]);
   const kiCurrent = kiMax > 0
     ? Math.max(0, Math.min(kiMax, classResources.kiRemaining ?? kiMax))
+    : 0;
+
+  // Sorcery Point diamond row — Sorcerer level 2+. Max = sorcerer
+  // level (Font of Magic). Follows the exact same click-to-correct
+  // semantics as the ki row, just purple.
+  const sorceryMax = React.useMemo(() => {
+    if (!character) return 0;
+    const cls = (character.class || character.stats?.class || '').toString();
+    if (!/sorcerer/i.test(cls)) return 0;
+    const level = character.level || character.stats?.level || 1;
+    if (level < 2) return 0;
+    return level;
+  }, [character]);
+  const sorceryCurrent = sorceryMax > 0
+    ? Math.max(0, Math.min(sorceryMax, classResources.sorceryPointsRemaining ?? sorceryMax))
     : 0;
   const initiative = character?.initiative || 0;
   const speed = character?.speed || 30;
@@ -414,12 +438,60 @@ export default function CombatActionBar({
     }
 
     // Paladin
-    if (clsLower.includes('paladin') && level >= 2) {
+    if (clsLower.includes('paladin')) {
+      if (level >= 2) {
+        list.push({
+          id: 'divineSmite',
+          name: 'Divine Smite',
+          pattern: 'posthit', // not rendered as a button — handled in CombatDiceWindow
+          classKey: 'Paladin',
+        });
+      }
+      // Lay on Hands — level 1+. Pool = level × 5 HP.
+      const lohMax = level * 5;
       list.push({
-        id: 'divineSmite',
-        name: 'Divine Smite',
-        pattern: 'posthit', // not rendered as a button — handled in CombatDiceWindow
+        id: 'layOnHands',
+        name: 'Lay on Hands',
+        pattern: 'oneclick',
         classKey: 'Paladin',
+        usesRemaining: classResources.layOnHandsRemaining ?? lohMax,
+        usesMax: lohMax,
+        disabled: (classResources.layOnHandsRemaining ?? lohMax) <= 0 || !actions.action,
+        cost: 'action',
+      });
+    }
+
+    // Cleric — Channel Divinity: Turn Undead (level 2+).
+    if (clsLower.includes('cleric') && level >= 2) {
+      const maxCD = level >= 18 ? 3 : level >= 6 ? 2 : 1;
+      list.push({
+        id: 'turnUndead',
+        name: 'Turn Undead',
+        pattern: 'oneclick',
+        classKey: 'Cleric',
+        usesRemaining: classResources.channelDivinityRemaining ?? maxCD,
+        usesMax: maxCD,
+        disabled: (classResources.channelDivinityRemaining ?? maxCD) <= 0 || !actions.action,
+        cost: 'action',
+      });
+    }
+
+    // Druid — Wild Shape (level 2+). 2 uses per short/long rest.
+    if (clsLower.includes('druid') && level >= 2) {
+      const isMoon = /circle\s*of\s*the\s*moon/i.test(character.subclass || '');
+      const isTransformed = !!classResources.wildShapeForm;
+      list.push({
+        id: 'wildShape',
+        name: isTransformed ? 'Revert' : 'Wild Shape',
+        pattern: 'oneclick',
+        classKey: 'Druid',
+        usesRemaining: classResources.wildShapeRemaining ?? 2,
+        usesMax: 2,
+        disabled: !isTransformed && (
+          (classResources.wildShapeRemaining ?? 2) <= 0 ||
+          (isMoon ? !actions.bonus : !actions.action)
+        ),
+        cost: isMoon ? 'bonus' : 'action',
       });
     }
 
@@ -439,7 +511,7 @@ export default function CombatActionBar({
     }
 
     return list;
-  }, [character, isCreature, classResources, actions.bonus]);
+  }, [character, isCreature, classResources, actions.bonus, actions.action]);
 
   // Quick lookup so we can grab icon URLs by action name when rendering
   // class bonus action entries. basicActionIcons is the canonical list.
@@ -509,12 +581,66 @@ export default function CombatActionBar({
       </div>
 
       {/* Resource tracker row — Ki diamonds for Monks (level 2+),
-          spell slot dots for casters. Divider between the two when a
-          character has both (multiclass). Same click-to-correct
-          semantics for both: clicking a filled glyph spends one,
-          clicking an empty one restores. */}
-      {(kiMax > 0 || Object.keys(maxSpellSlots).length > 0) && (
-        <div className="flex items-center gap-3 mb-3 px-1">
+          Sorcery Point diamonds for Sorcerers (level 2+), spell slot
+          dots for casters. Dividers between sections. Same click-to-
+          correct semantics for each: clicking a filled glyph spends
+          one, clicking an empty one restores. */}
+      {(kiMax > 0 || sorceryMax > 0 || Object.keys(maxSpellSlots).length > 0) && (
+        <div className="flex items-center gap-3 mb-3 px-1 flex-wrap">
+          {sorceryMax > 0 && (
+            <>
+              <span className="text-[9px] uppercase tracking-[0.22em] text-[#a855f7] font-bold">
+                SP
+              </span>
+              <div className="flex items-center gap-0.5">
+                {Array.from({ length: sorceryMax }).map((_, i) => {
+                  const isFilled = i < sorceryCurrent;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        if (!onToggleSorceryPoint) return;
+                        onToggleSorceryPoint(isFilled ? 'spend' : 'restore');
+                      }}
+                      title={`Sorcery point ${i + 1} — ${isFilled ? 'available' : 'spent'}`}
+                      className={`text-base leading-none transition-colors ${
+                        isFilled
+                          ? 'text-[#a855f7] hover:text-[#d8b4fe] drop-shadow-[0_0_4px_rgba(168,85,247,0.7)]'
+                          : 'text-[#1e293b] hover:text-[#334155]'
+                      }`}
+                    >
+                      {isFilled ? '◆' : '◇'}
+                    </button>
+                  );
+                })}
+              </div>
+              {(onConvertSlotToSP || onConvertSPToSlot) && (
+                <div className="flex items-center gap-1">
+                  {onConvertSlotToSP && (
+                    <button
+                      onClick={() => onConvertSlotToSP()}
+                      className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-[#a855f7]/60 text-[#a855f7] hover:bg-[#a855f7]/20"
+                      title="Convert a spell slot into sorcery points"
+                    >
+                      Slot→SP
+                    </button>
+                  )}
+                  {onConvertSPToSlot && (
+                    <button
+                      onClick={() => onConvertSPToSlot()}
+                      className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-[#a855f7]/60 text-[#a855f7] hover:bg-[#a855f7]/20"
+                      title="Convert sorcery points into a spell slot"
+                    >
+                      SP→Slot
+                    </button>
+                  )}
+                </div>
+              )}
+              {(kiMax > 0 || Object.keys(maxSpellSlots).length > 0) && (
+                <div className="h-10 w-[2px] bg-[#1e2636]" />
+              )}
+            </>
+          )}
           {kiMax > 0 && (
             <>
               <span className="text-[9px] uppercase tracking-[0.22em] text-[#37F2D1] font-bold">
