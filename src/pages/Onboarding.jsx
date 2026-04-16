@@ -125,7 +125,7 @@ export default function Onboarding() {
       <div className="w-full max-w-[min(95vmin,1100px)] aspect-square bg-white/95 rounded-full p-6 sm:p-10 md:p-12 lg:p-16 relative z-10 flex flex-col items-center justify-center overflow-y-auto">
         <div className="text-center mb-3 sm:mb-4">
           <img
-            src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/2a112bc4f_GuildStewLogoOfficialForRedditWhite1.png"
+            src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/branding/2a112bc4f_GuildStewLogoOfficialForRedditWhite1.png"
             alt="Guildstew"
             className="h-20 sm:h-28 md:h-32 w-auto mx-auto mb-2"
           />

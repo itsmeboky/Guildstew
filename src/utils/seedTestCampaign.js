@@ -50,7 +50,7 @@ const FAKE_PLAYERS = [
         ranged: { name: "Shortbow", damage: "1d6", category: "Ranged", properties: ["Two-Handed"] },
       },
       profile_avatar_url:
-        "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/lyra.png",
+        "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/test-characters/Lyra.png",
     },
   },
   {
@@ -88,7 +88,7 @@ const FAKE_PLAYERS = [
         "Counterspell",
       ],
       profile_avatar_url:
-        "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/kaelen.png",
+        "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/test-characters/Kaelen.png",
     },
   },
   {
@@ -118,7 +118,7 @@ const FAKE_PLAYERS = [
         ranged: { name: "Heavy Crossbow", damage: "1d10", category: "Ranged", properties: ["Heavy", "Two-Handed"] },
       },
       profile_avatar_url:
-        "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/thordak.png",
+        "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/test-characters/Thordak.png",
     },
   },
   {
@@ -156,7 +156,7 @@ const FAKE_PLAYERS = [
         "Spiritual Weapon",
       ],
       profile_avatar_url:
-        "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/serena.png",
+        "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/test-characters/Serena.png",
     },
   },
 ];

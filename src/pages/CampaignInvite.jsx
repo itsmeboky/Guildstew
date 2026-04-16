@@ -82,15 +82,18 @@ export default function CampaignInvite() {
       }
       
       // Check if already invited
-      const existingInvite = pendingInvitations.find(inv => inv.user_id === friendId);
+      const existingInvite = pendingInvitations.find(inv => inv.invited_user_id === friendId);
       if (existingInvite) {
         throw new Error('Player already has a pending invitation');
       }
-      
-      // Create invitation record
+
+      // Create invitation record. invited_user_id is the recipient;
+      // invited_by is the GM who sent it. The table column is
+      // invited_user_id, NOT user_id.
       await base44.entities.CampaignInvitation.create({
         campaign_id: campaignId,
-        user_id: friendId,
+        invited_user_id: friendId,
+        invited_by: user.id,
         status: 'pending'
       });
       
@@ -134,7 +137,7 @@ export default function CampaignInvite() {
   };
 
   const hasPendingInvite = (friendId) => {
-    return pendingInvitations.some(inv => inv.user_id === friendId);
+    return pendingInvitations.some(inv => inv.invited_user_id === friendId);
   };
 
   if (!campaign) {
@@ -270,7 +273,7 @@ export default function CampaignInvite() {
             <h2 className="text-xl font-bold text-white mb-4">Pending Invitations ({pendingInvitations.length})</h2>
             <div className="space-y-2">
               {pendingInvitations.map((invite) => {
-                const invitedProfile = allUserProfiles.find(p => p.user_id === invite.user_id);
+                const invitedProfile = allUserProfiles.find(p => p.user_id === invite.invited_user_id);
                 if (!invitedProfile) return null;
                 
                 return (

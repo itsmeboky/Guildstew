@@ -10,7 +10,7 @@ import LazyImage from "@/components/ui/LazyImage";
 const HERO_SLIDES = [
   {
     id: 1,
-    image: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/365f3ff13_HeroBannerImage1.png",
+    image: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/365f3ff13_HeroBannerImage1.png",
     buttonText: "Support Us",
     buttonLink: "https://www.kickstarter.com/",
     showText: false,
@@ -18,7 +18,7 @@ const HERO_SLIDES = [
   },
   {
     id: 2,
-    image: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/8d4c5234f_HeroBannerImage2.png",
+    image: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/8d4c5234f_HeroBannerImage2.png",
     title: "Build Your Worlds With Ease",
     subtitle: "Guildstew gives GMs and players everything they need—from character sheets to world bibles—all in one intuitive platform.",
     buttonText: "Get Started",
@@ -27,7 +27,7 @@ const HERO_SLIDES = [
   },
   {
     id: 3,
-    image: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/c2982a68e_HeroBannerImage3.png", // Updated image URL
+    image: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/c2982a68e_HeroBannerImage3.png", // Updated image URL
     title: "Try our Character Creator",
     subtitle: "See exactly what Guildstew is capable of.",
     buttonText: "Start Creating",
@@ -79,7 +79,7 @@ export default function Home() {
       {/* Banner Wallpaper */}
       <div className="absolute top-0 left-0 right-0 h-[33vh] overflow-hidden">
         <LazyImage 
-          src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/7a4e888b3_BannerHome.png" 
+          src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/7a4e888b3_BannerHome.png" 
           alt="Banner" 
           className="absolute inset-0 w-full h-full"
         />
@@ -93,7 +93,7 @@ export default function Home() {
             {/* Character Space */}
             <div className="col-span-2 relative">
               <img 
-                src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/ffd089d34_KarliahNewArt.png"
+                src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/ffd089d34_KarliahNewArt.png"
                 alt="Character"
                 className="absolute h-[535px] w-auto object-contain z-10 pointer-events-none"
                 style={{ top: '-55px', right: '-85px' }}
@@ -316,7 +316,7 @@ export default function Home() {
           {/* Running Character - Centered */}
           <div className="flex justify-center">
             <img 
-              src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/a7206e759_LadleRunning.png"
+              src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/a7206e759_LadleRunning.png"
               alt="Running Character"
               loading="lazy"
               className="h-[500px] w-auto object-contain"

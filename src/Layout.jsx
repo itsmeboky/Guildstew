@@ -15,6 +15,22 @@ export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatConversationId, setChatConversationId] = useState(null);
+
+  // Cross-component channel: any page (e.g. Friends) can dispatch a
+  // custom event to open the chat panel with a specific conversation
+  // pre-selected. The event carries { conversationId } as detail.
+  React.useEffect(() => {
+    const handler = (e) => {
+      const cid = e.detail?.conversationId;
+      if (cid) {
+        setChatConversationId(cid);
+        setIsChatOpen(true);
+      }
+    };
+    window.addEventListener('open-chat-conversation', handler);
+    return () => window.removeEventListener('open-chat-conversation', handler);
+  }, []);
   const [isDiceRollerOpen, setIsDiceRollerOpen] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
     account: false,
@@ -79,11 +95,13 @@ export default function Layout({ children, currentPageName }) {
   const { data: campaignInvitations } = useQuery({
     queryKey: ['campaignInvitations', user?.id],
     queryFn: async () => {
-      const invites = await base44.entities.CampaignInvitation.filter({ user_id: user?.id, status: 'pending' });
+      // Table column is invited_user_id, not user_id.
+      const invites = await base44.entities.CampaignInvitation.filter({ invited_user_id: user?.id, status: 'pending' });
       return invites;
     },
     enabled: !!user?.id,
-    staleTime: 30000,
+    staleTime: 10000,
+    refetchInterval: 10000,
     initialData: []
   });
 
@@ -368,7 +386,20 @@ export default function Layout({ children, currentPageName }) {
     });
   };
 
-  const useDyslexicFont = user?.accessibility_dyslexic_font || false;
+  // Font mode: read from localStorage (fast path) on mount, then
+  // sync from the user's profile (persistent path) when it loads.
+  // The CSS custom properties in index.css switch every font in the
+  // app via the data-font-mode attribute on <html>.
+  React.useEffect(() => {
+    const stored = localStorage.getItem('gs-font-mode');
+    const profileMode = user?.accessibility_dyslexic_font ? 'dyslexic' : null;
+    const mode = stored || profileMode || 'default';
+    document.documentElement.setAttribute('data-font-mode', mode);
+    // Sync localStorage from profile on first load so they agree.
+    if (profileMode && !stored) {
+      localStorage.setItem('gs-font-mode', mode);
+    }
+  }, [user?.accessibility_dyslexic_font]);
   const isDarkMode = user?.accessibility_dark_mode !== false;
 
   useEffect(() => {
@@ -389,25 +420,7 @@ export default function Layout({ children, currentPageName }) {
   return (
     <div className={`min-h-screen ${isWorldLorePage ? 'text-white' : isDarkMode ? 'bg-[#1E2430] text-white' : 'bg-gray-50 text-gray-900'}`}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=OpenDyslexic&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
-
-        @font-face {
-          font-family: 'Cream';
-          src: url('FONT_URL_HERE') format('opentype');
-          font-weight: 600;
-          font-style: normal;
-        }
-
-        body, p, span, div, input, select, textarea, button {
-          font-family: ${useDyslexicFont ? "'OpenDyslexic', 'Comic Sans MS', sans-serif" : "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"};
-          font-weight: 400;
-        }
-
-        h1, h2, h3, h4, h5, h6 {
-          font-family: ${useDyslexicFont ? "'OpenDyslexic', 'Comic Sans MS', sans-serif" : "'Cream', 'Inter', sans-serif"};
-          font-weight: 600;
-        }
 
         .world-lore-expanded .max-w-6xl {
           max-width: 90rem !important;
@@ -438,7 +451,7 @@ export default function Layout({ children, currentPageName }) {
       <header className={`${isDarkMode ? 'bg-[#FF5722]' : 'bg-[#FF5722]'} h-16 flex items-center justify-between px-6 relative z-20`}>
         <Link to={createPageUrl("Home")} className="flex items-center gap-3">
           <LazyImage 
-            src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/d93253ec3_image.png" 
+            src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/branding/d93253ec3_image.png" 
             alt="Guildstew" 
             className="h-10 w-auto bg-transparent"
             objectFit="contain"
@@ -719,21 +732,23 @@ export default function Layout({ children, currentPageName }) {
 
       <div className="fixed bottom-6 right-6 flex items-center gap-3 bg-[#2A3441] rounded-full p-2 shadow-lg z-30">
         <button
-          onClick={() => setIsChatOpen(!isChatOpen)}
-          className="w-12 h-12 bg-[#FF5722] rounded-full flex items-center justify-center hover:bg-[#FF6B3D] transition-colors"
+          onClick={() => {
+            setIsChatOpen(!isChatOpen);
+            // Clear the pending conversation when closing so re-opening
+            // later doesn't jump to an old DM.
+            if (isChatOpen) setChatConversationId(null);
+          }}
+          className="relative w-12 h-12 bg-[#FF5722] rounded-2xl rounded-br-sm flex items-center justify-center hover:bg-[#FF6B3D] transition-colors shadow-[0_4px_12px_rgba(255,87,34,0.5)]"
+          title="Chat"
         >
-          <div className="flex gap-1">
-            <div className="w-1.5 h-1.5 bg-white rounded-full" />
-            <div className="w-1.5 h-1.5 bg-white rounded-full" />
-            <div className="w-1.5 h-1.5 bg-white rounded-full" />
-          </div>
+          <MessageSquare className="w-5 h-5 text-white" />
         </button>
         <button
           onClick={() => setIsDiceRollerOpen(!isDiceRollerOpen)}
           className="w-12 h-12 bg-[#37F2D1] rounded-full flex items-center justify-center hover:bg-[#2dd9bd] transition-colors overflow-hidden"
         >
           <LazyImage 
-            src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6917dd35b600199681c5b960/4c2bdffd3_diceicon.png" 
+            src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/4c2bdffd3_diceicon.png" 
             alt="Dice" 
             className="w-8 h-8 bg-transparent"
             objectFit="contain"
@@ -741,7 +756,14 @@ export default function Layout({ children, currentPageName }) {
         </button>
         </div>
 
-      <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+      <ChatPanel
+        isOpen={isChatOpen}
+        onClose={() => {
+          setIsChatOpen(false);
+          setChatConversationId(null);
+        }}
+        initialConversationId={chatConversationId}
+      />
       <DiceRoller 
         isOpen={isDiceRollerOpen} 
         onClose={() => setIsDiceRollerOpen(false)} 
