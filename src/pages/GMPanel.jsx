@@ -273,6 +273,14 @@ export default function GMPanel() {
   // the targeting / dice-window flow (which weapon to fire) need it.
   const [attackMode, setAttackMode] = useState(null);
 
+  // Extra Attack tracking (M). When the Attack action resolves, the
+  // counter starts at attacksPerAction(class, level) and decrements
+  // after each attack resolves. While > 0, the onActionComplete
+  // handler re-enters targeting instead of closing the dice window.
+  // totalExtraAttacks stores the max for a "Attack X of Y" label.
+  const [remainingAttacks, setRemainingAttacks] = useState(0);
+  const [totalExtraAttacks, setTotalExtraAttacks] = useState(0);
+
   // When a downed PLAYER reaches their turn we automatically open the
   // dramatic DeathSaveWindow. When a downed MONSTER reaches their turn
   // the GM can opt into dramatic mode by clicking "Show Dramatic Roll"
@@ -1374,6 +1382,8 @@ export default function GMPanel() {
     setActionsState({ action: true, bonus: true, reaction: true, inspiration: false });
     setAttackMode(null);
     setSneakActive(false);
+    setRemainingAttacks(0);
+    setTotalExtraAttacks(0);
     // A dramatic monster save belongs to the GM's active interaction —
     // close it when the turn rotates so it doesn't stay on screen.
     setDramaticDeathSaveKey(null);
@@ -1787,6 +1797,11 @@ export default function GMPanel() {
               isSpectator={!combatState.isOpen && !!campaign?.combat_data?.active_encounter}
               spectatorData={campaign?.combat_data?.active_encounter}
               sneakActive={sneakActive}
+              extraAttackInfo={
+                totalExtraAttacks > 1
+                  ? { current: totalExtraAttacks - remainingAttacks, total: totalExtraAttacks }
+                  : null
+              }
 
               onViewTurnOrder={async () => {
                 // GM dismissed the rolled-initiative readout. Transition
@@ -2255,11 +2270,81 @@ export default function GMPanel() {
                 }
               }}
               onActionComplete={() => {
+                const isAttackAction = combatState.action?.name === 'Attack';
+                const isMainHandAttack = isAttackAction && !combatState.action?.isOffHand;
+
+                // (M) Extra Attack: on the FIRST attack of the Action,
+                // initialize the counter from the registry. On subsequent
+                // attacks, decrement it. While remaining > 0, re-enter
+                // targeting mode instead of closing the dice window so
+                // the character can pick a new target for their next hit.
+                if (isMainHandAttack) {
+                  if (remainingAttacks === 0 && totalExtraAttacks === 0) {
+                    // First attack of this Action — initialize counter.
+                    const total = attacksPerAction(
+                      selectedCharacter?.class,
+                      selectedCharacter?.level || selectedCharacter?.stats?.level || 1,
+                    );
+                    if (total > 1) {
+                      setRemainingAttacks(total - 1); // -1 because first just resolved
+                      setTotalExtraAttacks(total);
+                      // Consume the action cost on the FIRST attack only.
+                      const resolvedCost = combatState.action?.resolved?.cost;
+                      if (resolvedCost) {
+                        setActionsState(prev => consumeActionCost(prev, resolvedCost));
+                      }
+                      // Sneak attack reveals on the first hit.
+                      if (sneakActive) {
+                        const key = getCharacterKey(selectedCharacter);
+                        if (key) {
+                          setHiddenCharacters(prev => {
+                            if (!prev.has(key)) return prev;
+                            const next = new Set(prev);
+                            next.delete(key);
+                            return next;
+                          });
+                        }
+                        setSneakActive(false);
+                      }
+                      // Re-enter targeting for the next attack.
+                      const action = buildAttackAction(combatState.action?.mode || 'melee');
+                      setCombatState({ isOpen: false, step: 'selecting_target', action, target: null });
+                      // Clear the active encounter so spectators don't see stale data.
+                      if (campaign?.combat_data?.active_encounter) {
+                        base44.entities.Campaign.update(campaignId, {
+                          combat_data: { ...campaign.combat_data, active_encounter: null },
+                        }).catch(() => {});
+                      }
+                      return; // Don't fall through to the normal close path.
+                    }
+                  } else if (remainingAttacks > 0) {
+                    // Subsequent attacks — decrement counter.
+                    const left = remainingAttacks - 1;
+                    setRemainingAttacks(left);
+                    if (left > 0) {
+                      const action = buildAttackAction(combatState.action?.mode || 'melee');
+                      setCombatState({ isOpen: false, step: 'selecting_target', action, target: null });
+                      if (campaign?.combat_data?.active_encounter) {
+                        base44.entities.Campaign.update(campaignId, {
+                          combat_data: { ...campaign.combat_data, active_encounter: null },
+                        }).catch(() => {});
+                      }
+                      return; // More attacks left — stay in the targeting loop.
+                    }
+                    // Last attack resolved → fall through to normal close.
+                    setTotalExtraAttacks(0);
+                  }
+                }
+
                 // Consume the action's cost now that it has been resolved
+                // (or for single-attack characters, on the only attack).
                 const resolvedCost = combatState.action?.resolved?.cost;
-                if (resolvedCost) {
+                if (resolvedCost && totalExtraAttacks <= 1) {
                   setActionsState(prev => consumeActionCost(prev, resolvedCost));
                 }
+                // Reset Extra Attack counter in case it wasn't already.
+                setRemainingAttacks(0);
+                setTotalExtraAttacks(0);
                 // Attack resolved → leave attack-mode selection
                 setAttackMode(null);
 

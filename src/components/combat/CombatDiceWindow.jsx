@@ -52,6 +52,7 @@ export default function CombatDiceWindow({
   sneakActive = false,
   onViewTurnOrder,
   spellDataList = [],
+  extraAttackInfo = null, // { current: 2, total: 3 } → "Attack 2 of 3"
 }) {
   const [selectedAction, setSelectedAction] = useState(initialAction);
   const [attackRoll, setAttackRoll] = useState(null);
@@ -1979,13 +1980,20 @@ export default function CombatDiceWindow({
                 )}
 
                 {phase === "ready" && flowType === "attack" && (
-                  <button
-                    onClick={handleAttackRoll}
-                    disabled={isRolling || !target}
-                    className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] disabled:opacity-50 disabled:cursor-not-allowed text-white text-2xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(255,87,34,0.4)] border-b-4 border-[#c43e12] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
-                  >
-                    {isRolling ? "ROLLING..." : "ROLL ATTACK"}
-                  </button>
+                  <div className="w-full flex flex-col items-center gap-2">
+                    {extraAttackInfo && (
+                      <div className="text-[10px] uppercase tracking-[0.3em] text-[#37F2D1] font-black bg-[#37F2D1]/10 border border-[#37F2D1]/40 rounded-full px-4 py-1">
+                        Attack {extraAttackInfo.current} of {extraAttackInfo.total}
+                      </div>
+                    )}
+                    <button
+                      onClick={handleAttackRoll}
+                      disabled={isRolling || !target}
+                      className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] disabled:opacity-50 disabled:cursor-not-allowed text-white text-2xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(255,87,34,0.4)] border-b-4 border-[#c43e12] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
+                    >
+                      {isRolling ? "ROLLING..." : "ROLL ATTACK"}
+                    </button>
+                  </div>
                 )}
 
                 {phase === "ready" && flowType === "heal" && (
