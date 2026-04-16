@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import BulkMonsterImageUpload from "./BulkMonsterImageUpload";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
+import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
 
 export default function MonsterLibrary({ monsters, currentCharacter, canEdit, onSelectMonster, onDeleteMonster, onRefresh }) {
   const [selectedMonster, setSelectedMonster] = useState(null);
@@ -24,7 +25,7 @@ export default function MonsterLibrary({ monsters, currentCharacter, canEdit, on
   };
 
   const getModifier = (score) => {
-    const mod = Math.floor((score - 10) / 2);
+    const mod = abilityModifier(score);
     return mod >= 0 ? `+${mod}` : `${mod}`;
   };
 
