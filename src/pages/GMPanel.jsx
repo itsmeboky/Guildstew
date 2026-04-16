@@ -58,6 +58,8 @@ import {
   CONCENTRATION,
   applyDamageModifiers,
   attacksPerAction,
+  getRule,
+  DEATH_RULES,
 } from "@/components/dnd5e/dnd5eRules";
 import { toast } from "sonner";
 import { useTurnContext } from "@/components/combat/useTurnContext";
@@ -1053,7 +1055,9 @@ export default function GMPanel() {
       );
       return;
     }
-    if (roll >= 10) {
+    // (K) Death save DC — homebrew override. Default DC 10 per PHB.
+    const deathSaveDC = getRule(campaign?.homebrew_rules, 'combat.death_saves.dc') ?? DEATH_RULES.death_saves.dc;
+    if (roll >= deathSaveDC) {
       applyDeathSaveChange(combatantKey, { successesDelta: 1 });
       logCombatEvent(
         campaignId,

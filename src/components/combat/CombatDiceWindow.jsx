@@ -717,20 +717,58 @@ export default function CombatDiceWindow({
     const match = diceString.match(/(\d+)d(\d+)/);
     const faces = match ? parseInt(match[2], 10) : 8;
 
+    // (L) Critical hit homebrew override. Check campaign.homebrew_rules
+    // for alternate crit rules before applying the default double-dice.
+    const critMaxAll = getRule(homebrewRules, 'combat.critical_hits.max_all');
+    const critMaxFirst = getRule(homebrewRules, 'combat.critical_hits.max_first_roll_second');
+
     if (isCompoundDice) {
       numDice = match ? parseInt(match[1], 10) : 1;
-      // Crit still doubles dice on compound spell damage — roll the
-      // whole expression twice and sum.
       total = rollDiceString(diceString);
-      if (isCrit) total += rollDiceString(diceString);
+      if (isCrit) {
+        if (critMaxAll) {
+          // Maximize ALL dice — roll the expression and set each die to max.
+          const maxMatch = diceString.match(/(\d+)d(\d+)/g);
+          let maxTotal = 0;
+          (maxMatch || []).forEach(term => {
+            const m = term.match(/(\d+)d(\d+)/);
+            if (m) maxTotal += parseInt(m[1]) * parseInt(m[2]) * 2;
+          });
+          total = maxTotal;
+        } else {
+          total += rollDiceString(diceString);
+        }
+      }
     } else {
       numDice = match ? parseInt(match[1], 10) : 1;
-      // Crit: double number of dice
-      if (isCrit) numDice *= 2;
 
-      total = roll; // visible die
-      for (let i = 1; i < numDice; i++) {
-        total += Math.floor(Math.random() * faces) + 1;
+      if (isCrit) {
+        if (critMaxAll) {
+          // Max all: every die shows its maximum face.
+          numDice *= 2;
+          total = numDice * faces;
+        } else if (critMaxFirst) {
+          // Max first set, roll second set normally.
+          const maxFirst = numDice * faces;
+          let rolledSecond = roll;
+          for (let i = 1; i < numDice; i++) {
+            rolledSecond += Math.floor(Math.random() * faces) + 1;
+          }
+          total = maxFirst + rolledSecond;
+          numDice *= 2; // for display purposes
+        } else {
+          // Default: double the number of dice.
+          numDice *= 2;
+          total = roll;
+          for (let i = 1; i < numDice; i++) {
+            total += Math.floor(Math.random() * faces) + 1;
+          }
+        }
+      } else {
+        total = roll;
+        for (let i = 1; i < numDice; i++) {
+          total += Math.floor(Math.random() * faces) + 1;
+        }
       }
     }
 
