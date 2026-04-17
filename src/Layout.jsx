@@ -474,6 +474,10 @@ export default function Layout({ children, currentPageName }) {
   if (currentPageName === "CampaignItems" || currentPageName === "CampaignNPCs" || currentPageName === "CampaignMaps" || currentPageName === "CampaignHomebrew") {
     return <>{children}</>;
   }
+  // Admin dashboard has its own full-screen sidebar shell.
+  if (currentPageName === "Admin") {
+    return <>{children}</>;
+  }
 
   return (
     <div className={`min-h-screen ${isWorldLorePage ? 'text-white' : isDarkMode ? 'bg-[#1E2430] text-white' : 'bg-gray-50 text-gray-900'}`}>

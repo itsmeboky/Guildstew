@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useNavigate } from "react-router-dom";
+import { trackEvent } from "@/utils/analytics";
 
 // Bump this string whenever the privacy / terms / EULA copy
 // materially changes so existing users are forced through the
@@ -32,6 +33,7 @@ export default function Landing() {
         password,
       });
       if (authError) throw authError;
+      if (data?.user?.id) trackEvent(data.user.id, "user_login");
       navigate("/Home");
     } catch (err) {
       setError(err.message);
@@ -81,6 +83,7 @@ export default function Landing() {
           tos_accepted_at: new Date().toISOString(),
           tos_version: CURRENT_TOS_VERSION,
         });
+        trackEvent(data.user.id, "user_signup", { is_minor: isMinor });
       }
 
       navigate("/Onboarding");

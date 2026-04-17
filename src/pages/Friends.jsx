@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import StatusDot from "@/components/presence/StatusDot";
+import { trackEvent } from "@/utils/analytics";
 import {
   Dialog,
   DialogContent,
@@ -138,6 +139,7 @@ export default function Friends() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['allFriendships'] });
+      trackEvent(user?.id, 'friend_added');
       toast.success('Friend request accepted');
       setShowMinorAcceptWarning(false);
       setPendingAcceptRequest(null);

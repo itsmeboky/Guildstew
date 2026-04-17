@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Sparkles, Upload, ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { aiGenerate, generatePortrait } from "@/api/aiClient";
 import { uploadFile } from "@/utils/uploadFile";
+import { trackEvent } from "@/utils/analytics";
+import { useAuth } from "@/lib/AuthContext";
 
 /**
  * AI Generate flow — one prompt box, one API call, a preview with
@@ -14,6 +16,7 @@ import { uploadFile } from "@/utils/uploadFile";
  * the final character record + avatar_url.
  */
 export default function AIGenerateFlow({ onBack, onComplete, campaignId, busy = false }) {
+  const { user } = useAuth();
   const [prompt, setPrompt] = useState("");
   const [status, setStatus] = useState("idle"); // idle | generating | painting | ready
   const [character, setCharacter] = useState(null);
@@ -30,6 +33,7 @@ export default function AIGenerateFlow({ onBack, onComplete, campaignId, busy = 
     setCharacter(null);
     setPortrait(null);
     setBloodiedPortrait(null);
+    trackEvent(user?.id, 'ai_generate_used', { prompt_length: prompt.length });
     try {
       const c = await aiGenerate(prompt);
       setCharacter(c);
@@ -41,6 +45,7 @@ export default function AIGenerateFlow({ onBack, onComplete, campaignId, busy = 
           campaign_id: campaignId || null,
         });
         setPortrait(p);
+        trackEvent(user?.id, 'ai_portrait_generated', { subject_type: 'character_main' });
       } catch (err) {
         toast.error(err?.message || "Portrait generation failed — you can still upload one.");
       }
