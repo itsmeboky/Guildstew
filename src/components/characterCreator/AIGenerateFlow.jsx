@@ -18,6 +18,7 @@ export default function AIGenerateFlow({ onBack, onComplete, campaignId, busy = 
   const [status, setStatus] = useState("idle"); // idle | generating | painting | ready
   const [character, setCharacter] = useState(null);
   const [portrait, setPortrait] = useState(null);
+  const [bloodiedPortrait, setBloodiedPortrait] = useState(null);
   const [portraitUploading, setPortraitUploading] = useState(false);
 
   const run = async () => {
@@ -28,6 +29,7 @@ export default function AIGenerateFlow({ onBack, onComplete, campaignId, busy = 
     setStatus("generating");
     setCharacter(null);
     setPortrait(null);
+    setBloodiedPortrait(null);
     try {
       const c = await aiGenerate(prompt);
       setCharacter(c);
@@ -42,6 +44,17 @@ export default function AIGenerateFlow({ onBack, onComplete, campaignId, busy = 
       } catch (err) {
         toast.error(err?.message || "Portrait generation failed — you can still upload one.");
       }
+      // Queue a bloodied variant in the background. A failure here
+      // is soft — the combat UI falls back to the CSS splatter
+      // overlay when bloodied_avatar_url is missing.
+      generatePortrait({
+        description:
+          `${c.appearance || c.backstory || prompt}. They look exhausted, wounded, and battle-worn. ` +
+          `Cuts, bruises, torn clothing, smears of blood. Same character after a brutal fight.`,
+        campaign_id: campaignId || null,
+      })
+        .then((bp) => setBloodiedPortrait(bp))
+        .catch(() => { /* non-blocking */ });
       setStatus("ready");
     } catch (err) {
       toast.error(err?.message || "Generation failed");
@@ -70,7 +83,11 @@ export default function AIGenerateFlow({ onBack, onComplete, campaignId, busy = 
 
   const confirm = () => {
     if (!character) return;
-    onComplete?.({ ...character, avatar_url: portrait?.image_url || null });
+    onComplete?.({
+      ...character,
+      avatar_url: portrait?.image_url || null,
+      bloodied_avatar_url: bloodiedPortrait?.image_url || null,
+    });
   };
 
   if (status === "idle") {

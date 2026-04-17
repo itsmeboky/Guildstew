@@ -446,6 +446,7 @@ const handleSubmit = () => {
         personality: generated.personality || '',
         profile_avatar_url: generated.avatar_url || null,
         avatar_url: generated.avatar_url || null,
+        bloodied_avatar_url: generated.bloodied_avatar_url || null,
       };
       // Default HP / AC if the AI didn't supply them — mirrors what
       // buildStatsFromCharacterData does inside the full flow.
