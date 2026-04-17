@@ -16,6 +16,7 @@ import { uploadFile } from "@/utils/uploadFile";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import StatusDot from "@/components/presence/StatusDot";
 import { statusMeta } from "@/lib/PresenceContext";
+import { Skeleton, CardSkeleton } from "@/components/ui/Skeleton";
 
 export default function YourProfile() {
   const sub = useSubscription();
@@ -60,7 +61,7 @@ console.log('PROFILE PAGE USER:', user)
     initialData: []
   });
 
-  const { data: posts } = useQuery({
+  const { data: posts, isLoading: postsLoading } = useQuery({
     queryKey: ['userPosts'],
     queryFn: () => base44.entities.Post.filter({ profile_user_id: user?.id }, '-created_date'),
     enabled: !!user,
@@ -623,6 +624,11 @@ console.log('PROFILE PAGE USER:', user)
 
               {/* Posts */}
               <div className="space-y-4">
+                {postsLoading && posts.length === 0 && (
+                  <>
+                    {Array.from({ length: 3 }).map((_, i) => <CardSkeleton key={i} />)}
+                  </>
+                )}
                 {displayedPosts.map(post => {
                   const authorProfile = allUserProfiles.find(p => p.email === post.created_by);
                   const hasLiked = (post.likes || []).includes(user?.id);

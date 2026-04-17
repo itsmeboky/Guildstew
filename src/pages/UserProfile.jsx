@@ -22,6 +22,7 @@ import { uploadFile } from "@/utils/uploadFile";
 import StatusDot from "@/components/presence/StatusDot";
 import { resolveStatus, statusMeta } from "@/lib/PresenceContext";
 import ReportUserDialog from "@/components/support/ReportUserDialog";
+import { CardSkeleton } from "@/components/ui/Skeleton";
 
 export default function UserProfile() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -91,7 +92,7 @@ export default function UserProfile() {
     initialData: []
   });
 
-  const { data: posts } = useQuery({
+  const { data: posts, isLoading: postsLoading } = useQuery({
     queryKey: ['userPosts', userId],
     queryFn: () => base44.entities.Post.filter({ profile_user_id: userId }, '-created_date'),
     enabled: !!userId,
@@ -622,6 +623,11 @@ export default function UserProfile() {
 
               {/* Posts */}
               <div className="space-y-4">
+                {postsLoading && posts.length === 0 && (
+                  <>
+                    {Array.from({ length: 3 }).map((_, i) => <CardSkeleton key={i} />)}
+                  </>
+                )}
                 {posts.slice(0, 5).map(post => {
                   const authorProfile = allUserProfiles.find(p => p.email === post.created_by);
                   const hasLiked = (post.likes || []).includes(currentUser?.id);
