@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import SubscriptionTab from "@/components/subscription/SubscriptionTab";
 import SupportTicketDialog from "@/components/support/SupportTicketDialog";
 import MyTicketsList from "@/components/support/MyTicketsList";
+import DeleteAccountDialog from "@/components/settings/DeleteAccountDialog";
 
 const CLASS_ICONS = {
   "Wizard": "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/94cfaa28a_Wizard1.png",
@@ -33,6 +34,7 @@ export default function Settings() {
   const [avatarFile, setAvatarFile] = useState(null);
   const [bannerFile, setBannerFile] = useState(null);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
@@ -572,17 +574,24 @@ export default function Settings() {
               <div className="border-t border-slate-700 pt-4 mt-4">
                 <h3 className="text-base font-semibold text-white mb-1">Delete my account</h3>
                 <p className="text-xs text-slate-400 mb-3">
-                  We're working on a self-serve delete flow. In the meantime, please email
-                  the support team and we'll process the request within 30 days.
+                  Permanently remove your profile, characters, homebrew, and personal data.
+                  This cannot be undone.
                 </p>
-                <a
-                  href="mailto:support@guildstew.com?subject=Account%20deletion%20request"
-                  className="inline-flex items-center gap-2 bg-red-500/15 border border-red-500/40 text-red-300 hover:bg-red-500/25 rounded-lg px-3 py-2 text-sm font-semibold"
+                <Button
+                  onClick={() => setDeleteOpen(true)}
+                  className="bg-red-500/15 border border-red-500/40 text-red-300 hover:bg-red-500/25"
                 >
-                  Contact support@guildstew.com
-                </a>
+                  Delete My Account
+                </Button>
               </div>
             </div>
+
+            <DeleteAccountDialog
+              open={deleteOpen}
+              onClose={() => setDeleteOpen(false)}
+              userId={user?.id}
+              profileId={user?.profile_id}
+            />
           </TabsContent>
 
           <TabsContent value="support">

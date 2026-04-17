@@ -478,6 +478,11 @@ export default function Layout({ children, currentPageName }) {
   if (currentPageName === "Admin") {
     return <>{children}</>;
   }
+  // Auth-flow pages render without nav/sidebar so the user can finish
+  // password reset / email verification without distractions.
+  if (currentPageName === "ResetPassword" || currentPageName === "VerifyEmail") {
+    return <>{children}</>;
+  }
 
   return (
     <div className={`min-h-screen ${isWorldLorePage ? 'text-white' : isDarkMode ? 'bg-[#1E2430] text-white' : 'bg-gray-50 text-gray-900'}`}>

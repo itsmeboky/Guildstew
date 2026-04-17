@@ -2,6 +2,7 @@ import React from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import CampaignCarousel from "@/components/campaigns/CampaignCarousel";
+import { CardSkeleton } from "@/components/ui/Skeleton";
 
 export default function Campaigns() {
   const { data: user } = useQuery({
@@ -10,11 +11,11 @@ export default function Campaigns() {
     initialData: null
   });
 
-  const { data: campaigns } = useQuery({
+  const { data: campaigns, isLoading: campaignsLoading } = useQuery({
     queryKey: ['userCampaigns'],
     queryFn: async () => {
       const allCampaigns = await base44.entities.Campaign.list('-updated_date');
-      return allCampaigns.filter(c => 
+      return allCampaigns.filter(c =>
         c.game_master_id === user?.id || c.player_ids?.includes(user?.id)
       );
     },
@@ -49,7 +50,12 @@ export default function Campaigns() {
         </div>
       </div>
 
-      <div className="px-8 py-8 space-y-8">
+      <div className="px-4 md:px-8 py-8 space-y-8">
+        {campaignsLoading && campaigns.length === 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => <CardSkeleton key={i} />)}
+          </div>
+        )}
         {dmCampaigns.length > 0 && (
           <CampaignCarousel 
             title="Your Campaigns (DM)" 

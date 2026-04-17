@@ -30,8 +30,6 @@ import CampaignUpdates from './pages/CampaignUpdates';
 import CampaignArchives from './pages/CampaignArchives';
 import CampaignSettings from './pages/CampaignSettings';
 import CampaignStatistics from './pages/CampaignStatistics';
-import CampaignPlayerPanel from './pages/CampaignPlayerPanel';
-import GMPanel from './pages/GMPanel';
 import BackendAdmin from './pages/BackendAdmin';
 import DiceCalibrator from './pages/DiceCalibrator';
 import CampaignPanel from './pages/CampaignPanel';
@@ -42,6 +40,9 @@ import Terms from './pages/Terms';
 import EULA from './pages/EULA';
 import PrivacySummary from './pages/PrivacySummary';
 import Admin from './pages/Admin';
+import ResetPassword from './pages/ResetPassword';
+import VerifyEmail from './pages/VerifyEmail';
+import { GuardedGMPanel, GuardedPlayerPanel } from './pages/_desktopGuards.jsx';
 import __Layout from './Layout.jsx';
 
 
@@ -78,8 +79,8 @@ export const PAGES = {
     "CampaignArchives": CampaignArchives,
     "CampaignSettings": CampaignSettings,
     "CampaignStatistics": CampaignStatistics,
-    "CampaignPlayerPanel": CampaignPlayerPanel,
-    "GMPanel": GMPanel,
+    "CampaignPlayerPanel": GuardedPlayerPanel,
+    "GMPanel": GuardedGMPanel,
     "BackendAdmin": BackendAdmin,
     "DiceCalibrator": DiceCalibrator,
     "CampaignPanel": CampaignPanel,
@@ -90,6 +91,8 @@ export const PAGES = {
     "EULA": EULA,
     "PrivacySummary": PrivacySummary,
     "Admin": Admin,
+    "ResetPassword": ResetPassword,
+    "VerifyEmail": VerifyEmail,
 }
 
 export const pagesConfig = {
