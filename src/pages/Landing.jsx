@@ -9,6 +9,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { trackEvent } from "@/utils/analytics";
+import UsernameField from "@/components/profile/UsernameField";
+import { validateUsername, isUsernameAvailable } from "@/utils/username";
 
 // Bump this string whenever the privacy / terms / EULA copy
 // materially changes so existing users are forced through the
@@ -25,6 +27,8 @@ export default function Landing() {
   const [loading, setLoading] = useState(false);
   // Signup-only state
   const [dob, setDob] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameStatus, setUsernameStatus] = useState("idle");
   const [agreedToTos, setAgreedToTos] = useState(false);
   // Forgot-password dialog state.
   const [forgotOpen, setForgotOpen] = useState(false);
@@ -71,6 +75,24 @@ export default function Landing() {
       setError("Please agree to the Terms, Privacy Policy, and EULA to continue.");
       return;
     }
+    // Username policy + uniqueness. The live field already shows the
+    // status, but we re-check here so someone can't bypass the gate
+    // by submitting while the debounce is still pending.
+    const desiredUsername = (username || "").trim();
+    const policy = validateUsername(desiredUsername, email);
+    if (!policy.ok) {
+      setError(policy.error);
+      return;
+    }
+    const { available, error: checkErr } = await isUsernameAvailable(desiredUsername);
+    if (checkErr) {
+      setError("Could not verify username availability. Please try again.");
+      return;
+    }
+    if (!available) {
+      setError("That username is taken. Try another one.");
+      return;
+    }
     const isMinor = age < 18;
     setLoading(true);
     try {
@@ -85,7 +107,7 @@ export default function Landing() {
         await supabase.from("user_profiles").insert({
           user_id: data.user.id,
           email: email,
-          username: email.split("@")[0],
+          username: desiredUsername,
           date_of_birth: dob,
           is_minor: isMinor,
           tos_accepted_at: new Date().toISOString(),
@@ -132,8 +154,8 @@ export default function Landing() {
         backgroundPosition: "center",
       }}
     >
-      <div className="w-[700px] h-[700px] bg-white rounded-full flex items-center justify-center p-16 shadow-2xl">
-        <div className="w-full max-w-md space-y-6">
+      <div className="w-full max-w-md mx-4 md:mx-0 bg-white rounded-2xl overflow-hidden flex items-center justify-center p-8 md:p-10 shadow-2xl">
+        <div className="w-full space-y-6">
           {/* Logo */}
           <div className="flex justify-center mb-8">
             <img
@@ -197,11 +219,24 @@ export default function Landing() {
             />
           </div>
 
-          {/* Signup-only: date of birth + ToS checkbox. Under-13
-              is blocked at submit; 13-17 flagged as minor on the
-              user_profiles row. */}
+          {/* Signup-only: username, date of birth, ToS checkbox.
+              Under-13 is blocked at submit; 13-17 flagged as minor
+              on the user_profiles row. */}
           {isSignUp && (
             <>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">Username</label>
+                <UsernameField
+                  value={username}
+                  onChange={setUsername}
+                  onStatus={setUsernameStatus}
+                  email={email}
+                  label={null}
+                  placeholder="boky"
+                  inputClassName="bg-[#FFD4C4] border-none h-12 text-gray-800"
+                />
+              </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">Date of birth</label>
                 <Input
@@ -250,7 +285,12 @@ export default function Landing() {
           {/* Submit button */}
           <Button
             onClick={handleSubmit}
-            disabled={loading || !email || !password || (isSignUp && (!dob || !agreedToTos))}
+            disabled={
+              loading
+              || !email
+              || !password
+              || (isSignUp && (!dob || !agreedToTos || usernameStatus !== "available"))
+            }
             className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] text-white h-14 rounded-full text-lg font-bold disabled:opacity-50"
           >
             {loading ? (

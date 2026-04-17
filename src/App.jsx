@@ -33,11 +33,17 @@ const AuthenticatedApp = () => {
   if (!isAuthenticated) {
     // A small set of pages must remain reachable without a session so
     // users clicking a password-reset / email-verification link from
-    // their inbox aren't bounced back to the login screen.
+    // their inbox aren't bounced back to the login screen, and so the
+    // legal-copy links on the signup form actually navigate.
     return (
       <Routes>
         <Route path="/ResetPassword" element={<Pages.ResetPassword />} />
         <Route path="/VerifyEmail" element={<Pages.VerifyEmail />} />
+        <Route path="/Terms" element={<Pages.Terms />} />
+        <Route path="/Privacy" element={<Pages.Privacy />} />
+        <Route path="/EULA" element={<Pages.EULA />} />
+        <Route path="/Cookies" element={<Pages.Cookies />} />
+        <Route path="/PrivacySummary" element={<Pages.PrivacySummary />} />
         <Route path="*" element={<Pages.Landing />} />
       </Routes>
     );

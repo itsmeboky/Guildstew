@@ -23,6 +23,7 @@ import StatusDot from "@/components/presence/StatusDot";
 import { resolveStatus, statusMeta } from "@/lib/PresenceContext";
 import ReportUserDialog from "@/components/support/ReportUserDialog";
 import { CardSkeleton } from "@/components/ui/Skeleton";
+import SocialHandlesDisplay from "@/components/profile/SocialHandlesDisplay";
 
 export default function UserProfile() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -65,7 +66,7 @@ export default function UserProfile() {
     country: userProfile.country,
     pronouns: userProfile.pronouns,
     bio: userProfile.bio,
-    social_links: userProfile.social_links,
+    social_handles: userProfile.social_handles,
     favorite_genres: userProfile.favorite_genres,
     profile_color_1: userProfile.profile_color_1 || "#FF5722",
     profile_color_2: userProfile.profile_color_2 || "#37F2D1",
@@ -507,26 +508,14 @@ export default function UserProfile() {
               </p>
             </div>
 
-            {/* Links */}
+            {/* Social Handles */}
             <div className="bg-gradient-to-br from-[#1a1f2e]/90 to-[#2A3441]/90 backdrop-blur-md rounded-2xl p-6" style={{ boxShadow: `0 0 0 1px ${color1}80, 0 0 0 2px ${color2}80` }}>
-              <h3 className="text-sm font-bold uppercase mb-4 bg-gradient-to-r from-[#FF5722] to-[#37F2D1] bg-clip-text text-transparent">Links</h3>
-              <div className="space-y-2">
-                {(user?.social_links || []).length > 0 ? (
-                  user.social_links.map((link, idx) => (
-                    <a
-                      key={idx}
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-[#37F2D1] hover:text-[#2dd9bd] transition-colors text-sm"
-                    >
-                      🔗 {link.label}
-                    </a>
-                  ))
-                ) : (
-                  <p className="text-gray-500 text-sm">No links yet.</p>
-                )}
-              </div>
+              <h3 className="text-sm font-bold uppercase mb-4 bg-gradient-to-r from-[#FF5722] to-[#37F2D1] bg-clip-text text-transparent">Social Handles</h3>
+              {Object.values(user?.social_handles || {}).some(Boolean) ? (
+                <SocialHandlesDisplay handles={user.social_handles} />
+              ) : (
+                <p className="text-gray-500 text-sm">No social handles yet.</p>
+              )}
             </div>
 
             {/* Friends */}

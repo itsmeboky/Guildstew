@@ -2,7 +2,8 @@ import Home from './pages/Home';
 import YourProfile from './pages/YourProfile';
 import CharacterLibrary from './pages/CharacterLibrary';
 import Campaigns from './pages/Campaigns';
-import Workshop from './pages/Workshop';
+// Workshop is hidden for now — route registration is disabled below.
+// import Workshop from './pages/Workshop';
 import TheTavern from './pages/TheTavern';
 import Friends from './pages/Friends';
 import PIEChart from './pages/PIEChart';
@@ -51,7 +52,7 @@ export const PAGES = {
     "YourProfile": YourProfile,
     "CharacterLibrary": CharacterLibrary,
     "Campaigns": Campaigns,
-    "Workshop": Workshop,
+    // "Workshop": Workshop,
     "TheTavern": TheTavern,
     "Friends": Friends,
     "PIEChart": PIEChart,
