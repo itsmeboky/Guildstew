@@ -17,6 +17,7 @@ import {
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { supabase } from "@/api/supabaseClient";
+import { trackEvent } from "@/utils/analytics";
 
 /**
  * Subscription tab — renders the four tiers from billingClient.TIERS,
@@ -40,6 +41,7 @@ export default function SubscriptionTab() {
     const tier = params.get('tier');
     if (status === 'success') {
       toast.success(`Welcome to ${tier ? (TIERS[tier]?.name || tier) : 'your new tier'}! 🎉`, { duration: 5000 });
+      trackEvent(user?.id, 'subscription_started', { tier });
       sub.refresh();
       params.delete('subscription');
       params.delete('tier');

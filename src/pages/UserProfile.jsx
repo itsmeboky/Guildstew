@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Heart, MessageCircle, Upload, X, Globe, Cake, User as UserIcon, Ban, UserPlus, Trophy } from "lucide-react";
+import { Heart, MessageCircle, Upload, X, Globe, Cake, User as UserIcon, Ban, UserPlus, Trophy, Flag } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -21,6 +21,7 @@ import PostComments from "@/components/profile/PostComments";
 import { uploadFile } from "@/utils/uploadFile";
 import StatusDot from "@/components/presence/StatusDot";
 import { resolveStatus, statusMeta } from "@/lib/PresenceContext";
+import ReportUserDialog from "@/components/support/ReportUserDialog";
 
 export default function UserProfile() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -28,6 +29,7 @@ export default function UserProfile() {
   const [newPost, setNewPost] = useState("");
   const [postImage, setPostImage] = useState(null);
   const [showBlockWarning, setShowBlockWarning] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const genreGradients = {
     "High Fantasy": "from-purple-500 to-pink-500",
@@ -432,9 +434,18 @@ export default function UserProfile() {
                         Message
                       </Button>
                     )}
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-2 border-amber-500/50 text-amber-300 hover:bg-amber-500/20 bg-transparent shadow-lg gap-2"
+                      onClick={() => setReportOpen(true)}
+                    >
+                      <Flag className="w-4 h-4" />
+                      Report
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
                       className="border-2 border-red-500/50 text-red-400 hover:bg-red-500/20 bg-transparent shadow-lg gap-2"
                       onClick={() => setShowBlockWarning(true)}
                     >
@@ -836,6 +847,13 @@ export default function UserProfile() {
       </div>
 
       {/* Block Warning Dialog */}
+      <ReportUserDialog
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        reporterId={currentUser?.id}
+        targetUser={user ? { id: userId, username: user.username } : null}
+      />
+
       <Dialog open={showBlockWarning} onOpenChange={setShowBlockWarning}>
         <DialogContent className="bg-[#1E2430] border-2 border-red-500 text-white max-w-md">
           <DialogHeader>

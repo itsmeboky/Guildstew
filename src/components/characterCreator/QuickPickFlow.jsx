@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { quickPick, generatePortrait } from "@/api/aiClient";
 import { uploadFile } from "@/utils/uploadFile";
+import { trackEvent } from "@/utils/analytics";
+import { useAuth } from "@/lib/AuthContext";
 import RaceStep from "@/components/characterCreator/RaceStep";
 import ClassStep from "@/components/characterCreator/ClassStep";
 
@@ -29,6 +31,7 @@ const BACKGROUNDS = [
  * onComplete (the parent saves to the characters table).
  */
 export default function QuickPickFlow({ onBack, onComplete, campaignId, busy = false }) {
+  const { user } = useAuth();
   const [step, setStep] = useState(0); // 0 race, 1 class, 2 background, 3 loading, 4 swipe, 5 portrait-preview
   const [draft, setDraft] = useState({ race: "", subrace: "", class: "", subclass: "", background: "" });
 
@@ -45,6 +48,11 @@ export default function QuickPickFlow({ onBack, onComplete, campaignId, busy = f
   const runQuickPick = async () => {
     setLoadingLabel("Finding your perfect match…");
     setStep(3);
+    trackEvent(user?.id, 'ai_quick_pick_used', {
+      race: draft.race,
+      class: draft.class,
+      background: draft.background,
+    });
     try {
       const res = await quickPick({
         race: draft.race,
@@ -85,6 +93,7 @@ export default function QuickPickFlow({ onBack, onComplete, campaignId, busy = f
         campaign_id: campaignId || null,
       });
       setPortrait(p);
+      trackEvent(user?.id, 'ai_portrait_generated', { subject_type: 'character_main' });
     } catch (err) {
       toast.error(err?.message || "Portrait generation failed — you can still upload one.");
       setPortrait(null);

@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { trackEvent } from "@/utils/analytics";
 
 const AVAILABLE_TAGS = [
   "High Fantasy", "Low Fantasy", "Dark Fantasy", "Urban Fantasy",
@@ -114,6 +115,7 @@ export default function JoinCampaign() {
       queryClient.invalidateQueries({ queryKey: ['userCharacters'] });
       queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
+      trackEvent(user?.id, 'campaign_joined', { campaign_id: campaignId });
       toast.success('Joined campaign successfully');
       setShowCharacterSelect(false);
       setSelectedInvite(null);
