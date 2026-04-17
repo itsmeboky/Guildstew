@@ -75,6 +75,7 @@ import { hpBarColor, clampHp, normalizeHp } from "@/components/combat/hpColor";
 import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
 import { trackStat, ensureCharacterStats } from "@/utils/characterStats";
 import { checkAchievementsForCombatants } from "@/utils/achievementChecker";
+import { trackEvent } from "@/utils/analytics";
 import {
   abilityModifier,
   proficiencyBonus,
@@ -736,6 +737,10 @@ export default function GMPanel() {
         event: 'combat_start',
         category: 'round',
       });
+      trackEvent(currentUser?.id, 'combat_started', {
+        campaign_id: campaignId,
+        combatants: (campaign?.combat_data?.order || initiativeOrder || []).length,
+      });
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
     }
   });
@@ -863,6 +868,12 @@ export default function GMPanel() {
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
       queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
       queryClient.invalidateQueries({ queryKey: ['achievements'] });
+      trackEvent(currentUser?.id, 'combat_ended', {
+        campaign_id: campaignId,
+        rounds,
+        rest_type: restType,
+        awards_count: (awards || []).length,
+      });
       logCombatEvent(campaignId, `Combat ended. ${rounds} round${rounds === 1 ? '' : 's'}.`, {
         event: 'combat_ended',
         category: 'round',

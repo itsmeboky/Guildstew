@@ -1,5 +1,6 @@
 import { useAuth } from '@/lib/AuthContext';
 import { useSubscription } from '@/lib/SubscriptionContext';
+import { trackEvent } from '@/utils/analytics';
 import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -289,6 +290,14 @@ export default function CharacterCreator() {
       } else {
         queryClient.invalidateQueries({ queryKey: ['allCharacters'] });
         toast.success(editCharacterId ? "Character updated successfully!" : "Character created successfully!");
+        if (!editCharacterId && authUser?.id) {
+          trackEvent(authUser.id, 'character_created', {
+            method: mode || 'full',
+            race: characterData.race,
+            class: characterData.class,
+            gender: characterData.gender,
+          });
+        }
         navigate(createPageUrl("CharacterLibrary"));
       }
     }

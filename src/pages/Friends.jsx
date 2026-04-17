@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import StatusDot from "@/components/presence/StatusDot";
+import { trackEvent } from "@/utils/analytics";
+import { RowSkeleton } from "@/components/ui/Skeleton";
 import {
   Dialog,
   DialogContent,
@@ -68,7 +70,7 @@ export default function Friends() {
 
 
 
-  const { data: allFriendships = [] } = useQuery({
+  const { data: allFriendships = [], isLoading: friendsLoading } = useQuery({
     queryKey: ['allFriendships'],
     queryFn: () => base44.entities.Friend.list(),
     refetchInterval: 5000
@@ -138,6 +140,7 @@ export default function Friends() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['allFriendships'] });
+      trackEvent(user?.id, 'friend_added');
       toast.success('Friend request accepted');
       setShowMinorAcceptWarning(false);
       setPendingAcceptRequest(null);
@@ -416,6 +419,11 @@ export default function Friends() {
           <TabsContent value="all">
             <ScrollArea className="h-[600px]">
               <div className="space-y-3">
+                {friendsLoading && acceptedFriends.length === 0 && (
+                  <>
+                    {Array.from({ length: 5 }).map((_, i) => <RowSkeleton key={i} />)}
+                  </>
+                )}
                 {acceptedFriends.map(friend => (
                   <FriendCard
                     key={friend.id}
@@ -453,7 +461,7 @@ export default function Friends() {
                     }
                   />
                 ))}
-                {acceptedFriends.length === 0 && (
+                {!friendsLoading && acceptedFriends.length === 0 && (
                   <p className="text-center text-gray-500 py-12">No friends yet. Start adding friends!</p>
                 )}
               </div>

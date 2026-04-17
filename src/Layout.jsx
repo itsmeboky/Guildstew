@@ -224,13 +224,25 @@ export default function Layout({ children, currentPageName }) {
     setPreviousReminderCount(sessionReminders.length);
   }, [sessionReminders.length, previousReminderCount, sessionReminders]);
 
-  const isCreator = user?.email === 'itsmeboky@aetherianstudios.com';
+  // Aetherian / Guildstew staff emails pass the admin check
+  // automatically, plus anyone listed explicitly in ADMIN_EMAILS.
+  const isAetherianStaff = !!user?.email && (
+    user.email.endsWith('@aetherianstudios.com') ||
+    user.email.endsWith('@guildstew.com')
+  );
+  const isAdmin = isAetherianStaff || user?.email === 'itsmeboky@aetherianstudios.com';
+  // `isCreator` retained for the creator-dashboard section further
+  // down the sidebar; same gating as admin for now.
+  const isCreator = isAdmin;
 
   const topNavItems = [
+    ...(isAdmin ? [{ name: "ADMIN PANEL", path: createPageUrl("Admin") }] : []),
     { name: "YOUR PROFILE", path: createPageUrl("YourProfile"), badge: pendingRequestsCount + newAchievementsCount },
     { name: "CAMPAIGNS", path: createPageUrl("Campaigns"), badge: pendingInvitesCount },
     { name: "CHARACTER LIBRARY", path: createPageUrl("CharacterLibrary") },
-    { name: "WORKSHOP", path: createPageUrl("Workshop") },
+    // Workshop hidden for now — commented out, not deleted, until the
+    // page is ready for prime-time.
+    // { name: "WORKSHOP", path: createPageUrl("Workshop") },
     { name: "BREWERY", path: createPageUrl("Brewery") },
   ];
 
@@ -472,6 +484,27 @@ export default function Layout({ children, currentPageName }) {
 
   // For campaign pages with their own sidebar, don't render Layout wrapper
   if (currentPageName === "CampaignItems" || currentPageName === "CampaignNPCs" || currentPageName === "CampaignMaps" || currentPageName === "CampaignHomebrew") {
+    return <>{children}</>;
+  }
+  // Admin dashboard has its own full-screen sidebar shell.
+  if (currentPageName === "Admin") {
+    return <>{children}</>;
+  }
+  // Auth-flow pages render without nav/sidebar so the user can finish
+  // password reset / email verification without distractions. Legal
+  // pages render chrome-less too so they're readable when reached
+  // straight from the signup form without a session.
+  if (
+    currentPageName === "ResetPassword" ||
+    currentPageName === "VerifyEmail" ||
+    (!user && (
+      currentPageName === "Terms" ||
+      currentPageName === "Privacy" ||
+      currentPageName === "EULA" ||
+      currentPageName === "Cookies" ||
+      currentPageName === "PrivacySummary"
+    ))
+  ) {
     return <>{children}</>;
   }
 

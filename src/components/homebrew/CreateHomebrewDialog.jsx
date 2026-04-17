@@ -34,6 +34,7 @@ import {
 } from "@/components/dnd5e/dnd5eRules";
 import { CONDITION_COLORS } from "@/components/combat/conditions";
 import { supabase } from "@/api/supabaseClient";
+import { trackEvent } from "@/utils/analytics";
 
 /**
  * Rule Modification creation / edit dialog. Drives a homebrew_rules
@@ -390,14 +391,23 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
         modifications: mods,
       };
       if (isEditMode) {
-        return base44.entities.HomebrewRule.update(brew.id, payload);
+        const updated = await base44.entities.HomebrewRule.update(brew.id, payload);
+        return { row: updated, userId, isEdit: true };
       }
-      return base44.entities.HomebrewRule.create({ ...payload, is_published: false });
+      const created = await base44.entities.HomebrewRule.create({ ...payload, is_published: false });
+      return { row: created, userId, isEdit: false };
     },
-    onSuccess: () => {
+    onSuccess: ({ row, userId, isEdit } = {}) => {
       queryClient.invalidateQueries({ queryKey: ["myBrews"] });
       queryClient.invalidateQueries({ queryKey: ["homebrewMeta"] });
-      toast.success(isEditMode ? "Homebrew updated" : "Homebrew created");
+      if (!isEdit) {
+        trackEvent(userId, 'homebrew_created', {
+          category: row?.category,
+          game_system: row?.game_system,
+          content_rating: row?.content_rating,
+        });
+      }
+      toast.success(isEdit ? "Homebrew updated" : "Homebrew created");
       onClose?.();
     },
     onError: (err) => {

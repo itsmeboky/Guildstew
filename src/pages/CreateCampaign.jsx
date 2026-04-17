@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import CampaignBasicInfo from "@/components/campaigns/create/CampaignBasicInfo";
 import CampaignConsent from "@/components/campaigns/create/CampaignConsent";
 import CampaignDetails from "@/components/campaigns/create/CampaignDetails";
+import { trackEvent } from "@/utils/analytics";
 
 export default function CreateCampaign() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -55,6 +56,10 @@ export default function CreateCampaign() {
     },
     onSuccess: (campaign) => {
       queryClient.invalidateQueries({ queryKey: ['userCampaigns'] });
+      trackEvent(user?.id, 'campaign_created', {
+        game_system: campaign?.system,
+        name: campaign?.title,
+      });
       navigate(createPageUrl("Campaigns"));
     }
   });
