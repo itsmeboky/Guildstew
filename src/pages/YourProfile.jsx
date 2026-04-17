@@ -13,8 +13,10 @@ import { Link } from "react-router-dom";
 import EditProfileDialog from "@/components/profile/EditProfileDialog";
 import PostComments from "@/components/profile/PostComments";
 import { uploadFile } from "@/utils/uploadFile";
+import { useSubscription } from "@/lib/SubscriptionContext";
 
 export default function YourProfile() {
+  const sub = useSubscription();
   const [editingBio, setEditingBio] = useState(false);
   const [bioText, setBioText] = useState("");
   const [newPost, setNewPost] = useState("");
@@ -359,9 +361,25 @@ console.log('PROFILE PAGE USER:', user)
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <h1 className="text-3xl font-bold mb-1 bg-clip-text text-transparent" style={{ 
-                    backgroundImage: `linear-gradient(to right, ${color1}, ${color2})`
-                  }}>@{user?.username || user?.email?.split('@')[0]}</h1>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h1 className="text-3xl font-bold bg-clip-text text-transparent" style={{
+                      backgroundImage: `linear-gradient(to right, ${color1}, ${color2})`,
+                    }}>@{user?.username || user?.email?.split('@')[0]}</h1>
+                    {sub.tierData?.badgeIcon && sub.tier !== 'free' && (
+                      <span
+                        className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider rounded-full px-2 py-0.5"
+                        style={{
+                          backgroundColor: `${sub.tierData.badgeColor}33`,
+                          color: sub.tierData.badgeColor,
+                          border: `1px solid ${sub.tierData.badgeColor}66`,
+                        }}
+                        title={`${sub.tierData.name} subscriber`}
+                      >
+                        <span>{sub.tierData.badgeIcon}</span>
+                        <span>{sub.tierData.name}</span>
+                      </span>
+                    )}
+                  </div>
                   <p className="text-gray-400 text-sm">● Last online this week</p>
                 </div>
                 <div className="flex gap-3">
