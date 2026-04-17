@@ -4,6 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 import { trackEvent } from "@/utils/analytics";
 
 // Bump this string whenever the privacy / terms / EULA copy
@@ -22,6 +26,10 @@ export default function Landing() {
   // Signup-only state
   const [dob, setDob] = useState("");
   const [agreedToTos, setAgreedToTos] = useState(false);
+  // Forgot-password dialog state.
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSending, setForgotSending] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async () => {
@@ -86,7 +94,16 @@ export default function Landing() {
         trackEvent(data.user.id, "user_signup", { is_minor: isMinor });
       }
 
-      navigate("/Onboarding");
+      // If Supabase email confirmation is enabled (dashboard setting),
+      // data.session is null until the user clicks the link. Route to
+      // the verification page so they know what to do next. When
+      // confirmation is off, they're already signed in — send them to
+      // Onboarding as before.
+      if (!data.session) {
+        navigate("/VerifyEmail?email=" + encodeURIComponent(email));
+      } else {
+        navigate("/Onboarding");
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -150,7 +167,11 @@ export default function Landing() {
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-gray-700">Email</label>
               {!isSignUp && (
-                <button className="text-xs text-[#6366F1] hover:underline font-medium">
+                <button
+                  type="button"
+                  onClick={() => { setForgotEmail(email); setForgotOpen(true); }}
+                  className="text-xs text-[#6366F1] hover:underline font-medium"
+                >
                   Forgot Password?
                 </button>
               )}
@@ -256,6 +277,50 @@ export default function Landing() {
           </p>
         </div>
       </div>
+
+      <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
+        <DialogContent className="bg-white max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Reset your password</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              We'll email you a link to pick a new password.
+            </p>
+            <Input
+              type="email"
+              value={forgotEmail}
+              onChange={(e) => setForgotEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="bg-[#FFD4C4] border-none h-11 text-gray-800"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setForgotOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!forgotEmail || forgotSending}
+              onClick={async () => {
+                setForgotSending(true);
+                try {
+                  const { error: resetErr } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+                    redirectTo: `${window.location.origin}/ResetPassword`,
+                  });
+                  if (resetErr) throw resetErr;
+                  toast.success("Check your email for a password reset link.");
+                  setForgotOpen(false);
+                } catch (err) {
+                  toast.error(err?.message || "Failed to send reset email. Please try again.");
+                } finally {
+                  setForgotSending(false);
+                }
+              }}
+              className="bg-[#FF5722] hover:bg-[#FF6B3D] text-white font-bold"
+            >
+              {forgotSending ? "Sending…" : "Send Reset Link"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

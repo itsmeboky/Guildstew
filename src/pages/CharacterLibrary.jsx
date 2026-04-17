@@ -5,6 +5,7 @@ import { Plus, Edit, Trash2, User, Shield, Heart, Zap, Eye, Footprints, Swords }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import CreateCharacterDialog from "@/components/characters/CreateCharacterDialog";
+import { Skeleton } from "@/components/ui/Skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -146,7 +147,7 @@ export default function CharacterLibrary() {
     initialData: null
   });
 
-  const { data: characters } = useQuery({
+  const { data: characters, isLoading: charactersLoading } = useQuery({
     queryKey: ['allCharacters'],
     queryFn: () => base44.entities.Character.filter({ created_by: user?.email }, '-last_played'),
     enabled: !!user,
@@ -243,7 +244,14 @@ export default function CharacterLibrary() {
         </div>
 
         <div className="flex-1 overflow-y-auto mb-6 px-2" style={{ paddingTop: '25px' }}>
-          <div className="grid grid-cols-3 gap-4">
+          {charactersLoading && characters.length === 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="aspect-square rounded-lg" />
+              ))}
+            </div>
+          ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {characters.map((character) => {
               return (
                 <div
@@ -282,6 +290,7 @@ export default function CharacterLibrary() {
               );
             })}
           </div>
+          )}
         </div>
 
         <button
