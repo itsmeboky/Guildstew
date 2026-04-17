@@ -12,6 +12,7 @@ import PlayerConsentForm from "@/components/consent/PlayerConsentForm";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
+import SubscriptionTab from "@/components/subscription/SubscriptionTab";
 
 const CLASS_ICONS = {
   "Wizard": "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/94cfaa28a_Wizard1.png",
@@ -205,6 +206,9 @@ export default function Settings() {
             </TabsTrigger>
             <TabsTrigger value="account" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
               Account
+            </TabsTrigger>
+            <TabsTrigger value="subscription" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
+              Subscription
             </TabsTrigger>
           </TabsList>
 
@@ -513,6 +517,10 @@ export default function Settings() {
                 </Button>
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="subscription">
+            <SubscriptionTab />
           </TabsContent>
         </Tabs>
       </div>

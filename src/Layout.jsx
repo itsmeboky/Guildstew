@@ -8,6 +8,30 @@ import DiceRoller from "@/components/dice/DiceRoller";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
+import { useSubscription } from "@/lib/SubscriptionContext";
+
+function TierBadge() {
+  // Small "⚔️ Adventurer" / "🛡️ Veteran" / "👑 Guild" badge that
+  // sits next to the nav so the user always knows their tier.
+  // Free users get nothing (no clutter).
+  const sub = useSubscription();
+  if (!sub.tierData?.badgeIcon || sub.tier === 'free') return null;
+  return (
+    <Link
+      to={createPageUrl('Settings') + '?tab=subscription'}
+      title={`${sub.tierData.name} subscription — manage billing`}
+      className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider rounded-full px-2 py-1"
+      style={{
+        backgroundColor: `${sub.tierData.badgeColor}33`,
+        color: sub.tierData.badgeColor,
+        border: `1px solid ${sub.tierData.badgeColor}66`,
+      }}
+    >
+      <span>{sub.tierData.badgeIcon}</span>
+      <span>{sub.tierData.name}</span>
+    </Link>
+  );
+}
 import LazyImage from "@/components/ui/LazyImage";
 
 export default function Layout({ children, currentPageName }) {
@@ -476,7 +500,8 @@ export default function Layout({ children, currentPageName }) {
               )}
             </Link>
           ))}
-          
+          <TierBadge />
+
           <Link
             to={createPageUrl("TheTavern")}
             className="bg-[#FF5722] text-white px-6 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 hover:bg-[#FF6B3D] transition-colors border-2 border-white"

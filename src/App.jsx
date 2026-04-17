@@ -7,6 +7,7 @@ import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import { SubscriptionProvider } from '@/lib/SubscriptionContext';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -62,11 +63,13 @@ function App() {
   return (
     <QueryClientProvider client={queryClientInstance}>
       <AuthProvider>
-        <Router>
-          <NavigationTracker />
-          <AuthenticatedApp />
-        </Router>
-        <Toaster />
+        <SubscriptionProvider>
+          <Router>
+            <NavigationTracker />
+            <AuthenticatedApp />
+          </Router>
+          <Toaster />
+        </SubscriptionProvider>
       </AuthProvider>
     </QueryClientProvider>
   )

@@ -1,4 +1,5 @@
 import { useAuth } from '@/lib/AuthContext';
+import { useSubscription } from '@/lib/SubscriptionContext';
 import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -87,6 +88,24 @@ const getBackgroundSkills = (background) => {
 export default function CharacterCreator() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user: authUser } = useAuth();
+  const sub = useSubscription();
+  // Cached count of the user's existing characters — gated against
+  // the subscription tier's character limit before opening any
+  // creation flow (full / quick / AI). Editing or building NPCs
+  // bypasses the limit.
+  const { data: existingCharacterCount = 0 } = useQuery({
+    queryKey: ['characterCount', authUser?.id],
+    queryFn: async () => {
+      if (!authUser?.id) return 0;
+      const rows = await base44.entities.Character
+        .filter({ created_by: authUser.id })
+        .catch(() => []);
+      return rows.length;
+    },
+    enabled: !!authUser?.id,
+    initialData: 0,
+  });
   const urlParams = new URLSearchParams(window.location.search);
   const editCharacterId = urlParams.get('edit');
   const campaignId = urlParams.get('campaignId');
@@ -474,7 +493,19 @@ const handleSubmit = () => {
             <h1 className="text-4xl font-bold text-white">Character Creator</h1>
             <p className="text-white/60">Pick how you want to build your next hero.</p>
           </motion.div>
-          <ModeSelector onSelect={setMode} />
+          <ModeSelector onSelect={(next) => {
+            // Edits + NPCs bypass the limit (handled earlier).
+            // For brand-new PCs, enforce the tier's character cap.
+            const limit = sub.maxCharacters;
+            if (Number.isFinite(limit) && existingCharacterCount >= limit) {
+              toast.error(
+                `You've reached your ${limit} character limit. Upgrade to create more!`,
+              );
+              navigate(createPageUrl('Settings') + '?tab=subscription');
+              return;
+            }
+            setMode(next);
+          }} />
         </div>
       </div>
     );
