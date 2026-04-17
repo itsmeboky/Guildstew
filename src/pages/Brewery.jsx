@@ -17,9 +17,12 @@ import BreweryDetailDialog from "@/components/homebrew/BreweryDetailDialog";
 import CreateHomebrewDialog from "@/components/homebrew/CreateHomebrewDialog";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { useSubscription } from "@/lib/SubscriptionContext";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { toast } from "sonner";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
 
 /**
  * The Brewery — community homebrew marketplace.
@@ -45,12 +48,14 @@ export default function Brewery() {
   });
 
   const sub = useSubscription();
+  const navigate = useNavigate();
   const [tab, setTab] = useState("browse");
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [systemFilter, setSystemFilter] = useState("all");
   const [selected, setSelected] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [upgradeGateOpen, setUpgradeGateOpen] = useState(false);
 
   // One query for the marketplace tabs; we filter / sort client-side
   // so switching between Browse / Popular / Top Rated is instant.
@@ -116,7 +121,7 @@ export default function Brewery() {
           <Button
             onClick={() => {
               if (!sub.canUse('homebrew')) {
-                toast.error('Homebrew creation requires a Veteran or Guild subscription.');
+                setUpgradeGateOpen(true);
                 return;
               }
               setCreating(true);
@@ -124,9 +129,30 @@ export default function Brewery() {
             className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
           >
             <Sparkles className="w-4 h-4 mr-2" />
-            {sub.canUse('homebrew') ? 'Create Homebrew' : 'Create Homebrew (Veteran+)'}
+            Create Homebrew
           </Button>
         </div>
+
+        <Dialog open={upgradeGateOpen} onOpenChange={setUpgradeGateOpen}>
+          <DialogContent className="bg-[#1E2430] border border-[#37F2D1]/40 text-white max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Veteran+ required</DialogTitle>
+              <DialogDescription className="text-slate-400">
+                Homebrew creation requires a Veteran or Guild subscription. Upgrade to brew
+                your own rules, items, monsters, spells, and abilities — and share them on The Brewery.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setUpgradeGateOpen(false)}>Not now</Button>
+              <Button
+                onClick={() => navigate(createPageUrl("Settings") + "?tab=subscription")}
+                className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
+              >
+                View Plans
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Search + filters — applies to every marketplace tab. */}
         <div className="bg-[#2A3441] border border-[#111827] rounded-xl p-3 mb-4 flex flex-col md:flex-row gap-2">

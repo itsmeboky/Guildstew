@@ -18,7 +18,17 @@ import SupportTicketsTab from "@/components/admin/SupportTicketsTab";
 import ReportsModerationTab from "@/components/admin/ReportsModerationTab";
 import AdminLogTab from "@/components/admin/AdminLogTab";
 
+// Hard-coded override list — anyone here is always admin regardless
+// of domain. Aetherian / Guildstew staff domains are auto-admin too
+// via the check below.
 const ADMIN_EMAILS = ["itsmeboky@aetherianstudios.com"];
+
+function isAdminUser(user) {
+  const email = (user?.email || "").toLowerCase();
+  if (!email) return false;
+  if (ADMIN_EMAILS.includes(email)) return true;
+  return email.endsWith("@aetherianstudios.com") || email.endsWith("@guildstew.com");
+}
 
 const TABS = [
   { id: "overview",     label: "Overview",            icon: LayoutDashboard },
@@ -46,8 +56,9 @@ export default function Admin() {
     );
   }
 
-  // Guard — only listed admin emails get past this point.
-  if (!user || !ADMIN_EMAILS.includes((user.email || "").toLowerCase())) {
+  // Guard — only admin emails (explicit overrides or Aetherian /
+  // Guildstew staff domains) get past this point.
+  if (!user || !isAdminUser(user)) {
     return <Navigate to="/" replace />;
   }
 
