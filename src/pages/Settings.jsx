@@ -210,6 +210,9 @@ export default function Settings() {
             <TabsTrigger value="subscription" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
               Subscription
             </TabsTrigger>
+            <TabsTrigger value="legal" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
+              Privacy & Legal
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="profile">
@@ -521,6 +524,59 @@ export default function Settings() {
 
           <TabsContent value="subscription">
             <SubscriptionTab />
+          </TabsContent>
+
+          <TabsContent value="legal">
+            <div className="bg-[#2A3441] rounded-2xl p-6 space-y-4">
+              <div>
+                <h2 className="text-2xl font-bold mb-1">Privacy & Legal</h2>
+                <p className="text-sm text-slate-400">
+                  Read how Guildstew handles your data, or request account deletion.
+                </p>
+              </div>
+
+              <ul className="space-y-2">
+                <li>
+                  <a href="/PrivacySummary" className="text-[#37F2D1] hover:underline">
+                    How We Use Your Data (plain-language summary)
+                  </a>
+                </li>
+                <li>
+                  <a href="/Privacy" className="text-[#37F2D1] hover:underline">
+                    Full Privacy Policy
+                  </a>
+                </li>
+                <li>
+                  <a href="/Terms" className="text-[#37F2D1] hover:underline">
+                    Terms of Service
+                  </a>
+                </li>
+                <li>
+                  <a href="/EULA" className="text-[#37F2D1] hover:underline">
+                    EULA & Minor Safety
+                  </a>
+                </li>
+                <li>
+                  <a href="/Cookies" className="text-[#37F2D1] hover:underline">
+                    Cookie Policy
+                  </a>
+                </li>
+              </ul>
+
+              <div className="border-t border-slate-700 pt-4 mt-4">
+                <h3 className="text-base font-semibold text-white mb-1">Delete my account</h3>
+                <p className="text-xs text-slate-400 mb-3">
+                  We're working on a self-serve delete flow. In the meantime, please email
+                  the support team and we'll process the request within 30 days.
+                </p>
+                <a
+                  href="mailto:support@guildstew.com?subject=Account%20deletion%20request"
+                  className="inline-flex items-center gap-2 bg-red-500/15 border border-red-500/40 text-red-300 hover:bg-red-500/25 rounded-lg px-3 py-2 text-sm font-semibold"
+                >
+                  Contact support@guildstew.com
+                </a>
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

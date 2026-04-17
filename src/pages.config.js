@@ -36,6 +36,11 @@ import BackendAdmin from './pages/BackendAdmin';
 import DiceCalibrator from './pages/DiceCalibrator';
 import CampaignPanel from './pages/CampaignPanel';
 import Brewery from './pages/Brewery';
+import Privacy from './pages/Privacy';
+import Cookies from './pages/Cookies';
+import Terms from './pages/Terms';
+import EULA from './pages/EULA';
+import PrivacySummary from './pages/PrivacySummary';
 import __Layout from './Layout.jsx';
 
 
@@ -78,6 +83,11 @@ export const PAGES = {
     "DiceCalibrator": DiceCalibrator,
     "CampaignPanel": CampaignPanel,
     "Brewery": Brewery,
+    "Privacy": Privacy,
+    "Cookies": Cookies,
+    "Terms": Terms,
+    "EULA": EULA,
+    "PrivacySummary": PrivacySummary,
 }
 
 export const pagesConfig = {

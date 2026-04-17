@@ -19,6 +19,30 @@ function NavStatusPicker() {
   return <StatusPicker current={status} onChange={setStatus} />;
 }
 
+function LegalFooter() {
+  // Site-wide footer with the legal-doc links + copyright. Renders
+  // at the bottom of every routed page (mounted inside <main>) so
+  // users always have one click to the policies.
+  return (
+    <footer className="border-t border-slate-800 px-6 py-4 mt-12 text-center text-sm text-slate-500">
+      <div className="flex justify-center gap-3 flex-wrap">
+        <Link to="/PrivacySummary" className="hover:text-[#37F2D1]">How We Use Your Data</Link>
+        <span className="text-slate-700">·</span>
+        <Link to="/Privacy" className="hover:text-[#37F2D1]">Privacy Policy</Link>
+        <span className="text-slate-700">·</span>
+        <Link to="/Terms" className="hover:text-[#37F2D1]">Terms of Service</Link>
+        <span className="text-slate-700">·</span>
+        <Link to="/EULA" className="hover:text-[#37F2D1]">EULA</Link>
+        <span className="text-slate-700">·</span>
+        <Link to="/Cookies" className="hover:text-[#37F2D1]">Cookie Policy</Link>
+      </div>
+      <p className="mt-2 text-slate-600">
+        © {new Date().getFullYear()} Aetherian Studios. All rights reserved.
+      </p>
+    </footer>
+  );
+}
+
 function TierBadge() {
   // Small "⚔️ Adventurer" / "🛡️ Veteran" / "👑 Guild" badge that
   // sits next to the nav so the user always knows their tier.
@@ -763,6 +787,7 @@ export default function Layout({ children, currentPageName }) {
 
         <main className={`flex-1 relative transition-all duration-300 ${sidebarCollapsed && isWorldLorePage ? 'world-lore-expanded' : ''}`}>
           {children}
+          <LegalFooter />
         </main>
       </div>
 
