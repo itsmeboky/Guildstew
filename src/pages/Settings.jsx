@@ -12,6 +12,10 @@ import PlayerConsentForm from "@/components/consent/PlayerConsentForm";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
+import SubscriptionTab from "@/components/subscription/SubscriptionTab";
+import SupportTicketDialog from "@/components/support/SupportTicketDialog";
+import MyTicketsList from "@/components/support/MyTicketsList";
+import DeleteAccountDialog from "@/components/settings/DeleteAccountDialog";
 
 const CLASS_ICONS = {
   "Wizard": "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/94cfaa28a_Wizard1.png",
@@ -29,6 +33,8 @@ export default function Settings() {
   const queryClient = useQueryClient();
   const [avatarFile, setAvatarFile] = useState(null);
   const [bannerFile, setBannerFile] = useState(null);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
@@ -205,6 +211,15 @@ export default function Settings() {
             </TabsTrigger>
             <TabsTrigger value="account" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
               Account
+            </TabsTrigger>
+            <TabsTrigger value="subscription" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
+              Subscription
+            </TabsTrigger>
+            <TabsTrigger value="legal" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
+              Privacy & Legal
+            </TabsTrigger>
+            <TabsTrigger value="support" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
+              Help & Support
             </TabsTrigger>
           </TabsList>
 
@@ -513,6 +528,96 @@ export default function Settings() {
                 </Button>
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="subscription">
+            <SubscriptionTab />
+          </TabsContent>
+
+          <TabsContent value="legal">
+            <div className="bg-[#2A3441] rounded-2xl p-6 space-y-4">
+              <div>
+                <h2 className="text-2xl font-bold mb-1">Privacy & Legal</h2>
+                <p className="text-sm text-slate-400">
+                  Read how Guildstew handles your data, or request account deletion.
+                </p>
+              </div>
+
+              <ul className="space-y-2">
+                <li>
+                  <a href="/PrivacySummary" className="text-[#37F2D1] hover:underline">
+                    How We Use Your Data (plain-language summary)
+                  </a>
+                </li>
+                <li>
+                  <a href="/Privacy" className="text-[#37F2D1] hover:underline">
+                    Full Privacy Policy
+                  </a>
+                </li>
+                <li>
+                  <a href="/Terms" className="text-[#37F2D1] hover:underline">
+                    Terms of Service
+                  </a>
+                </li>
+                <li>
+                  <a href="/EULA" className="text-[#37F2D1] hover:underline">
+                    EULA & Minor Safety
+                  </a>
+                </li>
+                <li>
+                  <a href="/Cookies" className="text-[#37F2D1] hover:underline">
+                    Cookie Policy
+                  </a>
+                </li>
+              </ul>
+
+              <div className="border-t border-slate-700 pt-4 mt-4">
+                <h3 className="text-base font-semibold text-white mb-1">Delete my account</h3>
+                <p className="text-xs text-slate-400 mb-3">
+                  Permanently remove your profile, characters, homebrew, and personal data.
+                  This cannot be undone.
+                </p>
+                <Button
+                  onClick={() => setDeleteOpen(true)}
+                  className="bg-red-500/15 border border-red-500/40 text-red-300 hover:bg-red-500/25"
+                >
+                  Delete My Account
+                </Button>
+              </div>
+            </div>
+
+            <DeleteAccountDialog
+              open={deleteOpen}
+              onClose={() => setDeleteOpen(false)}
+              userId={user?.id}
+              profileId={user?.profile_id}
+            />
+          </TabsContent>
+
+          <TabsContent value="support">
+            <div className="bg-[#2A3441] rounded-2xl p-6 space-y-4">
+              <div>
+                <h2 className="text-2xl font-bold mb-1">Help & Support</h2>
+                <p className="text-sm text-slate-400">
+                  Submit a ticket and we'll get back to you. You can track every reply right here.
+                </p>
+              </div>
+              <Button
+                onClick={() => setSupportOpen(true)}
+                className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
+              >
+                Submit a Ticket
+              </Button>
+              <div className="border-t border-slate-700 pt-4">
+                <h3 className="text-base font-semibold text-white mb-2">My Tickets</h3>
+                <MyTicketsList userId={user?.id} />
+              </div>
+            </div>
+            <SupportTicketDialog
+              open={supportOpen}
+              onClose={() => setSupportOpen(false)}
+              userId={user?.id}
+            />
           </TabsContent>
         </Tabs>
       </div>

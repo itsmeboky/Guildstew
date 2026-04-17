@@ -1,93 +1,81 @@
-// ============================================================================
-// AI Generation Client
-// ============================================================================
-// Calls the guildstew-api backend for AI-powered content generation.
-// Located at src/api/aiClient.js in the main guildstew project.
-// ============================================================================
-
-const API_BASE = import.meta.env.VITE_AI_API_URL || 'https://guildstew-api.vercel.app';
-
-async function aiRequest(endpoint, body) {
-  const response = await fetch(`${API_BASE}/api/${endpoint}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || `AI request failed: ${response.status}`);
-  }
-
-  return response.json();
-}
-
-// ── Quick Pick ───────────────────────────────────────────
-// Player picks race, class, background.
-// Returns 6 characters (2M, 2F, 2NB) with dating-profile bios.
+import { supabase } from '@/api/supabaseClient';
 
 /**
- * @param {Object} params
- * @param {string} params.race
- * @param {string} params.class
- * @param {string} params.background
- * @returns {Promise<{ characters: Array }>} 6 character options
+ * AI-assisted character generation hooks. Each function wraps a
+ * Supabase Edge Function so the secret (OpenAI / replicate / etc.)
+ * never reaches the browser.
+ *
+ * Edge Function names expected on the project:
+ *   - quick-pick-characters      ({race, class, background}) →
+ *       { characters: [...] }
+ *   - ai-generate-character      ({prompt})                  →
+ *       { character: {...} }
+ *   - generate-character-portrait ({description, style?})    →
+ *       { image_url }
+ *
+ * When an Edge Function isn't deployed yet the wrappers throw a
+ * friendly error so the caller can surface a toast instead of a
+ * raw stack trace.
  */
-export async function quickPick({ race, class: charClass, background }) {
-  const result = await aiRequest('generate-characters', {
-    mode: 'quick_pick',
-    race,
-    class: charClass,
-    background,
-  });
-  return result.data; // { characters: [...6 characters] }
+
+async function invokeEdge(name, body) {
+  const { data, error } = await supabase.functions.invoke(name, { body });
+  if (error) {
+    const msg = error.message || String(error);
+    throw new Error(
+      `AI service "${name}" unavailable${msg ? `: ${msg}` : ''}. ` +
+      `Ask a GM to deploy the Edge Function.`,
+    );
+  }
+  return data;
 }
 
-// ── AI Generate ──────────────────────────────────────────
-// Player writes a prompt. AI builds the entire character.
-// Returns 1 complete character with everything chosen.
+/**
+ * Quick Pick — returns 6 candidate characters given a race + class +
+ * background. The response shape:
+ *   { characters: [{ name, gender, tagline, appearance, likes,
+ *     dislikes, story_hook, ability_scores, alignment, ... }, …] }
+ */
+export async function quickPick({ race, class: klass, background, level = 1 } = {}) {
+  if (!race || !klass || !background) {
+    throw new Error('Pick a race, class, and background first.');
+  }
+  const data = await invokeEdge('quick-pick-characters', {
+    race,
+    class: klass,
+    background,
+    level,
+    count: 6,
+  });
+  return data && Array.isArray(data.characters) ? data : { characters: [] };
+}
 
 /**
- * @param {string} prompt - Freeform description of the character concept
- * @returns {Promise<Object>} Complete character sheet
+ * AI Generate — takes a freeform prompt and returns a fully built
+ * character record with stats, spells, equipment, backstory, etc.
  */
 export async function aiGenerate(prompt) {
-  const result = await aiRequest('generate-characters', {
-    mode: 'ai_generate',
-    prompt,
-  });
-  return result.data; // full character object
+  const text = (prompt || '').trim();
+  if (!text) throw new Error('Describe your character first.');
+  const data = await invokeEdge('ai-generate-character', { prompt: text });
+  if (!data) throw new Error('The AI returned nothing. Try rephrasing.');
+  // Some Edge Function revisions wrap the character under a key;
+  // accept either shape so we don't break on a backend tweak.
+  return data.character ? data.character : data;
 }
-
-// ── Portrait Generation ──────────────────────────────────
-// Generates a character portrait from a description.
 
 /**
- * @param {Object} params
- * @param {string} params.description - What the character looks like
- * @param {string} [params.campaign_id] - For storage path
- * @param {string} [params.style_override] - Custom art style
- * @returns {Promise<{ image_url: string, prompt: string, stored: boolean }>}
+ * Portrait generation. Pass either a raw description or a specialized
+ * `portrait_prompt` string. Returns { image_url }.
  */
-export async function generatePortrait({ description, campaign_id, style_override }) {
-  const result = await aiRequest('generate-image', {
-    subject_type: 'character',
-    description,
-    aspect_ratio: '1:1',
-    campaign_id,
-    style_override,
+export async function generatePortrait({ description, portrait_prompt, style, campaign_id } = {}) {
+  const promptText = (portrait_prompt || description || '').trim();
+  if (!promptText) throw new Error('No description provided for the portrait.');
+  const data = await invokeEdge('generate-character-portrait', {
+    description: promptText,
+    style: style || 'fantasy portrait, centered bust, dramatic lighting',
+    campaign_id: campaign_id || null,
   });
-  return result.data; // { image_url, prompt, stored }
-}
-
-// ── Health check ─────────────────────────────────────────
-
-export async function checkAPIHealth() {
-  try {
-    const response = await fetch(`${API_BASE}/api/health`);
-    const data = await response.json();
-    return data.status === 'ok';
-  } catch {
-    return false;
-  }
+  if (!data?.image_url) throw new Error('Portrait generation returned no image.');
+  return data;
 }

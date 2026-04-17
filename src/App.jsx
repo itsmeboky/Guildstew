@@ -7,6 +7,9 @@ import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import { SubscriptionProvider } from '@/lib/SubscriptionContext';
+import { PresenceProvider } from '@/lib/PresenceContext';
+import LegalReconsentGate from '@/components/legal/LegalReconsentGate';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -28,14 +31,20 @@ const AuthenticatedApp = () => {
   }
 
   if (!isAuthenticated) {
+    // A small set of pages must remain reachable without a session so
+    // users clicking a password-reset / email-verification link from
+    // their inbox aren't bounced back to the login screen.
     return (
       <Routes>
+        <Route path="/ResetPassword" element={<Pages.ResetPassword />} />
+        <Route path="/VerifyEmail" element={<Pages.VerifyEmail />} />
         <Route path="*" element={<Pages.Landing />} />
       </Routes>
     );
   }
 
   return (
+    <LegalReconsentGate>
     <Routes>
       <Route path="/" element={
         <LayoutWrapper currentPageName={mainPageKey}>
@@ -55,6 +64,7 @@ const AuthenticatedApp = () => {
       ))}
       <Route path="*" element={<PageNotFound />} />
     </Routes>
+    </LegalReconsentGate>
   );
 };
 
@@ -62,11 +72,15 @@ function App() {
   return (
     <QueryClientProvider client={queryClientInstance}>
       <AuthProvider>
-        <Router>
-          <NavigationTracker />
-          <AuthenticatedApp />
-        </Router>
-        <Toaster />
+        <SubscriptionProvider>
+          <PresenceProvider>
+            <Router>
+              <NavigationTracker />
+              <AuthenticatedApp />
+            </Router>
+            <Toaster />
+          </PresenceProvider>
+        </SubscriptionProvider>
       </AuthProvider>
     </QueryClientProvider>
   )

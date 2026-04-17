@@ -1,4 +1,6 @@
 import { useAuth } from '@/lib/AuthContext';
+import { useSubscription } from '@/lib/SubscriptionContext';
+import { trackEvent } from '@/utils/analytics';
 import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -32,6 +34,9 @@ import SpellsStep from "@/components/characterCreator/SpellsStep";
 import EquipmentStep from "@/components/characterCreator/EquipmentStep";
 import ReviewStep from "@/components/characterCreator/ReviewStep";
 import QuickCreateDialog from "@/components/characterCreator/QuickCreateDialog";
+import ModeSelector from "@/components/characterCreator/ModeSelector";
+import QuickPickFlow from "@/components/characterCreator/QuickPickFlow";
+import AIGenerateFlow from "@/components/characterCreator/AIGenerateFlow";
 
 const STEPS = [
   { id: 'race', label: 'Race', component: RaceStep },
@@ -84,6 +89,24 @@ const getBackgroundSkills = (background) => {
 export default function CharacterCreator() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user: authUser } = useAuth();
+  const sub = useSubscription();
+  // Cached count of the user's existing characters — gated against
+  // the subscription tier's character limit before opening any
+  // creation flow (full / quick / AI). Editing or building NPCs
+  // bypasses the limit.
+  const { data: existingCharacterCount = 0 } = useQuery({
+    queryKey: ['characterCount', authUser?.id],
+    queryFn: async () => {
+      if (!authUser?.id) return 0;
+      const rows = await base44.entities.Character
+        .filter({ created_by: authUser.id })
+        .catch(() => []);
+      return rows.length;
+    },
+    enabled: !!authUser?.id,
+    initialData: 0,
+  });
   const urlParams = new URLSearchParams(window.location.search);
   const editCharacterId = urlParams.get('edit');
   const campaignId = urlParams.get('campaignId');
@@ -92,6 +115,12 @@ export default function CharacterCreator() {
   const [currentStep, setCurrentStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState([]);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+  // Creation mode: null = show mode selector. 'full' = the classic
+  // step-by-step creator. 'quick' / 'ai' = AI-assisted flows that
+  // skip straight to their own screens. Editing an existing
+  // character bypasses the selector entirely (see effect below).
+  const [mode, setMode] = useState(null);
+  const [aiSaving, setAiSaving] = useState(false);
   const [backgroundImage] = useState(() => 
     BACKGROUND_GIFS[Math.floor(Math.random() * BACKGROUND_GIFS.length)]
   );
@@ -143,6 +172,13 @@ export default function CharacterCreator() {
     },
     enabled: !!editCharacterId,
   });
+
+  // Editing an existing character (or building an NPC inside a
+  // campaign) skips the mode selector and lands straight in the
+  // full step-by-step editor.
+  useEffect(() => {
+    if (editCharacterId || campaignId) setMode('full');
+  }, [editCharacterId, campaignId]);
 
   useEffect(() => {
     if (existingCharacter && editCharacterId) {
@@ -254,6 +290,14 @@ export default function CharacterCreator() {
       } else {
         queryClient.invalidateQueries({ queryKey: ['allCharacters'] });
         toast.success(editCharacterId ? "Character updated successfully!" : "Character created successfully!");
+        if (!editCharacterId && authUser?.id) {
+          trackEvent(authUser.id, 'character_created', {
+            method: mode || 'full',
+            race: characterData.race,
+            class: characterData.class,
+            gender: characterData.gender,
+          });
+        }
         navigate(createPageUrl("CharacterLibrary"));
       }
     }
@@ -366,7 +410,162 @@ const handleSubmit = () => {
     setCompletedSteps(STEPS.map((_, idx) => idx));
   };
 
+  // Translate either a Quick Pick card or an AI Generate record
+  // into the `characters` table shape, then run it through the
+  // existing createMutation. We keep the full step-flow intact by
+  // building a `stats` object (buildStatsFromCharacterData expects
+  // the characterData shape) rather than bypassing it.
+  const saveAiGenerated = async (generated) => {
+    setAiSaving(true);
+    try {
+      const abilities = generated.ability_scores
+        || generated.abilities
+        || generated.stats?.ability_scores
+        || {};
+      const stats = {
+        name: generated.name || 'Unnamed Hero',
+        race: generated.race || '',
+        subrace: generated.subrace || '',
+        class: generated.class || '',
+        subclass: generated.subclass || '',
+        background: generated.background || '',
+        level: Number(generated.level) || 1,
+        alignment: generated.alignment || '',
+        gender: generated.gender || '',
+        age: generated.age || '',
+        height: generated.height || '',
+        weight: generated.weight || '',
+        strength: Number(abilities.str ?? abilities.STR ?? abilities.strength ?? 10),
+        dexterity: Number(abilities.dex ?? abilities.DEX ?? abilities.dexterity ?? 10),
+        constitution: Number(abilities.con ?? abilities.CON ?? abilities.constitution ?? 10),
+        intelligence: Number(abilities.int ?? abilities.INT ?? abilities.intelligence ?? 10),
+        wisdom: Number(abilities.wis ?? abilities.WIS ?? abilities.wisdom ?? 10),
+        charisma: Number(abilities.cha ?? abilities.CHA ?? abilities.charisma ?? 10),
+        skill_proficiencies: Array.isArray(generated.skill_proficiencies)
+          ? generated.skill_proficiencies
+          : Array.isArray(generated.skills) ? generated.skills : [],
+        saving_throws: Array.isArray(generated.saving_throw_proficiencies)
+          ? generated.saving_throw_proficiencies
+          : Array.isArray(generated.saving_throws) ? generated.saving_throws : [],
+        languages: Array.isArray(generated.languages) ? generated.languages : [],
+        spells: generated.spells || generated.spells_known || [],
+        equipment: generated.equipment || [],
+        backstory: generated.backstory || generated.story_hook || '',
+        appearance: generated.appearance || '',
+        personality: generated.personality || '',
+        profile_avatar_url: generated.avatar_url || null,
+        avatar_url: generated.avatar_url || null,
+        bloodied_avatar_url: generated.bloodied_avatar_url || null,
+      };
+      // Default HP / AC if the AI didn't supply them — mirrors what
+      // buildStatsFromCharacterData does inside the full flow.
+      const conMod = Math.floor((stats.constitution - 10) / 2);
+      const dexMod = Math.floor((stats.dexterity - 10) / 2);
+      const hitDie = {
+        Barbarian: 12, Fighter: 10, Paladin: 10, Ranger: 10,
+        Bard: 8, Cleric: 8, Druid: 8, Monk: 8, Rogue: 8, Warlock: 8,
+        Sorcerer: 6, Wizard: 6,
+      }[stats.class] || 8;
+      const maxHp = Number(generated.hit_points?.max ?? generated.max_hp ?? (hitDie + conMod));
+      stats.hit_points = { current: maxHp, max: maxHp, temporary: 0 };
+      stats.armor_class = Number(generated.armor_class ?? 10 + dexMod);
+
+      createMutation.mutate(stats);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to save character');
+    } finally {
+      setAiSaving(false);
+    }
+  };
+
   const CurrentStepComponent = STEPS[currentStep].component;
+
+  // Mode selector — first screen before any creator steps render.
+  // editCharacterId / campaignId flip us directly into 'full'
+  // so this only shows for brand-new PCs.
+  if (!mode) {
+    return (
+      <div className="min-h-screen relative p-6">
+        <div
+          className="fixed inset-0 bg-cover bg-center"
+          style={{
+            backgroundImage: `url(${backgroundImage})`,
+            animation: 'slowZoom 30s ease-in-out infinite alternate',
+          }}
+        />
+        <div className="fixed inset-0 bg-[#1E2430]/85 backdrop-blur-sm" />
+        <div className="max-w-6xl mx-auto relative z-10">
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center mb-8"
+          >
+            <h1 className="text-4xl font-bold text-white">Character Creator</h1>
+            <p className="text-white/60">Pick how you want to build your next hero.</p>
+          </motion.div>
+          <ModeSelector onSelect={(next) => {
+            // Edits + NPCs bypass the limit (handled earlier).
+            // For brand-new PCs, enforce the tier's character cap.
+            const limit = sub.maxCharacters;
+            if (Number.isFinite(limit) && existingCharacterCount >= limit) {
+              toast.error(
+                `You've reached your ${limit} character limit. Upgrade to create more!`,
+              );
+              navigate(createPageUrl('Settings') + '?tab=subscription');
+              return;
+            }
+            setMode(next);
+          }} />
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === 'quick') {
+    return (
+      <div className="min-h-screen relative p-6">
+        <div
+          className="fixed inset-0 bg-cover bg-center"
+          style={{
+            backgroundImage: `url(${backgroundImage})`,
+            animation: 'slowZoom 30s ease-in-out infinite alternate',
+          }}
+        />
+        <div className="fixed inset-0 bg-[#1E2430]/85 backdrop-blur-sm" />
+        <div className="relative z-10 py-4">
+          <QuickPickFlow
+            campaignId={campaignId}
+            busy={aiSaving || createMutation.isPending}
+            onBack={() => setMode(null)}
+            onComplete={saveAiGenerated}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === 'ai') {
+    return (
+      <div className="min-h-screen relative p-6">
+        <div
+          className="fixed inset-0 bg-cover bg-center"
+          style={{
+            backgroundImage: `url(${backgroundImage})`,
+            animation: 'slowZoom 30s ease-in-out infinite alternate',
+          }}
+        />
+        <div className="fixed inset-0 bg-[#1E2430]/85 backdrop-blur-sm" />
+        <div className="relative z-10 py-4">
+          <AIGenerateFlow
+            campaignId={campaignId}
+            busy={aiSaving || createMutation.isPending}
+            onBack={() => setMode(null)}
+            onComplete={saveAiGenerated}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen relative p-6">

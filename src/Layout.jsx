@@ -8,6 +8,63 @@ import DiceRoller from "@/components/dice/DiceRoller";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
+import { useSubscription } from "@/lib/SubscriptionContext";
+import { useMyPresence } from "@/lib/PresenceContext";
+import { StatusPicker } from "@/components/presence/StatusDot";
+
+function NavStatusPicker() {
+  // Manual status picker next to the TierBadge so the user can
+  // flip online / away / DND / offline on a whim.
+  const { status, setStatus } = useMyPresence();
+  return <StatusPicker current={status} onChange={setStatus} />;
+}
+
+function LegalFooter() {
+  // Site-wide footer with the legal-doc links + copyright. Renders
+  // at the bottom of every routed page (mounted inside <main>) so
+  // users always have one click to the policies.
+  return (
+    <footer className="border-t border-slate-800 px-6 py-4 mt-12 text-center text-sm text-slate-500">
+      <div className="flex justify-center gap-3 flex-wrap">
+        <Link to="/PrivacySummary" className="hover:text-[#37F2D1]">How We Use Your Data</Link>
+        <span className="text-slate-700">·</span>
+        <Link to="/Privacy" className="hover:text-[#37F2D1]">Privacy Policy</Link>
+        <span className="text-slate-700">·</span>
+        <Link to="/Terms" className="hover:text-[#37F2D1]">Terms of Service</Link>
+        <span className="text-slate-700">·</span>
+        <Link to="/EULA" className="hover:text-[#37F2D1]">EULA</Link>
+        <span className="text-slate-700">·</span>
+        <Link to="/Cookies" className="hover:text-[#37F2D1]">Cookie Policy</Link>
+      </div>
+      <p className="mt-2 text-slate-600">
+        © {new Date().getFullYear()} Aetherian Studios. All rights reserved.
+      </p>
+    </footer>
+  );
+}
+
+function TierBadge() {
+  // Small "⚔️ Adventurer" / "🛡️ Veteran" / "👑 Guild" badge that
+  // sits next to the nav so the user always knows their tier.
+  // Free users get nothing (no clutter).
+  const sub = useSubscription();
+  if (!sub.tierData?.badgeIcon || sub.tier === 'free') return null;
+  return (
+    <Link
+      to={createPageUrl('Settings') + '?tab=subscription'}
+      title={`${sub.tierData.name} subscription — manage billing`}
+      className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider rounded-full px-2 py-1"
+      style={{
+        backgroundColor: `${sub.tierData.badgeColor}33`,
+        color: sub.tierData.badgeColor,
+        border: `1px solid ${sub.tierData.badgeColor}66`,
+      }}
+    >
+      <span>{sub.tierData.badgeIcon}</span>
+      <span>{sub.tierData.name}</span>
+    </Link>
+  );
+}
 import LazyImage from "@/components/ui/LazyImage";
 
 export default function Layout({ children, currentPageName }) {
@@ -417,6 +474,15 @@ export default function Layout({ children, currentPageName }) {
   if (currentPageName === "CampaignItems" || currentPageName === "CampaignNPCs" || currentPageName === "CampaignMaps" || currentPageName === "CampaignHomebrew") {
     return <>{children}</>;
   }
+  // Admin dashboard has its own full-screen sidebar shell.
+  if (currentPageName === "Admin") {
+    return <>{children}</>;
+  }
+  // Auth-flow pages render without nav/sidebar so the user can finish
+  // password reset / email verification without distractions.
+  if (currentPageName === "ResetPassword" || currentPageName === "VerifyEmail") {
+    return <>{children}</>;
+  }
 
   return (
     <div className={`min-h-screen ${isWorldLorePage ? 'text-white' : isDarkMode ? 'bg-[#1E2430] text-white' : 'bg-gray-50 text-gray-900'}`}>
@@ -476,7 +542,9 @@ export default function Layout({ children, currentPageName }) {
               )}
             </Link>
           ))}
-          
+          <NavStatusPicker />
+          <TierBadge />
+
           <Link
             to={createPageUrl("TheTavern")}
             className="bg-[#FF5722] text-white px-6 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 hover:bg-[#FF6B3D] transition-colors border-2 border-white"
@@ -728,6 +796,7 @@ export default function Layout({ children, currentPageName }) {
 
         <main className={`flex-1 relative transition-all duration-300 ${sidebarCollapsed && isWorldLorePage ? 'world-lore-expanded' : ''}`}>
           {children}
+          <LegalFooter />
         </main>
       </div>
 

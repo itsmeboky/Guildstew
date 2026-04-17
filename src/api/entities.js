@@ -78,6 +78,8 @@ async list(sort, limit) {
 
 export const entities = {
   Achievement:          createEntity('achievements'),
+  AdminAction:          createEntity('admin_actions'),
+  AnalyticsEvent:       createEntity('analytics_events'),
   Artifact:             createEntity('artifacts'),
   Campaign:             createEntity('campaigns'),
   CampaignInvitation:   createEntity('campaign_invitations'),
@@ -110,8 +112,11 @@ export const entities = {
   Sect:                 createEntity('sects'),
   SessionReminder:      createEntity('session_reminders'),
   Spell:                createEntity('spells'),
+  SupportTicket:        createEntity('support_tickets'),
+  TicketResponse:       createEntity('ticket_responses'),
   TradeOffer:           createEntity('trade_offers'),
   User:                 createEntity('user_profiles'),
+  UserReport:           createEntity('user_reports'),
   UserProfile:          createEntity('user_profiles'),
   WorldLoreComment:     createEntity('world_lore_comments'),
   WorldLoreEntry:       createEntity('world_lore_entries'),
