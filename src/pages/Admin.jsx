@@ -14,6 +14,7 @@ import CombatStatsTab from "@/components/admin/CombatStatsTab";
 import AchievementsTab from "@/components/admin/AchievementsTab";
 import MarketplaceTab from "@/components/admin/MarketplaceTab";
 import RevenueTab from "@/components/admin/RevenueTab";
+import SupportTicketsTab from "@/components/admin/SupportTicketsTab";
 
 const ADMIN_EMAILS = ["itsmeboky@aetherianstudios.com"];
 
@@ -25,7 +26,7 @@ const TABS = [
   { id: "achievements", label: "Achievements",        icon: Trophy },
   { id: "marketplace",  label: "Marketplace",         icon: ShoppingBag },
   { id: "revenue",      label: "Revenue",             icon: DollarSign },
-  { id: "tickets",      label: "Support Tickets",     icon: LifeBuoy,   stub: true },
+  { id: "tickets",      label: "Support Tickets",     icon: LifeBuoy },
   { id: "reports",      label: "Reports & Mod",       icon: Flag,       stub: true },
   { id: "log",          label: "Admin Log",           icon: ScrollText, stub: true },
 ];
@@ -114,7 +115,8 @@ export default function Admin() {
           {tab === "achievements" && <AchievementsTab />}
           {tab === "marketplace"  && <MarketplaceTab />}
           {tab === "revenue"      && <RevenueTab      dateRange={dateRange} />}
-          {(tab === "tickets" || tab === "reports" || tab === "log") && (
+          {tab === "tickets"      && <SupportTicketsTab adminId={user.id} />}
+          {(tab === "reports" || tab === "log") && (
             <div className="bg-[#1E2430] border border-[#2A3441] rounded-xl p-12 text-center">
               <p className="text-slate-400">This tab ships in the next admin slice.</p>
             </div>

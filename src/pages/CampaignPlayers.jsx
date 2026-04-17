@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, UserMinus, Gift, Award } from "lucide-react";
+import { ArrowLeft, UserMinus, Gift, Award, Flag } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { canManagePlayers } from "@/components/campaigns/permissions";
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import ReportUserDialog from "@/components/support/ReportUserDialog";
 
 export default function CampaignPlayers() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -24,6 +25,7 @@ export default function CampaignPlayers() {
   const [itemName, setItemName] = useState("");
   const [itemDescription, setItemDescription] = useState("");
   const [selectedAchievement, setSelectedAchievement] = useState(null);
+  const [reportTarget, setReportTarget] = useState(null);
 
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
@@ -252,10 +254,29 @@ export default function CampaignPlayers() {
                   <UserMinus className="w-4 h-4 mr-1" />
                   Kick
                 </Button>
+                {user?.id && player.user_id !== user.id && (
+                  <Button
+                    onClick={() => setReportTarget({ id: player.user_id, username: player.username })}
+                    size="sm"
+                    variant="outline"
+                    className="border-amber-700 text-amber-400 hover:bg-amber-500/10"
+                  >
+                    <Flag className="w-4 h-4 mr-1" />
+                    Report
+                  </Button>
+                )}
               </div>
             </div>
           ))}
         </div>
+
+        <ReportUserDialog
+          open={!!reportTarget}
+          onClose={() => setReportTarget(null)}
+          reporterId={user?.id}
+          targetUser={reportTarget}
+          campaignId={campaignId}
+        />
 
         {/* Kick Player Dialog */}
         <Dialog open={showKickDialog} onOpenChange={setShowKickDialog}>
