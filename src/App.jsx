@@ -8,6 +8,7 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { SubscriptionProvider } from '@/lib/SubscriptionContext';
+import { PresenceProvider } from '@/lib/PresenceContext';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -64,11 +65,13 @@ function App() {
     <QueryClientProvider client={queryClientInstance}>
       <AuthProvider>
         <SubscriptionProvider>
-          <Router>
-            <NavigationTracker />
-            <AuthenticatedApp />
-          </Router>
-          <Toaster />
+          <PresenceProvider>
+            <Router>
+              <NavigationTracker />
+              <AuthenticatedApp />
+            </Router>
+            <Toaster />
+          </PresenceProvider>
         </SubscriptionProvider>
       </AuthProvider>
     </QueryClientProvider>

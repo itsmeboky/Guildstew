@@ -19,6 +19,8 @@ import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } fro
 import { Link } from "react-router-dom";
 import PostComments from "@/components/profile/PostComments";
 import { uploadFile } from "@/utils/uploadFile";
+import StatusDot from "@/components/presence/StatusDot";
+import { resolveStatus, statusMeta } from "@/lib/PresenceContext";
 
 export default function UserProfile() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -387,9 +389,17 @@ export default function UserProfile() {
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <h1 className="text-3xl font-bold mb-1 bg-clip-text text-transparent" style={{ 
-                    backgroundImage: `linear-gradient(to right, ${color1}, ${color2})`
-                  }}>@{user?.username || user?.email?.split('@')[0]}</h1>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h1 className="text-3xl font-bold bg-clip-text text-transparent" style={{
+                      backgroundImage: `linear-gradient(to right, ${color1}, ${color2})`,
+                    }}>@{user?.username || user?.email?.split('@')[0]}</h1>
+                    {user && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-slate-300">
+                        <StatusDot profile={user} size="sm" border="#1a1f2e" />
+                        <span>{statusMeta(resolveStatus(user)).label}</span>
+                      </span>
+                    )}
+                  </div>
                   <p className="text-gray-400 text-sm">● Last online this week</p>
                 </div>
                 {currentUser && currentUser.id !== userId && !isBlocked && (
