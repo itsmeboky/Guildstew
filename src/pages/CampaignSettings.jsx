@@ -746,6 +746,15 @@ export default function CampaignSettings() {
                 </Button>
               </div>
             </div>
+
+            {/* Session Zero / Table Rules — populates the campaign
+                consent dialog players see before joining. Saving
+                bumps consent_version so existing players re-accept. */}
+            <SessionZeroPanel
+              campaign={campaign}
+              campaignId={campaignId}
+              onSaved={() => queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] })}
+            />
           </TabsContent>
 
           {/* Archive Images Tab */}
@@ -874,6 +883,123 @@ export default function CampaignSettings() {
             )}
           </DialogContent>
         </Dialog>
+      </div>
+    </div>
+  );
+}
+const SAFETY_TOOLS = [
+  "X-Card (anyone can tap out of a scene, no questions asked)",
+  "Lines & Veils (hard limits and fade-to-black topics)",
+  "Open Door Policy (anyone can leave the session at any time)",
+  "Stars & Wishes (end-of-session feedback)",
+];
+
+/**
+ * GM-facing editor for the campaign's consent_config blob. Populated
+ * fields drive the optional sections of CampaignConsentDialog. Saving
+ * also bumps consent_version so any player who already accepted the
+ * older version is re-prompted on their next visit.
+ */
+function SessionZeroPanel({ campaign, campaignId, onSaved }) {
+  const initial = campaign?.consent_config || {};
+  const [contentWarnings, setContentWarnings] = React.useState(initial.content_warnings || "");
+  const [etiquette, setEtiquette] = React.useState(initial.etiquette || "");
+  const [safetyTools, setSafetyTools] = React.useState(Array.isArray(initial.safety_tools) ? initial.safety_tools : []);
+  const [additionalNotes, setAdditionalNotes] = React.useState(initial.additional_notes || "");
+  const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    const next = campaign?.consent_config || {};
+    setContentWarnings(next.content_warnings || "");
+    setEtiquette(next.etiquette || "");
+    setSafetyTools(Array.isArray(next.safety_tools) ? next.safety_tools : []);
+    setAdditionalNotes(next.additional_notes || "");
+  }, [campaign?.id, campaign?.consent_config]);
+
+  const toggleTool = (tool) => {
+    setSafetyTools((prev) => prev.includes(tool) ? prev.filter((t) => t !== tool) : [...prev, tool]);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await base44.entities.Campaign.update(campaignId, {
+        consent_config: {
+          content_warnings: contentWarnings.trim(),
+          etiquette: etiquette.trim(),
+          safety_tools: safetyTools,
+          additional_notes: additionalNotes.trim(),
+        },
+        consent_version: Number(campaign?.consent_version || 1) + 1,
+      });
+      toast.success("Session Zero saved. Players will see the updated dialog on next visit.");
+      onSaved?.();
+    } catch (err) {
+      toast.error(err?.message || "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-[#2A3441] rounded-xl p-6">
+      <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+        <Shield className="w-6 h-6" />
+        Session Zero / Table Rules
+      </h2>
+      <p className="text-sm text-slate-400 mb-4">
+        These fields show up in the consent dialog every player sees before joining the campaign.
+        Bumping any field re-prompts players who already accepted.
+      </p>
+
+      <div className="space-y-4">
+        <div>
+          <Label className="text-white mb-2 block">Content Warnings</Label>
+          <Textarea
+            value={contentWarnings}
+            onChange={(e) => setContentWarnings(e.target.value)}
+            placeholder="e.g., Body horror, character death, psychological themes"
+            className="bg-[#1E2430] border-gray-700 text-white"
+          />
+        </div>
+        <div>
+          <Label className="text-white mb-2 block">Table Etiquette</Label>
+          <Textarea
+            value={etiquette}
+            onChange={(e) => setEtiquette(e.target.value)}
+            placeholder="e.g., No phones during combat. Be respectful of everyone's time."
+            className="bg-[#1E2430] border-gray-700 text-white"
+          />
+        </div>
+        <div>
+          <Label className="text-white mb-2 block">Safety Tools</Label>
+          <div className="space-y-1">
+            {SAFETY_TOOLS.map((tool) => (
+              <label key={tool} className="flex items-start gap-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={safetyTools.includes(tool)}
+                  onChange={() => toggleTool(tool)}
+                  className="mt-1"
+                />
+                <span>{tool}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+        <div>
+          <Label className="text-white mb-2 block">Additional Notes</Label>
+          <Textarea
+            value={additionalNotes}
+            onChange={(e) => setAdditionalNotes(e.target.value)}
+            placeholder="e.g., Schedule, house rules summary, session expectations"
+            className="bg-[#1E2430] border-gray-700 text-white"
+          />
+        </div>
+
+        <Button onClick={save} disabled={saving} className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430]">
+          {saving ? "Saving…" : "Save Session Zero"}
+        </Button>
       </div>
     </div>
   );

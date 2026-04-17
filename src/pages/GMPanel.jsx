@@ -63,6 +63,7 @@ import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
 import ConditionRing from "@/components/combat/ConditionRing";
+import PortraitWithState from "@/components/combat/PortraitWithState";
 import {
   CONDITIONS as DND_CONDITIONS,
   CONDITION_COLORS,
@@ -2213,6 +2214,7 @@ export default function GMPanel() {
         id: `player-${p.user_id}`,
         name: char?.name || p.username,
         avatar: char?.profile_avatar_url || char?.avatar_url || char?.image_url || p.avatar_url,
+        bloodied_avatar_url: char?.bloodied_avatar_url || null,
         dexMod: mod,
         type: 'player',
         initiative: roll.total,
@@ -7068,19 +7070,19 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
                               borderColor: computedBorderColor,
                             }}
                           >
-                            <div
-                              className="w-full h-full bg-cover bg-center"
-                              style={{
-                                backgroundImage: combatant.avatar ? `url(${combatant.avatar})` : 'none',
-                                backgroundColor: '#1a1f2e'
-                              }}
-                            >
-                              {!combatant.avatar && (
-                                <div className="w-full h-full flex items-center justify-center text-xl text-slate-500 font-bold">
-                                  {combatant.name[0]}
+                            <PortraitWithState
+                              url={combatant.avatar}
+                              bloodiedUrl={combatant.bloodied_avatar_url}
+                              current={combatant.hit_points?.current ?? combatant.hit_points?.max}
+                              max={combatant.hit_points?.max}
+                              alt={combatant.name}
+                              skullSize="lg"
+                              fallback={
+                                <div className="w-full h-full flex items-center justify-center text-xl text-slate-500 font-bold bg-[#1a1f2e]">
+                                  {combatant.name?.[0] || '?'}
                                 </div>
-                              )}
-                            </div>
+                              }
+                            />
                             {/* Animated condition rings wrap around the
                                 portrait — one ring per active condition,
                                 name arcs along the top and slowly spins. */}

@@ -15,6 +15,10 @@ import MyBrewsList from "@/components/homebrew/MyBrewsList";
 import BreweryCard from "@/components/homebrew/BreweryCard";
 import BreweryDetailDialog from "@/components/homebrew/BreweryDetailDialog";
 import CreateHomebrewDialog from "@/components/homebrew/CreateHomebrewDialog";
+import { useSubscription } from "@/lib/SubscriptionContext";
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { toast } from "sonner";
 
 /**
  * The Brewery — community homebrew marketplace.
@@ -39,6 +43,7 @@ export default function Brewery() {
     },
   });
 
+  const sub = useSubscription();
   const [tab, setTab] = useState("browse");
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -55,11 +60,16 @@ export default function Brewery() {
     initialData: [],
   });
 
+  // Minor flag from the merged user profile — honored by hiding
+  // any brew tagged 18+ from the marketplace grid.
+  const isMinor = !!currentUser?.user_metadata?.is_minor || !!currentUser?.is_minor;
+
   const filteredBrews = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return publishedBrews.filter((b) => {
       if (systemFilter !== "all" && b.game_system !== systemFilter) return false;
       if (categoryFilter !== "all" && b.category !== categoryFilter) return false;
+      if (isMinor && b.content_rating === "18+") return false;
       if (!q) return true;
       return (
         (b.title || "").toLowerCase().includes(q)
@@ -67,7 +77,7 @@ export default function Brewery() {
         || (Array.isArray(b.tags) && b.tags.some((t) => (t || "").toLowerCase().includes(q)))
       );
     });
-  }, [publishedBrews, systemFilter, categoryFilter, searchQuery]);
+  }, [publishedBrews, systemFilter, categoryFilter, searchQuery, isMinor]);
 
   const sortedForTab = useMemo(() => {
     const list = [...filteredBrews];
@@ -103,11 +113,17 @@ export default function Brewery() {
             </div>
           </div>
           <Button
-            onClick={() => setCreating(true)}
+            onClick={() => {
+              if (!sub.canUse('homebrew')) {
+                toast.error('Homebrew creation requires a Veteran or Guild subscription.');
+                return;
+              }
+              setCreating(true);
+            }}
             className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
           >
             <Sparkles className="w-4 h-4 mr-2" />
-            Create Homebrew
+            {sub.canUse('homebrew') ? 'Create Homebrew' : 'Create Homebrew (Veteran+)'}
           </Button>
         </div>
 
