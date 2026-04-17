@@ -24,6 +24,7 @@ import { resolveAction, consumeActionCost } from "@/components/combat/actionReso
 import TradeOfferDialog from "@/components/trade/TradeOfferDialog";
 import TradesPanel from "@/components/trade/TradesPanel";
 import { Handshake } from "lucide-react";
+import CampaignConsentDialog, { needsCampaignConsent } from "@/components/consent/CampaignConsentDialog";
 import { getConditionModifiers } from "@/components/combat/conditions";
 import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
 import { toast } from "sonner";
@@ -607,8 +608,19 @@ function CampaignPlayerPanelContent() {
     return <div className="min-h-screen flex items-center justify-center bg-[#020617] text-white"><p className="text-gray-400">Loading...</p></div>;
   }
 
+  // Campaign consent gate. GM and co-DMs auto-skip; everyone else
+  // must accept the current consent_version before any of the
+  // panel renders.
+  const showConsentDialog = needsCampaignConsent(campaign, user);
+
   return (
     <div className="min-h-screen bg-[#020617] text-white flex flex-col">
+      <CampaignConsentDialog
+        open={showConsentDialog}
+        campaign={campaign}
+        userId={user?.id}
+        onAccept={() => queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] })}
+      />
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #050816; border-radius: 4px; }

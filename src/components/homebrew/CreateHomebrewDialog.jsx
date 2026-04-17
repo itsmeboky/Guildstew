@@ -247,6 +247,7 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
   const [gameSystem, setGameSystem] = useState("dnd5e");
   const [description, setDescription] = useState("");
   const [version, setVersion] = useState("1.0.0");
+  const [contentRating, setContentRating] = useState("all_ages");
   const [tags, setTags] = useState([]);
   const [tagDraft, setTagDraft] = useState("");
   const [coverImageUrl, setCoverImageUrl] = useState("");
@@ -286,6 +287,7 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
     setGameSystem(brew?.game_system || "dnd5e");
     setDescription(brew?.description || "");
     setVersion(brew?.version || "1.0.0");
+    setContentRating(brew?.content_rating || "all_ages");
     setTags(Array.isArray(brew?.tags) ? brew.tags : []);
     setTagDraft("");
     setCoverImageUrl(brew?.cover_image_url || "");
@@ -378,6 +380,7 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
         category: effectiveCategory,
         game_system: gameSystem,
         version: version || "1.0.0",
+        content_rating: contentRating || "all_ages",
         cover_image_url:
           coverImageUrl
           || (isCustomItem ? item.image_url : null)
@@ -522,6 +525,22 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
                   placeholder="1.0.0"
                   className="bg-[#0b1220] border-slate-700 text-white"
                 />
+              </Field>
+              <Field label="Content Rating">
+                <Select value={contentRating} onValueChange={setContentRating}>
+                  <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all_ages">All Ages</SelectItem>
+                    <SelectItem value="18+">18+ (mature themes or imagery)</SelectItem>
+                  </SelectContent>
+                </Select>
+                {contentRating === '18+' && (
+                  <p className="text-[11px] text-amber-300 mt-1">
+                    This content will be hidden from users under 18.
+                  </p>
+                )}
               </Field>
             </div>
 

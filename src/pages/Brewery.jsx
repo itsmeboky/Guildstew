@@ -60,11 +60,16 @@ export default function Brewery() {
     initialData: [],
   });
 
+  // Minor flag from the merged user profile — honored by hiding
+  // any brew tagged 18+ from the marketplace grid.
+  const isMinor = !!currentUser?.user_metadata?.is_minor || !!currentUser?.is_minor;
+
   const filteredBrews = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return publishedBrews.filter((b) => {
       if (systemFilter !== "all" && b.game_system !== systemFilter) return false;
       if (categoryFilter !== "all" && b.category !== categoryFilter) return false;
+      if (isMinor && b.content_rating === "18+") return false;
       if (!q) return true;
       return (
         (b.title || "").toLowerCase().includes(q)
@@ -72,7 +77,7 @@ export default function Brewery() {
         || (Array.isArray(b.tags) && b.tags.some((t) => (t || "").toLowerCase().includes(q)))
       );
     });
-  }, [publishedBrews, systemFilter, categoryFilter, searchQuery]);
+  }, [publishedBrews, systemFilter, categoryFilter, searchQuery, isMinor]);
 
   const sortedForTab = useMemo(() => {
     const list = [...filteredBrews];
