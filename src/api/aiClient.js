@@ -2,7 +2,7 @@
 // AI Generation Client
 // ============================================================================
 // Calls the guildstew-api backend for AI-powered content generation.
-// Drop this in src/api/aiClient.js in the main guildstew project.
+// Located at src/api/aiClient.js in the main guildstew project.
 // ============================================================================
 
 const API_BASE = import.meta.env.VITE_AI_API_URL || 'https://guildstew-api.vercel.app';
@@ -22,109 +22,62 @@ async function aiRequest(endpoint, body) {
   return response.json();
 }
 
-// ── Individual generators ──────────────────────────────────
+// ── Quick Pick ───────────────────────────────────────────
+// Player picks race, class, background.
+// Returns 6 characters (2M, 2F, 2NB) with dating-profile bios.
 
 /**
- * Generate a D&D 5e NPC
  * @param {Object} params
- * @param {string} [params.race] - Race (e.g., "Elf", "Dwarf")
- * @param {string} [params.class] - Class (e.g., "Fighter", "Wizard")
- * @param {number} [params.level] - Character level
- * @param {string} [params.alignment] - Alignment
- * @param {string} [params.gender] - Gender
- * @param {string} [params.setting] - World setting context
- * @param {string} [params.role] - Story role (e.g., "tavern keeper", "villain")
- * @param {string} [params.campaign_context] - GM's world description
+ * @param {string} params.race
+ * @param {string} params.class
+ * @param {string} params.background
+ * @returns {Promise<{ characters: Array }>} 6 character options
  */
-export async function generateNPC(params = {}) {
-  const result = await aiRequest('generate-npc', params);
-  return result.data;
+export async function quickPick({ race, class: charClass, background }) {
+  const result = await aiRequest('generate-characters', {
+    mode: 'quick_pick',
+    race,
+    class: charClass,
+    background,
+  });
+  return result.data; // { characters: [...6 characters] }
 }
 
+// ── AI Generate ──────────────────────────────────────────
+// Player writes a prompt. AI builds the entire character.
+// Returns 1 complete character with everything chosen.
+
 /**
- * Generate a D&D 5e Monster
- * @param {Object} params
- * @param {string} [params.cr] - Challenge Rating
- * @param {string} [params.type] - Creature type
- * @param {string} [params.environment] - Environment
- * @param {string} [params.theme] - Theme/tone
- * @param {string} [params.name_hint] - Concept or name idea
- * @param {string} [params.campaign_context] - GM's world description
+ * @param {string} prompt - Freeform description of the character concept
+ * @returns {Promise<Object>} Complete character sheet
  */
-export async function generateMonster(params = {}) {
-  const result = await aiRequest('generate-monster', params);
-  return result.data;
+export async function aiGenerate(prompt) {
+  const result = await aiRequest('generate-characters', {
+    mode: 'ai_generate',
+    prompt,
+  });
+  return result.data; // full character object
 }
 
-/**
- * Generate a D&D 5e Magic Item
- * @param {Object} params
- * @param {string} [params.type] - Item type
- * @param {string} [params.rarity] - Rarity
- * @param {string} [params.theme] - Theme
- * @param {string} [params.for_class] - Intended class
- * @param {boolean} [params.cursed] - Should it be cursed?
- * @param {string} [params.name_hint] - Concept or name idea
- * @param {string} [params.campaign_context] - GM's world description
- */
-export async function generateItem(params = {}) {
-  const result = await aiRequest('generate-item', params);
-  return result.data;
-}
+// ── Portrait Generation ──────────────────────────────────
+// Generates a character portrait from a description.
 
 /**
- * Generate a D&D 5e Spell
  * @param {Object} params
- * @param {number} [params.level] - Spell level (0 for cantrip)
- * @param {string} [params.school] - Spell school
- * @param {string[]} [params.classes] - Available classes
- * @param {string} [params.theme] - Theme
- * @param {string} [params.effect_type] - Effect type
- * @param {string} [params.name_hint] - Concept or name idea
- * @param {string} [params.campaign_context] - GM's world description
- */
-export async function generateSpell(params = {}) {
-  const result = await aiRequest('generate-spell', params);
-  return result.data;
-}
-
-/**
- * Generate a fantasy image
- * @param {Object} params
- * @param {string} params.description - What to generate
- * @param {string} [params.subject_type] - "character", "monster", "item", "scene"
- * @param {string} [params.aspect_ratio] - "1:1", "16:9", "9:16"
- * @param {string} [params.style_override] - Custom style instructions
- * @param {string} [params.campaign_id] - Campaign for storage path
- */
-export async function generateImage(params) {
-  const result = await aiRequest('generate-image', params);
-  return result.data;
-}
-
-// ── Quick Create (content + portrait in one call) ────────
-
-/**
- * Generate content AND its portrait in one call
- * @param {Object} params
- * @param {string} params.type - "npc", "monster", "item"
- * @param {Object} params.params - Generation parameters
- * @param {boolean} [params.generate_image] - Also generate portrait? (default true)
- * @param {string} [params.campaign_id] - Campaign for storage
+ * @param {string} params.description - What the character looks like
+ * @param {string} [params.campaign_id] - For storage path
  * @param {string} [params.style_override] - Custom art style
+ * @returns {Promise<{ image_url: string, prompt: string, stored: boolean }>}
  */
-export async function quickCreate({ type, params = {}, generate_image = true, campaign_id, style_override }) {
-  const result = await aiRequest('quick-create', {
-    type,
-    params,
-    generate_image,
+export async function generatePortrait({ description, campaign_id, style_override }) {
+  const result = await aiRequest('generate-image', {
+    subject_type: 'character',
+    description,
+    aspect_ratio: '1:1',
     campaign_id,
     style_override,
   });
-  return {
-    content: result.data,
-    image: result.image,
-  };
+  return result.data; // { image_url, prompt, stored }
 }
 
 // ── Health check ─────────────────────────────────────────
