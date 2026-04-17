@@ -9,6 +9,9 @@ import { Upload, X, Plus } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import UsernameField from "@/components/profile/UsernameField";
+import { validateUsername, isUsernameAvailable } from "@/utils/username";
+import SocialHandlesEditor from "@/components/profile/SocialHandlesEditor";
 
 export default function EditProfileDialog({ open, onClose, user }) {
   const [bannerFile, setBannerFile] = useState(null);
@@ -20,7 +23,9 @@ export default function EditProfileDialog({ open, onClose, user }) {
   const [pronouns, setPronouns] = useState(user?.pronouns || "");
   const [color1, setColor1] = useState(user?.profile_color_1 || "#FF5722");
   const [color2, setColor2] = useState(user?.profile_color_2 || "#37F2D1");
-  const [links, setLinks] = useState(user?.social_links || []);
+  const [username, setUsername] = useState(user?.username || "");
+  const [usernameStatus, setUsernameStatus] = useState("idle");
+  const [socialHandles, setSocialHandles] = useState(user?.social_handles || {});
   const [selectedGenres, setSelectedGenres] = useState(user?.favorite_genres || []);
   const [selectedAchievements, setSelectedAchievements] = useState(user?.featured_achievement_ids || []);
 
@@ -174,7 +179,8 @@ export default function EditProfileDialog({ open, onClose, user }) {
       setPronouns(user.pronouns || "");
       setColor1(user.profile_color_1 || "#FF5722");
       setColor2(user.profile_color_2 || "#37F2D1");
-      setLinks(user.social_links || []);
+      setUsername(user.username || "");
+      setSocialHandles(user.social_handles || {});
       setSelectedGenres(user.favorite_genres || []);
       setSelectedAchievements(user.featured_achievement_ids || []);
     }
@@ -196,6 +202,7 @@ export default function EditProfileDialog({ open, onClose, user }) {
       }
 
       const updates = {
+        username: data.username,
         tagline: data.tagline,
         bio: data.bio,
         country: data.country,
@@ -205,7 +212,7 @@ export default function EditProfileDialog({ open, onClose, user }) {
         avatar_url: avatarUrl,
         profile_color_1: data.color1,
         profile_color_2: data.color2,
-        social_links: data.links,
+        social_handles: data.socialHandles,
         favorite_genres: data.selectedGenres,
         featured_achievement_ids: data.selectedAchievements
       };
@@ -215,7 +222,7 @@ export default function EditProfileDialog({ open, onClose, user }) {
       // Sync to UserProfile for public visibility
       const profiles = await base44.entities.UserProfile.filter({ user_id: user.id });
       const profileData = {
-        username: user.username,
+        username: data.username,
         email: user.email,
         avatar_url: avatarUrl,
         age: user.age,
@@ -223,7 +230,7 @@ export default function EditProfileDialog({ open, onClose, user }) {
         country: data.country,
         pronouns: data.pronouns,
         bio: data.bio,
-        social_links: data.links,
+        social_handles: data.socialHandles,
         favorite_genres: data.selectedGenres,
         profile_color_1: data.color1,
         profile_color_2: data.color2,
@@ -248,18 +255,39 @@ export default function EditProfileDialog({ open, onClose, user }) {
     }
   });
 
-  const handleSave = () => {
-    updateProfileMutation.mutate({ 
+  const handleSave = async () => {
+    // Username is required and must pass the policy + uniqueness
+    // check. Skip the live-field status and re-check here so a stale
+    // debounce can't let an invalid name slip through.
+    const desiredUsername = (username || "").trim();
+    if (desiredUsername !== (user?.username || "")) {
+      const policy = validateUsername(desiredUsername, user?.email);
+      if (!policy.ok) {
+        toast.error(policy.error);
+        return;
+      }
+      const { available, error: checkErr } = await isUsernameAvailable(desiredUsername, user?.id);
+      if (checkErr) {
+        toast.error("Could not verify username availability. Please try again.");
+        return;
+      }
+      if (!available) {
+        toast.error("That username is taken. Try another one.");
+        return;
+      }
+    }
+    updateProfileMutation.mutate({
+      username: desiredUsername,
       tagline,
-      bio, 
-      country, 
-      displayAge, 
-      pronouns, 
-      color1, 
-      color2, 
-      links, 
-      selectedGenres, 
-      selectedAchievements 
+      bio,
+      country,
+      displayAge,
+      pronouns,
+      color1,
+      color2,
+      socialHandles,
+      selectedGenres,
+      selectedAchievements
     });
   };
 
@@ -521,54 +549,24 @@ export default function EditProfileDialog({ open, onClose, user }) {
             </div>
           </div>
 
-          {/* Links */}
+          {/* Username — live uniqueness + policy check. */}
           <div>
-            <Label className="text-sm font-semibold text-gray-300 mb-2 block">Links</Label>
-            <div className="space-y-2">
-              {links.map((link, idx) => (
-                <div key={idx} className="flex gap-2">
-                  <Input
-                    value={link.label}
-                    onChange={(e) => {
-                      const newLinks = [...links];
-                      newLinks[idx].label = e.target.value;
-                      setLinks(newLinks);
-                    }}
-                    placeholder="Label (e.g., Discord)"
-                    className="bg-[#2A3441] border-gray-700 text-white"
-                  />
-                  <Input
-                    value={link.url}
-                    onChange={(e) => {
-                      const newLinks = [...links];
-                      newLinks[idx].url = e.target.value;
-                      setLinks(newLinks);
-                    }}
-                    placeholder="URL"
-                    className="bg-[#2A3441] border-gray-700 text-white flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setLinks(links.filter((_, i) => i !== idx))}
-                    className="text-red-400"
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))}
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => setLinks([...links, { label: '', url: '' }])}
-                className="w-full bg-[#37F2D1] text-[#1E2430] hover:bg-[#FF5722] hover:text-white transition-all"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Link
-              </Button>
-            </div>
+            <Label className="text-sm font-semibold text-gray-300 mb-2 block">Username</Label>
+            <UsernameField
+              value={username}
+              onChange={setUsername}
+              onStatus={setUsernameStatus}
+              email={user?.email}
+              excludeUserId={user?.id}
+              label={null}
+              inputClassName="bg-[#2A3441] border-gray-700 text-white"
+            />
           </div>
+
+          {/* Social Handles — replaces the old free-form Links array.
+              Only specific platforms are accepted; links open with a
+              "leaving Guildstew" confirmation on the public profile. */}
+          <SocialHandlesEditor value={socialHandles} onChange={setSocialHandles} />
 
           {/* Favorite Genres */}
           <div>
@@ -652,7 +650,12 @@ export default function EditProfileDialog({ open, onClose, user }) {
           </Button>
           <Button
             onClick={handleSave}
-            disabled={updateProfileMutation.isPending}
+            disabled={
+              updateProfileMutation.isPending
+              || usernameStatus === "checking"
+              || usernameStatus === "invalid"
+              || usernameStatus === "taken"
+            }
             className="bg-[#37F2D1] text-[#1E2430] hover:bg-[#FF5722] hover:text-white transition-all font-semibold"
           >
             {updateProfileMutation.isPending ? "Saving..." : "Save Changes"}

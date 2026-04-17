@@ -89,12 +89,9 @@ export default function MyBrewsList({ currentUser }) {
             Your homebrew rules, items, monsters, and spells.
           </p>
         </div>
-        <Button
-          onClick={() => setCreating(true)}
-          className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
-        >
-          Create Homebrew
-        </Button>
+        {/* Header "Create Homebrew" button used to live here and
+            duplicated the one in the Brewery page header. Removed —
+            use the page-header button instead. */}
       </div>
 
       {isLoading ? (

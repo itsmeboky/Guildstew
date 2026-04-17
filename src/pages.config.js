@@ -2,7 +2,8 @@ import Home from './pages/Home';
 import YourProfile from './pages/YourProfile';
 import CharacterLibrary from './pages/CharacterLibrary';
 import Campaigns from './pages/Campaigns';
-import Workshop from './pages/Workshop';
+// Workshop is hidden for now — route registration is disabled below.
+// import Workshop from './pages/Workshop';
 import TheTavern from './pages/TheTavern';
 import Friends from './pages/Friends';
 import PIEChart from './pages/PIEChart';
@@ -30,8 +31,6 @@ import CampaignUpdates from './pages/CampaignUpdates';
 import CampaignArchives from './pages/CampaignArchives';
 import CampaignSettings from './pages/CampaignSettings';
 import CampaignStatistics from './pages/CampaignStatistics';
-import CampaignPlayerPanel from './pages/CampaignPlayerPanel';
-import GMPanel from './pages/GMPanel';
 import BackendAdmin from './pages/BackendAdmin';
 import DiceCalibrator from './pages/DiceCalibrator';
 import CampaignPanel from './pages/CampaignPanel';
@@ -41,6 +40,10 @@ import Cookies from './pages/Cookies';
 import Terms from './pages/Terms';
 import EULA from './pages/EULA';
 import PrivacySummary from './pages/PrivacySummary';
+import Admin from './pages/Admin';
+import ResetPassword from './pages/ResetPassword';
+import VerifyEmail from './pages/VerifyEmail';
+import { GuardedGMPanel, GuardedPlayerPanel } from './pages/_desktopGuards.jsx';
 import __Layout from './Layout.jsx';
 
 
@@ -49,7 +52,7 @@ export const PAGES = {
     "YourProfile": YourProfile,
     "CharacterLibrary": CharacterLibrary,
     "Campaigns": Campaigns,
-    "Workshop": Workshop,
+    // "Workshop": Workshop,
     "TheTavern": TheTavern,
     "Friends": Friends,
     "PIEChart": PIEChart,
@@ -77,8 +80,8 @@ export const PAGES = {
     "CampaignArchives": CampaignArchives,
     "CampaignSettings": CampaignSettings,
     "CampaignStatistics": CampaignStatistics,
-    "CampaignPlayerPanel": CampaignPlayerPanel,
-    "GMPanel": GMPanel,
+    "CampaignPlayerPanel": GuardedPlayerPanel,
+    "GMPanel": GuardedGMPanel,
     "BackendAdmin": BackendAdmin,
     "DiceCalibrator": DiceCalibrator,
     "CampaignPanel": CampaignPanel,
@@ -88,6 +91,9 @@ export const PAGES = {
     "Terms": Terms,
     "EULA": EULA,
     "PrivacySummary": PrivacySummary,
+    "Admin": Admin,
+    "ResetPassword": ResetPassword,
+    "VerifyEmail": VerifyEmail,
 }
 
 export const pagesConfig = {
