@@ -951,7 +951,18 @@ export default function CombatActionBar({
           </button>
         )}
 
-        <div className="flex-1 flex items-center gap-3 overflow-visible relative">
+        <div
+          className="flex-1 min-w-0 flex items-center gap-3 overflow-x-auto overflow-y-hidden relative custom-scrollbar"
+          onWheel={(e) => {
+            // Let vertical wheel gestures drive the horizontal scroll
+            // through the spell / ability row — otherwise the row
+            // quietly overflows under the next section on small
+            // viewports and users can't see the trailing icons.
+            if (e.deltaY !== 0 && e.currentTarget.scrollWidth > e.currentTarget.clientWidth) {
+              e.currentTarget.scrollLeft += e.deltaY;
+            }
+          }}
+        >
           {/* Fixed prefix: class-feature bonus actions. Stays put while the
               spell portion scrolls. Label + tinted icons + vertical divider
               match the styling of the main-action / spell divider. Skipped
