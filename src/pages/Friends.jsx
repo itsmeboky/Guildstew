@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import StatusDot from "@/components/presence/StatusDot";
 import {
   Dialog,
   DialogContent,
@@ -367,9 +368,9 @@ export default function Friends() {
             </div>
           )}
         </div>
-        {friend.online_status === 'online' && (
-          <div className="absolute bottom-0 right-0 w-5 h-5 bg-[#37F2D1] rounded-full border-2 border-[#2A3441]" />
-        )}
+        <div className="absolute bottom-0 right-0">
+          <StatusDot profile={friend} size="md" border="#2A3441" />
+        </div>
       </Link>
       <div className="flex-1 min-w-0">
         <Link to={createPageUrl("UserProfile") + `?id=${friend.user_id || friend.id}`}>
