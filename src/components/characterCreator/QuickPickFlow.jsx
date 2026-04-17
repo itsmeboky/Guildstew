@@ -36,6 +36,7 @@ export default function QuickPickFlow({ onBack, onComplete, campaignId, busy = f
   const [cursor, setCursor] = useState(0);
   const [picked, setPicked] = useState(null);
   const [portrait, setPortrait] = useState(null);
+  const [bloodiedPortrait, setBloodiedPortrait] = useState(null);
   const [portraitUploading, setPortraitUploading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState("Finding your perfect match…");
 
@@ -88,6 +89,17 @@ export default function QuickPickFlow({ onBack, onComplete, campaignId, busy = f
       toast.error(err?.message || "Portrait generation failed — you can still upload one.");
       setPortrait(null);
     }
+    // Queue a bloodied variant in the background. Non-blocking —
+    // combat still falls back to the CSS overlay if this never
+    // resolves.
+    generatePortrait({
+      description:
+        `${choice.appearance || `${choice.race} ${choice.class}`}. They look exhausted, wounded, and battle-worn. ` +
+        `Cuts, bruises, torn clothing, smears of blood. Same character after a brutal fight.`,
+      campaign_id: campaignId || null,
+    })
+      .then((bp) => setBloodiedPortrait(bp))
+      .catch(() => { /* non-blocking */ });
   };
 
   const replacePortrait = async (file) => {
@@ -111,6 +123,7 @@ export default function QuickPickFlow({ onBack, onComplete, campaignId, busy = f
       class: picked.class || draft.class,
       background: picked.background || draft.background,
       avatar_url: portrait?.image_url || null,
+      bloodied_avatar_url: bloodiedPortrait?.image_url || null,
     });
   };
 
