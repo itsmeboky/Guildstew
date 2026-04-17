@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { formatCategoryLabel, categoryColorClass } from "./BreweryCard";
+import { trackEvent } from "@/utils/analytics";
 
 /**
  * Detail modal for a brewery homebrew row. Shows the full
@@ -116,6 +117,11 @@ export default function BreweryDetailDialog({ open, onClose, brew, currentUser }
       queryClient.invalidateQueries({ queryKey: ["myBrews"] });
       queryClient.invalidateQueries({ queryKey: ["campaignHomebrew", campaignId] });
       queryClient.invalidateQueries({ queryKey: ["campaignHomebrewMods", campaignId] });
+      trackEvent(userId, 'homebrew_downloaded', {
+        homebrew_id: brewId,
+        category: brew?.category,
+        campaign_id: campaignId,
+      });
       toast.success("Added to campaign!");
     },
     onError: (err) => toast.error(err?.message || "Failed to add"),

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Heart, MessageCircle, Upload, X, Globe, Cake, User as UserIcon, Ban, UserPlus, Trophy } from "lucide-react";
+import { Heart, MessageCircle, Upload, X, Globe, Cake, User as UserIcon, Ban, UserPlus, Trophy, Flag } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -19,6 +19,10 @@ import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } fro
 import { Link } from "react-router-dom";
 import PostComments from "@/components/profile/PostComments";
 import { uploadFile } from "@/utils/uploadFile";
+import StatusDot from "@/components/presence/StatusDot";
+import { resolveStatus, statusMeta } from "@/lib/PresenceContext";
+import ReportUserDialog from "@/components/support/ReportUserDialog";
+import { CardSkeleton } from "@/components/ui/Skeleton";
 
 export default function UserProfile() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -26,6 +30,7 @@ export default function UserProfile() {
   const [newPost, setNewPost] = useState("");
   const [postImage, setPostImage] = useState(null);
   const [showBlockWarning, setShowBlockWarning] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const genreGradients = {
     "High Fantasy": "from-purple-500 to-pink-500",
@@ -87,7 +92,7 @@ export default function UserProfile() {
     initialData: []
   });
 
-  const { data: posts } = useQuery({
+  const { data: posts, isLoading: postsLoading } = useQuery({
     queryKey: ['userPosts', userId],
     queryFn: () => base44.entities.Post.filter({ profile_user_id: userId }, '-created_date'),
     enabled: !!userId,
@@ -387,9 +392,17 @@ export default function UserProfile() {
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <h1 className="text-3xl font-bold mb-1 bg-clip-text text-transparent" style={{ 
-                    backgroundImage: `linear-gradient(to right, ${color1}, ${color2})`
-                  }}>@{user?.username || user?.email?.split('@')[0]}</h1>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h1 className="text-3xl font-bold bg-clip-text text-transparent" style={{
+                      backgroundImage: `linear-gradient(to right, ${color1}, ${color2})`,
+                    }}>@{user?.username || user?.email?.split('@')[0]}</h1>
+                    {user && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-slate-300">
+                        <StatusDot profile={user} size="sm" border="#1a1f2e" />
+                        <span>{statusMeta(resolveStatus(user)).label}</span>
+                      </span>
+                    )}
+                  </div>
                   <p className="text-gray-400 text-sm">● Last online this week</p>
                 </div>
                 {currentUser && currentUser.id !== userId && !isBlocked && (
@@ -422,9 +435,18 @@ export default function UserProfile() {
                         Message
                       </Button>
                     )}
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-2 border-amber-500/50 text-amber-300 hover:bg-amber-500/20 bg-transparent shadow-lg gap-2"
+                      onClick={() => setReportOpen(true)}
+                    >
+                      <Flag className="w-4 h-4" />
+                      Report
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
                       className="border-2 border-red-500/50 text-red-400 hover:bg-red-500/20 bg-transparent shadow-lg gap-2"
                       onClick={() => setShowBlockWarning(true)}
                     >
@@ -601,6 +623,11 @@ export default function UserProfile() {
 
               {/* Posts */}
               <div className="space-y-4">
+                {postsLoading && posts.length === 0 && (
+                  <>
+                    {Array.from({ length: 3 }).map((_, i) => <CardSkeleton key={i} />)}
+                  </>
+                )}
                 {posts.slice(0, 5).map(post => {
                   const authorProfile = allUserProfiles.find(p => p.email === post.created_by);
                   const hasLiked = (post.likes || []).includes(currentUser?.id);
@@ -826,6 +853,13 @@ export default function UserProfile() {
       </div>
 
       {/* Block Warning Dialog */}
+      <ReportUserDialog
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        reporterId={currentUser?.id}
+        targetUser={user ? { id: userId, username: user.username } : null}
+      />
+
       <Dialog open={showBlockWarning} onOpenChange={setShowBlockWarning}>
         <DialogContent className="bg-[#1E2430] border-2 border-red-500 text-white max-w-md">
           <DialogHeader>

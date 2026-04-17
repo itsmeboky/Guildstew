@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, ArrowLeft, Send, Volume2, VolumeX } from "lucide-react";
+import { Skeleton, AvatarSkeleton } from "@/components/ui/Skeleton";
 
 const CHAT_NOTIFICATION_SOUNDS = [
   "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/notification/chatnotif1.mp3",
@@ -54,7 +55,7 @@ export default function ChatPanel({
 
   // All conversations the current user is in. Poll at 5s when open,
   // 15s when closed (so the unread badge stays roughly up to date).
-  const { data: conversations = [] } = useQuery({
+  const { data: conversations = [], isLoading: convosLoading } = useQuery({
     queryKey: ["chatConversations", user?.id],
     queryFn: async () => {
       const all = await base44.entities.ChatConversation.list("-last_message_at");
@@ -78,7 +79,7 @@ export default function ChatPanel({
   }, [initialConversationId, isOpen]);
 
   // Messages for the active conversation. 50 message cap, 3s poll.
-  const { data: messages = [] } = useQuery({
+  const { data: messages = [], isLoading: messagesLoading } = useQuery({
     queryKey: ["chatMessages", selectedConversationId],
     queryFn: async () => {
       if (!selectedConversationId) return [];
@@ -267,7 +268,19 @@ export default function ChatPanel({
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar">
-            {filteredConversations.length === 0 ? (
+            {convosLoading && filteredConversations.length === 0 ? (
+              <div className="space-y-1 py-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 px-3 py-2.5 border-b border-[#1e2636]/50">
+                    <AvatarSkeleton />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-3 w-1/2" />
+                      <Skeleton className="h-2.5 w-3/4" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filteredConversations.length === 0 ? (
               <div className="text-center text-slate-600 text-xs py-10">
                 No conversations yet.
               </div>
@@ -319,7 +332,15 @@ export default function ChatPanel({
         /* ---- ACTIVE CONVERSATION ---- */
         <div className="flex-1 flex flex-col overflow-hidden">
           <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar px-3 py-2">
-            {messages.length === 0 ? (
+            {messagesLoading && messages.length === 0 ? (
+              <div className="space-y-2 py-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className={i % 2 === 0 ? "max-w-[85%]" : "max-w-[85%] ml-auto"}>
+                    <Skeleton className={`h-8 rounded-xl ${i % 2 === 0 ? "w-48" : "w-36 ml-auto"}`} />
+                  </div>
+                ))}
+              </div>
+            ) : messages.length === 0 ? (
               <div className="text-center text-slate-600 text-xs py-10">
                 No messages yet. Say hello!
               </div>

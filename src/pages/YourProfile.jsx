@@ -13,8 +13,13 @@ import { Link } from "react-router-dom";
 import EditProfileDialog from "@/components/profile/EditProfileDialog";
 import PostComments from "@/components/profile/PostComments";
 import { uploadFile } from "@/utils/uploadFile";
+import { useSubscription } from "@/lib/SubscriptionContext";
+import StatusDot from "@/components/presence/StatusDot";
+import { statusMeta } from "@/lib/PresenceContext";
+import { Skeleton, CardSkeleton } from "@/components/ui/Skeleton";
 
 export default function YourProfile() {
+  const sub = useSubscription();
   const [editingBio, setEditingBio] = useState(false);
   const [bioText, setBioText] = useState("");
   const [newPost, setNewPost] = useState("");
@@ -56,7 +61,7 @@ console.log('PROFILE PAGE USER:', user)
     initialData: []
   });
 
-  const { data: posts } = useQuery({
+  const { data: posts, isLoading: postsLoading } = useQuery({
     queryKey: ['userPosts'],
     queryFn: () => base44.entities.Post.filter({ profile_user_id: user?.id }, '-created_date'),
     enabled: !!user,
@@ -359,9 +364,31 @@ console.log('PROFILE PAGE USER:', user)
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <h1 className="text-3xl font-bold mb-1 bg-clip-text text-transparent" style={{ 
-                    backgroundImage: `linear-gradient(to right, ${color1}, ${color2})`
-                  }}>@{user?.username || user?.email?.split('@')[0]}</h1>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h1 className="text-3xl font-bold bg-clip-text text-transparent" style={{
+                      backgroundImage: `linear-gradient(to right, ${color1}, ${color2})`,
+                    }}>@{user?.username || user?.email?.split('@')[0]}</h1>
+                    {user?.status && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-slate-300">
+                        <StatusDot profile={user} size="sm" border="#1a1f2e" />
+                        <span>{statusMeta(user.status).label}</span>
+                      </span>
+                    )}
+                    {sub.tierData?.badgeIcon && sub.tier !== 'free' && (
+                      <span
+                        className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider rounded-full px-2 py-0.5"
+                        style={{
+                          backgroundColor: `${sub.tierData.badgeColor}33`,
+                          color: sub.tierData.badgeColor,
+                          border: `1px solid ${sub.tierData.badgeColor}66`,
+                        }}
+                        title={`${sub.tierData.name} subscriber`}
+                      >
+                        <span>{sub.tierData.badgeIcon}</span>
+                        <span>{sub.tierData.name}</span>
+                      </span>
+                    )}
+                  </div>
                   <p className="text-gray-400 text-sm">● Last online this week</p>
                 </div>
                 <div className="flex gap-3">
@@ -597,6 +624,11 @@ console.log('PROFILE PAGE USER:', user)
 
               {/* Posts */}
               <div className="space-y-4">
+                {postsLoading && posts.length === 0 && (
+                  <>
+                    {Array.from({ length: 3 }).map((_, i) => <CardSkeleton key={i} />)}
+                  </>
+                )}
                 {displayedPosts.map(post => {
                   const authorProfile = allUserProfiles.find(p => p.email === post.created_by);
                   const hasLiked = (post.likes || []).includes(user?.id);

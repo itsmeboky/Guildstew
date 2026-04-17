@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Check, X, Handshake, ArrowRight } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { logCombatEvent } from "@/utils/combatLog";
+import { trackEvent } from "@/utils/analytics";
 
 const CURRENCY_KEYS = ["pp", "gp", "ep", "sp", "cp"];
 
@@ -80,6 +81,12 @@ export default function TradeOfferCard({
       queryClient.invalidateQueries({ queryKey: ["tradeOffers", campaignId] });
       queryClient.invalidateQueries({ queryKey: ["campaignCharacters", campaignId] });
       queryClient.invalidateQueries({ queryKey: ["campaignPlayers", campaignId] });
+      trackEvent(receiver?.user_id || sender?.user_id, 'trade_completed', {
+        campaign_id: campaignId,
+        offer_id: offer.id,
+        sender_character_id: offer.sender_character_id,
+        receiver_character_id: offer.receiver_character_id,
+      });
       toast.success("Trade accepted!");
       if (campaignId) {
         const summary = summarizeTrade(offer);
