@@ -9,6 +9,15 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { useSubscription } from "@/lib/SubscriptionContext";
+import { useMyPresence } from "@/lib/PresenceContext";
+import { StatusPicker } from "@/components/presence/StatusDot";
+
+function NavStatusPicker() {
+  // Manual status picker next to the TierBadge so the user can
+  // flip online / away / DND / offline on a whim.
+  const { status, setStatus } = useMyPresence();
+  return <StatusPicker current={status} onChange={setStatus} />;
+}
 
 function TierBadge() {
   // Small "⚔️ Adventurer" / "🛡️ Veteran" / "👑 Guild" badge that
@@ -500,6 +509,7 @@ export default function Layout({ children, currentPageName }) {
               )}
             </Link>
           ))}
+          <NavStatusPicker />
           <TierBadge />
 
           <Link

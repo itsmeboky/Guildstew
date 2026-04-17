@@ -14,6 +14,8 @@ import EditProfileDialog from "@/components/profile/EditProfileDialog";
 import PostComments from "@/components/profile/PostComments";
 import { uploadFile } from "@/utils/uploadFile";
 import { useSubscription } from "@/lib/SubscriptionContext";
+import StatusDot from "@/components/presence/StatusDot";
+import { statusMeta } from "@/lib/PresenceContext";
 
 export default function YourProfile() {
   const sub = useSubscription();
@@ -365,6 +367,12 @@ console.log('PROFILE PAGE USER:', user)
                     <h1 className="text-3xl font-bold bg-clip-text text-transparent" style={{
                       backgroundImage: `linear-gradient(to right, ${color1}, ${color2})`,
                     }}>@{user?.username || user?.email?.split('@')[0]}</h1>
+                    {user?.status && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-slate-300">
+                        <StatusDot profile={user} size="sm" border="#1a1f2e" />
+                        <span>{statusMeta(user.status).label}</span>
+                      </span>
+                    )}
                     {sub.tierData?.badgeIcon && sub.tier !== 'free' && (
                       <span
                         className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider rounded-full px-2 py-0.5"
