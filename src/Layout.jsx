@@ -508,6 +508,11 @@ export default function Layout({ children, currentPageName }) {
   if (currentPageName === "QuickNotes") {
     return <>{children}</>;
   }
+  // World Lore owns its own horizontal nav + landing grid and no
+  // longer wants the Layout's old world-lore sidebar tree.
+  if (currentPageName === "CampaignWorldLore") {
+    return <>{children}</>;
+  }
   // Auth-flow pages render without nav/sidebar so the user can finish
   // password reset / email verification without distractions. Legal
   // pages render chrome-less too so they're readable when reached
