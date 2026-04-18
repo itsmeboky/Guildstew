@@ -71,6 +71,16 @@ function getMonsterImageUrl(monster) {
   return `${SUPABASE_MONSTER_PATH}/${encodeURIComponent(monster.name)}.png`;
 }
 
+/**
+ * Pokédex encounter key. SRD + homebrew IDs come from different
+ * tables (dnd5e_monsters vs. monsters), so we prefix to avoid an ID
+ * collision between `srd:<uuid>` and `hb:<uuid>`.
+ */
+function encounterKey(monster) {
+  if (!monster?.id) return null;
+  return monster._source === "srd" ? `srd:${monster.id}` : `hb:${monster.id}`;
+}
+
 function crToNumber(monster) {
   const raw = monster?.stats?.challenge_rating
     ?? monster?.stats?.cr
@@ -146,26 +156,37 @@ export default function CampaignMonsters() {
   // consistent) and false for players. Respect an explicit toggle.
   const effectiveShowUnencountered = showUnencountered ?? isGM;
 
+  // SRD monsters live in the shared dnd5e_monsters reference table
+  // (one row per monster, no campaign_id). Homebrew monsters live in
+  // the per-campaign `monsters` table. Tag each row with _source so
+  // the UI knows which lane to render and so the Pokédex uses a
+  // prefixed ID (srd:<uuid> / hb:<uuid>) to disambiguate.
   const { data: srd = [] } = useQuery({
-    queryKey: ["monsters", "srd"],
-    queryFn: () => base44.entities.Monster.filter({ is_system: true }).catch(() => []),
+    queryKey: ["srdMonsters"],
+    queryFn: () => base44.entities.Dnd5eMonster
+      .list("name")
+      .then((rows) => (rows || []).map((m) => ({ ...m, _source: "srd" })))
+      .catch(() => []),
     initialData: [],
   });
   const { data: custom = [] } = useQuery({
-    queryKey: ["monsters", "campaign", campaignId],
-    queryFn: () => base44.entities.Monster.filter({ campaign_id: campaignId }).catch(() => []),
+    queryKey: ["homebrewMonsters", campaignId],
+    queryFn: () => base44.entities.Monster
+      .filter({ campaign_id: campaignId })
+      .then((rows) => (rows || []).map((m) => ({ ...m, _source: "homebrew" })))
+      .catch(() => []),
     enabled: !!campaignId,
     initialData: [],
   });
 
-  const merged = useMemo(() => {
-    const byId = new Map();
-    for (const row of [...srd, ...custom]) {
-      if (!row?.id || byId.has(row.id)) continue;
-      byId.set(row.id, row);
-    }
-    return Array.from(byId.values());
-  }, [srd, custom]);
+  const merged = useMemo(() => [...srd, ...custom], [srd, custom]);
+
+  const isEncountered = (monster) => {
+    if (isGM) return true;
+    // Homebrew = GM's own creation — no Pokédex lock on your own.
+    if (monster._source === "homebrew") return true;
+    return encounteredIds.has(encounterKey(monster));
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -174,15 +195,14 @@ export default function CampaignMonsters() {
       rows = rows.filter((m) => (m.name || "").toLowerCase().includes(q));
     }
     if (sourceFilter !== "all") {
-      const wantSystem = sourceFilter === "srd";
-      rows = rows.filter((m) => !!m.is_system === wantSystem);
+      rows = rows.filter((m) => m._source === sourceFilter);
     }
     if (typeFilter !== "all") {
       rows = rows.filter((m) => getMonsterType(m) === typeFilter);
     }
     rows = rows.filter((m) => crInRange(m, crRange));
     if (!effectiveShowUnencountered) {
-      rows = rows.filter((m) => isGM || encounteredIds.has(m.id));
+      rows = rows.filter(isEncountered);
     }
     const sorted = rows.slice();
     if (sortBy === "cr") {
@@ -200,18 +220,22 @@ export default function CampaignMonsters() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] }),
   });
 
-  const toggleEncountered = (monsterId) => {
+  const toggleEncountered = (monster) => {
+    // Only SRD entries participate in the Pokédex — homebrew is
+    // always visible to the party, so toggling does nothing useful
+    // there (still flip in case a GM wants to "hide" one).
+    const key = encounterKey(monster);
     const current = Array.isArray(campaign?.encountered_monsters) ? campaign.encountered_monsters : [];
-    const next = current.includes(monsterId)
-      ? current.filter((id) => id !== monsterId)
-      : [...current, monsterId];
+    const next = current.includes(key)
+      ? current.filter((id) => id !== key)
+      : [...current, key];
     updateCampaignMutation.mutate({ encountered_monsters: next });
   };
 
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Monster.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["monsters", "campaign", campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["homebrewMonsters", campaignId] });
       setSelected(null);
       toast.success("Monster removed.");
     },
@@ -227,7 +251,7 @@ export default function CampaignMonsters() {
       created_at: new Date().toISOString(),
     }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["monsters", "campaign", campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["homebrewMonsters", campaignId] });
       setCreating(false);
       toast.success("Custom monster saved.");
     },
@@ -240,8 +264,7 @@ export default function CampaignMonsters() {
   };
 
   const selectMonster = (monster) => {
-    const unlocked = isGM || encounteredIds.has(monster.id);
-    if (!unlocked) return;
+    if (!isEncountered(monster)) return;
     setSelected(monster);
   };
 
@@ -293,12 +316,12 @@ export default function CampaignMonsters() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {filtered.map((monster) => (
               <MonsterCard
-                key={monster.id}
+                key={`${monster._source}-${monster.id}`}
                 monster={monster}
-                encountered={isGM || encounteredIds.has(monster.id)}
+                encountered={isEncountered(monster)}
                 isGM={isGM}
                 onClick={() => selectMonster(monster)}
-                onToggleEncountered={() => toggleEncountered(monster.id)}
+                onToggleEncountered={() => toggleEncountered(monster)}
                 busy={updateCampaignMutation.isPending}
               />
             ))}
@@ -312,7 +335,7 @@ export default function CampaignMonsters() {
         onClose={() => setSelected(null)}
         onDelete={() => {
           if (!selected) return;
-          if (selected.is_system) {
+          if (selected._source !== "homebrew") {
             toast.error("SRD monsters can't be deleted.");
             return;
           }
@@ -411,6 +434,7 @@ function MonsterCard({ monster, encountered, isGM, onClick, onToggleEncountered,
   const cr = monster?.stats?.challenge_rating ?? monster?.stats?.cr ?? monster?.challenge_rating ?? monster?.cr ?? "?";
   const ac = monster?.stats?.armor_class ?? monster?.stats?.ac ?? monster?.armor_class ?? "?";
   const hp = monster?.stats?.hit_points ?? monster?.stats?.hp ?? monster?.hit_points ?? "?";
+  const isHomebrew = monster._source === "homebrew";
 
   return (
     <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg overflow-hidden hover:border-[#37F2D1]/30 transition-colors flex flex-col">
@@ -435,11 +459,13 @@ function MonsterCard({ monster, encountered, isGM, onClick, onToggleEncountered,
               {monster?.name?.charAt(0) || "?"}
             </div>
           )}
-          {!monster.is_system && (
-            <span className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded bg-[#37F2D1]/15 text-[#37F2D1] border border-[#37F2D1]/40">
-              Homebrew
-            </span>
-          )}
+          <span className={`absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded ${
+            isHomebrew
+              ? "bg-purple-900/30 text-purple-400 border border-purple-700/40"
+              : "bg-blue-900/30 text-blue-400 border border-blue-700/40"
+          }`}>
+            {isHomebrew ? "Homebrew" : "SRD"}
+          </span>
         </div>
         <div className="p-3">
           <h3 className="text-white font-semibold text-sm truncate">{monster.name}</h3>
@@ -455,7 +481,7 @@ function MonsterCard({ monster, encountered, isGM, onClick, onToggleEncountered,
           </div>
         </div>
       </button>
-      {isGM && (
+      {isGM && !isHomebrew && (
         <button
           type="button"
           onClick={onToggleEncountered}
@@ -519,9 +545,16 @@ function StatBlockDialog({ monster, isGM, onClose, onDelete }) {
               <h2 className="text-2xl font-bold text-white truncate">{monster.name}</h2>
               {meta && <p className="text-sm text-slate-300 italic truncate">{meta}</p>}
             </div>
-            {!monster.is_system && (
-              <Badge variant="outline" className="text-[10px] border-[#37F2D1]/60 text-[#37F2D1] flex-shrink-0">Homebrew</Badge>
-            )}
+            <Badge
+              variant="outline"
+              className={`text-[10px] flex-shrink-0 ${
+                monster._source === "homebrew"
+                  ? "border-purple-500/50 text-purple-300"
+                  : "border-blue-500/50 text-blue-300"
+              }`}
+            >
+              {monster._source === "homebrew" ? "Homebrew" : "SRD"}
+            </Badge>
           </div>
         </div>
 
@@ -610,7 +643,7 @@ function StatBlockDialog({ monster, isGM, onClose, onDelete }) {
         </div>
 
         <DialogFooter className="p-4 border-t border-slate-700/30">
-          {isGM && !monster.is_system && (
+          {isGM && monster._source === "homebrew" && (
             <Button variant="outline" onClick={onDelete} className="text-red-400 border-red-700 hover:bg-red-950/30">
               <Trash2 className="w-3 h-3 mr-1" /> Delete
             </Button>

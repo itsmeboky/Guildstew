@@ -40,10 +40,25 @@ export default function CampaignItems() {
     queryFn: () => base44.auth.me()
   });
 
+  // Homebrew items live in campaign_items (one row per campaign).
+  // SRD items live in the shared dnd5e_items reference table (one
+  // row per item, no campaign_id — the per-campaign seed trigger is
+  // gone). Each side gets a _source tag for badge rendering.
   const { data: items } = useQuery({
-    queryKey: ['campaignItems', campaignId],
-    queryFn: () => base44.entities.CampaignItem.filter({ campaign_id: campaignId }),
+    queryKey: ['homebrewItems', campaignId],
+    queryFn: () => base44.entities.CampaignItem
+      .filter({ campaign_id: campaignId })
+      .then((rows) => (rows || []).map((i) => ({ ...i, _source: 'homebrew' }))),
     enabled: !!campaignId,
+    initialData: []
+  });
+
+  const { data: srdItems } = useQuery({
+    queryKey: ['srdItems'],
+    queryFn: () => base44.entities.Dnd5eItem
+      .list('name')
+      .then((rows) => (rows || []).map((i) => ({ ...i, _source: 'srd' })))
+      .catch(() => []),
     initialData: []
   });
 
@@ -101,22 +116,23 @@ export default function CampaignItems() {
   };
 
   const filteredLibraryItems = React.useMemo(() => {
-    let filtered = allItemsWithEnchanted;
-    
+    let filtered = srdItems || [];
+
     if (selectedCategory !== "all") {
       filtered = filtered.filter(item => item.category === selectedCategory);
     }
-    
+
     if (searchQuery) {
+      const q = searchQuery.toLowerCase();
       filtered = filtered.filter(item =>
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.description.toLowerCase().includes(searchQuery.toLowerCase())
+        (item.name || "").toLowerCase().includes(q) ||
+        (item.type || "").toLowerCase().includes(q) ||
+        (item.description || "").toLowerCase().includes(q)
       );
     }
-    
+
     return filtered;
-  }, [searchQuery, selectedCategory]);
+  }, [srdItems, searchQuery, selectedCategory]);
 
   const { data: campaign } = useQuery({
     queryKey: ['campaign', campaignId],

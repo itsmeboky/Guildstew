@@ -339,25 +339,29 @@ export const spellIcons = {
 };
 
 // Fetch all spell rows for autocomplete / tooltips / effect
-// classification. The old `fetchDnd5eSpells` Edge Function never
-// shipped, so invoking it threw CORS errors on every page that loaded
-// this query. The spells DO live in Supabase — the per-campaign
-// `spells` table is the live editable copy, and the global reference
-// `dnd5e_spells` table is the read-only catalog.
+// classification. SRD spells live in the shared dnd5e_spells
+// reference table; per-campaign homebrew spells live in the `spells`
+// table. When a campaignId is supplied we merge both so character
+// sheets, spell selection, and combat resolution can look up any
+// spell the party has access to without querying twice.
 export async function fetchAllSpells(campaignId) {
   try {
-    if (campaignId) {
-      const { base44 } = await import('@/api/base44Client');
-      const spells = await base44.entities.Spell.filter({ campaign_id: campaignId });
-      return { spells: Array.isArray(spells) ? spells : [] };
-    }
     const { supabase } = await import('@/api/supabaseClient');
-    const { data, error } = await supabase.from('dnd5e_spells').select('*');
-    if (error) {
-      console.error('fetchAllSpells: dnd5e_spells query failed', error);
-      return { spells: [] };
+    const { data: srdData, error: srdError } = await supabase
+      .from('dnd5e_spells').select('*');
+    if (srdError) {
+      console.error('fetchAllSpells: dnd5e_spells query failed', srdError);
     }
-    return { spells: data || [] };
+    const srd = (srdData || []).map((s) => ({ ...s, _source: 'srd' }));
+
+    if (!campaignId) return { spells: srd };
+
+    const { base44 } = await import('@/api/base44Client');
+    const homebrewRows = await base44.entities.Spell
+      .filter({ campaign_id: campaignId })
+      .catch(() => []);
+    const homebrew = (homebrewRows || []).map((s) => ({ ...s, _source: 'homebrew' }));
+    return { spells: [...srd, ...homebrew] };
   } catch (err) {
     console.error('fetchAllSpells failed', err);
     return { spells: [] };
