@@ -7,6 +7,7 @@ const AuthContext = createContext()
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
+  const [profileFetched, setProfileFetched] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoadingAuth, setIsLoadingAuth] = useState(true)
   const [authError, setAuthError] = useState(null)
@@ -20,10 +21,12 @@ export const AuthProvider = ({ children }) => {
         if (session?.user) {
           setUser(session.user)
           setIsAuthenticated(true)
+          setProfileFetched(false)
           fetchProfile(session.user.id).catch(() => {})
         } else {
           setUser(null)
           setProfile(null)
+          setProfileFetched(false)
           setIsAuthenticated(false)
         }
         setIsLoadingAuth(false)
@@ -62,13 +65,19 @@ export const AuthProvider = ({ children }) => {
       .eq('user_id', userId)
       .single()
 
-    console.log('AUTH: profile result:', data, error)
-
     if (data) {
+      console.log('AUTH: profile loaded:', data.username || '(no username yet)')
       setProfile(data)
-    } else if (error && error.code !== 'PGRST116') {
+    } else if (error?.code === 'PGRST116') {
+      // PGRST116 = "no rows found". Brand new user who hasn't
+      // created their profile row yet — let the Layout's
+      // onboarding gate take them to the first-run wizard.
+      console.log('AUTH: no profile yet — new user')
+    } else if (error) {
       console.error('Profile fetch error:', error)
     }
+    // Either way, we're done trying so the UI can stop waiting.
+    setProfileFetched(true)
   }
 
   const logout = async (shouldRedirect = true) => {
@@ -88,7 +97,12 @@ export const AuthProvider = ({ children }) => {
     ...profile,
     id: user.id,
     email: user.email,
-    profile_id: profile?.id
+    profile_id: profile?.id,
+    // `profile_fetched` flips true once fetchProfile resolves —
+    // success OR PGRST116 "no rows" for a brand new user. Consumers
+    // (Layout's onboarding gate, etc.) use it to tell "still
+    // loading" apart from "no profile row exists yet".
+    profile_fetched: profileFetched,
   } : null
 
   useEffect(() => {

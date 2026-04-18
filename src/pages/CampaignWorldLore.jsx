@@ -71,11 +71,11 @@ const EMPTY_COPY = {
   artifacts: "No artifacts catalogued yet.",
 };
 
-export default function CampaignWorldLore() {
+export default function CampaignWorldLore({ embedded = false, campaignId: campaignIdOverride } = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const params = new URLSearchParams(window.location.search);
-  const campaignId = params.get("id");
+  const campaignId = campaignIdOverride ?? params.get("id");
   const initialCategory = params.get("category") || null;
   // null = landing page; otherwise one of the CATEGORIES keys.
   const [category, setCategory] = useState(
@@ -151,19 +151,21 @@ export default function CampaignWorldLore() {
   );
 
   return (
-    <div className="min-h-screen bg-[#0f1219] text-white">
-      <header className="px-6 py-4 border-b border-slate-800 bg-[#050816] flex items-center gap-3">
-        <Button
-          onClick={backToCampaign}
-          variant="outline"
-          size="sm"
-          className="text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/10 hover:text-[#37F2D1]"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" /> Back to Campaign
-        </Button>
-        <h1 className="text-xl font-bold">World Lore</h1>
-        {campaign?.title && <span className="text-xs text-slate-500">· {campaign.title}</span>}
-      </header>
+    <div className={`${embedded ? "h-full overflow-y-auto" : "min-h-screen"} bg-[#0f1219] text-white`}>
+      {!embedded && (
+        <header className="px-6 py-4 border-b border-slate-800 bg-[#050816] flex items-center gap-3">
+          <Button
+            onClick={backToCampaign}
+            variant="outline"
+            size="sm"
+            className="text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/10 hover:text-[#37F2D1]"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Campaign
+          </Button>
+          <h1 className="text-xl font-bold">World Lore</h1>
+          {campaign?.title && <span className="text-xs text-slate-500">· {campaign.title}</span>}
+        </header>
+      )}
 
       <nav className="px-6 border-b border-slate-800 bg-[#050816] overflow-x-auto">
         <div className="flex items-center gap-1">
