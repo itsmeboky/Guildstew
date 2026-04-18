@@ -35,8 +35,13 @@ const AuthenticatedApp = () => {
     // users clicking a password-reset / email-verification link from
     // their inbox aren't bounced back to the login screen, and so the
     // legal-copy links on the signup form actually navigate.
+    //
+    // Everything else falls through to Login — this is what makes
+    // `/` + any unknown path render the login screen for unauth
+    // visitors instead of dumping them into onboarding.
     return (
       <Routes>
+        <Route path="/Signup" element={<Pages.Signup />} />
         <Route path="/ResetPassword" element={<Pages.ResetPassword />} />
         <Route path="/VerifyEmail" element={<Pages.VerifyEmail />} />
         <Route path="/Terms" element={<Pages.Terms />} />

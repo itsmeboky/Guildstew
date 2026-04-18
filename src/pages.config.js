@@ -43,6 +43,7 @@ import PrivacySummary from './pages/PrivacySummary';
 import Admin from './pages/Admin';
 import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
+import Signup from './pages/Signup';
 import { GuardedGMPanel, GuardedPlayerPanel } from './pages/_desktopGuards.jsx';
 import __Layout from './Layout.jsx';
 
@@ -94,6 +95,11 @@ export const PAGES = {
     "Admin": Admin,
     "ResetPassword": ResetPassword,
     "VerifyEmail": VerifyEmail,
+    // `/Login` aliases the Landing component so the default
+    // unauthenticated route lands on a login page by name, not a
+    // mystery alias.
+    "Login": Landing,
+    "Signup": Signup,
 }
 
 export const pagesConfig = {
