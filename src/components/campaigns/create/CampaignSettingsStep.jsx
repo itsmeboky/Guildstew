@@ -2,6 +2,9 @@ import React from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Calendar, Users } from "lucide-react";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -64,14 +67,22 @@ export default function CampaignSettingsStep({ data, onChange }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label className="text-white mb-1 block text-sm">Maximum players</Label>
-            <Input
-              type="number"
-              min={1}
-              max={12}
-              value={data.max_players ?? 6}
-              onChange={(e) => onChange({ max_players: Number(e.target.value) || 6 })}
-              className="bg-[#0b1220] border-gray-700 text-white"
-            />
+            <Select
+              value={String(data.max_players ?? 6)}
+              onValueChange={(v) => onChange({ max_players: Number(v) })}
+            >
+              <SelectTrigger className="bg-[#0b1220] border-gray-700 text-white">
+                <SelectValue placeholder="Max players" />
+              </SelectTrigger>
+              <SelectContent>
+                {[2, 3, 4, 5, 6, 7, 8].map((n) => (
+                  <SelectItem key={n} value={String(n)}>{n} Players</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-slate-500 mt-1">
+              Maximum 8 players + 1 GM per campaign.
+            </p>
           </div>
           <div className="flex items-end gap-2">
             <div className="flex-1">
