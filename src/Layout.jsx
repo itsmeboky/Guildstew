@@ -495,6 +495,9 @@ export default function Layout({ children, currentPageName }) {
   // Campaign pages that own their full-screen shell (either because
   // they render their own sidebar or because they use a
   // h-screen overflow-hidden split layout that must not be wrapped).
+  // GMPanel + CampaignPlayerPanel ship the in-session sidebar
+  // (GMSessionSidebar / player equivalent), so wrapping with Layout
+  // would render TWO sidebars side by side.
   if (
     currentPageName === "CampaignItems"
     || currentPageName === "CampaignNPCs"
@@ -503,6 +506,8 @@ export default function Layout({ children, currentPageName }) {
     || currentPageName === "CampaignMonsters"
     || currentPageName === "CampaignSpells"
     || currentPageName === "CampaignAbilities"
+    || currentPageName === "GMPanel"
+    || currentPageName === "CampaignPlayerPanel"
   ) {
     return <>{children}</>;
   }
