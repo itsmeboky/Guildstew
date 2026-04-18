@@ -45,6 +45,7 @@ import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
 import Signup from './pages/Signup';
 import AdventuringParty from './pages/AdventuringParty';
+import QuickNotes from './pages/QuickNotes';
 import { GuardedGMPanel, GuardedPlayerPanel } from './pages/_desktopGuards.jsx';
 import __Layout from './Layout.jsx';
 
@@ -102,6 +103,7 @@ export const PAGES = {
     "Login": Landing,
     "Signup": Signup,
     "AdventuringParty": AdventuringParty,
+    "QuickNotes": QuickNotes,
 }
 
 export const pagesConfig = {

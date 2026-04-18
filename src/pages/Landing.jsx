@@ -113,7 +113,7 @@ export default function Landing() {
               <img
                 src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/branding/90f5ad509_GuildStewLogoOfficialForRedditWhite1.png"
                 alt="Guildstew"
-                className="h-20 w-auto"
+                className="h-[120px] w-auto"
               />
             </div>
 
@@ -146,7 +146,7 @@ export default function Landing() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="bg-[#FFD4C4] border-none h-10 text-gray-800"
+                className="bg-[#FFD4C4] border-none h-9 text-gray-800 text-sm"
               />
             </div>
 
@@ -157,7 +157,7 @@ export default function Landing() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="bg-[#FFD4C4] border-none h-10 text-gray-800"
+                className="bg-[#FFD4C4] border-none h-9 text-gray-800 text-sm"
               />
             </div>
 
@@ -171,7 +171,7 @@ export default function Landing() {
             <Button
               onClick={handleLogin}
               disabled={loading || !email || !password}
-              className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] text-white h-11 rounded-full text-sm font-bold disabled:opacity-50"
+              className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] text-white h-9 rounded-full text-sm font-bold disabled:opacity-50"
             >
               {loading ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -181,7 +181,7 @@ export default function Landing() {
             <Button
               onClick={handleGoogle}
               variant="outline"
-              className="w-full h-10 rounded-full text-xs font-semibold text-gray-700 border-gray-300 bg-white hover:bg-gray-50"
+              className="w-full h-9 rounded-full text-xs font-semibold text-gray-700 border-gray-300 bg-white hover:bg-gray-50"
             >
               <GoogleGlyph />
               Continue with Google
