@@ -202,6 +202,16 @@ export default function GMPanel() {
     refetchInterval: (data) => (data?.combat_active || data?.combat_data?.stage === 'initiative') ? 1000 : 2000
   });
 
+  // currentUser needs to be declared before the session-start and
+  // presence effects below, which both read it. Keeping the
+  // original definition lower in the file used to throw
+  // `ReferenceError: Cannot access 'currentUser' before
+  // initialization` the moment the GM Panel mounted.
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: () => base44.auth.me(),
+  });
+
   // Start the session when the GM opens the panel. Runs once per
   // campaign load — if the session is already active we skip the
   // write so this doesn't thrash on every refetch.
@@ -309,11 +319,6 @@ export default function GMPanel() {
     }
     return rules;
   }, [campaign?.homebrew_rules, installedHomebrew]);
-
-  const { data: currentUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me()
-  });
 
   // === Campaign entity queries ======================================
   // These used to live way further down the component (around line
