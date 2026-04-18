@@ -19,26 +19,29 @@ export default function CampaignAbilities() {
   const campaignId = params.get("id");
   const [search, setSearch] = useState("");
 
+  // SRD class / racial abilities live in the shared dnd5e_abilities
+  // reference table. Per-campaign homebrew abilities live in
+  // campaign_abilities. Tag each row with _source so the UI can
+  // render the right badge and gate edit/delete correctly.
   const { data: srd = [] } = useQuery({
-    queryKey: ["abilities", "srd"],
-    queryFn: () => base44.entities.CampaignAbility.filter({ is_system: true }).catch(() => []),
+    queryKey: ["srdAbilities"],
+    queryFn: () => base44.entities.Dnd5eAbility
+      .list("name")
+      .then((rows) => (rows || []).map((a) => ({ ...a, _source: "srd" })))
+      .catch(() => []),
     initialData: [],
   });
   const { data: custom = [] } = useQuery({
-    queryKey: ["abilities", "campaign", campaignId],
-    queryFn: () => base44.entities.CampaignAbility.filter({ campaign_id: campaignId }).catch(() => []),
+    queryKey: ["homebrewAbilities", campaignId],
+    queryFn: () => base44.entities.CampaignAbility
+      .filter({ campaign_id: campaignId })
+      .then((rows) => (rows || []).map((a) => ({ ...a, _source: "homebrew" })))
+      .catch(() => []),
     enabled: !!campaignId,
     initialData: [],
   });
 
-  const merged = useMemo(() => {
-    const byId = new Map();
-    for (const row of [...srd, ...custom]) {
-      if (!row?.id || byId.has(row.id)) continue;
-      byId.set(row.id, row);
-    }
-    return Array.from(byId.values());
-  }, [srd, custom]);
+  const merged = useMemo(() => [...srd, ...custom], [srd, custom]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -103,10 +106,10 @@ export default function CampaignAbilities() {
                       </Badge>
                     )}
                     <span className="ml-auto">
-                      {a.is_system ? (
-                        <Badge variant="outline" className="text-[10px] border-slate-500 text-slate-300">SRD</Badge>
+                      {a._source === "homebrew" ? (
+                        <Badge variant="outline" className="text-[10px] border-purple-500/50 text-purple-300">Homebrew</Badge>
                       ) : (
-                        <Badge variant="outline" className="text-[10px] border-[#37F2D1]/60 text-[#37F2D1]">Homebrew</Badge>
+                        <Badge variant="outline" className="text-[10px] border-blue-500/50 text-blue-300">SRD</Badge>
                       )}
                     </span>
                   </div>

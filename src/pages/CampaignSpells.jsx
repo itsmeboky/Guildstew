@@ -23,26 +23,28 @@ export default function CampaignSpells() {
   const [search, setSearch] = useState("");
   const [levelFilter, setLevelFilter] = useState("all");
 
+  // SRD spells live in the shared dnd5e_spells reference table;
+  // per-campaign homebrew spells live in the `spells` table. Tag
+  // each row with _source so the UI renders the right badge.
   const { data: srd = [] } = useQuery({
-    queryKey: ["spells", "srd"],
-    queryFn: () => base44.entities.Spell.filter({ is_system: true }).catch(() => []),
+    queryKey: ["srdSpells"],
+    queryFn: () => base44.entities.Dnd5eSpell
+      .list("name")
+      .then((rows) => (rows || []).map((s) => ({ ...s, _source: "srd" })))
+      .catch(() => []),
     initialData: [],
   });
   const { data: custom = [] } = useQuery({
-    queryKey: ["spells", "campaign", campaignId],
-    queryFn: () => base44.entities.Spell.filter({ campaign_id: campaignId }).catch(() => []),
+    queryKey: ["homebrewSpells", campaignId],
+    queryFn: () => base44.entities.Spell
+      .filter({ campaign_id: campaignId })
+      .then((rows) => (rows || []).map((s) => ({ ...s, _source: "homebrew" })))
+      .catch(() => []),
     enabled: !!campaignId,
     initialData: [],
   });
 
-  const merged = useMemo(() => {
-    const byId = new Map();
-    for (const row of [...srd, ...custom]) {
-      if (!row?.id || byId.has(row.id)) continue;
-      byId.set(row.id, row);
-    }
-    return Array.from(byId.values());
-  }, [srd, custom]);
+  const merged = useMemo(() => [...srd, ...custom], [srd, custom]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -133,10 +135,10 @@ export default function CampaignSpells() {
                       </Badge>
                     )}
                     <span className="ml-auto">
-                      {s.is_system ? (
-                        <Badge variant="outline" className="text-[10px] border-slate-500 text-slate-300">SRD</Badge>
+                      {s._source === "homebrew" ? (
+                        <Badge variant="outline" className="text-[10px] border-purple-500/50 text-purple-300">Homebrew</Badge>
                       ) : (
-                        <Badge variant="outline" className="text-[10px] border-[#37F2D1]/60 text-[#37F2D1]">Homebrew</Badge>
+                        <Badge variant="outline" className="text-[10px] border-blue-500/50 text-blue-300">SRD</Badge>
                       )}
                     </span>
                   </div>

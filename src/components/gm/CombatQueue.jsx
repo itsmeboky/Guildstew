@@ -10,20 +10,24 @@ import { base44 } from "@/api/base44Client";
 const SAVED_LOADOUTS_KEY = 'gm_saved_monster_loadouts';
 
 /**
- * Append `monsterId` to `campaigns.encountered_monsters` so the
- * Monster Compendium reveals it. Idempotent: the server load plus a
- * local dedupe skip the write when the ID is already present.
+ * Append a prefixed monster key (`srd:<id>` or `hb:<id>`) to
+ * `campaigns.encountered_monsters` so the Monster Compendium reveals
+ * it. SRD + homebrew monsters come from different tables, so the
+ * prefix avoids UUID collisions. Idempotent: the server load + local
+ * dedupe skip the write when the key is already present.
  */
-async function markMonsterEncountered(campaignId, monsterId) {
+async function markMonsterEncountered(campaignId, monster) {
+  if (!monster?.id) return;
+  const key = monster._source === 'srd' ? `srd:${monster.id}` : `hb:${monster.id}`;
   const rows = await base44.entities.Campaign.filter({ id: campaignId });
   const campaign = rows?.[0];
   if (!campaign) return;
   const current = Array.isArray(campaign.encountered_monsters)
     ? campaign.encountered_monsters
     : [];
-  if (current.includes(monsterId)) return;
+  if (current.includes(key)) return;
   await base44.entities.Campaign.update(campaignId, {
-    encountered_monsters: [...current, monsterId],
+    encountered_monsters: [...current, key],
   });
 }
 
@@ -65,9 +69,15 @@ export default function CombatQueue({
     // Pokédex-style unlock: any monster (not NPC) added to the combat
     // queue flips the campaign's encountered_monsters array so players
     // can see its bestiary entry. Fire-and-forget — a network failure
-    // here should not block the combat flow.
-    if (campaignId && creature?.id && creature?.type !== 'npc') {
-      markMonsterEncountered(campaignId, creature.id).catch(() => {});
+    // here should not block the combat flow. Homebrew monsters skip
+    // this write (they're always visible in the compendium).
+    if (
+      campaignId
+      && creature?.id
+      && creature?.type !== 'npc'
+      && creature?._source !== 'homebrew'
+    ) {
+      markMonsterEncountered(campaignId, creature).catch(() => {});
     }
 
     const newCombatants = [];
