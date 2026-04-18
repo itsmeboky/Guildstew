@@ -134,7 +134,7 @@ export default function Onboarding() {
           <img
             src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/branding/2a112bc4f_GuildStewLogoOfficialForRedditWhite1.png"
             alt="Guildstew"
-            className="h-14 sm:h-16 w-auto mx-auto mb-1"
+            className="h-[120px] w-auto mx-auto mb-1"
           />
           <h1 className="text-xl sm:text-2xl font-bold text-[#FF5722]">Welcome to Guildstew!</h1>
           <p className="text-gray-700 text-[11px]">

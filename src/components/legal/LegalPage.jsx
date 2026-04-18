@@ -4,11 +4,13 @@ import { ArrowLeft } from "lucide-react";
 
 /**
  * Termly-backed legal page wrapper. Injects the embed script once
- * and renders the policy container Termly hydrates. The dark CSS
- * override below forces the Termly viewer (which ships with white
- * styling) onto the app's dark theme.
+ * and renders the policy container Termly hydrates.
  *
- * Pass the Termly UUID for the relevant policy.
+ * Termly ships with a black-on-white viewer. The previous
+ * implementation tried to force it onto the dark theme with
+ * !important CSS overrides, which left large blocks unreadable on
+ * real content. Now we just give the embed a white background card
+ * to live in and keep the dark page around it — clean on both sides.
  */
 export default function LegalPage({ uuid, title }) {
   useEffect(() => {
@@ -33,24 +35,13 @@ export default function LegalPage({ uuid, title }) {
         </div>
         {title && <h1 className="text-3xl font-bold mb-6 text-[#37F2D1]">{title}</h1>}
 
-        {/* Termly embed target. The data-id is the policy UUID. */}
-        <div className="bg-[#1a1f2e] border border-slate-800 rounded-2xl p-6 termly-host">
+        {/* White container gives Termly's default viewer a readable
+            background. We deliberately skip the dark-theme CSS
+            overrides — the embed hydrates with its own typography. */}
+        <div className="bg-white rounded-xl p-8 shadow-lg text-slate-900">
           <div name="termly-embed" data-id={uuid} />
         </div>
       </div>
-
-      <style>{`
-        /* Force Termly's default white viewer onto the dark theme. */
-        .termly-host *, .termly-host {
-          color: #e2e8f0 !important;
-          background-color: transparent !important;
-        }
-        .termly-host a { color: #37F2D1 !important; }
-        .termly-host h1, .termly-host h2, .termly-host h3, .termly-host h4 {
-          color: #ffffff !important;
-        }
-        .termly-host hr { border-color: #1e293b !important; }
-      `}</style>
     </div>
   );
 }
