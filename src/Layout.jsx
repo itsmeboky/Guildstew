@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Play, Users, Trophy, PieChart, Settings, Beer, LogOut, Plus, Radio, UserPlus, Search, ChevronDown, ChevronRight, CreditCard, Palette, MessageSquare, FileText, HelpCircle, Upload, ShoppingBag, DollarSign, AlertCircle, BookOpen, Menu, Sparkles, Globe, UsersIcon, Clock, Scroll, Wand2, Wrench, Church, Skull, Flower2, Crown, Shield, Calendar as CalendarIcon, Layers } from "lucide-react";
+import { Play, Users, Trophy, PieChart, Settings, Beer, LogOut, Plus, Radio, UserPlus, Search, ChevronDown, ChevronRight, CreditCard, Palette, MessageSquare, FileText, HelpCircle, Upload, ShoppingBag, DollarSign, AlertCircle, BookOpen, Menu, Sparkles, Globe, UsersIcon, Clock, Scroll, Wand2, Wrench, Church, Skull, Flower2, Crown, Shield, Calendar as CalendarIcon, Layers, NotebookPen } from "lucide-react";
 import ChatPanel from "@/components/chat/ChatPanel";
 import SessionReminderNotification from "@/components/notifications/SessionReminderNotification";
 import DiceRoller from "@/components/dice/DiceRoller";
@@ -280,6 +280,7 @@ export default function Layout({ children, currentPageName }) {
     
     const items = [
       { name: "Adventuring Party", icon: Users, path: createPageUrl("AdventuringParty") + `?id=${campaignId}` },
+      { name: "Quick Notes", icon: NotebookPen, path: createPageUrl("QuickNotes") + `?id=${campaignId}` },
       { name: "Player Management", icon: Users, path: createPageUrl("CampaignPlayers") + `?id=${campaignId}` },
       { name: "Campaign Updates", icon: FileText, path: createPageUrl("CampaignUpdates") + `?id=${campaignId}` },
       { name: "Campaign Archives", icon: FileText, path: createPageUrl("CampaignArchives") + `?id=${campaignId}` },
@@ -495,6 +496,10 @@ export default function Layout({ children, currentPageName }) {
   }
   // Adventuring Party panel has its own two-column shell.
   if (currentPageName === "AdventuringParty") {
+    return <>{children}</>;
+  }
+  // Quick Notes panel is a single-column full-screen form.
+  if (currentPageName === "QuickNotes") {
     return <>{children}</>;
   }
   // Auth-flow pages render without nav/sidebar so the user can finish
