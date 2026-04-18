@@ -376,6 +376,19 @@ function EntryDetail({ entry, profilesById, metadataFields, isGM, onEdit, onDele
         />
       )}
 
+      {Array.isArray(entry.images) && entry.images.length > 0 && (
+        <div className="grid grid-cols-2 gap-4 mt-6">
+          {entry.images.map((img, idx) => (
+            <img
+              key={`${img}-${idx}`}
+              src={img}
+              alt=""
+              className="rounded-lg border border-slate-700 w-full object-cover max-h-80"
+            />
+          ))}
+        </div>
+      )}
+
       {isGM && (
         <div className="flex gap-2 mt-6 pt-4 border-t border-slate-700/50">
           <Button variant="ghost" size="sm" onClick={onEdit} className="text-slate-300 hover:text-white">
