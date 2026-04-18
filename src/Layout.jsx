@@ -279,6 +279,7 @@ export default function Layout({ children, currentPageName }) {
     if (!currentCampaign) return [];
     
     const items = [
+      { name: "Adventuring Party", icon: Users, path: createPageUrl("AdventuringParty") + `?id=${campaignId}` },
       { name: "Player Management", icon: Users, path: createPageUrl("CampaignPlayers") + `?id=${campaignId}` },
       { name: "Campaign Updates", icon: FileText, path: createPageUrl("CampaignUpdates") + `?id=${campaignId}` },
       { name: "Campaign Archives", icon: FileText, path: createPageUrl("CampaignArchives") + `?id=${campaignId}` },
@@ -303,12 +304,14 @@ export default function Layout({ children, currentPageName }) {
       ]
     },
     {
-      id: 'companions',
+      id: 'adventuring_party',
       title: 'Adventuring Party',
       icon: Users,
-      items: [
-        { name: 'Relationships', path: createPageUrl('PlayerRelationships') + `?id=${campaignId}` }
-      ]
+      // Single-link section — opens the shared party panel where the
+      // player can read their own relationships + browse other
+      // characters (with permission filtering applied in-page).
+      path: createPageUrl('AdventuringParty') + `?id=${campaignId}`,
+      single: true,
     }
   ];
 
@@ -490,6 +493,10 @@ export default function Layout({ children, currentPageName }) {
   if (currentPageName === "Admin") {
     return <>{children}</>;
   }
+  // Adventuring Party panel has its own two-column shell.
+  if (currentPageName === "AdventuringParty") {
+    return <>{children}</>;
+  }
   // Auth-flow pages render without nav/sidebar so the user can finish
   // password reset / email verification without distractions. Legal
   // pages render chrome-less too so they're readable when reached
@@ -497,6 +504,8 @@ export default function Layout({ children, currentPageName }) {
   if (
     currentPageName === "ResetPassword" ||
     currentPageName === "VerifyEmail" ||
+    currentPageName === "Login" ||
+    currentPageName === "Signup" ||
     (!user && (
       currentPageName === "Terms" ||
       currentPageName === "Privacy" ||

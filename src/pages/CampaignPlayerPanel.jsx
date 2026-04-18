@@ -614,7 +614,7 @@ function CampaignPlayerPanelContent() {
   const showConsentDialog = needsCampaignConsent(campaign, user);
 
   return (
-    <div className="min-h-screen bg-[#020617] text-white flex flex-col">
+    <div className="h-screen w-screen bg-[#020617] text-white flex flex-col overflow-hidden">
       <CampaignConsentDialog
         open={showConsentDialog}
         campaign={campaign}
@@ -632,15 +632,15 @@ function CampaignPlayerPanelContent() {
         }
       `}</style>
 
-      <div className="relative w-full h-56 overflow-hidden">
-        <div 
-          className="absolute inset-0 bg-cover bg-center" 
+      <div className="relative w-full h-56 overflow-hidden flex-shrink-0">
+        <div
+          className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url(${campaign.cover_image_url || 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=1200&h=400&fit=crop'})` }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/70 to-[#020617]" />
       </div>
 
-      <div className="-mt-16 px-6 pb-10">
+      <div className="-mt-16 px-6 pb-10 flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden">
         <div className="grid grid-cols-[320px,minmax(0,1fr)] gap-6">
           <CharacterPanel 
           character={myCharacter} 

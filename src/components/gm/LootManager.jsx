@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Coins, Plus, Trash2, Dices, RefreshCw, ChevronRight, ChevronDown, Search, Package, X, User, Sparkles, Shield, Sword, Gem } from "lucide-react";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
 import { base44 } from "@/api/base44Client";
 import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
+import { toast } from "sonner";
 import ItemTooltip from "@/components/shared/ItemTooltip";
 
 // D&D 5e DMG individual treasure tables. One table per CR bucket.
@@ -89,6 +91,7 @@ function formatCurrencyDelta(currency) {
 }
 
 export default function LootManager({ campaignId, lootData, players, onUpdateLoot }) {
+  const queryClient = useQueryClient();
   const [items, setItems] = useState(lootData?.items || []);
   const [currency, setCurrency] = useState(lootData?.currency || { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 });
   const [settings, setSettings] = useState(lootData?.settings || { split_gold_evenly: true, level_up: false, random_items: false });
@@ -127,7 +130,7 @@ export default function LootManager({ campaignId, lootData, players, onUpdateLoo
   // distribution. Used by Retract to subtract the right amounts / pull
   // the right items back without a schema migration. Shape:
   //   { [playerUserId]: { charId, currency, items: [itemObj, ...] } }
-  const executeDistribution = (manualDistribution = null) => {
+  const executeDistribution = async (manualDistribution = null) => {
     let finalItems = [...items];
     let finalCurrency = { ...currency };
     const audit = {}; // per-player delta for retraction
@@ -221,9 +224,34 @@ export default function LootManager({ campaignId, lootData, players, onUpdateLoo
       }
     }
 
-    Promise.all(promises).catch((err) => {
-      console.error("Loot distribution write failed:", err);
-    });
+    // Await the character writes so the GM sees a real success/failure
+    // toast instead of a silent failure after the promises settle post-
+    // return. If nothing was queued (no toggle matched, nobody to give
+    // it to) we still fall through to handleSave so the UI settles.
+    if (promises.length > 0) {
+      try {
+        await Promise.all(promises);
+      } catch (err) {
+        console.error("Loot distribution write failed:", err);
+        toast.error(err?.message || "Couldn't hand out the loot — try again.");
+        return;
+      }
+    }
+
+    const playerCount = Object.keys(audit).length;
+    if (playerCount === 0 && promises.length === 0) {
+      toast.error("Nothing to distribute — add items or currency first.");
+      return;
+    }
+    if (playerCount > 0) {
+      toast.success(`Loot distributed to ${playerCount} player${playerCount === 1 ? "" : "s"}.`);
+      // Refresh the character queries so the recipients' inventory /
+      // currency panels in the GM + Player views pick up the delta
+      // without a manual reload.
+      queryClient.invalidateQueries({ queryKey: ["campaignCharacters", campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaignPlayers", campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
+    }
 
     // Campaign log — one banner + per-player rollup line. Fire-and-
     // forget, same convention as the combat event helpers.
