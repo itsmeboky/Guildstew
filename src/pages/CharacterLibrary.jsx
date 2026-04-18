@@ -329,7 +329,14 @@ export default function CharacterLibrary() {
         }}>
           <div className="mb-6">
             <div className="flex items-start justify-between mb-2">
-              <h1 className="text-3xl font-bold text-[#FF5722] flex-1">{selectedCharacter.name}</h1>
+              <h1 className="text-3xl font-bold text-[#FF5722] flex-1">
+                {selectedCharacter.name}
+                {selectedCharacter.active_title && (
+                  <span className="text-[#37F2D1] ml-2 font-bold text-2xl align-middle">
+                    {selectedCharacter.active_title}
+                  </span>
+                )}
+              </h1>
               <div className="flex gap-2">
                 <button
                   onClick={(e) => {
