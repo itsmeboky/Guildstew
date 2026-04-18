@@ -28,6 +28,7 @@ import CampaignConsentDialog, { needsCampaignConsent } from "@/components/consen
 import { getConditionModifiers } from "@/components/combat/conditions";
 import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
 import { toast } from "sonner";
+import { supabase } from "@/api/supabaseClient";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -259,6 +260,97 @@ function CampaignPlayerPanelContent() {
   const myCharacter = React.useMemo(() => {
     return characters.find(c => c.created_by === user?.email && c.campaign_id === campaignId);
   }, [characters, user, campaignId]);
+
+  // === Session lifecycle =============================================
+  // Lock the player's character into this session as soon as they
+  // land here while session_active. If the same user is already
+  // locked into another campaign's session we bounce them back to
+  // the Campaigns page with a toast — same user can't straddle two
+  // sessions at once.
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function lock() {
+      if (!myCharacter || !campaign?.session_active || !user?.id) return;
+      try {
+        const mine = await base44.entities.Character.filter({ created_by: user.email });
+        const conflict = (mine || []).find((c) =>
+          c.active_session_id && c.active_session_id !== campaignId
+        );
+        if (conflict) {
+          toast.error("You're already locked into another campaign's session. Leave that one first.");
+          navigate(createPageUrl('Campaigns'));
+          return;
+        }
+        if (cancelled) return;
+        if (myCharacter.active_session_id !== campaignId) {
+          await base44.entities.Character.update(myCharacter.id, {
+            active_session_id: campaignId,
+          });
+        }
+      } catch { /* ignore — lock is best-effort */ }
+    }
+    lock();
+    return () => { cancelled = true; };
+  }, [myCharacter?.id, campaign?.session_active, user?.id, user?.email, campaignId, navigate]);
+
+  // If this player is on the `disconnected_players` list but they're
+  // clearly here (panel mounted), remove them on the next campaign
+  // refresh and toast a reconnect.
+  useEffect(() => {
+    if (!campaign?.session_active || !user?.id) return;
+    const list = Array.isArray(campaign.disconnected_players) ? campaign.disconnected_players : [];
+    if (!list.includes(user.id)) return;
+    base44.entities.Campaign.update(campaignId, {
+      disconnected_players: list.filter((id) => id !== user.id),
+    }).catch(() => {});
+    toast.success('Reconnected to session!');
+  }, [campaign?.session_active, campaign?.disconnected_players, user?.id, campaignId]);
+
+  // Live presence channel. Tracks this player so the GM-side
+  // `leave` event fires on tab close / refresh.
+  useEffect(() => {
+    if (!campaignId || !user?.id || !campaign?.session_active) return;
+    const channel = supabase.channel(`session:${campaignId}`, {
+      config: { presence: { key: user.id } },
+    });
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await channel.track({
+          user_id: user.id,
+          username: user.username || user.email,
+          role: 'player',
+          character_id: myCharacter?.id,
+          character_name: myCharacter?.name,
+          online_at: new Date().toISOString(),
+        });
+      }
+    });
+    return () => { supabase.removeChannel(channel); };
+  }, [campaignId, user?.id, campaign?.session_active, myCharacter?.id, user?.email, user?.username, myCharacter?.name]);
+
+  const handleLeaveSession = async () => {
+    setShowLeaveConfirm(false);
+    try {
+      if (myCharacter?.id) {
+        await base44.entities.Character.update(myCharacter.id, { active_session_id: null });
+      }
+      if (user?.id) {
+        const fresh = await base44.entities.Campaign.filter({ id: campaignId }).then((r) => r?.[0]);
+        const list = Array.isArray(fresh?.disconnected_players) ? fresh.disconnected_players : [];
+        if (!list.includes(user.id)) {
+          await base44.entities.Campaign.update(campaignId, {
+            disconnected_players: [...list, user.id],
+          });
+        }
+      }
+      toast.success('You left the session.');
+      navigate(createPageUrl('CampaignView') + `?id=${campaignId}`);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to leave session.');
+    }
+  };
 
   // Read-only views of the GM panel's combat state. GMPanel writes
   // both of these to combat_data with a 500ms debounce; here we just
@@ -613,6 +705,9 @@ function CampaignPlayerPanelContent() {
   // panel renders.
   const showConsentDialog = needsCampaignConsent(campaign, user);
 
+  const isGM = campaign?.game_master_id === user?.id
+    || (Array.isArray(campaign?.co_dm_ids) && campaign.co_dm_ids.includes(user?.id));
+
   return (
     <div className="h-screen w-screen bg-[#020617] text-white flex flex-col overflow-hidden">
       <CampaignConsentDialog
@@ -621,6 +716,44 @@ function CampaignPlayerPanelContent() {
         userId={user?.id}
         onAccept={() => queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] })}
       />
+
+      {!isGM && campaign?.session_active && (
+        <button
+          type="button"
+          onClick={() => setShowLeaveConfirm(true)}
+          className="fixed top-4 right-4 z-40 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold uppercase tracking-wider rounded-lg px-4 py-2 shadow-lg shadow-amber-900/50"
+        >
+          Leave Session
+        </button>
+      )}
+
+      {showLeaveConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-[#1a1f2e] border border-slate-700 rounded-lg p-6 max-w-sm w-full">
+            <h3 className="text-white font-bold text-lg mb-2">Leave Session?</h3>
+            <p className="text-slate-400 text-sm mb-4">
+              You&apos;ll be removed from the active session. The GM will take control of
+              your character until you rejoin or the session ends.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowLeaveConfirm(false)}
+                className="flex-1 py-2 rounded-lg border border-slate-700 text-slate-300 hover:text-white hover:bg-[#252b3d]"
+              >
+                Stay
+              </button>
+              <button
+                type="button"
+                onClick={handleLeaveSession}
+                className="flex-1 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold"
+              >
+                Leave Session
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #050816; border-radius: 4px; }

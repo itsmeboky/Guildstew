@@ -77,6 +77,7 @@ import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
 import { trackStat, ensureCharacterStats } from "@/utils/characterStats";
 import { checkAchievementsForCombatants } from "@/utils/achievementChecker";
 import { trackEvent } from "@/utils/analytics";
+import { supabase } from "@/api/supabaseClient";
 import {
   getAC as monsterGetAC,
   getSpeed as monsterGetSpeed,
@@ -201,6 +202,61 @@ export default function GMPanel() {
     refetchInterval: (data) => (data?.combat_active || data?.combat_data?.stage === 'initiative') ? 1000 : 2000
   });
 
+  // Start the session when the GM opens the panel. Runs once per
+  // campaign load — if the session is already active we skip the
+  // write so this doesn't thrash on every refetch.
+  React.useEffect(() => {
+    if (!campaign) return;
+    if (campaign.session_active) return;
+    base44.entities.Campaign.update(campaignId, {
+      session_active: true,
+      session_started_at: new Date().toISOString(),
+      active_session_players: campaign.player_ids || [],
+      disconnected_players: [],
+      is_session_active: true,
+    }).catch(() => {});
+  }, [campaignId, campaign?.id, campaign?.session_active]);
+
+  // Live presence — every GM + player that mounts its panel drops
+  // into this channel. When a connection leaves without a clean
+  // handoff (tab close, hard refresh, network drop) the `leave`
+  // event fires and we flip the player into disconnected_players.
+  React.useEffect(() => {
+    if (!campaignId || !currentUser?.id || !campaign?.session_active) return;
+    const channel = supabase.channel(`session:${campaignId}`, {
+      config: { presence: { key: currentUser.id } },
+    });
+
+    channel
+      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+        const leftUserId = leftPresences?.[0]?.user_id;
+        if (!leftUserId || leftUserId === campaign.game_master_id) return;
+        base44.entities.Campaign.filter({ id: campaignId })
+          .then((rows) => rows?.[0])
+          .then((fresh) => {
+            if (!fresh) return;
+            const current = Array.isArray(fresh.disconnected_players) ? fresh.disconnected_players : [];
+            if (current.includes(leftUserId)) return;
+            return base44.entities.Campaign.update(campaignId, {
+              disconnected_players: [...current, leftUserId],
+            });
+          })
+          .catch(() => {});
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({
+            user_id: currentUser.id,
+            username: currentUser.username || currentUser.email,
+            role: 'gm',
+            online_at: new Date().toISOString(),
+          });
+        }
+      });
+
+    return () => { supabase.removeChannel(channel); };
+  }, [campaignId, currentUser?.id, campaign?.session_active, campaign?.game_master_id]);
+
   // Installed Brewery homebrew for this campaign. Each row pairs a
   // homebrew pack with its enabled flag. Enabled packs' `modifications`
   // JSONB gets deep-merged onto campaign.homebrew_rules to form the
@@ -315,6 +371,20 @@ export default function GMPanel() {
     queryFn: () => base44.entities.UserProfile.list(),
     staleTime: 60000
   });
+
+  // Resolve campaign.disconnected_players (user_id strings) into the
+  // { id, name } summaries the sidebar wants. Falls back to the raw
+  // user_id when we don't have a profile cached yet.
+  const disconnectedPlayerSummaries = React.useMemo(() => {
+    const ids = Array.isArray(campaign?.disconnected_players) ? campaign.disconnected_players : [];
+    return ids.map((uid) => {
+      const profile = allUserProfiles.find((p) => p.user_id === uid);
+      return {
+        id: uid,
+        name: profile?.username || profile?.email || 'Player',
+      };
+    });
+  }, [campaign?.disconnected_players, allUserProfiles]);
 
   // Fetch all spells for accurate tooltips + effect classification.
   // Prefer the per-campaign `spells` table (the 89 with full details)
@@ -706,22 +776,43 @@ export default function GMPanel() {
 
   const endSessionMutation = useMutation({
     mutationFn: async () => {
-      // Reset combat state
-      await base44.entities.Campaign.update(campaignId, { 
+      // Reset combat state + the new session-lifecycle columns.
+      // The old flags (is_session_active, ready_player_ids,
+      // combat_data) stay in sync so existing consumers keep
+      // working.
+      await base44.entities.Campaign.update(campaignId, {
         is_session_active: false,
         last_session_ended_at: new Date().toISOString(),
         ready_player_ids: [],
         combat_active: false,
-        combat_data: null
+        combat_data: null,
+        session_active: false,
+        session_started_at: null,
+        active_session_players: [],
+        disconnected_players: [],
       });
-      
+
+      // Release every character locked into this session so players
+      // can join another campaign's session. Fire all clears in
+      // parallel, swallow individual errors so a single bad row
+      // doesn't stop the end-session flow.
+      try {
+        const locked = await base44.entities.Character.filter({ active_session_id: campaignId });
+        await Promise.all(
+          (locked || []).map((c) =>
+            base44.entities.Character.update(c.id, { active_session_id: null }).catch(() => {}),
+          ),
+        );
+      } catch { /* ignore */ }
+
       // Clear combat queue from local storage
       clearCombatQueue(campaignId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
-      navigate(createPageUrl("CampaignGMPanel") + `?id=${campaignId}`);
-    }
+      toast.success('Session ended.');
+      navigate(createPageUrl("CampaignView") + `?id=${campaignId}`);
+    },
   });
 
   const [showEndCombatAlert, setShowEndCombatAlert] = useState(false);
@@ -2695,8 +2786,8 @@ export default function GMPanel() {
   return (
     <div className="h-screen w-screen bg-[#020617] text-white flex flex-row overflow-hidden">
       <GMSessionSidebar
-        campaignId={campaignId}
         onEndSession={() => setShowEndSessionAlert(true)}
+        disconnectedPlayers={disconnectedPlayerSummaries}
       />
       <div className="flex-1 min-w-0 flex flex-col">
       <style>{`
