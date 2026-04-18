@@ -497,6 +497,8 @@ export default function Layout({ children, currentPageName }) {
   if (
     currentPageName === "ResetPassword" ||
     currentPageName === "VerifyEmail" ||
+    currentPageName === "Login" ||
+    currentPageName === "Signup" ||
     (!user && (
       currentPageName === "Terms" ||
       currentPageName === "Privacy" ||
