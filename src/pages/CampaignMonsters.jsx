@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Plus, Trash2, Search, Skull, X, HelpCircle, Eye, EyeOff, Check,
+  ArrowLeft, Plus, Trash2, Search, Skull, HelpCircle, Eye, EyeOff, Check,
 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
@@ -240,80 +240,98 @@ export default function CampaignMonsters() {
     setSelected(monster);
   };
 
+  const onDeleteSelected = () => {
+    if (!selected) return;
+    if (selected._source !== "homebrew") {
+      toast.error("SRD monsters can't be deleted.");
+      return;
+    }
+    if (confirm(`Delete "${selected.name}"?`)) deleteMutation.mutate(selected.id);
+  };
+
   return (
-    <div className="min-h-screen bg-[#0f1219] text-white p-6">
-      <div className="max-w-7xl mx-auto">
-        <header className="flex items-center justify-between gap-3 mb-6 flex-wrap">
-          <div className="flex items-center gap-3">
-            <Button
-              onClick={back}
-              variant="outline"
-              size="sm"
-              className="text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/10 hover:text-[#37F2D1]"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" /> Back to Archives
-            </Button>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Skull className="w-5 h-5 text-[#37F2D1]" /> Monster Compendium
-            </h1>
-          </div>
-          {isGM && (
-            <Button
-              onClick={() => setCreating(true)}
-              className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
-            >
-              <Plus className="w-4 h-4 mr-1" /> New Monster
-            </Button>
-          )}
-        </header>
-
-        <Filters
-          search={search} setSearch={setSearch}
-          crRange={crRange} setCrRange={setCrRange}
-          typeFilter={typeFilter} setTypeFilter={setTypeFilter}
-          sourceFilter={sourceFilter} setSourceFilter={setSourceFilter}
-          sortBy={sortBy} setSortBy={setSortBy}
-          showUnencountered={effectiveShowUnencountered}
-          onToggleShowUnencountered={(v) => setShowUnencountered(v)}
-        />
-
-        {filtered.length === 0 ? (
-          <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-12 text-center">
-            <p className="text-sm text-slate-500 italic">
-              No monsters match these filters.
-              {!effectiveShowUnencountered && !isGM && " Try enabling \"Show unencountered\"."}
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {filtered.map((monster) => (
-              <MonsterCard
-                key={`${monster._source}-${monster.id}`}
-                monster={monster}
-                encountered={isEncountered(monster)}
-                isGM={isGM}
-                onClick={() => selectMonster(monster)}
-                onToggleEncountered={() => toggleEncountered(monster)}
-                busy={updateCampaignMutation.isPending}
-              />
-            ))}
-          </div>
+    <div className="h-screen flex flex-col overflow-hidden bg-[#0f1219] text-white">
+      <header className="flex items-center justify-between gap-3 px-6 py-4 flex-wrap flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={back}
+            variant="outline"
+            size="sm"
+            className="text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/10 hover:text-[#37F2D1]"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Archives
+          </Button>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Skull className="w-5 h-5 text-[#37F2D1]" /> Monster Compendium
+          </h1>
+        </div>
+        {isGM && (
+          <Button
+            onClick={() => setCreating(true)}
+            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
+          >
+            <Plus className="w-4 h-4 mr-1" /> New Monster
+          </Button>
         )}
-      </div>
+      </header>
 
-      <StatBlockDialog
-        monster={selected}
-        isGM={isGM}
-        onClose={() => setSelected(null)}
-        onDelete={() => {
-          if (!selected) return;
-          if (selected._source !== "homebrew") {
-            toast.error("SRD monsters can't be deleted.");
-            return;
-          }
-          if (confirm(`Delete "${selected.name}"?`)) deleteMutation.mutate(selected.id);
-        }}
-      />
+      <div className="flex-1 flex gap-4 overflow-hidden px-6 pb-6 min-h-0">
+        {/* Left: selected monster's stat block. Scrolls independently. */}
+        <div className="w-1/2 overflow-y-auto border border-slate-700/50 rounded-lg bg-[#1a1f2e]">
+          {selected ? (
+            <MonsterStatBlock
+              monster={selected}
+              isGM={isGM}
+              onDelete={onDeleteSelected}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-slate-500 italic text-sm p-6 text-center">
+              Select a monster to view its stat block.
+            </div>
+          )}
+        </div>
+
+        {/* Right: filters (fixed) + grid (scrolls). */}
+        <div className="w-1/2 flex flex-col overflow-hidden min-h-0">
+          <div className="flex-shrink-0 mb-3">
+            <Filters
+              search={search} setSearch={setSearch}
+              crRange={crRange} setCrRange={setCrRange}
+              typeFilter={typeFilter} setTypeFilter={setTypeFilter}
+              sourceFilter={sourceFilter} setSourceFilter={setSourceFilter}
+              sortBy={sortBy} setSortBy={setSortBy}
+              showUnencountered={effectiveShowUnencountered}
+              onToggleShowUnencountered={(v) => setShowUnencountered(v)}
+            />
+          </div>
+
+          <div className="flex-1 overflow-y-auto pr-1">
+            {filtered.length === 0 ? (
+              <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-12 text-center">
+                <p className="text-sm text-slate-500 italic">
+                  No monsters match these filters.
+                  {!effectiveShowUnencountered && !isGM && " Try enabling \"Show unencountered\"."}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {filtered.map((monster) => (
+                  <MonsterCard
+                    key={`${monster._source}-${monster.id}`}
+                    monster={monster}
+                    encountered={isEncountered(monster)}
+                    isGM={isGM}
+                    selected={selected?.id === monster.id && selected?._source === monster._source}
+                    onClick={() => selectMonster(monster)}
+                    onToggleEncountered={() => toggleEncountered(monster)}
+                    busy={updateCampaignMutation.isPending}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       <NewMonsterDialog
         open={creating}
@@ -334,17 +352,17 @@ function Filters({
   showUnencountered, onToggleShowUnencountered,
 }) {
   return (
-    <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-4 mb-6 space-y-3">
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search monsters by name…"
-            className="pl-7 bg-[#0f1219] border-slate-600 text-white placeholder:text-slate-500"
-          />
-        </div>
+    <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-3 space-y-2">
+      <div className="relative">
+        <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search monsters…"
+          className="pl-7 bg-[#0f1219] border-slate-600 text-white placeholder:text-slate-500"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
         <FilterSelect value={crRange} onChange={setCrRange} options={CR_OPTIONS} />
         <FilterSelect
           value={typeFilter}
@@ -371,7 +389,7 @@ function Filters({
 function FilterSelect({ value, onChange, options }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="w-[160px] bg-[#0f1219] border-slate-600 text-white text-xs">
+      <SelectTrigger className="w-full bg-[#0f1219] border-slate-600 text-white text-xs">
         <SelectValue />
       </SelectTrigger>
       <SelectContent className="bg-[#1a1f2e] border-slate-700 text-white">
@@ -383,7 +401,7 @@ function FilterSelect({ value, onChange, options }) {
   );
 }
 
-function MonsterCard({ monster, encountered, isGM, onClick, onToggleEncountered, busy }) {
+function MonsterCard({ monster, encountered, isGM, selected, onClick, onToggleEncountered, busy }) {
   if (!encountered) {
     return (
       <div className="bg-[#1a1f2e] border border-slate-700/30 rounded-lg overflow-hidden opacity-50 cursor-not-allowed">
@@ -413,7 +431,11 @@ function MonsterCard({ monster, encountered, isGM, onClick, onToggleEncountered,
   const isHomebrew = monster._source === "homebrew";
 
   return (
-    <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg overflow-hidden hover:border-[#37F2D1]/30 transition-colors flex flex-col">
+    <div className={`bg-[#1a1f2e] border rounded-lg overflow-hidden hover:border-[#37F2D1]/30 transition-colors flex flex-col ${
+      selected
+        ? "border-[#37F2D1] ring-1 ring-[#37F2D1]/40"
+        : "border-slate-700/50"
+    }`}>
       <button
         type="button"
         onClick={onClick}
@@ -477,9 +499,10 @@ function MonsterCard({ monster, encountered, isGM, onClick, onToggleEncountered,
  * visually distinguish monster sheets from the teal-accented
  * UI chrome. Everything pipes through the shared helpers so
  * SRD (nested under .stats) and homebrew (often flat) render
- * identically.
+ * identically. Renders inline in the split-panel left pane —
+ * the outer container provides the scroll.
  */
-function StatBlockDialog({ monster, isGM, onClose, onDelete }) {
+function MonsterStatBlock({ monster, isGM, onDelete }) {
   if (!monster) return null;
   const img   = getMonsterImageUrl(monster);
   const size  = getSize(monster);
@@ -501,12 +524,7 @@ function StatBlockDialog({ monster, isGM, onClose, onDelete }) {
   const description = getDescription(monster);
 
   return (
-    <Dialog open={!!monster} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="bg-[#1a1f2e] border border-slate-700 text-white max-w-2xl max-h-[85vh] overflow-y-auto p-0">
-        <DialogHeader className="sr-only">
-          <DialogTitle>{monster.name}</DialogTitle>
-        </DialogHeader>
-
+    <div>
         {/* Hero image + title */}
         <div className="relative h-56 overflow-hidden">
           {img ? (
@@ -634,18 +652,14 @@ function StatBlockDialog({ monster, isGM, onClose, onDelete }) {
           </div>
         )}
 
-        <DialogFooter className="p-4 border-t border-red-900/30">
-          {isGM && monster._source === "homebrew" && (
+        {isGM && monster._source === "homebrew" && (
+          <div className="p-4 border-t border-red-900/30 flex justify-end">
             <Button variant="outline" onClick={onDelete} className="text-red-400 border-red-700 hover:bg-red-950/30">
               <Trash2 className="w-3 h-3 mr-1" /> Delete
             </Button>
-          )}
-          <Button onClick={onClose} className="bg-[#37F2D1] text-[#050816] hover:bg-[#2dd9bd]">
-            <X className="w-3 h-3 mr-1" /> Close
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </div>
+        )}
+    </div>
   );
 }
 
