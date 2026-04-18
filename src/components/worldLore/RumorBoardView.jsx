@@ -141,42 +141,47 @@ export default function RumorBoardView({ campaignId, user, isGM, isMole }) {
 function RumorCard({ rumor, isGM, onEdit, onDelete, onApprove }) {
   const status = STATUS_STYLES[rumor.status] || STATUS_STYLES.unverified;
   return (
-    <article className="bg-[#1a1f2e] border border-slate-700 rounded-xl p-4 shadow-inner">
-      <div className="flex items-center gap-2 mb-2">
-        <Badge variant="outline" className={`text-[10px] ${status.cls}`}>{status.label}</Badge>
-        {rumor.mole_accessible && (
-          <Badge variant="outline" className="text-[10px] border-purple-500/40 text-purple-300">
-            🔒 Mole
-          </Badge>
-        )}
-        {isGM && rumor.is_approved === false && (
-          <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-300">
-            ⏳ Pending
-          </Badge>
-        )}
-        {isGM && typeof rumor.is_true === "boolean" && (
-          <Badge
-            variant="outline"
-            className={`text-[10px] ${
-              rumor.is_true
-                ? "border-emerald-500/40 text-emerald-300"
-                : "border-red-500/40 text-red-300"
-            }`}
-          >
-            GM: {rumor.is_true ? "True" : "False"}
-          </Badge>
-        )}
-      </div>
-      <blockquote className="text-sm text-slate-200 italic leading-relaxed">
-        “{rumor.content}”
-      </blockquote>
-      {rumor.source && (
-        <p className="text-[11px] text-slate-400 italic mt-2">— {rumor.source}</p>
-      )}
-      {isGM && (
-        <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-slate-700">
-          {rumor.is_approved === false && (
-            <Button size="sm" variant="outline" onClick={onApprove} className="text-emerald-300 border-emerald-700">
+    <article className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-5 shadow-inner">
+      <div className="flex items-start gap-3">
+        <MessageSquare className="w-5 h-5 text-amber-400 mt-1 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <Badge variant="outline" className={`text-[10px] ${status.cls}`}>{status.label}</Badge>
+            {rumor.mole_accessible && (
+              <Badge variant="outline" className="text-[10px] border-purple-500/40 text-purple-300">
+                🔒 Mole
+              </Badge>
+            )}
+            {isGM && rumor.is_approved === false && (
+              <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-300">
+                ⏳ Pending
+              </Badge>
+            )}
+            {isGM && typeof rumor.is_true === "boolean" && (
+              <Badge
+                variant="outline"
+                className={`text-[10px] ${
+                  rumor.is_true
+                    ? "bg-emerald-900/30 text-emerald-400 border-emerald-800/30"
+                    : "bg-red-900/30 text-red-400 border-red-800/30"
+                }`}
+              >
+                GM: {rumor.is_true ? "TRUE" : "FALSE"}
+              </Badge>
+            )}
+          </div>
+          <blockquote className="text-sm text-slate-200 italic leading-relaxed">
+            “{rumor.content}”
+          </blockquote>
+          {rumor.source && (
+            <p className="text-[11px] text-slate-500 mt-2">
+              Source: <span className="text-slate-400 italic">{rumor.source}</span>
+            </p>
+          )}
+          {isGM && (
+            <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-slate-700">
+              {rumor.is_approved === false && (
+                <Button size="sm" variant="outline" onClick={onApprove} className="text-emerald-300 border-emerald-700">
               <Check className="w-3 h-3 mr-1" /> Approve
             </Button>
           )}
@@ -188,6 +193,8 @@ function RumorCard({ rumor, isGM, onEdit, onDelete, onApprove }) {
           </Button>
         </div>
       )}
+        </div>
+      </div>
     </article>
   );
 }
