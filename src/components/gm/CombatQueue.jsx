@@ -5,8 +5,27 @@ import { spellIcons, spellDetails } from "@/components/dnd5e/spellData";
 import { enrichMonster } from "./monsterEnrichment";
 import { readCombatQueue, writeCombatQueue, FACTION_STYLES, FACTIONS } from "@/utils/combatQueue";
 import { normalizeHp } from "@/components/combat/hpColor";
+import { base44 } from "@/api/base44Client";
 
 const SAVED_LOADOUTS_KEY = 'gm_saved_monster_loadouts';
+
+/**
+ * Append `monsterId` to `campaigns.encountered_monsters` so the
+ * Monster Compendium reveals it. Idempotent: the server load plus a
+ * local dedupe skip the write when the ID is already present.
+ */
+async function markMonsterEncountered(campaignId, monsterId) {
+  const rows = await base44.entities.Campaign.filter({ id: campaignId });
+  const campaign = rows?.[0];
+  if (!campaign) return;
+  const current = Array.isArray(campaign.encountered_monsters)
+    ? campaign.encountered_monsters
+    : [];
+  if (current.includes(monsterId)) return;
+  await base44.entities.Campaign.update(campaignId, {
+    encountered_monsters: [...current, monsterId],
+  });
+}
 
 export default function CombatQueue({
   monsters,
@@ -42,6 +61,14 @@ export default function CombatQueue({
     // Calculate how many we can add
     const canAddCount = Math.min(quantity, 12 - queue.length);
     if (canAddCount <= 0) return;
+
+    // Pokédex-style unlock: any monster (not NPC) added to the combat
+    // queue flips the campaign's encountered_monsters array so players
+    // can see its bestiary entry. Fire-and-forget — a network failure
+    // here should not block the combat flow.
+    if (campaignId && creature?.id && creature?.type !== 'npc') {
+      markMonsterEncountered(campaignId, creature.id).catch(() => {});
+    }
 
     const newCombatants = [];
     for (let i = 0; i < canAddCount; i++) {
