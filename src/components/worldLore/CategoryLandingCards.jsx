@@ -93,7 +93,7 @@ export default function CategoryLandingCards({
   }, [categories, visibleEntries, visibleRumors, allComments]);
 
   return (
-    <div className="space-y-3">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {categories.map((cat) => {
         const stats = statsByCategory.get(cat.key) || { entries: [], comments: 0 };
         const last = stats.entries?.[0] || null;

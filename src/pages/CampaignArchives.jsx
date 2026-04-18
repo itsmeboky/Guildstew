@@ -43,12 +43,19 @@ export default function CampaignArchives() {
     }
   };
 
+  // Hub cards. Maps and World Lore moved off this page (Maps live
+  // under World Lore > Regions & Maps; Homebrew no longer gets its
+  // own tab — SRD + homebrew now mix inside each category). The
+  // *_image_url field name for Monsters / Spells / Abilities is
+  // new and will be null on existing campaigns until the GM uploads
+  // a cover, which is fine — the card falls back to the default
+  // gradient.
   const sections = [
-    { title: "NPCs", field: "npcs_image_url", page: "CampaignNPCs" },
-    { title: "Items", field: "items_image_url", page: "CampaignItems" },
-    { title: "Maps", field: "maps_image_url", page: "CampaignMaps" },
-    { title: "World Lore", field: "world_lore_image_url", page: "CampaignWorldLore" },
-    { title: "Homebrew", field: "homebrew_image_url", page: "CampaignHomebrew" }
+    { title: "NPCs",      field: "npcs_image_url",      page: "CampaignNPCs" },
+    { title: "Items",     field: "items_image_url",     page: "CampaignItems" },
+    { title: "Monsters",  field: "monsters_image_url",  page: "CampaignMonsters" },
+    { title: "Spells",    field: "spells_image_url",    page: "CampaignSpells" },
+    { title: "Abilities", field: "abilities_image_url", page: "CampaignAbilities" },
   ];
 
   if (!campaign) {

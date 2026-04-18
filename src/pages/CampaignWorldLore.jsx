@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import EntryCategoryView from "@/components/worldLore/EntryCategoryView";
 import CategoryLandingCards from "@/components/worldLore/CategoryLandingCards";
+import RecentActivity from "@/components/worldLore/RecentActivity";
 import RumorBoardView from "@/components/worldLore/RumorBoardView";
 import LegendTrackerView from "@/components/worldLore/LegendTrackerView";
 import GuildHallPanel from "@/components/worldLore/GuildHallPanel";
@@ -201,15 +202,25 @@ export default function CampaignWorldLore() {
 
       <main className="p-6 max-w-6xl mx-auto">
         {category === null && (
-          <CategoryLandingCards
-            campaignId={campaignId}
-            categories={CATEGORIES}
-            user={user}
-            isGM={isGM}
-            isMole={isMole}
-            profilesById={profilesById}
-            onSelectCategory={setCategory}
-          />
+          <>
+            <CategoryLandingCards
+              campaignId={campaignId}
+              categories={CATEGORIES}
+              user={user}
+              isGM={isGM}
+              isMole={isMole}
+              profilesById={profilesById}
+              onSelectCategory={setCategory}
+            />
+            <RecentActivity
+              campaignId={campaignId}
+              user={user}
+              isGM={isGM}
+              isMole={isMole}
+              profilesById={profilesById}
+              onOpenCategory={setCategory}
+            />
+          </>
         )}
         {category === "regions"    && entryView("regions")}
         {category === "political"  && entryView("political")}

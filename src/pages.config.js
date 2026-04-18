@@ -46,6 +46,9 @@ import VerifyEmail from './pages/VerifyEmail';
 import Signup from './pages/Signup';
 import AdventuringParty from './pages/AdventuringParty';
 import QuickNotes from './pages/QuickNotes';
+import CampaignMonsters from './pages/CampaignMonsters';
+import CampaignSpells from './pages/CampaignSpells';
+import CampaignAbilities from './pages/CampaignAbilities';
 import { GuardedGMPanel, GuardedPlayerPanel } from './pages/_desktopGuards.jsx';
 import __Layout from './Layout.jsx';
 
@@ -104,6 +107,9 @@ export const PAGES = {
     "Signup": Signup,
     "AdventuringParty": AdventuringParty,
     "QuickNotes": QuickNotes,
+    "CampaignMonsters": CampaignMonsters,
+    "CampaignSpells": CampaignSpells,
+    "CampaignAbilities": CampaignAbilities,
 }
 
 export const pagesConfig = {
