@@ -31,8 +31,8 @@ export default function GMSessionSidebar({ campaignId, onEndSession }) {
   };
 
   return (
-    <aside className="w-56 flex-shrink-0 bg-[#050816] border-r border-[#1e293b] flex flex-col">
-      <div className="px-3 pt-4 pb-3 border-b border-[#1e293b] space-y-2">
+    <aside className="w-64 flex-shrink-0 bg-[#1a1f2e] border-r border-slate-700/50 flex flex-col">
+      <div className="px-3 pt-4 pb-3 border-b border-slate-700/50 space-y-2">
         <button
           type="button"
           onClick={handleBackToCampaign}
@@ -60,7 +60,7 @@ export default function GMSessionSidebar({ campaignId, onEndSession }) {
             <Link
               key={item.name}
               to={item.path}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:text-[#37F2D1] hover:bg-[#0b1220] transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:text-[#37F2D1] hover:bg-[#0f1219] transition-colors"
             >
               <Icon className="w-4 h-4 text-[#37F2D1]" />
               <span className="truncate">{item.name}</span>

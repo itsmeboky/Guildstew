@@ -175,7 +175,9 @@ export default function CampaignAbilities() {
         {/* Right: class selector + feature list */}
         <div className="w-1/2 flex flex-col overflow-hidden min-h-0">
           <div className="flex-shrink-0 mb-3 space-y-2">
-            <div className="flex flex-wrap gap-2">
+            {/* 12 classes laid out as 3 rows of 4 — bigger icons,
+                stacked label below for symmetry. */}
+            <div className="grid grid-cols-4 gap-3">
               {CLASSES.map((cls) => {
                 const icon = getClassIconUrl(cls);
                 const active = selectedClass === cls;
@@ -184,21 +186,21 @@ export default function CampaignAbilities() {
                     key={cls}
                     type="button"
                     onClick={() => { setSelectedClass(cls); setSelected(null); }}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${
+                    className={`flex flex-col items-center gap-2 p-3 rounded-lg border transition-colors ${
                       active
                         ? "border-[#37F2D1] bg-[#37F2D1]/10 text-[#37F2D1]"
-                        : "border-slate-700 text-slate-400 hover:text-white"
+                        : "border-slate-700 text-slate-400 hover:text-white hover:border-slate-500"
                     }`}
                   >
                     {icon && (
                       <img
                         src={icon}
                         alt=""
-                        className="w-6 h-6 rounded object-cover"
+                        className="w-10 h-10 rounded object-cover"
                         onError={(e) => { e.currentTarget.style.display = "none"; }}
                       />
                     )}
-                    <span className="text-sm">{cls}</span>
+                    <span className="text-xs font-semibold">{cls}</span>
                   </button>
                 );
               })}
