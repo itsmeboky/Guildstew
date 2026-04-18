@@ -249,6 +249,52 @@ export default function Layout({ children, currentPageName }) {
   const isPlayMode = currentPageName === "WatchLive" || currentPageName === "Campaigns";
   const isCampaignGMMode = currentPageName === "CampaignGMPanel" || currentPageName === "CampaignPlayers" || currentPageName === "CampaignUpdates" || currentPageName === "CampaignArchives" || currentPageName === "CampaignStatistics" || currentPageName === "CampaignSettings" || currentPageName === "CampaignItems" || currentPageName === "CampaignNPCs" || currentPageName === "CampaignMaps" || currentPageName === "CampaignHomebrew";
   const isCampaignPlayerMode = currentPageName === "CampaignPlayerPanel";
+
+  // === SessionGuard =================================================
+  // If the current user has any character with `active_session_id`
+  // set, that campaign has a live session and the user must stay
+  // inside GMPanel / CampaignPlayerPanel until it ends. Runs at the
+  // top of Layout so it catches every route-wrapped page; the
+  // in-session panels bypass Layout (see below) so they're not
+  // affected. Polls every 10s so an End Session write frees them.
+  const { data: sessionLock } = useQuery({
+    queryKey: ['sessionLock', user?.id],
+    queryFn: async () => {
+      const chars = await base44.entities.Character.filter({ created_by: user?.email });
+      const locked = (chars || []).find((c) => c.active_session_id);
+      return locked
+        ? { campaignId: locked.active_session_id, characterId: locked.id }
+        : null;
+    },
+    enabled: !!user?.id && !!user?.email,
+    refetchInterval: 10000,
+  });
+
+  useEffect(() => {
+    if (!sessionLock?.campaignId) return;
+    // Figure out whether the locked user is a GM or a player in
+    // that campaign so we route them to the right in-session panel.
+    // Keep this light — we don't want every Layout tick refetching
+    // the campaign when we already know the lock.
+    const target = sessionLock.campaignId;
+    let cancelled = false;
+    (async () => {
+      try {
+        const camp = await base44.entities.Campaign.filter({ id: target }).then((r) => r?.[0]);
+        if (cancelled || !camp) return;
+        const isLockedUserGM = camp.game_master_id === user?.id
+          || (Array.isArray(camp.co_dm_ids) && camp.co_dm_ids.includes(user?.id));
+        const targetPage = isLockedUserGM ? 'GMPanel' : 'CampaignPlayerPanel';
+        const alreadyThere =
+          currentPageName === targetPage
+          && new URLSearchParams(window.location.search).get('id') === target;
+        if (!alreadyThere) {
+          navigate(createPageUrl(targetPage) + `?id=${target}`, { replace: true });
+        }
+      } catch { /* ignore — lock enforcement is best-effort */ }
+    })();
+    return () => { cancelled = true; };
+  }, [sessionLock?.campaignId, user?.id, currentPageName, navigate]);
   const isCampaignLobbyMode = currentPageName === "CampaignPanel";
   const isHomePage = currentPageName === "Home";
   const isWorldLorePage = currentPageName === "CampaignWorldLore";

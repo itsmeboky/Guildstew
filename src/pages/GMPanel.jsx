@@ -2786,8 +2786,11 @@ export default function GMPanel() {
   return (
     <div className="h-screen w-screen bg-[#020617] text-white flex flex-row overflow-hidden">
       <GMSessionSidebar
+        campaignId={campaignId}
+        campaign={campaign}
         onEndSession={() => setShowEndSessionAlert(true)}
         disconnectedPlayers={disconnectedPlayerSummaries}
+        allUserProfiles={allUserProfiles}
       />
       <div className="flex-1 min-w-0 flex flex-col">
       <style>{`
