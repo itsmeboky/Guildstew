@@ -7295,11 +7295,15 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
                               neutral = blue). The current turn swaps to
                               the stronger fill variant. */}
                           <span
-                            className={`text-[10px] font-bold max-w-[90px] truncate px-2 py-0.5 rounded-full ${
+                            className={`text-[10px] font-bold max-w-[120px] truncate px-2 py-0.5 rounded-full ${
                               index === 0 ? factionStyle.pillStrong : factionStyle.pill
                             }`}
+                            title={combatant.active_title ? `${combatant.name} ${combatant.active_title}` : combatant.name}
                           >
                             {combatant.name}
+                            {combatant.active_title && (
+                              <span className="ml-1 font-normal opacity-90">{combatant.active_title}</span>
+                            )}
                           </span>
                         </motion.div>
                       </div>
