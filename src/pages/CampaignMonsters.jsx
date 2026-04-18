@@ -23,6 +23,10 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  MONSTER_TYPES,
+  getAC, getHP, getCR, getSize, getMonsterType, getMonsterImageUrl,
+} from "@/utils/monsterHelpers";
 
 /**
  * Pokédex-style Monster Compendium. Renders SRD + campaign-custom
@@ -32,11 +36,6 @@ import {
  * a greyed silhouette with "???" and are not clickable for players.
  * The GM always sees everything fully revealed.
  */
-
-const MONSTER_TYPES = [
-  "Aberration", "Beast", "Celestial", "Construct", "Dragon", "Elemental",
-  "Fey", "Fiend", "Giant", "Humanoid", "Monstrosity", "Ooze", "Plant", "Undead",
-];
 
 const CR_OPTIONS = [
   { value: "all", label: "Any CR" },
@@ -60,17 +59,6 @@ const SORT_OPTIONS = [
   { value: "type", label: "Type" },
 ];
 
-const SUPABASE_MONSTER_PATH =
-  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/monsters";
-
-function getMonsterImageUrl(monster) {
-  if (!monster) return null;
-  if (monster.image_url) return monster.image_url;
-  if (monster.avatar_url) return monster.avatar_url;
-  if (!monster.name) return null;
-  return `${SUPABASE_MONSTER_PATH}/${encodeURIComponent(monster.name)}.png`;
-}
-
 /**
  * Pokédex encounter key. SRD + homebrew IDs come from different
  * tables (dnd5e_monsters vs. monsters), so we prefix to avoid an ID
@@ -82,11 +70,8 @@ function encounterKey(monster) {
 }
 
 function crToNumber(monster) {
-  const raw = monster?.stats?.challenge_rating
-    ?? monster?.stats?.cr
-    ?? monster?.challenge_rating
-    ?? monster?.cr;
-  if (raw === undefined || raw === null || raw === "") return 99;
+  const raw = getCR(monster);
+  if (raw === "?" || raw == null || raw === "") return 99;
   if (typeof raw === "number") return raw;
   const s = String(raw);
   if (s.includes("/")) {
@@ -103,21 +88,6 @@ function crInRange(monster, range) {
   const cr = crToNumber(monster);
   const [lo, hi] = range.split("-").map(Number);
   return cr >= lo && cr <= hi;
-}
-
-function getMonsterType(monster) {
-  const raw = monster?.stats?.type
-    || monster?.stats?.meta
-    || monster?.type
-    || monster?.monster_type
-    || "";
-  // Some SRD rows store meta as "Medium beast, unaligned" — grab the
-  // type word. Otherwise return the explicit value.
-  const str = String(raw).toLowerCase();
-  for (const t of MONSTER_TYPES) {
-    if (str.includes(t.toLowerCase())) return t;
-  }
-  return null;
 }
 
 export default function CampaignMonsters() {
@@ -430,10 +400,14 @@ function MonsterCard({ monster, encountered, isGM, onClick, onToggleEncountered,
   }
 
   const img = getMonsterImageUrl(monster);
-  const type = getMonsterType(monster) || monster?.stats?.type || monster?.stats?.meta || "Unknown Type";
-  const cr = monster?.stats?.challenge_rating ?? monster?.stats?.cr ?? monster?.challenge_rating ?? monster?.cr ?? "?";
-  const ac = monster?.stats?.armor_class ?? monster?.stats?.ac ?? monster?.armor_class ?? "?";
-  const hp = monster?.stats?.hit_points ?? monster?.stats?.hp ?? monster?.hit_points ?? "?";
+  const size = getSize(monster);
+  const type = getMonsterType(monster);
+  const ac = getAC(monster);
+  const hp = getHP(monster);
+  const cr = getCR(monster);
+  // "Huge Dragon" instead of just "Dragon". Size falls back silently
+  // when the stat block doesn't record one (most homebrew shims).
+  const typeLabel = size ? `${size} ${type}` : type;
   const isHomebrew = monster._source === "homebrew";
 
   return (
@@ -448,7 +422,7 @@ function MonsterCard({ monster, encountered, isGM, onClick, onToggleEncountered,
             <img
               src={img}
               alt={monster.name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover object-top"
               onError={(e) => {
                 e.currentTarget.onerror = null;
                 e.currentTarget.src = "/default-monster.png";
@@ -471,7 +445,7 @@ function MonsterCard({ monster, encountered, isGM, onClick, onToggleEncountered,
           <h3 className="text-white font-semibold text-sm truncate">{monster.name}</h3>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 truncate">
-              {type}
+              {typeLabel}
             </span>
             <span className="text-xs text-[#37F2D1] font-semibold">CR {cr}</span>
           </div>
@@ -528,7 +502,7 @@ function StatBlockDialog({ monster, isGM, onClose, onDelete }) {
             <img
               src={img}
               alt={monster.name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover object-top"
               onError={(e) => {
                 e.currentTarget.onerror = null;
                 e.currentTarget.src = "/default-monster.png";
