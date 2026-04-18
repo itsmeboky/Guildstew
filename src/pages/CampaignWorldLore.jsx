@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Map, Swords, Church, ScrollText, Gem, MessageSquare, Castle, Crown, Home } from "lucide-react";
+import { ArrowLeft, Map as MapIcon, Swords, Church, ScrollText, Gem, MessageSquare, Castle, Crown, Home } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -18,7 +18,7 @@ import { stripHtml } from "@/utils/worldLoreVisibility";
 // components stay on disk but are not imported by this orchestrator.
 
 const CATEGORIES = [
-  { key: "regions",    label: "Regions & Maps",      subtitle: "Locations & Geography",    description: "Cities, wilderness, dungeons, and the maps that connect them.",                      icon: Map },
+  { key: "regions",    label: "Regions & Maps",      subtitle: "Locations & Geography",    description: "Cities, wilderness, dungeons, and the maps that connect them.",                      icon: MapIcon },
   { key: "political",  label: "Politics & Factions", subtitle: "Power & Allegiance",       description: "Guilds, courts, secret societies, and who sits on whose throne.",                     icon: Swords },
   { key: "religions",  label: "Deities & Religion",  subtitle: "Gods & Faith",             description: "Pantheons, temples, and the sects that carry their banners.",                         icon: Church },
   { key: "history",    label: "History & Timeline",  subtitle: "Chronicle of the World",   description: "Events in chronological order — from the first flame to last week.",                  icon: ScrollText },
