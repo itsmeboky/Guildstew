@@ -18,11 +18,32 @@ export default function CampaignLog({ campaignId, currentUser, currentUserProfil
   const scrollRef = useRef(null);
   const queryClient = useQueryClient();
 
+  // Poll the campaign log every few seconds so the chat stream feels
+  // live. The query runs from many panels, so any failure here used
+  // to flood the console with a 400 every 3s — wrap the queryFn in a
+  // try/catch and back the retries off so transient schema mismatches
+  // (e.g. `created_date` vs `created_at`) stop spamming.
   const { data: logEntries = [] } = useQuery({
     queryKey: ['campaignLog', campaignId],
-    queryFn: () => base44.entities.CampaignLogEntry.filter({ campaign_id: campaignId }, 'created_date'),
+    queryFn: async () => {
+      try {
+        return await base44.entities.CampaignLogEntry.filter({ campaign_id: campaignId }, 'created_date');
+      } catch (err) {
+        // Fall back to the legacy column name if the new one isn't
+        // there yet, then quietly return [] if both fail so the
+        // polling loop doesn't keep crashing.
+        try {
+          return await base44.entities.CampaignLogEntry.filter({ campaign_id: campaignId }, 'created_at');
+        } catch {
+          console.error('CampaignLog: log fetch failed', err);
+          return [];
+        }
+      }
+    },
     enabled: !!campaignId,
-    refetchInterval: 3000
+    refetchInterval: 5000,
+    retry: 2,
+    retryDelay: 5000,
   });
 
   const isGM = campaign?.game_master_id === currentUser?.id || 

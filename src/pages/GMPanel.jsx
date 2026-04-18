@@ -78,6 +78,15 @@ import { trackStat, ensureCharacterStats } from "@/utils/characterStats";
 import { checkAchievementsForCombatants } from "@/utils/achievementChecker";
 import { trackEvent } from "@/utils/analytics";
 import {
+  getAC as monsterGetAC,
+  getSpeed as monsterGetSpeed,
+  getCR as monsterGetCR,
+  getSenses as monsterGetSenses,
+  getLanguages as monsterGetLanguages,
+  getDamageInfo as monsterGetDamageInfo,
+  getAbilityScores as monsterGetAbilityScores,
+} from "@/utils/monsterHelpers";
+import {
   abilityModifier,
   proficiencyBonus,
   CONCENTRATION,
@@ -6617,11 +6626,16 @@ function MonsterStatBlock({ character, className, onActionClick }) {
     return mod >= 0 ? `+${mod}` : `${mod}`;
   };
 
-  // Handle nested attributes structure or flat keys
+  // Handle nested attributes structure or flat keys. Falls through
+  // to monsterGetAbilityScores for the SRD long-name keys
+  // (`strength`, `dexterity`, …) so reseeded monsters resolve too.
+  const helperScores = monsterGetAbilityScores(character);
   const getAbilityScore = (key) => {
-    if (abilities[key.toLowerCase()]) return abilities[key.toLowerCase()];
-    if (stats[key.toLowerCase()]) return stats[key.toLowerCase()];
-    if (stats.attributes?.[key.toLowerCase()]) return stats.attributes[key.toLowerCase()];
+    const lk = key.toLowerCase();
+    if (abilities[lk] != null) return abilities[lk];
+    if (stats[lk] != null) return stats[lk];
+    if (stats.attributes?.[lk] != null) return stats.attributes[lk];
+    if (helperScores[lk] != null) return helperScores[lk];
     return 10;
   };
 
@@ -6646,12 +6660,18 @@ function MonsterStatBlock({ character, className, onActionClick }) {
   const reactions = stats.reactions || character.reactions || [];
 
   const skills = stats.skills || character.skills || {};
-  const senses = stats.senses || character.senses || '';
-  const languages = stats.languages || character.languages || '';
-  const damageResistances = stats.damage_resistances || character.damage_resistances || null;
-  const damageImmunities = stats.damage_immunities || character.damage_immunities || null;
-  const damageVulnerabilities = stats.damage_vulnerabilities || character.damage_vulnerabilities || null;
-  const conditionImmunities = stats.condition_immunities || character.condition_immunities || null;
+  // Senses / languages on reseeded SRD monsters are objects /
+  // arrays — pipe them through the shared helpers so they end up
+  // as plain strings before they hit JSX. Same story for the
+  // damage info group: arrays of strings or arrays of objects with
+  // `name` keys.
+  const senses    = monsterGetSenses(character)    || stats.senses    || character.senses    || '';
+  const languages = monsterGetLanguages(character) || stats.languages || character.languages || '—';
+  const damageInfo = monsterGetDamageInfo(character);
+  const damageResistances     = damageInfo.resistances     || (Array.isArray(stats.damage_resistances)     ? stats.damage_resistances.join(', ')     : stats.damage_resistances     || character.damage_resistances     || null);
+  const damageImmunities      = damageInfo.immunities      || (Array.isArray(stats.damage_immunities)      ? stats.damage_immunities.join(', ')      : stats.damage_immunities      || character.damage_immunities      || null);
+  const damageVulnerabilities = damageInfo.vulnerabilities || (Array.isArray(stats.damage_vulnerabilities) ? stats.damage_vulnerabilities.join(', ') : stats.damage_vulnerabilities || character.damage_vulnerabilities || null);
+  const conditionImmunities   = damageInfo.conditionImmunities || (Array.isArray(stats.condition_immunities) ? stats.condition_immunities.map((c) => c?.name || c).join(', ') : stats.condition_immunities || character.condition_immunities || null);
   const proficiencyBonus = stats.proficiency_bonus || character.proficiency_bonus || 2;
   
   // Prefer a derived AC when the character has anything in their
@@ -6671,11 +6691,18 @@ function MonsterStatBlock({ character, className, onActionClick }) {
         fightingStyles: collectFightingStyles(character),
       }).total
     : null;
-  const ac = computedACValue || stats.armor_class || character.armor_class || 10;
+  // AC on reseeded SRD monsters ships as `[{ type: "natural", value: 19 }]`,
+  // which crashes React if we hand it to JSX. monsterGetAC normalises
+  // both that array shape and a plain number, so we route the
+  // computed (equipped-armor) value first and fall through to it.
+  const ac = computedACValue ?? monsterGetAC(character);
   const hpObj = stats.hit_points || character.hit_points;
   const hp = typeof hpObj === 'object' ? (hpObj?.max || '?') : (hpObj || '?');
-  const speed = stats.speed || character.speed || '30 ft.';
-  const cr = stats.challenge_rating ?? character.challenge_rating ?? '?';
+  // Speed on reseeded SRD monsters ships as `{ walk: "40 ft.",
+  // fly: "80 ft.", swim: "40 ft." }`; the helper joins it into a
+  // single readable string.
+  const speed = monsterGetSpeed(character) || '30 ft.';
+  const cr = monsterGetCR(character);
 
   // Spells might be in stats.spells (NPC) or character.spells
   const spellsData = stats.spells || character.spells;
@@ -6924,13 +6951,13 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                   {senses && (
                     <div>
                       <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Senses</p>
-                      <p className="text-xs text-white bg-[#0b1220] p-2 rounded">{typeof senses === 'string' ? senses : JSON.stringify(senses)}</p>
+                      <p className="text-xs text-white bg-[#0b1220] p-2 rounded">{senses}</p>
                     </div>
                   )}
                   {languages && (
                     <div>
                       <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Languages</p>
-                      <p className="text-xs text-white bg-[#0b1220] p-2 rounded">{Array.isArray(languages) ? languages.join(', ') : languages}</p>
+                      <p className="text-xs text-white bg-[#0b1220] p-2 rounded">{languages}</p>
                     </div>
                   )}
                 </div>
