@@ -43,13 +43,14 @@ export default function CampaignArchives() {
     }
   };
 
-  // Hub cards. Maps and World Lore moved off this page (Maps live
-  // under World Lore > Regions & Maps; Homebrew no longer gets its
-  // own tab — SRD + homebrew now mix inside each category). The
-  // *_image_url field name for Monsters / Spells / Abilities is
-  // new and will be null on existing campaigns until the GM uploads
-  // a cover, which is fine — the card falls back to the default
-  // gradient.
+  // Hub cards for the five Archives categories: NPCs, Items,
+  // Monsters, Spells, Abilities. Maps moved to World Lore >
+  // Regions & Maps; Homebrew is no longer its own tab — SRD +
+  // homebrew rows now mix inside each category with an SRD /
+  // Homebrew badge. The *_image_url field name for Monsters /
+  // Spells / Abilities is new and will be null on existing
+  // campaigns until the GM uploads a cover, which is fine — the
+  // card falls back to the default gradient.
   const sections = [
     { title: "NPCs",      field: "npcs_image_url",      page: "CampaignNPCs" },
     { title: "Items",     field: "items_image_url",     page: "CampaignItems" },
@@ -138,11 +139,11 @@ export default function CampaignArchives() {
                     <div>
                       <h3 className="text-3xl font-bold text-white mb-1">{section.title}</h3>
                       <p className="text-sm text-gray-300 uppercase tracking-widest">
-                        {section.title === 'NPCs' ? 'The Cast Beyond the Party' : 
-                         section.title === 'Items' ? 'Forged & Found Compendium' : 
-                         section.title === 'Maps' ? 'Boundaries of the Unknown' : 
-                         section.title === 'World Lore' ? 'Chronicles of the Realm' : 
-                         section.title === 'Homebrew' ? 'The Creator\'s Codex' : 
+                        {section.title === 'NPCs' ? 'The Cast Beyond the Party' :
+                         section.title === 'Items' ? 'Forged & Found Compendium' :
+                         section.title === 'Monsters' ? 'Bestiary of Beasts & Foes' :
+                         section.title === 'Spells' ? 'Words of Power & Fire' :
+                         section.title === 'Abilities' ? 'Talents, Feats & Features' :
                          'Campaign Archives'}
                       </p>
                     </div>
@@ -153,9 +154,9 @@ export default function CampaignArchives() {
                   <p className="text-gray-200 text-sm leading-relaxed">
                     {section.field === 'npcs_image_url' && "Manage non-player characters, their stats, abilities, and notes. Build a comprehensive NPC library for your campaign."}
                     {section.field === 'items_image_url' && "Create and organize magical items, weapons, and artifacts. Track rarity, stats, and special properties."}
-                    {section.field === 'maps_image_url' && "Upload and manage battle maps and world maps. Add notes and grid settings for tactical encounters."}
-                    {section.field === 'world_lore_image_url' && "Document your world's history, cultures, and lore. Build an immersive setting for your players."}
-                    {section.field === 'homebrew_image_url' && "Create custom rules, classes, and mechanics. Customize your campaign with unique homebrew content."}
+                    {section.field === 'monsters_image_url' && "Browse the SRD bestiary and your own custom creations. Open a monster to view its full stat block."}
+                    {section.field === 'spells_image_url' && "Reference SRD spells alongside anything brewed in-house. Filter by level and search by name."}
+                    {section.field === 'abilities_image_url' && "Class features, racial traits, and homebrew talents in one searchable compendium."}
                   </p>
                 </div>
               </div>
