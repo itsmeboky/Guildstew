@@ -13,8 +13,8 @@ import LegendTrackerView from "@/components/worldLore/LegendTrackerView";
 import GuildHallPanel from "@/components/worldLore/GuildHallPanel";
 import { stripHtml } from "@/utils/worldLoreVisibility";
 
-// v2 feature — removed from v1 (cosmology, flora, myth, calendar,
-// magic grimoire, technology/recipes, player diary). Their sub-
+// v2 features removed: Cosmology, Flora, Myth, Calendar,
+// Magic/Grimoire, Technology/Recipes, Player Diary. Their sub-
 // components stay on disk but are not imported by this orchestrator.
 
 const CATEGORIES = [
