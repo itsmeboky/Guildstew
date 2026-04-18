@@ -44,6 +44,7 @@ import Admin from './pages/Admin';
 import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
 import Signup from './pages/Signup';
+import AdventuringParty from './pages/AdventuringParty';
 import { GuardedGMPanel, GuardedPlayerPanel } from './pages/_desktopGuards.jsx';
 import __Layout from './Layout.jsx';
 
@@ -100,6 +101,7 @@ export const PAGES = {
     // mystery alias.
     "Login": Landing,
     "Signup": Signup,
+    "AdventuringParty": AdventuringParty,
 }
 
 export const pagesConfig = {
