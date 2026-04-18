@@ -113,7 +113,7 @@ export default function Landing() {
               <img
                 src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/branding/90f5ad509_GuildStewLogoOfficialForRedditWhite1.png"
                 alt="Guildstew"
-                className="h-20 w-auto"
+                className="h-[120px] w-auto"
               />
             </div>
 

@@ -27,6 +27,19 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  const handleGoogle = async () => {
+    setError(null);
+    try {
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/Onboarding` },
+      });
+      if (oauthError) throw oauthError;
+    } catch (err) {
+      setError(err.message || "Google sign-in failed. Try email instead.");
+    }
+  };
+
   const handleSignUp = async () => {
     setError(null);
     if (!agreedToTos) {
@@ -82,7 +95,7 @@ export default function Signup() {
               <img
                 src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/branding/90f5ad509_GuildStewLogoOfficialForRedditWhite1.png"
                 alt="Guildstew"
-                className="h-16 w-auto"
+                className="h-[120px] w-auto"
               />
             </div>
 
@@ -96,6 +109,25 @@ export default function Signup() {
                 {error}
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={handleGoogle}
+              className="w-full py-2.5 border border-slate-300 rounded-lg flex items-center justify-center gap-3 text-slate-700 hover:bg-slate-100 transition text-sm font-semibold"
+            >
+              <img
+                src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                alt=""
+                className="w-4 h-4"
+              />
+              Sign up with Google
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-slate-300" />
+              <span className="text-slate-400 text-[11px] uppercase tracking-widest">or</span>
+              <div className="flex-1 h-px bg-slate-300" />
+            </div>
 
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-700">Email</label>
