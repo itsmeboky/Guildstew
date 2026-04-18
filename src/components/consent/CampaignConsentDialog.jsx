@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -6,27 +7,195 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, AlertTriangle, ArrowLeft } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
+import {
+  findConsentConflicts,
+  isBlockedFromCampaign,
+  ratingIcon,
+  ratingLabel,
+} from "@/utils/contentConflicts";
 
 /**
- * Campaign consent dialog. Shown the first time a player opens a
- * campaign they haven't consented to (or any time the GM bumps
- * consent_version). Renders the default Guildstew sections
- * followed by any GM-customized fields from
- * campaign.consent_config (content warnings, etiquette, safety
- * tools, additional notes).
+ * Two-stage consent gate shown when a player joins a new campaign.
  *
- * Acceptance writes to campaign.player_consents[user.id].
+ * Stage A ("minor-block"): if the viewer is a minor joining a red-
+ * rated campaign, show a hard stop — no option to continue.
+ *
+ * Stage B ("conflicts"): if the campaign's planned content overlaps
+ * with topics the player has flagged as "not allowed" or "handle
+ * with care", show the conflict warning first. The player can back
+ * out or push through to the normal consent dialog.
+ *
+ * Stage C ("consent"): the regular acknowledgement form, now with
+ * extra sections for the campaign's rating, the GM's Player
+ * Expectations, and the GM's stated Responsibilities.
  */
 export default function CampaignConsentDialog({ open, campaign, userId, onAccept }) {
   const navigate = useNavigate();
+
+  // Viewer profile — we need is_minor + content_preferences for the
+  // two gating stages. Keep the query small and cached.
+  const { data: profile } = useQuery({
+    queryKey: ["consentProfile", userId],
+    queryFn: async () => {
+      if (!userId) return null;
+      const rows = await base44.entities.UserProfile
+        .filter({ user_id: userId })
+        .catch(() => []);
+      return rows?.[0] || null;
+    },
+    enabled: open && !!userId,
+  });
+
+  const blocked = useMemo(
+    () => isBlockedFromCampaign({ campaign, profile }),
+    [campaign, profile],
+  );
+
+  const conflicts = useMemo(
+    () => findConsentConflicts(
+      profile?.content_preferences,
+      campaign?.content_settings,
+      campaign?.consent_checklist,
+    ),
+    [profile, campaign],
+  );
+  const hasConflicts = conflicts.notAllowed.length > 0 || conflicts.handleWithCare.length > 0;
+
+  // Stage ladder. `minor-block` and `conflicts` are pre-flights; the
+  // core consent form lives at `consent`. `conflictsAck` just tracks
+  // whether the player clicked "Continue Anyway".
+  const [conflictsAck, setConflictsAck] = useState(false);
+  const stage = blocked
+    ? "minor-block"
+    : (hasConflicts && !conflictsAck ? "conflicts" : "consent");
+
+  const cancel = () => navigate(createPageUrl("Campaigns"));
+
+  if (stage === "minor-block") {
+    return <MinorBlockDialog open={open} onGoBack={cancel} />;
+  }
+
+  if (stage === "conflicts") {
+    return (
+      <ConflictsDialog
+        open={open}
+        conflicts={conflicts}
+        onGoBack={cancel}
+        onContinue={() => setConflictsAck(true)}
+      />
+    );
+  }
+
+  return (
+    <ConsentDialog
+      open={open}
+      campaign={campaign}
+      userId={userId}
+      onAccept={onAccept}
+      onCancel={cancel}
+    />
+  );
+}
+
+// ─── Minor-block stage ─────────────────────────────────────────────
+
+function MinorBlockDialog({ open, onGoBack }) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onGoBack(); }}>
+      <DialogContent className="bg-[#1E2430] border border-red-500/50 text-white max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-300">
+            🚫 Age Restriction
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-slate-300">
+          This campaign is rated for adults only. You cannot join this campaign with
+          your current account.
+        </p>
+        <div className="flex justify-end pt-3">
+          <Button variant="outline" onClick={onGoBack}>
+            <ArrowLeft className="w-4 h-4 mr-2" /> Go Back
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Conflicts stage ───────────────────────────────────────────────
+
+function ConflictsDialog({ open, conflicts, onGoBack, onContinue }) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onGoBack(); }}>
+      <DialogContent className="bg-[#1E2430] border border-amber-500/50 text-white max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-amber-300">
+            <AlertTriangle className="w-5 h-5" /> Content Preference Conflicts
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-slate-300">
+          This campaign contains content that conflicts with your preferences:
+        </p>
+
+        {conflicts.notAllowed.length > 0 && (
+          <section className="bg-red-500/10 border border-red-500/40 rounded-lg p-3 mt-2">
+            <div className="text-xs uppercase tracking-widest text-red-300 font-bold mb-1">
+              🔴 Not Allowed by you, but present in this campaign
+            </div>
+            <ul className="text-sm text-slate-200 list-disc pl-5 space-y-0.5">
+              {conflicts.notAllowed.map((t) => <li key={`r-${t}`}>{t}</li>)}
+            </ul>
+          </section>
+        )}
+        {conflicts.handleWithCare.length > 0 && (
+          <section className="bg-amber-500/10 border border-amber-500/40 rounded-lg p-3 mt-2">
+            <div className="text-xs uppercase tracking-widest text-amber-300 font-bold mb-1">
+              🟡 Handle with Care for you, present in this campaign
+            </div>
+            <ul className="text-sm text-slate-200 list-disc pl-5 space-y-0.5">
+              {conflicts.handleWithCare.map((t) => <li key={`y-${t}`}>{t}</li>)}
+            </ul>
+          </section>
+        )}
+
+        <p className="text-xs text-slate-400 mt-3">
+          You can still join, but the GM should be aware of your boundaries.
+          Would you like to continue?
+        </p>
+
+        <div className="flex justify-end gap-2 pt-3">
+          <Button variant="outline" onClick={onGoBack}>
+            <ArrowLeft className="w-4 h-4 mr-2" /> Go Back
+          </Button>
+          <Button
+            onClick={onContinue}
+            className="bg-amber-500 hover:bg-amber-400 text-black font-bold"
+          >
+            Continue Anyway
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Consent stage ─────────────────────────────────────────────────
+
+function ConsentDialog({ open, campaign, userId, onAccept, onCancel }) {
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const consent = campaign?.consent_config || {};
   const safetyTools = Array.isArray(consent.safety_tools) ? consent.safety_tools : [];
+
+  // Prefer the new campaign_rating column when the migration's been
+  // applied; fall back to the legacy consent_rating field.
+  const rating = campaign?.campaign_rating || campaign?.consent_rating;
+  const hasExpectations = !!campaign?.player_expectations?.trim?.();
+  const hasResponsibilities = !!campaign?.gm_responsibilities?.trim?.();
 
   const accept = async () => {
     if (!agreed || !userId || !campaign?.id) return;
@@ -47,10 +216,8 @@ export default function CampaignConsentDialog({ open, campaign, userId, onAccept
     }
   };
 
-  const cancel = () => navigate(createPageUrl("Campaigns"));
-
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) cancel(); }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
       <DialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -62,6 +229,30 @@ export default function CampaignConsentDialog({ open, campaign, userId, onAccept
         <p className="text-sm text-slate-400">
           Before you begin, please review:
         </p>
+
+        {rating && (
+          <DefaultSection
+            icon={ratingIcon(rating)}
+            title={`Campaign Rating: ${ratingLabel(rating)}`}
+            body="The GM set this rating to describe the overall tone and intensity of the campaign."
+          />
+        )}
+
+        {hasExpectations && (
+          <DefaultSection
+            icon="📋"
+            title="Player Expectations"
+            body={campaign.player_expectations}
+          />
+        )}
+
+        {hasResponsibilities && (
+          <DefaultSection
+            icon="🛡️"
+            title="GM Responsibilities"
+            body={campaign.gm_responsibilities}
+          />
+        )}
 
         <DefaultSection
           icon="📊"
@@ -110,7 +301,7 @@ export default function CampaignConsentDialog({ open, campaign, userId, onAccept
         </label>
 
         <div className="flex justify-end gap-2 pt-3">
-          <Button variant="outline" onClick={cancel}>Cancel</Button>
+          <Button variant="outline" onClick={onCancel}>Cancel</Button>
           <Button
             onClick={accept}
             disabled={!agreed || submitting}
@@ -135,11 +326,6 @@ function DefaultSection({ icon, title, body }) {
   );
 }
 
-/**
- * Helper a page can call to decide whether to show the dialog. GM
- * + co-DMs auto-skip; everyone else needs consent at the campaign's
- * current version.
- */
 export function needsCampaignConsent(campaign, user) {
   if (!campaign || !user) return false;
   const isGM = user.id === campaign.game_master_id;

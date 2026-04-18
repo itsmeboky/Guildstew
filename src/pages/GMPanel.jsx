@@ -18,6 +18,7 @@ import {
 import { spellIcons, spellDetails as hardcodedSpellDetails, getCharacterSpellSlots, fetchAllSpells } from "@/components/dnd5e/spellData";
 import { Heart, Music, Circle, Triangle, Crosshair } from "lucide-react";
 import LootManager from "@/components/gm/LootManager";
+import GMSessionSidebar from "@/components/gm/GMSessionSidebar";
 import MoneyCounter from "@/components/shared/MoneyCounter";
 import ItemTooltip from "@/components/shared/ItemTooltip";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
@@ -2668,7 +2669,12 @@ export default function GMPanel() {
   }
 
   return (
-    <div className="h-screen w-screen bg-[#020617] text-white flex flex-col overflow-hidden">
+    <div className="h-screen w-screen bg-[#020617] text-white flex flex-row overflow-hidden">
+      <GMSessionSidebar
+        campaignId={campaignId}
+        onEndSession={() => setShowEndSessionAlert(true)}
+      />
+      <div className="flex-1 min-w-0 flex flex-col">
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 8px;
@@ -4814,6 +4820,7 @@ export default function GMPanel() {
           })()}
         </AlertDialogContent>
       </AlertDialog>
+      </div>
     </div>
   );
 }
@@ -7288,11 +7295,15 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
                               neutral = blue). The current turn swaps to
                               the stronger fill variant. */}
                           <span
-                            className={`text-[10px] font-bold max-w-[90px] truncate px-2 py-0.5 rounded-full ${
+                            className={`text-[10px] font-bold max-w-[120px] truncate px-2 py-0.5 rounded-full ${
                               index === 0 ? factionStyle.pillStrong : factionStyle.pill
                             }`}
+                            title={combatant.active_title ? `${combatant.name} ${combatant.active_title}` : combatant.name}
                           >
                             {combatant.name}
+                            {combatant.active_title && (
+                              <span className="ml-1 font-normal opacity-90">{combatant.active_title}</span>
+                            )}
                           </span>
                         </motion.div>
                       </div>
