@@ -2824,10 +2824,7 @@ export default function GMPanel() {
         onClose={() => setActiveModal(null)}
         title="Campaign Archives"
       >
-        <CampaignArchivesContent
-          campaignId={campaignId}
-          onClose={() => setActiveModal(null)}
-        />
+        <CampaignArchivesContent campaignId={campaignId} />
       </SessionModal>
 
       <SessionModal

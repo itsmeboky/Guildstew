@@ -21,9 +21,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-export default function CampaignNPCs() {
+export default function CampaignNPCs({ embedded = false, campaignId: campaignIdOverride } = {}) {
   const urlParams = new URLSearchParams(window.location.search);
-  const campaignId = urlParams.get('id');
+  const campaignId = campaignIdOverride ?? urlParams.get('id');
   const navigate = useNavigate();
   const [selectedNPC, setSelectedNPC] = useState(null);
   const [editingNPC, setEditingNPC] = useState(null);
@@ -204,39 +204,50 @@ export default function CampaignNPCs() {
 
   return (
     <>
-      <div 
-        className="fixed inset-0 z-0"
-        style={{
-          backgroundImage: campaign?.npcs_image_url 
-            ? `url(${campaign.npcs_image_url})`
-            : 'linear-gradient(to bottom right, #0f1419, #1a1f2e, #0f1419)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundAttachment: 'fixed'
-        }}
-      >
-        {campaign?.npcs_image_url && (
-          <div className="absolute inset-0 bg-black/50" />
-        )}
-      </div>
-      
-      <div className="h-screen flex flex-col overflow-hidden p-6 relative z-10">
-        <header className="flex items-center justify-between gap-3 mb-4 flex-shrink-0 flex-wrap">
-          <div className="flex items-center gap-3">
-            <Button
-              onClick={() => navigate(createPageUrl("CampaignGMPanel") + `?id=${campaignId}`)}
-              variant="outline"
-              size="sm"
-              className="text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/10 hover:text-[#37F2D1]"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" /> Back to Campaign
+      {!embedded && (
+        <div
+          className="fixed inset-0 z-0"
+          style={{
+            backgroundImage: campaign?.npcs_image_url
+              ? `url(${campaign.npcs_image_url})`
+              : 'linear-gradient(to bottom right, #0f1419, #1a1f2e, #0f1419)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundAttachment: 'fixed'
+          }}
+        >
+          {campaign?.npcs_image_url && (
+            <div className="absolute inset-0 bg-black/50" />
+          )}
+        </div>
+      )}
+
+      <div className={`${embedded ? "h-full" : "h-screen"} flex flex-col overflow-hidden p-6 relative z-10`}>
+        {!embedded && (
+          <header className="flex items-center justify-between gap-3 mb-4 flex-shrink-0 flex-wrap">
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={() => navigate(createPageUrl("CampaignGMPanel") + `?id=${campaignId}`)}
+                variant="outline"
+                size="sm"
+                className="text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/10 hover:text-[#37F2D1]"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" /> Back to Campaign
+              </Button>
+              <h1 className="text-2xl font-bold text-white">NPCs</h1>
+            </div>
+            <Button onClick={handleCreateNew} className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] font-bold">
+              <Plus className="w-4 h-4 mr-2" /> New NPC
             </Button>
-            <h1 className="text-2xl font-bold text-white">NPCs</h1>
+          </header>
+        )}
+        {embedded && (
+          <div className="flex justify-end mb-3 flex-shrink-0">
+            <Button onClick={handleCreateNew} className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] font-bold">
+              <Plus className="w-4 h-4 mr-2" /> New NPC
+            </Button>
           </div>
-          <Button onClick={handleCreateNew} className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] font-bold">
-            <Plus className="w-4 h-4 mr-2" /> New NPC
-          </Button>
-        </header>
+        )}
 
         <div className="flex-1 flex gap-4 overflow-hidden min-h-0">
           {/* Left: NPC detail — owns its own scroll. */}

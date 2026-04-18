@@ -92,11 +92,11 @@ function crInRange(monster, range) {
   return cr >= lo && cr <= hi;
 }
 
-export default function CampaignMonsters() {
+export default function CampaignMonsters({ embedded = false, campaignId: campaignIdOverride } = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const params = new URLSearchParams(window.location.search);
-  const campaignId = params.get("id");
+  const campaignId = campaignIdOverride ?? params.get("id");
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
@@ -250,30 +250,42 @@ export default function CampaignMonsters() {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[#0f1219] text-white">
-      <header className="flex items-center justify-between gap-3 px-6 py-4 flex-wrap flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={back}
-            variant="outline"
-            size="sm"
-            className="text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/10 hover:text-[#37F2D1]"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Archives
-          </Button>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Skull className="w-5 h-5 text-[#37F2D1]" /> Monster Compendium
-          </h1>
-        </div>
-        {isGM && (
+    <div className={`${embedded ? "h-full" : "h-screen"} flex flex-col overflow-hidden bg-[#0f1219] text-white`}>
+      {!embedded && (
+        <header className="flex items-center justify-between gap-3 px-6 py-4 flex-wrap flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={back}
+              variant="outline"
+              size="sm"
+              className="text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/10 hover:text-[#37F2D1]"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" /> Back to Archives
+            </Button>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Skull className="w-5 h-5 text-[#37F2D1]" /> Monster Compendium
+            </h1>
+          </div>
+          {isGM && (
+            <Button
+              onClick={() => setCreating(true)}
+              className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
+            >
+              <Plus className="w-4 h-4 mr-1" /> New Monster
+            </Button>
+          )}
+        </header>
+      )}
+      {embedded && isGM && (
+        <div className="flex justify-end px-6 py-3 flex-shrink-0">
           <Button
             onClick={() => setCreating(true)}
             className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
           >
             <Plus className="w-4 h-4 mr-1" /> New Monster
           </Button>
-        )}
-      </header>
+        </div>
+      )}
 
       <div className="flex-1 flex gap-4 overflow-hidden px-6 pb-6 min-h-0">
         {/* Left: selected monster's stat block. Scrolls independently. */}

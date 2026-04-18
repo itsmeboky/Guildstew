@@ -171,31 +171,17 @@ export default function QuickNotesContent({ campaignId, campaign, user }) {
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden p-4">
-        <Input
-          value={draft.title}
-          onChange={(e) => updateDraft({ title: e.target.value })}
-          placeholder="Note title…"
-          className="mb-3 bg-[#0f1219] border-slate-700 text-white"
-        />
-        <textarea
-          value={draft.content}
-          onChange={(e) => updateDraft({ content: e.target.value })}
-          placeholder="Write your note…"
-          className="flex-1 bg-[#0f1219] border border-slate-700 rounded-lg p-4 text-white text-sm resize-none mb-3 min-h-0"
-        />
-        <div className="flex items-center gap-3 flex-wrap flex-shrink-0">
-          <Button
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending || !draft.content.trim()}
-            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
-          >
-            <Save className="w-4 h-4 mr-1" />
-            {saveMutation.isPending ? "Saving…" : "Save Note"}
-          </Button>
+        <div className="flex gap-3 mb-3 flex-shrink-0 flex-wrap">
+          <Input
+            value={draft.title}
+            onChange={(e) => updateDraft({ title: e.target.value })}
+            placeholder="Note title…"
+            className="flex-1 min-w-[200px] bg-[#0f1219] border-slate-700 text-white"
+          />
 
           <Select value={draft.saveTarget} onValueChange={(v) => updateDraft({ saveTarget: v })}>
-            <SelectTrigger className="w-56 bg-[#0f1219] border-slate-700 text-white text-xs">
-              <SelectValue placeholder="Also save to…" />
+            <SelectTrigger className="w-56 flex-shrink-0 bg-[#0f1219] border-slate-700 text-white text-xs">
+              <SelectValue placeholder="Save to…" />
             </SelectTrigger>
             <SelectContent className="bg-[#1a1f2e] border-slate-700 text-white">
               <SelectItem value="quick_only">Quick Notes only</SelectItem>
@@ -210,16 +196,34 @@ export default function QuickNotesContent({ campaignId, campaign, user }) {
 
           {draft.saveTarget === "party_note" && (
             <Select value={draft.visibility} onValueChange={(v) => updateDraft({ visibility: v })}>
-              <SelectTrigger className="w-44 bg-[#0f1219] border-slate-700 text-white text-xs">
+              <SelectTrigger className="w-36 flex-shrink-0 bg-[#0f1219] border-slate-700 text-white text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-[#1a1f2e] border-slate-700 text-white">
                 <SelectItem value="gm_only">🔒 GM Only</SelectItem>
                 <SelectItem value="public">🌍 Public</SelectItem>
-                <SelectItem value="selected">👁️ Selected Players</SelectItem>
+                <SelectItem value="selected">👁️ Selected</SelectItem>
               </SelectContent>
             </Select>
           )}
+        </div>
+
+        <textarea
+          value={draft.content}
+          onChange={(e) => updateDraft({ content: e.target.value })}
+          placeholder="Write your note…"
+          className="flex-1 bg-[#0f1219] border border-slate-700 rounded-lg p-4 text-white text-sm resize-none mb-3 min-h-0"
+        />
+
+        <div className="flex items-center gap-3 flex-wrap flex-shrink-0">
+          <Button
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending || !draft.content.trim()}
+            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
+          >
+            <Save className="w-4 h-4 mr-1" />
+            {saveMutation.isPending ? "Saving…" : "Save Note"}
+          </Button>
 
           {draft.id && (
             <Button
