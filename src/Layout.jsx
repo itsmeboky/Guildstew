@@ -278,15 +278,21 @@ export default function Layout({ children, currentPageName }) {
   const campaignGMSidebarItems = React.useMemo(() => {
     if (!currentCampaign) return [];
     
+    // Campaign-home sidebar (campaign management / hub pages, NOT
+    // the active session panel). Adventuring Party + Quick Notes
+    // used to live here but moved into the GM session sidebar so the
+    // hub stays focused on management. Friends / PIE Chart /
+    // Achievements never belonged here — those are main-nav items.
     const items = [
-      { name: "Adventuring Party", icon: Users, path: createPageUrl("AdventuringParty") + `?id=${campaignId}` },
-      { name: "Quick Notes", icon: NotebookPen, path: createPageUrl("QuickNotes") + `?id=${campaignId}` },
       { name: "Player Management", icon: Users, path: createPageUrl("CampaignPlayers") + `?id=${campaignId}` },
       { name: "Campaign Updates", icon: FileText, path: createPageUrl("CampaignUpdates") + `?id=${campaignId}` },
       { name: "Campaign Archives", icon: FileText, path: createPageUrl("CampaignArchives") + `?id=${campaignId}` },
       { name: "Campaign Statistics", icon: PieChart, path: createPageUrl("CampaignStatistics") + `?id=${campaignId}` },
-      { name: "Campaign Settings", icon: Settings, path: createPageUrl("CampaignSettings") + `?id=${campaignId}` }
     ];
+    // Only GMs / co-GMs see Campaign Settings.
+    if (isGM) {
+      items.push({ name: "Campaign Settings", icon: Settings, path: createPageUrl("CampaignSettings") + `?id=${campaignId}` });
+    }
 
     return items;
   }, [currentCampaign, campaignId]);

@@ -18,6 +18,7 @@ import {
 import { spellIcons, spellDetails as hardcodedSpellDetails, getCharacterSpellSlots, fetchAllSpells } from "@/components/dnd5e/spellData";
 import { Heart, Music, Circle, Triangle, Crosshair } from "lucide-react";
 import LootManager from "@/components/gm/LootManager";
+import GMSessionSidebar from "@/components/gm/GMSessionSidebar";
 import MoneyCounter from "@/components/shared/MoneyCounter";
 import ItemTooltip from "@/components/shared/ItemTooltip";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
@@ -2668,7 +2669,12 @@ export default function GMPanel() {
   }
 
   return (
-    <div className="h-screen w-screen bg-[#020617] text-white flex flex-col overflow-hidden">
+    <div className="h-screen w-screen bg-[#020617] text-white flex flex-row overflow-hidden">
+      <GMSessionSidebar
+        campaignId={campaignId}
+        onEndSession={() => setShowEndSessionAlert(true)}
+      />
+      <div className="flex-1 min-w-0 flex flex-col">
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 8px;
@@ -4814,6 +4820,7 @@ export default function GMPanel() {
           })()}
         </AlertDialogContent>
       </AlertDialog>
+      </div>
     </div>
   );
 }
