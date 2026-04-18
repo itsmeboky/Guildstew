@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import AuthBackdrop from "@/components/auth/AuthBackdrop";
+import UsernameField from "@/components/profile/UsernameField";
+import { validateUsername, isUsernameAvailable } from "@/utils/username";
 
 /**
  * Profile-completion flow after signup. Split into two steps so the
@@ -25,6 +27,7 @@ export default function Onboarding() {
   const [step, setStep] = useState(1);
   const [avatarFile, setAvatarFile] = useState(null);
   const [username, setUsername] = useState("");
+  const [usernameStatus, setUsernameStatus] = useState("idle");
   const [birthday, setBirthday] = useState("");
   const [country, setCountry] = useState("");
   const [pronouns, setPronouns] = useState("");
@@ -94,25 +97,39 @@ export default function Onboarding() {
     }
   });
 
-  const canAdvance = username.trim() && birthday;
+  const canAdvance = username.trim() && birthday && (usernameStatus === "available" || usernameStatus === "idle");
   const canSubmit = canAdvance && reason;
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (!username.trim()) { toast.error("Please choose a username"); return; }
     if (!birthday) { toast.error("Please enter your birthday"); return; }
+    // Re-check the username policy + uniqueness right before we
+    // advance so a stale "available" indicator can't let a bad value
+    // through.
+    const policy = validateUsername(username.trim(), currentUser?.email);
+    if (!policy.ok) { toast.error(policy.error); return; }
+    const { available, error: checkErr } = await isUsernameAvailable(username.trim(), currentUser?.id);
+    if (checkErr) { toast.error("Could not verify username availability. Try again."); return; }
+    if (!available) { toast.error("That username is taken. Try another one."); return; }
     setStep(2);
   };
 
   const handleSubmit = () => {
     if (!reason) { toast.error("Please tell us what brought you to Guildstew"); return; }
-    completeOnboardingMutation.mutate({ username, birthday, country, pronouns, reason });
+    completeOnboardingMutation.mutate({
+      username: username.trim(),
+      birthday,
+      country,
+      pronouns,
+      reason,
+    });
   };
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center relative p-4 sm:p-6">
       <AuthBackdrop />
 
-      <div className="w-full max-w-[min(92vmin,720px)] aspect-square bg-white/95 rounded-full relative z-10 flex flex-col items-center justify-center p-10 sm:p-14 overflow-hidden">
+      <div className="w-[min(92vmin,720px)] aspect-square bg-white/95 rounded-full shadow-2xl relative z-10 flex flex-col items-center justify-center p-10 sm:p-14 overflow-hidden">
         <div className="text-center mb-3 flex-shrink-0">
           <img
             src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/branding/2a112bc4f_GuildStewLogoOfficialForRedditWhite1.png"
@@ -123,6 +140,17 @@ export default function Onboarding() {
           <p className="text-gray-700 text-[11px]">
             Step {step} of 2 — {step === 1 ? "The basics" : "Tell us about you"}
           </p>
+          {/* Step-dot indicator so the user sees there's more. */}
+          <div className="flex items-center justify-center gap-1.5 mt-2">
+            {[1, 2].map((s) => (
+              <span
+                key={s}
+                className={`h-1.5 rounded-full transition-all ${
+                  s === step ? "w-6 bg-[#FF5722]" : "w-1.5 bg-gray-300"
+                }`}
+              />
+            ))}
+          </div>
         </div>
 
         <div className="w-full max-w-sm space-y-3">
@@ -156,16 +184,21 @@ export default function Onboarding() {
               </div>
 
               <div>
-                <Label htmlFor="username" className="text-xs font-semibold text-gray-800">
+                <Label className="text-xs font-semibold text-gray-800">
                   Username <span className="text-[#FF5722]">*</span>
                 </Label>
-                <Input
-                  id="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Choose a username"
-                  className="bg-orange-100/50 border-orange-200 text-gray-800 placeholder:text-gray-500 h-9 text-sm mt-1"
-                />
+                <div className="mt-1">
+                  <UsernameField
+                    value={username}
+                    onChange={setUsername}
+                    onStatus={setUsernameStatus}
+                    email={currentUser?.email}
+                    excludeUserId={currentUser?.id}
+                    label={null}
+                    placeholder="Choose a username"
+                    inputClassName="bg-orange-100/50 border-orange-200 text-gray-800 placeholder:text-gray-500 h-9 text-sm"
+                  />
+                </div>
               </div>
 
               <div>
