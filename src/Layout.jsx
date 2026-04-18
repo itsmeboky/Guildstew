@@ -536,19 +536,17 @@ export default function Layout({ children, currentPageName }) {
   }, [user?.accessibility_dyslexic_font]);
   const isDarkMode = user?.accessibility_dark_mode !== false;
 
-  // Only bounce someone to Onboarding if they genuinely haven't
-  // finished it. AuthContext primes the `['currentUser']` cache
-  // with just `{ id, email }` until the user_profiles row lands,
-  // so the first few renders have `username` / `onboarding_completed`
-  // as `undefined`. Bail in that window — redirecting mid-load
-  // dumped every authenticated user back to Onboarding on every
-  // refresh when the profile fetch was slow or missing.
+  // Redirect to Onboarding only once AuthContext has actually
+  // tried to load the user_profiles row. `profile_fetched` flips
+  // true on either success or PGRST116 ("no row yet — brand new
+  // user"), so we can distinguish "profile still loading" from
+  // "profile doesn't exist yet". Under the earlier rule,
+  // mid-load renders had both fields undefined and kicked the
+  // user into Onboarding every refresh.
   useEffect(() => {
     if (!user) return;
     if (currentPageName === "Onboarding") return;
-    const profileLoaded =
-      user.username !== undefined || user.onboarding_completed !== undefined;
-    if (!profileLoaded) return;
+    if (user.profile_fetched !== true) return;
     const onboarded = user.onboarding_completed === true || !!user.username;
     if (!onboarded) {
       navigate(createPageUrl("Onboarding"));
