@@ -113,7 +113,7 @@ export default function Signup() {
             <button
               type="button"
               onClick={handleGoogle}
-              className="w-full py-2.5 border border-slate-300 rounded-lg flex items-center justify-center gap-3 text-slate-700 hover:bg-slate-100 transition text-sm font-semibold"
+              className="w-full h-9 border border-slate-300 rounded-lg flex items-center justify-center gap-2 text-slate-700 hover:bg-slate-100 transition text-xs font-semibold"
             >
               <img
                 src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
@@ -135,7 +135,7 @@ export default function Signup() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="bg-[#FFD4C4] border-none h-10 text-gray-800"
+                className="bg-[#FFD4C4] border-none h-9 text-gray-800 text-sm"
               />
             </div>
 
@@ -145,7 +145,7 @@ export default function Signup() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="bg-[#FFD4C4] border-none h-10 text-gray-800"
+                className="bg-[#FFD4C4] border-none h-9 text-gray-800 text-sm"
               />
             </div>
 
@@ -167,7 +167,7 @@ export default function Signup() {
             <Button
               onClick={handleSignUp}
               disabled={loading || !email || !password || !agreedToTos}
-              className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] text-white h-11 rounded-full text-sm font-bold disabled:opacity-50"
+              className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] text-white h-9 rounded-full text-sm font-bold disabled:opacity-50"
             >
               {loading ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
