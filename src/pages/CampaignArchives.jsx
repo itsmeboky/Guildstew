@@ -1,78 +1,65 @@
-import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Upload, ArrowLeft } from "lucide-react";
+import {
+  ArrowLeft, Users, Package, Skull, Sparkles, BookOpen, Globe,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import LazyImage from "@/components/ui/LazyImage";
+
+/**
+ * Campaign Archives hub. A 2-column grid of category cards — five
+ * compendium tabs (NPCs, Items, Monsters, Spells, Class Features)
+ * that live inside Archives, plus a World Lore shortcut that links
+ * straight to the standalone World Lore page. Every card navigates
+ * on click; there is no inline tab content on this page.
+ */
+const SECTIONS = [
+  { key: "npcs",           label: "NPCs",           icon: Users,    page: "CampaignNPCs",      description: "Non-player characters in this campaign." },
+  { key: "items",          label: "Items",          icon: Package,  page: "CampaignItems",     description: "SRD equipment, magic items, and homebrew gear." },
+  { key: "monsters",       label: "Monsters",       icon: Skull,    page: "CampaignMonsters",  description: "Bestiary of encountered and homebrew creatures." },
+  { key: "spells",         label: "Spells",         icon: Sparkles, page: "CampaignSpells",    description: "SRD spells and homebrew magic." },
+  { key: "class_features", label: "Class Features", icon: BookOpen, page: "CampaignAbilities", description: "Class abilities organized by class." },
+  { key: "world_lore",     label: "World Lore",     icon: Globe,    page: "CampaignWorldLore", description: "GM-created world history, factions, and lore." },
+];
 
 export default function CampaignArchives() {
   const urlParams = new URLSearchParams(window.location.search);
-  const campaignId = urlParams.get('id');
+  const campaignId = urlParams.get("id");
   const navigate = useNavigate();
 
-  const queryClient = useQueryClient();
-
   const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me()
+    queryKey: ["currentUser"],
+    queryFn: () => base44.auth.me(),
   });
 
   const { data: campaign } = useQuery({
-    queryKey: ['campaign', campaignId],
-    queryFn: () => base44.entities.Campaign.filter({ id: campaignId }).then(campaigns => campaigns[0]),
-    enabled: !!campaignId
+    queryKey: ["campaign", campaignId],
+    queryFn: () => base44.entities.Campaign.filter({ id: campaignId }).then((c) => c[0]),
+    enabled: !!campaignId,
   });
 
-  const isGM = user?.id === campaign?.game_master_id || campaign?.co_dm_ids?.includes(user?.id);
-
-  const updateImageMutation = useMutation({
-    mutationFn: async ({ field, file }) => {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      return base44.entities.Campaign.update(campaignId, { [field]: file_url });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
-    }
-  });
-
-  const handleImageUpload = (field, file) => {
-    if (file) {
-      updateImageMutation.mutate({ field, file });
-    }
-  };
-
-  // Hub cards for the five Archives categories: NPCs, Items,
-  // Monsters, Spells, Abilities. Maps moved to World Lore >
-  // Regions & Maps; Homebrew is no longer its own tab — SRD +
-  // homebrew rows now mix inside each category with an SRD /
-  // Homebrew badge. The *_image_url field name for Monsters /
-  // Spells / Abilities is new and will be null on existing
-  // campaigns until the GM uploads a cover, which is fine — the
-  // card falls back to the default gradient.
-  const sections = [
-    { title: "NPCs",      field: "npcs_image_url",      page: "CampaignNPCs" },
-    { title: "Items",     field: "items_image_url",     page: "CampaignItems" },
-    { title: "Monsters",  field: "monsters_image_url",  page: "CampaignMonsters" },
-    { title: "Spells",    field: "spells_image_url",    page: "CampaignSpells" },
-    { title: "Class Features", field: "abilities_image_url", page: "CampaignAbilities" },
-  ];
+  const isGM = user?.id === campaign?.game_master_id
+    || campaign?.co_dm_ids?.includes(user?.id);
 
   if (!campaign) {
-    return <div className="p-8 text-white">Loading...</div>;
+    return <div className="p-8 text-white">Loading…</div>;
   }
 
+  const navigateToSection = (section) => {
+    navigate(createPageUrl(section.page) + `?id=${campaignId}`);
+  };
+
   return (
-    <div 
+    <div
       className="min-h-screen p-8 relative"
       style={{
-        backgroundImage: campaign.archives_background_url 
+        backgroundImage: campaign.archives_background_url
           ? `url(${campaign.archives_background_url})`
-          : 'linear-gradient(to bottom right, #0f1419, #1a1f2e, #0f1419)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundAttachment: 'fixed'
+          : "linear-gradient(to bottom right, #0f1419, #1a1f2e, #0f1419)",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundAttachment: "fixed",
       }}
     >
       {campaign.archives_background_url && (
@@ -88,82 +75,26 @@ export default function CampaignArchives() {
           Back to {isGM ? "GM Panel" : "Campaign Lobby"}
         </Button>
 
-        <div className="space-y-6">
-          {sections.map((section, index) => (
-            <div
-              key={section.field}
-              onClick={() => navigate(createPageUrl(section.page) + `?id=${campaignId}`)}
-              className="relative h-64 rounded-xl overflow-hidden cursor-pointer group"
-              style={{ 
-                marginLeft: index % 2 === 0 ? '0' : '3rem',
-                marginRight: index % 2 === 0 ? '3rem' : '0'
-              }}
-            >
-              {/* Background Image */}
-              <div className="absolute inset-0">
-                {campaign[section.field] ? (
-                  <LazyImage 
-                    src={campaign[section.field]} 
-                    alt={section.title}
-                    className="w-full h-full group-hover:scale-105 transition-transform duration-500"
-                    style={{
-                      transform: campaign[section.field.replace('_url', '_position')] && campaign[section.field.replace('_url', '_zoom')]
-                        ? `translate(${campaign[section.field.replace('_url', '_position')].x}px, ${campaign[section.field.replace('_url', '_position')].y}px) scale(${campaign[section.field.replace('_url', '_zoom')]})`
-                        : 'none',
-                      transformOrigin: 'center center'
-                    }}
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-[#2A3441] to-[#1E2430] flex items-center justify-center">
-                    <Upload className="w-16 h-16 text-gray-600" />
-                  </div>
-                )}
-              </div>
+        <h1 className="text-3xl font-bold text-white mb-6">Campaign Archives</h1>
 
-              {/* Corner Decorations */}
-              <div className="absolute top-0 left-0 w-16 h-16 border-l-2 border-t-2 border-cyan-400/50" />
-              <div className="absolute top-0 right-0 w-16 h-16 border-r-2 border-t-2 border-cyan-400/50" />
-              <div className="absolute bottom-0 left-0 w-16 h-16 border-l-2 border-b-2 border-cyan-400/50" />
-              <div className="absolute bottom-0 right-0 w-16 h-16 border-r-2 border-b-2 border-cyan-400/50" />
-
-              {/* Gradient Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
-
-              {/* Content */}
-              <div className="absolute inset-0 p-8 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center">
-                      <span className="text-2xl font-bold text-white">{String(index + 1).padStart(2, '0')}</span>
-                    </div>
-                    <div>
-                      <h3 className="text-3xl font-bold text-white mb-1">{section.title}</h3>
-                      <p className="text-sm text-gray-300 uppercase tracking-widest">
-                        {section.title === 'NPCs' ? 'The Cast Beyond the Party' :
-                         section.title === 'Items' ? 'Forged & Found Compendium' :
-                         section.title === 'Monsters' ? 'Bestiary of Beasts & Foes' :
-                         section.title === 'Spells' ? 'Words of Power & Fire' :
-                         section.title === 'Class Features' ? 'Talents, Feats & Features' :
-                         'Campaign Archives'}
-                      </p>
-                    </div>
-                  </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {SECTIONS.map((section) => {
+            const Icon = section.icon;
+            return (
+              <button
+                key={section.key}
+                type="button"
+                onClick={() => navigateToSection(section)}
+                className="text-left bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-6 hover:border-[#37F2D1]/30 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Icon className="w-6 h-6 text-[#37F2D1]" />
+                  <h2 className="text-lg font-bold text-white">{section.label}</h2>
                 </div>
-
-                <div className="bg-black/30 backdrop-blur-sm border border-white/10 rounded-lg p-4 max-w-2xl">
-                  <p className="text-gray-200 text-sm leading-relaxed">
-                    {section.field === 'npcs_image_url' && "Manage non-player characters, their stats, abilities, and notes. Build a comprehensive NPC library for your campaign."}
-                    {section.field === 'items_image_url' && "Create and organize magical items, weapons, and artifacts. Track rarity, stats, and special properties."}
-                    {section.field === 'monsters_image_url' && "Browse the SRD bestiary and your own custom creations. Open a monster to view its full stat block."}
-                    {section.field === 'spells_image_url' && "Reference SRD spells alongside anything brewed in-house. Filter by level and search by name."}
-                    {section.field === 'abilities_image_url' && "Class features, racial traits, and homebrew talents in one searchable compendium."}
-                  </p>
-                </div>
-              </div>
-
-
-            </div>
-          ))}
+                <p className="text-sm text-slate-400">{section.description}</p>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

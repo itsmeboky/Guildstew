@@ -28,15 +28,6 @@ import {
  * React.
  */
 
-const RARITY_COLORS = {
-  common: "bg-gray-500",
-  uncommon: "bg-green-600",
-  rare: "bg-blue-600",
-  very_rare: "bg-purple-600",
-  legendary: "bg-orange-500",
-  artifact: "bg-red-600",
-};
-
 const RARITY_OPTIONS = [
   { value: "all",       label: "Any rarity" },
   { value: "common",    label: "Common" },
@@ -61,52 +52,81 @@ function safeString(val) {
   return "";
 }
 
-function renderItemProperties(properties) {
-  if (!properties) return "";
-  if (typeof properties === "string") return properties;
-  if (Array.isArray(properties)) return properties.map(safeString).filter(Boolean).join(", ");
-  if (typeof properties !== "object") return "";
-  const parts = [];
-  if (properties.damage?.dice || properties.damage?.type) {
-    parts.push([properties.damage.dice, properties.damage.type].filter(Boolean).join(" "));
+/**
+ * Item-field accessors. The reseeded dnd5e_items rows store the raw
+ * D&D 5e API record under `properties._raw` and hoist the handful of
+ * fields we display to top-level keys inside `properties`. Homebrew
+ * items usually have the same shape flattened onto the row itself.
+ * Each accessor walks both paths so the UI stays consistent across
+ * sources.
+ */
+function getItemCost(item) {
+  const top = item?.cost;
+  if (typeof top === "string" && top.trim()) return top;
+  if (top && typeof top === "object" && (top.quantity != null || top.unit)) {
+    return `${top.quantity ?? ""} ${top.unit ?? ""}`.trim() || "—";
   }
-  if (properties.armor_class?.base != null) {
-    parts.push(`AC ${properties.armor_class.base}${properties.armor_class.dex_bonus ? " + DEX" : ""}`);
+  const raw = item?.properties?._raw;
+  if (raw?.cost?.quantity != null) {
+    return `${raw.cost.quantity} ${raw.cost.unit ?? ""}`.trim() || "—";
   }
-  if (properties.range?.normal || properties.range?.long) {
-    parts.push(`Range ${properties.range.normal ?? "—"}/${properties.range.long ?? "—"}`);
-  }
-  if (properties.weight) parts.push(`${properties.weight} lb.`);
-  if (Array.isArray(properties.properties) && properties.properties.length) {
-    parts.push(properties.properties.map(safeString).filter(Boolean).join(", "));
-  }
-  if (properties.stealth_disadvantage) parts.push("Stealth Disadvantage");
-  if (properties.str_minimum) parts.push(`STR ${properties.str_minimum}`);
-  return parts.filter(Boolean).join(" · ");
+  return "—";
 }
 
-function renderDamage(damage) {
-  if (!damage) return "";
-  if (typeof damage === "string") return damage;
-  if (typeof damage !== "object") return "";
-  const dice = damage.damage_dice || damage.dice || "";
-  const type = damage.damage_type?.name || damage.type || "";
-  return [dice, type].filter(Boolean).join(" ");
+function getItemWeight(item) {
+  const w1 = item?.properties?.weight;
+  if (w1 != null && w1 !== "") return `${w1} lb.`;
+  const w2 = item?.properties?._raw?.weight;
+  if (w2 != null && w2 !== "") return `${w2} lb.`;
+  const w3 = item?.weight;
+  if (w3 != null && w3 !== "") return `${w3} lb.`;
+  return "—";
 }
 
-function renderArmorClass(ac) {
-  if (!ac) return "";
-  if (typeof ac === "string" || typeof ac === "number") return String(ac);
-  if (Array.isArray(ac)) {
-    const first = ac[0];
-    if (typeof first === "number") return String(first);
-    if (first?.value != null) return String(first.value);
+function getItemPropertiesList(item) {
+  const p1 = item?.properties?.properties;
+  if (Array.isArray(p1) && p1.length) {
+    return p1.map((p) => (typeof p === "string" ? p : safeString(p?.name || p))).filter(Boolean);
   }
-  if (typeof ac === "object") {
-    if (ac.base != null) return `${ac.base}${ac.dex_bonus ? " + DEX" : ""}`;
-    if (ac.value != null) return String(ac.value);
+  const p2 = item?.properties?._raw?.properties;
+  if (Array.isArray(p2) && p2.length) {
+    return p2.map((p) => safeString(p?.name || p)).filter(Boolean);
   }
-  return "";
+  return [];
+}
+
+function getItemDamage(item) {
+  const d = item?.properties?.damage;
+  if (d && (d.dice || d.type)) return [d.dice, d.type].filter(Boolean).join(" ");
+  const r = item?.properties?._raw?.damage;
+  if (r && (r.damage_dice || r.damage_type)) {
+    return [r.damage_dice, r.damage_type?.name].filter(Boolean).join(" ");
+  }
+  const flat = item?.damage;
+  if (typeof flat === "string" && flat.trim()) return flat;
+  return null;
+}
+
+function getItemArmorClass(item) {
+  const format = (ac) =>
+    `AC ${ac.base}${ac.dex_bonus ? " + DEX" : ""}${ac.max_bonus ? ` (max ${ac.max_bonus})` : ""}`;
+  const a1 = item?.properties?.armor_class;
+  if (a1?.base != null) return format(a1);
+  const a2 = item?.properties?._raw?.armor_class;
+  if (a2?.base != null) return format(a2);
+  const a3 = item?.armor_class ?? item?.armorClass;
+  if (a3 && typeof a3 === "object" && a3.base != null) return format(a3);
+  if (typeof a3 === "number") return `AC ${a3}`;
+  return null;
+}
+
+function getItemRange(item) {
+  const fmt = (r) => `${r.normal ?? "—"}/${r.long ?? "—"} ft.`;
+  const r1 = item?.properties?.range;
+  if (r1 && (r1.normal || r1.long)) return fmt(r1);
+  const r2 = item?.properties?._raw?.range;
+  if (r2 && (r2.normal || r2.long)) return fmt(r2);
+  return null;
 }
 
 function collectTypes(items) {
@@ -359,55 +379,75 @@ function FilterSelect({ value, onChange, options }) {
   );
 }
 
+const RARITY_PILL = {
+  common:    "bg-slate-700 text-slate-300",
+  uncommon:  "bg-emerald-900/30 text-emerald-400",
+  rare:      "bg-blue-900/30 text-blue-400",
+  very_rare: "bg-purple-900/30 text-purple-400",
+  legendary: "bg-orange-900/30 text-orange-400",
+  artifact:  "bg-red-900/30 text-red-400",
+};
+
+function rarityPillClass(rarity) {
+  const key = safeString(rarity).toLowerCase().replace(/\s+/g, "_");
+  return RARITY_PILL[key] || "bg-slate-700 text-slate-300";
+}
+
+function rarityLabel(rarity) {
+  const str = safeString(rarity);
+  if (!str) return "Common";
+  return str
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
 function ItemRow({ item, selected, onClick }) {
   const img = item.icon_url || item.image_url;
   const isHomebrew = item._source === "homebrew";
-  const rarityKey = safeString(item.rarity).toLowerCase();
+  const cost = getItemCost(item);
+  const weight = getItemWeight(item);
+  const type = safeString(item.type);
+  const category = safeString(item.category);
+  const subLine = [
+    [type, category].filter(Boolean).join(" · "),
+    cost,
+    weight,
+  ].filter((s) => s && s !== "—").join(" · ");
+
   return (
     <li>
       <button
         type="button"
         onClick={onClick}
-        className={`w-full text-left px-4 py-3 flex items-start gap-3 transition-colors ${
-          selected ? "bg-[#252b3d]" : "hover:bg-[#252b3d]"
+        className={`w-full text-left px-3 py-3 flex items-center gap-3 transition-colors border-b border-slate-700/30 last:border-b-0 ${
+          selected ? "bg-[#252b3d] border-l-2 border-l-[#37F2D1]" : "hover:bg-[#252b3d]"
         }`}
       >
         {img ? (
           <img
             src={img}
             alt=""
-            className="w-10 h-10 rounded object-cover flex-shrink-0 bg-[#0f1219]"
+            className="w-8 h-8 rounded object-cover flex-shrink-0 bg-[#0f1219]"
             onError={(e) => { e.currentTarget.style.display = "none"; }}
           />
         ) : (
-          <div className="w-10 h-10 rounded bg-[#0f1219] flex items-center justify-center flex-shrink-0">
+          <div className="w-8 h-8 rounded bg-[#0f1219] flex items-center justify-center flex-shrink-0">
             <Package className="w-4 h-4 text-slate-600" />
           </div>
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-white font-semibold truncate">{safeString(item.name)}</span>
-            {rarityKey && (
-              <Badge className={`text-[10px] ${RARITY_COLORS[rarityKey] || "bg-slate-600"} text-white border-0`}>
-                {rarityKey.replace("_", " ")}
-              </Badge>
+            <span className="text-sm text-white font-semibold truncate">{safeString(item.name)}</span>
+            {isHomebrew && (
+              <Badge variant="outline" className="text-[10px] border-purple-500/50 text-purple-300">Homebrew</Badge>
             )}
-            <span className="ml-auto">
-              {isHomebrew ? (
-                <Badge variant="outline" className="text-[10px] border-purple-500/50 text-purple-300">Homebrew</Badge>
-              ) : (
-                <Badge variant="outline" className="text-[10px] border-blue-500/50 text-blue-300">SRD</Badge>
-              )}
-            </span>
           </div>
-          <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
-            {safeString(item.type) && <span>{safeString(item.type)}</span>}
-            {safeString(item.cost) && <span>· {safeString(item.cost)}</span>}
-          </div>
-          {item.description && (
-            <p className="text-xs text-slate-400 mt-1 line-clamp-2">{safeString(item.description)}</p>
-          )}
+          <div className="text-xs text-slate-400 truncate">{subLine || "—"}</div>
         </div>
+        <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${rarityPillClass(item.rarity)}`}>
+          {rarityLabel(item.rarity)}
+        </span>
       </button>
     </li>
   );
@@ -416,39 +456,32 @@ function ItemRow({ item, selected, onClick }) {
 function ItemDetail({ item, isGM, onEdit, onDelete }) {
   const img = item.icon_url || item.image_url;
   const isHomebrew = item._source === "homebrew";
-  const rarityKey = safeString(item.rarity).toLowerCase();
-  const damageText =
-    renderDamage(item.damage) || renderDamage(item.properties?.damage);
-  const acText =
-    renderArmorClass(item.armorClass)
-    || renderArmorClass(item.armor_class)
-    || renderArmorClass(item.properties?.armor_class);
-  const propsText = renderItemProperties(item.properties);
+  const category = safeString(item.category);
+  const typeLine = [safeString(item.type), category].filter(Boolean).join(" — ");
+  const damageText   = getItemDamage(item);
+  const rangeText    = getItemRange(item);
+  const acText       = getItemArmorClass(item);
+  const propsList    = getItemPropertiesList(item);
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-4 space-y-3">
       <div className="flex items-start gap-4">
         {img ? (
           <img
             src={img}
             alt=""
-            className="w-24 h-24 rounded-lg object-cover flex-shrink-0 bg-[#0f1219] border border-slate-700/60"
+            className="w-20 h-20 rounded-lg object-cover flex-shrink-0 bg-[#0f1219] border border-slate-700/60"
             onError={(e) => { e.currentTarget.style.display = "none"; }}
           />
         ) : (
-          <div className="w-24 h-24 rounded-lg bg-[#0f1219] border border-slate-700/60 flex items-center justify-center flex-shrink-0">
-            <Package className="w-8 h-8 text-slate-600" />
+          <div className="w-20 h-20 rounded-lg bg-[#0f1219] border border-slate-700/60 flex items-center justify-center flex-shrink-0">
+            <Package className="w-7 h-7 text-slate-600" />
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <h2 className="text-2xl font-bold text-white">{safeString(item.name)}</h2>
-          <p className="text-sm text-slate-400">{safeString(item.type)}</p>
+          <h2 className="text-xl font-bold text-white">{safeString(item.name)}</h2>
+          <p className="text-sm text-slate-400 italic">{typeLine || "—"}</p>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            {rarityKey && (
-              <Badge className={`text-[10px] ${RARITY_COLORS[rarityKey] || "bg-slate-600"} text-white border-0`}>
-                {rarityKey.replace("_", " ")}
-              </Badge>
-            )}
             {isHomebrew ? (
               <Badge variant="outline" className="text-[10px] border-purple-500/50 text-purple-300">Homebrew</Badge>
             ) : (
@@ -458,33 +491,59 @@ function ItemDetail({ item, isGM, onEdit, onDelete }) {
         </div>
       </div>
 
+      {/* Always show cost / weight / rarity so the detail is consistent
+          regardless of whether the row represents a weapon, armor,
+          gear, or a trinket. */}
+      <div className="grid grid-cols-3 gap-3 py-3 border-y border-slate-700/30">
+        <div>
+          <div className="text-xs text-slate-500">Cost</div>
+          <div className="text-sm text-white font-semibold">{getItemCost(item)}</div>
+        </div>
+        <div>
+          <div className="text-xs text-slate-500">Weight</div>
+          <div className="text-sm text-white font-semibold">{getItemWeight(item)}</div>
+        </div>
+        <div>
+          <div className="text-xs text-slate-500">Rarity</div>
+          <div className="text-sm text-white font-semibold">{rarityLabel(item.rarity)}</div>
+        </div>
+      </div>
+
       {damageText && (
-        <div className="bg-[#0f1219] rounded-lg p-3">
-          <span className="font-semibold text-[#FF5722]">Damage: </span>
-          <span className="text-white">{damageText}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs px-2 py-0.5 rounded bg-red-900/30 text-red-300">
+            Damage: {damageText}
+          </span>
+          {rangeText && (
+            <span className="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-300">
+              Range: {rangeText}
+            </span>
+          )}
         </div>
       )}
+
       {acText && (
-        <div className="bg-[#0f1219] rounded-lg p-3">
-          <span className="font-semibold text-[#37F2D1]">Armor Class: </span>
-          <span className="text-white">{acText}</span>
-        </div>
+        <span className="inline-block text-xs px-2 py-0.5 rounded bg-blue-900/30 text-blue-300">
+          {acText}
+        </span>
       )}
-      {propsText && (
-        <div className="bg-[#0f1219] rounded-lg p-3">
-          <span className="font-semibold text-white">Properties: </span>
-          <span className="text-slate-300">{propsText}</span>
-        </div>
-      )}
-      {safeString(item.cost) && (
-        <div className="bg-[#0f1219] rounded-lg p-3">
-          <span className="font-semibold text-white">Cost: </span>
-          <span className="text-slate-300">{safeString(item.cost)}</span>
+
+      {propsList.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {propsList.map((prop, i) => (
+            <span key={`${prop}-${i}`} className="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-300">
+              {prop}
+            </span>
+          ))}
         </div>
       )}
 
       {item.description && (
-        <p className="text-white leading-relaxed whitespace-pre-wrap">{safeString(item.description)}</p>
+        <div className="pt-3 border-t border-slate-700/30">
+          <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
+            {safeString(item.description)}
+          </p>
+        </div>
       )}
 
       {isGM && isHomebrew && (
