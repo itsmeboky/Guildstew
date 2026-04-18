@@ -492,8 +492,18 @@ export default function Layout({ children, currentPageName }) {
     return <>{children}</>;
   }
 
-  // For campaign pages with their own sidebar, don't render Layout wrapper
-  if (currentPageName === "CampaignItems" || currentPageName === "CampaignNPCs" || currentPageName === "CampaignMaps" || currentPageName === "CampaignHomebrew") {
+  // Campaign pages that own their full-screen shell (either because
+  // they render their own sidebar or because they use a
+  // h-screen overflow-hidden split layout that must not be wrapped).
+  if (
+    currentPageName === "CampaignItems"
+    || currentPageName === "CampaignNPCs"
+    || currentPageName === "CampaignMaps"
+    || currentPageName === "CampaignHomebrew"
+    || currentPageName === "CampaignMonsters"
+    || currentPageName === "CampaignSpells"
+    || currentPageName === "CampaignAbilities"
+  ) {
     return <>{children}</>;
   }
   // Admin dashboard has its own full-screen sidebar shell.

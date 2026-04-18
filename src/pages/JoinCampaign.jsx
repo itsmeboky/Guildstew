@@ -71,10 +71,13 @@ export default function JoinCampaign() {
       if (!campaign[0]) throw new Error('Campaign not found');
       
       const currentPlayers = campaign[0].player_ids || [];
-      if (currentPlayers.length >= 12) {
-        throw new Error('Campaign is full');
+      // Campaigns cap at 8 players + 1 GM. Respect the GM-chosen
+      // `max_players` but never go above the hard ceiling.
+      const cap = Math.min(campaign[0].max_players || 8, 8);
+      if (currentPlayers.length >= cap) {
+        throw new Error(`This campaign is full (max ${cap} players).`);
       }
-      
+
       await base44.entities.Campaign.update(invite.campaign_id, {
         player_ids: [...currentPlayers, user.id]
       });
@@ -224,7 +227,7 @@ export default function JoinCampaign() {
                         </p>
                         <div className="flex items-center gap-4 text-sm text-gray-400 mb-4">
                           <span>System: {campaign.system}</span>
-                          <span>Players: {campaign.player_ids?.length || 0}/12</span>
+                          <span>Players: {campaign.player_ids?.length || 0}/{Math.min(campaign.max_players || 8, 8)}</span>
                         </div>
                         
                         <div className="flex gap-3">
@@ -345,7 +348,7 @@ export default function JoinCampaign() {
                       )}
                       <div className="flex items-center gap-4 text-sm text-gray-400">
                         <span>System: {campaign.system}</span>
-                        <span>Players: {campaign.player_ids?.length || 0}/12</span>
+                        <span>Players: {campaign.player_ids?.length || 0}/{Math.min(campaign.max_players || 8, 8)}</span>
                         <span className="text-[#37F2D1]">Recruiting</span>
                       </div>
                     </div>

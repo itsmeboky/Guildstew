@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Trash2, Search, Swords, Skull, X } from "lucide-react";
+import {
+  ArrowLeft, Plus, Trash2, Search, Skull, HelpCircle, Eye, EyeOff, Check,
+} from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -11,21 +13,85 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  MONSTER_TYPES,
+  getAC, getHP, getCR, getXP, getHitDice, getSize, getAlignment,
+  getMonsterType, getMonsterImageUrl, getSpeed,
+  getAbilityScores, getAbilityMod,
+  getProficiencies, getSenses, getLanguages, getDamageInfo,
+  getSpecialAbilities, getActions, getLegendaryActions, getReactions,
+  getDescription, formatUsage,
+} from "@/utils/monsterHelpers";
 
 /**
- * Campaign Monsters tab. Shows both SRD monsters (is_system = true)
- * and custom GM-created monsters (is_system = false) in one list.
- * SRD entries get an "SRD" badge and can't be deleted; custom ones
- * get a "Custom" badge plus an edit/delete affordance.
- *
- * Clicking a row opens a stat-block dialog — traits, ability
- * scores, actions, legendary actions, reactions — pulled off the
- * monster's `stats` JSONB and rendered in the same shape as the GM
- * Panel's info panel.
+ * Pokédex-style Monster Compendium. Renders SRD + campaign-custom
+ * monsters as a responsive card grid. Encountered monsters (any
+ * monster added to the combat queue, or manually flagged by the GM)
+ * reveal their full card + stat block; unencountered monsters show
+ * a greyed silhouette with "???" and are not clickable for players.
+ * The GM always sees everything fully revealed.
  */
+
+const CR_OPTIONS = [
+  { value: "all", label: "Any CR" },
+  { value: "0-1", label: "CR 0–1" },
+  { value: "2-4", label: "CR 2–4" },
+  { value: "5-10", label: "CR 5–10" },
+  { value: "11-16", label: "CR 11–16" },
+  { value: "17-20", label: "CR 17–20" },
+  { value: "21-30", label: "CR 21–30" },
+];
+
+const SOURCE_OPTIONS = [
+  { value: "all", label: "All sources" },
+  { value: "srd", label: "SRD" },
+  { value: "homebrew", label: "Homebrew" },
+];
+
+const SORT_OPTIONS = [
+  { value: "name", label: "Name (A→Z)" },
+  { value: "cr", label: "CR (low→high)" },
+  { value: "type", label: "Type" },
+];
+
+/**
+ * Pokédex encounter key. SRD + homebrew IDs come from different
+ * tables (dnd5e_monsters vs. monsters), so we prefix to avoid an ID
+ * collision between `srd:<uuid>` and `hb:<uuid>`.
+ */
+function encounterKey(monster) {
+  if (!monster?.id) return null;
+  return monster._source === "srd" ? `srd:${monster.id}` : `hb:${monster.id}`;
+}
+
+function crToNumber(monster) {
+  const raw = getCR(monster);
+  if (raw === "?" || raw == null || raw === "") return 99;
+  if (typeof raw === "number") return raw;
+  const s = String(raw);
+  if (s.includes("/")) {
+    const [a, b] = s.split("/");
+    const na = Number(a); const nb = Number(b);
+    if (Number.isFinite(na) && Number.isFinite(nb) && nb !== 0) return na / nb;
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 99;
+}
+
+function crInRange(monster, range) {
+  if (range === "all") return true;
+  const cr = crToNumber(monster);
+  const [lo, hi] = range.split("-").map(Number);
+  return cr >= lo && cr <= hi;
+}
+
 export default function CampaignMonsters() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -34,8 +100,13 @@ export default function CampaignMonsters() {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
+  const [crRange, setCrRange] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("name");
   const [selected, setSelected] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [showUnencountered, setShowUnencountered] = useState(null);
 
   const { data: campaign } = useQuery({
     queryKey: ["campaign", campaignId],
@@ -47,50 +118,96 @@ export default function CampaignMonsters() {
     || (Array.isArray(campaign.co_dm_ids) && campaign.co_dm_ids.includes(user?.id))
   );
 
-  // SRD monsters live campaign-less; custom ones filter by campaign.
-  // Merge both into a single view and tag each row with `is_system`.
+  const encounteredIds = useMemo(() => {
+    const list = Array.isArray(campaign?.encountered_monsters) ? campaign.encountered_monsters : [];
+    return new Set(list);
+  }, [campaign?.encountered_monsters]);
+
+  // `showUnencountered` defaults to true for GMs (they always see
+  // everything anyway, but keeping the toggle on keeps the grid
+  // consistent) and false for players. Respect an explicit toggle.
+  const effectiveShowUnencountered = showUnencountered ?? isGM;
+
+  // SRD monsters live in the shared dnd5e_monsters reference table
+  // (one row per monster, no campaign_id). Homebrew monsters live in
+  // the per-campaign `monsters` table. Tag each row with _source so
+  // the UI knows which lane to render and so the Pokédex uses a
+  // prefixed ID (srd:<uuid> / hb:<uuid>) to disambiguate.
   const { data: srd = [] } = useQuery({
-    queryKey: ["monsters", "srd"],
-    queryFn: () => base44.entities.Monster.filter({ is_system: true }).catch(() => []),
+    queryKey: ["srdMonsters"],
+    queryFn: () => base44.entities.Dnd5eMonster
+      .list("name")
+      .then((rows) => (rows || []).map((m) => ({ ...m, _source: "srd" })))
+      .catch(() => []),
     initialData: [],
   });
   const { data: custom = [] } = useQuery({
-    queryKey: ["monsters", "campaign", campaignId],
-    queryFn: () => base44.entities.Monster.filter({ campaign_id: campaignId }).catch(() => []),
+    queryKey: ["homebrewMonsters", campaignId],
+    queryFn: () => base44.entities.Monster
+      .filter({ campaign_id: campaignId })
+      .then((rows) => (rows || []).map((m) => ({ ...m, _source: "homebrew" })))
+      .catch(() => []),
     enabled: !!campaignId,
     initialData: [],
   });
 
-  const merged = useMemo(() => {
-    const byId = new Map();
-    for (const row of [...srd, ...custom]) {
-      if (!row?.id || byId.has(row.id)) continue;
-      byId.set(row.id, row);
-    }
-    return Array.from(byId.values());
-  }, [srd, custom]);
+  const merged = useMemo(() => [...srd, ...custom], [srd, custom]);
+
+  const isEncountered = (monster) => {
+    if (isGM) return true;
+    // Homebrew = GM's own creation — no Pokédex lock on your own.
+    if (monster._source === "homebrew") return true;
+    return encounteredIds.has(encounterKey(monster));
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let rows = merged;
     if (q) {
-      rows = rows.filter((m) =>
-        (m.name || "").toLowerCase().includes(q)
-        || (m.type || m.monster_type || "").toLowerCase().includes(q),
-      );
+      rows = rows.filter((m) => (m.name || "").toLowerCase().includes(q));
     }
-    return rows.slice().sort((a, b) => {
-      const ac = crToNumber(a);
-      const bc = crToNumber(b);
-      if (ac !== bc) return ac - bc;
-      return (a.name || "").localeCompare(b.name || "");
-    });
-  }, [merged, search]);
+    if (sourceFilter !== "all") {
+      rows = rows.filter((m) => m._source === sourceFilter);
+    }
+    if (typeFilter !== "all") {
+      rows = rows.filter((m) => getMonsterType(m) === typeFilter);
+    }
+    rows = rows.filter((m) => crInRange(m, crRange));
+    if (!effectiveShowUnencountered) {
+      rows = rows.filter(isEncountered);
+    }
+    const sorted = rows.slice();
+    if (sortBy === "cr") {
+      sorted.sort((a, b) => crToNumber(a) - crToNumber(b) || (a.name || "").localeCompare(b.name || ""));
+    } else if (sortBy === "type") {
+      sorted.sort((a, b) => (getMonsterType(a) || "zzz").localeCompare(getMonsterType(b) || "zzz") || (a.name || "").localeCompare(b.name || ""));
+    } else {
+      sorted.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    }
+    return sorted;
+  }, [merged, search, crRange, typeFilter, sourceFilter, sortBy, effectiveShowUnencountered, isGM, encounteredIds]);
+
+  const updateCampaignMutation = useMutation({
+    mutationFn: (updates) => base44.entities.Campaign.update(campaignId, updates),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] }),
+  });
+
+  const toggleEncountered = (monster) => {
+    // Only SRD entries participate in the Pokédex — homebrew is
+    // always visible to the party, so toggling does nothing useful
+    // there (still flip in case a GM wants to "hide" one).
+    const key = encounterKey(monster);
+    const current = Array.isArray(campaign?.encountered_monsters) ? campaign.encountered_monsters : [];
+    const next = current.includes(key)
+      ? current.filter((id) => id !== key)
+      : [...current, key];
+    updateCampaignMutation.mutate({ encountered_monsters: next });
+  };
 
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Monster.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["monsters", "campaign", campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["homebrewMonsters", campaignId] });
       setSelected(null);
       toast.success("Monster removed.");
     },
@@ -106,7 +223,7 @@ export default function CampaignMonsters() {
       created_at: new Date().toISOString(),
     }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["monsters", "campaign", campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["homebrewMonsters", campaignId] });
       setCreating(false);
       toast.success("Custom monster saved.");
     },
@@ -118,106 +235,103 @@ export default function CampaignMonsters() {
     navigate(createPageUrl("CampaignArchives") + `?id=${campaignId}`);
   };
 
-  return (
-    <div className="min-h-screen bg-[#0f1219] text-white p-6">
-      <div className="max-w-5xl mx-auto">
-        <header className="flex items-center justify-between gap-3 mb-6 flex-wrap">
-          <div className="flex items-center gap-3">
-            <Button
-              onClick={back}
-              variant="outline"
-              size="sm"
-              className="text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/10 hover:text-[#37F2D1]"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" /> Back to Archives
-            </Button>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Skull className="w-5 h-5 text-[#37F2D1]" /> Monsters
-            </h1>
-          </div>
-          {isGM && (
-            <Button
-              onClick={() => setCreating(true)}
-              className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
-            >
-              <Plus className="w-4 h-4 mr-1" /> New Monster
-            </Button>
-          )}
-        </header>
+  const selectMonster = (monster) => {
+    if (!isEncountered(monster)) return;
+    setSelected(monster);
+  };
 
-        <div className="relative mb-4">
-          <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search monsters by name or type…"
-            className="pl-7 bg-[#1a1f2e] border-slate-600 text-white placeholder:text-slate-500"
-          />
+  const onDeleteSelected = () => {
+    if (!selected) return;
+    if (selected._source !== "homebrew") {
+      toast.error("SRD monsters can't be deleted.");
+      return;
+    }
+    if (confirm(`Delete "${selected.name}"?`)) deleteMutation.mutate(selected.id);
+  };
+
+  return (
+    <div className="h-screen flex flex-col overflow-hidden bg-[#0f1219] text-white">
+      <header className="flex items-center justify-between gap-3 px-6 py-4 flex-wrap flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={back}
+            variant="outline"
+            size="sm"
+            className="text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/10 hover:text-[#37F2D1]"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Archives
+          </Button>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Skull className="w-5 h-5 text-[#37F2D1]" /> Monster Compendium
+          </h1>
+        </div>
+        {isGM && (
+          <Button
+            onClick={() => setCreating(true)}
+            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
+          >
+            <Plus className="w-4 h-4 mr-1" /> New Monster
+          </Button>
+        )}
+      </header>
+
+      <div className="flex-1 flex gap-4 overflow-hidden px-6 pb-6 min-h-0">
+        {/* Left: selected monster's stat block. Scrolls independently. */}
+        <div className="w-1/2 overflow-y-auto border border-slate-700/50 rounded-lg bg-[#1a1f2e]">
+          {selected ? (
+            <MonsterStatBlock
+              monster={selected}
+              isGM={isGM}
+              onDelete={onDeleteSelected}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-slate-500 italic text-sm p-6 text-center">
+              Select a monster to view its stat block.
+            </div>
+          )}
         </div>
 
-        <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg overflow-hidden">
-          {filtered.length === 0 ? (
-            <p className="text-sm text-slate-500 italic text-center py-12">
-              No monsters match. {isGM && "Create one with the button above."}
-            </p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="text-[10px] uppercase tracking-widest text-slate-500 bg-[#0f1219]">
-                <tr>
-                  <th className="text-left px-4 py-2">Name</th>
-                  <th className="text-left px-4 py-2 hidden md:table-cell">Type</th>
-                  <th className="text-right px-4 py-2">CR</th>
-                  <th className="text-right px-4 py-2 hidden md:table-cell">HP</th>
-                  <th className="text-right px-4 py-2 hidden md:table-cell">AC</th>
-                  <th className="text-right px-4 py-2">Source</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700/30">
-                {filtered.map((m) => {
-                  const hp = typeof m.hit_points === "object" ? (m.hit_points?.max ?? "—") : (m.hit_points ?? m.stats?.hit_points ?? "—");
-                  const ac = m.armor_class ?? m.stats?.armor_class ?? "—";
-                  return (
-                    <tr
-                      key={m.id}
-                      onClick={() => setSelected(m)}
-                      className="hover:bg-[#252b3d] cursor-pointer transition-colors"
-                    >
-                      <td className="px-4 py-2.5 text-white font-semibold">{m.name}</td>
-                      <td className="px-4 py-2.5 text-slate-400 hidden md:table-cell">
-                        {m.type || m.monster_type || "—"}
-                      </td>
-                      <td className="px-4 py-2.5 text-right text-amber-300 font-bold">{m.challenge_rating ?? m.cr ?? "?"}</td>
-                      <td className="px-4 py-2.5 text-right text-slate-300 hidden md:table-cell">{hp}</td>
-                      <td className="px-4 py-2.5 text-right text-slate-300 hidden md:table-cell">{ac}</td>
-                      <td className="px-4 py-2.5 text-right">
-                        {m.is_system ? (
-                          <Badge variant="outline" className="text-[10px] border-slate-500 text-slate-300">SRD</Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-[10px] border-[#37F2D1]/60 text-[#37F2D1]">Custom</Badge>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+        {/* Right: filters (fixed) + grid (scrolls). */}
+        <div className="w-1/2 flex flex-col overflow-hidden min-h-0">
+          <div className="flex-shrink-0 mb-3">
+            <Filters
+              search={search} setSearch={setSearch}
+              crRange={crRange} setCrRange={setCrRange}
+              typeFilter={typeFilter} setTypeFilter={setTypeFilter}
+              sourceFilter={sourceFilter} setSourceFilter={setSourceFilter}
+              sortBy={sortBy} setSortBy={setSortBy}
+              showUnencountered={effectiveShowUnencountered}
+              onToggleShowUnencountered={(v) => setShowUnencountered(v)}
+            />
+          </div>
+
+          <div className="flex-1 overflow-y-auto pr-1">
+            {filtered.length === 0 ? (
+              <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-12 text-center">
+                <p className="text-sm text-slate-500 italic">
+                  No monsters match these filters.
+                  {!effectiveShowUnencountered && !isGM && " Try enabling \"Show unencountered\"."}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {filtered.map((monster) => (
+                  <MonsterCard
+                    key={`${monster._source}-${monster.id}`}
+                    monster={monster}
+                    encountered={isEncountered(monster)}
+                    isGM={isGM}
+                    selected={selected?.id === monster.id && selected?._source === monster._source}
+                    onClick={() => selectMonster(monster)}
+                    onToggleEncountered={() => toggleEncountered(monster)}
+                    busy={updateCampaignMutation.isPending}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
-      <StatBlockDialog
-        monster={selected}
-        isGM={isGM}
-        onClose={() => setSelected(null)}
-        onDelete={() => {
-          if (!selected) return;
-          if (selected.is_system) {
-            toast.error("SRD monsters can't be deleted.");
-            return;
-          }
-          if (confirm(`Delete "${selected.name}"?`)) deleteMutation.mutate(selected.id);
-        }}
-      />
 
       <NewMonsterDialog
         open={creating}
@@ -229,135 +343,432 @@ export default function CampaignMonsters() {
   );
 }
 
-function crToNumber(m) {
-  const raw = m?.challenge_rating ?? m?.cr;
-  if (raw === undefined || raw === null || raw === "") return 99;
-  if (typeof raw === "number") return raw;
-  const s = String(raw);
-  if (s.includes("/")) {
-    const [a, b] = s.split("/");
-    const na = Number(a), nb = Number(b);
-    if (Number.isFinite(na) && Number.isFinite(nb) && nb !== 0) return na / nb;
-  }
-  const n = Number(s);
-  return Number.isFinite(n) ? n : 99;
+function Filters({
+  search, setSearch,
+  crRange, setCrRange,
+  typeFilter, setTypeFilter,
+  sourceFilter, setSourceFilter,
+  sortBy, setSortBy,
+  showUnencountered, onToggleShowUnencountered,
+}) {
+  return (
+    <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-3 space-y-2">
+      <div className="relative">
+        <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search monsters…"
+          className="pl-7 bg-[#0f1219] border-slate-600 text-white placeholder:text-slate-500"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <FilterSelect value={crRange} onChange={setCrRange} options={CR_OPTIONS} />
+        <FilterSelect
+          value={typeFilter}
+          onChange={setTypeFilter}
+          options={[{ value: "all", label: "Any type" }, ...MONSTER_TYPES.map((t) => ({ value: t, label: t }))]}
+        />
+        <FilterSelect value={sourceFilter} onChange={setSourceFilter} options={SOURCE_OPTIONS} />
+        <FilterSelect value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} />
+      </div>
+      <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+        <Checkbox
+          checked={showUnencountered}
+          onCheckedChange={(v) => onToggleShowUnencountered(!!v)}
+        />
+        <span className="flex items-center gap-1">
+          {showUnencountered ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+          Show unencountered entries
+        </span>
+      </label>
+    </div>
+  );
 }
 
-function StatBlockDialog({ monster, isGM, onClose, onDelete }) {
-  if (!monster) return null;
-  const stats = monster.stats || {};
-  const abilities = stats.abilities || stats.attributes || {};
-  const traits = stats.traits || stats.special_abilities || stats.special_traits || monster.special_abilities || [];
-  const actions = stats.actions || monster.actions || [];
-  const reactions = stats.reactions || monster.reactions || [];
-  const legendary = stats.legendary_actions || monster.legendary_actions || [];
+function FilterSelect({ value, onChange, options }) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="w-full bg-[#0f1219] border-slate-600 text-white text-xs">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="bg-[#1a1f2e] border-slate-700 text-white">
+        {options.map((opt) => (
+          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
-  const getAbility = (key) => {
-    const k = key.toLowerCase();
-    const K = key.toUpperCase();
-    return abilities[k] ?? abilities[K] ?? stats[k] ?? 10;
-  };
-  const mod = (score) => {
-    const m = Math.floor((Number(score) - 10) / 2);
-    return m >= 0 ? `+${m}` : `${m}`;
-  };
+function MonsterCard({ monster, encountered, isGM, selected, onClick, onToggleEncountered, busy }) {
+  if (!encountered) {
+    return (
+      <div className="bg-[#1a1f2e] border border-slate-700/30 rounded-lg overflow-hidden opacity-50 cursor-not-allowed">
+        <div className="h-40 bg-[#0f1219] flex items-center justify-center">
+          <HelpCircle className="w-16 h-16 text-slate-700" />
+        </div>
+        <div className="p-3">
+          <h3 className="text-slate-600 font-semibold text-sm">???</h3>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-600">Unknown</span>
+          </div>
+          <div className="text-xs text-slate-700 mt-2">Not yet encountered</div>
+        </div>
+      </div>
+    );
+  }
+
+  const img = getMonsterImageUrl(monster);
+  const size = getSize(monster);
+  const type = getMonsterType(monster);
+  const ac = getAC(monster);
+  const hp = getHP(monster);
+  const cr = getCR(monster);
+  // "Huge Dragon" instead of just "Dragon". Size falls back silently
+  // when the stat block doesn't record one (most homebrew shims).
+  const typeLabel = size ? `${size} ${type}` : type;
+  const isHomebrew = monster._source === "homebrew";
 
   return (
-    <Dialog open={!!monster} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="bg-[#1a1f2e] border border-slate-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 flex-wrap">
-            <span>{monster.name}</span>
-            {monster.is_system ? (
-              <Badge variant="outline" className="text-[10px] border-slate-500 text-slate-300">SRD</Badge>
-            ) : (
-              <Badge variant="outline" className="text-[10px] border-[#37F2D1]/60 text-[#37F2D1]">Custom</Badge>
-            )}
-          </DialogTitle>
-        </DialogHeader>
+    <div className={`bg-[#1a1f2e] border rounded-lg overflow-hidden hover:border-[#37F2D1]/30 transition-colors flex flex-col ${
+      selected
+        ? "border-[#37F2D1] ring-1 ring-[#37F2D1]/40"
+        : "border-slate-700/50"
+    }`}>
+      <button
+        type="button"
+        onClick={onClick}
+        className="text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#37F2D1]/40"
+      >
+        <div className="h-40 overflow-hidden bg-[#0f1219] relative">
+          {img ? (
+            <img
+              src={img}
+              alt={monster.name}
+              className="w-full h-full object-cover object-top"
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = "/default-monster.png";
+              }}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-slate-700 text-5xl font-bold">
+              {monster?.name?.charAt(0) || "?"}
+            </div>
+          )}
+          <span className={`absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded ${
+            isHomebrew
+              ? "bg-purple-900/30 text-purple-400 border border-purple-700/40"
+              : "bg-blue-900/30 text-blue-400 border border-blue-700/40"
+          }`}>
+            {isHomebrew ? "Homebrew" : "SRD"}
+          </span>
+        </div>
+        <div className="p-3">
+          <h3 className="text-white font-semibold text-sm truncate">{monster.name}</h3>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 truncate">
+              {typeLabel}
+            </span>
+            <span className="text-xs text-[#37F2D1] font-semibold">CR {cr}</span>
+          </div>
+          <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
+            <span>AC {ac}</span>
+            <span>HP {hp}</span>
+          </div>
+        </div>
+      </button>
+      {isGM && !isHomebrew && (
+        <button
+          type="button"
+          onClick={onToggleEncountered}
+          disabled={busy}
+          className="text-xs px-3 py-2 border-t border-slate-700/50 text-slate-400 hover:text-[#37F2D1] hover:bg-[#0f1219] transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
+        >
+          <Check className="w-3 h-3" />
+          {encountered ? "Lock entry" : "Mark as encountered"}
+        </button>
+      )}
+    </div>
+  );
+}
 
-        <div className="grid grid-cols-4 gap-2 text-[11px] bg-[#0f1219] p-3 rounded-lg border border-slate-700">
-          <Stat label="AC"    value={monster.armor_class ?? stats.armor_class ?? "—"} />
-          <Stat label="HP"    value={typeof monster.hit_points === "object" ? monster.hit_points?.max : (monster.hit_points ?? stats.hit_points ?? "—")} />
-          <Stat label="Speed" value={monster.speed ?? stats.speed ?? "—"} />
-          <Stat label="CR"    value={monster.challenge_rating ?? monster.cr ?? "?"} accent />
+/**
+ * Full D&D 5e-style monster stat block. Uses red accents to
+ * visually distinguish monster sheets from the teal-accented
+ * UI chrome. Everything pipes through the shared helpers so
+ * SRD (nested under .stats) and homebrew (often flat) render
+ * identically. Renders inline in the split-panel left pane —
+ * the outer container provides the scroll.
+ */
+function MonsterStatBlock({ monster, isGM, onDelete }) {
+  if (!monster) return null;
+  const img   = getMonsterImageUrl(monster);
+  const size  = getSize(monster);
+  const type  = getMonsterType(monster);
+  const align = getAlignment(monster);
+  const metaLine = [size, type ? type.toLowerCase() : "", align]
+    .filter(Boolean)
+    .join(", ");
+  const xp = getXP(monster);
+  const abilityScores = getAbilityScores(monster);
+  const { saves, skills } = getProficiencies(monster);
+  const damage = getDamageInfo(monster);
+  const senses = getSenses(monster);
+  const languages = getLanguages(monster);
+  const traits = getSpecialAbilities(monster);
+  const actions = getActions(monster);
+  const reactions = getReactions(monster);
+  const legendary = getLegendaryActions(monster);
+  const description = getDescription(monster);
+
+  return (
+    <div>
+        {/* Hero image + title */}
+        <div className="relative h-56 overflow-hidden">
+          {img ? (
+            <img
+              src={img}
+              alt={monster.name}
+              className="w-full h-full object-cover object-top"
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = "/default-monster.png";
+              }}
+            />
+          ) : (
+            <div className="w-full h-full bg-[#0f1219] flex items-center justify-center text-slate-600 text-6xl font-bold">
+              {monster.name?.charAt(0)}
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#1a1f2e] via-transparent to-transparent" />
+          <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="text-2xl font-bold text-white truncate drop-shadow-lg">{monster.name}</h2>
+              {metaLine && (
+                <p className="text-sm text-slate-300 italic truncate drop-shadow">{metaLine}</p>
+              )}
+            </div>
+            <Badge
+              variant="outline"
+              className={`text-[10px] flex-shrink-0 ${
+                monster._source === "homebrew"
+                  ? "border-purple-500/50 text-purple-300"
+                  : "border-blue-500/50 text-blue-300"
+              }`}
+            >
+              {monster._source === "homebrew" ? "Homebrew" : "SRD"}
+            </Badge>
+          </div>
         </div>
 
-        <div className="grid grid-cols-6 gap-2">
-          {["STR","DEX","CON","INT","WIS","CHA"].map((k) => (
-            <div key={k} className="bg-[#0f1219] border border-slate-700 rounded p-2 text-center">
-              <div className="text-[9px] uppercase tracking-widest text-amber-400 font-bold">{k}</div>
-              <div className="text-white font-bold">{getAbility(k)}</div>
-              <div className="text-xs text-slate-400">{mod(getAbility(k))}</div>
+        {/* Core stats row — red-tinted backing to match official stat blocks */}
+        <div className="grid grid-cols-5 gap-2 p-4 border-b border-red-900/30 bg-red-900/5">
+          <CoreStat label="Armor Class" value={getAC(monster)} />
+          <CoreStat label="Hit Points"  value={getHP(monster)} sub={getHitDice(monster)} />
+          <CoreStat label="Speed"       value={getSpeed(monster)} small />
+          <CoreStat label="CR"          value={getCR(monster)} accent />
+          <CoreStat label="XP"          value={formatXP(xp)} small />
+        </div>
+
+        {/* Ability scores */}
+        <div className="grid grid-cols-6 gap-2 p-4 border-b border-red-900/30">
+          {Object.entries(abilityScores).map(([ability, score]) => (
+            <div key={ability} className="text-center">
+              <div className="text-xs text-red-400 uppercase font-bold">{ability}</div>
+              <div className="text-white font-bold text-lg">{score}</div>
+              <div className="text-xs text-slate-400">({getAbilityMod(score)})</div>
             </div>
           ))}
         </div>
 
+        {/* Proficiencies, immunities, senses, languages */}
+        {(saves.length > 0 || skills.length > 0 || damage.vulnerabilities ||
+          damage.resistances || damage.immunities || damage.conditionImmunities ||
+          senses || languages) && (
+          <div className="p-4 border-b border-red-900/30 space-y-2 text-sm">
+            {saves.length > 0  && <PropLine label="Saving Throws"     value={saves.join(", ")} />}
+            {skills.length > 0 && <PropLine label="Skills"            value={skills.join(", ")} />}
+            {damage.vulnerabilities     && <PropLine label="Vulnerabilities"        value={damage.vulnerabilities} />}
+            {damage.resistances         && <PropLine label="Resistances"            value={damage.resistances} />}
+            {damage.immunities          && <PropLine label="Damage Immunities"      value={damage.immunities} />}
+            {damage.conditionImmunities && <PropLine label="Condition Immunities"   value={damage.conditionImmunities} />}
+            {senses    && <PropLine label="Senses"    value={senses} />}
+            {languages && <PropLine label="Languages" value={languages} />}
+          </div>
+        )}
+
+        {/* Traits */}
         {traits.length > 0 && (
-          <Section label="Traits" colour="text-amber-400">
-            {traits.map((t, i) => (
-              <Trait key={i} item={t} />
+          <Section title="Traits">
+            {traits.map((trait, i) => (
+              <TraitBlock key={`tr-${i}`} item={trait} />
             ))}
           </Section>
         )}
 
+        {/* Actions */}
         {actions.length > 0 && (
-          <Section label="Actions" colour="text-red-400">
-            {actions.map((a, i) => <Trait key={i} item={a} />)}
+          <Section title="Actions">
+            {actions.map((action, i) => (
+              <ActionBlock key={`a-${i}`} item={action} />
+            ))}
           </Section>
         )}
 
+        {/* Reactions */}
         {reactions.length > 0 && (
-          <Section label="Reactions" colour="text-orange-400">
-            {reactions.map((r, i) => <Trait key={i} item={r} />)}
+          <Section title="Reactions" titleClass="text-blue-400">
+            {reactions.map((r, i) => (
+              <TraitBlock key={`rx-${i}`} item={r} />
+            ))}
           </Section>
         )}
 
+        {/* Legendary actions */}
         {legendary.length > 0 && (
-          <Section label="Legendary Actions" colour="text-purple-400">
-            {legendary.map((a, i) => <Trait key={i} item={a} />)}
+          <Section title="Legendary Actions" titleClass="text-amber-400">
+            <p className="text-slate-400 text-sm mb-3 italic">
+              The {(monster.name || "creature").toLowerCase()} can take 3 legendary actions,
+              choosing from the options below. Only one legendary action option can be used at
+              a time and only at the end of another creature&apos;s turn.
+              The {(monster.name || "creature").toLowerCase()} regains spent legendary actions
+              at the start of its turn.
+            </p>
+            {legendary.map((action, i) => (
+              <ActionBlock key={`lg-${i}`} item={action} />
+            ))}
           </Section>
         )}
 
-        <DialogFooter>
-          {isGM && !monster.is_system && (
-            <Button variant="outline" onClick={onDelete} className="text-red-400 border-red-700">
+        {/* Lore */}
+        {description && (
+          <div className="p-4">
+            <h3 className="text-slate-400 font-bold text-sm uppercase tracking-wider mb-3">Lore</h3>
+            <p className="text-slate-300 italic text-sm leading-relaxed whitespace-pre-wrap">
+              {description}
+            </p>
+          </div>
+        )}
+
+        {isGM && monster._source === "homebrew" && (
+          <div className="p-4 border-t border-red-900/30 flex justify-end">
+            <Button variant="outline" onClick={onDelete} className="text-red-400 border-red-700 hover:bg-red-950/30">
               <Trash2 className="w-3 h-3 mr-1" /> Delete
             </Button>
-          )}
-          <Button onClick={onClose}>
-            <X className="w-3 h-3 mr-1" /> Close
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </div>
+        )}
+    </div>
   );
 }
 
-function Stat({ label, value, accent }) {
+function formatXP(xp) {
+  if (xp == null || xp === "") return "—";
+  const n = Number(xp);
+  if (!Number.isFinite(n)) return String(xp);
+  return n.toLocaleString();
+}
+
+function CoreStat({ label, value, sub, accent, small }) {
   return (
     <div className="text-center">
-      <div className="text-[9px] uppercase tracking-widest text-slate-500 font-bold">{label}</div>
-      <div className={`font-bold text-sm ${accent ? "text-amber-400" : "text-white"}`}>{value}</div>
+      <div className="text-xs text-slate-400">{label}</div>
+      <div className={`font-bold ${small ? "text-sm" : "text-lg"} ${accent ? "text-[#37F2D1]" : "text-white"}`}>
+        {value}
+      </div>
+      {sub && <div className="text-xs text-slate-500">{sub}</div>}
     </div>
   );
 }
 
-function Section({ label, colour, children }) {
+function PropLine({ label, value }) {
   return (
-    <section>
-      <p className={`text-[10px] uppercase tracking-wide mb-2 font-bold border-b border-slate-700/50 pb-1 ${colour}`}>{label}</p>
-      <div className="space-y-2">{children}</div>
-    </section>
+    <div>
+      <span className="text-red-400 font-semibold">{label}: </span>
+      <span className="text-white">{value}</span>
+    </div>
   );
 }
 
-function Trait({ item }) {
+function Section({ title, titleClass = "text-red-400", children }) {
   return (
-    <div className="text-[11px]">
-      <span className="text-white font-bold">{item.name}. </span>
-      <span className="text-slate-300 leading-relaxed">{item.desc || item.description}</span>
+    <div className="p-4 border-b border-red-900/30">
+      <h3 className={`${titleClass} font-bold text-sm uppercase tracking-wider mb-3`}>{title}</h3>
+      <div className="space-y-3">{children}</div>
     </div>
+  );
+}
+
+function TraitBlock({ item }) {
+  if (!item) return null;
+  return (
+    <div>
+      <span className="text-white font-semibold italic">{item.name}</span>
+      {item.usage && (
+        <span className="text-amber-400 text-xs ml-1">{formatUsage(item.usage)}</span>
+      )}
+      <span className="text-white font-semibold italic">. </span>
+      <span className="text-slate-300 text-sm">{item.desc || item.description}</span>
+    </div>
+  );
+}
+
+/**
+ * Action entry — prints the name + description like a trait, then
+ * shows inline badges for attack bonus + damage dice (for attack
+ * actions) or a DC badge + damage (for save-based actions). Pulls
+ * "half on save" off `dc.success_type === 'half'` when present.
+ */
+function ActionBlock({ item }) {
+  if (!item) return null;
+  const damage = Array.isArray(item.damage) ? item.damage : [];
+  return (
+    <div>
+      <span className="text-white font-semibold italic">{item.name}</span>
+      {item.usage && (
+        <span className="text-amber-400 text-xs ml-1">{formatUsage(item.usage)}</span>
+      )}
+      <span className="text-white font-semibold italic">. </span>
+      <span className="text-slate-300 text-sm">{item.desc || item.description}</span>
+
+      {item.attack_bonus != null && (
+        <div className="flex flex-wrap items-center gap-2 mt-1 ml-4">
+          <span className="text-xs px-1.5 py-0.5 rounded bg-red-900/30 text-red-300 border border-red-700/40">
+            +{item.attack_bonus} to hit
+          </span>
+          {damage.map((d, di) => (
+            <DamageBadge key={`dmg-${di}`} damage={d} />
+          ))}
+        </div>
+      )}
+
+      {item.dc && item.attack_bonus == null && (
+        <div className="flex flex-wrap items-center gap-2 mt-1 ml-4">
+          <span className="text-xs px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-300 border border-amber-700/40">
+            DC {item.dc.dc_value}{item.dc.dc_type?.name ? ` ${item.dc.dc_type.name}` : ""}
+          </span>
+          {damage.map((d, di) => (
+            <DamageBadge key={`dc-${di}`} damage={d} />
+          ))}
+          {item.dc.success_type === "half" && (
+            <span className="text-xs text-slate-500">half on save</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DamageBadge({ damage }) {
+  if (!damage) return null;
+  const dice = damage.damage_dice || damage.dice || "";
+  const dtype = damage.damage_type?.name || damage.type || "";
+  if (!dice && !dtype) return null;
+  return (
+    <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">
+      {dice}{dice && dtype ? " " : ""}{dtype ? dtype.toLowerCase() : ""}
+    </span>
   );
 }
 
@@ -375,12 +786,13 @@ function NewMonsterDialog({ open, onClose, onSave, saving }) {
     if (!name.trim()) { toast.error("Name the monster."); return; }
     onSave({
       name: name.trim(),
-      type: type.trim() || null,
-      challenge_rating: cr.trim() || null,
-      armor_class: Number(ac) || 10,
-      hit_points: Number(hp) || 10,
       description: description.trim() || null,
-      stats: {},
+      stats: {
+        type: type.trim() || null,
+        challenge_rating: cr.trim() || null,
+        armor_class: Number(ac) || 10,
+        hit_points: Number(hp) || 10,
+      },
     });
     reset();
   };

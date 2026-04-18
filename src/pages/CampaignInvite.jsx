@@ -77,8 +77,11 @@ export default function CampaignInvite() {
       if (currentPlayers.includes(friendId)) {
         throw new Error('Player already in campaign');
       }
-      if (currentPlayers.length >= 12) {
-        throw new Error('Campaign is full (maximum 12 players)');
+      // Campaigns cap at 8 players + 1 GM. Use the GM-chosen cap but
+      // never go above the hard ceiling.
+      const cap = Math.min(campaign.max_players || 8, 8);
+      if (currentPlayers.length >= cap) {
+        throw new Error(`This campaign is full (max ${cap} players).`);
       }
       
       // Check if already invited
@@ -165,8 +168,8 @@ export default function CampaignInvite() {
         
         <div className="bg-[#2A3441] border-l-4 border-[#37F2D1] p-4 mb-8 rounded">
           <p className="text-white text-sm">
-            <span className="font-semibold">Player Count:</span> {campaign.player_ids?.length || 0} / 12
-            <span className="text-gray-400 ml-2">(Recommended: 6 or fewer for best experience)</span>
+            <span className="font-semibold">Player Count:</span> {campaign.player_ids?.length || 0} / {Math.min(campaign.max_players || 8, 8)}
+            <span className="text-gray-400 ml-2">Max 8 players + 1 GM.</span>
           </p>
         </div>
 

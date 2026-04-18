@@ -257,10 +257,25 @@ export default function GMPanel() {
   // keep tripping the "Cannot access X before initialization" TDZ
   // trap when a useCallback deps array references them. Anything that
   // needs this data MUST be declared below this block.
+  // Monsters the GM can drop into the combat queue. SRD monsters
+  // come from the shared dnd5e_monsters reference table; homebrew
+  // monsters come from the per-campaign `monsters` table. Each row
+  // is tagged with _source so encounter tracking can prefix IDs
+  // (srd:<uuid> vs hb:<uuid>) when flipping the Pokédex.
   const { data: monsters = [] } = useQuery({
-    queryKey: ['campaignMonsters', campaignId],
-    queryFn: () => base44.entities.Monster.filter({ campaign_id: campaignId }),
-    enabled: !!campaignId
+    queryKey: ['combatMonsterRoster', campaignId],
+    queryFn: async () => {
+      const [srd, homebrew] = await Promise.all([
+        base44.entities.Dnd5eMonster.list('name').catch(() => []),
+        campaignId
+          ? base44.entities.Monster.filter({ campaign_id: campaignId }).catch(() => [])
+          : Promise.resolve([]),
+      ]);
+      const srdRows = (srd || []).map((m) => ({ ...m, _source: 'srd' }));
+      const hbRows  = (homebrew || []).map((m) => ({ ...m, _source: 'homebrew' }));
+      return [...srdRows, ...hbRows].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    },
+    enabled: !!campaignId,
   });
 
   const { data: npcs = [] } = useQuery({
