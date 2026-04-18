@@ -2668,7 +2668,7 @@ export default function GMPanel() {
   }
 
   return (
-    <div className="min-h-screen bg-[#020617] text-white flex flex-col">
+    <div className="h-screen w-screen bg-[#020617] text-white flex flex-col overflow-hidden">
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 8px;
@@ -2698,15 +2698,15 @@ export default function GMPanel() {
         }
       `}</style>
 
-      <div className="relative w-full h-56 overflow-hidden">
-        <div 
-          className="absolute inset-0 bg-cover bg-center" 
+      <div className="relative w-full h-56 overflow-hidden flex-shrink-0">
+        <div
+          className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url(${campaign.cover_image_url || 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=1200&h=400&fit=crop'})` }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/70 to-[#020617]" />
       </div>
 
-      <div className="-mt-16 px-6 pb-10">
+      <div className="-mt-16 px-6 pb-10 flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden">
         <div className="grid grid-cols-[320px,minmax(0,1fr)] gap-6">
           <CharacterPanel
             character={selectedCharacter}
@@ -6612,15 +6612,24 @@ function MonsterStatBlock({ character, className, onActionClick }) {
     CHA: getAbilityScore('CHA')
   };
 
-  // Features can be in various places depending on data source
+  // Features can be in various places depending on data source.
+  // SRD monsters tend to store under `special_abilities`, imported
+  // monsters sometimes use `special_traits`, PCs use `features`.
   const traits = stats.traits || character.traits || [];
   const actions = stats.actions || character.actions || [];
-  const specialAbilities = stats.special_abilities || character.special_abilities || 
-                          stats.features || character.features || []; // NPC features often mapped here
-  
+  const specialAbilities = stats.special_abilities || character.special_abilities ||
+                          stats.special_traits || character.special_traits ||
+                          stats.features || character.features || [];
+  const legendaryActions = stats.legendary_actions || character.legendary_actions || [];
+  const reactions = stats.reactions || character.reactions || [];
+
   const skills = stats.skills || character.skills || {};
   const senses = stats.senses || character.senses || '';
   const languages = stats.languages || character.languages || '';
+  const damageResistances = stats.damage_resistances || character.damage_resistances || null;
+  const damageImmunities = stats.damage_immunities || character.damage_immunities || null;
+  const damageVulnerabilities = stats.damage_vulnerabilities || character.damage_vulnerabilities || null;
+  const conditionImmunities = stats.condition_immunities || character.condition_immunities || null;
   const proficiencyBonus = stats.proficiency_bonus || character.proficiency_bonus || 2;
   
   // Prefer a derived AC when the character has anything in their
@@ -6712,14 +6721,49 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                 </div>
               )}
 
+              {/* Damage / Condition treatment — only shows the rows
+                  that the monster actually defines so the panel
+                  stays compact for simple stat blocks. */}
+              {(damageResistances || damageImmunities || damageVulnerabilities || conditionImmunities) && (
+                <div>
+                  <p className="text-[10px] text-blue-400 uppercase tracking-wide mb-2 font-bold border-b border-blue-500/20 pb-1">Treatment</p>
+                  <div className="space-y-1.5 text-[11px]">
+                    {damageVulnerabilities && (
+                      <div>
+                        <span className="text-slate-400 uppercase tracking-wide text-[9px]">Vulnerabilities </span>
+                        <span className="text-rose-300">{Array.isArray(damageVulnerabilities) ? damageVulnerabilities.join(', ') : damageVulnerabilities}</span>
+                      </div>
+                    )}
+                    {damageResistances && (
+                      <div>
+                        <span className="text-slate-400 uppercase tracking-wide text-[9px]">Resistances </span>
+                        <span className="text-emerald-300">{Array.isArray(damageResistances) ? damageResistances.join(', ') : damageResistances}</span>
+                      </div>
+                    )}
+                    {damageImmunities && (
+                      <div>
+                        <span className="text-slate-400 uppercase tracking-wide text-[9px]">Damage Immunities </span>
+                        <span className="text-slate-200">{Array.isArray(damageImmunities) ? damageImmunities.join(', ') : damageImmunities}</span>
+                      </div>
+                    )}
+                    {conditionImmunities && (
+                      <div>
+                        <span className="text-slate-400 uppercase tracking-wide text-[9px]">Condition Immunities </span>
+                        <span className="text-slate-200">{Array.isArray(conditionImmunities) ? conditionImmunities.join(', ') : conditionImmunities}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Actions */}
               {actions.length > 0 && (
                 <div>
                   <p className="text-[10px] text-red-400 uppercase tracking-wide mb-2 font-bold border-b border-red-500/20 pb-1">Actions</p>
                   <div className="space-y-3">
                     {actions.map((action, idx) => (
-                      <div 
-                        key={idx} 
+                      <div
+                        key={idx}
                         className="text-[11px] hover:bg-white/5 p-1 rounded cursor-pointer transition-colors group"
                         onClick={() => {
                           // Trigger action selection in parent (GMPanel)
@@ -6730,7 +6774,7 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                           if (character?.onActionClick) {
                              character.onActionClick(action);
                           } else {
-                             // Dispatch global event as fallback if props drilling is hard, 
+                             // Dispatch global event as fallback if props drilling is hard,
                              // but better to use the prop we'll add in GMPanel usage
                              const event = new CustomEvent('gm-monster-action', { detail: action });
                              window.dispatchEvent(event);
@@ -6745,7 +6789,45 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                 </div>
               )}
 
-              {traits.length === 0 && specialAbilities.length === 0 && actions.length === 0 && (
+              {/* Reactions */}
+              {reactions.length > 0 && (
+                <div>
+                  <p className="text-[10px] text-orange-400 uppercase tracking-wide mb-2 font-bold border-b border-orange-500/20 pb-1">Reactions</p>
+                  <div className="space-y-3">
+                    {reactions.map((reaction, idx) => (
+                      <div key={idx} className="text-[11px]">
+                        <span className="text-white font-bold">{reaction.name}. </span>
+                        <span className="text-slate-300 leading-relaxed">{reaction.desc || reaction.description}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Legendary Actions */}
+              {legendaryActions.length > 0 && (
+                <div>
+                  <p className="text-[10px] text-purple-400 uppercase tracking-wide mb-2 font-bold border-b border-purple-500/20 pb-1">Legendary Actions</p>
+                  <div className="space-y-3">
+                    {legendaryActions.map((action, idx) => (
+                      <div key={idx} className="text-[11px]">
+                        <span className="text-white font-bold">{action.name}. </span>
+                        <span className="text-slate-300 leading-relaxed">{action.desc || action.description}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {traits.length === 0
+                && specialAbilities.length === 0
+                && actions.length === 0
+                && reactions.length === 0
+                && legendaryActions.length === 0
+                && !damageResistances
+                && !damageImmunities
+                && !damageVulnerabilities
+                && !conditionImmunities && (
                 <div className="h-full flex items-center justify-center py-8">
                   <p className="text-slate-500 text-xs italic">No traits or actions defined.</p>
                 </div>

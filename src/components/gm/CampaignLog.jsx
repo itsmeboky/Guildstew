@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Send, Dice6, Eye, EyeOff, ChevronDown, Lock, MessageSquare, Swords, Filter } from "lucide-react";
 import moment from "moment";
+import { toast } from "sonner";
 import { COMBAT_LOG_BORDER, COMBAT_LOG_GLYPH } from "@/utils/combatLog";
 
 export default function CampaignLog({ campaignId, currentUser, currentUserProfile, campaign, characters, allUserProfiles }) {
@@ -57,7 +58,14 @@ export default function CampaignLog({ campaignId, currentUser, currentUserProfil
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaignLog', campaignId] });
       setMessage("");
-    }
+    },
+    onError: (err) => {
+      // Previously the failure was silent — the input stayed full and
+      // nothing got posted. Surface the problem so the GM / player
+      // knows to look at their connection or retry.
+      console.error('CampaignLogEntry.create failed:', err);
+      toast.error(err?.message || "Couldn't send — try again.");
+    },
   });
 
   // Auto-scroll to bottom when new entries arrive
@@ -87,7 +95,10 @@ export default function CampaignLog({ campaignId, currentUser, currentUserProfil
     createEntryMutation.mutate(payload);
   };
 
-  const handleKeyPress = (e) => {
+  // `onKeyPress` used to live here — it's deprecated and stops firing
+  // on some browsers in React 18. `onKeyDown` is the canonical hook
+  // for Enter-to-submit.
+  const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
@@ -276,14 +287,14 @@ export default function CampaignLog({ campaignId, currentUser, currentUserProfil
             type="text"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyDown}
             placeholder="Type a message..."
-            className="flex-1 bg-[#111827] border border-[#1e293b] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[#22c5f5] transition-colors"
+            className="flex-1 min-w-0 bg-[#111827] border border-[#1e293b] rounded-lg px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-[#22c5f5] transition-colors"
           />
           <button
             onClick={handleSendMessage}
-            disabled={!message.trim()}
-            className="w-8 h-8 rounded-lg bg-[#22c5f5] hover:bg-[#38bdf8] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+            disabled={!message.trim() || createEntryMutation.isPending}
+            className="w-8 h-8 rounded-lg bg-[#22c5f5] hover:bg-[#38bdf8] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors flex-shrink-0"
           >
             <Send className="w-4 h-4 text-white" />
           </button>

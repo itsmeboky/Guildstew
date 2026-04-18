@@ -1,16 +1,15 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { trackEvent } from "@/utils/analytics";
-import UsernameField from "@/components/profile/UsernameField";
-import { validateUsername, isUsernameAvailable } from "@/utils/username";
+import AuthBackdrop from "@/components/auth/AuthBackdrop";
 
 // Bump this string whenever the privacy / terms / EULA copy
 // materially changes so existing users are forced through the
@@ -18,23 +17,37 @@ import { validateUsername, isUsernameAvailable } from "@/utils/username";
 // LegalReconsentGate in App.jsx.
 export const CURRENT_TOS_VERSION = '1.0';
 
+// localStorage key used to remember who logged in last so we can
+// greet them on return visits. Cleared by Logout only; we leave it
+// in place on a successful login so the next visit still picks it up.
+const LAST_LOGIN_NAME_KEY = "gs-last-login-name";
+
+/**
+ * Login landing page. Signup lives on its own route — this screen is
+ * the default unauthenticated entry point. Remembers the greeting
+ * name across sessions so returning users see "Hail, Boky" on re-
+ * entry instead of a generic welcome.
+ */
 export default function Landing() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
-  // Signup-only state
-  const [dob, setDob] = useState("");
-  const [username, setUsername] = useState("");
-  const [usernameStatus, setUsernameStatus] = useState("idle");
-  const [agreedToTos, setAgreedToTos] = useState(false);
-  // Forgot-password dialog state.
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotSending, setForgotSending] = useState(false);
+  const [greetingName, setGreetingName] = useState("Adventurer");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(LAST_LOGIN_NAME_KEY);
+      if (stored && stored.trim()) setGreetingName(stored.trim());
+    } catch {
+      // localStorage might be blocked — fall back silently.
+    }
+  }, []);
 
   const handleLogin = async () => {
     setError(null);
@@ -46,6 +59,22 @@ export default function Landing() {
       });
       if (authError) throw authError;
       if (data?.user?.id) trackEvent(data.user.id, "user_login");
+
+      // Stash whatever "first-name-ish" handle we can resolve so the
+      // greeting remembers them next time. username > email prefix.
+      try {
+        const profileRows = await supabase
+          .from("user_profiles")
+          .select("username")
+          .eq("user_id", data.user.id)
+          .limit(1);
+        const username = profileRows?.data?.[0]?.username;
+        const fallback = email.includes("@") ? email.split("@")[0] : email;
+        localStorage.setItem(LAST_LOGIN_NAME_KEY, (username || fallback || "").trim());
+      } catch {
+        // Non-fatal — we just won't remember the name next time.
+      }
+
       navigate("/Home");
     } catch (err) {
       setError(err.message);
@@ -53,269 +82,121 @@ export default function Landing() {
     setLoading(false);
   };
 
-  const handleSignUp = async () => {
+  const handleGoogle = async () => {
     setError(null);
-    // Age + consent gates. Block under-13 outright; flag 13-17 as
-    // minors so the marketplace later filters 18+ content for them.
-    if (!dob) {
-      setError("Please enter your date of birth.");
-      return;
-    }
-    const ageMs = Date.now() - new Date(dob).getTime();
-    const age = Math.floor(ageMs / (365.25 * 24 * 60 * 60 * 1000));
-    if (!Number.isFinite(age) || age < 0) {
-      setError("That date of birth doesn't look right.");
-      return;
-    }
-    if (age < 13) {
-      setError("You must be at least 13 years old to create a Guildstew account.");
-      return;
-    }
-    if (!agreedToTos) {
-      setError("Please agree to the Terms, Privacy Policy, and EULA to continue.");
-      return;
-    }
-    // Username policy + uniqueness. The live field already shows the
-    // status, but we re-check here so someone can't bypass the gate
-    // by submitting while the debounce is still pending.
-    const desiredUsername = (username || "").trim();
-    const policy = validateUsername(desiredUsername, email);
-    if (!policy.ok) {
-      setError(policy.error);
-      return;
-    }
-    const { available, error: checkErr } = await isUsernameAvailable(desiredUsername);
-    if (checkErr) {
-      setError("Could not verify username availability. Please try again.");
-      return;
-    }
-    if (!available) {
-      setError("That username is taken. Try another one.");
-      return;
-    }
-    const isMinor = age < 18;
-    setLoading(true);
     try {
-      const { data, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/Home` },
       });
-      if (authError) throw authError;
-
-      // Create their user profile with consent + age metadata.
-      if (data.user) {
-        await supabase.from("user_profiles").insert({
-          user_id: data.user.id,
-          email: email,
-          username: desiredUsername,
-          date_of_birth: dob,
-          is_minor: isMinor,
-          tos_accepted_at: new Date().toISOString(),
-          tos_version: CURRENT_TOS_VERSION,
-        });
-        trackEvent(data.user.id, "user_signup", { is_minor: isMinor });
-      }
-
-      // If Supabase email confirmation is enabled (dashboard setting),
-      // data.session is null until the user clicks the link. Route to
-      // the verification page so they know what to do next. When
-      // confirmation is off, they're already signed in — send them to
-      // Onboarding as before.
-      if (!data.session) {
-        navigate("/VerifyEmail?email=" + encodeURIComponent(email));
-      } else {
-        navigate("/Onboarding");
-      }
+      if (oauthError) throw oauthError;
     } catch (err) {
-      setError(err.message);
-    }
-    setLoading(false);
-  };
-
-  const handleSubmit = () => {
-    if (isSignUp) {
-      handleSignUp();
-    } else {
-      handleLogin();
+      setError(err.message || "Google sign-in failed. Try email instead.");
     }
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === "Enter") handleSubmit();
+    if (e.key === "Enter") handleLogin();
   };
 
   return (
-    <div
-      className="min-h-screen w-full flex items-center justify-center relative"
-      style={{
-        backgroundImage:
-          "url('https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/168af6bd5_bggggg1.png')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }}
-    >
-      <div className="w-full max-w-md mx-4 md:mx-0 bg-white rounded-2xl overflow-hidden flex items-center justify-center p-8 md:p-10 shadow-2xl">
-        <div className="w-full space-y-6">
-          {/* Logo */}
-          <div className="flex justify-center mb-8">
-            <img
-              src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/branding/90f5ad509_GuildStewLogoOfficialForRedditWhite1.png"
-              alt="Guildstew"
-              className="h-32 w-auto"
-            />
-          </div>
+    <div className="min-h-screen w-full flex items-center justify-center relative p-4">
+      <AuthBackdrop />
 
-          {/* Greeting */}
-          <div className="text-center space-y-2">
-            <h1 className="text-4xl font-bold text-[#FF5722]">
-              {isSignUp ? "Join the Guild." : "Greetings, Wanderer."}
-            </h1>
-            <p className="text-gray-700 text-sm">
-              {isSignUp
-                ? "Create an account to begin your adventure."
-                : "Sign-in to continue your journey."}
-            </p>
-          </div>
-
-          {/* Error message */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 text-center">
-              {error}
+      <div className="flex flex-col items-center gap-4 relative z-10">
+        {/* Circular card — sized to contain every form element with
+            breathing room. Content is vertically centred; overflow is
+            clipped so a scrollbar never appears on the circle. */}
+        <div className="w-[min(92vmin,600px)] aspect-square bg-white rounded-full shadow-2xl overflow-hidden flex flex-col items-center justify-center px-10">
+          <div className="w-full max-w-xs space-y-4">
+            <div className="flex justify-center">
+              <img
+                src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/branding/90f5ad509_GuildStewLogoOfficialForRedditWhite1.png"
+                alt="Guildstew"
+                className="h-20 w-auto"
+              />
             </div>
-          )}
 
-          {/* Email field */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-gray-700">Email</label>
-              {!isSignUp && (
+            <div className="text-center space-y-0.5">
+              <h1 className="text-2xl font-bold text-[#FF5722]">
+                Hail, {greetingName}.
+              </h1>
+              <p className="text-gray-700 text-xs">Sign in to continue your journey.</p>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg p-2 text-center">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-gray-700">Email</label>
                 <button
                   type="button"
                   onClick={() => { setForgotEmail(email); setForgotOpen(true); }}
-                  className="text-xs text-[#6366F1] hover:underline font-medium"
+                  className="text-[11px] text-[#6366F1] hover:underline font-medium"
                 >
-                  Forgot Password?
+                  Forgot?
                 </button>
-              )}
-            </div>
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="bg-[#FFD4C4] border-none h-12 text-gray-800"
-            />
-          </div>
-
-          {/* Password field */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Password</label>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="bg-[#FFD4C4] border-none h-12 text-gray-800"
-            />
-          </div>
-
-          {/* Signup-only: username, date of birth, ToS checkbox.
-              Under-13 is blocked at submit; 13-17 flagged as minor
-              on the user_profiles row. */}
-          {isSignUp && (
-            <>
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">Username</label>
-                <UsernameField
-                  value={username}
-                  onChange={setUsername}
-                  onStatus={setUsernameStatus}
-                  email={email}
-                  label={null}
-                  placeholder="boky"
-                  inputClassName="bg-[#FFD4C4] border-none h-12 text-gray-800"
-                />
               </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Date of birth</label>
-                <Input
-                  type="date"
-                  value={dob}
-                  onChange={(e) => setDob(e.target.value)}
-                  className="bg-[#FFD4C4] border-none h-12 text-gray-800"
-                />
-                <p className="text-[11px] text-gray-600">
-                  Used for age verification. You must be 13+ to play.
-                </p>
-              </div>
-
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  id="tos"
-                  checked={agreedToTos}
-                  onCheckedChange={(v) => setAgreedToTos(!!v)}
-                  className="border-gray-400 mt-1"
-                />
-                <label htmlFor="tos" className="text-xs text-gray-700 leading-snug">
-                  I have read and agree to the{' '}
-                  <a href="/Terms" target="_blank" rel="noreferrer" className="text-[#FF5722] hover:underline font-semibold">Terms of Service</a>,{' '}
-                  <a href="/Privacy" target="_blank" rel="noreferrer" className="text-[#FF5722] hover:underline font-semibold">Privacy Policy</a>, and{' '}
-                  <a href="/EULA" target="_blank" rel="noreferrer" className="text-[#FF5722] hover:underline font-semibold">End User License Agreement</a>.
-                </label>
-              </div>
-            </>
-          )}
-
-          {/* Remember me */}
-          {!isSignUp && (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="remember"
-                checked={remember}
-                onCheckedChange={setRemember}
-                className="border-gray-400"
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="bg-[#FFD4C4] border-none h-10 text-gray-800"
               />
-              <label htmlFor="remember" className="text-sm text-gray-700">
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-700">Password</label>
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="bg-[#FFD4C4] border-none h-10 text-gray-800"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Checkbox id="remember" checked={remember} onCheckedChange={setRemember} />
+              <label htmlFor="remember" className="text-[11px] text-gray-700">
                 Remember me on this device
               </label>
             </div>
-          )}
 
-          {/* Submit button */}
-          <Button
-            onClick={handleSubmit}
-            disabled={
-              loading
-              || !email
-              || !password
-              || (isSignUp && (!dob || !agreedToTos || usernameStatus !== "available"))
-            }
-            className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] text-white h-14 rounded-full text-lg font-bold disabled:opacity-50"
-          >
-            {loading ? (
-              <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : isSignUp ? (
-              "Create Account"
-            ) : (
-              "Login"
-            )}
-          </Button>
-
-          {/* Toggle login/signup */}
-          <p className="text-center text-sm text-gray-700">
-            {isSignUp ? "Already have an account? " : "Don't have an account? "}
-            <button
-              onClick={() => {
-                setIsSignUp(!isSignUp);
-                setError(null);
-              }}
-              className="text-[#FF5722] font-semibold hover:underline"
+            <Button
+              onClick={handleLogin}
+              disabled={loading || !email || !password}
+              className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] text-white h-11 rounded-full text-sm font-bold disabled:opacity-50"
             >
-              {isSignUp ? "Login" : "Sign-up"}
-            </button>
-          </p>
+              {loading ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : "Login"}
+            </Button>
+
+            <Button
+              onClick={handleGoogle}
+              variant="outline"
+              className="w-full h-10 rounded-full text-xs font-semibold text-gray-700 border-gray-300 bg-white hover:bg-gray-50"
+            >
+              <GoogleGlyph />
+              Continue with Google
+            </Button>
+          </div>
         </div>
+
+        {/* Sits OUTSIDE the circle — keeps the circle uncluttered and
+            the copy legible against the dark overlay. */}
+        <p className="text-center text-sm text-white drop-shadow-md">
+          Don't have an account?{' '}
+          <Link to="/Signup" className="text-[#37F2D1] font-semibold hover:underline">
+            Sign Up
+          </Link>
+        </p>
       </div>
 
       <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
@@ -362,5 +243,16 @@ export default function Landing() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function GoogleGlyph() {
+  return (
+    <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+      <path d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.83z" fill="#FBBC05" />
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z" fill="#EA4335" />
+    </svg>
   );
 }
