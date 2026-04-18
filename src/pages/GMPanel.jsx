@@ -77,6 +77,16 @@ import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
 import { trackStat, ensureCharacterStats } from "@/utils/characterStats";
 import { checkAchievementsForCombatants } from "@/utils/achievementChecker";
 import { trackEvent } from "@/utils/analytics";
+import { supabase } from "@/api/supabaseClient";
+import {
+  getAC as monsterGetAC,
+  getSpeed as monsterGetSpeed,
+  getCR as monsterGetCR,
+  getSenses as monsterGetSenses,
+  getLanguages as monsterGetLanguages,
+  getDamageInfo as monsterGetDamageInfo,
+  getAbilityScores as monsterGetAbilityScores,
+} from "@/utils/monsterHelpers";
 import {
   abilityModifier,
   proficiencyBonus,
@@ -192,6 +202,71 @@ export default function GMPanel() {
     refetchInterval: (data) => (data?.combat_active || data?.combat_data?.stage === 'initiative') ? 1000 : 2000
   });
 
+  // currentUser needs to be declared before the session-start and
+  // presence effects below, which both read it. Keeping the
+  // original definition lower in the file used to throw
+  // `ReferenceError: Cannot access 'currentUser' before
+  // initialization` the moment the GM Panel mounted.
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: () => base44.auth.me(),
+  });
+
+  // Start the session when the GM opens the panel. Runs once per
+  // campaign load — if the session is already active we skip the
+  // write so this doesn't thrash on every refetch.
+  React.useEffect(() => {
+    if (!campaign) return;
+    if (campaign.session_active) return;
+    base44.entities.Campaign.update(campaignId, {
+      session_active: true,
+      session_started_at: new Date().toISOString(),
+      active_session_players: campaign.player_ids || [],
+      disconnected_players: [],
+      is_session_active: true,
+    }).catch(() => {});
+  }, [campaignId, campaign?.id, campaign?.session_active]);
+
+  // Live presence — every GM + player that mounts its panel drops
+  // into this channel. When a connection leaves without a clean
+  // handoff (tab close, hard refresh, network drop) the `leave`
+  // event fires and we flip the player into disconnected_players.
+  React.useEffect(() => {
+    if (!campaignId || !currentUser?.id || !campaign?.session_active) return;
+    const channel = supabase.channel(`session:${campaignId}`, {
+      config: { presence: { key: currentUser.id } },
+    });
+
+    channel
+      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+        const leftUserId = leftPresences?.[0]?.user_id;
+        if (!leftUserId || leftUserId === campaign.game_master_id) return;
+        base44.entities.Campaign.filter({ id: campaignId })
+          .then((rows) => rows?.[0])
+          .then((fresh) => {
+            if (!fresh) return;
+            const current = Array.isArray(fresh.disconnected_players) ? fresh.disconnected_players : [];
+            if (current.includes(leftUserId)) return;
+            return base44.entities.Campaign.update(campaignId, {
+              disconnected_players: [...current, leftUserId],
+            });
+          })
+          .catch(() => {});
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({
+            user_id: currentUser.id,
+            username: currentUser.username || currentUser.email,
+            role: 'gm',
+            online_at: new Date().toISOString(),
+          });
+        }
+      });
+
+    return () => { supabase.removeChannel(channel); };
+  }, [campaignId, currentUser?.id, campaign?.session_active, campaign?.game_master_id]);
+
   // Installed Brewery homebrew for this campaign. Each row pairs a
   // homebrew pack with its enabled flag. Enabled packs' `modifications`
   // JSONB gets deep-merged onto campaign.homebrew_rules to form the
@@ -244,11 +319,6 @@ export default function GMPanel() {
     }
     return rules;
   }, [campaign?.homebrew_rules, installedHomebrew]);
-
-  const { data: currentUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me()
-  });
 
   // === Campaign entity queries ======================================
   // These used to live way further down the component (around line
@@ -306,6 +376,20 @@ export default function GMPanel() {
     queryFn: () => base44.entities.UserProfile.list(),
     staleTime: 60000
   });
+
+  // Resolve campaign.disconnected_players (user_id strings) into the
+  // { id, name } summaries the sidebar wants. Falls back to the raw
+  // user_id when we don't have a profile cached yet.
+  const disconnectedPlayerSummaries = React.useMemo(() => {
+    const ids = Array.isArray(campaign?.disconnected_players) ? campaign.disconnected_players : [];
+    return ids.map((uid) => {
+      const profile = allUserProfiles.find((p) => p.user_id === uid);
+      return {
+        id: uid,
+        name: profile?.username || profile?.email || 'Player',
+      };
+    });
+  }, [campaign?.disconnected_players, allUserProfiles]);
 
   // Fetch all spells for accurate tooltips + effect classification.
   // Prefer the per-campaign `spells` table (the 89 with full details)
@@ -697,22 +781,43 @@ export default function GMPanel() {
 
   const endSessionMutation = useMutation({
     mutationFn: async () => {
-      // Reset combat state
-      await base44.entities.Campaign.update(campaignId, { 
+      // Reset combat state + the new session-lifecycle columns.
+      // The old flags (is_session_active, ready_player_ids,
+      // combat_data) stay in sync so existing consumers keep
+      // working.
+      await base44.entities.Campaign.update(campaignId, {
         is_session_active: false,
         last_session_ended_at: new Date().toISOString(),
         ready_player_ids: [],
         combat_active: false,
-        combat_data: null
+        combat_data: null,
+        session_active: false,
+        session_started_at: null,
+        active_session_players: [],
+        disconnected_players: [],
       });
-      
+
+      // Release every character locked into this session so players
+      // can join another campaign's session. Fire all clears in
+      // parallel, swallow individual errors so a single bad row
+      // doesn't stop the end-session flow.
+      try {
+        const locked = await base44.entities.Character.filter({ active_session_id: campaignId });
+        await Promise.all(
+          (locked || []).map((c) =>
+            base44.entities.Character.update(c.id, { active_session_id: null }).catch(() => {}),
+          ),
+        );
+      } catch { /* ignore */ }
+
       // Clear combat queue from local storage
       clearCombatQueue(campaignId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
-      navigate(createPageUrl("CampaignGMPanel") + `?id=${campaignId}`);
-    }
+      toast.success('Session ended.');
+      navigate(createPageUrl("CampaignView") + `?id=${campaignId}`);
+    },
   });
 
   const [showEndCombatAlert, setShowEndCombatAlert] = useState(false);
@@ -2687,7 +2792,10 @@ export default function GMPanel() {
     <div className="h-screen w-screen bg-[#020617] text-white flex flex-row overflow-hidden">
       <GMSessionSidebar
         campaignId={campaignId}
+        campaign={campaign}
         onEndSession={() => setShowEndSessionAlert(true)}
+        disconnectedPlayers={disconnectedPlayerSummaries}
+        allUserProfiles={allUserProfiles}
       />
       <div className="flex-1 min-w-0 flex flex-col">
       <style>{`
@@ -6617,11 +6725,16 @@ function MonsterStatBlock({ character, className, onActionClick }) {
     return mod >= 0 ? `+${mod}` : `${mod}`;
   };
 
-  // Handle nested attributes structure or flat keys
+  // Handle nested attributes structure or flat keys. Falls through
+  // to monsterGetAbilityScores for the SRD long-name keys
+  // (`strength`, `dexterity`, …) so reseeded monsters resolve too.
+  const helperScores = monsterGetAbilityScores(character);
   const getAbilityScore = (key) => {
-    if (abilities[key.toLowerCase()]) return abilities[key.toLowerCase()];
-    if (stats[key.toLowerCase()]) return stats[key.toLowerCase()];
-    if (stats.attributes?.[key.toLowerCase()]) return stats.attributes[key.toLowerCase()];
+    const lk = key.toLowerCase();
+    if (abilities[lk] != null) return abilities[lk];
+    if (stats[lk] != null) return stats[lk];
+    if (stats.attributes?.[lk] != null) return stats.attributes[lk];
+    if (helperScores[lk] != null) return helperScores[lk];
     return 10;
   };
 
@@ -6646,12 +6759,18 @@ function MonsterStatBlock({ character, className, onActionClick }) {
   const reactions = stats.reactions || character.reactions || [];
 
   const skills = stats.skills || character.skills || {};
-  const senses = stats.senses || character.senses || '';
-  const languages = stats.languages || character.languages || '';
-  const damageResistances = stats.damage_resistances || character.damage_resistances || null;
-  const damageImmunities = stats.damage_immunities || character.damage_immunities || null;
-  const damageVulnerabilities = stats.damage_vulnerabilities || character.damage_vulnerabilities || null;
-  const conditionImmunities = stats.condition_immunities || character.condition_immunities || null;
+  // Senses / languages on reseeded SRD monsters are objects /
+  // arrays — pipe them through the shared helpers so they end up
+  // as plain strings before they hit JSX. Same story for the
+  // damage info group: arrays of strings or arrays of objects with
+  // `name` keys.
+  const senses    = monsterGetSenses(character)    || stats.senses    || character.senses    || '';
+  const languages = monsterGetLanguages(character) || stats.languages || character.languages || '—';
+  const damageInfo = monsterGetDamageInfo(character);
+  const damageResistances     = damageInfo.resistances     || (Array.isArray(stats.damage_resistances)     ? stats.damage_resistances.join(', ')     : stats.damage_resistances     || character.damage_resistances     || null);
+  const damageImmunities      = damageInfo.immunities      || (Array.isArray(stats.damage_immunities)      ? stats.damage_immunities.join(', ')      : stats.damage_immunities      || character.damage_immunities      || null);
+  const damageVulnerabilities = damageInfo.vulnerabilities || (Array.isArray(stats.damage_vulnerabilities) ? stats.damage_vulnerabilities.join(', ') : stats.damage_vulnerabilities || character.damage_vulnerabilities || null);
+  const conditionImmunities   = damageInfo.conditionImmunities || (Array.isArray(stats.condition_immunities) ? stats.condition_immunities.map((c) => c?.name || c).join(', ') : stats.condition_immunities || character.condition_immunities || null);
   const proficiencyBonus = stats.proficiency_bonus || character.proficiency_bonus || 2;
   
   // Prefer a derived AC when the character has anything in their
@@ -6671,11 +6790,18 @@ function MonsterStatBlock({ character, className, onActionClick }) {
         fightingStyles: collectFightingStyles(character),
       }).total
     : null;
-  const ac = computedACValue || stats.armor_class || character.armor_class || 10;
+  // AC on reseeded SRD monsters ships as `[{ type: "natural", value: 19 }]`,
+  // which crashes React if we hand it to JSX. monsterGetAC normalises
+  // both that array shape and a plain number, so we route the
+  // computed (equipped-armor) value first and fall through to it.
+  const ac = computedACValue ?? monsterGetAC(character);
   const hpObj = stats.hit_points || character.hit_points;
   const hp = typeof hpObj === 'object' ? (hpObj?.max || '?') : (hpObj || '?');
-  const speed = stats.speed || character.speed || '30 ft.';
-  const cr = stats.challenge_rating ?? character.challenge_rating ?? '?';
+  // Speed on reseeded SRD monsters ships as `{ walk: "40 ft.",
+  // fly: "80 ft.", swim: "40 ft." }`; the helper joins it into a
+  // single readable string.
+  const speed = monsterGetSpeed(character) || '30 ft.';
+  const cr = monsterGetCR(character);
 
   // Spells might be in stats.spells (NPC) or character.spells
   const spellsData = stats.spells || character.spells;
@@ -6924,13 +7050,13 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                   {senses && (
                     <div>
                       <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Senses</p>
-                      <p className="text-xs text-white bg-[#0b1220] p-2 rounded">{typeof senses === 'string' ? senses : JSON.stringify(senses)}</p>
+                      <p className="text-xs text-white bg-[#0b1220] p-2 rounded">{senses}</p>
                     </div>
                   )}
                   {languages && (
                     <div>
                       <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Languages</p>
-                      <p className="text-xs text-white bg-[#0b1220] p-2 rounded">{Array.isArray(languages) ? languages.join(', ') : languages}</p>
+                      <p className="text-xs text-white bg-[#0b1220] p-2 rounded">{languages}</p>
                     </div>
                   )}
                 </div>
