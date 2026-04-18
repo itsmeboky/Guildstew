@@ -536,8 +536,17 @@ export default function Layout({ children, currentPageName }) {
   }, [user?.accessibility_dyslexic_font]);
   const isDarkMode = user?.accessibility_dark_mode !== false;
 
+  // Only bounce someone to Onboarding if they genuinely haven't
+  // finished it — the Onboarding step writes `onboarding_completed:
+  // true` on save, and every profile that existed before that flag
+  // was added has a username set, so honour either signal. This
+  // stops "missing birthday" from kicking established users back
+  // into the first-run wizard on every page load.
   useEffect(() => {
-    if (user && !user.birthday && currentPageName !== "Onboarding") {
+    if (!user) return;
+    if (currentPageName === "Onboarding") return;
+    const onboarded = user.onboarding_completed === true || !!user.username;
+    if (!onboarded) {
       navigate(createPageUrl("Onboarding"));
     }
   }, [user, currentPageName, navigate]);
