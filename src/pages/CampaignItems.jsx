@@ -138,9 +138,9 @@ function collectTypes(items) {
   return Array.from(set).sort((a, b) => a.localeCompare(b));
 }
 
-export default function CampaignItems() {
+export default function CampaignItems({ embedded = false, campaignId: campaignIdOverride } = {}) {
   const urlParams = new URLSearchParams(window.location.search);
-  const campaignId = urlParams.get("id");
+  const campaignId = campaignIdOverride ?? urlParams.get("id");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -271,30 +271,42 @@ export default function CampaignItems() {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[#0f1219] text-white">
-      <header className="flex items-center justify-between gap-3 px-6 py-4 flex-shrink-0 flex-wrap">
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={back}
-            variant="outline"
-            size="sm"
-            className="text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/10 hover:text-[#37F2D1]"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Archives
-          </Button>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Package className="w-5 h-5 text-[#37F2D1]" /> Items
-          </h1>
-        </div>
-        {isGM && (
+    <div className={`${embedded ? "h-full" : "h-screen"} flex flex-col overflow-hidden bg-[#0f1219] text-white`}>
+      {!embedded && (
+        <header className="flex items-center justify-between gap-3 px-6 py-4 flex-shrink-0 flex-wrap">
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={back}
+              variant="outline"
+              size="sm"
+              className="text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/10 hover:text-[#37F2D1]"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" /> Back to Archives
+            </Button>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Package className="w-5 h-5 text-[#37F2D1]" /> Items
+            </h1>
+          </div>
+          {isGM && (
+            <Button
+              onClick={handleCreateNew}
+              className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
+            >
+              <Plus className="w-4 h-4 mr-1" /> New Item
+            </Button>
+          )}
+        </header>
+      )}
+      {embedded && isGM && (
+        <div className="flex justify-end px-6 py-3 flex-shrink-0">
           <Button
             onClick={handleCreateNew}
             className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
           >
             <Plus className="w-4 h-4 mr-1" /> New Item
           </Button>
-        )}
-      </header>
+        </div>
+      )}
 
       <div className="flex-1 flex gap-4 overflow-hidden px-6 pb-6 min-h-0">
         {/* Left: item detail */}

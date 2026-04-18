@@ -78,6 +78,14 @@ import { trackStat, ensureCharacterStats } from "@/utils/characterStats";
 import { checkAchievementsForCombatants } from "@/utils/achievementChecker";
 import { trackEvent } from "@/utils/analytics";
 import { supabase } from "@/api/supabaseClient";
+import SessionModal from "@/components/session/SessionModal";
+import AdventuringPartyContent from "@/components/session/content/AdventuringPartyContent";
+import CampaignArchivesContent from "@/components/session/content/CampaignArchivesContent";
+import QuickNotesContent from "@/components/session/content/QuickNotesContent";
+import CampaignSettingsContent from "@/components/session/content/CampaignSettingsContent";
+import GMSidebarAchievements from "@/components/gm/GMSidebarAchievements";
+import GMSidebarPlayers from "@/components/gm/GMSidebarPlayers";
+import GMSidebarUpdates from "@/components/gm/GMSidebarUpdates";
 import {
   getAC as monsterGetAC,
   getSpeed as monsterGetSpeed,
@@ -193,6 +201,7 @@ export default function GMPanel() {
 
   const [showConditionManager, setShowConditionManager] = useState(false);
   const [showEndSessionAlert, setShowEndSessionAlert] = useState(false);
+  const [activeModal, setActiveModal] = useState(null);
   const queryClient = useQueryClient();
 
   const { data: campaign } = useQuery({
@@ -2791,12 +2800,95 @@ export default function GMPanel() {
   return (
     <div className="h-screen w-screen bg-[#020617] text-white flex flex-row overflow-hidden">
       <GMSessionSidebar
-        campaignId={campaignId}
-        campaign={campaign}
+        activeModal={activeModal}
+        onOpenModal={setActiveModal}
         onEndSession={() => setShowEndSessionAlert(true)}
         disconnectedPlayers={disconnectedPlayerSummaries}
-        allUserProfiles={allUserProfiles}
       />
+
+      <SessionModal
+        isOpen={activeModal === 'party'}
+        onClose={() => setActiveModal(null)}
+        title="Adventuring Party"
+      >
+        <AdventuringPartyContent
+          campaignId={campaignId}
+          campaign={campaign}
+          allUserProfiles={allUserProfiles}
+          disconnectedPlayers={disconnectedPlayerSummaries}
+        />
+      </SessionModal>
+
+      <SessionModal
+        isOpen={activeModal === 'archives'}
+        onClose={() => setActiveModal(null)}
+        title="Campaign Archives"
+      >
+        <CampaignArchivesContent campaignId={campaignId} />
+      </SessionModal>
+
+      <SessionModal
+        isOpen={activeModal === 'quick_notes'}
+        onClose={() => setActiveModal(null)}
+        title="Quick Notes"
+      >
+        <QuickNotesContent
+          campaignId={campaignId}
+          campaign={campaign}
+          user={currentUser}
+        />
+      </SessionModal>
+
+      <SessionModal
+        isOpen={activeModal === 'achievements'}
+        onClose={() => setActiveModal(null)}
+        title="Achievements & Titles"
+      >
+        <div className="h-full overflow-y-auto p-6">
+          <GMSidebarAchievements
+            campaignId={campaignId}
+            campaign={campaign}
+            allUserProfiles={allUserProfiles}
+          />
+        </div>
+      </SessionModal>
+
+      <SessionModal
+        isOpen={activeModal === 'players'}
+        onClose={() => setActiveModal(null)}
+        title="Player Management"
+      >
+        <div className="h-full overflow-y-auto p-6">
+          <GMSidebarPlayers
+            campaignId={campaignId}
+            campaign={campaign}
+            allUserProfiles={allUserProfiles}
+            disconnectedPlayers={disconnectedPlayerSummaries}
+          />
+        </div>
+      </SessionModal>
+
+      <SessionModal
+        isOpen={activeModal === 'updates'}
+        onClose={() => setActiveModal(null)}
+        title="Campaign Updates"
+      >
+        <div className="h-full overflow-y-auto p-6">
+          <GMSidebarUpdates campaignId={campaignId} />
+        </div>
+      </SessionModal>
+
+      <SessionModal
+        isOpen={activeModal === 'settings'}
+        onClose={() => setActiveModal(null)}
+        title="Campaign Settings"
+      >
+        <CampaignSettingsContent
+          campaignId={campaignId}
+          campaign={campaign}
+          allUserProfiles={allUserProfiles}
+        />
+      </SessionModal>
       <div className="flex-1 min-w-0 flex flex-col">
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
