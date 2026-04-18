@@ -3,64 +3,83 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Plus, Search, Pencil, Trash2, Save, X, Upload,
+  Plus, Search, Pencil, Trash2, ArrowLeft, Pin, Lock, Eye, Edit,
 } from "lucide-react";
-import { uploadFile } from "@/utils/uploadFile";
 import {
   filterByVisibility,
   stripHtml,
-  VISIBILITY_OPTIONS,
-  visibilityBadge,
 } from "@/utils/worldLoreVisibility";
+import { timeAgo, formatDate } from "@/utils/timeAgo";
+import { templateById } from "@/data/worldLoreTemplates";
+import EntryForm from "./EntryForm";
+import CommentThread from "./CommentThread";
 
 /**
- * One shared layout used by Regions, Politics, Deities, History, and
- * Artifacts. The outer page supplies:
- *   - categoryKey: the value written to entry.category
- *   - emptyLabel: copy shown when no entries exist
- *   - metadataFields: an array of `{ key, label, type, options? }`
- *     that drives the "category-specific fields" block on the edit
- *     form. The values land in entry.metadata[key].
- *   - renderList (optional): replaces the default left-column list
- *     (History's timeline uses this when no entry is selected).
- *
- * All reads / writes go through the shared WorldLoreEntry entity.
+ * Forum-style shared view for the five entry-based categories.
+ * State machine:
+ *   list    — default thread list
+ *   detail  — forum post + comments for the selected entry
+ *   new     — empty form
+ *   edit    — form prefilled with the selected entry
  */
 export default function EntryCategoryView({
   campaignId,
-  campaign,
   user,
   isGM,
   isMole,
   partyPlayers = [],
+  profiles = [],
   categoryKey,
   emptyLabel,
   metadataFields = [],
   renderList,
 }) {
   const queryClient = useQueryClient();
+  const [mode, setMode] = useState("list");
   const [selectedId, setSelectedId] = useState(null);
-  const [editingMode, setEditingMode] = useState(null); // "new" | "edit" | null
   const [search, setSearch] = useState("");
 
   const { data: allEntries = [], isLoading } = useQuery({
     queryKey: ["worldLoreEntries", campaignId, categoryKey],
-    queryFn: () => base44.entities.WorldLoreEntry.filter({
-      campaign_id: campaignId,
-      category: categoryKey,
-    }, "-created_at"),
+    queryFn: () => base44.entities.WorldLoreEntry
+      .filter({ campaign_id: campaignId, category: categoryKey }, "-created_at")
+      .catch(() => []),
     enabled: !!campaignId && !!categoryKey,
     initialData: [],
   });
+
+  // Comment counts per entry — one query, grouped client-side.
+  const { data: allComments = [] } = useQuery({
+    queryKey: ["worldLoreCommentCounts", campaignId, categoryKey],
+    queryFn: async () => {
+      const entryIds = allEntries.map((e) => e.id);
+      if (entryIds.length === 0) return [];
+      // WorldLoreComment.filter doesn't support "in" natively — grab
+      // everything for the campaign's entries and count client-side.
+      const lists = await Promise.all(entryIds.map((id) =>
+        base44.entities.WorldLoreComment.filter({ entry_id: id }).catch(() => [])
+      ));
+      return lists.flat();
+    },
+    enabled: allEntries.length > 0,
+    initialData: [],
+  });
+  const commentsByEntry = useMemo(() => {
+    const m = new Map();
+    for (const c of allComments) {
+      m.set(c.entry_id, (m.get(c.entry_id) || 0) + 1);
+    }
+    return m;
+  }, [allComments]);
+
+  const profilesById = useMemo(() => {
+    const m = new Map();
+    for (const p of profiles) m.set(p.user_id, p);
+    if (user?.id) m.set(user.id, { ...(m.get(user.id) || {}), ...user });
+    return m;
+  }, [profiles, user]);
 
   const visibleEntries = useMemo(
     () => filterByVisibility(allEntries, { userId: user?.id, isGM, isMole }),
@@ -76,6 +95,14 @@ export default function EntryCategoryView({
     );
   }, [visibleEntries, search]);
 
+  // Pinned entries sort first, then by newest.
+  const ordered = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      if (!!a.is_pinned !== !!b.is_pinned) return a.is_pinned ? -1 : 1;
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    });
+  }, [filtered]);
+
   const selected = useMemo(
     () => visibleEntries.find((e) => e.id === selectedId) || null,
     [visibleEntries, selectedId],
@@ -83,20 +110,19 @@ export default function EntryCategoryView({
 
   const writeMutation = useMutation({
     mutationFn: async (payload) => {
-      if (payload.id) {
-        return base44.entities.WorldLoreEntry.update(payload.id, payload);
-      }
+      if (payload.id) return base44.entities.WorldLoreEntry.update(payload.id, payload);
       return base44.entities.WorldLoreEntry.create({
         ...payload,
         campaign_id: campaignId,
         category: categoryKey,
-        created_by: user?.id,
+        created_by: user?.id || null,
         created_at: new Date().toISOString(),
       });
     },
     onSuccess: (row) => {
       queryClient.invalidateQueries({ queryKey: ["worldLoreEntries", campaignId, categoryKey] });
-      setEditingMode(null);
+      queryClient.invalidateQueries({ queryKey: ["worldLoreEntriesAll", campaignId] });
+      setMode(row?.id ? "detail" : "list");
       if (row?.id) setSelectedId(row.id);
       toast.success("Entry saved.");
     },
@@ -107,162 +133,201 @@ export default function EntryCategoryView({
     mutationFn: (id) => base44.entities.WorldLoreEntry.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["worldLoreEntries", campaignId, categoryKey] });
+      queryClient.invalidateQueries({ queryKey: ["worldLoreEntriesAll", campaignId] });
       setSelectedId(null);
+      setMode("list");
       toast.success("Entry deleted.");
     },
     onError: (err) => toast.error(err?.message || "Delete failed."),
   });
 
+  // ─── NEW / EDIT ──────────────────────────────────────────────────
+  if (mode === "new" || mode === "edit") {
+    return (
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={() => setMode(selected ? "detail" : "list")}
+          className="text-xs text-slate-400 hover:text-[#37F2D1] flex items-center gap-1"
+        >
+          <ArrowLeft className="w-3 h-3" /> {selected ? "Back to entry" : "Back to list"}
+        </button>
+        <EntryForm
+          initial={mode === "edit" ? selected : null}
+          categoryMetadataFields={metadataFields}
+          partyPlayers={partyPlayers}
+          campaignId={campaignId}
+          saving={writeMutation.isPending}
+          onCancel={() => setMode(selected ? "detail" : "list")}
+          onSave={(payload) => writeMutation.mutate(payload)}
+        />
+      </div>
+    );
+  }
+
+  // ─── DETAIL ──────────────────────────────────────────────────────
+  if (mode === "detail" && selected) {
+    return (
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={() => { setMode("list"); setSelectedId(null); }}
+          className="text-xs text-slate-400 hover:text-[#37F2D1] flex items-center gap-1"
+        >
+          <ArrowLeft className="w-3 h-3" /> Back to list
+        </button>
+
+        <EntryDetail
+          entry={selected}
+          profilesById={profilesById}
+          metadataFields={metadataFields}
+          isGM={isGM}
+          onEdit={() => setMode("edit")}
+          onDelete={() => {
+            if (confirm(`Delete "${selected.title}"?`)) deleteMutation.mutate(selected.id);
+          }}
+        />
+
+        <CommentThread
+          entryId={selected.id}
+          user={user}
+          isGM={isGM}
+          profilesById={profilesById}
+        />
+      </div>
+    );
+  }
+
+  // ─── LIST ────────────────────────────────────────────────────────
   return (
-    <div className="grid grid-cols-1 md:grid-cols-[minmax(0,30%),minmax(0,1fr)] gap-4 min-h-[calc(100vh-240px)]">
-      <aside className="bg-[#0f1219] border border-slate-700 rounded-xl p-3 flex flex-col">
-        <div className="relative mb-2">
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[220px]">
           <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search…"
-            className="pl-7 bg-[#050816] border-slate-600 text-white placeholder:text-slate-500 h-9 text-sm"
+            placeholder="Search entries…"
+            className="pl-7 bg-[#0f1219] border-slate-600 text-white placeholder:text-slate-500"
           />
         </div>
-
-        {isLoading ? (
-          <p className="text-sm text-slate-500 italic p-4 text-center">Loading…</p>
-        ) : filtered.length === 0 ? (
-          <p className="text-sm text-slate-500 italic p-4 text-center">{emptyLabel || "No entries yet."}</p>
-        ) : renderList ? (
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
-            {renderList({
-              entries: filtered,
-              selectedId,
-              onSelect: setSelectedId,
-            })}
-          </div>
-        ) : (
-          <ul className="flex-1 overflow-y-auto custom-scrollbar space-y-1">
-            {filtered.map((entry) => (
-              <EntryListRow
-                key={entry.id}
-                entry={entry}
-                selected={selectedId === entry.id}
-                onClick={() => setSelectedId(entry.id)}
-              />
-            ))}
-          </ul>
-        )}
-
         {isGM && (
           <Button
-            onClick={() => { setSelectedId(null); setEditingMode("new"); }}
-            className="mt-2 bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
+            onClick={() => { setSelectedId(null); setMode("new"); }}
+            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
           >
             <Plus className="w-4 h-4 mr-1" /> New Entry
           </Button>
         )}
-      </aside>
+      </div>
 
-      <section className="bg-[#0f1219] border border-slate-700 rounded-xl p-5 overflow-y-auto">
-        {editingMode ? (
-          <EntryForm
-            initial={editingMode === "edit" ? selected : null}
-            metadataFields={metadataFields}
-            partyPlayers={partyPlayers}
-            saving={writeMutation.isPending}
-            onCancel={() => setEditingMode(null)}
-            onSave={(payload) => writeMutation.mutate(payload)}
-          />
-        ) : !selected ? (
-          <EmptySelectionPane label={emptyLabel} />
+      {isLoading ? (
+        <div className="text-sm text-slate-500 italic text-center py-12">Loading entries…</div>
+      ) : ordered.length === 0 ? (
+        <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-10 text-center text-slate-500 text-sm italic">
+          {emptyLabel || "No entries yet."}
+        </div>
+      ) : renderList ? (
+        renderList({
+          entries: ordered,
+          profilesById,
+          commentsByEntry,
+          onSelect: (id) => { setSelectedId(id); setMode("detail"); },
+        })
+      ) : (
+        <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg divide-y divide-slate-700/30">
+          {ordered.map((entry) => (
+            <ForumRow
+              key={entry.id}
+              entry={entry}
+              authorProfile={profilesById.get(entry.created_by)}
+              commentCount={commentsByEntry.get(entry.id) || 0}
+              onClick={() => { setSelectedId(entry.id); setMode("detail"); }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ForumRow({ entry, authorProfile, commentCount, onClick }) {
+  const preview = stripHtml(entry.content).slice(0, 140);
+  const template = templateById(entry.template_type);
+  return (
+    <div
+      onClick={onClick}
+      className="flex items-center p-4 hover:bg-[#252b3d] transition-colors cursor-pointer"
+    >
+      {entry.is_pinned && <Pin className="w-4 h-4 text-[#37F2D1] mr-3 flex-shrink-0" />}
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-white font-semibold truncate">{entry.title}</span>
+          {entry.visibility === "gm_only"  && <Lock className="w-3 h-3 text-red-400" title="GM only" />}
+          {entry.visibility === "selected" && <Eye  className="w-3 h-3 text-amber-400" title="Selected players" />}
+          {template && template.id !== "freeform" && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-400 uppercase tracking-wider">
+              {template.label}
+            </span>
+          )}
+        </div>
+        {preview && (
+          <div className="text-sm text-slate-400 truncate mt-0.5">
+            {preview}{stripHtml(entry.content).length > 140 ? "…" : ""}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 mx-6 flex-shrink-0">
+        {authorProfile?.avatar_url ? (
+          <img src={authorProfile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
         ) : (
-          <EntryDetailPane
-            entry={selected}
-            metadataFields={metadataFields}
-            canEdit={isGM}
-            onEdit={() => setEditingMode("edit")}
-            onDelete={() => {
-              if (confirm(`Delete "${selected.title}"?`)) deleteMutation.mutate(selected.id);
-            }}
-          />
+          <div className="w-8 h-8 rounded-full bg-slate-700" />
         )}
-      </section>
+        <div className="text-right">
+          <div className="text-xs text-[#37F2D1]">{authorProfile?.username || "GM"}</div>
+          <div className="text-xs text-slate-500">{timeAgo(entry.created_at)}</div>
+        </div>
+      </div>
+
+      <div className="text-center flex-shrink-0 w-16">
+        <div className="text-sm font-bold text-slate-300">{commentCount}</div>
+        <div className="text-xs text-slate-500">replies</div>
+      </div>
     </div>
   );
 }
 
-function EntryListRow({ entry, selected, onClick }) {
-  const badge = visibilityBadge(entry.visibility);
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onClick}
-        className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${
-          selected
-            ? "bg-[#37F2D1]/10 border-[#37F2D1]/60"
-            : "bg-[#050816] border-slate-700 hover:border-slate-500"
-        }`}
-      >
-        <div className="flex items-center gap-2">
-          <span className={`text-sm font-bold truncate flex-1 ${selected ? "text-[#37F2D1]" : "text-white"}`}>
-            {entry.title || "Untitled"}
-          </span>
-          <Badge variant="outline" className={`text-[9px] ${badge.cls}`}>{badge.label}</Badge>
-        </div>
-        <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">
-          {stripHtml(entry.content)}
-        </p>
-      </button>
-    </li>
-  );
-}
+function EntryDetail({ entry, profilesById, metadataFields, isGM, onEdit, onDelete }) {
+  const author = profilesById.get(entry.created_by) || {};
+  const template = templateById(entry.template_type);
+  const structuredMetadataKeys = template.fields?.map((f) => f.key) || [];
 
-function EmptySelectionPane({ label }) {
   return (
-    <div className="h-full flex items-center justify-center text-slate-500 text-sm italic">
-      {label || "Select an entry to view its details."}
-    </div>
-  );
-}
-
-function EntryDetailPane({ entry, metadataFields, canEdit, onEdit, onDelete }) {
-  const badge = visibilityBadge(entry.visibility);
-  return (
-    <article className="space-y-4">
-      <header className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h2 className="text-2xl font-bold text-white">{entry.title}</h2>
-          <div className="flex items-center gap-2 mt-1">
-            <Badge variant="outline" className={`text-[10px] ${badge.cls}`}>{badge.label}</Badge>
-            {entry.subcategory && (
-              <Badge variant="outline" className="text-[10px] border-slate-600 text-slate-300">
-                {entry.subcategory}
-              </Badge>
-            )}
-          </div>
-        </div>
-        {canEdit && (
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={onEdit} className="text-slate-300">
-              <Pencil className="w-3 h-3 mr-1" /> Edit
-            </Button>
-            <Button size="sm" variant="outline" onClick={onDelete} className="text-red-400 border-red-700">
-              <Trash2 className="w-3 h-3 mr-1" /> Delete
-            </Button>
-          </div>
+    <article className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-6">
+      <header className="flex items-start gap-4 mb-6">
+        {author.avatar_url ? (
+          <img src={author.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
+        ) : (
+          <div className="w-12 h-12 rounded-full bg-slate-700 flex-shrink-0" />
         )}
+        <div className="flex-1 min-w-0">
+          <div className="text-[#37F2D1] font-semibold">{author.username || "GM"}</div>
+          <div className="text-xs text-slate-500">{formatDate(entry.created_at)}</div>
+          <h1 className="text-2xl font-bold text-white mt-2">{entry.title}</h1>
+        </div>
+        <VisibilityPill visibility={entry.visibility} />
       </header>
 
-      {entry.image_url && (
-        <img src={entry.image_url} alt="" className="w-full max-h-80 object-cover rounded-lg border border-slate-700" />
-      )}
-
+      {/* Category-level metadata (e.g., Region type, Faction alignment) */}
       {metadataFields.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-5">
           {metadataFields.map((field) => {
             const val = entry?.metadata?.[field.key];
             if (!val && val !== 0) return null;
             return (
-              <div key={field.key} className="bg-[#050816] border border-slate-700 rounded-lg p-2">
+              <div key={field.key} className="bg-[#0f1219] border border-slate-700 rounded-lg p-2">
                 <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">{field.label}</div>
                 <div className="text-sm text-white font-semibold">{String(val)}</div>
               </div>
@@ -271,223 +336,78 @@ function EntryDetailPane({ entry, metadataFields, canEdit, onEdit, onDelete }) {
         </div>
       )}
 
-      {entry.content ? (
+      {/* Template-specific structured body */}
+      {template.id !== "freeform" && structuredMetadataKeys.length > 0 && (
+        <div className="space-y-3 mb-5">
+          {template.fields.map((field) => {
+            const val = entry?.metadata?.[field.key];
+            if (!val) return null;
+            if (field.type === "image") {
+              return (
+                <div key={field.key}>
+                  <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">{field.label}</div>
+                  <img src={val} alt="" className="max-h-80 rounded-lg border border-slate-700" />
+                </div>
+              );
+            }
+            return (
+              <div key={field.key} className="bg-[#0f1219] border border-slate-700 rounded-lg p-3">
+                <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">{field.label}</div>
+                <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{val}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Freeform content */}
+      {template.id === "freeform" && entry.content && (
         <div
-          className="text-sm text-slate-300 leading-relaxed prose prose-invert max-w-none"
-          // The rich-text editor persists HTML — render it directly.
-          // Inputs are GM-authored so the XSS surface is low; long
-          // term we could run it through DOMPurify.
+          className="prose prose-invert max-w-none text-slate-300 leading-relaxed"
           dangerouslySetInnerHTML={{ __html: entry.content }}
         />
-      ) : (
-        <p className="text-sm text-slate-500 italic">No description yet.</p>
+      )}
+
+      {entry.image_url && (
+        <img
+          src={entry.image_url}
+          alt=""
+          className="mt-6 rounded-lg border border-slate-700 max-h-96 object-cover w-full"
+        />
+      )}
+
+      {isGM && (
+        <div className="flex gap-2 mt-6 pt-4 border-t border-slate-700/50">
+          <Button variant="ghost" size="sm" onClick={onEdit} className="text-slate-300 hover:text-white">
+            <Pencil className="w-4 h-4 mr-1" /> Edit
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onDelete} className="text-red-400 hover:text-red-300">
+            <Trash2 className="w-4 h-4 mr-1" /> Delete
+          </Button>
+        </div>
       )}
     </article>
   );
 }
 
-function EntryForm({ initial, metadataFields, partyPlayers, saving, onCancel, onSave }) {
-  const [title, setTitle] = useState(initial?.title || "");
-  const [content, setContent] = useState(initial?.content || "");
-  const [visibility, setVisibility] = useState(initial?.visibility || "public");
-  const [visibleTo, setVisibleTo] = useState(
-    Array.isArray(initial?.visible_to_players) ? initial.visible_to_players : [],
-  );
-  const [metadata, setMetadata] = useState(initial?.metadata || {});
-  const [imageUrl, setImageUrl] = useState(initial?.image_url || "");
-  const [uploading, setUploading] = useState(false);
-
-  const setMeta = (key, value) => setMetadata((m) => ({ ...m, [key]: value }));
-
-  const togglePlayer = (id) => {
-    setVisibleTo((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
-  };
-
-  const handleUpload = async (file) => {
-    if (!file) return;
-    setUploading(true);
-    try {
-      const { file_url } = await uploadFile(file, "campaign-assets", "worldlore");
-      setImageUrl(file_url);
-    } catch (err) {
-      toast.error(err?.message || "Upload failed");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleSave = () => {
-    if (!title.trim()) { toast.error("Give it a title."); return; }
-    onSave({
-      id: initial?.id,
-      title: title.trim(),
-      content,
-      visibility,
-      visible_to_players: visibility === "selected" ? visibleTo : [],
-      metadata,
-      image_url: imageUrl || null,
-    });
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-white">
-          {initial?.id ? "Edit Entry" : "New Entry"}
-        </h2>
-      </div>
-
-      <div>
-        <Label className="text-xs text-slate-300">Title</Label>
-        <Input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="bg-[#050816] border-slate-600 text-white mt-1"
-        />
-      </div>
-
-      <div>
-        <Label className="text-xs text-slate-300">Content</Label>
-        <Textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          rows={10}
-          placeholder="Supports plain text or raw HTML from your editor of choice."
-          className="bg-[#050816] border-slate-600 text-white placeholder:text-slate-500 mt-1"
-        />
-      </div>
-
-      <div>
-        <Label className="text-xs text-slate-300">Image (optional)</Label>
-        <div className="flex items-center gap-3 mt-1">
-          {imageUrl ? (
-            <img src={imageUrl} alt="" className="w-20 h-20 rounded object-cover border border-slate-700" />
-          ) : (
-            <div className="w-20 h-20 rounded bg-slate-800 border border-slate-700" />
-          )}
-          <label className="inline-flex items-center gap-1 text-xs text-slate-300 cursor-pointer bg-[#050816] border border-slate-600 px-2 py-1.5 rounded hover:border-[#37F2D1]">
-            <Upload className="w-3 h-3" />
-            {uploading ? "Uploading…" : imageUrl ? "Replace" : "Upload"}
-            <input type="file" accept="image/*" className="hidden"
-              onChange={(e) => handleUpload(e.target.files?.[0])}
-              disabled={uploading} />
-          </label>
-          {imageUrl && (
-            <button
-              type="button"
-              onClick={() => setImageUrl("")}
-              className="text-[11px] text-red-400 hover:underline"
-            >
-              Remove
-            </button>
-          )}
-        </div>
-      </div>
-
-      {metadataFields.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-[#050816] border border-slate-700 rounded-lg p-3">
-          {metadataFields.map((field) => (
-            <MetadataField
-              key={field.key}
-              field={field}
-              value={metadata[field.key] ?? ""}
-              onChange={(v) => setMeta(field.key, v)}
-            />
-          ))}
-        </div>
-      )}
-
-      <div className="bg-[#050816] border border-slate-700 rounded-lg p-3 space-y-2">
-        <Label className="text-xs text-slate-300">Visibility</Label>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-          {VISIBILITY_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setVisibility(opt.value)}
-              className={`text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
-                visibility === opt.value
-                  ? "bg-[#37F2D1]/15 border-[#37F2D1]/60 text-[#37F2D1]"
-                  : "bg-[#0b1220] border-slate-600 text-slate-300 hover:border-slate-400"
-              }`}
-            >
-              <div className="font-semibold">{opt.label}</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">{opt.hint}</div>
-            </button>
-          ))}
-        </div>
-
-        {visibility === "selected" && (
-          <div className="pt-1">
-            <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-1">
-              Select players
-            </div>
-            {partyPlayers.length === 0 ? (
-              <p className="text-[11px] text-slate-500 italic">No players in this campaign yet.</p>
-            ) : (
-              <ul className="space-y-1">
-                {partyPlayers.map((p) => (
-                  <li key={p.user_id} className="flex items-center gap-2 text-xs text-slate-300">
-                    <Checkbox
-                      checked={visibleTo.includes(p.user_id)}
-                      onCheckedChange={() => togglePlayer(p.user_id)}
-                    />
-                    <span>{p.username || p.email || p.user_id}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="text-[10px] text-slate-500 italic mt-1">
-              Any player flagged as a mole in Campaign Settings also sees selected-visibility entries.
-            </p>
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center justify-end gap-2 pt-2">
-        <Button variant="outline" onClick={onCancel}>
-          <X className="w-4 h-4 mr-1" /> Cancel
-        </Button>
-        <Button
-          onClick={handleSave}
-          disabled={saving}
-          className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
-        >
-          <Save className="w-4 h-4 mr-1" /> {saving ? "Saving…" : "Save Entry"}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function MetadataField({ field, value, onChange }) {
-  const { key, label, type = "text", options = [] } = field;
-  if (type === "select") {
+function VisibilityPill({ visibility }) {
+  if (visibility === "gm_only") {
     return (
-      <div>
-        <Label className="text-[10px] uppercase tracking-widest text-slate-400">{label}</Label>
-        <Select value={String(value || "")} onValueChange={onChange}>
-          <SelectTrigger className="bg-[#0b1220] border-slate-600 text-white h-9 text-xs mt-1">
-            <SelectValue placeholder="—" />
-          </SelectTrigger>
-          <SelectContent>
-            {options.map((opt) => (
-              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <span className="text-xs px-2 py-1 rounded bg-red-900/30 text-red-400 border border-red-800/30">
+        GM Only
+      </span>
+    );
+  }
+  if (visibility === "selected") {
+    return (
+      <span className="text-xs px-2 py-1 rounded bg-amber-900/30 text-amber-400 border border-amber-800/30">
+        Limited
+      </span>
     );
   }
   return (
-    <div>
-      <Label className="text-[10px] uppercase tracking-widest text-slate-400">{label}</Label>
-      <Input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        type={type === "number" ? "number" : "text"}
-        className="bg-[#0b1220] border-slate-600 text-white h-9 text-xs mt-1"
-      />
-    </div>
+    <span className="text-xs px-2 py-1 rounded bg-emerald-900/30 text-emerald-400 border border-emerald-800/30">
+      Public
+    </span>
   );
 }
