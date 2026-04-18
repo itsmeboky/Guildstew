@@ -1,16 +1,16 @@
 import {
-  LogOut, WifiOff, Users, BookOpen, StickyNote, Trophy, UserCog,
+  LogOut, Users, BookOpen, StickyNote, Trophy, UserCog,
   Megaphone, Settings,
 } from "lucide-react";
 
 /**
- * In-session GM sidebar. A slim icon column pinned to the left of
- * GMPanel. The big red End Session button lives at the top, then
- * a divider, then one icon per in-session tool. Each tool button
- * sets the active modal key on the parent — nothing here ever
- * navigates away from the session. A live disconnected-player
- * tooltip surfaces on the WifiOff icon when the presence channel
- * drops someone.
+ * In-session GM sidebar. Wide enough (w-56) to carry both an icon
+ * and a text label per tool so the GM isn't left guessing what
+ * each button does. End Session lives at the top — a full-width
+ * red button with a label — and a live Disconnected Players card
+ * drops in below it whenever the presence channel loses somebody.
+ * Every tool button flips the parent's activeModal; nothing here
+ * navigates away from the session.
  */
 const SECTIONS = [
   { key: "party",        icon: Users,     label: "Adventuring Party" },
@@ -29,49 +29,24 @@ export default function GMSessionSidebar({
   disconnectedPlayers = [],
 }) {
   return (
-    <aside className="w-16 flex-shrink-0 bg-[#1a1f2e] border-r border-slate-700/50 flex flex-col items-center py-4 gap-3">
-      <button
-        type="button"
-        onClick={onEndSession}
-        className="w-12 h-12 rounded-lg bg-red-600 hover:bg-red-500 flex items-center justify-center"
-        title="End Session"
-      >
-        <LogOut className="w-5 h-5 text-white" />
-      </button>
-
-      <div className="w-8 border-t border-slate-700 my-1" />
-
-      {SECTIONS.map((section) => {
-        const Icon = section.icon;
-        const active = activeModal === section.key;
-        return (
-          <button
-            key={section.key}
-            type="button"
-            onClick={() => onOpenModal(section.key)}
-            title={section.label}
-            className={`w-12 h-12 rounded-lg flex items-center justify-center transition-colors ${
-              active
-                ? "bg-[#37F2D1]/10 text-[#37F2D1]"
-                : "text-slate-400 hover:text-white hover:bg-[#252b3d]"
-            }`}
-          >
-            <Icon className="w-5 h-5" />
-          </button>
-        );
-      })}
+    <aside className="w-56 flex-shrink-0 bg-[#1a1f2e] border-r border-slate-700/50 flex flex-col h-full overflow-hidden">
+      <div className="p-3 border-b border-slate-700/50">
+        <button
+          type="button"
+          onClick={onEndSession}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-semibold transition-colors"
+          title="End the session and release every locked character"
+        >
+          <LogOut className="w-4 h-4" />
+          End Session
+        </button>
+      </div>
 
       {disconnectedPlayers.length > 0 && (
-        <div className="mt-auto mb-2 relative group">
-          <div className="w-10 h-10 rounded-full bg-amber-900/30 border border-amber-700/60 flex items-center justify-center text-amber-400">
-            <WifiOff className="w-5 h-5" />
-          </div>
-          <span className="absolute -top-1 -right-1 bg-amber-500 text-[#050816] text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-            {disconnectedPlayers.length}
-          </span>
-          <div className="absolute left-full ml-2 top-0 min-w-[180px] bg-[#1a1f2e] border border-amber-700/50 rounded-lg p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-xl">
-            <p className="text-[10px] uppercase tracking-wider text-amber-400 mb-2">Disconnected</p>
-            <ul className="space-y-1">
+        <div className="p-3 border-b border-slate-700/50">
+          <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-2">
+            <p className="text-xs text-amber-400 font-semibold mb-1">Disconnected</p>
+            <ul className="space-y-0.5">
               {disconnectedPlayers.map((p) => (
                 <li key={p.id} className="text-xs text-slate-300 truncate">{p.name}</li>
               ))}
@@ -79,6 +54,28 @@ export default function GMSessionSidebar({
           </div>
         </div>
       )}
+
+      <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+        {SECTIONS.map((section) => {
+          const Icon = section.icon;
+          const active = activeModal === section.key;
+          return (
+            <button
+              key={section.key}
+              type="button"
+              onClick={() => onOpenModal(section.key)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
+                active
+                  ? "bg-[#37F2D1]/10 text-[#37F2D1]"
+                  : "text-slate-400 hover:text-white hover:bg-[#252b3d]"
+              }`}
+            >
+              <Icon className="w-4 h-4 flex-shrink-0" />
+              <span>{section.label}</span>
+            </button>
+          );
+        })}
+      </nav>
     </aside>
   );
 }
