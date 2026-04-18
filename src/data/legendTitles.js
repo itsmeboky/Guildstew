@@ -254,3 +254,53 @@ export function buildTitleRumor(character, titleMeta) {
   const flavor = titleMeta?.rumorFlavor || "";
   return `Word has spread of ${name} ${titleMeta?.title || ""}. ${flavor.replaceAll("{name}", name)}`.trim();
 }
+
+/**
+ * Short-form auto-rumor strings keyed by title display text. These
+ * are the exact snippets the World Lore Task 4 spec lists for the
+ * most commonly-earned titles; other titles fall back to the richer
+ * per-title rumorFlavor via `buildTitleRumor`. Consumers that want
+ * the exact spec phrasing (e.g. a combat-end hook that picks the
+ * canonical line) can read from this map first.
+ */
+export const AUTO_RUMOR_TEMPLATES = {
+  "the Butcher":         "They say {name} has left a trail of blood across the land.",
+  "the Lucky":           "Fortune favors {name}, or so the gamblers whisper.",
+  "the Silver-Tongued":  "Watch your coin purse around {name}. That one could talk a dragon out of its hoard.",
+  "the Wise":            "The counsel of {name} is sought by lords and beggars alike.",
+  "the Immortal":        "{name} has cheated death so many times, even the Raven Queen has stopped counting.",
+  "the Mender":          "Where {name} walks, the wounded rise again.",
+  "the Survivor":        "They keep trying to kill {name}. It never sticks.",
+  "the Cursed":          "Stay away from {name} at the gambling table. Bad luck follows that one like a shadow.",
+};
+
+/**
+ * Returns a 0-100 number describing how close the character is to
+ * earning this title. Matches the Task 4 spec's helper signature.
+ * Leans on each title's `progress({stats,achievements})` function
+ * when available; falls back to a binary 0/100 for titles that
+ * don't expose progress (rare corner-cases).
+ */
+export function getProgress(title, stats, achievements) {
+  if (!title) return 0;
+  if (typeof title.progress === "function") {
+    try {
+      const { current = 0, target = 1 } = title.progress({
+        stats: stats || {},
+        achievements: achievements || [],
+      }) || {};
+      if (!target) return 0;
+      return Math.max(0, Math.min(100, Math.round((Number(current) / Number(target)) * 100)));
+    } catch {
+      return 0;
+    }
+  }
+  if (typeof title.condition === "function") {
+    try {
+      return title.condition({ stats: stats || {}, achievements: achievements || [] }) ? 100 : 0;
+    } catch {
+      return 0;
+    }
+  }
+  return 0;
+}
