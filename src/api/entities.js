@@ -90,6 +90,15 @@ export const entities = {
   CampaignMap:          createEntity('campaign_maps'),
   CampaignNPC:          createEntity('campaign_npcs'),
   CampaignUpdate:       createEntity('campaign_updates'),
+  // Shared SRD reference tables. Read-only from the app's
+  // perspective (populated by seed scripts). The per-campaign
+  // tables (monsters / campaign_items / spells / campaign_abilities)
+  // now only hold GM homebrew — a campaign-create trigger used to
+  // copy SRD rows in but it's gone.
+  Dnd5eAbility:         createEntity('dnd5e_abilities'),
+  Dnd5eItem:            createEntity('dnd5e_items'),
+  Dnd5eMonster:         createEntity('dnd5e_monsters'),
+  Dnd5eSpell:            createEntity('dnd5e_spells'),
   HomebrewRule:         createEntity('homebrew_rules'),
   HomebrewReview:       createEntity('homebrew_reviews'),
   Character:            createEntity('characters'),

@@ -56,7 +56,7 @@ export default function CampaignArchives() {
     { title: "Items",     field: "items_image_url",     page: "CampaignItems" },
     { title: "Monsters",  field: "monsters_image_url",  page: "CampaignMonsters" },
     { title: "Spells",    field: "spells_image_url",    page: "CampaignSpells" },
-    { title: "Abilities", field: "abilities_image_url", page: "CampaignAbilities" },
+    { title: "Class Features", field: "abilities_image_url", page: "CampaignAbilities" },
   ];
 
   if (!campaign) {
@@ -143,7 +143,7 @@ export default function CampaignArchives() {
                          section.title === 'Items' ? 'Forged & Found Compendium' :
                          section.title === 'Monsters' ? 'Bestiary of Beasts & Foes' :
                          section.title === 'Spells' ? 'Words of Power & Fire' :
-                         section.title === 'Abilities' ? 'Talents, Feats & Features' :
+                         section.title === 'Class Features' ? 'Talents, Feats & Features' :
                          'Campaign Archives'}
                       </p>
                     </div>
