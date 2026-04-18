@@ -227,6 +227,9 @@ function PartyRow({ character, selected, onClick }) {
         <div className="flex-1 min-w-0">
           <div className={`text-sm font-bold truncate ${selected ? "text-[#37F2D1]" : "text-[#37F2D1]/80"}`}>
             {character.name}
+            {character.active_title && (
+              <span className="text-[#37F2D1]/70 ml-1 font-normal">{character.active_title}</span>
+            )}
           </div>
           <div className="text-[10px] text-slate-400 truncate">
             Lvl {level} {className}

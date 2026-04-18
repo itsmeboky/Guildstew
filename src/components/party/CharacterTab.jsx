@@ -1,5 +1,6 @@
 import React from "react";
 import { Shield, Heart, Footprints, Zap } from "lucide-react";
+import { formatCharacterName } from "@/utils/characterTitle";
 
 const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"];
 const ABILITY_LABELS = { str: "STR", dex: "DEX", con: "CON", int: "INT", wis: "WIS", cha: "CHA" };
@@ -37,7 +38,12 @@ export default function CharacterTab({ character }) {
           <div className="w-48 h-48 rounded-2xl bg-slate-800 flex-shrink-0" />
         )}
         <div className="flex-1 min-w-0">
-          <h2 className="text-3xl font-black text-white">{character.name}</h2>
+          <h2 className="text-3xl font-black text-white">
+            {character.name}
+            {character.active_title && (
+              <span className="text-[#37F2D1] ml-2 font-bold">{character.active_title}</span>
+            )}
+          </h2>
           <p className="text-xs uppercase tracking-widest text-slate-400 mt-1">
             Level {character.level || 1}
             {title ? ` · ${title}` : ""}
