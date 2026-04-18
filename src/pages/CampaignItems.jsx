@@ -22,6 +22,69 @@ const categoryIcons = {
   trinkets: Package
 };
 
+/**
+ * The `properties`, `damage`, and `armor_class` columns on
+ * `dnd5e_items` are JSONB objects, not strings. Rendering them
+ * directly crashed React with "Objects are not valid as a React
+ * child." These helpers coerce whatever shape comes through the
+ * merged SRD + homebrew list into something safe to render.
+ */
+function safeString(val) {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "string") return val;
+  if (typeof val === "number" || typeof val === "boolean") return String(val);
+  if (Array.isArray(val)) return val.map(safeString).filter(Boolean).join(", ");
+  return "";
+}
+
+function renderItemProperties(properties) {
+  if (!properties) return "";
+  if (typeof properties === "string") return properties;
+  if (Array.isArray(properties)) return properties.map(safeString).filter(Boolean).join(", ");
+  if (typeof properties !== "object") return "";
+  const parts = [];
+  if (properties.damage?.dice || properties.damage?.type) {
+    parts.push([properties.damage.dice, properties.damage.type].filter(Boolean).join(" "));
+  }
+  if (properties.armor_class?.base != null) {
+    parts.push(`AC ${properties.armor_class.base}${properties.armor_class.dex_bonus ? " + DEX" : ""}`);
+  }
+  if (properties.range?.normal || properties.range?.long) {
+    parts.push(`Range ${properties.range.normal ?? "—"}/${properties.range.long ?? "—"}`);
+  }
+  if (properties.weight) parts.push(`${properties.weight} lb.`);
+  if (Array.isArray(properties.properties) && properties.properties.length) {
+    parts.push(properties.properties.map(safeString).filter(Boolean).join(", "));
+  }
+  if (properties.stealth_disadvantage) parts.push("Stealth Disadvantage");
+  if (properties.str_minimum) parts.push(`STR ${properties.str_minimum}`);
+  return parts.filter(Boolean).join(" · ");
+}
+
+function renderDamage(damage) {
+  if (!damage) return "";
+  if (typeof damage === "string") return damage;
+  if (typeof damage !== "object") return "";
+  const dice = damage.damage_dice || damage.dice || "";
+  const type = damage.damage_type?.name || damage.type || "";
+  return [dice, type].filter(Boolean).join(" ");
+}
+
+function renderArmorClass(ac) {
+  if (!ac) return "";
+  if (typeof ac === "string" || typeof ac === "number") return String(ac);
+  if (Array.isArray(ac)) {
+    const first = ac[0];
+    if (typeof first === "number") return String(first);
+    if (first?.value != null) return String(first.value);
+  }
+  if (typeof ac === "object") {
+    if (ac.base != null) return `${ac.base}${ac.dex_bonus ? " + DEX" : ""}`;
+    if (ac.value != null) return String(ac.value);
+  }
+  return "";
+}
+
 export default function CampaignItems() {
   const urlParams = new URLSearchParams(window.location.search);
   const campaignId = urlParams.get('id');
@@ -124,10 +187,10 @@ export default function CampaignItems() {
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(item =>
-        (item.name || "").toLowerCase().includes(q) ||
-        (item.type || "").toLowerCase().includes(q) ||
-        (item.description || "").toLowerCase().includes(q)
+      filtered = filtered.filter((item) =>
+        safeString(item.name).toLowerCase().includes(q) ||
+        safeString(item.type).toLowerCase().includes(q) ||
+        safeString(item.description).toLowerCase().includes(q)
       );
     }
 
@@ -315,10 +378,10 @@ export default function CampaignItems() {
                   )}
                   <div className="p-4">
                     <div className={`inline-block px-2 py-1 rounded text-xs font-bold text-white mb-2 ${rarityColors[item.rarity]}`}>
-                      {item.rarity?.toUpperCase()}
+                      {safeString(item.rarity).toUpperCase()}
                     </div>
-                    <h3 className="font-bold text-lg">{item.name}</h3>
-                    <p className="text-sm text-gray-400 line-clamp-2">{item.description}</p>
+                    <h3 className="font-bold text-lg">{safeString(item.name)}</h3>
+                    <p className="text-sm text-gray-400 line-clamp-2">{safeString(item.description)}</p>
                   </div>
                 </div>
               ))}
@@ -394,9 +457,9 @@ export default function CampaignItems() {
                               <Package className="w-12 h-12 text-gray-600" />
                             </div>
                           )}
-                          <h3 className="font-semibold text-sm line-clamp-1 text-white">{item.name}</h3>
-                          <p className="text-xs text-gray-400">{item.type}</p>
-                          <p className="text-xs text-[#37F2D1] font-semibold mt-1">{item.cost}</p>
+                          <h3 className="font-semibold text-sm line-clamp-1 text-white">{safeString(item.name)}</h3>
+                          <p className="text-xs text-gray-400">{safeString(item.type)}</p>
+                          <p className="text-xs text-[#37F2D1] font-semibold mt-1">{safeString(item.cost)}</p>
                         </div>
                       ))}
                     </div>
@@ -417,37 +480,51 @@ export default function CampaignItems() {
                   <img src={itemIcons[selectedLibraryItem.name]} alt={selectedLibraryItem.name} className="w-32 h-32 rounded-lg object-cover flex-shrink-0" />
                 )}
                 <div className="flex-1">
-                  <h2 className="text-3xl font-bold mb-2">{selectedLibraryItem.name}</h2>
-                  <p className="text-[#37F2D1] font-semibold mb-1">{selectedLibraryItem.type}</p>
-                  <p className="text-white font-bold text-xl mb-2">{selectedLibraryItem.cost}</p>
+                  <h2 className="text-3xl font-bold mb-2">{safeString(selectedLibraryItem.name)}</h2>
+                  <p className="text-[#37F2D1] font-semibold mb-1">{safeString(selectedLibraryItem.type)}</p>
+                  <p className="text-white font-bold text-xl mb-2">{safeString(selectedLibraryItem.cost)}</p>
                   {selectedLibraryItem.weight > 0 && (
                     <p className="text-gray-400 text-sm">Weight: {selectedLibraryItem.weight} lb.</p>
                   )}
                 </div>
               </div>
 
-              {selectedLibraryItem.damage && (
-                <div className="mb-4 p-3 bg-[#1E2430] rounded-lg">
-                  <span className="font-semibold text-[#FF5722]">Damage: </span>
-                  <span className="text-white">{selectedLibraryItem.damage}</span>
-                </div>
-              )}
+              {(() => {
+                const damageText =
+                  renderDamage(selectedLibraryItem.damage)
+                  || renderDamage(selectedLibraryItem.properties?.damage);
+                return damageText ? (
+                  <div className="mb-4 p-3 bg-[#1E2430] rounded-lg">
+                    <span className="font-semibold text-[#FF5722]">Damage: </span>
+                    <span className="text-white">{damageText}</span>
+                  </div>
+                ) : null;
+              })()}
 
-              {selectedLibraryItem.armorClass && (
-                <div className="mb-4 p-3 bg-[#1E2430] rounded-lg">
-                  <span className="font-semibold text-[#37F2D1]">Armor Class: </span>
-                  <span className="text-white">{selectedLibraryItem.armorClass}</span>
-                </div>
-              )}
+              {(() => {
+                const acText =
+                  renderArmorClass(selectedLibraryItem.armorClass)
+                  || renderArmorClass(selectedLibraryItem.armor_class)
+                  || renderArmorClass(selectedLibraryItem.properties?.armor_class);
+                return acText ? (
+                  <div className="mb-4 p-3 bg-[#1E2430] rounded-lg">
+                    <span className="font-semibold text-[#37F2D1]">Armor Class: </span>
+                    <span className="text-white">{acText}</span>
+                  </div>
+                ) : null;
+              })()}
 
-              {selectedLibraryItem.properties && (
-                <div className="mb-4 p-3 bg-[#1E2430] rounded-lg">
-                  <span className="font-semibold text-white">Properties: </span>
-                  <span className="text-gray-300">{selectedLibraryItem.properties}</span>
-                </div>
-              )}
+              {(() => {
+                const propsText = renderItemProperties(selectedLibraryItem.properties);
+                return propsText ? (
+                  <div className="mb-4 p-3 bg-[#1E2430] rounded-lg">
+                    <span className="font-semibold text-white">Properties: </span>
+                    <span className="text-gray-300">{propsText}</span>
+                  </div>
+                ) : null;
+              })()}
 
-              <p className="text-white leading-relaxed mb-6">{selectedLibraryItem.description}</p>
+              <p className="text-white leading-relaxed mb-6">{safeString(selectedLibraryItem.description)}</p>
 
             <Button onClick={() => setSelectedLibraryItem(null)} className="w-full bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430]">
               Close
@@ -578,12 +655,12 @@ export default function CampaignItems() {
                   </div>
 
                   <div className={`inline-block px-3 py-1 rounded font-bold text-white mb-3 ${rarityColors[selectedItem.rarity]}`}>
-                    {selectedItem.rarity?.toUpperCase()}
+                    {safeString(selectedItem.rarity).toUpperCase()}
                   </div>
                   
-                  <h2 className="text-3xl font-bold mb-2">{selectedItem.name}</h2>
-                  <p className="text-gray-400 mb-4">{selectedItem.type}</p>
-                  <p className="text-white leading-relaxed">{selectedItem.description}</p>
+                  <h2 className="text-3xl font-bold mb-2">{safeString(selectedItem.name)}</h2>
+                  <p className="text-gray-400 mb-4">{safeString(selectedItem.type)}</p>
+                  <p className="text-white leading-relaxed">{safeString(selectedItem.description)}</p>
                 </div>
             )}
           </div>
