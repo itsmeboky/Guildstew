@@ -66,13 +66,24 @@ export default function CampaignArchives() {
         <div className="absolute inset-0 bg-black/50" />
       )}
       <div className="max-w-4xl mx-auto relative z-10">
+        {/* If a session is active, Archives is the one page a GM is
+            allowed to leave the session for — so the back button
+            goes straight to the GMPanel. Otherwise this is just a
+            lobby-level compendium and we point back to the campaign
+            home. */}
         <Button
-          onClick={() => navigate(createPageUrl(isGM ? "CampaignGMPanel" : "CampaignPanel") + `?id=${campaignId}`)}
+          onClick={() => {
+            if (campaign?.session_active) {
+              navigate(createPageUrl("GMPanel") + `?id=${campaignId}`);
+            } else {
+              navigate(createPageUrl(isGM ? "CampaignView" : "CampaignPanel") + `?id=${campaignId}`);
+            }
+          }}
           variant="ghost"
-          className="mb-8 text-gray-400 hover:text-white"
+          className="mb-8 text-slate-400 hover:text-white"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to {isGM ? "GM Panel" : "Campaign Lobby"}
+          {campaign?.session_active ? "Back to Session" : "Back to Campaign"}
         </Button>
 
         <h1 className="text-3xl font-bold text-white mb-6">Campaign Archives</h1>

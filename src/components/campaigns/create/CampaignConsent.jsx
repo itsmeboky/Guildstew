@@ -77,7 +77,12 @@ export default function CampaignConsent({ data, onChange }) {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold mb-6">Content Guidelines & Consent</h2>
+        <h2 className="text-2xl font-bold mb-2">Content Guidelines & Consent</h2>
+        <p className="text-xs text-amber-400 mb-4">
+          ⚠️ Content consent settings cannot be changed after campaign creation.
+          Players who join agree to these settings — changing them later would
+          violate that agreement.
+        </p>
         <div className="bg-[#1E2430] rounded-lg p-6 mb-6 border-l-4 border-[#FF5722]">
           <div className="flex gap-3 mb-4">
             <AlertCircle className="w-6 h-6 text-[#FF5722] flex-shrink-0 mt-1" />

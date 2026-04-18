@@ -270,12 +270,25 @@ export default function Layout({ children, currentPageName }) {
     refetchInterval: 10000,
   });
 
+  // Pages a session-locked user is still allowed to reach — these
+  // are all read-only campaign compendia the GM might want to peek
+  // at mid-session without ending it. The in-session panels route
+  // here intentionally; everything else bounces back.
+  const SESSION_ALLOWED_PAGES = React.useMemo(() => new Set([
+    "GMPanel",
+    "CampaignPlayerPanel",
+    "CampaignArchives",
+    "CampaignNPCs",
+    "CampaignItems",
+    "CampaignMonsters",
+    "CampaignSpells",
+    "CampaignAbilities",
+    "CampaignWorldLore",
+  ]), []);
+
   useEffect(() => {
     if (!sessionLock?.campaignId) return;
-    // Figure out whether the locked user is a GM or a player in
-    // that campaign so we route them to the right in-session panel.
-    // Keep this light — we don't want every Layout tick refetching
-    // the campaign when we already know the lock.
+    if (SESSION_ALLOWED_PAGES.has(currentPageName)) return;
     const target = sessionLock.campaignId;
     let cancelled = false;
     (async () => {
@@ -285,16 +298,11 @@ export default function Layout({ children, currentPageName }) {
         const isLockedUserGM = camp.game_master_id === user?.id
           || (Array.isArray(camp.co_dm_ids) && camp.co_dm_ids.includes(user?.id));
         const targetPage = isLockedUserGM ? 'GMPanel' : 'CampaignPlayerPanel';
-        const alreadyThere =
-          currentPageName === targetPage
-          && new URLSearchParams(window.location.search).get('id') === target;
-        if (!alreadyThere) {
-          navigate(createPageUrl(targetPage) + `?id=${target}`, { replace: true });
-        }
+        navigate(createPageUrl(targetPage) + `?id=${target}`, { replace: true });
       } catch { /* ignore — lock enforcement is best-effort */ }
     })();
     return () => { cancelled = true; };
-  }, [sessionLock?.campaignId, user?.id, currentPageName, navigate]);
+  }, [sessionLock?.campaignId, user?.id, currentPageName, navigate, SESSION_ALLOWED_PAGES]);
   const isCampaignLobbyMode = currentPageName === "CampaignPanel";
   const isHomePage = currentPageName === "Home";
   const isWorldLorePage = currentPageName === "CampaignWorldLore";
@@ -554,6 +562,7 @@ export default function Layout({ children, currentPageName }) {
     || currentPageName === "CampaignAbilities"
     || currentPageName === "GMPanel"
     || currentPageName === "CampaignPlayerPanel"
+    || currentPageName === "CampaignView"
   ) {
     return <>{children}</>;
   }

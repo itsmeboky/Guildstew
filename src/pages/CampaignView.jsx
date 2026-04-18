@@ -1,262 +1,194 @@
-import React, { useState } from "react";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import {
+  Play, UserPlus, UserCog, Megaphone, BookOpen, BarChart3, Settings,
+} from "lucide-react";
+import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
-import { useQuery } from "@tanstack/react-query";
-import { Upload, Users, Map, BookOpen, Scroll, Package, Play } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
 
+/**
+ * Campaign Home — the lobby players and GMs see when they're NOT
+ * in an active session. Replaces the old card-based archives
+ * layout (NPCs / Items / Maps / World Lore / Homebrew tiles) that
+ * used to live on this page; Campaign Archives is now a page of
+ * its own and doesn't belong on the lobby.
+ *
+ * The layout: a campaign sidebar with quick links, a hero banner
+ * with campaign name, a "Start Session" button (GM only), and a
+ * grid of current players. No End Session button here — End
+ * Session lives inside the GM Panel.
+ */
 export default function CampaignView() {
   const urlParams = new URLSearchParams(window.location.search);
-  const campaignId = urlParams.get('id');
+  const campaignId = urlParams.get("id");
   const navigate = useNavigate();
-  const [uploadingSection, setUploadingSection] = useState(null);
+  const queryClient = useQueryClient();
+  const [starting, setStarting] = useState(false);
 
   const { data: campaign } = useQuery({
-    queryKey: ['campaign', campaignId],
-    queryFn: async () => {
-      const campaigns = await base44.entities.Campaign.list();
-      return campaigns.find(c => c.id === campaignId);
-    },
-    enabled: !!campaignId
+    queryKey: ["campaign", campaignId],
+    queryFn: () => base44.entities.Campaign.filter({ id: campaignId }).then((r) => r?.[0]),
+    enabled: !!campaignId,
   });
 
   const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me()
+    queryKey: ["currentUser"],
+    queryFn: () => base44.auth.me(),
   });
 
-  const isGM = campaign?.game_master_id === user?.id;
+  const { data: allUserProfiles = [] } = useQuery({
+    queryKey: ["allUserProfiles"],
+    queryFn: () => base44.entities.UserProfile.list(),
+    staleTime: 60_000,
+  });
 
-  const sections = [
-    {
-      title: "NPCs",
-      icon: Users,
-      imageUrl: campaign?.npcs_image_url,
-      field: "npcs_image_url",
-      link: createPageUrl("CampaignNPCs") + `?id=${campaignId}`
-    },
-    {
-      title: "Items",
-      icon: Package,
-      imageUrl: campaign?.items_image_url,
-      field: "items_image_url",
-      link: createPageUrl("CampaignItems") + `?id=${campaignId}`
-    },
-    {
-      title: "Maps",
-      icon: Map,
-      imageUrl: campaign?.maps_image_url,
-      field: "maps_image_url",
-      link: createPageUrl("CampaignMaps") + `?id=${campaignId}`
-    },
-    {
-      title: "World Lore",
-      icon: BookOpen,
-      imageUrl: campaign?.world_lore_image_url,
-      field: "world_lore_image_url",
-      link: createPageUrl("CampaignWorldLore") + `?id=${campaignId}`,
-      large: true
-    },
-    {
-      title: "Homebrew",
-      icon: Scroll,
-      imageUrl: campaign?.homebrew_image_url,
-      field: "homebrew_image_url",
-      link: createPageUrl("CampaignHomebrew") + `?id=${campaignId}`,
-      large: true
-    }
-  ];
+  const { data: characters = [] } = useQuery({
+    queryKey: ["campaignCharacters", campaignId],
+    queryFn: () => base44.entities.Character.filter({ campaign_id: campaignId }),
+    enabled: !!campaignId,
+    initialData: [],
+  });
 
-  const handleImageUpload = async (field, file) => {
-    setUploadingSection(field);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    await base44.entities.Campaign.update(campaignId, { [field]: file_url });
-    setUploadingSection(null);
+  const isGM = !!campaign
+    && (campaign.game_master_id === user?.id
+        || (Array.isArray(campaign.co_dm_ids) && campaign.co_dm_ids.includes(user?.id)));
+
+  const startSession = useMutation({
+    mutationFn: () => base44.entities.Campaign.update(campaignId, {
+      session_active: true,
+      session_started_at: new Date().toISOString(),
+      active_session_players: campaign?.player_ids || [],
+      disconnected_players: [],
+      is_session_active: true,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
+      navigate(createPageUrl("GMPanel") + `?id=${campaignId}`);
+    },
+    onError: (err) => toast.error(err?.message || "Couldn't start session."),
+  });
+
+  const handleStartSession = async () => {
+    setStarting(true);
+    try { await startSession.mutateAsync(); }
+    finally { setStarting(false); }
   };
 
   if (!campaign) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-400">Loading campaign...</p>
+      <div className="min-h-screen flex items-center justify-center bg-[#0f1219] text-slate-400">
+        Loading campaign…
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen flex">
-      <aside className="w-48 bg-[#1E2430] p-4 space-y-2">
-        <Link 
-          to={createPageUrl("Play")}
-          className="bg-[#37F2D1] text-[#1E2430] font-bold text-lg px-6 py-4 flex items-center justify-center gap-3 hover:bg-[#2dd9bd] transition-colors rounded-lg mb-4"
-        >
-          <Play className="w-5 h-5 fill-current" />
-          LAUNCH
-        </Link>
+  const playerIds = Array.isArray(campaign.player_ids) ? campaign.player_ids : [];
+  const playerRows = playerIds.map((uid) => {
+    const profile = allUserProfiles.find((p) => p.user_id === uid);
+    const character = characters.find((c) => c.user_id === uid || c.created_by === profile?.email);
+    return {
+      id: uid,
+      username: profile?.username || profile?.email || "Player",
+      avatar_url: profile?.avatar_url || character?.profile_avatar_url || character?.avatar_url,
+      character_name: character?.name || null,
+    };
+  });
 
-        <Link to={createPageUrl("YourProfile")} className="block text-sm text-gray-300 hover:text-white py-2">
-          Your Profile
-        </Link>
-        
-        {isGM && (
-          <>
-            <div className="block text-sm font-semibold text-white py-2 border-b border-gray-700 mb-2 mt-4">
-              GM Panel
-            </div>
-            <Link 
-              to={createPageUrl("TacticianBoard") + `?id=${campaignId}`}
-              className="block text-sm text-gray-300 hover:text-white py-2"
+  const sidebarLinks = [
+    { label: "Invite Players",      page: "CampaignInvite",     Icon: UserPlus,  primary: true },
+    { label: "Player Management",   page: "CampaignPlayers",    Icon: UserCog },
+    { label: "Campaign Updates",    page: "CampaignUpdates",    Icon: Megaphone },
+    { label: "Campaign Archives",   page: "CampaignArchives",   Icon: BookOpen },
+    { label: "Campaign Statistics", page: "CampaignStatistics", Icon: BarChart3 },
+    { label: "Campaign Settings",   page: "CampaignSettings",   Icon: Settings },
+  ];
+
+  return (
+    <div className="min-h-screen flex bg-[#0f1219] text-white">
+      <aside className="w-64 flex-shrink-0 bg-[#1a1f2e] border-r border-slate-700/50 flex flex-col">
+        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
+          {sidebarLinks.map(({ label, page, Icon, primary }) => (
+            <button
+              key={page}
+              type="button"
+              onClick={() => navigate(createPageUrl(page) + `?id=${campaignId}`)}
+              className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                primary
+                  ? "bg-[#37F2D1] text-[#050816] font-bold hover:bg-[#2dd9bd]"
+                  : "text-slate-300 hover:text-[#37F2D1] hover:bg-[#0f1219]"
+              }`}
             >
-              Tactician Board
-            </Link>
-            <Link 
-              to={createPageUrl("PlayerTheatre") + `?id=${campaignId}`}
-              className="block text-sm text-gray-300 hover:text-white py-2"
-            >
-              Player Theatre
-            </Link>
-          </>
-        )}
-        
-        <Link 
-          to={createPageUrl("CampaignManagement") + `?id=${campaignId}`}
-          className="block text-sm text-gray-300 hover:text-white py-2"
-        >
-          Players
-        </Link>
-        <div className="block text-sm text-gray-300 py-2">World</div>
-        <div className="block text-sm text-gray-300 py-2">Notes</div>
-        <div className="block text-sm text-gray-300 py-2">Campaign Stats</div>
-        <div className="block text-sm text-gray-300 py-2">Campaign Settings</div>
+              <Icon className="w-4 h-4" />
+              <span className="truncate">{label}</span>
+            </button>
+          ))}
+        </nav>
       </aside>
 
-      <main className="flex-1 relative">
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{
-            backgroundImage: campaign.cover_image_url
-              ? `url(${campaign.cover_image_url})`
-              : 'url(https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1200&h=800&fit=crop)'
-          }}
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-[#1E2430]/80 via-[#2A3441]/70 to-[#1E2430]/80" />
+      <main className="flex-1 flex flex-col items-center p-8">
+        <div className="relative w-full max-w-3xl h-64 rounded-lg overflow-hidden mb-6">
+          {campaign.cover_image_url || campaign.banner_url || campaign.image_url ? (
+            <img
+              src={campaign.cover_image_url || campaign.banner_url || campaign.image_url}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-[#1a1f2e] via-[#2A3441] to-[#050816]" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+          <div className="absolute bottom-4 left-4 right-4 text-left">
+            <p className="text-sm text-slate-300">Currently Playing</p>
+            <h1 className="text-3xl font-bold text-white">{campaign.title || campaign.name}</h1>
+          </div>
         </div>
 
-        <div className="relative z-10 p-8">
-          <div className="max-w-6xl mx-auto">
-            <div className="mb-8">
-              <h1 className="text-5xl font-bold text-white mb-2 drop-shadow-lg">
-                {campaign.title}
-              </h1>
-              <p className="text-2xl text-gray-200 tracking-wider drop-shadow-lg">
-                ARCHIVES
-              </p>
-            </div>
+        {isGM && (
+          <div className="flex gap-3 mb-8">
+            <Button
+              onClick={handleStartSession}
+              disabled={starting}
+              className="bg-white text-black hover:bg-slate-200 px-8 py-3 text-lg"
+            >
+              <Play className="w-4 h-4 mr-2" />
+              {starting ? "Starting…" : "Start Session"}
+            </Button>
+          </div>
+        )}
 
-            <div className="grid grid-cols-2 gap-4">
-              {sections.slice(0, 2).map((section) => (
-                <SectionCard
-                  key={section.title}
-                  section={section}
-                  isGM={isGM}
-                  onImageUpload={handleImageUpload}
-                  uploading={uploadingSection === section.field}
-                />
-              ))}
-              <div className="col-span-2">
-                <SectionCard
-                  section={sections[2]}
-                  isGM={isGM}
-                  onImageUpload={handleImageUpload}
-                  uploading={uploadingSection === sections[2].field}
-                />
-              </div>
-              {sections.slice(3).map((section) => (
-                <SectionCard
-                  key={section.title}
-                  section={section}
-                  isGM={isGM}
-                  onImageUpload={handleImageUpload}
-                  uploading={uploadingSection === section.field}
-                />
+        {playerRows.length > 0 ? (
+          <div className="w-full max-w-3xl">
+            <h2 className="text-sm uppercase tracking-wider text-slate-400 mb-3">Players</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {playerRows.map((player) => (
+                <div
+                  key={player.id}
+                  className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-4 text-center"
+                >
+                  {player.avatar_url ? (
+                    <img
+                      src={player.avatar_url}
+                      alt=""
+                      className="w-16 h-16 rounded-full mx-auto mb-2 object-cover"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full mx-auto mb-2 bg-slate-700 flex items-center justify-center text-slate-300 font-bold">
+                      {player.username?.charAt(0) || "?"}
+                    </div>
+                  )}
+                  <p className="text-sm text-white font-semibold truncate">{player.username}</p>
+                  <p className="text-xs text-slate-400 truncate">{player.character_name || "No character"}</p>
+                </div>
               ))}
             </div>
           </div>
-        </div>
-      </main>
-    </div>
-  );
-}
-
-function SectionCard({ section, isGM, onImageUpload, uploading }) {
-  const navigate = useNavigate();
-
-  const handleFileSelect = (e) => {
-    e.stopPropagation();
-    const file = e.target.files[0];
-    if (file) {
-      onImageUpload(section.field, file);
-    }
-  };
-
-  const handleClick = (e) => {
-    // If GM is clicking to upload, don't navigate
-    if (isGM && e.target.tagName !== 'INPUT') {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const clickY = e.clientY - rect.top;
-      
-      // If clicking on bottom 20% of card and it's GM, show upload
-      if (clickY > rect.height * 0.8) {
-        document.getElementById(`upload-${section.field}`)?.click();
-        return;
-      }
-    }
-    
-    // Otherwise navigate
-    navigate(section.link);
-  };
-
-  return (
-    <div 
-      className="bg-white/90 backdrop-blur-sm rounded-2xl overflow-hidden h-64 relative group cursor-pointer hover:scale-[1.02] transition-transform"
-      onClick={handleClick}
-    >
-      {section.imageUrl ? (
-        <img
-          src={section.imageUrl}
-          alt={section.title}
-          className="w-full h-full object-cover"
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
-          <section.icon className="w-16 h-16 text-gray-400" />
-        </div>
-      )}
-
-      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex flex-col justify-end p-6">
-        <h3 className="text-3xl font-bold text-white drop-shadow-lg">
-          {section.title}
-        </h3>
-        {isGM && (
-          <p className="text-xs text-white/60 mt-1">Click bottom to upload image</p>
+        ) : (
+          <p className="text-slate-500">No players yet. Invite some players to join!</p>
         )}
-      </div>
-
-      {uploading && (
-        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-          <p className="text-white font-semibold">Uploading...</p>
-        </div>
-      )}
-
-      {isGM && (
-        <input
-          type="file"
-          id={`upload-${section.field}`}
-          accept="image/*"
-          className="hidden"
-          onChange={handleFileSelect}
-        />
-      )}
+      </main>
     </div>
   );
 }

@@ -1,31 +1,34 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   LogOut, WifiOff, Users, StickyNote, Trophy, UserCog, Megaphone,
   Settings, BookOpen, ArrowLeft,
 } from "lucide-react";
+import { createPageUrl } from "@/utils";
 import GMSidebarPartyPanel     from "./GMSidebarPartyPanel";
 import GMSidebarQuickNotes     from "./GMSidebarQuickNotes";
 import GMSidebarAchievements   from "./GMSidebarAchievements";
 import GMSidebarPlayers        from "./GMSidebarPlayers";
 import GMSidebarUpdates        from "./GMSidebarUpdates";
 import GMSidebarSettings       from "./GMSidebarSettings";
-import GMSidebarArchives       from "./GMSidebarArchives";
 
 /**
  * In-session GM sidebar. One red End Session button, a live
  * Disconnected Players card (pushed from GMPanel's presence
  * channel), and a menu of in-session tool panels that open inline
- * in the same sidebar column — nothing here navigates away from
- * the running session.
+ * in the same sidebar column. The one exception is Campaign
+ * Archives — it's too big to cram into a sidebar, so the Archives
+ * entry navigates to the full page and that page carries a "Back
+ * to Session" button home.
  */
 const SECTIONS = [
   { key: "party",        label: "Adventuring Party", icon: Users,     Component: GMSidebarPartyPanel },
+  { key: "archives",     label: "Campaign Archives", icon: BookOpen,  navTo: "CampaignArchives" },
   { key: "quick_notes",  label: "Quick Notes",       icon: StickyNote, Component: GMSidebarQuickNotes },
   { key: "achievements", label: "Achievements",      icon: Trophy,    Component: GMSidebarAchievements },
   { key: "players",      label: "Player Management", icon: UserCog,   Component: GMSidebarPlayers },
   { key: "updates",      label: "Campaign Updates",  icon: Megaphone, Component: GMSidebarUpdates },
   { key: "settings",     label: "Campaign Settings", icon: Settings,  Component: GMSidebarSettings },
-  { key: "archives",     label: "Campaign Archives", icon: BookOpen,  Component: GMSidebarArchives },
 ];
 
 export default function GMSessionSidebar({
@@ -35,6 +38,7 @@ export default function GMSessionSidebar({
   campaign,
   allUserProfiles = [],
 }) {
+  const navigate = useNavigate();
   const [active, setActive] = useState(null);
   const ActivePanel = SECTIONS.find((s) => s.key === active)?.Component || null;
   const activeLabel = SECTIONS.find((s) => s.key === active)?.label || "";
@@ -79,11 +83,18 @@ export default function GMSessionSidebar({
         <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
           {SECTIONS.map((section) => {
             const Icon = section.icon;
+            const handleClick = () => {
+              if (section.navTo) {
+                navigate(createPageUrl(section.navTo) + `?id=${campaignId}`);
+                return;
+              }
+              setActive(section.key);
+            };
             return (
               <button
                 key={section.key}
                 type="button"
-                onClick={() => setActive(section.key)}
+                onClick={handleClick}
                 className="flex items-center gap-3 w-full p-3 rounded-lg text-left hover:bg-[#252b3d] transition-colors text-slate-300 hover:text-white"
               >
                 <Icon className="w-5 h-5 text-[#37F2D1]" />
