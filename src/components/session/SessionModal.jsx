@@ -30,7 +30,7 @@ export default function SessionModal({ isOpen, onClose, title, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="relative w-[90vw] h-[85vh] bg-[#0f1219] border border-slate-700 rounded-xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="relative w-[80vw] h-[80vh] max-w-6xl bg-[#0f1219] border border-slate-700 rounded-xl shadow-2xl flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700/50 flex-shrink-0">
           <h2 className="text-lg font-bold text-white">{title}</h2>
           <Button

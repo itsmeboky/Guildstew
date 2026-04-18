@@ -91,10 +91,10 @@ function featureLevel(feature) {
   return feature?.ability_level ?? feature?.level ?? null;
 }
 
-export default function CampaignAbilities() {
+export default function CampaignAbilities({ embedded = false, campaignId: campaignIdOverride } = {}) {
   const navigate = useNavigate();
   const params = new URLSearchParams(window.location.search);
-  const campaignId = params.get("id");
+  const campaignId = campaignIdOverride ?? params.get("id");
 
   const [search, setSearch] = useState("");
   const [selectedClass, setSelectedClass] = useState("Barbarian");
@@ -143,22 +143,24 @@ export default function CampaignAbilities() {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[#0f1219] text-white">
-      <header className="flex items-center justify-between gap-3 px-6 py-4 flex-shrink-0 flex-wrap">
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={back}
-            variant="outline"
-            size="sm"
-            className="text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/10 hover:text-[#37F2D1]"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Archives
-          </Button>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Wand2 className="w-5 h-5 text-[#37F2D1]" /> Class Features
-          </h1>
-        </div>
-      </header>
+    <div className={`${embedded ? "h-full" : "h-screen"} flex flex-col overflow-hidden bg-[#0f1219] text-white`}>
+      {!embedded && (
+        <header className="flex items-center justify-between gap-3 px-6 py-4 flex-shrink-0 flex-wrap">
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={back}
+              variant="outline"
+              size="sm"
+              className="text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/10 hover:text-[#37F2D1]"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" /> Back to Archives
+            </Button>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Wand2 className="w-5 h-5 text-[#37F2D1]" /> Class Features
+            </h1>
+          </div>
+        </header>
+      )}
 
       <div className="flex-1 flex gap-4 overflow-hidden px-6 pb-6 min-h-0">
         {/* Left: feature detail */}
