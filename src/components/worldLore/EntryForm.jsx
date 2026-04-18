@@ -38,6 +38,7 @@ export default function EntryForm({
   const [content, setContent] = useState(initial?.content || "");
   const [templateType, setTemplateType] = useState(initial?.template_type || "freeform");
   const [visibility, setVisibility] = useState(initial?.visibility || "public");
+  const [images, setImages] = useState(Array.isArray(initial?.images) ? initial.images : []);
   const [visibleTo, setVisibleTo] = useState(
     Array.isArray(initial?.visible_to_players) ? initial.visible_to_players : [],
   );
@@ -83,6 +84,7 @@ export default function EntryForm({
       visible_to_players: visibility === "selected" ? visibleTo : [],
       metadata,
       image_url: imageUrl || null,
+      images,
     });
   };
 
@@ -190,6 +192,12 @@ export default function EntryForm({
           )}
         </div>
       </div>
+
+      <AttachmentsField
+        images={images}
+        onChange={setImages}
+        campaignId={campaignId}
+      />
 
       <div className="bg-[#0f1219] border border-slate-700 rounded-lg p-3 space-y-2">
         <Label className="text-sm text-slate-300">Visibility</Label>
@@ -340,6 +348,64 @@ function ImageField({ label, value, onChange, campaignId }) {
             Remove
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+function AttachmentsField({ images, onChange, campaignId }) {
+  const [uploading, setUploading] = useState(false);
+  const add = (url) => {
+    if (!url) return;
+    onChange([...(Array.isArray(images) ? images : []), url]);
+  };
+  const remove = (idx) => {
+    onChange(images.filter((_, i) => i !== idx));
+  };
+  const handleUpload = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { file_url } = await uploadFile(file, "campaign-assets", "worldlore");
+      add(file_url);
+    } catch (err) {
+      toast.error(err?.message || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+  return (
+    <div>
+      <Label className="text-sm text-slate-300">Attached Images (optional)</Label>
+      <p className="text-[11px] text-slate-500 mb-2">
+        Adds to the 2-column image grid below the entry. Cover image stays separate.
+      </p>
+      {images.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+          {images.map((url, idx) => (
+            <div key={`${url}-${idx}`} className="relative group">
+              <img src={url} alt="" className="w-full aspect-square object-cover rounded border border-slate-700" />
+              <button
+                type="button"
+                onClick={() => remove(idx)}
+                className="absolute top-1 right-1 bg-black/70 text-red-300 hover:text-red-200 rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Remove"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-2 flex-wrap">
+        <label className="inline-flex items-center gap-1 text-[11px] text-slate-300 cursor-pointer bg-[#0f1219] border border-slate-600 px-2.5 py-1.5 rounded hover:border-[#37F2D1]">
+          <Upload className="w-3 h-3" />
+          {uploading ? "Uploading…" : "Add image"}
+          <input type="file" accept="image/*" className="hidden"
+            onChange={(e) => handleUpload(e.target.files?.[0])}
+            disabled={uploading} />
+        </label>
+        <SketchCanvas campaignId={campaignId} onSave={(url) => add(url)} />
       </div>
     </div>
   );
