@@ -120,7 +120,7 @@ export default function CategoryLandingCards({
                 {cat.description && (
                   <p className="text-slate-400 text-sm">{cat.description}</p>
                 )}
-                {last && (
+                {last ? (
                   <div className="flex items-center gap-2 mt-4">
                     {author?.avatar_url ? (
                       <img src={author.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
@@ -133,6 +133,8 @@ export default function CategoryLandingCards({
                     </span>
                     <span className="text-xs text-slate-600">{timeAgo(last.created_at)}</span>
                   </div>
+                ) : (
+                  <div className="text-xs text-slate-600 italic mt-4">No entries yet</div>
                 )}
               </div>
 

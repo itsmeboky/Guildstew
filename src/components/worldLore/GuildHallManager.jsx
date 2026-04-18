@@ -145,7 +145,7 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
   // Step 1: Deed Purchase
   if (!guildHall?.deed_purchased) {
     return (
-      <div className="bg-[#2A3441]/90 backdrop-blur-sm rounded-xl p-8 border border-cyan-400/30">
+      <div className="bg-[#0f1219]/90 backdrop-blur-sm rounded-xl p-8 border border-cyan-400/30">
         <div className="text-center mb-8">
           <Home className="w-16 h-16 text-[#37F2D1] mx-auto mb-4" />
           <h2 className="text-3xl font-bold text-white mb-2">Guild Hall</h2>
@@ -160,7 +160,7 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
                 type="number"
                 value={deedCost}
                 onChange={(e) => setDeedCost(parseInt(e.target.value) || 0)}
-                className="bg-[#1E2430] border-gray-700 text-white"
+                className="bg-[#1a1f2e] border-slate-700 text-white"
               />
             </div>
             <div className="flex gap-2">
@@ -200,7 +200,7 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
                 <span className="text-sm text-gray-400">Progress</span>
                 <span className="text-sm font-bold text-[#37F2D1]">{totalContributed} / {totalNeeded} GP</span>
               </div>
-              <div className="h-4 bg-[#1E2430] rounded-full overflow-hidden">
+              <div className="h-4 bg-[#1a1f2e] rounded-full overflow-hidden">
                 <motion.div
                   className="h-full bg-gradient-to-r from-[#37F2D1] to-[#2dd9bd]"
                   initial={{ width: 0 }}
@@ -215,7 +215,7 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
                 placeholder="Amount to contribute"
                 value={contribution}
                 onChange={(e) => setContribution(parseInt(e.target.value) || 0)}
-                className="bg-[#1E2430] border-gray-700 text-white"
+                className="bg-[#1a1f2e] border-slate-700 text-white"
               />
               <Button onClick={handleContribute} className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430]">
                 Contribute
@@ -231,7 +231,7 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
   if (!guildHall?.current_option_id) {
     return (
       <div className="space-y-6">
-        <div className="bg-[#2A3441]/90 backdrop-blur-sm rounded-xl p-6 border border-cyan-400/30">
+        <div className="bg-[#0f1219]/90 backdrop-blur-sm rounded-xl p-6 border border-cyan-400/30">
           <h2 className="text-3xl font-bold text-white mb-4">Choose Your Guild Hall</h2>
           
           {canEdit && (
@@ -253,7 +253,7 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
                   </>
                 )}
               </Button>
-              <Button onClick={() => setCreatingOption(true)} variant="outline" className="border-gray-700 text-white">
+              <Button onClick={() => setCreatingOption(true)} variant="outline" className="border-slate-700 text-white">
                 Create Custom Option
               </Button>
             </div>
@@ -261,7 +261,7 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {options?.map(option => (
-              <div key={option.id} className="bg-[#1E2430] rounded-xl overflow-hidden border border-gray-700 hover:border-[#37F2D1] transition-all">
+              <div key={option.id} className="bg-[#1a1f2e] rounded-xl overflow-hidden border border-slate-700 hover:border-[#37F2D1] transition-all">
                 {option.image_url && (
                   <img src={option.image_url} alt={option.name} className="w-full h-48 object-cover" />
                 )}
@@ -290,20 +290,20 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
 
         {creatingOption && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-            <div className="bg-[#1E2430] border border-[#37F2D1] rounded-xl p-6 max-w-lg w-full">
+            <div className="bg-[#1a1f2e] border border-[#37F2D1] rounded-xl p-6 max-w-lg w-full">
               <h3 className="text-2xl font-bold mb-4">Create Guild Hall Option</h3>
               <div className="space-y-3">
                 <Input
                   placeholder="Hall name"
                   value={newOption.name}
                   onChange={(e) => setNewOption({ ...newOption, name: e.target.value })}
-                  className="bg-[#2A3441] border-gray-700 text-white"
+                  className="bg-[#0f1219] border-slate-600 text-white"
                 />
                 <Textarea
                   placeholder="Description"
                   value={newOption.description}
                   onChange={(e) => setNewOption({ ...newOption, description: e.target.value })}
-                  className="bg-[#2A3441] border-gray-700 text-white"
+                  className="bg-[#0f1219] border-slate-600 text-white"
                   rows={3}
                 />
                 <Input
@@ -311,7 +311,7 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
                   placeholder="Cost in gold"
                   value={newOption.cost}
                   onChange={(e) => setNewOption({ ...newOption, cost: parseInt(e.target.value) || 0 })}
-                  className="bg-[#2A3441] border-gray-700 text-white"
+                  className="bg-[#0f1219] border-slate-600 text-white"
                 />
                 
                 {newOption.image_url ? (
@@ -327,7 +327,7 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
                     />
                     <label
                       htmlFor="hall-image-upload"
-                      className="flex flex-col items-center justify-center w-full h-32 bg-[#2A3441] border-2 border-dashed border-gray-700 rounded-lg cursor-pointer hover:border-[#37F2D1]"
+                      className="flex flex-col items-center justify-center w-full h-32 bg-[#0f1219] border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:border-[#37F2D1]"
                     >
                       <Upload className="w-6 h-6 text-gray-400 mb-2" />
                       <span className="text-gray-400 text-sm">{uploadingImage ? "Uploading..." : "Upload Image"}</span>
@@ -377,7 +377,7 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
   return (
     <div className="space-y-6">
       {/* Current Hall */}
-      <div className="bg-[#2A3441]/90 backdrop-blur-sm rounded-xl overflow-hidden border border-cyan-400/30">
+      <div className="bg-[#0f1219]/90 backdrop-blur-sm rounded-xl overflow-hidden border border-cyan-400/30">
         {currentOption?.image_url && (
           <img src={currentOption.image_url} alt={currentOption.name} className="w-full h-64 object-cover" />
         )}
@@ -416,7 +416,7 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
       </div>
 
       {/* Guild Coffers */}
-      <div className="bg-[#2A3441]/90 backdrop-blur-sm rounded-xl p-6 border border-cyan-400/30 flex items-center justify-between">
+      <div className="bg-[#0f1219]/90 backdrop-blur-sm rounded-xl p-6 border border-cyan-400/30 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center border border-yellow-500/30">
             <Coins className="w-6 h-6 text-yellow-500" />
@@ -451,7 +451,7 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
       </div>
 
       {/* Upgrades */}
-      <div className="bg-[#2A3441]/90 backdrop-blur-sm rounded-xl p-6 border border-cyan-400/30">
+      <div className="bg-[#0f1219]/90 backdrop-blur-sm rounded-xl p-6 border border-cyan-400/30">
         <h3 className="text-2xl font-bold text-white mb-6">Guild Hall Upgrades</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {availableUpgrades.map(upgrade => {
@@ -459,8 +459,8 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
             return (
               <div
                 key={upgrade.id}
-                className={`bg-[#1E2430] rounded-lg p-4 border ${
-                  isPurchased ? 'border-green-500' : 'border-gray-700'
+                className={`bg-[#1a1f2e] rounded-lg p-4 border ${
+                  isPurchased ? 'border-green-500' : 'border-slate-700'
                 }`}
               >
                 <div className="flex items-start justify-between mb-2">
