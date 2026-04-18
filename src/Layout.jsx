@@ -537,14 +537,18 @@ export default function Layout({ children, currentPageName }) {
   const isDarkMode = user?.accessibility_dark_mode !== false;
 
   // Only bounce someone to Onboarding if they genuinely haven't
-  // finished it — the Onboarding step writes `onboarding_completed:
-  // true` on save, and every profile that existed before that flag
-  // was added has a username set, so honour either signal. This
-  // stops "missing birthday" from kicking established users back
-  // into the first-run wizard on every page load.
+  // finished it. AuthContext primes the `['currentUser']` cache
+  // with just `{ id, email }` until the user_profiles row lands,
+  // so the first few renders have `username` / `onboarding_completed`
+  // as `undefined`. Bail in that window — redirecting mid-load
+  // dumped every authenticated user back to Onboarding on every
+  // refresh when the profile fetch was slow or missing.
   useEffect(() => {
     if (!user) return;
     if (currentPageName === "Onboarding") return;
+    const profileLoaded =
+      user.username !== undefined || user.onboarding_completed !== undefined;
+    if (!profileLoaded) return;
     const onboarded = user.onboarding_completed === true || !!user.username;
     if (!onboarded) {
       navigate(createPageUrl("Onboarding"));
