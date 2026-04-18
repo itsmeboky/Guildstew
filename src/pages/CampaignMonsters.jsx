@@ -18,14 +18,16 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Tabs, TabsList, TabsTrigger, TabsContent,
-} from "@/components/ui/tabs";
-import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
   MONSTER_TYPES,
-  getAC, getHP, getCR, getSize, getMonsterType, getMonsterImageUrl,
+  getAC, getHP, getCR, getXP, getHitDice, getSize, getAlignment,
+  getMonsterType, getMonsterImageUrl, getSpeed,
+  getAbilityScores, getAbilityMod,
+  getProficiencies, getSenses, getLanguages, getDamageInfo,
+  getSpecialAbilities, getActions, getLegendaryActions, getReactions,
+  getDescription, formatUsage,
 } from "@/utils/monsterHelpers";
 
 /**
@@ -470,34 +472,43 @@ function MonsterCard({ monster, encountered, isGM, onClick, onToggleEncountered,
   );
 }
 
+/**
+ * Full D&D 5e-style monster stat block. Uses red accents to
+ * visually distinguish monster sheets from the teal-accented
+ * UI chrome. Everything pipes through the shared helpers so
+ * SRD (nested under .stats) and homebrew (often flat) render
+ * identically.
+ */
 function StatBlockDialog({ monster, isGM, onClose, onDelete }) {
   if (!monster) return null;
-  const stats = monster.stats || {};
-  const img = getMonsterImageUrl(monster);
-  const meta = stats.meta || [stats.size, stats.type, stats.alignment].filter(Boolean).join(" ");
-
-  const traits = stats.special_abilities || stats.traits || monster.special_abilities || [];
-  const actions = stats.actions || monster.actions || [];
-  const legendary = stats.legendary_actions || monster.legendary_actions || [];
-  const reactions = stats.reactions || monster.reactions || [];
-
-  const getAbility = (key) => {
-    const k = key.toLowerCase();
-    const K = key.toUpperCase();
-    return stats[k] ?? stats[K] ?? stats.abilities?.[k] ?? stats.abilities?.[K] ?? 10;
-  };
-  const mod = (score) => {
-    const m = Math.floor((Number(score) - 10) / 2);
-    return m >= 0 ? `+${m}` : `${m}`;
-  };
+  const img   = getMonsterImageUrl(monster);
+  const size  = getSize(monster);
+  const type  = getMonsterType(monster);
+  const align = getAlignment(monster);
+  const metaLine = [size, type ? type.toLowerCase() : "", align]
+    .filter(Boolean)
+    .join(", ");
+  const xp = getXP(monster);
+  const abilityScores = getAbilityScores(monster);
+  const { saves, skills } = getProficiencies(monster);
+  const damage = getDamageInfo(monster);
+  const senses = getSenses(monster);
+  const languages = getLanguages(monster);
+  const traits = getSpecialAbilities(monster);
+  const actions = getActions(monster);
+  const reactions = getReactions(monster);
+  const legendary = getLegendaryActions(monster);
+  const description = getDescription(monster);
 
   return (
     <Dialog open={!!monster} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="bg-[#1a1f2e] border border-slate-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="bg-[#1a1f2e] border border-slate-700 text-white max-w-2xl max-h-[85vh] overflow-y-auto p-0">
         <DialogHeader className="sr-only">
           <DialogTitle>{monster.name}</DialogTitle>
         </DialogHeader>
-        <div className="relative h-48 overflow-hidden">
+
+        {/* Hero image + title */}
+        <div className="relative h-56 overflow-hidden">
           {img ? (
             <img
               src={img}
@@ -513,11 +524,13 @@ function StatBlockDialog({ monster, isGM, onClose, onDelete }) {
               {monster.name?.charAt(0)}
             </div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#1a1f2e] to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#1a1f2e] via-transparent to-transparent" />
           <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-2">
             <div className="min-w-0">
-              <h2 className="text-2xl font-bold text-white truncate">{monster.name}</h2>
-              {meta && <p className="text-sm text-slate-300 italic truncate">{meta}</p>}
+              <h2 className="text-2xl font-bold text-white truncate drop-shadow-lg">{monster.name}</h2>
+              {metaLine && (
+                <p className="text-sm text-slate-300 italic truncate drop-shadow">{metaLine}</p>
+              )}
             </div>
             <Badge
               variant="outline"
@@ -532,91 +545,96 @@ function StatBlockDialog({ monster, isGM, onClose, onDelete }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-2 p-4 border-b border-slate-700/30">
-          <CoreStat label="AC" value={stats.armor_class ?? stats.ac ?? monster.armor_class ?? "—"} />
-          <CoreStat
-            label="HP"
-            value={stats.hit_points ?? stats.hp ?? (typeof monster.hit_points === "object" ? monster.hit_points?.max : monster.hit_points) ?? "—"}
-            sub={stats.hit_dice}
-          />
-          <CoreStat label="Speed" value={stats.speed ?? "30 ft."} />
-          <CoreStat label="CR" value={stats.challenge_rating ?? stats.cr ?? monster.cr ?? "?"} accent />
+        {/* Core stats row — red-tinted backing to match official stat blocks */}
+        <div className="grid grid-cols-5 gap-2 p-4 border-b border-red-900/30 bg-red-900/5">
+          <CoreStat label="Armor Class" value={getAC(monster)} />
+          <CoreStat label="Hit Points"  value={getHP(monster)} sub={getHitDice(monster)} />
+          <CoreStat label="Speed"       value={getSpeed(monster)} small />
+          <CoreStat label="CR"          value={getCR(monster)} accent />
+          <CoreStat label="XP"          value={formatXP(xp)} small />
         </div>
 
-        <div className="grid grid-cols-6 gap-2 p-4 border-b border-slate-700/30">
-          {["str", "dex", "con", "int", "wis", "cha"].map((k) => {
-            const score = Number(getAbility(k)) || 10;
-            return (
-              <div key={k} className="text-center">
-                <div className="text-xs text-slate-400 uppercase">{k}</div>
-                <div className="text-white font-bold">{score}</div>
-                <div className="text-xs text-slate-400">({mod(score)})</div>
-              </div>
-            );
-          })}
+        {/* Ability scores */}
+        <div className="grid grid-cols-6 gap-2 p-4 border-b border-red-900/30">
+          {Object.entries(abilityScores).map(([ability, score]) => (
+            <div key={ability} className="text-center">
+              <div className="text-xs text-red-400 uppercase font-bold">{ability}</div>
+              <div className="text-white font-bold text-lg">{score}</div>
+              <div className="text-xs text-slate-400">({getAbilityMod(score)})</div>
+            </div>
+          ))}
         </div>
 
-        <div className="p-4">
-          <Tabs defaultValue="traits">
-            <TabsList className="bg-[#0f1219] border border-slate-700">
-              <TabsTrigger value="traits">Traits</TabsTrigger>
-              <TabsTrigger value="actions">Actions</TabsTrigger>
-              <TabsTrigger value="details">Details</TabsTrigger>
-            </TabsList>
+        {/* Proficiencies, immunities, senses, languages */}
+        {(saves.length > 0 || skills.length > 0 || damage.vulnerabilities ||
+          damage.resistances || damage.immunities || damage.conditionImmunities ||
+          senses || languages) && (
+          <div className="p-4 border-b border-red-900/30 space-y-2 text-sm">
+            {saves.length > 0  && <PropLine label="Saving Throws"     value={saves.join(", ")} />}
+            {skills.length > 0 && <PropLine label="Skills"            value={skills.join(", ")} />}
+            {damage.vulnerabilities     && <PropLine label="Vulnerabilities"        value={damage.vulnerabilities} />}
+            {damage.resistances         && <PropLine label="Resistances"            value={damage.resistances} />}
+            {damage.immunities          && <PropLine label="Damage Immunities"      value={damage.immunities} />}
+            {damage.conditionImmunities && <PropLine label="Condition Immunities"   value={damage.conditionImmunities} />}
+            {senses    && <PropLine label="Senses"    value={senses} />}
+            {languages && <PropLine label="Languages" value={languages} />}
+          </div>
+        )}
 
-            <TabsContent value="traits" className="mt-4 space-y-3">
-              {traits.length > 0 ? (
-                traits.map((trait, i) => <TraitLine key={i} item={trait} />)
-              ) : (
-                <p className="text-slate-500 italic">No special traits.</p>
-              )}
-            </TabsContent>
+        {/* Traits */}
+        {traits.length > 0 && (
+          <Section title="Traits">
+            {traits.map((trait, i) => (
+              <TraitBlock key={`tr-${i}`} item={trait} />
+            ))}
+          </Section>
+        )}
 
-            <TabsContent value="actions" className="mt-4 space-y-3">
-              {actions.length > 0
-                ? actions.map((a, i) => <TraitLine key={`a-${i}`} item={a} />)
-                : <p className="text-slate-500 italic">No actions defined.</p>}
+        {/* Actions */}
+        {actions.length > 0 && (
+          <Section title="Actions">
+            {actions.map((action, i) => (
+              <ActionBlock key={`a-${i}`} item={action} />
+            ))}
+          </Section>
+        )}
 
-              {legendary.length > 0 && (
-                <>
-                  <h4 className="text-amber-400 font-semibold mt-6 mb-2 border-t border-slate-700/30 pt-4">
-                    Legendary Actions
-                  </h4>
-                  {legendary.map((a, i) => <TraitLine key={`l-${i}`} item={a} />)}
-                </>
-              )}
+        {/* Reactions */}
+        {reactions.length > 0 && (
+          <Section title="Reactions" titleClass="text-blue-400">
+            {reactions.map((r, i) => (
+              <TraitBlock key={`rx-${i}`} item={r} />
+            ))}
+          </Section>
+        )}
 
-              {reactions.length > 0 && (
-                <>
-                  <h4 className="text-blue-400 font-semibold mt-6 mb-2 border-t border-slate-700/30 pt-4">
-                    Reactions
-                  </h4>
-                  {reactions.map((r, i) => <TraitLine key={`r-${i}`} item={r} />)}
-                </>
-              )}
-            </TabsContent>
+        {/* Legendary actions */}
+        {legendary.length > 0 && (
+          <Section title="Legendary Actions" titleClass="text-amber-400">
+            <p className="text-slate-400 text-sm mb-3 italic">
+              The {(monster.name || "creature").toLowerCase()} can take 3 legendary actions,
+              choosing from the options below. Only one legendary action option can be used at
+              a time and only at the end of another creature&apos;s turn.
+              The {(monster.name || "creature").toLowerCase()} regains spent legendary actions
+              at the start of its turn.
+            </p>
+            {legendary.map((action, i) => (
+              <ActionBlock key={`lg-${i}`} item={action} />
+            ))}
+          </Section>
+        )}
 
-            <TabsContent value="details" className="mt-4 space-y-2 text-sm">
-              <DetailLine label="Saving Throws"      value={stats.saving_throws} />
-              <DetailLine label="Skills"             value={stats.skills} />
-              <DetailLine label="Damage Resistances" value={stats.damage_resistances} />
-              <DetailLine label="Damage Immunities"  value={stats.damage_immunities} />
-              <DetailLine label="Vulnerabilities"    value={stats.damage_vulnerabilities} />
-              <DetailLine label="Condition Immunities" value={stats.condition_immunities} />
-              <DetailLine label="Senses"             value={stats.senses} />
-              <DetailLine label="Languages"          value={stats.languages} />
-              {(monster.description || stats.description) && (
-                <div className="border-t border-slate-700/30 pt-3 mt-4">
-                  <p className="text-slate-300 italic whitespace-pre-wrap">
-                    {monster.description || stats.description}
-                  </p>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </div>
+        {/* Lore */}
+        {description && (
+          <div className="p-4">
+            <h3 className="text-slate-400 font-bold text-sm uppercase tracking-wider mb-3">Lore</h3>
+            <p className="text-slate-300 italic text-sm leading-relaxed whitespace-pre-wrap">
+              {description}
+            </p>
+          </div>
+        )}
 
-        <DialogFooter className="p-4 border-t border-slate-700/30">
+        <DialogFooter className="p-4 border-t border-red-900/30">
           {isGM && monster._source === "homebrew" && (
             <Button variant="outline" onClick={onDelete} className="text-red-400 border-red-700 hover:bg-red-950/30">
               <Trash2 className="w-3 h-3 mr-1" /> Delete
@@ -631,30 +649,112 @@ function StatBlockDialog({ monster, isGM, onClose, onDelete }) {
   );
 }
 
-function CoreStat({ label, value, sub, accent }) {
+function formatXP(xp) {
+  if (xp == null || xp === "") return "—";
+  const n = Number(xp);
+  if (!Number.isFinite(n)) return String(xp);
+  return n.toLocaleString();
+}
+
+function CoreStat({ label, value, sub, accent, small }) {
   return (
     <div className="text-center">
       <div className="text-xs text-slate-400">{label}</div>
-      <div className={`text-lg font-bold ${accent ? "text-[#37F2D1]" : "text-white"}`}>{value}</div>
+      <div className={`font-bold ${small ? "text-sm" : "text-lg"} ${accent ? "text-[#37F2D1]" : "text-white"}`}>
+        {value}
+      </div>
       {sub && <div className="text-xs text-slate-500">{sub}</div>}
     </div>
   );
 }
 
-function TraitLine({ item }) {
+function PropLine({ label, value }) {
+  return (
+    <div>
+      <span className="text-red-400 font-semibold">{label}: </span>
+      <span className="text-white">{value}</span>
+    </div>
+  );
+}
+
+function Section({ title, titleClass = "text-red-400", children }) {
+  return (
+    <div className="p-4 border-b border-red-900/30">
+      <h3 className={`${titleClass} font-bold text-sm uppercase tracking-wider mb-3`}>{title}</h3>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function TraitBlock({ item }) {
   if (!item) return null;
   return (
     <div>
-      <span className="text-white font-semibold">{item.name}. </span>
+      <span className="text-white font-semibold italic">{item.name}</span>
+      {item.usage && (
+        <span className="text-amber-400 text-xs ml-1">{formatUsage(item.usage)}</span>
+      )}
+      <span className="text-white font-semibold italic">. </span>
       <span className="text-slate-300 text-sm">{item.desc || item.description}</span>
     </div>
   );
 }
 
-function DetailLine({ label, value }) {
-  if (!value) return null;
+/**
+ * Action entry — prints the name + description like a trait, then
+ * shows inline badges for attack bonus + damage dice (for attack
+ * actions) or a DC badge + damage (for save-based actions). Pulls
+ * "half on save" off `dc.success_type === 'half'` when present.
+ */
+function ActionBlock({ item }) {
+  if (!item) return null;
+  const damage = Array.isArray(item.damage) ? item.damage : [];
   return (
-    <p><span className="text-slate-400">{label}:</span> <span className="text-white">{value}</span></p>
+    <div>
+      <span className="text-white font-semibold italic">{item.name}</span>
+      {item.usage && (
+        <span className="text-amber-400 text-xs ml-1">{formatUsage(item.usage)}</span>
+      )}
+      <span className="text-white font-semibold italic">. </span>
+      <span className="text-slate-300 text-sm">{item.desc || item.description}</span>
+
+      {item.attack_bonus != null && (
+        <div className="flex flex-wrap items-center gap-2 mt-1 ml-4">
+          <span className="text-xs px-1.5 py-0.5 rounded bg-red-900/30 text-red-300 border border-red-700/40">
+            +{item.attack_bonus} to hit
+          </span>
+          {damage.map((d, di) => (
+            <DamageBadge key={`dmg-${di}`} damage={d} />
+          ))}
+        </div>
+      )}
+
+      {item.dc && item.attack_bonus == null && (
+        <div className="flex flex-wrap items-center gap-2 mt-1 ml-4">
+          <span className="text-xs px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-300 border border-amber-700/40">
+            DC {item.dc.dc_value}{item.dc.dc_type?.name ? ` ${item.dc.dc_type.name}` : ""}
+          </span>
+          {damage.map((d, di) => (
+            <DamageBadge key={`dc-${di}`} damage={d} />
+          ))}
+          {item.dc.success_type === "half" && (
+            <span className="text-xs text-slate-500">half on save</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DamageBadge({ damage }) {
+  if (!damage) return null;
+  const dice = damage.damage_dice || damage.dice || "";
+  const dtype = damage.damage_type?.name || damage.type || "";
+  if (!dice && !dtype) return null;
+  return (
+    <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">
+      {dice}{dice && dtype ? " " : ""}{dtype ? dtype.toLowerCase() : ""}
+    </span>
   );
 }
 
