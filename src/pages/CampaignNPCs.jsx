@@ -220,86 +220,27 @@ export default function CampaignNPCs() {
         )}
       </div>
       
-      <div className="min-h-screen p-8 relative z-10">
-        <div className="max-w-6xl mx-auto relative z-10">
-          <Button
-            onClick={() => navigate(createPageUrl("CampaignGMPanel") + `?id=${campaignId}`)}
-            variant="ghost"
-            className="mb-4 text-gray-400 hover:text-white"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Campaign
-          </Button>
-
-          <div className="flex items-center justify-between mb-8">
-            <h1 className="text-4xl font-bold text-white">NPCs</h1>
-            <Button onClick={handleCreateNew} className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430]">
-              <Plus className="w-4 h-4 mr-2" />
-              New NPC
+      <div className="h-screen flex flex-col overflow-hidden p-6 relative z-10">
+        <header className="flex items-center justify-between gap-3 mb-4 flex-shrink-0 flex-wrap">
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => navigate(createPageUrl("CampaignGMPanel") + `?id=${campaignId}`)}
+              variant="outline"
+              size="sm"
+              className="text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/10 hover:text-[#37F2D1]"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" /> Back to Campaign
             </Button>
+            <h1 className="text-2xl font-bold text-white">NPCs</h1>
           </div>
+          <Button onClick={handleCreateNew} className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] font-bold">
+            <Plus className="w-4 h-4 mr-2" /> New NPC
+          </Button>
+        </header>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column - Search & List */}
-            <div className="lg:col-span-1 space-y-6">
-              <div className="bg-[#2A3441]/90 backdrop-blur-sm rounded-xl p-6 border border-cyan-400/30">
-                <div className="relative mb-4">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <Input 
-                    placeholder="Search NPCs..." 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="bg-[#1E2430] border-gray-700 text-white pl-9"
-                  />
-                </div>
-                
-                <div className="space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
-                  {filteredNPCs.length > 0 ? filteredNPCs.map(npc => (
-                    <div
-                      key={npc.id}
-                      onClick={() => {
-                        setSelectedNPC(npc);
-                        setEditingNPC(null);
-                      }}
-                      className={`p-3 rounded-lg cursor-pointer transition-all border ${
-                        selectedNPC?.id === npc.id 
-                          ? 'bg-[#37F2D1]/20 border-[#37F2D1]' 
-                          : 'bg-[#1E2430] border-gray-700 hover:border-gray-500'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[#0f1419] overflow-hidden flex-shrink-0 border border-gray-600">
-                          {(() => {
-                            const stats = getNpcStats(npc);
-                            const imgUrl = npc.avatar_url || stats.profile_avatar_url || stats.avatar_url;
-                            return imgUrl ? (
-                              <img src={imgUrl} alt={npc.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-500">
-                                {npc.name.charAt(0)}
-                              </div>
-                            );
-                          })()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`font-bold truncate ${selectedNPC?.id === npc.id ? 'text-[#37F2D1]' : 'text-white'}`}>
-                            {npc.name}
-                          </p>
-                          <p className="text-xs text-gray-400 truncate">
-                            {getNpcStats(npc).race} {getNpcStats(npc).class} • Lvl {getNpcStats(npc).level || 1}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )) : (
-                    <p className="text-center text-gray-500 py-4">No NPCs found</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Right Column - Details */}
-            <div className="lg:col-span-2">
+        <div className="flex-1 flex gap-4 overflow-hidden min-h-0">
+          {/* Left: NPC detail — owns its own scroll. */}
+          <div className="w-1/2 overflow-y-auto border border-slate-700/50 rounded-lg bg-[#1a1f2e]">
               {selectedNPC ? (() => {
                 const stats = getNpcStats(selectedNPC);
                 return (
@@ -553,14 +494,88 @@ export default function CampaignNPCs() {
                 </div>
                 );
               })() : (
-                <div className="bg-[#2A3441]/90 backdrop-blur-sm rounded-xl p-12 border border-gray-700 flex flex-col items-center justify-center text-center h-full min-h-[400px]">
+                <div className="flex flex-col items-center justify-center text-center h-full min-h-[400px] p-12">
                   <div className="w-20 h-20 bg-[#1E2430] rounded-full flex items-center justify-center mb-4 border-2 border-gray-700 border-dashed">
                     <Search className="w-8 h-8 text-gray-500" />
                   </div>
                   <h3 className="text-xl font-bold text-white mb-2">Select an NPC</h3>
                   <p className="text-gray-400 max-w-md">
-                    Select a character from the list on the left to view their details, stats, and notes.
+                    Pick an NPC from the list on the right to view their details, stats, and notes.
                   </p>
+                </div>
+              )}
+          </div>
+
+          {/* Right: search + NPC list, own scroll. */}
+          <div className="w-1/2 flex flex-col overflow-hidden min-h-0">
+            <div className="flex-shrink-0 mb-3 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Search NPCs…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-[#1E2430] border-gray-700 text-white pl-9"
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto pr-1">
+              {filteredNPCs.length > 0 ? (
+                <ul className="divide-y divide-slate-700/30 bg-[#1a1f2e] border border-slate-700/50 rounded-lg overflow-hidden">
+                  {filteredNPCs.map((npc) => {
+                    const stats = getNpcStats(npc);
+                    const imgUrl = npc.avatar_url || stats.profile_avatar_url || stats.avatar_url;
+                    const active = selectedNPC?.id === npc.id;
+                    const subLine = [stats.race, stats.class, stats.level ? `Lvl ${stats.level}` : null]
+                      .filter(Boolean).join(" • ") || npc.faction || npc.location || "—";
+                    const isAlive = npc.is_alive !== false;
+                    return (
+                      <li key={npc.id}>
+                        <button
+                          type="button"
+                          onClick={() => { setSelectedNPC(npc); setEditingNPC(null); }}
+                          className={`w-full text-left flex items-center gap-3 p-3 transition-colors ${
+                            active
+                              ? "bg-[#252b3d] border-l-2 border-l-[#37F2D1]"
+                              : "hover:bg-[#252b3d]"
+                          }`}
+                        >
+                          <div className="w-10 h-10 rounded-full bg-[#0f1419] overflow-hidden flex-shrink-0 border border-gray-600">
+                            {imgUrl ? (
+                              <img
+                                src={imgUrl}
+                                alt={npc.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                  e.currentTarget.parentElement.className =
+                                    "w-10 h-10 rounded-full bg-slate-700 flex-shrink-0";
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-500">
+                                {npc.name?.charAt(0) || "?"}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className={`text-sm font-semibold truncate ${active ? "text-[#37F2D1]" : "text-white"}`}>
+                              {npc.name}
+                            </div>
+                            <div className="text-xs text-slate-400 truncate">{subLine}</div>
+                          </div>
+                          <span
+                            className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              isAlive ? "bg-emerald-400" : "bg-red-400"
+                            }`}
+                            title={isAlive ? "Alive" : "Deceased"}
+                          />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-12 text-center">
+                  <p className="text-sm text-slate-500 italic">No NPCs match.</p>
                 </div>
               )}
             </div>
