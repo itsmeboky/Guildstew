@@ -3546,6 +3546,480 @@ function TriggerFields({ value, onChange }) {
   );
 }
 
+// Tier 3 §A — Feature Menu authoring. Drives the learn-count schedule,
+// swap-on-level-up policy, and the repeatable options list. Each
+// option unlocks conditional mechanical fields by effect_type the
+// same way a standalone class feature does.
+function MenuFields({ value, onChange }) {
+  const menu = value || { enabled: true, learn_count: [{ level: 1, count: 1 }], swap_on_level_up: false, swap_count: 1, options: [] };
+  const patch = (fields) => onChange({ ...menu, ...fields });
+  const learnCount = Array.isArray(menu.learn_count) ? menu.learn_count : [];
+  const options = Array.isArray(menu.options) ? menu.options : [];
+
+  const updateSchedule = (idx, fields) => patch({
+    learn_count: learnCount.map((r, i) => (i === idx ? { ...r, ...fields } : r)),
+  });
+  const addScheduleRow = () => patch({
+    learn_count: [...learnCount, { level: (learnCount.at(-1)?.level ?? 0) + 2, count: (learnCount.at(-1)?.count ?? 1) + 1 }],
+  });
+  const removeScheduleRow = (idx) => patch({ learn_count: learnCount.filter((_, i) => i !== idx) });
+
+  const addOption = () => patch({ options: [...options, { ...BLANK_MENU_OPTION }] });
+  const updateOption = (idx, fields) => patch({
+    options: options.map((o, i) => (i === idx ? { ...o, ...fields } : o)),
+  });
+  const removeOption = (idx) => patch({ options: options.filter((_, i) => i !== idx) });
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3 space-y-3">
+        <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Learn Count Schedule</h4>
+        <p className="text-[10px] text-slate-500 italic">
+          At each class level, the character knows this many options from the menu. Invocations: 2, 3, 4, 5, 6, 7, 8…
+        </p>
+        {learnCount.length === 0 ? (
+          <p className="text-[11px] text-slate-500 italic text-center py-2">No schedule rows yet.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {learnCount.map((row, i) => (
+              <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                <div className="col-span-5">
+                  <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">At level</Label>
+                  <Input
+                    type="number" min={1} max={20}
+                    value={row.level ?? 1}
+                    onChange={(e) => updateSchedule(i, { level: Number(e.target.value) || 1 })}
+                    className="bg-[#0b1220] border-slate-700 text-white text-xs h-8"
+                  />
+                </div>
+                <div className="col-span-6">
+                  <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Knows</Label>
+                  <Input
+                    type="number" min={1} max={20}
+                    value={row.count ?? 1}
+                    onChange={(e) => updateSchedule(i, { count: Number(e.target.value) || 1 })}
+                    className="bg-[#0b1220] border-slate-700 text-white text-xs h-8"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeScheduleRow(i)}
+                  className="col-span-1 text-slate-400 hover:text-red-400 flex justify-center mt-4"
+                >
+                  <Trash className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <Button type="button" variant="outline" size="sm" onClick={addScheduleRow}>
+          <Plus className="w-3 h-3 mr-1" /> Add Schedule Row
+        </Button>
+        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[#1e293b]">
+          <div className="flex items-center gap-2 h-10">
+            <Switch
+              checked={!!menu.swap_on_level_up}
+              onCheckedChange={(c) => patch({ swap_on_level_up: c })}
+            />
+            <span className="text-xs text-slate-300">Swap one on level-up</span>
+          </div>
+          {menu.swap_on_level_up && (
+            <Field label="Swap count">
+              <Input
+                type="number" min={1} max={5}
+                value={menu.swap_count ?? 1}
+                onChange={(e) => patch({ swap_count: Number(e.target.value) || 1 })}
+                className="bg-[#0b1220] border-slate-700 text-white"
+              />
+            </Field>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Options</h4>
+          <Button type="button" variant="outline" size="sm" onClick={addOption}>
+            <Plus className="w-3 h-3 mr-1" /> Add Option
+          </Button>
+        </div>
+        {options.length === 0 ? (
+          <p className="text-[11px] text-slate-500 italic text-center py-3">
+            No options yet. Add the Invocations, Maneuvers, Metamagic choices, etc.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {options.map((option, idx) => (
+              <MenuOptionCard
+                key={idx}
+                option={option}
+                onChange={(fields) => updateOption(idx, fields)}
+                onRemove={() => removeOption(idx)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MenuOptionCard({ option, onChange, onRemove }) {
+  const effectType = option.effect_type || "Passive Modifier";
+  return (
+    <div className="bg-[#0b1220] border border-[#1e293b] rounded-lg p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <Input
+          value={option.name || ""}
+          onChange={(e) => onChange({ name: e.target.value })}
+          placeholder="Option name (e.g., Agonizing Blast)"
+          className="bg-[#050816] border-slate-700 text-white flex-1"
+        />
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-slate-400 hover:text-red-400"
+          title="Remove"
+        >
+          <Trash className="w-3 h-3" />
+        </button>
+      </div>
+      <Textarea
+        value={option.description || ""}
+        onChange={(e) => onChange({ description: e.target.value })}
+        placeholder="What the option does."
+        rows={2}
+        className="bg-[#050816] border-slate-700 text-white text-xs"
+      />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div>
+          <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Level req</Label>
+          <Input
+            type="number" min={0} max={20}
+            value={option.level_requirement ?? 0}
+            onChange={(e) => onChange({ level_requirement: Number(e.target.value) || 0 })}
+            placeholder="0 = any"
+            className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+          />
+        </div>
+        <div className="md:col-span-2">
+          <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Prerequisite</Label>
+          <Input
+            value={option.prerequisite || ""}
+            onChange={(e) => onChange({ prerequisite: e.target.value })}
+            placeholder="e.g., Pact of the Blade"
+            className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+          />
+        </div>
+        <div>
+          <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Cost</Label>
+          <Select value={option.cost || "Passive"} onValueChange={(v) => onChange({ cost: v })}>
+            <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Passive">Passive</SelectItem>
+              <SelectItem value="Action">Action</SelectItem>
+              <SelectItem value="Bonus Action">Bonus Action</SelectItem>
+              <SelectItem value="Reaction">Reaction</SelectItem>
+              <SelectItem value="Free">Free</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Effect</Label>
+          <Select value={effectType} onValueChange={(v) => onChange({ effect_type: v })}>
+            <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {MENU_FEATURE_EFFECT_TYPES.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {effectType === "Damage" && (
+          <>
+            <div>
+              <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Damage dice</Label>
+              <Input
+                value={option.damage_dice || ""}
+                onChange={(e) => onChange({ damage_dice: e.target.value })}
+                placeholder="1d6"
+                className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+              />
+            </div>
+            <div>
+              <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Damage type</Label>
+              <Select
+                value={option.damage_type || ""}
+                onValueChange={(v) => onChange({ damage_type: v === "__none" ? "" : v })}
+              >
+                <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">None</SelectItem>
+                  {DAMAGE_TYPES.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
+
+        {effectType === "Healing" && (
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Healing dice</Label>
+            <Input
+              value={option.healing_dice || ""}
+              onChange={(e) => onChange({ healing_dice: e.target.value })}
+              placeholder="1d8"
+              className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+            />
+          </div>
+        )}
+
+        {effectType === "Condition" && (
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Condition</Label>
+            <Select
+              value={option.applies_condition || ""}
+              onValueChange={(v) => onChange({ applies_condition: v === "__none" ? "" : v })}
+            >
+              <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="None" /></SelectTrigger>
+              <SelectContent className="max-h-64">
+                <SelectItem value="__none">None</SelectItem>
+                {Object.keys(CONDITION_COLORS).map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {effectType === "Spell" && (
+          <>
+            <div className="md:col-span-2">
+              <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Spell reference</Label>
+              <Input
+                value={option.spell_reference || ""}
+                onChange={(e) => onChange({ spell_reference: e.target.value })}
+                placeholder="e.g., Mage Armor"
+                className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+              />
+            </div>
+            <div>
+              <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Spell cost</Label>
+              <Select value={option.spell_cost || "slot"} onValueChange={(v) => onChange({ spell_cost: v })}>
+                <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="slot">Uses a slot</SelectItem>
+                  <SelectItem value="free">Free (at will)</SelectItem>
+                  <SelectItem value="once_long">1/long rest</SelectItem>
+                  <SelectItem value="once_short">1/short rest</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
+
+        {effectType === "Passive Modifier" && (
+          <>
+            <div>
+              <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Modifier target</Label>
+              <Input
+                value={option.modifier_target || ""}
+                onChange={(e) => onChange({ modifier_target: e.target.value })}
+                placeholder="eldritch_blast_damage"
+                className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+              />
+            </div>
+            <div>
+              <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Modifier value</Label>
+              <Input
+                value={option.modifier_value || ""}
+                onChange={(e) => onChange({ modifier_value: e.target.value })}
+                placeholder="charisma_mod / +2 / 1d6"
+                className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+              />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Tier 3 §B — Non-slot spell costs. Blood magic (HP), exhaustion,
+// hit dice, consumed materials, and custom pools. After-effects fire
+// based on trigger (on_cast / on_concentration_break / after_duration)
+// with optional plain-text conditions like "spell level 6+".
+function AlternativeCostFields({ value, onChange }) {
+  const block = value || { enabled: false, replaces_slot: true, costs: [], after_effects: [] };
+  const patch = (fields) => onChange({ ...block, ...fields });
+  const costs = Array.isArray(block.costs) ? block.costs : [];
+  const afterEffects = Array.isArray(block.after_effects) ? block.after_effects : [];
+
+  const setEnabled = (on) => patch({
+    enabled: on,
+    costs: on && costs.length === 0 ? [{ ...BLANK_ALT_COST }] : costs,
+  });
+
+  const updateCost = (idx, fields) => patch({
+    costs: costs.map((c, i) => (i === idx ? { ...c, ...fields } : c)),
+  });
+  const addCost = () => patch({ costs: [...costs, { ...BLANK_ALT_COST }] });
+  const removeCost = (idx) => patch({ costs: costs.filter((_, i) => i !== idx) });
+
+  const updateAfter = (idx, fields) => patch({
+    after_effects: afterEffects.map((c, i) => (i === idx ? { ...c, ...fields } : c)),
+  });
+  const addAfter = () => patch({ after_effects: [...afterEffects, { ...BLANK_ALT_AFTER_EFFECT }] });
+  const removeAfter = (idx) => patch({ after_effects: afterEffects.filter((_, i) => i !== idx) });
+
+  return (
+    <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Alternative Casting Cost</h4>
+          <p className="text-[10px] text-slate-500">Blood magic, exhaustion, hit dice, consumed materials, custom pools.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch checked={!!block.enabled} onCheckedChange={setEnabled} />
+          <span className="text-[10px] text-slate-400">{block.enabled ? "On" : "Off"}</span>
+        </div>
+      </div>
+      {block.enabled && (
+        <>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={!!block.replaces_slot}
+              onCheckedChange={(c) => patch({ replaces_slot: c })}
+            />
+            <span className="text-xs text-slate-300">
+              Replaces spell slot (off = paid in addition to a slot)
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Costs</Label>
+              <Button type="button" variant="outline" size="sm" onClick={addCost}>
+                <Plus className="w-3 h-3 mr-1" /> Add Cost
+              </Button>
+            </div>
+            {costs.length === 0 ? (
+              <p className="text-[11px] text-slate-500 italic text-center py-2">No costs defined.</p>
+            ) : (
+              costs.map((cost, idx) => (
+                <div key={idx} className="bg-[#0b1220] border border-[#1e293b] rounded p-2 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Type</Label>
+                        <Select value={cost.type || "hp"} onValueChange={(v) => updateCost(idx, { type: v })}>
+                          <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {SPELL_COST_TYPES.map((t) => (<SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Amount</Label>
+                        <Input
+                          value={cost.amount || ""}
+                          onChange={(e) => updateCost(idx, { amount: e.target.value })}
+                          placeholder='"5 per spell level" / "1d4" / "2"'
+                          className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeCost(idx)}
+                      className="text-slate-400 hover:text-red-400 mt-5"
+                      title="Remove"
+                    >
+                      <Trash className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <Textarea
+                    value={cost.description || ""}
+                    onChange={(e) => updateCost(idx, { description: e.target.value })}
+                    placeholder="Flavor / flavor text."
+                    rows={2}
+                    className="bg-[#050816] border-slate-700 text-white text-xs"
+                  />
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">After-Effects (optional)</Label>
+              <Button type="button" variant="outline" size="sm" onClick={addAfter}>
+                <Plus className="w-3 h-3 mr-1" /> Add After-Effect
+              </Button>
+            </div>
+            {afterEffects.length === 0 ? (
+              <p className="text-[11px] text-slate-500 italic text-center py-2">No after-effects.</p>
+            ) : (
+              afterEffects.map((ae, idx) => (
+                <div key={idx} className="bg-[#0b1220] border border-[#1e293b] rounded p-2 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 grid grid-cols-2 md:grid-cols-3 gap-2">
+                      <div>
+                        <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Trigger</Label>
+                        <Select value={ae.trigger || "on_cast"} onValueChange={(v) => updateAfter(idx, { trigger: v })}>
+                          <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="on_cast">On Cast</SelectItem>
+                            <SelectItem value="on_concentration_break">On Concentration Break</SelectItem>
+                            <SelectItem value="after_duration">After Duration Ends</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Effect</Label>
+                        <Select value={ae.effect_type || "exhaustion"} onValueChange={(v) => updateAfter(idx, { effect_type: v })}>
+                          <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="exhaustion">Exhaustion level</SelectItem>
+                            <SelectItem value="damage">Damage</SelectItem>
+                            <SelectItem value="condition">Condition</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Amount</Label>
+                        <Input
+                          value={ae.amount ?? ""}
+                          onChange={(e) => updateAfter(idx, { amount: e.target.value })}
+                          placeholder="1 / 2d6 / Blinded"
+                          className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+                        />
+                      </div>
+                      <div className="md:col-span-3">
+                        <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Condition (when it fires)</Label>
+                        <Input
+                          value={ae.condition || ""}
+                          onChange={(e) => updateAfter(idx, { condition: e.target.value })}
+                          placeholder='"spell level 6+" / "on concentration break"'
+                          className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeAfter(idx)}
+                      className="text-slate-400 hover:text-red-400 mt-5"
+                    >
+                      <Trash className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ChipMultiSelect({ label, options, values, onChange }) {
   const selected = Array.isArray(values) ? values : [];
   const toggle = (value) => {
@@ -3898,6 +4372,46 @@ function formatComponents(c) {
   return out;
 }
 
+function normalizeAlternativeCosts(value) {
+  if (!value || typeof value !== "object") {
+    return { enabled: false, replaces_slot: true, costs: [], after_effects: [] };
+  }
+  return {
+    enabled: !!value.enabled,
+    replaces_slot: value.replaces_slot !== false,
+    costs: Array.isArray(value.costs) ? value.costs : [],
+    after_effects: Array.isArray(value.after_effects) ? value.after_effects : [],
+  };
+}
+
+function serializeAlternativeCosts(value) {
+  if (!value || !value.enabled) return null;
+  const costs = (Array.isArray(value.costs) ? value.costs : [])
+    .filter((c) => c && c.type && (c.amount || c.description))
+    .map((c) => ({
+      type: c.type,
+      amount: c.amount || "",
+      amount_value: c.amount_value == null || c.amount_value === "" ? null : Number(c.amount_value),
+      amount_per_level: c.amount_per_level == null || c.amount_per_level === "" ? null : Number(c.amount_per_level),
+      description: c.description || "",
+    }));
+  const after_effects = (Array.isArray(value.after_effects) ? value.after_effects : [])
+    .filter((ae) => ae && (ae.effect_type || ae.description))
+    .map((ae) => ({
+      trigger: ae.trigger || "on_cast",
+      effect_type: ae.effect_type || "",
+      amount: ae.amount === "" || ae.amount == null ? null : ae.amount,
+      condition: ae.condition || "",
+      description: ae.description || "",
+    }));
+  return {
+    enabled: true,
+    replaces_slot: value.replaces_slot !== false,
+    costs,
+    after_effects,
+  };
+}
+
 export function spellFromModifications(mods) {
   if (!mods || typeof mods !== "object") return { ...BLANK_SPELL };
   return {
@@ -3917,11 +4431,13 @@ export function spellFromModifications(mods) {
       || (mods.attack_roll ? "attack" : mods.save ? "save" : "save"),
     save: (mods.save || "DEX").toString().toUpperCase(),
     condition_save: (mods.condition_save || "WIS").toString().toUpperCase(),
+    alternative_costs: normalizeAlternativeCosts(mods.alternative_costs),
   };
 }
 
 export function buildSpellModifications(spell) {
   if (!spell || typeof spell !== "object") return {};
+  const altCosts = serializeAlternativeCosts(spell.alternative_costs);
   const base = {
     name: spell.name || "",
     level: Number(spell.level) || 0,
@@ -3936,6 +4452,7 @@ export function buildSpellModifications(spell) {
     classes: Array.isArray(spell.classes) ? spell.classes : [],
     effect_type: (spell.effect_type || "Utility").toLowerCase(),
     source: "homebrew",
+    ...(altCosts ? { alternative_costs: altCosts } : {}),
   };
   const effect = (spell.effect_type || "").toLowerCase();
   if (effect === "damage") {
@@ -3997,6 +4514,15 @@ export function classFeatureFromModifications(mods) {
         ability: mods.feature_dc.ability || "STR",
       }
     : { ...BLANK_CLASS_FEATURE.feature_dc };
+  const menu = mods.menu && typeof mods.menu === "object"
+    ? {
+        enabled: mods.menu.enabled !== false,
+        learn_count: Array.isArray(mods.menu.learn_count) ? mods.menu.learn_count : [],
+        swap_on_level_up: !!mods.menu.swap_on_level_up,
+        swap_count: Number(mods.menu.swap_count) || 1,
+        options: Array.isArray(mods.menu.options) ? mods.menu.options : [],
+      }
+    : { ...BLANK_CLASS_FEATURE.menu };
   return {
     ...BLANK_CLASS_FEATURE,
     ...mods,
@@ -4007,15 +4533,64 @@ export function classFeatureFromModifications(mods) {
     scaling_die,
     feature_dc,
     trigger: mods.trigger && typeof mods.trigger === "object" ? mods.trigger : null,
+    menu,
   };
 }
 
 // Back-compat alias for anything still importing the old name.
 export const abilityFromModifications = classFeatureFromModifications;
 
+function serializeMenu(menu) {
+  if (!menu || typeof menu !== "object") return null;
+  const learn_count = (Array.isArray(menu.learn_count) ? menu.learn_count : [])
+    .filter((r) => r && r.level)
+    .map((r) => ({ level: Number(r.level), count: Number(r.count) || 1 }));
+  const options = (Array.isArray(menu.options) ? menu.options : [])
+    .filter((o) => o && o.name)
+    .map((o) => ({
+      name: o.name || "",
+      description: o.description || "",
+      level_requirement: Number(o.level_requirement) || 0,
+      prerequisite: o.prerequisite || "",
+      effect_type: o.effect_type || "Passive Modifier",
+      cost: o.cost || "Passive",
+      damage_dice: o.damage_dice || "",
+      damage_type: o.damage_type || "",
+      healing_dice: o.healing_dice || "",
+      applies_condition: o.applies_condition || "",
+      spell_reference: o.spell_reference || "",
+      spell_cost: o.spell_cost || "slot",
+      modifier_target: o.modifier_target || "",
+      modifier_value: o.modifier_value || "",
+    }));
+  return {
+    enabled: true,
+    learn_count,
+    swap_on_level_up: !!menu.swap_on_level_up,
+    swap_count: Number(menu.swap_count) || 1,
+    options,
+  };
+}
+
 export function buildClassFeatureModifications(feature) {
   if (!feature || typeof feature !== "object") return {};
   const type = feature.type || "Class Feature";
+  const isMenu = type === "Feature Menu";
+
+  if (isMenu) {
+    const menu = serializeMenu(feature.menu);
+    return {
+      name: feature.name || "",
+      type,
+      class: feature.class || "Fighter",
+      level: Number(feature.level) || 1,
+      description: feature.description || "",
+      image_url: feature.image_url || "",
+      source: "homebrew",
+      menu: menu || { enabled: true, learn_count: [], swap_on_level_up: false, swap_count: 1, options: [] },
+    };
+  }
+
   const effectType = feature.effect_type || "Utility";
   const resolution = feature.resolution || "no_roll";
   const base = {
@@ -4418,6 +4993,11 @@ function CustomSpellForm({ spell, setSpell }) {
           </p>
         )}
       </div>
+
+      <AlternativeCostFields
+        value={spell.alternative_costs}
+        onChange={(next) => patch({ alternative_costs: next })}
+      />
     </div>
   );
 }
@@ -4433,6 +5013,7 @@ function CustomClassFeatureForm({ feature, setFeature }) {
     feature_dc: { ...(prev.feature_dc || {}), ...fields },
   }));
   const isClassFeature = feature.type === "Class Feature";
+  const isMenu = feature.type === "Feature Menu";
   const effect = feature.effect_type || "Utility";
   const resolution = feature.resolution || "no_roll";
 
@@ -4499,6 +5080,10 @@ function CustomClassFeatureForm({ feature, setFeature }) {
         />
       </Field>
 
+      {isMenu ? (
+        <MenuFields value={feature.menu} onChange={(menu) => patch({ menu })} />
+      ) : (
+        <>
       {/* --- Action Economy --- */}
       <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3 space-y-3">
         <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Action Economy</h4>
@@ -4824,6 +5409,8 @@ function CustomClassFeatureForm({ feature, setFeature }) {
         value={feature.trigger || null}
         onChange={(next) => patch({ trigger: next })}
       />
+        </>
+      )}
 
       <Field label="Image">
         <HomebrewImageUpload
