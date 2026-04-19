@@ -25,7 +25,19 @@ export function buildStatsFromCharacterData(characterData) {
   const maxHP = calculateMaxHP(characterData.class, level, attributes.con);
   const armor_class = calculateAC(attributes.dex);
   const initiative = calculateAbilityModifier(attributes.dex);
-  const speed = getSpeed(characterData.race);
+  // Brewery races override SRD-lookup basics — speed, size, and
+  // darkvision come from the mod schema when _brewery_race is set
+  // (RaceStep copies them onto characterData under _brewery_* keys).
+  const speed = characterData._brewery_speed != null
+    ? characterData._brewery_speed
+    : getSpeed(characterData.race);
+  const size = characterData._brewery_size || characterData.size || null;
+  const darkvision = characterData._brewery_darkvision != null
+    ? characterData._brewery_darkvision
+    : (characterData.darkvision || 0);
+  const additional_speeds = characterData._brewery_additional_speeds
+    || characterData.additional_speeds
+    || null;
 
   // Passive Perception with expertise support
   const perceptionMod = calculateAbilityModifier(attributes.wis);
@@ -65,6 +77,9 @@ export function buildStatsFromCharacterData(characterData) {
     armor_class,
     initiative,
     speed,
+    size,
+    darkvision,
+    additional_speeds,
     proficiency_bonus,
     passive_perception,
 

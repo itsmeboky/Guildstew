@@ -7,6 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { motion, AnimatePresence } from "framer-motion";
 import { RACES } from '@/components/dnd5e/dnd5eRules';
 import { getModdedRaces } from '@/lib/modEngine';
+import {
+  applyBreweryRaceBaseline,
+  clearBreweryRaceMarkers,
+} from '@/lib/breweryRaceApply';
 
 // Normalize a brewery race (modEngine metadata shape) into the same
 // shape the SRD race list uses — { name, subtypes, description,
@@ -301,18 +305,19 @@ export default function RaceStep({ characterData, updateCharacterData, campaignI
   // re-fetching. SRD selections wipe the slate so switching away
   // from a brewery race cleans up its bonuses.
   const buildRaceUpdates = (race) => {
-    const updates = {
+    const base = {
       race: race.name,
       subrace: race.subtypes[0],
     };
     if (race._source === "brewery") {
-      updates._brewery_race = race._raw || null;
-      updates._brewery_ability_picks = {};
-    } else {
-      updates._brewery_race = null;
-      updates._brewery_ability_picks = {};
+      return {
+        ...base,
+        ...clearBreweryRaceMarkers(),
+        _brewery_race: race._raw || null,
+        ...applyBreweryRaceBaseline(race._raw || null, characterData),
+      };
     }
-    return updates;
+    return { ...base, ...clearBreweryRaceMarkers() };
   };
 
   const handleRaceChange = (direction) => {
@@ -534,8 +539,171 @@ export default function RaceStep({ characterData, updateCharacterData, campaignI
               </p>
             </motion.div>
           )}
+
+          {currentRace._source === "brewery" && (
+            <BreweryRacePickers
+              characterData={characterData}
+              updateCharacterData={updateCharacterData}
+            />
+          )}
         </motion.div>
       </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// Bonus-language + skill-choice pickers for modded races. Rendered
+// in-panel under the race description when the selected race is
+// brewery-sourced and its schema includes picks.
+function BreweryRacePickers({ characterData, updateCharacterData }) {
+  const race = characterData._brewery_race;
+  if (!race) return null;
+
+  const bonusLangPicks = Number(race.languages?.bonus_picks) || 0;
+  const restrictedTo   = Array.isArray(race.languages?.restricted_to) ? race.languages.restricted_to : [];
+  const skillChoose    = Number(race.skill_proficiencies?.choose) || 0;
+  const chooseFrom     = Array.isArray(race.skill_proficiencies?.choose_from) ? race.skill_proficiencies.choose_from : [];
+
+  const fixedLangs = Array.isArray(race.languages?.fixed) ? race.languages.fixed : [];
+  const fixedSkills = Array.isArray(race.skill_proficiencies?.fixed) ? race.skill_proficiencies.fixed : [];
+
+  const existingLangs = Array.isArray(characterData.languages) ? characterData.languages : [];
+  const existingBonus = Array.isArray(characterData._brewery_bonus_langs) ? characterData._brewery_bonus_langs : [];
+  const existingChosenSkills = Array.isArray(characterData._brewery_chosen_skills) ? characterData._brewery_chosen_skills : [];
+
+  const langOptions = restrictedTo.length > 0
+    ? restrictedTo.filter((l) => !fixedLangs.includes(l))
+    : [
+        "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin", "Halfling", "Orc",
+        "Abyssal", "Celestial", "Draconic", "Deep Speech", "Infernal",
+        "Primordial", "Sylvan", "Undercommon",
+      ].filter((l) => !fixedLangs.includes(l));
+  const skillOptionList = chooseFrom.length > 0
+    ? chooseFrom.filter((s) => !fixedSkills.includes(s))
+    : [
+        "Acrobatics", "Animal Handling", "Arcana", "Athletics", "Deception",
+        "History", "Insight", "Intimidation", "Investigation", "Medicine",
+        "Nature", "Perception", "Performance", "Persuasion", "Religion",
+        "Sleight of Hand", "Stealth", "Survival",
+      ].filter((s) => !fixedSkills.includes(s));
+
+  const toggleLang = (lang) => {
+    const active = existingBonus.includes(lang);
+    if (!active && existingBonus.length >= bonusLangPicks) return;
+    const nextBonus = active
+      ? existingBonus.filter((l) => l !== lang)
+      : [...existingBonus, lang];
+    // Keep characterData.languages in sync: fixed + any bonus.
+    const mergedLangs = Array.from(new Set([
+      ...existingLangs.filter((l) => !existingBonus.includes(l) || nextBonus.includes(l)),
+      ...nextBonus,
+    ]));
+    updateCharacterData({
+      _brewery_bonus_langs: nextBonus,
+      languages: mergedLangs,
+    });
+  };
+
+  const toggleSkill = (skill) => {
+    const active = existingChosenSkills.includes(skill);
+    if (!active && existingChosenSkills.length >= skillChoose) return;
+    const nextChosen = active
+      ? existingChosenSkills.filter((s) => s !== skill)
+      : [...existingChosenSkills, skill];
+    // Mirror in characterData.skills so the Skills step sees them
+    // as proficient. Dropped picks untoggle the corresponding skill
+    // unless it came from elsewhere (fixed race skill, class, etc.).
+    const nextSkills = { ...(characterData.skills || {}) };
+    if (active) {
+      if (!fixedSkills.includes(skill)) delete nextSkills[skill];
+    } else {
+      nextSkills[skill] = true;
+    }
+    updateCharacterData({
+      _brewery_chosen_skills: nextChosen,
+      skills: nextSkills,
+    });
+  };
+
+  if (bonusLangPicks === 0 && skillChoose === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mt-4 space-y-3"
+    >
+      {bonusLangPicks > 0 && (
+        <div className="bg-[#0b1220] border-2 border-[#37F2D1]/30 rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-[#37F2D1] font-bold text-xs uppercase tracking-widest">
+              Bonus Languages
+            </h4>
+            <span className="text-[10px] text-white/60">
+              {existingBonus.length} / {bonusLangPicks}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {langOptions.map((lang) => {
+              const active = existingBonus.includes(lang);
+              const disabled = !active && existingBonus.length >= bonusLangPicks;
+              return (
+                <button
+                  key={lang}
+                  type="button"
+                  onClick={() => toggleLang(lang)}
+                  disabled={disabled}
+                  className={`px-2 py-1 rounded border text-[10px] font-semibold transition-colors ${
+                    active
+                      ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                      : disabled
+                        ? "bg-[#1E2430] text-slate-600 border-slate-800 cursor-not-allowed"
+                        : "bg-[#1E2430] text-slate-300 border-slate-700 hover:border-[#37F2D1]/60"
+                  }`}
+                >
+                  {lang}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {skillChoose > 0 && (
+        <div className="bg-[#0b1220] border-2 border-[#37F2D1]/30 rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-[#37F2D1] font-bold text-xs uppercase tracking-widest">
+              Skill Choices
+            </h4>
+            <span className="text-[10px] text-white/60">
+              {existingChosenSkills.length} / {skillChoose}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {skillOptionList.map((skill) => {
+              const active = existingChosenSkills.includes(skill);
+              const disabled = !active && existingChosenSkills.length >= skillChoose;
+              return (
+                <button
+                  key={skill}
+                  type="button"
+                  onClick={() => toggleSkill(skill)}
+                  disabled={disabled}
+                  className={`px-2 py-1 rounded border text-[10px] font-semibold transition-colors ${
+                    active
+                      ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                      : disabled
+                        ? "bg-[#1E2430] text-slate-600 border-slate-800 cursor-not-allowed"
+                        : "bg-[#1E2430] text-slate-300 border-slate-700 hover:border-[#37F2D1]/60"
+                  }`}
+                >
+                  {skill}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }
