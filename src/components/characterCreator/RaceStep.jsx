@@ -420,10 +420,23 @@ export default function RaceStep({ characterData, updateCharacterData, campaignI
               <ChevronLeft className="w-6 h-6" />
             </button>
             <div className="flex items-center gap-3">
-              <img src={currentRace.icon} alt={currentRace.name} className="w-12 h-12" />
-              <h2 className="text-2xl font-bold text-white">
-                {currentRace.name}
-              </h2>
+              {currentRace.icon ? (
+                <img src={currentRace.icon} alt={currentRace.name} className="w-12 h-12" />
+              ) : (
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-[#37F2D1]/30 to-[#8B5CF6]/30 flex items-center justify-center">
+                  <Sparkles className="w-6 h-6 text-[#37F2D1]" />
+                </div>
+              )}
+              <div className="flex flex-col items-start">
+                <h2 className="text-2xl font-bold text-white">
+                  {currentRace.name}
+                </h2>
+                {currentRace._source === "brewery" && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1.5 py-0.5 mt-1">
+                    <Sparkles className="w-3 h-3" /> Brewery
+                  </span>
+                )}
+              </div>
             </div>
             <button
               onClick={() => handleRaceChange(1)}
