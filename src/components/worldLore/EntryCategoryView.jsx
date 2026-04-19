@@ -15,6 +15,7 @@ import { timeAgo, formatDate } from "@/utils/timeAgo";
 import { templateById } from "@/data/worldLoreTemplates";
 import EntryForm from "./EntryForm";
 import GatedEntryView from "./GatedEntryView";
+import TemplateRenderer from "./TemplateRenderer";
 import CommentThread from "./CommentThread";
 
 /**
@@ -307,45 +308,14 @@ function ForumRow({ entry, authorProfile, commentCount, onClick }) {
 
 function EntryDetail({ entry, profilesById, metadataFields, isGM, campaign, character, onEdit, onDelete }) {
   const author = profilesById.get(entry.created_by) || {};
-  const template = templateById(entry.template_type);
-  const structuredMetadataKeys = template.fields?.map((f) => f.key) || [];
 
   // Render the entry body through the gated-view wrapper. It
   // handles skill/ability locks, language comprehension tiers, and
   // Thieves' Cant / Druidic annotations. GMs pass through unblocked.
-  const renderBody = () => (
-    <>
-      {template.id !== "freeform" && structuredMetadataKeys.length > 0 && (
-        <div className="space-y-3 mb-5">
-          {template.fields.map((field) => {
-            const val = entry?.metadata?.[field.key];
-            if (!val) return null;
-            if (field.type === "image") {
-              return (
-                <div key={field.key}>
-                  <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">{field.label}</div>
-                  <img src={val} alt="" className="max-h-80 rounded-lg border border-slate-700" />
-                </div>
-              );
-            }
-            return (
-              <div key={field.key} className="bg-[#0f1219] border border-slate-700 rounded-lg p-3">
-                <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">{field.label}</div>
-                <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{val}</p>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {template.id === "freeform" && entry.content && (
-        <div
-          className="prose prose-invert max-w-none text-slate-300 leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: entry.content }}
-        />
-      )}
-    </>
-  );
+  // TemplateRenderer dispatches on entry.template_type and picks the
+  // right visual layout (Wanted Poster, Letter, Secret Document,
+  // Sketch, …); unknown types fall back to a freeform renderer.
+  const renderBody = () => <TemplateRenderer entry={entry} />;
 
   return (
     <article className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-6">
