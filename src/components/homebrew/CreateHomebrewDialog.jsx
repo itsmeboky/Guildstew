@@ -678,6 +678,12 @@ function itemFromModifications(mods) {
     ...mods,
     properties: Array.isArray(mods.properties) ? mods.properties : [],
     bonus_to: Array.isArray(mods.bonus_to) ? mods.bonus_to : [],
+    curse: mods.curse && typeof mods.curse === "object"
+      ? { ...BLANK_CURSE, ...mods.curse }
+      : { ...BLANK_CURSE },
+    sentience: mods.sentience && typeof mods.sentience === "object"
+      ? { ...BLANK_SENTIENCE, ...mods.sentience, conflict: { ...BLANK_SENTIENCE.conflict, ...(mods.sentience.conflict || {}) } }
+      : { ...BLANK_SENTIENCE },
   };
 }
 
@@ -1963,6 +1969,15 @@ function CustomItemForm({ item, setItem }) {
           </p>
         </div>
       )}
+
+      <CurseFields
+        value={item.curse}
+        onChange={(next) => patch({ curse: next })}
+      />
+      <SentienceFields
+        value={item.sentience}
+        onChange={(next) => patch({ sentience: next })}
+      />
     </div>
   );
 }
@@ -2019,11 +2034,82 @@ function ItemImageUpload({ url, onChange }) {
   );
 }
 
+function serializeCurse(curse) {
+  if (!curse || !curse.enabled) return null;
+  const out = {
+    enabled: true,
+    identified_as_cursed: !!curse.identified_as_cursed,
+    reveal_trigger: curse.reveal_trigger || "on_attune",
+    curse_type: curse.curse_type || "stat_penalty",
+    description: curse.description || "",
+    cannot_unattune: !!curse.cannot_unattune,
+    remove_curse_dc: curse.remove_curse_dc == null || curse.remove_curse_dc === "" ? null : Number(curse.remove_curse_dc),
+  };
+  if (curse.curse_type === "stat_penalty") {
+    out.stat_penalty = {
+      ability: curse.stat_penalty?.ability || "WIS",
+      amount: Number(curse.stat_penalty?.amount ?? -2),
+    };
+  }
+  if (curse.curse_type === "forced_behavior") {
+    out.forced_behavior = {
+      description: curse.forced_behavior?.description || "",
+      save_to_resist: !!curse.forced_behavior?.save_to_resist,
+      save_ability: curse.forced_behavior?.save_ability || "WIS",
+      save_dc: Number(curse.forced_behavior?.save_dc) || 15,
+    };
+  }
+  if (curse.curse_type === "recurring_damage") {
+    out.recurring = {
+      damage_dice: curse.recurring?.damage_dice || "",
+      damage_type: curse.recurring?.damage_type || "",
+      trigger: curse.recurring?.trigger || "dawn",
+    };
+  }
+  if (curse.curse_type === "progressive") {
+    out.progressive = {
+      stages: (Array.isArray(curse.progressive?.stages) ? curse.progressive.stages : [])
+        .filter((s) => s && (s.trigger || s.effect))
+        .map((s) => ({ trigger: s.trigger || "", effect: s.effect || "" })),
+    };
+  }
+  return out;
+}
+
+function serializeSentience(sentience) {
+  if (!sentience || !sentience.enabled) return null;
+  return {
+    enabled: true,
+    intelligence: Number(sentience.intelligence) || 10,
+    wisdom: Number(sentience.wisdom) || 10,
+    charisma: Number(sentience.charisma) || 10,
+    senses: Array.isArray(sentience.senses) ? sentience.senses : [],
+    communication: sentience.communication || "empathy",
+    languages: Array.isArray(sentience.languages) ? sentience.languages : [],
+    alignment: sentience.alignment || "True Neutral",
+    personality: sentience.personality || "",
+    purpose: sentience.purpose || "",
+    conflict: {
+      trigger_conditions: Array.isArray(sentience.conflict?.trigger_conditions)
+        ? sentience.conflict.trigger_conditions.filter(Boolean)
+        : [],
+      contest_type: sentience.conflict?.contest_type || "charisma",
+      on_loss: sentience.conflict?.on_loss || "",
+    },
+  };
+}
+
 // Serialize the in-form item state into a compact modifications blob
 // — only the fields relevant to the chosen Type are kept, so the
 // saved JSONB doesn't carry stale Armor fields for a Weapon.
 export function buildItemModifications(item) {
   if (!item || typeof item !== "object") return {};
+  const curse = serializeCurse(item.curse);
+  const sentience = serializeSentience(item.sentience);
+  const extras = {
+    ...(curse ? { curse } : {}),
+    ...(sentience ? { sentience } : {}),
+  };
   const base = {
     name: item.name || "",
     type: item.type || "Wondrous Item",
@@ -2032,6 +2118,7 @@ export function buildItemModifications(item) {
     image_url: item.image_url || "",
     weight: Number.isFinite(Number(item.weight)) ? Number(item.weight) : 0,
     cost: Number.isFinite(Number(item.cost)) ? Number(item.cost) : 0,
+    ...extras,
   };
   if (item.type === "Weapon") {
     return {
@@ -4013,6 +4100,410 @@ function AlternativeCostFields({ value, onChange }) {
                 </div>
               ))
             )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Tier 3 §A — Cursed item authoring. Conditionally reveals fields
+// per curse_type. The cannot_unattune flag is a separate cross-cutting
+// switch that combines with any curse type so an item can be a stat-
+// penalty curse AND impossible to remove without Remove Curse.
+function CurseFields({ value, onChange }) {
+  const curse = value || { ...BLANK_CURSE };
+  const enabled = !!curse.enabled;
+  const setEnabled = (on) => onChange(on ? { ...BLANK_CURSE, ...curse, enabled: true } : { ...curse, enabled: false });
+  const patch = (fields) => onChange({ ...curse, ...fields });
+  const patchSub = (key, fields) => patch({ [key]: { ...(curse[key] || {}), ...fields } });
+
+  const stages = Array.isArray(curse.progressive?.stages) ? curse.progressive.stages : [];
+  const addStage = () => patchSub("progressive", { stages: [...stages, { trigger: "1_week", effect: "" }] });
+  const updateStage = (idx, fields) => patchSub("progressive", {
+    stages: stages.map((s, i) => (i === idx ? { ...s, ...fields } : s)),
+  });
+  const removeStage = (idx) => patchSub("progressive", { stages: stages.filter((_, i) => i !== idx) });
+
+  return (
+    <div className="bg-gradient-to-br from-[#1a0a14]/80 to-[#0b1220] border-2 border-purple-700/50 rounded-lg p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="text-[11px] uppercase tracking-widest text-purple-300 font-black">Curse</h4>
+          <p className="text-[10px] text-slate-500">Stat penalties, forced behavior, recurring damage, can't-unattune, progressive corruption.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch checked={enabled} onCheckedChange={setEnabled} />
+          <span className="text-[10px] text-slate-400">{enabled ? "Cursed" : "Off"}</span>
+        </div>
+      </div>
+      {enabled && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Field label="Reveal trigger">
+              <Select value={curse.reveal_trigger || "on_attune"} onValueChange={(v) => patch({ reveal_trigger: v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CURSE_REVEAL_TRIGGERS.map((r) => (<SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Curse type">
+              <Select value={curse.curse_type || "stat_penalty"} onValueChange={(v) => patch({ curse_type: v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CURSE_TYPES.map((t) => (<SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={!!curse.identified_as_cursed}
+              onCheckedChange={(c) => patch({ identified_as_cursed: c })}
+            />
+            <span className="text-xs text-slate-300">Identify spell detects the curse</span>
+          </div>
+
+          {curse.curse_type === "stat_penalty" && (
+            <div className="bg-[#0b1220] border border-purple-700/40 rounded p-2 grid grid-cols-2 gap-2">
+              <Field label="Ability">
+                <Select value={curse.stat_penalty?.ability || "WIS"} onValueChange={(v) => patchSub("stat_penalty", { ability: v })}>
+                  <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SAVE_ABILITIES.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Modifier">
+                <Input
+                  type="number"
+                  value={curse.stat_penalty?.amount ?? -2}
+                  onChange={(e) => patchSub("stat_penalty", { amount: Number(e.target.value) || 0 })}
+                  className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+                />
+              </Field>
+            </div>
+          )}
+
+          {curse.curse_type === "forced_behavior" && (
+            <div className="bg-[#0b1220] border border-purple-700/40 rounded p-2 space-y-2">
+              <Textarea
+                value={curse.forced_behavior?.description || ""}
+                onChange={(e) => patchSub("forced_behavior", { description: e.target.value })}
+                placeholder='"You must attack the nearest creature at the start of combat."'
+                rows={2}
+                className="bg-[#050816] border-slate-700 text-white text-xs"
+              />
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={!!curse.forced_behavior?.save_to_resist}
+                  onCheckedChange={(c) => patchSub("forced_behavior", { save_to_resist: c })}
+                />
+                <span className="text-xs text-slate-300">Save to resist</span>
+              </div>
+              {curse.forced_behavior?.save_to_resist && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Save ability">
+                    <Select value={curse.forced_behavior?.save_ability || "WIS"} onValueChange={(v) => patchSub("forced_behavior", { save_ability: v })}>
+                      <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {SAVE_ABILITIES.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Save DC">
+                    <Input
+                      type="number" min={1}
+                      value={curse.forced_behavior?.save_dc ?? 15}
+                      onChange={(e) => patchSub("forced_behavior", { save_dc: Number(e.target.value) || 15 })}
+                      className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+                    />
+                  </Field>
+                </div>
+              )}
+            </div>
+          )}
+
+          {curse.curse_type === "recurring_damage" && (
+            <div className="bg-[#0b1220] border border-purple-700/40 rounded p-2 grid grid-cols-3 gap-2">
+              <Field label="Damage dice">
+                <Input
+                  value={curse.recurring?.damage_dice || ""}
+                  onChange={(e) => patchSub("recurring", { damage_dice: e.target.value })}
+                  placeholder="1d4"
+                  className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+                />
+              </Field>
+              <Field label="Damage type">
+                <Select
+                  value={curse.recurring?.damage_type || "necrotic"}
+                  onValueChange={(v) => patchSub("recurring", { damage_type: v })}
+                >
+                  <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {DAMAGE_TYPES.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Trigger">
+                <Select value={curse.recurring?.trigger || "dawn"} onValueChange={(v) => patchSub("recurring", { trigger: v })}>
+                  <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="dawn">Dawn</SelectItem>
+                    <SelectItem value="dusk">Dusk</SelectItem>
+                    <SelectItem value="long_rest">Long rest</SelectItem>
+                    <SelectItem value="short_rest">Short rest</SelectItem>
+                    <SelectItem value="on_kill">On kill</SelectItem>
+                    <SelectItem value="custom">Custom (see desc)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+          )}
+
+          {curse.curse_type === "progressive" && (
+            <div className="bg-[#0b1220] border border-purple-700/40 rounded p-2 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Progressive stages</Label>
+                <Button type="button" variant="outline" size="sm" onClick={addStage}>
+                  <Plus className="w-3 h-3 mr-1" /> Add Stage
+                </Button>
+              </div>
+              {stages.length === 0 ? (
+                <p className="text-[11px] text-slate-500 italic text-center py-2">No stages defined.</p>
+              ) : (
+                stages.map((stage, idx) => (
+                  <div key={idx} className="bg-[#050816] border border-purple-700/40 rounded p-2 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={stage.trigger || ""}
+                        onChange={(e) => updateStage(idx, { trigger: e.target.value })}
+                        placeholder="1_week / 1_month / 3_months"
+                        className="bg-[#0b1220] border-slate-700 text-white text-xs h-8 flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeStage(idx)}
+                        className="text-slate-400 hover:text-red-400"
+                      >
+                        <Trash className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <Textarea
+                      value={stage.effect || ""}
+                      onChange={(e) => updateStage(idx, { effect: e.target.value })}
+                      placeholder="What happens at this stage."
+                      rows={2}
+                      className="bg-[#0b1220] border-slate-700 text-white text-xs"
+                    />
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          <div className="bg-[#0b1220] border border-purple-700/40 rounded p-2 space-y-2">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={!!curse.cannot_unattune}
+                onCheckedChange={(c) => patch({ cannot_unattune: c })}
+              />
+              <span className="text-xs text-slate-300">Cannot unattune (Remove Curse required)</span>
+            </div>
+            {curse.cannot_unattune && (
+              <Field label="Remove Curse DC (blank = auto-success)">
+                <Input
+                  type="number" min={1}
+                  value={curse.remove_curse_dc ?? ""}
+                  onChange={(e) => patch({ remove_curse_dc: e.target.value === "" ? null : Number(e.target.value) })}
+                  placeholder="blank"
+                  className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+                />
+              </Field>
+            )}
+          </div>
+
+          <Field label="Description">
+            <Textarea
+              value={curse.description || ""}
+              onChange={(e) => patch({ description: e.target.value })}
+              placeholder='Flavor — "The ring whispers to you in Abyssal, urging violence."'
+              rows={2}
+              className="bg-[#0b1220] border-slate-700 text-white text-xs"
+            />
+          </Field>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Tier 3 §B — Sentient item authoring. Captures DMG sentient-item
+// fields plus a structured conflict block so the GM-tools "Trigger
+// Conflict" flow can reach into the item to find triggers + on_loss
+// instead of asking the GM to retype them every session.
+function SentienceFields({ value, onChange }) {
+  const sentience = value || { ...BLANK_SENTIENCE };
+  const enabled = !!sentience.enabled;
+  const setEnabled = (on) => onChange(on ? { ...BLANK_SENTIENCE, ...sentience, enabled: true } : { ...sentience, enabled: false });
+  const patch = (fields) => onChange({ ...sentience, ...fields });
+  const patchConflict = (fields) => patch({ conflict: { ...(sentience.conflict || {}), ...fields } });
+  const triggers = Array.isArray(sentience.conflict?.trigger_conditions) ? sentience.conflict.trigger_conditions : [];
+
+  const addTrigger = () => patchConflict({ trigger_conditions: [...triggers, ""] });
+  const updateTrigger = (idx, text) => patchConflict({
+    trigger_conditions: triggers.map((t, i) => (i === idx ? text : t)),
+  });
+  const removeTrigger = (idx) => patchConflict({ trigger_conditions: triggers.filter((_, i) => i !== idx) });
+
+  const toggleSense = (sense) => {
+    const cur = Array.isArray(sentience.senses) ? sentience.senses : [];
+    const next = cur.includes(sense) ? cur.filter((s) => s !== sense) : [...cur, sense];
+    patch({ senses: next });
+  };
+
+  const languagesText = Array.isArray(sentience.languages) ? sentience.languages.join(", ") : "";
+
+  return (
+    <div className="bg-gradient-to-br from-[#0b1430]/80 to-[#050816] border-2 border-cyan-500/40 rounded-lg p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="text-[11px] uppercase tracking-widest text-cyan-300 font-black">Sentience</h4>
+          <p className="text-[10px] text-slate-500">Mental scores, senses, communication, alignment, personality, purpose, conflict.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch checked={enabled} onCheckedChange={setEnabled} />
+          <span className="text-[10px] text-slate-400">{enabled ? "Sentient" : "Off"}</span>
+        </div>
+      </div>
+      {enabled && (
+        <>
+          <div className="grid grid-cols-3 gap-2">
+            {["intelligence", "wisdom", "charisma"].map((key) => (
+              <Field key={key} label={key.toUpperCase().slice(0, 3)}>
+                <Input
+                  type="number" min={1} max={30}
+                  value={sentience[key] ?? 10}
+                  onChange={(e) => patch({ [key]: Number(e.target.value) || 10 })}
+                  className="bg-[#0b1220] border-slate-700 text-white text-center"
+                />
+              </Field>
+            ))}
+          </div>
+
+          <div>
+            <Label className="block mb-1 text-xs text-slate-300 font-semibold">Senses</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {SENTIENCE_SENSES.map((sense) => {
+                const active = Array.isArray(sentience.senses) && sentience.senses.includes(sense);
+                return (
+                  <button
+                    key={sense}
+                    type="button"
+                    onClick={() => toggleSense(sense)}
+                    className={`text-[10px] font-semibold px-2 py-1 rounded border transition-colors ${
+                      active
+                        ? "bg-cyan-400 text-[#050816] border-cyan-400"
+                        : "bg-[#0b1220] border-slate-700 text-slate-300 hover:border-cyan-400/60"
+                    }`}
+                  >
+                    {sense}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Field label="Communication">
+              <Select value={sentience.communication || "empathy"} onValueChange={(v) => patch({ communication: v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SENTIENCE_COMMUNICATION.map((c) => (<SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Alignment">
+              <Select value={sentience.alignment || "True Neutral"} onValueChange={(v) => patch({ alignment: v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {ALIGNMENTS.map((a) => (<SelectItem key={a} value={a}>{a}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Languages (comma-separated)">
+              <Input
+                value={languagesText}
+                onChange={(e) => patch({
+                  languages: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                })}
+                placeholder="Common, Elvish, Draconic"
+                className="bg-[#0b1220] border-slate-700 text-white"
+              />
+            </Field>
+          </div>
+
+          <Field label="Personality">
+            <Textarea
+              value={sentience.personality || ""}
+              onChange={(e) => patch({ personality: e.target.value })}
+              placeholder="Sardonic and impatient. Values courage above all."
+              rows={2}
+              className="bg-[#0b1220] border-slate-700 text-white text-xs"
+            />
+          </Field>
+          <Field label="Purpose">
+            <Textarea
+              value={sentience.purpose || ""}
+              onChange={(e) => patch({ purpose: e.target.value })}
+              placeholder="Destroy undead wherever they are found."
+              rows={2}
+              className="bg-[#0b1220] border-slate-700 text-white text-xs"
+            />
+          </Field>
+
+          <div className="bg-[#050816] border border-cyan-500/30 rounded p-2 space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] uppercase tracking-widest text-cyan-200 font-bold">Conflict triggers</Label>
+              <Button type="button" variant="outline" size="sm" onClick={addTrigger}>
+                <Plus className="w-3 h-3 mr-1" /> Add Trigger
+              </Button>
+            </div>
+            {triggers.length === 0 ? (
+              <p className="text-[11px] text-slate-500 italic text-center py-2">
+                No triggers — the item never initiates conflict.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {triggers.map((t, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Input
+                      value={t}
+                      onChange={(e) => updateTrigger(idx, e.target.value)}
+                      placeholder="Wielder allies with undead"
+                      className="bg-[#0b1220] border-slate-700 text-white text-xs h-8 flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeTrigger(idx)}
+                      className="text-slate-400 hover:text-red-400"
+                    >
+                      <Trash className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Field label="On wielder loss (when item wins the contest)">
+              <Textarea
+                value={sentience.conflict?.on_loss || ""}
+                onChange={(e) => patchConflict({ on_loss: e.target.value })}
+                placeholder="The weapon controls the wielder for 1d4 rounds, attacking the nearest undead."
+                rows={2}
+                className="bg-[#0b1220] border-slate-700 text-white text-xs"
+              />
+            </Field>
           </div>
         </>
       )}

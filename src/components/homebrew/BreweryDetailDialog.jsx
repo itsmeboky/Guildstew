@@ -547,6 +547,59 @@ function ItemPreview({ mods }) {
       {mods.description && (
         <p className="text-xs text-slate-300 mt-2 whitespace-pre-wrap">{mods.description}</p>
       )}
+      {mods.curse?.enabled && (
+        <div className="mt-3 bg-[#1a0a14]/80 border border-purple-700/50 rounded p-2">
+          <div className="text-[10px] uppercase tracking-widest text-purple-300 font-bold mb-1">
+            Cursed{mods.curse.cannot_unattune ? " · cannot unattune" : ""}
+          </div>
+          <Row label="Curse type" value={mods.curse.curse_type?.replaceAll("_", " ")} />
+          <Row label="Reveal" value={mods.curse.reveal_trigger?.replaceAll("_", " ")} />
+          {mods.curse.curse_type === "stat_penalty" && mods.curse.stat_penalty && (
+            <Row label="Penalty" value={`${mods.curse.stat_penalty.amount} to ${mods.curse.stat_penalty.ability}`} />
+          )}
+          {mods.curse.curse_type === "recurring_damage" && mods.curse.recurring && (
+            <Row label="Recurring" value={`${mods.curse.recurring.damage_dice} ${mods.curse.recurring.damage_type} (${mods.curse.recurring.trigger})`} />
+          )}
+          {mods.curse.curse_type === "forced_behavior" && mods.curse.forced_behavior?.description && (
+            <p className="text-[11px] text-slate-300 mt-1">{mods.curse.forced_behavior.description}</p>
+          )}
+          {mods.curse.curse_type === "progressive" && Array.isArray(mods.curse.progressive?.stages) && (
+            <ul className="text-[11px] text-slate-300 mt-1 space-y-0.5">
+              {mods.curse.progressive.stages.map((s, i) => (
+                <li key={i}><span className="text-purple-300">{s.trigger}:</span> {s.effect}</li>
+              ))}
+            </ul>
+          )}
+          {mods.curse.description && (
+            <p className="text-[11px] text-slate-300 mt-1 italic">{mods.curse.description}</p>
+          )}
+        </div>
+      )}
+      {mods.sentience?.enabled && (
+        <div className="mt-3 bg-[#0b1430]/80 border border-cyan-500/50 rounded p-2">
+          <div className="text-[10px] uppercase tracking-widest text-cyan-300 font-bold mb-1">
+            Sentient · {mods.sentience.alignment || "Unaligned"}
+          </div>
+          <Row label="INT/WIS/CHA" value={`${mods.sentience.intelligence} / ${mods.sentience.wisdom} / ${mods.sentience.charisma}`} />
+          <Row label="Communication" value={mods.sentience.communication} />
+          <Row label="Senses" value={Array.isArray(mods.sentience.senses) ? mods.sentience.senses : null} />
+          <Row label="Languages" value={Array.isArray(mods.sentience.languages) ? mods.sentience.languages : null} />
+          {mods.sentience.personality && (
+            <p className="text-[11px] text-slate-300 mt-1"><span className="text-cyan-300">Personality:</span> {mods.sentience.personality}</p>
+          )}
+          {mods.sentience.purpose && (
+            <p className="text-[11px] text-slate-300"><span className="text-cyan-300">Purpose:</span> {mods.sentience.purpose}</p>
+          )}
+          {Array.isArray(mods.sentience.conflict?.trigger_conditions) && mods.sentience.conflict.trigger_conditions.length > 0 && (
+            <div className="mt-1">
+              <div className="text-[10px] text-cyan-300">Conflict triggers:</div>
+              <ul className="text-[11px] text-slate-300 list-disc list-inside">
+                {mods.sentience.conflict.trigger_conditions.map((t, i) => (<li key={i}>{t}</li>))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
