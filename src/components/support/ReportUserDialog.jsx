@@ -49,7 +49,7 @@ export default function ReportUserDialog({ open, onClose, reporterId, targetUser
         setUploading(true);
         try {
           for (const file of evidence) {
-            const { file_url } = await uploadFile(file, "campaign-assets", "support");
+            const { file_url } = await uploadFile(file, "user-assets", "support", { uploadType: "general" });
             evidence_urls.push(file_url);
           }
         } finally {

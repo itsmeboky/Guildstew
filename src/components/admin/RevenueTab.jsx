@@ -14,13 +14,12 @@ import {
   formatNumber, formatCurrency,
 } from "./adminShared";
 
-// Display-only price overrides for the revenue calc per task spec.
-// We keep TIERS as the source of truth elsewhere but the spec lists
-// $6.99 / $12.99 / $34.99 here, so honour that for MRR display.
+// MRR prices pull straight from the TIERS catalog so billing,
+// admin, and the pricing page can never drift.
 const REVENUE_PRICES = {
-  adventurer: 6.99,
-  veteran:    12.99,
-  guild:      34.99,
+  adventurer: TIERS.adventurer.price,
+  veteran:    TIERS.veteran.price,
+  guild:      TIERS.guild.price,
 };
 const AI_COST_PER_EVENT = 0.10;
 const DAY_MS = 24 * 60 * 60 * 1000;

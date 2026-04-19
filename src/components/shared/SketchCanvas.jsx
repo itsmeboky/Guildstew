@@ -77,9 +77,9 @@ function SketchModal({ campaignId, onClose, onSave }) {
         getDimensions: () => ({ width: 1200, height: 800, scale: 2 }),
       });
       const file = new File([blob], `sketch-${Date.now()}.png`, { type: "image/png" });
-      const bucket = "campaign-assets";
+      const bucket = "user-assets";
       const folder = campaignId ? `${campaignId}/sketches` : "sketches";
-      const { file_url } = await uploadFile(file, bucket, folder);
+      const { file_url } = await uploadFile(file, bucket, folder, { uploadType: "worldLore" });
       onSave?.(file_url);
       onClose();
     } catch (err) {
