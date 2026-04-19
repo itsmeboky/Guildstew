@@ -459,6 +459,12 @@ export default function GMPanel() {
   // the targeting / dice-window flow (which weapon to fire) need it.
   const [attackMode, setAttackMode] = useState(null);
 
+  // Villain action end-of-turn prompt. `villainPrompt` holds the queued
+  // villain + the specific round's action so the confirm modal can
+  // read from the combat_data.order entry even if it mutates while the
+  // prompt is open. null = closed.
+  const [villainPrompt, setVillainPrompt] = useState(null);
+
   // Extra Attack tracking (M). When the Attack action resolves, the
   // counter starts at attacksPerAction(class, level) and decrements
   // after each attack resolves. While > 0, the onActionComplete
@@ -3819,6 +3825,37 @@ export default function GMPanel() {
                     const [finished] = currentOrder.splice(0, 1);
                     currentOrder.push(finished);
 
+                    // Villain action timing (MCDM): when the *finished*
+                    // combatant is non-villain (i.e. "an enemy" from the
+                    // villain's POV), check every villain in the queue
+                    // for an unspent action for the current round.
+                    // Surface the first match as a prompt — the GM
+                    // confirms, the action resolves, and the round's
+                    // entry lands in the villain's villain_spent[].
+                    const round = campaign.combat_data.round || 1;
+                    const finishedIsVillain = !!(
+                      finished?.villain_actions?.enabled
+                      || finished?.villain_data?.villain_actions?.enabled
+                      || finished?.is_villain
+                    );
+                    let villainToPrompt = null;
+                    if (!finishedIsVillain) {
+                      for (const entry of currentOrder) {
+                        const vBlock = entry?.villain_actions
+                          || entry?.villain_data?.villain_actions
+                          || entry?.stats?.villain_actions
+                          || null;
+                        if (!vBlock?.enabled || !Array.isArray(vBlock.actions)) continue;
+                        const spent = Array.isArray(entry.villain_spent) ? entry.villain_spent : [];
+                        if (spent.includes(round)) continue;
+                        const action = vBlock.actions.find((a) => (a?.round || 0) === round)
+                          || vBlock.actions[round - 1];
+                        if (!action || !action.name) continue;
+                        villainToPrompt = { villain: entry, action, round };
+                        break;
+                      }
+                    }
+
                     await base44.entities.Campaign.update(campaignId, {
                       combat_data: {
                         ...campaign.combat_data,
@@ -3827,10 +3864,67 @@ export default function GMPanel() {
                       }
                     });
                     queryClient.invalidateQueries(['campaign', campaignId]);
+
+                    if (villainToPrompt) setVillainPrompt(villainToPrompt);
                   }
                 }
                 setAttackMode(null);
                 setCombatState({ step: 'idle', isOpen: false, action: null, target: null });
+              }}
+            />
+
+            <VillainActionPrompt
+              prompt={villainPrompt}
+              onClose={() => setVillainPrompt(null)}
+              onConfirm={async () => {
+                if (!villainPrompt) return;
+                const { villain, action, round } = villainPrompt;
+                const villainKey = villain.uniqueId || villain.id;
+                const currentOrder = Array.isArray(campaign?.combat_data?.order) ? campaign.combat_data.order : [];
+                const nextOrder = currentOrder.map((entry) => {
+                  const key = entry.uniqueId || entry.id;
+                  if (key !== villainKey) return entry;
+                  const spent = Array.isArray(entry.villain_spent) ? entry.villain_spent : [];
+                  if (spent.includes(round)) return entry;
+                  return { ...entry, villain_spent: [...spent, round] };
+                });
+                await base44.entities.Campaign.update(campaignId, {
+                  combat_data: { ...campaign.combat_data, order: nextOrder },
+                });
+                queryClient.invalidateQueries(['campaign', campaignId]);
+                logCombatEvent(
+                  campaignId,
+                  `${villain.name} uses Villain Action: ${action.name}`,
+                  { event: 'villain_action', actor: villain.name, action: action.name, round },
+                );
+                setVillainPrompt(null);
+                // Open the dice window pre-configured with the villain
+                // action so the GM can resolve it through the normal
+                // pipeline. action_type drives the dice flow (save /
+                // attack / no_roll / healing).
+                setCombatState({
+                  step: 'selecting_target',
+                  isOpen: true,
+                  action: {
+                    type: 'villain_action',
+                    name: action.name,
+                    description: action.description,
+                    action_type: action.action_type,
+                    save_ability: action.save_ability,
+                    save_dc: action.save_dc,
+                    attack_bonus: action.attack_bonus,
+                    damage: action.damage_dice,
+                    damage_type: action.damage_type,
+                    half_on_save: action.half_on_save,
+                    aoe_shape: action.aoe_shape,
+                    aoe_size: action.aoe_size,
+                    applies_condition: action.applies_condition,
+                    costOverride: 'free',
+                    villain_round: round,
+                    _raw: action,
+                  },
+                  target: null,
+                });
               }}
             />
 
@@ -7759,6 +7853,60 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
           </button>
         </div>
       )}
+    </div>
+  );
+}
+function VillainActionPrompt({ prompt, onClose, onConfirm }) {
+  if (!prompt) return null;
+  const { villain, action, round } = prompt;
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md bg-gradient-to-br from-[#1a0514] to-[#0b1220] border-2 border-rose-600/70 rounded-xl shadow-[0_0_40px_rgba(225,29,72,0.5)] p-6">
+        <div className="flex items-center gap-2 text-rose-300 text-[10px] font-black uppercase tracking-[0.3em] mb-2">
+          <span className="bg-rose-600/20 border border-rose-600/60 rounded px-2 py-0.5">Round {round}</span>
+          Villain Action
+        </div>
+        <h3 className="text-2xl font-black text-rose-100 mb-1">{action.name}</h3>
+        <p className="text-xs text-slate-400 mb-4">{villain.name}</p>
+        {action.description && (
+          <p className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed mb-4">
+            {action.description}
+          </p>
+        )}
+        <div className="grid grid-cols-2 gap-2 text-xs text-slate-300 mb-6">
+          {action.save_dc && (
+            <div><span className="text-rose-300">DC</span> {action.save_dc} {action.save_ability || "save"}</div>
+          )}
+          {action.attack_bonus != null && action.attack_bonus !== "" && (
+            <div><span className="text-rose-300">Attack</span> +{action.attack_bonus}</div>
+          )}
+          {action.damage_dice && (
+            <div><span className="text-rose-300">Damage</span> {action.damage_dice} {action.damage_type || ""}</div>
+          )}
+          {action.aoe_size && (
+            <div><span className="text-rose-300">Area</span> {action.aoe_shape || ""} {action.aoe_size}</div>
+          )}
+          {action.applies_condition && (
+            <div><span className="text-rose-300">Condition</span> {action.applies_condition}</div>
+          )}
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-sm font-semibold hover:bg-slate-700"
+          >
+            Skip this round
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-sm font-black uppercase tracking-wider shadow-[0_0_20px_rgba(225,29,72,0.6)]"
+          >
+            Use Villain Action
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -3,7 +3,8 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Trash2, Upload, ArrowLeft, Copy, Edit, Search } from "lucide-react";
+import { Plus, Trash2, Upload, ArrowLeft, Copy, Edit, Search, Skull } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import QuickCreateDialog from "@/components/characterCreator/QuickCreateDialog";
@@ -20,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import NpcVillainPanel from "@/components/npc/NpcVillainPanel";
 
 export default function CampaignNPCs({ embedded = false, campaignId: campaignIdOverride } = {}) {
   const urlParams = new URLSearchParams(window.location.search);
@@ -72,10 +74,14 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
 
   const updateNPCMutation = useMutation({
     mutationFn: ({ id, data }) => base44.entities.CampaignNPC.update(id, data),
-    onSuccess: () => {
+    onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['campaignNPCs', campaignId] });
-      setSelectedNPC(null);
-      setEditingNPC(null);
+      // Only close the edit dialog on explicit edit-form saves; autosave
+      // from inline toggles (villain flag, villain_data) keeps the NPC
+      // selected so the GM can keep editing.
+      if (editingNPC && editingNPC.id === vars?.id) {
+        setEditingNPC(null);
+      }
     }
   });
 
@@ -323,6 +329,9 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                       <TabsTrigger value="features" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">Features</TabsTrigger>
                       <TabsTrigger value="inventory" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">Inventory</TabsTrigger>
                       <TabsTrigger value="notes" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">Notes</TabsTrigger>
+                      <TabsTrigger value="villain" className={`data-[state=active]:bg-rose-600 data-[state=active]:text-white ${selectedNPC.is_villain ? "text-rose-300" : "text-slate-400"}`}>
+                        <Skull className="w-3 h-3 mr-1" /> Villain
+                      </TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="stats" className="space-y-6 animate-in fade-in duration-300">
@@ -495,11 +504,60 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
 
                     <TabsContent value="notes" className="animate-in fade-in duration-300">
                       <div className="bg-[#1E2430] rounded-xl p-6 border border-gray-700/50 min-h-[200px]">
-                        <div 
+                        <div
                           className="prose prose-invert max-w-none prose-sm"
                           dangerouslySetInnerHTML={{ __html: selectedNPC.notes || '<p class="text-gray-500 italic">No GM notes added.</p>' }}
                         />
                       </div>
+                    </TabsContent>
+
+                    <TabsContent value="villain" className="animate-in fade-in duration-300 space-y-4">
+                      <div className="bg-gradient-to-br from-[#1a0514] to-[#2A1014] border-2 border-rose-600/40 rounded-xl p-5">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <h3 className="text-lg font-black uppercase tracking-widest text-rose-300 flex items-center gap-2">
+                              <Skull className="w-5 h-5" /> Promote to Villain
+                            </h3>
+                            <p className="text-xs text-slate-400 mt-1 max-w-prose">
+                              Promoting this NPC unlocks boss mechanics: villain actions, legendary
+                              resistances, phase transitions, and auras. In combat the NPC renders
+                              identically to a monster with the same systems.
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 pt-1">
+                            <Switch
+                              checked={!!selectedNPC.is_villain}
+                              onCheckedChange={(on) => {
+                                updateNPCMutation.mutate({
+                                  id: selectedNPC.id,
+                                  data: { is_villain: on, villain_data: selectedNPC.villain_data || {} },
+                                });
+                                setSelectedNPC({
+                                  ...selectedNPC,
+                                  is_villain: on,
+                                  villain_data: selectedNPC.villain_data || {},
+                                });
+                              }}
+                            />
+                            <span className="text-xs text-slate-400">
+                              {selectedNPC.is_villain ? "Villain" : "Off"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {selectedNPC.is_villain && (
+                        <NpcVillainPanel
+                          value={selectedNPC.villain_data || {}}
+                          onChange={(nextData) => {
+                            setSelectedNPC({ ...selectedNPC, villain_data: nextData });
+                            updateNPCMutation.mutate({
+                              id: selectedNPC.id,
+                              data: { villain_data: nextData },
+                            });
+                          }}
+                        />
+                      )}
                     </TabsContent>
                   </Tabs>
                 </div>
