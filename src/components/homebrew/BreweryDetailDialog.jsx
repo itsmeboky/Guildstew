@@ -595,6 +595,34 @@ function MonsterPreview({ mods }) {
               {a.description && (
                 <p className="text-[11px] text-slate-300 mt-1 whitespace-pre-wrap">{a.description}</p>
               )}
+              {a.trigger?.event && (
+                <div className="text-[10px] text-fuchsia-300 mt-1">
+                  ⚡ Trigger: {a.trigger.event.replaceAll("_", " ")}
+                  {a.trigger.gate && a.trigger.gate !== "unlimited" ? ` · ${a.trigger.gate.replaceAll("_", " ")}` : ""}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {mods.villain_actions?.enabled && Array.isArray(mods.villain_actions.actions) && mods.villain_actions.actions.length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          <div className="text-[10px] uppercase tracking-widest text-rose-300 font-bold">Villain Actions (MCDM)</div>
+          {mods.villain_actions.actions.map((a, i) => (
+            <div key={i} className="bg-[#1a0514] border border-rose-600/50 rounded p-2">
+              <div className="text-xs font-bold text-rose-200">
+                <span className="text-rose-300 bg-rose-600/20 border border-rose-600/60 rounded px-1.5 py-0.5 text-[9px] mr-1.5">R{a.round || i + 1}</span>
+                {a.name || "Villain action"}
+              </div>
+              {a.save_dc && (
+                <div className="text-[10px] text-slate-400">DC {a.save_dc} {a.save_ability || "save"}</div>
+              )}
+              {a.damage_dice && (
+                <div className="text-[10px] text-slate-400">{a.damage_dice} {a.damage_type || ""}</div>
+              )}
+              {a.description && (
+                <p className="text-[11px] text-slate-300 mt-1 whitespace-pre-wrap">{a.description}</p>
+              )}
             </div>
           ))}
         </div>
@@ -646,6 +674,7 @@ function ClassFeaturePreview({ mods }) {
       <Row label="Save" value={mods.save_ability || mods.condition_save} />
       <Row label="Condition" value={mods.condition_applied} />
       <Row label="Resource" value={mods.resource_restored ? `${mods.resource_restored}${mods.resource_amount ? ` (${mods.resource_amount})` : ""}` : null} />
+      <Row label="Trigger" value={mods.trigger?.event ? mods.trigger.event.replaceAll("_", " ") : null} />
       {mods.description && (
         <p className="text-xs text-slate-300 mt-2 whitespace-pre-wrap">{mods.description}</p>
       )}
