@@ -228,7 +228,7 @@ function NoteForm({ character, initial, onSave, onCancel }) {
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await uploadFile(file, "campaign-assets", "notes");
+      const { file_url } = await uploadFile(file, "user-assets", "notes", { uploadType: "general" });
       setImageUrl(file_url);
     } catch (err) {
       toast.error(err?.message || "Upload failed");
