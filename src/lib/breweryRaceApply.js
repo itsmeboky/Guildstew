@@ -84,3 +84,73 @@ export function getBreweryAbilityPickerSpec(breweryRace) {
 }
 
 export const BREWERY_ABILITY_KEYS = ABILITY_KEYS;
+
+/**
+ * Produce the characterData updates that should land the instant a
+ * brewery race is selected: auto-granted languages, fixed skill /
+ * weapon / armor / tool proficiencies, damage & condition
+ * resistances, and the basics (speed, darkvision, size, additional
+ * speeds).
+ *
+ * Existing characterData is passed in so we can merge (fixed
+ * languages / proficiencies / skills) with whatever else is
+ * already there — switching between SRD and brewery races wipes
+ * the brewery-specific chunks via RaceStep's clean-up path, so
+ * this helper only has to worry about adding on top.
+ */
+export function applyBreweryRaceBaseline(breweryRace, characterData = {}) {
+  if (!breweryRace) return {};
+  const langsFixed = Array.isArray(breweryRace.languages?.fixed) ? breweryRace.languages.fixed : [];
+  const existingLangs = Array.isArray(characterData.languages) ? characterData.languages : [];
+  const nextLangs = Array.from(new Set([...existingLangs, ...langsFixed]));
+
+  const existingProf = characterData.proficiencies || { armor: [], weapons: [], tools: [] };
+  const nextProf = {
+    armor:   Array.from(new Set([...(existingProf.armor   || []), ...(breweryRace.armor_proficiencies  || [])])),
+    weapons: Array.from(new Set([...(existingProf.weapons || []), ...(breweryRace.weapon_proficiencies || [])])),
+    tools:   Array.from(new Set([...(existingProf.tools   || []), ...(breweryRace.tool_proficiencies   || [])])),
+  };
+
+  const fixedSkills = Array.isArray(breweryRace.skill_proficiencies?.fixed) ? breweryRace.skill_proficiencies.fixed : [];
+  const existingSkills = characterData.skills || {};
+  const nextSkills = { ...existingSkills };
+  for (const s of fixedSkills) nextSkills[s] = true;
+
+  return {
+    languages: nextLangs,
+    proficiencies: nextProf,
+    skills: nextSkills,
+    _brewery_bonus_langs: [],
+    _brewery_chosen_skills: [],
+    _brewery_race_resistances: {
+      damage_resistances:    Array.isArray(breweryRace.damage_resistances)    ? breweryRace.damage_resistances    : [],
+      damage_immunities:     Array.isArray(breweryRace.damage_immunities)     ? breweryRace.damage_immunities     : [],
+      condition_resistances: Array.isArray(breweryRace.condition_resistances) ? breweryRace.condition_resistances : [],
+    },
+    _brewery_speed: Number(breweryRace.speed) || 30,
+    _brewery_size: breweryRace.size || "Medium",
+    _brewery_darkvision: Number(breweryRace.darkvision) || 0,
+    _brewery_additional_speeds: breweryRace.additional_speeds || {},
+  };
+}
+
+/**
+ * Clear every _brewery_* key on characterData. Called when the
+ * user switches away from a brewery race back to SRD so nothing
+ * sticky leaks through. Does NOT touch `languages` / `skills` /
+ * `proficiencies` — those are dedupe-merged in and removing them
+ * individually would re-open the duplicate-substitution problem.
+ */
+export function clearBreweryRaceMarkers() {
+  return {
+    _brewery_race: null,
+    _brewery_ability_picks: {},
+    _brewery_bonus_langs: [],
+    _brewery_chosen_skills: [],
+    _brewery_race_resistances: null,
+    _brewery_speed: null,
+    _brewery_size: null,
+    _brewery_darkvision: null,
+    _brewery_additional_speeds: null,
+  };
+}
