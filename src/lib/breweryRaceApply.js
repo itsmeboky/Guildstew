@@ -116,6 +116,18 @@ export function applyBreweryRaceBaseline(breweryRace, characterData = {}) {
   const nextSkills = { ...existingSkills };
   for (const s of fixedSkills) nextSkills[s] = true;
 
+  // Traits land in a dedicated slot so ClassStep's features-
+  // overwrite doesn't wipe them. characterMapping merges
+  // race_features into the final features list at save time.
+  const raceFeatures = (Array.isArray(breweryRace.traits) ? breweryRace.traits : []).map((t) => ({
+    name: t?.name || "Racial Trait",
+    source: breweryRace.name || "Racial",
+    description: t?.description || "",
+    level: Number(t?.level) || 1,
+    mechanical: t?.mechanical || {},
+    origin: "race_mod",
+  }));
+
   return {
     languages: nextLangs,
     proficiencies: nextProf,
@@ -131,6 +143,7 @@ export function applyBreweryRaceBaseline(breweryRace, characterData = {}) {
     _brewery_size: breweryRace.size || "Medium",
     _brewery_darkvision: Number(breweryRace.darkvision) || 0,
     _brewery_additional_speeds: breweryRace.additional_speeds || {},
+    race_features: raceFeatures,
   };
 }
 
@@ -152,5 +165,6 @@ export function clearBreweryRaceMarkers() {
     _brewery_size: null,
     _brewery_darkvision: null,
     _brewery_additional_speeds: null,
+    race_features: [],
   };
 }

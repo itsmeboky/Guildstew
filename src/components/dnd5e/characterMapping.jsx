@@ -80,6 +80,12 @@ export function buildStatsFromCharacterData(characterData) {
     size,
     darkvision,
     additional_speeds,
+    damage_resistances:
+      (characterData._brewery_race_resistances?.damage_resistances) || characterData.damage_resistances || [],
+    damage_immunities:
+      (characterData._brewery_race_resistances?.damage_immunities) || characterData.damage_immunities || [],
+    condition_resistances:
+      (characterData._brewery_race_resistances?.condition_resistances) || characterData.condition_resistances || [],
     proficiency_bonus,
     passive_perception,
 
@@ -92,7 +98,10 @@ export function buildStatsFromCharacterData(characterData) {
       weapons: [],
       tools: [],
     },
-    features: characterData.features || [],
+    features: [
+      ...((characterData.features) || []),
+      ...((characterData.race_features) || []),
+    ],
     feature_choices: characterData.feature_choices || {},
     multiclasses: characterData.multiclasses || [],
     spells: characterData.spells || { cantrips: [], level1: [] },
