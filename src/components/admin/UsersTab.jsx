@@ -13,6 +13,7 @@ import {
 import { base44 } from "@/api/base44Client";
 import { TIERS } from "@/api/billingClient";
 import { downloadCsv } from "@/utils/csv";
+import { setStorageOverride } from "@/utils/campaignLifecycle";
 import { PanelCard, EmptyState } from "./adminShared";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -401,6 +402,8 @@ function UserDetailPanel({ user, onClose, characters, campaigns, events, onWarn,
           </div>
         </DetailSection>
 
+        <StorageSection user={user} campaigns={campaigns} />
+
         <DetailSection label={`Characters (${characters.length})`}>
           {characters.length === 0 ? (
             <p className="text-xs text-slate-500">None.</p>
@@ -500,4 +503,101 @@ function formatRelative(ms) {
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
   if (diff < DAY_MS) return `${Math.floor(diff / 3_600_000)}h ago`;
   return `${Math.floor(diff / DAY_MS)}d ago`;
+}
+
+// Storage usage + per-user override. The override stored in
+// user_profiles.storage_limit_override_bytes wins over the tier
+// default when set; clearing it falls back to the tier limit.
+function StorageSection({ user, campaigns }) {
+  const uid = user?.user_id || user?.id;
+  const queryClient = useQueryClient();
+  const [overrideMB, setOverrideMB] = React.useState(
+    user?.storage_limit_override_bytes
+      ? Math.round(user.storage_limit_override_bytes / (1024 * 1024))
+      : "",
+  );
+
+  const tier = TIERS[user?.subscription_tier] || TIERS.free;
+  const tierLimit = tier.limits.userStorageBytes || 0;
+  const effectiveLimit =
+    user?.storage_limit_override_bytes
+    || user?.storage_limit_bytes
+    || tierLimit
+    || 1;
+  const used = user?.storage_used_bytes || 0;
+  const pct = Math.min(100, Math.round((used / effectiveLimit) * 100));
+  const usedMB = (used / (1024 * 1024)).toFixed(1);
+  const limitMB = (effectiveLimit / (1024 * 1024)).toFixed(0);
+  const tierMB = (tierLimit / (1024 * 1024)).toFixed(0);
+
+  const ownedCampaigns = campaigns.filter((c) => c.game_master_id === uid);
+
+  const applyOverride = async () => {
+    const bytes = overrideMB === "" ? null : Number(overrideMB) * 1024 * 1024;
+    await setStorageOverride(uid, bytes);
+    queryClient.invalidateQueries({ queryKey: ["adminUsers"] });
+  };
+
+  return (
+    <DetailSection label="Storage">
+      <div className="bg-[#050816] rounded-lg p-3 border border-slate-700/30 space-y-3">
+        <div>
+          <div className="flex items-baseline justify-between">
+            <p className="text-xs text-slate-400 uppercase tracking-wider">Personal storage</p>
+            <p className="text-white font-bold text-sm">{usedMB} MB / {limitMB} MB</p>
+          </div>
+          <div className="w-full bg-slate-700/30 rounded-full h-2 mt-2 overflow-hidden">
+            <div
+              className={`h-2 rounded-full ${pct > 90 ? "bg-red-500" : pct > 70 ? "bg-amber-400" : "bg-[#37F2D1]"}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <p className="text-[10px] text-slate-500 mt-1">
+            Tier default: {tierMB} MB{user?.storage_limit_override_bytes ? " · override active" : ""}
+          </p>
+        </div>
+
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <label className="text-[10px] uppercase tracking-widest text-slate-400 block mb-1">
+              Override limit (MB)
+            </label>
+            <Input
+              type="number"
+              min={0}
+              value={overrideMB}
+              onChange={(e) => setOverrideMB(e.target.value)}
+              placeholder="Empty = tier default"
+              className="bg-[#0f1219] border-slate-700 text-white text-xs h-8"
+            />
+          </div>
+          <Button
+            onClick={applyOverride}
+            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold h-8"
+          >
+            {overrideMB === "" ? "Clear" : "Apply"}
+          </Button>
+        </div>
+
+        {ownedCampaigns.length > 0 && (
+          <div className="pt-2 border-t border-slate-700/30 space-y-1">
+            <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">
+              Owned campaigns ({ownedCampaigns.length})
+            </p>
+            {ownedCampaigns.map((c) => {
+              const mb = ((c.storage_used_bytes || 0) / (1024 * 1024)).toFixed(1);
+              return (
+                <div key={c.id} className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-300 truncate">{c.title || c.name || "Untitled"}</span>
+                  <span className="text-slate-500">
+                    {mb} MB{c.status === "archived" ? " · archived" : ""}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </DetailSection>
+  );
 }

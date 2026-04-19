@@ -8,6 +8,9 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import CampaignInformationStep from "@/components/campaigns/create/CampaignInformationStep";
 import CampaignSettingsStep from "@/components/campaigns/create/CampaignSettingsStep";
 import CampaignHomebrewStep from "@/components/campaigns/create/CampaignHomebrewStep";
+import { supabase } from "@/api/supabaseClient";
+import { checkActiveCampaignLimit } from "@/utils/campaignLifecycle";
+import { toast } from "sonner";
 import { trackEvent } from "@/utils/analytics";
 
 /**
@@ -54,6 +57,23 @@ export default function CreateCampaign() {
       // table doesn't know about it; we install each brew after the
       // campaign row exists.
       const { initial_homebrew = [], ...payload } = data;
+
+      // Tier-based active-campaign cap. Archived campaigns don't
+      // count; the helper queries campaigns with status != archived.
+      const gmId = payload.game_master_id || user?.id;
+      if (gmId) {
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('subscription_tier')
+          .eq('user_id', gmId)
+          .single();
+        const tier = profile?.subscription_tier || 'free';
+        const gate = await checkActiveCampaignLimit({ userId: gmId, tier });
+        if (!gate.allowed) {
+          throw new Error(gate.reason || 'Active campaign limit reached.');
+        }
+      }
+
       const campaign = await base44.entities.Campaign.create(payload);
 
       // Auto-create a group chat for the campaign so the GM and
@@ -97,7 +117,10 @@ export default function CreateCampaign() {
         name: campaign?.title,
       });
       navigate(createPageUrl("Campaigns"));
-    }
+    },
+    onError: (err) => {
+      toast.error(err?.message || 'Could not create campaign.');
+    },
   });
 
   const handleNext = () => {
