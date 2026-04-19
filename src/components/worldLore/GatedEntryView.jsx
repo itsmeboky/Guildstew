@@ -9,6 +9,9 @@ import {
   getComprehensionLevel, speaksLanguage,
 } from "@/utils/languageComprehension";
 import { fontFamilyFor } from "@/utils/languageFonts";
+import { SymbolImage } from "@/components/shared/SymbolPicker";
+import { THIEVES_CANT_SYMBOLS, CANT_DEFAULT_COLOR } from "@/config/thievesCantSymbols";
+import { DRUIDIC_SYMBOLS, DRUIDIC_DEFAULT_COLOR } from "@/config/druidicSymbols";
 
 /**
  * Wraps a World Lore entry's body with the three gating layers:
@@ -369,29 +372,69 @@ function Annotations({ entry, character, isGM }) {
   const meta = entry?.metadata || {};
   const cant = meta.thieves_cant_message;
   const druidic = meta.druidic_message;
+  const cantSymbols = Array.isArray(meta.thieves_cant_symbols) ? meta.thieves_cant_symbols : [];
+  const druidicSymbols = Array.isArray(meta.druidic_symbols) ? meta.druidic_symbols : [];
   const knowsCant = isGM || speaksLanguage(character, "Thieves' Cant");
   const knowsDruidic = isGM || speaksLanguage(character, "Druidic");
 
-  if (!cant && !druidic) return null;
+  const hasCant = !!cant || cantSymbols.length > 0;
+  const hasDruidic = !!druidic || druidicSymbols.length > 0;
+  if (!hasCant && !hasDruidic) return null;
 
   return (
     <>
-      {cant && knowsCant && (
-        <div className="mt-4 border-l-2 border-amber-500/50 pl-4 py-2 bg-amber-900/10 rounded-r-lg">
-          <p className="text-xs text-amber-400 font-semibold uppercase tracking-wider mb-1">
+      {hasCant && knowsCant && (
+        <div className="mt-4 border-l-2 border-amber-500/50 pl-4 py-2 bg-amber-900/10 rounded-r-lg space-y-2">
+          <p className="text-xs text-amber-400 font-semibold uppercase tracking-wider">
             🗡️ Thieves&apos; Cant
           </p>
-          <p className="text-sm text-amber-200/80 italic">{cant}</p>
+          <AnnotationSymbols
+            selected={cantSymbols}
+            catalog={THIEVES_CANT_SYMBOLS}
+            defaultColor={meta.thieves_cant_color || CANT_DEFAULT_COLOR}
+          />
+          {cant && <p className="text-sm text-amber-200/80 italic">{cant}</p>}
         </div>
       )}
-      {druidic && knowsDruidic && (
-        <div className="mt-4 border-l-2 border-emerald-500/50 pl-4 py-2 bg-emerald-900/10 rounded-r-lg">
-          <p className="text-xs text-emerald-400 font-semibold uppercase tracking-wider mb-1">
+      {hasDruidic && knowsDruidic && (
+        <div className="mt-4 border-l-2 border-emerald-500/50 pl-4 py-2 bg-emerald-900/10 rounded-r-lg space-y-2">
+          <p className="text-xs text-emerald-400 font-semibold uppercase tracking-wider">
             🌿 Druidic
           </p>
-          <p className="text-sm text-emerald-200/80 italic">{druidic}</p>
+          <AnnotationSymbols
+            selected={druidicSymbols}
+            catalog={DRUIDIC_SYMBOLS}
+            defaultColor={meta.druidic_color || DRUIDIC_DEFAULT_COLOR}
+          />
+          {druidic && <p className="text-sm text-emerald-200/80 italic">{druidic}</p>}
         </div>
       )}
     </>
+  );
+}
+
+function AnnotationSymbols({ selected, catalog, defaultColor }) {
+  if (!Array.isArray(selected) || selected.length === 0) return null;
+  const byId = new Map(catalog.map((s) => [s.id, s]));
+  return (
+    <div className="flex flex-wrap gap-3">
+      {selected.map((sel) => {
+        const sym = byId.get(sel.id);
+        if (!sym) return null;
+        return (
+          <div key={sel.id} className="flex flex-col items-center gap-0.5 w-16">
+            <SymbolImage
+              src={sym.src}
+              color={sel.color || defaultColor}
+              size={40}
+              title={sym.name}
+            />
+            <span className="text-[9px] text-slate-400 font-semibold text-center leading-tight">
+              {sym.name}
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }

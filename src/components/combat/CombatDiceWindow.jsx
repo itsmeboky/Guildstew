@@ -32,6 +32,7 @@ import {
   getSpellSlots as getSpellSlotsFromRegistry,
   COVER,
 } from "@/components/dnd5e/dnd5eRules";
+import { safeText } from "@/utils/safeRender";
 
 // Alias so the existing in-file lookups don't need renaming.
 const CLASS_SPELL_ABILITY = SPELLCASTING_ABILITY;
@@ -1919,19 +1920,19 @@ export default function CombatDiceWindow({
                             {avatar ? (
                               <img
                                 src={avatar}
-                                alt={c.name}
+                                alt={safeText(c.name)}
                                 className="w-full h-full object-cover"
                               />
                             ) : (
                               <div className="w-full h-full bg-[#1a1f2e] flex items-center justify-center text-xl text-slate-400 font-bold">
-                                {c.name?.[0] || "?"}
+                                {safeText(c.name)?.[0] || "?"}
                               </div>
                             )}
                           </div>
                         );
                       })()}
                       <h4 className="text-xs font-bold text-white mb-1 truncate max-w-full">
-                        {c.name}
+                        {safeText(c.name)}
                       </h4>
                       <div
                         className="text-5xl font-black leading-none tracking-tight"
@@ -2005,11 +2006,11 @@ export default function CombatDiceWindow({
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-xs text-slate-500 font-bold">
-                      {c.name?.[0]}
+                      {safeText(c.name)?.[0]}
                     </div>
                   )}
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/60 text-[8px] text-white text-center leading-tight transition-opacity">
-                    {c.name}
+                    {safeText(c.name)}
                   </div>
                 </div>
               ))}
@@ -2025,7 +2026,7 @@ export default function CombatDiceWindow({
                     actor.image_url ||
                     actor.profile_avatar_url
                   }
-                  alt={actor.name}
+                  alt={safeText(actor.name)}
                   className="w-full h-full object-cover"
                 />
               ) : (
@@ -2041,7 +2042,7 @@ export default function CombatDiceWindow({
                 : 'bg-[#FF5722]/20 text-[#FF5722] border border-[#FF5722]';
               return (
                 <div className={`px-4 py-1 rounded-full text-sm font-bold whitespace-nowrap z-20 ${bubble}`}>
-                  {actor?.name || "Actor"}
+                  {safeText(actor?.name) || "Actor"}
                 </div>
               );
             })()}
@@ -2289,12 +2290,12 @@ export default function CombatDiceWindow({
                             )}
                             {damageRoll.bonusDamage?.label && (
                               <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-[#fbbf24] drop-shadow">
-                                +{damageRoll.bonusDamage.dice} {damageRoll.bonusDamage.label}
+                                +{safeText(damageRoll.bonusDamage.dice)} {safeText(damageRoll.bonusDamage.label)}
                               </span>
                             )}
                             {spellEffect?.effect === "damage_condition" && spellEffect.condition && (
                               <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-purple-200 drop-shadow">
-                                +{spellEffect.condition}
+                                +{safeText(spellEffect.condition)}
                               </span>
                             )}
                           </motion.div>
@@ -2307,11 +2308,11 @@ export default function CombatDiceWindow({
                                 <span key={i} className="text-[10px] font-mono">
                                   {d.rerolled ? (
                                     <>
-                                      <span className="line-through text-red-300">{d.original}</span>
-                                      <span className="text-yellow-200"> → {d.value}</span>
+                                      <span className="line-through text-red-300">{safeText(d.original)}</span>
+                                      <span className="text-yellow-200"> → {safeText(d.value)}</span>
                                     </>
                                   ) : (
-                                    <span className="text-slate-300">{d.value}</span>
+                                    <span className="text-slate-300">{safeText(d.value)}</span>
                                   )}
                                   {i < damageRoll.rolledDice.length - 1 && (
                                     <span className="text-slate-600">, </span>
@@ -2481,13 +2482,13 @@ export default function CombatDiceWindow({
                         } w-44 h-44 rounded-full flex flex-col items-center justify-center shadow-[0_0_50px_rgba(0,0,0,0.8)] border-4 border-white z-50`}
                       >
                         <span className="text-xs font-bold uppercase tracking-widest opacity-80">
-                          {savingThrowRoll.ability.toUpperCase()} SAVE
+                          {safeText(savingThrowRoll.ability).toUpperCase()} SAVE
                         </span>
                         <span className="text-5xl font-black drop-shadow-md">
-                          {savingThrowRoll.total}
+                          {safeText(savingThrowRoll.total)}
                         </span>
                         <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
-                          vs DC {savingThrowRoll.dc}
+                          vs DC {safeText(savingThrowRoll.dc)}
                         </span>
                         <span className="text-sm font-black uppercase tracking-widest mt-1">
                           {savingThrowRoll.success ? "SAVED" : "FAILED"}
@@ -2524,7 +2525,7 @@ export default function CombatDiceWindow({
               <div className="bg-black/60 backdrop-blur text-white px-6 py-3 rounded-xl border border-white/10 text-center flex flex-col gap-2">
                 {spectatorData?.action && (
                   <div className="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-white/10 pb-1 mb-1">
-                    USING {spectatorData.action.name}
+                    USING {safeText(spectatorData.action.name)}
                   </div>
                 )}
                 <p className="text-sm font-bold text-[#37F2D1] animate-pulse">
@@ -2788,7 +2789,7 @@ export default function CombatDiceWindow({
                       return (
                         <div className="bg-black/40 border border-[#38bdf8]/60 rounded-2xl p-3">
                           <div className="text-[11px] uppercase tracking-[0.22em] text-[#38bdf8] font-black mb-1">
-                            🛡 Uncanny Dodge — {tgt.name}?
+                            🛡 Uncanny Dodge — {safeText(tgt.name)}?
                           </div>
                           <p className="text-[10px] text-slate-400 mb-2">
                             Halve this damage (Reaction)?
@@ -2999,7 +3000,7 @@ export default function CombatDiceWindow({
                     target.profile_avatar_url ||
                     target.avatar
                   }
-                  alt={target.name}
+                  alt={safeText(target.name)}
                   className="w-full h-full object-cover"
                 />
               ) : (
@@ -3015,7 +3016,7 @@ export default function CombatDiceWindow({
                 : 'bg-[#FF5722]/20 text-[#FF5722] border border-[#FF5722]';
               return (
                 <div className={`px-4 py-1 rounded-full text-sm font-bold whitespace-nowrap z-20 ${bubble}`}>
-                  {target?.name || "No Target"}
+                  {safeText(target?.name) || "No Target"}
                 </div>
               );
             })()}
@@ -3103,11 +3104,11 @@ export default function CombatDiceWindow({
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-xs text-slate-500 font-bold">
-                      {c.name?.[0]}
+                      {safeText(c.name)?.[0]}
                     </div>
                   )}
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/60 text-[8px] text-white text-center leading-tight transition-opacity">
-                    {c.name}
+                    {safeText(c.name)}
                   </div>
                 </div>
               ))}

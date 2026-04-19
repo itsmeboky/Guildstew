@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import NpcVillainPanel from "@/components/npc/NpcVillainPanel";
+import { safeText } from "@/utils/safeRender";
 
 export default function CampaignNPCs({ embedded = false, campaignId: campaignIdOverride } = {}) {
   const urlParams = new URLSearchParams(window.location.search);
@@ -279,13 +280,13 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                         )}
                       </div>
                       <div>
-                        <h2 className="text-3xl font-bold text-white">{selectedNPC.name}</h2>
+                        <h2 className="text-3xl font-bold text-white">{safeText(selectedNPC.name)}</h2>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[#37F2D1] font-semibold">Level {stats.level || 1}</span>
+                          <span className="text-[#37F2D1] font-semibold">Level {safeText(stats.level) || 1}</span>
                           <span className="text-gray-400">•</span>
-                          <span className="text-gray-300">{stats.race} {stats.class}</span>
+                          <span className="text-gray-300">{safeText(stats.race)} {safeText(stats.class)}</span>
                         </div>
-                        <div className="text-sm text-gray-400 mt-1">{stats.background} • {stats.alignment}</div>
+                        <div className="text-sm text-gray-400 mt-1">{safeText(stats.background)} • {safeText(stats.alignment)}</div>
                       </div>
                     </div>
                     
@@ -342,12 +343,12 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                       {/* Core Stats */}
                       <div className="grid grid-cols-4 gap-4">
                         <div className="bg-[#1E2430] rounded-xl p-4 text-center border border-gray-700/50">
-                          <div className="text-2xl font-bold text-[#FF5722]">{stats.armor_class || 10}</div>
+                          <div className="text-2xl font-bold text-[#FF5722]">{safeText(stats.armor_class) || 10}</div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider mt-1">Armor Class</div>
                         </div>
                         <div className="bg-[#1E2430] rounded-xl p-4 text-center border border-gray-700/50">
                           <div className="text-2xl font-bold text-[#37F2D1]">
-                            {(stats.hit_points?.current ?? stats.hit_points?.max ?? 0)}/{stats.hit_points?.max || 0}
+                            {safeText(stats.hit_points?.current ?? stats.hit_points?.max ?? 0)}/{safeText(stats.hit_points?.max) || 0}
                           </div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider mt-1">Hit Points</div>
                         </div>
@@ -356,7 +357,7 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                           <div className="text-xs text-gray-400 uppercase tracking-wider mt-1">Initiative</div>
                         </div>
                         <div className="bg-[#1E2430] rounded-xl p-4 text-center border border-gray-700/50">
-                          <div className="text-2xl font-bold text-white">{stats.speed || 30} ft</div>
+                          <div className="text-2xl font-bold text-white">{safeText(stats.speed) || 30} ft</div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider mt-1">Speed</div>
                         </div>
                       </div>
@@ -365,8 +366,8 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                       <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
                         {Object.entries(stats.attributes || {}).map(([key, value]) => (
                           <div key={key} className="bg-[#1E2430] rounded-lg p-3 text-center border border-gray-700/50">
-                            <div className="text-xs text-gray-500 uppercase mb-1">{key}</div>
-                            <div className="text-xl font-bold text-white">{value}</div>
+                            <div className="text-xs text-gray-500 uppercase mb-1">{safeText(key)}</div>
+                            <div className="text-xl font-bold text-white">{safeText(value)}</div>
                             <div className="text-xs text-[#37F2D1]">{formatModifier(getAbilityMod(value))}</div>
                           </div>
                         ))}
@@ -382,7 +383,7 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                               const mod = getAbilityMod(abilityScore) + (stats.proficiency_bonus || 2);
                               return (
                                 <div key={ability} className="px-3 py-1.5 bg-[#1E2430] rounded border border-gray-700 flex items-center gap-2">
-                                  <span className="text-xs text-gray-400 uppercase">{ability}</span>
+                                  <span className="text-xs text-gray-400 uppercase">{safeText(ability)}</span>
                                   <span className="text-sm font-bold text-[#37F2D1]">{formatModifier(mod)}</span>
                                 </div>
                               );
@@ -413,7 +414,7 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                             return (
                               <div key={skill} className="flex items-center justify-between bg-[#1E2430] rounded-lg p-3 border border-gray-700/50">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm text-gray-300">{skill}</span>
+                                  <span className="text-sm text-gray-300">{safeText(skill)}</span>
                                   {isExpertise && <span className="text-[#FF5722] text-[10px] border border-[#FF5722] px-1 rounded">EXP</span>}
                                 </div>
                                 <span className="font-bold text-[#37F2D1]">{formatModifier(mod)}</span>
@@ -444,8 +445,8 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {spells.map((spell, idx) => (
                                   <div key={idx} className="bg-[#1E2430] rounded-lg p-3 border border-gray-700/50 hover:border-[#37F2D1]/50 transition-colors">
-                                    <div className="font-bold text-white">{spell.name || spell}</div>
-                                    {spell.description && <div className="text-xs text-gray-400 mt-1 line-clamp-2">{spell.description}</div>}
+                                    <div className="font-bold text-white">{safeText(spell?.name || spell)}</div>
+                                    {spell?.description && <div className="text-xs text-gray-400 mt-1 line-clamp-2">{safeText(spell.description)}</div>}
                                   </div>
                                 ))}
                               </div>
@@ -463,10 +464,10 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                         {stats.features?.map((feature, idx) => (
                           <div key={idx} className="bg-[#1E2430] rounded-lg p-4 border border-gray-700/50">
                             <div className="flex items-baseline justify-between mb-1">
-                              <div className="font-bold text-[#37F2D1]">{feature.name}</div>
-                              {feature.source && <div className="text-xs text-gray-500">{feature.source}</div>}
+                              <div className="font-bold text-[#37F2D1]">{safeText(feature?.name)}</div>
+                              {feature?.source && <div className="text-xs text-gray-500">{safeText(feature.source)}</div>}
                             </div>
-                            <div className="text-sm text-gray-300 leading-relaxed">{feature.description}</div>
+                            <div className="text-sm text-gray-300 leading-relaxed">{safeText(feature?.description)}</div>
                           </div>
                         ))}
                         {(!stats.features || stats.features.length === 0) && (
@@ -482,8 +483,8 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                           <div className="space-y-2">
                             {stats.equipment.weapons.map((weapon, idx) => (
                               <div key={idx} className="bg-[#1E2430] rounded-lg p-3 border border-gray-700/50 flex justify-between items-center">
-                                <span className="font-semibold text-white">{weapon.name}</span>
-                                <Badge variant="outline" className="text-gray-300 border-gray-600">{weapon.damage}</Badge>
+                                <span className="font-semibold text-white">{safeText(weapon?.name)}</span>
+                                <Badge variant="outline" className="text-gray-300 border-gray-600">{safeText(weapon?.damage)}</Badge>
                               </div>
                             ))}
                           </div>
@@ -495,8 +496,8 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                           {/* Fallback to top-level inventory if stats.inventory is empty, although mapping should handle it */}
                           {(stats.inventory?.length > 0 ? stats.inventory : selectedNPC.inventory)?.map((item, idx) => (
                             <div key={idx} className="bg-[#1E2430] rounded-lg p-3 border border-gray-700/50 flex justify-between items-center">
-                              <span className="text-gray-300">{item.name}</span>
-                              <span className="text-xs text-gray-500">x{item.quantity || 1}</span>
+                              <span className="text-gray-300">{safeText(item?.name)}</span>
+                              <span className="text-xs text-gray-500">x{safeText(item?.quantity) || 1}</span>
                             </div>
                           ))}
                           {(!stats.inventory && !selectedNPC.inventory || (stats.inventory?.length === 0 && selectedNPC.inventory?.length === 0)) && (
@@ -558,8 +559,8 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                     const stats = getNpcStats(npc);
                     const imgUrl = npc.avatar_url || stats.profile_avatar_url || stats.avatar_url;
                     const active = selectedNPC?.id === npc.id;
-                    const subLine = [stats.race, stats.class, stats.level ? `Lvl ${stats.level}` : null]
-                      .filter(Boolean).join(" • ") || npc.faction || npc.location || "—";
+                    const subLine = [safeText(stats.race), safeText(stats.class), stats.level ? `Lvl ${safeText(stats.level)}` : null]
+                      .filter(Boolean).join(" • ") || safeText(npc.faction) || safeText(npc.location) || "—";
                     const isAlive = npc.is_alive !== false;
                     return (
                       <li key={npc.id}>
@@ -586,13 +587,13 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                               />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-gray-500">
-                                {npc.name?.charAt(0) || "?"}
+                                {safeText(npc.name)?.charAt(0) || "?"}
                               </div>
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className={`text-sm font-semibold truncate flex items-center gap-1 ${active ? "text-[#37F2D1]" : "text-white"}`}>
-                              {npc.name}
+                              {safeText(npc.name)}
                               {npc.is_plant && (
                                 <Sprout className="w-3 h-3 text-emerald-400 flex-shrink-0" title="Plant" />
                               )}
@@ -770,7 +771,7 @@ function VillainTabBody({ selectedNPC, setSelectedNPC, campaignId, updateNPCMuta
           <div className="flex-1 min-w-0">
             <div className="text-[10px] uppercase tracking-[0.25em] text-emerald-300 font-black">Plant</div>
             <div className="text-sm text-white truncate">
-              Cloned from <span className="text-emerald-200">{sourceCharacter?.name || "a player character"}</span>
+              Cloned from <span className="text-emerald-200">{safeText(sourceCharacter?.name) || "a player character"}</span>
             </div>
             <div className="text-[10px] text-slate-400 truncate">
               GM edits here don't touch the player's live sheet.
@@ -977,9 +978,9 @@ function ClonePlantButton({ campaign, campaignId, queryClient }) {
                     />
                   )}
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-white truncate">{c.name || "Unnamed"}</div>
+                    <div className="text-sm font-bold text-white truncate">{safeText(c.name) || "Unnamed"}</div>
                     <div className="text-[10px] text-slate-400 truncate">
-                      {c.stats?.race} {c.stats?.class} · Lvl {c.stats?.level ?? c.level ?? 1}
+                      {safeText(c.stats?.race)} {safeText(c.stats?.class)} · Lvl {safeText(c.stats?.level ?? c.level ?? 1)}
                     </div>
                   </div>
                   <Sprout className="w-4 h-4 text-emerald-400 flex-shrink-0" />

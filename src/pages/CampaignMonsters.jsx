@@ -29,6 +29,7 @@ import {
   getSpecialAbilities, getActions, getLegendaryActions, getReactions,
   getDescription, formatUsage,
 } from "@/utils/monsterHelpers";
+import { safeText } from "@/utils/safeRender";
 
 /**
  * Pokédex-style Monster Compendium. Renders SRD + campaign-custom
@@ -466,7 +467,7 @@ function MonsterCard({ monster, encountered, isGM, selected, onClick, onToggleEn
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-slate-700 text-5xl font-bold">
-              {monster?.name?.charAt(0) || "?"}
+              {safeText(monster?.name)?.charAt(0) || "?"}
             </div>
           )}
           <span className={`absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded ${
@@ -478,16 +479,16 @@ function MonsterCard({ monster, encountered, isGM, selected, onClick, onToggleEn
           </span>
         </div>
         <div className="p-3">
-          <h3 className="text-white font-semibold text-sm truncate">{monster.name}</h3>
+          <h3 className="text-white font-semibold text-sm truncate">{safeText(monster.name)}</h3>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 truncate">
-              {typeLabel}
+              {safeText(typeLabel)}
             </span>
-            <span className="text-xs text-[#37F2D1] font-semibold">CR {cr}</span>
+            <span className="text-xs text-[#37F2D1] font-semibold">CR {safeText(cr)}</span>
           </div>
           <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
-            <span>AC {ac}</span>
-            <span>HP {hp}</span>
+            <span>AC {safeText(ac)}</span>
+            <span>HP {safeText(hp)}</span>
           </div>
         </div>
       </button>
@@ -520,7 +521,8 @@ function MonsterStatBlock({ monster, isGM, onDelete }) {
   const size  = getSize(monster);
   const type  = getMonsterType(monster);
   const align = getAlignment(monster);
-  const metaLine = [size, type ? type.toLowerCase() : "", align]
+  const typeStr = safeText(type);
+  const metaLine = [safeText(size), typeStr ? typeStr.toLowerCase() : "", safeText(align)]
     .filter(Boolean)
     .join(", ");
   const xp = getXP(monster);
@@ -551,13 +553,13 @@ function MonsterStatBlock({ monster, isGM, onDelete }) {
             />
           ) : (
             <div className="w-full h-full bg-[#0f1219] flex items-center justify-center text-slate-600 text-6xl font-bold">
-              {monster.name?.charAt(0)}
+              {safeText(monster.name)?.charAt(0)}
             </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-[#1a1f2e] via-transparent to-transparent" />
           <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-2">
             <div className="min-w-0">
-              <h2 className="text-2xl font-bold text-white truncate drop-shadow-lg">{monster.name}</h2>
+              <h2 className="text-2xl font-bold text-white truncate drop-shadow-lg">{safeText(monster.name)}</h2>
               {metaLine && (
                 <p className="text-sm text-slate-300 italic truncate drop-shadow">{metaLine}</p>
               )}
@@ -577,20 +579,20 @@ function MonsterStatBlock({ monster, isGM, onDelete }) {
 
         {/* Core stats row — red-tinted backing to match official stat blocks */}
         <div className="grid grid-cols-5 gap-2 p-4 border-b border-red-900/30 bg-red-900/5">
-          <CoreStat label="Armor Class" value={getAC(monster)} />
-          <CoreStat label="Hit Points"  value={getHP(monster)} sub={getHitDice(monster)} />
-          <CoreStat label="Speed"       value={getSpeed(monster)} small />
-          <CoreStat label="CR"          value={getCR(monster)} accent />
-          <CoreStat label="XP"          value={formatXP(xp)} small />
+          <CoreStat label="Armor Class" value={safeText(getAC(monster))} />
+          <CoreStat label="Hit Points"  value={safeText(getHP(monster))} sub={safeText(getHitDice(monster))} />
+          <CoreStat label="Speed"       value={safeText(getSpeed(monster))} small />
+          <CoreStat label="CR"          value={safeText(getCR(monster))} accent />
+          <CoreStat label="XP"          value={safeText(formatXP(xp))} small />
         </div>
 
         {/* Ability scores */}
         <div className="grid grid-cols-6 gap-2 p-4 border-b border-red-900/30">
           {Object.entries(abilityScores).map(([ability, score]) => (
             <div key={ability} className="text-center">
-              <div className="text-xs text-red-400 uppercase font-bold">{ability}</div>
-              <div className="text-white font-bold text-lg">{score}</div>
-              <div className="text-xs text-slate-400">({getAbilityMod(score)})</div>
+              <div className="text-xs text-red-400 uppercase font-bold">{safeText(ability)}</div>
+              <div className="text-white font-bold text-lg">{safeText(score)}</div>
+              <div className="text-xs text-slate-400">({safeText(getAbilityMod(score))})</div>
             </div>
           ))}
         </div>
@@ -600,14 +602,14 @@ function MonsterStatBlock({ monster, isGM, onDelete }) {
           damage.resistances || damage.immunities || damage.conditionImmunities ||
           senses || languages) && (
           <div className="p-4 border-b border-red-900/30 space-y-2 text-sm">
-            {saves.length > 0  && <PropLine label="Saving Throws"     value={saves.join(", ")} />}
-            {skills.length > 0 && <PropLine label="Skills"            value={skills.join(", ")} />}
-            {damage.vulnerabilities     && <PropLine label="Vulnerabilities"        value={damage.vulnerabilities} />}
-            {damage.resistances         && <PropLine label="Resistances"            value={damage.resistances} />}
-            {damage.immunities          && <PropLine label="Damage Immunities"      value={damage.immunities} />}
-            {damage.conditionImmunities && <PropLine label="Condition Immunities"   value={damage.conditionImmunities} />}
-            {senses    && <PropLine label="Senses"    value={senses} />}
-            {languages && <PropLine label="Languages" value={languages} />}
+            {saves.length > 0  && <PropLine label="Saving Throws"     value={saves.map((s) => safeText(s)).join(", ")} />}
+            {skills.length > 0 && <PropLine label="Skills"            value={skills.map((s) => safeText(s)).join(", ")} />}
+            {damage.vulnerabilities     && <PropLine label="Vulnerabilities"        value={safeText(damage.vulnerabilities)} />}
+            {damage.resistances         && <PropLine label="Resistances"            value={safeText(damage.resistances)} />}
+            {damage.immunities          && <PropLine label="Damage Immunities"      value={safeText(damage.immunities)} />}
+            {damage.conditionImmunities && <PropLine label="Condition Immunities"   value={safeText(damage.conditionImmunities)} />}
+            {senses    && <PropLine label="Senses"    value={safeText(senses)} />}
+            {languages && <PropLine label="Languages" value={safeText(languages)} />}
           </div>
         )}
 
@@ -642,10 +644,10 @@ function MonsterStatBlock({ monster, isGM, onDelete }) {
         {legendary.length > 0 && (
           <Section title="Legendary Actions" titleClass="text-amber-400">
             <p className="text-slate-400 text-sm mb-3 italic">
-              The {(monster.name || "creature").toLowerCase()} can take 3 legendary actions,
+              The {(safeText(monster.name) || "creature").toLowerCase()} can take 3 legendary actions,
               choosing from the options below. Only one legendary action option can be used at
               a time and only at the end of another creature&apos;s turn.
-              The {(monster.name || "creature").toLowerCase()} regains spent legendary actions
+              The {(safeText(monster.name) || "creature").toLowerCase()} regains spent legendary actions
               at the start of its turn.
             </p>
             {legendary.map((action, i) => (
@@ -659,7 +661,7 @@ function MonsterStatBlock({ monster, isGM, onDelete }) {
           <div className="p-4">
             <h3 className="text-slate-400 font-bold text-sm uppercase tracking-wider mb-3">Lore</h3>
             <p className="text-slate-300 italic text-sm leading-relaxed whitespace-pre-wrap">
-              {description}
+              {safeText(description)}
             </p>
           </div>
         )}
@@ -687,9 +689,9 @@ function CoreStat({ label, value, sub, accent, small }) {
     <div className="text-center">
       <div className="text-xs text-slate-400">{label}</div>
       <div className={`font-bold ${small ? "text-sm" : "text-lg"} ${accent ? "text-[#37F2D1]" : "text-white"}`}>
-        {value}
+        {safeText(value)}
       </div>
-      {sub && <div className="text-xs text-slate-500">{sub}</div>}
+      {sub && <div className="text-xs text-slate-500">{safeText(sub)}</div>}
     </div>
   );
 }
@@ -698,7 +700,7 @@ function PropLine({ label, value }) {
   return (
     <div>
       <span className="text-red-400 font-semibold">{label}: </span>
-      <span className="text-white">{value}</span>
+      <span className="text-white">{safeText(value)}</span>
     </div>
   );
 }
@@ -716,12 +718,12 @@ function TraitBlock({ item }) {
   if (!item) return null;
   return (
     <div>
-      <span className="text-white font-semibold italic">{item.name}</span>
+      <span className="text-white font-semibold italic">{safeText(item.name)}</span>
       {item.usage && (
-        <span className="text-amber-400 text-xs ml-1">{formatUsage(item.usage)}</span>
+        <span className="text-amber-400 text-xs ml-1">{safeText(formatUsage(item.usage))}</span>
       )}
       <span className="text-white font-semibold italic">. </span>
-      <span className="text-slate-300 text-sm">{item.desc || item.description}</span>
+      <span className="text-slate-300 text-sm">{safeText(item.desc || item.description)}</span>
     </div>
   );
 }
@@ -737,17 +739,17 @@ function ActionBlock({ item }) {
   const damage = Array.isArray(item.damage) ? item.damage : [];
   return (
     <div>
-      <span className="text-white font-semibold italic">{item.name}</span>
+      <span className="text-white font-semibold italic">{safeText(item.name)}</span>
       {item.usage && (
-        <span className="text-amber-400 text-xs ml-1">{formatUsage(item.usage)}</span>
+        <span className="text-amber-400 text-xs ml-1">{safeText(formatUsage(item.usage))}</span>
       )}
       <span className="text-white font-semibold italic">. </span>
-      <span className="text-slate-300 text-sm">{item.desc || item.description}</span>
+      <span className="text-slate-300 text-sm">{safeText(item.desc || item.description)}</span>
 
       {item.attack_bonus != null && (
         <div className="flex flex-wrap items-center gap-2 mt-1 ml-4">
           <span className="text-xs px-1.5 py-0.5 rounded bg-red-900/30 text-red-300 border border-red-700/40">
-            +{item.attack_bonus} to hit
+            +{safeText(item.attack_bonus)} to hit
           </span>
           {damage.map((d, di) => (
             <DamageBadge key={`dmg-${di}`} damage={d} />
@@ -758,7 +760,7 @@ function ActionBlock({ item }) {
       {item.dc && item.attack_bonus == null && (
         <div className="flex flex-wrap items-center gap-2 mt-1 ml-4">
           <span className="text-xs px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-300 border border-amber-700/40">
-            DC {item.dc.dc_value}{item.dc.dc_type?.name ? ` ${item.dc.dc_type.name}` : ""}
+            DC {safeText(item.dc.dc_value)}{item.dc.dc_type?.name ? ` ${safeText(item.dc.dc_type.name)}` : ""}
           </span>
           {damage.map((d, di) => (
             <DamageBadge key={`dc-${di}`} damage={d} />
@@ -777,9 +779,11 @@ function DamageBadge({ damage }) {
   const dice = damage.damage_dice || damage.dice || "";
   const dtype = damage.damage_type?.name || damage.type || "";
   if (!dice && !dtype) return null;
+  const diceStr = safeText(dice);
+  const dtypeStr = safeText(dtype);
   return (
     <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">
-      {dice}{dice && dtype ? " " : ""}{dtype ? dtype.toLowerCase() : ""}
+      {diceStr}{diceStr && dtypeStr ? " " : ""}{dtypeStr ? dtypeStr.toLowerCase() : ""}
     </span>
   );
 }
