@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sparkles, Search, BookOpen, Edit, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { safeText } from "@/utils/safeRender";
 
 const SCHOOL_COLORS = {
   abjuration: "#3B82F6",
@@ -135,17 +136,17 @@ export default function GrimoireViewer({ spells, entries, canEdit, onSelectSpell
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
                       <h4 className="font-bold text-white group-hover:text-[#37F2D1] transition-colors">
-                        {spell.name}
+                        {safeText(spell.name)}
                       </h4>
                       <div className="flex items-center gap-2 mt-1">
-                        <span 
+                        <span
                           className="text-xs px-2 py-0.5 rounded font-semibold"
-                          style={{ 
+                          style={{
                             backgroundColor: `${SCHOOL_COLORS[spell.school]}20`,
                             color: SCHOOL_COLORS[spell.school]
                           }}
                         >
-                          {spell.school}
+                          {safeText(spell.school)}
                         </span>
                         {!spell.discovered && canEdit && (
                           <span className="text-xs text-yellow-500">Hidden</span>
