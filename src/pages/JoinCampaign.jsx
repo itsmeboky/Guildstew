@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { trackEvent } from "@/utils/analytics";
+import { loadCampaignMods } from "@/lib/modEngine";
 
 const AVAILABLE_TAGS = [
   "High Fantasy", "Low Fantasy", "Dark Fantasy", "Urban Fantasy",
@@ -61,6 +62,28 @@ export default function JoinCampaign() {
     enabled: !!user,
     initialData: []
   });
+
+  // Pull the invite campaign's installed mods so we can mark a
+  // character "incompatible" when its mod_dependencies aren't
+  // satisfied here. Cached per-campaign; missing mods are greyed
+  // out with a tooltip listing the blockers.
+  const inviteCampaignId = selectedInvite?.campaign_id;
+  const { data: installedMods = [] } = useQuery({
+    queryKey: ['joinCampaignMods', inviteCampaignId],
+    queryFn: () => loadCampaignMods(inviteCampaignId),
+    enabled: !!inviteCampaignId,
+    initialData: [],
+  });
+  const installedModIds = React.useMemo(
+    () => new Set(installedMods.map((m) => m.mod_id)),
+    [installedMods],
+  );
+  const getCharacterIncompatibility = (character) => {
+    const deps = Array.isArray(character?.mod_dependencies) ? character.mod_dependencies : [];
+    if (deps.length === 0) return { compatible: true, missing: [] };
+    const missing = deps.filter((d) => d?.mod_id && !installedModIds.has(d.mod_id));
+    return { compatible: missing.length === 0, missing };
+  };
 
   const acceptInviteMutation = useMutation({
     mutationFn: async ({ inviteId, characterId }) => {
@@ -384,27 +407,46 @@ export default function JoinCampaign() {
               </div>
 
               <div className="max-h-96 overflow-y-auto space-y-2">
-                {characters.filter(c => !c.campaign_id).map((character) => (
-                  <button
-                    key={character.id}
-                    onClick={() => handleCharacterSelect(character.id)}
-                    className="w-full bg-[#2A3441] hover:bg-[#37F2D1]/20 rounded-lg p-4 flex items-center gap-4 transition-colors border border-gray-700 hover:border-[#37F2D1]"
-                  >
-                    <div className="w-16 h-16 rounded-lg overflow-hidden border-2 border-[#FF5722]/40">
-                      {character.profile_avatar_url ? (
-                        <img src={character.profile_avatar_url} alt={character.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-[#FF5722] to-[#37F2D1] flex items-center justify-center text-2xl font-bold">
-                          {character.name[0]}
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-left">
-                      <p className="text-white font-bold">{character.name}</p>
-                      <p className="text-sm text-gray-400">{character.class} • Level {character.level}</p>
-                    </div>
-                  </button>
-                ))}
+                {characters.filter(c => !c.campaign_id).map((character) => {
+                  const compat = getCharacterIncompatibility(character);
+                  const missingLabel = compat.missing.map((d) => d.mod_name).filter(Boolean).join(", ");
+                  return (
+                    <button
+                      key={character.id}
+                      onClick={() => compat.compatible && handleCharacterSelect(character.id)}
+                      disabled={!compat.compatible}
+                      title={
+                        compat.compatible
+                          ? ""
+                          : `Incompatible — this campaign is missing: ${missingLabel || "required mods"}`
+                      }
+                      className={`w-full rounded-lg p-4 flex items-center gap-4 transition-colors border text-left ${
+                        compat.compatible
+                          ? "bg-[#2A3441] hover:bg-[#37F2D1]/20 border-gray-700 hover:border-[#37F2D1]"
+                          : "bg-[#1E2430] border-gray-800 opacity-50 cursor-not-allowed"
+                      }`}
+                    >
+                      <div className="w-16 h-16 rounded-lg overflow-hidden border-2 border-[#FF5722]/40">
+                        {character.profile_avatar_url ? (
+                          <img src={character.profile_avatar_url} alt={character.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-[#FF5722] to-[#37F2D1] flex items-center justify-center text-2xl font-bold">
+                            {character.name[0]}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-white font-bold">{character.name}</p>
+                        <p className="text-sm text-gray-400">{character.class} • Level {character.level}</p>
+                        {!compat.compatible && (
+                          <p className="text-[10px] text-rose-300 mt-1">
+                            Missing: {missingLabel}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </DialogContent>

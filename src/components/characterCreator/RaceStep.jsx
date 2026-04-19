@@ -317,15 +317,31 @@ export default function RaceStep({ characterData, updateCharacterData, campaignI
         race.subtypes[0],
         baseline.race_features || [],
       );
+      // Strip any previously-tagged race mod, then (re-)tag this one
+      // so the character row records a single race dependency for
+      // the library's campaign compatibility check.
+      const priorDeps = Array.isArray(characterData.mod_dependencies) ? characterData.mod_dependencies : [];
+      const nonRaceDeps = priorDeps.filter((d) => d?.mod_type !== "race");
+      const raceDep = race._mod_id
+        ? [{ mod_id: race._mod_id, mod_name: race._mod_name || race.name, mod_type: "race" }]
+        : [];
       return {
         ...base,
         ...clearBreweryRaceMarkers(),
         _brewery_race: race._raw || null,
+        mod_dependencies: [...nonRaceDeps, ...raceDep],
         ...baseline,
         ...subraceUpdates,
       };
     }
-    return { ...base, ...clearBreweryRaceMarkers() };
+    // Drop the race dependency tag when switching back to SRD.
+    const priorDeps = Array.isArray(characterData.mod_dependencies) ? characterData.mod_dependencies : [];
+    const nonRaceDeps = priorDeps.filter((d) => d?.mod_type !== "race");
+    return {
+      ...base,
+      ...clearBreweryRaceMarkers(),
+      mod_dependencies: nonRaceDeps,
+    };
   };
 
   const handleRaceChange = (direction) => {
