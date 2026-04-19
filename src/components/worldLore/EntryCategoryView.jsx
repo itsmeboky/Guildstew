@@ -157,6 +157,7 @@ export default function EntryCategoryView({
         </button>
         <EntryForm
           initial={mode === "edit" ? selected : null}
+          categoryKey={categoryKey}
           categoryMetadataFields={metadataFields}
           partyPlayers={partyPlayers}
           campaignId={campaignId}
