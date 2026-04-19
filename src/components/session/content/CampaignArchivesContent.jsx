@@ -35,8 +35,8 @@ export default function CampaignArchivesContent({ campaignId }) {
 
   if (!activeSection) {
     return (
-      <div className="h-full overflow-y-auto p-6">
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="h-full overflow-y-auto p-4">
+        <div className="grid grid-cols-3 gap-3">
           {SECTIONS.map((section) => {
             const Icon = section.icon;
             return (
@@ -44,10 +44,10 @@ export default function CampaignArchivesContent({ campaignId }) {
                 key={section.key}
                 type="button"
                 onClick={() => setActiveKey(section.key)}
-                className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-6 text-left hover:border-[#37F2D1]/30 transition-colors"
+                className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-4 text-left hover:border-[#37F2D1]/30 transition-colors"
               >
-                <Icon className="w-8 h-8 text-[#37F2D1] mb-3" />
-                <h3 className="text-white font-bold">{section.label}</h3>
+                <Icon className="w-6 h-6 text-[#37F2D1] mb-2" />
+                <h3 className="text-white font-semibold text-sm">{section.label}</h3>
                 <p className="text-xs text-slate-400 mt-1">{section.description}</p>
               </button>
             );
