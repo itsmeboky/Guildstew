@@ -1042,16 +1042,16 @@ export default function CombatActionBar({
             })()}
             tooltip={
               offHandAvailable
-                ? `Off-hand Attack — bonus action (${offHandWeapon?.name || 'Weapon 2'})`
+                ? `Off-hand Attack — bonus action (${safeRender(offHandWeapon?.name) || 'Weapon 2'})`
                 : isCreature
-                ? `Attack (${(character?.actions?.[0]?.name) || 'Default'})`
+                ? `Attack (${safeRender(character?.actions?.[0]?.name) || 'Default'})`
                 : attackMode === 'ranged'
-                ? `Ranged Attack (${rangedWeapon?.name || 'No Ranged Weapon'})`
+                ? `Ranged Attack (${safeRender(rangedWeapon?.name) || 'No Ranged Weapon'})`
                 : attackMode === 'unarmed'
                 ? 'Unarmed Strike'
                 : attackMode === 'melee'
-                ? `Melee Attack (${meleeWeapon?.name || 'No Melee Weapon'})`
-                : `Attack — click to select (${meleeWeapon?.name || 'no melee'})`
+                ? `Melee Attack (${safeRender(meleeWeapon?.name) || 'No Melee Weapon'})`
+                : `Attack — click to select (${safeRender(meleeWeapon?.name) || 'no melee'})`
             }
             toggleable={false}
             isActive={offHandAvailable || attackIsTargeting}
@@ -1113,7 +1113,7 @@ export default function CombatActionBar({
                   <BasicActionSlot
                     key={`cb-${cba.classKey}-${cba.name}-${idx}`}
                     src={base.url}
-                    tooltip={`${cba.name} (${cba.classFeature}) — bonus action`}
+                    tooltip={`${safeRender(cba.name)} (${safeRender(cba.classFeature)}) — bonus action`}
                     iconFilter={tint}
                     isActive={hideActive}
                     activeTint={hideActive ? '#38bdf8' : undefined}
@@ -1143,7 +1143,7 @@ export default function CombatActionBar({
                 return (
                   <div key={ability.id} className="relative flex-shrink-0">
                     <button
-                      title={ability.name}
+                      title={safeRender(ability.name)}
                       disabled={ability.disabled}
                       onClick={() => onClassAbility && onClassAbility(ability.id, ability)}
                       className={`w-[44px] h-[44px] rounded-xl border-2 flex flex-col items-center justify-center transition-all text-[8px] font-black uppercase tracking-wider leading-none ${
@@ -1155,13 +1155,13 @@ export default function CombatActionBar({
                       }`}
                       style={!isActive && !ability.disabled && tint ? { filter: tint } : undefined}
                     >
-                      <span className="text-[9px] leading-tight">{ability.name}</span>
+                      <span className="text-[9px] leading-tight">{safeRender(ability.name)}</span>
                     </button>
                     {/* Use counter badge */}
                     {ability.usesMax != null && (
                       <div className="absolute -bottom-1 -right-1 min-w-[16px] h-[14px] bg-black/90 border border-white/30 rounded-full flex items-center justify-center px-0.5">
                         <span className="text-[8px] font-bold text-white leading-none">
-                          {ability.usesRemaining ?? '?'}/{ability.usesMax}
+                          {safeRender(ability.usesRemaining ?? '?')}/{safeRender(ability.usesMax)}
                         </span>
                       </div>
                     )}
@@ -1182,7 +1182,7 @@ export default function CombatActionBar({
           {defaultSpells
             .slice(scrollPosition, scrollPosition + visibleSpellCount)
             .map((spell, idx) => {
-              const spellName = typeof spell === 'string' ? spell : spell.name;
+              const spellName = safeRender(typeof spell === 'string' ? spell : spell?.name);
               const spellLevel = typeof spell === 'object' && typeof spell.level === 'number' ? spell.level : undefined;
               return (
                 <div key={`sp-${scrollPosition + idx}`} className="relative">
@@ -1207,17 +1207,17 @@ export default function CombatActionBar({
                       if (!details) return null;
                       return (
                         <div className="absolute bottom-full left-0 mb-2 bg-[#1E2430] text-white p-4 rounded-lg text-xs w-80 shadow-2xl border-2 border-[#37F2D1] z-[100] max-h-96 overflow-y-auto custom-scrollbar pointer-events-auto">
-                          <div className="font-bold mb-2 text-[#37F2D1] text-sm">{spellName}</div>
+                          <div className="font-bold mb-2 text-[#37F2D1] text-sm">{safeRender(spellName)}</div>
                           <div className="text-gray-400 mb-2">
-                            {details.level} {details.school}
+                            {safeRender(details.level)} {safeRender(details.school)}
                           </div>
                           <div className="space-y-1 mb-2">
-                            <div><span className="text-gray-400">Casting Time:</span> {details.castingTime}</div>
-                            <div><span className="text-gray-400">Range:</span> {details.range}</div>
-                            <div><span className="text-gray-400">Components:</span> {details.components}</div>
-                            <div><span className="text-gray-400">Duration:</span> {details.duration}</div>
+                            <div><span className="text-gray-400">Casting Time:</span> {safeRender(details.castingTime)}</div>
+                            <div><span className="text-gray-400">Range:</span> {safeRender(details.range)}</div>
+                            <div><span className="text-gray-400">Components:</span> {safeRender(details.components)}</div>
+                            <div><span className="text-gray-400">Duration:</span> {safeRender(details.duration)}</div>
                           </div>
-                          <div className="text-white leading-relaxed whitespace-pre-wrap">{details.description}</div>
+                          <div className="text-white leading-relaxed whitespace-pre-wrap">{safeRender(details.description)}</div>
                         </div>
                       );
                     })()}
@@ -1244,24 +1244,27 @@ export default function CombatActionBar({
                       Spells
                     </span>
                   </div>
-                  {monsterSpells.map((spell, idx) => (
-                    <SpellSlot
-                      key={`msp-${idx}`}
-                      src={getSpellIcon(spell.name)}
-                      tooltip={spell.level != null ? `${spell.name} (L${spell.level})` : spell.name}
-                      onHover={() => handleSpellHover(spell.name)}
-                      onLeave={handleSpellLeave}
-                      onClick={() =>
-                        onActionClick &&
-                        onActionClick({
-                          type: "spell",
-                          name: spell.name,
-                          level: spell.level,
-                          spell,
-                        })
-                      }
-                    />
-                  ))}
+                  {monsterSpells.map((spell, idx) => {
+                    const msName = safeRender(spell?.name);
+                    return (
+                      <SpellSlot
+                        key={`msp-${idx}`}
+                        src={getSpellIcon(msName)}
+                        tooltip={spell?.level != null ? `${msName} (L${spell.level})` : msName}
+                        onHover={() => handleSpellHover(msName)}
+                        onLeave={handleSpellLeave}
+                        onClick={() =>
+                          onActionClick &&
+                          onActionClick({
+                            type: "spell",
+                            name: msName,
+                            level: spell?.level,
+                            spell,
+                          })
+                        }
+                      />
+                    );
+                  })}
                 </div>
               )}
             </>
@@ -1328,6 +1331,7 @@ function ActionButton({ active, onClick, color, icon: Icon }) {
 
 function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick, disabled, activeTint, iconFilter }) {
   const [showTooltip, setShowTooltip] = useState(false);
+  const tooltipText = safeRender(tooltip);
 
   // When active, we either apply a button-specific tint (solid coloured
   // border + coloured glow) or fall back to the existing teal/orange
@@ -1379,15 +1383,15 @@ function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick
         {src ? (
           <img
             src={src}
-            alt={tooltip || ""}
+            alt={tooltipText}
             className="w-full h-full object-cover"
             style={iconStyle}
           />
         ) : null}
       </div>
-      {showTooltip && tooltip && (
+      {showTooltip && tooltipText && (
         <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-[#1E2430] text-white px-3 py-1.5 rounded-lg text-xs whitespace-nowrap shadow-xl border border-[#37F2D1] z-50">
-          {tooltip}
+          {tooltipText}
         </div>
       )}
     </button>
@@ -1406,8 +1410,9 @@ const MONSTER_GROUP_COLORS = {
 
 // SRD monster data is wildly inconsistent in shape. A field nominally
 // expected to be a string ("damage", "description", "reach") sometimes
-// arrives as a structured object ({ damage_dice, damage_type }) or an
-// array (legendary-action usage). `toText` collapses any of those to a
+// arrives as a structured object ({ damage_dice, damage_type }, or
+// `{ type, value }` from the 5e-api AC/senses payloads) or an array
+// (legendary-action usage). `toText` collapses any of those to a
 // plain string so downstream JSX can render it without blowing up.
 function toText(value) {
   if (value == null) return "";
@@ -1418,6 +1423,14 @@ function toText(value) {
     if (value.damage_dice || value.damage_type) {
       return [toText(value.damage_dice), toText(value.damage_type)].filter(Boolean).join(" ").trim();
     }
+    // `{ type, value }` — 5e-api AC entries (`{ type: "natural", value: 17 }`),
+    // proficiency rows, and anything else that splits a label from a
+    // number. Prefer "type: value" so both pieces survive.
+    if ("type" in value && "value" in value) {
+      const t = toText(value.type);
+      const v = toText(value.value);
+      return t && v ? `${t}: ${v}` : (v || t);
+    }
     if (typeof value.text === "string") return value.text;
     if (typeof value.name === "string") return value.name;
     if (typeof value.value !== "undefined") return toText(value.value);
@@ -1426,6 +1439,15 @@ function toText(value) {
     return "";
   }
   return String(value);
+}
+
+// Narrow wrapper that always returns a React-safe value. Use on ANY
+// interpolated field sourced from a monster / spell / action / ability
+// payload — those shapes drift enough that raw JSX interpolation is a
+// liability.
+function safeRender(value) {
+  const text = toText(value);
+  return text || "";
 }
 
 function pickActionIconKind(action) {
@@ -1449,12 +1471,12 @@ function MonsterActionGroup({ label, color, actions, onActionClick, badge }) {
       <div className="h-10 w-[2px] bg-[#1e2636] flex-shrink-0" />
       <div className="flex flex-col items-start gap-0.5 pr-1 flex-shrink-0">
         <span className={`text-[9px] uppercase tracking-[0.22em] font-bold leading-none ${palette.label}`}>
-          {label}
+          {safeRender(label)}
         </span>
       </div>
       {actions.map((action, idx) => (
         <MonsterActionSlot
-          key={`${label}-${action.name || "action"}-${idx}`}
+          key={`${safeRender(label)}-${safeRender(action.name) || "action"}-${idx}`}
           action={action}
           palette={palette}
           badge={badge}
@@ -1495,16 +1517,19 @@ function MonsterActionSlot({ action, palette, badge, onClick }) {
   const damageTypeText = toText(action.damage_type);
   const saveAbilityText = toText(action.save_ability);
   const descText = toText(action.description || action.desc);
+  const legendaryCost = Number(action.legendary_cost) || 0;
+  const attackBonusText = safeRender(action.attack_bonus);
+  const saveDcText = safeRender(action.save_dc);
   const tooltip = (
     <div className="max-w-[260px]">
       <div className="font-bold text-[#37F2D1] mb-1">
-        {name}{action.legendary_cost > 1 ? ` (Costs ${action.legendary_cost})` : ""}
+        {name}{legendaryCost > 1 ? ` (Costs ${legendaryCost})` : ""}
       </div>
       {action.attack_bonus != null && action.attack_bonus !== "" && (
-        <div className="text-[10px] text-slate-400 mb-1">+{action.attack_bonus} to hit{reachText ? ` · ${reachText}` : ""}</div>
+        <div className="text-[10px] text-slate-400 mb-1">+{attackBonusText} to hit{reachText ? ` · ${reachText}` : ""}</div>
       )}
       {action.save_dc && (
-        <div className="text-[10px] text-slate-400 mb-1">DC {action.save_dc} {saveAbilityText || "save"}</div>
+        <div className="text-[10px] text-slate-400 mb-1">DC {saveDcText} {saveAbilityText || "save"}</div>
       )}
       {damageText && (
         <div className="text-[10px] text-slate-400 mb-1">{damageText} {damageTypeText}</div>
@@ -1540,17 +1565,17 @@ function MonsterActionSlot({ action, palette, badge, onClick }) {
       </span>
       {badge && (
         <span className="absolute -top-1 -right-1 bg-black border border-yellow-400 text-yellow-300 text-[8px] font-black rounded-full w-4 h-4 flex items-center justify-center">
-          {badge}
+          {safeRender(badge)}
         </span>
       )}
       {action._isVillain && action._round && (
         <span className="absolute -top-1 -right-1 bg-black border border-rose-500 text-rose-300 text-[8px] font-black rounded-full w-5 h-4 flex items-center justify-center">
-          R{action._round}
+          R{safeRender(action._round)}
         </span>
       )}
       {action._isMulti && Array.isArray(action.attacks) && action.attacks.length > 0 && (
         <span className="absolute -top-1 -left-1 bg-black border border-amber-400 text-amber-300 text-[8px] font-black rounded-full px-1 flex items-center justify-center">
-          ×{action.attacks.reduce((n, a) => n + (a?.count || 1), 0)}
+          ×{action.attacks.reduce((n, a) => n + (Number(a?.count) || 1), 0)}
         </span>
       )}
       {showTooltip && (
@@ -1564,9 +1589,10 @@ function MonsterActionSlot({ action, palette, badge, onClick }) {
 
 function SpellSlot({ src, tooltip, onHover, onLeave, onClick }) {
   const [showTooltip, setShowTooltip] = useState(false);
-  
+  const tooltipText = safeRender(tooltip);
+
   return (
-    <button 
+    <button
       className="w-[52px] h-[52px] rounded-xl bg-gradient-to-br from-[#4c1d95] via-[#6366f1] to-[#22d3ee] p-[2px] flex-shrink-0 shadow-[0_14px_32px_rgba(0,0,0,0.8)] hover:-translate-y-[1px] transition relative"
       onMouseEnter={() => {
         setShowTooltip(true);
@@ -1579,11 +1605,11 @@ function SpellSlot({ src, tooltip, onHover, onLeave, onClick }) {
       onClick={onClick}
     >
       <div className="w-full h-full rounded-[10px] bg-black/60 overflow-hidden">
-        {src ? <img src={src} alt={tooltip || ""} className="w-full h-full object-cover" /> : null}
+        {src ? <img src={src} alt={tooltipText} className="w-full h-full object-cover" /> : null}
       </div>
-      {showTooltip && tooltip && (
+      {showTooltip && tooltipText && (
         <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-[#1E2430] text-white px-3 py-1.5 rounded-lg text-xs whitespace-nowrap shadow-xl border border-[#37F2D1] z-50">
-          {tooltip}
+          {tooltipText}
         </div>
       )}
     </button>
