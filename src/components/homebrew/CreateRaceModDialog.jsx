@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,11 +11,15 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
+import {
+  Plus, Trash2, ChevronUp, ChevronDown, Save, Lock, Globe,
+} from "lucide-react";
 import {
   BLANK_RACE,
   BLANK_TRAIT,
+  BLANK_SUBRACE,
   RACE_ABILITY_MODES,
   RACE_SIZES,
   DARKVISION_OPTIONS,
@@ -24,6 +30,10 @@ import {
   TRAIT_RECHARGE,
 } from "@/config/breweryRaceSchema";
 import { CONDITIONS } from "@/components/combat/conditions";
+import { base44 } from "@/api/base44Client";
+import { supabase } from "@/api/supabaseClient";
+import { useSubscription } from "@/lib/SubscriptionContext";
+import { tierAtLeast } from "@/api/billingClient";
 
 /**
  * Race mod creator — dialog form that authors a brewery_mods row
@@ -101,17 +111,25 @@ function cloneBlankRace() {
 export default function CreateRaceModDialog({ open, onClose, mod = null }) {
   const [formData, setFormData] = useState(cloneBlankRace);
   const [gameSystem, setGameSystem] = useState("dnd5e");
+  const [hasSubraces, setHasSubraces] = useState(false);
+  const queryClient = useQueryClient();
+  const sub = useSubscription();
+  const canPublish = tierAtLeast(sub?.tier || "free", "veteran");
+  const isEdit = !!mod?.id;
 
   // Reset state every time the dialog is opened so a closed-then-
   // reopened dialog doesn't leak the previous session's state.
   useEffect(() => {
     if (!open) return;
     if (mod) {
-      setFormData({ ...cloneBlankRace(), ...(mod.metadata || {}), name: mod.name || "" });
+      const next = { ...cloneBlankRace(), ...(mod.metadata || {}), name: mod.name || "" };
+      setFormData(next);
       setGameSystem(mod.game_system || "dnd5e");
+      setHasSubraces(Array.isArray(next.subraces) && next.subraces.length > 0);
     } else {
       setFormData(cloneBlankRace());
       setGameSystem("dnd5e");
+      setHasSubraces(false);
     }
   }, [open, mod]);
 
@@ -119,11 +137,81 @@ export default function CreateRaceModDialog({ open, onClose, mod = null }) {
   const setAsi = (updater) =>
     setFormData((f) => ({ ...f, ability_score_increases: updater(f.ability_score_increases) }));
 
+  const saveMutation = useMutation({
+    mutationFn: async ({ mode }) => {
+      const name = (formData.name || "").trim();
+      if (!name) throw new Error("Race name is required");
+      const description = (formData.description || "").trim();
+      if (!description) throw new Error("Description is required");
+
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData?.user) throw new Error("Not authenticated");
+      const userId = authData.user.id;
+
+      const isDraft      = mode === "draft";
+      const isPublishing = mode === "publish";
+      if (isPublishing && !canPublish) {
+        throw new Error("Publishing to the Brewery requires a Veteran subscription");
+      }
+
+      const metadata = {
+        ...formData,
+        name,
+        description,
+        mod_type: "race",
+        // Zero out subraces when the toggle is off so the saved shape
+        // matches what the rest of the engine expects.
+        subraces: hasSubraces ? (formData.subraces || []) : [],
+      };
+
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+      const payload = {
+        name,
+        slug,
+        description,
+        mod_type: "race",
+        game_system: gameSystem || "dnd5e",
+        creator_id: userId,
+        creator_tier: sub?.tier || "free",
+        metadata,
+        patches: [{
+          target: "races",
+          operation: "extend",
+          field: "available_races",
+          value: name,
+        }],
+        is_private: !isPublishing,
+        published: isPublishing,
+        status: isDraft ? "draft" : "active",
+      };
+
+      if (isEdit) {
+        return base44.entities.BreweryMod.update(mod.id, payload);
+      }
+      return base44.entities.BreweryMod.create({ ...payload, version: "1.0.0" });
+    },
+    onSuccess: (_row, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["myMods"] });
+      queryClient.invalidateQueries({ queryKey: ["brewery", "mods"] });
+      const msg =
+        vars.mode === "draft"   ? "Saved as draft" :
+        vars.mode === "publish" ? "Published to The Brewery" :
+                                  "Saved privately — only you can install it";
+      toast.success(msg);
+      onClose?.();
+    },
+    onError: (err) => {
+      toast.error(err?.message || "Failed to save race mod");
+      console.error(err);
+    },
+  });
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose?.(); }}>
       <DialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{mod ? "Edit Race Mod" : "Create Race Mod"}</DialogTitle>
+          <DialogTitle>{isEdit ? "Edit Race Mod" : "Create Race Mod"}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -139,7 +227,45 @@ export default function CreateRaceModDialog({ open, onClose, mod = null }) {
           <ProficienciesSection formData={formData} setField={setField} />
           <ResistancesSection formData={formData} setField={setField} />
           <TraitsSection formData={formData} setField={setField} />
+          <SubracesSection
+            formData={formData}
+            setField={setField}
+            hasSubraces={hasSubraces}
+            setHasSubraces={setHasSubraces}
+          />
+          <FlavorSection formData={formData} setField={setField} />
         </div>
+
+        <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => saveMutation.mutate({ mode: "draft" })}
+            disabled={saveMutation.isPending}
+            className="text-slate-300"
+          >
+            <Save className="w-4 h-4 mr-1" /> Save as Draft
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => saveMutation.mutate({ mode: "private" })}
+            disabled={saveMutation.isPending}
+            className="text-amber-300 border-amber-400/40"
+          >
+            <Lock className="w-4 h-4 mr-1" /> Save &amp; Use Privately
+          </Button>
+          <Button
+            type="button"
+            onClick={() => saveMutation.mutate({ mode: "publish" })}
+            disabled={saveMutation.isPending || !canPublish}
+            title={canPublish ? "Publish to The Brewery" : "Veteran subscription required"}
+            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold disabled:opacity-50"
+          >
+            <Globe className="w-4 h-4 mr-1" />
+            {canPublish ? "Publish to Brewery" : "Publish (Veteran+)"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -840,5 +966,256 @@ function MechanicalEffectFields({ value, onChange }) {
         </>
       )}
     </div>
+  );
+}
+
+// ──────────────────────────── B8 Subraces ────────────────────────
+
+function cloneBlankSubrace() {
+  return JSON.parse(JSON.stringify(BLANK_SUBRACE));
+}
+
+function SubracesSection({ formData, setField, hasSubraces, setHasSubraces }) {
+  const subraces = Array.isArray(formData.subraces) ? formData.subraces : [];
+  const baseTraitNames = (formData.traits || [])
+    .map((t) => t?.name)
+    .filter((n) => typeof n === "string" && n.trim());
+
+  const add = () => setField("subraces", [...subraces, cloneBlankSubrace()]);
+  const update = (idx, next) =>
+    setField("subraces", subraces.map((s, i) => (i === idx ? next : s)));
+  const remove = (idx) =>
+    setField("subraces", subraces.filter((_, i) => i !== idx));
+
+  const onToggle = (checked) => {
+    setHasSubraces(checked);
+    // Seed one empty subrace card the first time the toggle flips on
+    // so users see the structure instead of an empty section.
+    if (checked && subraces.length === 0) add();
+  };
+
+  return (
+    <Section title="Subraces">
+      <div className="flex items-center gap-3">
+        <Switch checked={hasSubraces} onCheckedChange={onToggle} id="has-subraces" />
+        <Label htmlFor="has-subraces" className="text-sm text-slate-300">
+          This race has subraces
+        </Label>
+      </div>
+
+      {hasSubraces && (
+        <>
+          <div className="space-y-3">
+            {subraces.map((sub, idx) => (
+              <SubraceEditor
+                key={idx}
+                subrace={sub}
+                idx={idx}
+                baseTraitNames={baseTraitNames}
+                onChange={(next) => update(idx, next)}
+                onRemove={() => remove(idx)}
+              />
+            ))}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={add}
+            className="mt-2"
+          >
+            <Plus className="w-3 h-3 mr-1" /> Add Subrace
+          </Button>
+        </>
+      )}
+    </Section>
+  );
+}
+
+function SubraceEditor({ subrace, idx, baseTraitNames, onChange, onRemove }) {
+  const set = (key, value) => onChange({ ...subrace, [key]: value });
+  const setBonus = (ability, value) =>
+    onChange({
+      ...subrace,
+      ability_score_bonus: {
+        ...(subrace.ability_score_bonus || {}),
+        [ability]: Number(value) || 0,
+      },
+    });
+
+  // Additional traits reuse the top-level TraitEditor so the form
+  // for a subrace-specific trait matches B7 exactly.
+  const traits = Array.isArray(subrace.additional_traits) ? subrace.additional_traits : [];
+  const addTrait = () => set("additional_traits", [...traits, cloneBlankTrait()]);
+  const updateTrait = (i, next) =>
+    set("additional_traits", traits.map((t, j) => (j === i ? next : t)));
+  const removeTrait = (i) =>
+    set("additional_traits", traits.filter((_, j) => j !== i));
+  const moveTrait = (i, dir) => {
+    const target = i + dir;
+    if (target < 0 || target >= traits.length) return;
+    const next = [...traits];
+    [next[i], next[target]] = [next[target], next[i]];
+    set("additional_traits", next);
+  };
+
+  return (
+    <div className="bg-[#050816] border border-slate-700 rounded-lg p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] uppercase tracking-widest text-slate-400 font-bold flex-1">
+          Subrace #{idx + 1}
+        </span>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="p-1 text-red-400 hover:text-red-300"
+          title="Delete subrace"
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
+      </div>
+
+      <Field label="Name">
+        <Input
+          value={subrace.name || ""}
+          onChange={(e) => set("name", e.target.value)}
+          placeholder="e.g., Duskstripe"
+          className="bg-[#1E2430] border-slate-700 text-white"
+        />
+      </Field>
+      <Field label="Description">
+        <Textarea
+          value={subrace.description || ""}
+          onChange={(e) => set("description", e.target.value)}
+          rows={2}
+          className="bg-[#1E2430] border-slate-700 text-white"
+        />
+      </Field>
+
+      <Field label="Additional Ability Score Bonus">
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+          {ABILITY_KEYS.map((k) => (
+            <Field key={k} label={k.toUpperCase()}>
+              <NumberInput
+                value={(subrace.ability_score_bonus || {})[k] ?? 0}
+                onChange={(v) => setBonus(k, v)}
+              />
+            </Field>
+          ))}
+        </div>
+      </Field>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <Field label="Speed Override (blank = same as base)">
+          <Input
+            type="number"
+            value={subrace.speed_override ?? ""}
+            onChange={(e) =>
+              set("speed_override", e.target.value === "" ? null : Number(e.target.value))
+            }
+            placeholder="(inherit)"
+            className="bg-[#1E2430] border-slate-700 text-white"
+          />
+        </Field>
+        <Field label="Darkvision Override (blank = same as base)">
+          <Input
+            type="number"
+            value={subrace.darkvision_override ?? ""}
+            onChange={(e) =>
+              set("darkvision_override", e.target.value === "" ? null : Number(e.target.value))
+            }
+            placeholder="(inherit)"
+            className="bg-[#1E2430] border-slate-700 text-white"
+          />
+        </Field>
+      </div>
+
+      <div>
+        <Label className="block mb-1 text-xs text-slate-300 font-semibold">
+          Additional Traits
+        </Label>
+        <div className="space-y-2">
+          {traits.map((t, i) => (
+            <TraitEditor
+              key={i}
+              trait={t}
+              idx={i}
+              total={traits.length}
+              onChange={(next) => updateTrait(i, next)}
+              onRemove={() => removeTrait(i)}
+              onMoveUp={() => moveTrait(i, -1)}
+              onMoveDown={() => moveTrait(i, 1)}
+            />
+          ))}
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={addTrait}
+          className="mt-2"
+        >
+          <Plus className="w-3 h-3 mr-1" /> Add Trait
+        </Button>
+      </div>
+
+      <Field label="Replaced Traits (from base race)">
+        {baseTraitNames.length === 0 ? (
+          <p className="text-[11px] text-slate-500 italic">
+            Add traits to the base race above first — this subrace can then
+            override them by name.
+          </p>
+        ) : (
+          <ChipMultiSelect
+            options={baseTraitNames}
+            values={subrace.replaced_traits || []}
+            onChange={(v) => set("replaced_traits", v)}
+          />
+        )}
+      </Field>
+    </div>
+  );
+}
+
+// ───────────────────────────── B9 Flavor ─────────────────────────
+
+function FlavorSection({ formData, setField }) {
+  return (
+    <Section title="Flavor">
+      <details className="bg-[#050816] border border-slate-700 rounded p-3">
+        <summary className="cursor-pointer text-xs text-slate-300 font-semibold">
+          Optional flavor text
+        </summary>
+        <div className="mt-3 space-y-3">
+          <Field label="Age">
+            <Textarea
+              value={formData.age_description || ""}
+              onChange={(e) => setField("age_description", e.target.value)}
+              placeholder="When do they mature? How long do they live?"
+              rows={2}
+              className="bg-[#1E2430] border-slate-700 text-white"
+            />
+          </Field>
+          <Field label="Alignment">
+            <Textarea
+              value={formData.alignment_description || ""}
+              onChange={(e) => setField("alignment_description", e.target.value)}
+              placeholder="Common alignment tendencies."
+              rows={2}
+              className="bg-[#1E2430] border-slate-700 text-white"
+            />
+          </Field>
+          <Field label="Size">
+            <Textarea
+              value={formData.size_description || ""}
+              onChange={(e) => setField("size_description", e.target.value)}
+              placeholder="Height / weight range and any extra physical notes."
+              rows={2}
+              className="bg-[#1E2430] border-slate-700 text-white"
+            />
+          </Field>
+        </div>
+      </details>
+    </Section>
   );
 }
