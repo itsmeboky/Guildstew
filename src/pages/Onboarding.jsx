@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, HelpCircle, ArrowLeft, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
+import { uploadFile } from "@/utils/uploadFile";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import AuthBackdrop from "@/components/auth/AuthBackdrop";
@@ -50,13 +51,19 @@ export default function Onboarding() {
     mutationFn: async (data) => {
       let avatarUrl = null;
       if (avatarFile) {
-        const fileName = `avatars/${currentUser.id}_${Date.now()}`;
-        const { error: uploadError } = await supabase.storage
-          .from('uploads')
-          .upload(fileName, avatarFile);
-        if (!uploadError) {
-          const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(fileName);
-          avatarUrl = urlData.publicUrl;
+        // Onboarding flows through the shared uploadFile helper so the
+        // user-assets bucket, validation, and storage-quota bumps all
+        // apply the same way they do everywhere else.
+        try {
+          const { file_url } = await uploadFile(
+            avatarFile,
+            'user-assets',
+            `users/${currentUser.id}/profile`,
+            { userId: currentUser.id, uploadType: 'avatar' },
+          );
+          avatarUrl = file_url;
+        } catch (err) {
+          console.warn('avatar upload failed during onboarding:', err?.message || err);
         }
       }
 

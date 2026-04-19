@@ -237,7 +237,7 @@ export default function UserProfile() {
     mutationFn: async (data) => {
       let imageUrl = null;
       if (postImage) {
-        const { file_url } = await uploadFile(postImage, 'avatars', `${currentUser?.id || 'anon'}/posts`);
+        const { file_url } = await uploadFile(postImage, 'user-assets', `users/${currentUser?.id || 'anon'}/posts`, { userId: currentUser?.id, uploadType: 'general' });
         imageUrl = file_url;
       }
 
