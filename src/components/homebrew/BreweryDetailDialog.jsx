@@ -16,6 +16,7 @@ import {
 import { base44 } from "@/api/base44Client";
 import { formatCategoryLabel, categoryColorClass } from "./BreweryCard";
 import { trackEvent } from "@/utils/analytics";
+import { safeText } from "@/utils/safeRender";
 
 /**
  * Detail modal for a brewery homebrew row. Shows the full
@@ -184,7 +185,7 @@ export default function BreweryDetailDialog({ open, onClose, brew, currentUser }
     <Dialog open={open} onOpenChange={(o) => !o && onClose?.()}>
       <DialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-5xl max-h-[92vh] overflow-y-auto">
         <DialogHeader className="sr-only">
-          <DialogTitle>{brew.title}</DialogTitle>
+          <DialogTitle>{safeText(brew.title)}</DialogTitle>
         </DialogHeader>
 
         {/* Cover banner */}
@@ -211,19 +212,19 @@ export default function BreweryDetailDialog({ open, onClose, brew, currentUser }
                 v{brew.version || "1.0.0"}
               </Badge>
             </div>
-            <h1 className="text-3xl font-black">{brew.title}</h1>
+            <h1 className="text-3xl font-black">{safeText(brew.title)}</h1>
             {brew.description && (
-              <p className="text-sm text-slate-300 whitespace-pre-wrap">{brew.description}</p>
+              <p className="text-sm text-slate-300 whitespace-pre-wrap">{safeText(brew.description)}</p>
             )}
             {Array.isArray(brew.tags) && brew.tags.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
                 <Tag className="w-3.5 h-3.5 text-slate-400" />
                 {brew.tags.map((t) => (
                   <span
-                    key={t}
+                    key={safeText(t)}
                     className="text-[10px] font-semibold uppercase tracking-wider text-[#37F2D1] bg-[#37F2D1]/10 border border-[#37F2D1]/30 rounded-full px-2 py-0.5"
                   >
-                    {t}
+                    {safeText(t)}
                   </span>
                 ))}
               </div>
@@ -526,7 +527,7 @@ function Row({ label, value }) {
   return (
     <div className="flex items-baseline gap-2 text-xs">
       <span className="text-slate-400 uppercase tracking-widest font-bold text-[10px] min-w-[100px]">{label}</span>
-      <span className="text-white">{Array.isArray(value) ? value.join(", ") : String(value)}</span>
+      <span className="text-white">{Array.isArray(value) ? value.map((v) => safeText(v)).join(", ") : safeText(value)}</span>
     </div>
   );
 }
@@ -545,56 +546,56 @@ function ItemPreview({ mods }) {
       <Row label="Attunement" value={mods.requires_attunement ? "Required" : null} />
       <Row label="Charges" value={mods.charges} />
       {mods.description && (
-        <p className="text-xs text-slate-300 mt-2 whitespace-pre-wrap">{mods.description}</p>
+        <p className="text-xs text-slate-300 mt-2 whitespace-pre-wrap">{safeText(mods.description)}</p>
       )}
       {mods.curse?.enabled && (
         <div className="mt-3 bg-[#1a0a14]/80 border border-purple-700/50 rounded p-2">
           <div className="text-[10px] uppercase tracking-widest text-purple-300 font-bold mb-1">
             Cursed{mods.curse.cannot_unattune ? " · cannot unattune" : ""}
           </div>
-          <Row label="Curse type" value={mods.curse.curse_type?.replaceAll("_", " ")} />
-          <Row label="Reveal" value={mods.curse.reveal_trigger?.replaceAll("_", " ")} />
+          <Row label="Curse type" value={safeText(mods.curse.curse_type)?.replaceAll?.("_", " ")} />
+          <Row label="Reveal" value={safeText(mods.curse.reveal_trigger)?.replaceAll?.("_", " ")} />
           {mods.curse.curse_type === "stat_penalty" && mods.curse.stat_penalty && (
-            <Row label="Penalty" value={`${mods.curse.stat_penalty.amount} to ${mods.curse.stat_penalty.ability}`} />
+            <Row label="Penalty" value={`${safeText(mods.curse.stat_penalty.amount)} to ${safeText(mods.curse.stat_penalty.ability)}`} />
           )}
           {mods.curse.curse_type === "recurring_damage" && mods.curse.recurring && (
-            <Row label="Recurring" value={`${mods.curse.recurring.damage_dice} ${mods.curse.recurring.damage_type} (${mods.curse.recurring.trigger})`} />
+            <Row label="Recurring" value={`${safeText(mods.curse.recurring.damage_dice)} ${safeText(mods.curse.recurring.damage_type)} (${safeText(mods.curse.recurring.trigger)})`} />
           )}
           {mods.curse.curse_type === "forced_behavior" && mods.curse.forced_behavior?.description && (
-            <p className="text-[11px] text-slate-300 mt-1">{mods.curse.forced_behavior.description}</p>
+            <p className="text-[11px] text-slate-300 mt-1">{safeText(mods.curse.forced_behavior.description)}</p>
           )}
           {mods.curse.curse_type === "progressive" && Array.isArray(mods.curse.progressive?.stages) && (
             <ul className="text-[11px] text-slate-300 mt-1 space-y-0.5">
               {mods.curse.progressive.stages.map((s, i) => (
-                <li key={i}><span className="text-purple-300">{s.trigger}:</span> {s.effect}</li>
+                <li key={i}><span className="text-purple-300">{safeText(s?.trigger)}:</span> {safeText(s?.effect)}</li>
               ))}
             </ul>
           )}
           {mods.curse.description && (
-            <p className="text-[11px] text-slate-300 mt-1 italic">{mods.curse.description}</p>
+            <p className="text-[11px] text-slate-300 mt-1 italic">{safeText(mods.curse.description)}</p>
           )}
         </div>
       )}
       {mods.sentience?.enabled && (
         <div className="mt-3 bg-[#0b1430]/80 border border-cyan-500/50 rounded p-2">
           <div className="text-[10px] uppercase tracking-widest text-cyan-300 font-bold mb-1">
-            Sentient · {mods.sentience.alignment || "Unaligned"}
+            Sentient · {safeText(mods.sentience.alignment) || "Unaligned"}
           </div>
-          <Row label="INT/WIS/CHA" value={`${mods.sentience.intelligence} / ${mods.sentience.wisdom} / ${mods.sentience.charisma}`} />
-          <Row label="Communication" value={mods.sentience.communication} />
+          <Row label="INT/WIS/CHA" value={`${safeText(mods.sentience.intelligence)} / ${safeText(mods.sentience.wisdom)} / ${safeText(mods.sentience.charisma)}`} />
+          <Row label="Communication" value={safeText(mods.sentience.communication)} />
           <Row label="Senses" value={Array.isArray(mods.sentience.senses) ? mods.sentience.senses : null} />
           <Row label="Languages" value={Array.isArray(mods.sentience.languages) ? mods.sentience.languages : null} />
           {mods.sentience.personality && (
-            <p className="text-[11px] text-slate-300 mt-1"><span className="text-cyan-300">Personality:</span> {mods.sentience.personality}</p>
+            <p className="text-[11px] text-slate-300 mt-1"><span className="text-cyan-300">Personality:</span> {safeText(mods.sentience.personality)}</p>
           )}
           {mods.sentience.purpose && (
-            <p className="text-[11px] text-slate-300"><span className="text-cyan-300">Purpose:</span> {mods.sentience.purpose}</p>
+            <p className="text-[11px] text-slate-300"><span className="text-cyan-300">Purpose:</span> {safeText(mods.sentience.purpose)}</p>
           )}
           {Array.isArray(mods.sentience.conflict?.trigger_conditions) && mods.sentience.conflict.trigger_conditions.length > 0 && (
             <div className="mt-1">
               <div className="text-[10px] text-cyan-300">Conflict triggers:</div>
               <ul className="text-[11px] text-slate-300 list-disc list-inside">
-                {mods.sentience.conflict.trigger_conditions.map((t, i) => (<li key={i}>{t}</li>))}
+                {mods.sentience.conflict.trigger_conditions.map((t, i) => (<li key={i}>{safeText(t)}</li>))}
               </ul>
             </div>
           )}
@@ -608,7 +609,7 @@ function MonsterPreview({ mods }) {
   const abilities = mods.stats || mods.abilities || {};
   return (
     <div className="space-y-1">
-      <Row label="Size / Type" value={`${mods.size || ""} ${mods.creature_type || mods.type || ""}`.trim()} />
+      <Row label="Size / Type" value={`${safeText(mods.size)} ${safeText(mods.creature_type || mods.type)}`.trim()} />
       <Row label="Alignment" value={mods.alignment} />
       <Row label="CR" value={mods.cr || mods.challenge_rating} />
       <Row label="AC" value={mods.armor_class} />
@@ -619,7 +620,7 @@ function MonsterPreview({ mods }) {
           {["str","dex","con","int","wis","cha"].map((k) => (
             <div key={k} className="bg-[#050816] border border-[#1e293b] rounded p-1">
               <div className="text-[9px] uppercase tracking-widest text-slate-400">{k}</div>
-              <div className="text-sm font-bold text-white">{abilities[k] ?? 10}</div>
+              <div className="text-sm font-bold text-white">{safeText(abilities[k] ?? 10)}</div>
             </div>
           ))}
         </div>
@@ -631,27 +632,27 @@ function MonsterPreview({ mods }) {
       <Row label="Senses" value={mods.senses} />
       <Row label="Languages" value={mods.languages} />
       {mods.description && (
-        <p className="text-xs text-slate-300 mt-2 whitespace-pre-wrap">{mods.description}</p>
+        <p className="text-xs text-slate-300 mt-2 whitespace-pre-wrap">{safeText(mods.description)}</p>
       )}
       {Array.isArray(mods.actions) && mods.actions.length > 0 && (
         <div className="mt-3 space-y-1.5">
           <div className="text-[10px] uppercase tracking-widest text-[#37F2D1] font-bold">Actions</div>
           {mods.actions.map((a, i) => (
             <div key={i} className="bg-[#050816] border border-[#1e293b] rounded p-2">
-              <div className="text-xs font-bold text-white">{a.name || "Unnamed action"}</div>
+              <div className="text-xs font-bold text-white">{safeText(a.name) || "Unnamed action"}</div>
               {(a.attack_bonus !== null && a.attack_bonus !== undefined && a.attack_bonus !== "") && (
-                <div className="text-[10px] text-slate-400">+{a.attack_bonus} to hit{a.reach ? ` · ${a.reach}` : ""}</div>
+                <div className="text-[10px] text-slate-400">+{safeText(a.attack_bonus)} to hit{a.reach ? ` · ${safeText(a.reach)}` : ""}</div>
               )}
               {a.damage && (
-                <div className="text-[10px] text-slate-400">{a.damage} {a.damage_type || ""}</div>
+                <div className="text-[10px] text-slate-400">{safeText(a.damage)} {safeText(a.damage_type)}</div>
               )}
               {a.description && (
-                <p className="text-[11px] text-slate-300 mt-1 whitespace-pre-wrap">{a.description}</p>
+                <p className="text-[11px] text-slate-300 mt-1 whitespace-pre-wrap">{safeText(a.description)}</p>
               )}
               {a.trigger?.event && (
                 <div className="text-[10px] text-fuchsia-300 mt-1">
-                  ⚡ Trigger: {a.trigger.event.replaceAll("_", " ")}
-                  {a.trigger.gate && a.trigger.gate !== "unlimited" ? ` · ${a.trigger.gate.replaceAll("_", " ")}` : ""}
+                  ⚡ Trigger: {safeText(a.trigger.event)?.replaceAll?.("_", " ")}
+                  {a.trigger.gate && a.trigger.gate !== "unlimited" ? ` · ${safeText(a.trigger.gate)?.replaceAll?.("_", " ")}` : ""}
                 </div>
               )}
             </div>
@@ -664,17 +665,17 @@ function MonsterPreview({ mods }) {
           {mods.villain_actions.actions.map((a, i) => (
             <div key={i} className="bg-[#1a0514] border border-rose-600/50 rounded p-2">
               <div className="text-xs font-bold text-rose-200">
-                <span className="text-rose-300 bg-rose-600/20 border border-rose-600/60 rounded px-1.5 py-0.5 text-[9px] mr-1.5">R{a.round || i + 1}</span>
-                {a.name || "Villain action"}
+                <span className="text-rose-300 bg-rose-600/20 border border-rose-600/60 rounded px-1.5 py-0.5 text-[9px] mr-1.5">R{safeText(a.round) || i + 1}</span>
+                {safeText(a.name) || "Villain action"}
               </div>
               {a.save_dc && (
-                <div className="text-[10px] text-slate-400">DC {a.save_dc} {a.save_ability || "save"}</div>
+                <div className="text-[10px] text-slate-400">DC {safeText(a.save_dc)} {safeText(a.save_ability) || "save"}</div>
               )}
               {a.damage_dice && (
-                <div className="text-[10px] text-slate-400">{a.damage_dice} {a.damage_type || ""}</div>
+                <div className="text-[10px] text-slate-400">{safeText(a.damage_dice)} {safeText(a.damage_type)}</div>
               )}
               {a.description && (
-                <p className="text-[11px] text-slate-300 mt-1 whitespace-pre-wrap">{a.description}</p>
+                <p className="text-[11px] text-slate-300 mt-1 whitespace-pre-wrap">{safeText(a.description)}</p>
               )}
             </div>
           ))}
@@ -687,24 +688,24 @@ function MonsterPreview({ mods }) {
 function SpellPreview({ mods }) {
   return (
     <div className="space-y-1">
-      <Row label="Level" value={`${mods.level === 0 ? "Cantrip" : `Level ${mods.level}`} ${mods.school ? `· ${mods.school}` : ""}`.trim()} />
+      <Row label="Level" value={`${mods.level === 0 ? "Cantrip" : `Level ${safeText(mods.level)}`} ${mods.school ? `· ${safeText(mods.school)}` : ""}`.trim()} />
       <Row label="Casting time" value={mods.casting_time} />
       <Row label="Range" value={mods.range} />
       <Row label="Components" value={mods.components} />
       <Row label="Duration" value={mods.duration} />
       <Row label="Classes" value={Array.isArray(mods.classes) ? mods.classes : null} />
       <Row label="Effect" value={mods.effect_type} />
-      <Row label="Damage" value={mods.damage ? `${mods.damage} ${mods.damage_type || ""}`.trim() : null} />
+      <Row label="Damage" value={mods.damage ? `${safeText(mods.damage)} ${safeText(mods.damage_type)}`.trim() : null} />
       <Row label="Healing" value={mods.healing} />
       <Row label="Save" value={mods.save} />
       <Row label="Upcast" value={mods.upcast_per_level} />
       {mods.description && (
-        <p className="text-xs text-slate-300 mt-2 whitespace-pre-wrap">{mods.description}</p>
+        <p className="text-xs text-slate-300 mt-2 whitespace-pre-wrap">{safeText(mods.description)}</p>
       )}
       {mods.higher_level && (
         <div className="mt-2">
           <div className="text-[10px] uppercase tracking-widest text-[#37F2D1] font-bold mb-1">At Higher Levels</div>
-          <p className="text-xs text-slate-300 whitespace-pre-wrap">{mods.higher_level}</p>
+          <p className="text-xs text-slate-300 whitespace-pre-wrap">{safeText(mods.higher_level)}</p>
         </div>
       )}
       {mods.alternative_costs?.enabled && Array.isArray(mods.alternative_costs.costs) && mods.alternative_costs.costs.length > 0 && (
@@ -715,8 +716,8 @@ function SpellPreview({ mods }) {
           <ul className="text-[11px] text-slate-200 space-y-0.5">
             {mods.alternative_costs.costs.map((c, i) => (
               <li key={i}>
-                <span className="text-rose-300 capitalize">{c.type?.replaceAll("_", " ")}:</span> {c.amount}
-                {c.description && <span className="text-slate-400"> — {c.description}</span>}
+                <span className="text-rose-300 capitalize">{safeText(c.type)?.replaceAll?.("_", " ")}:</span> {safeText(c.amount)}
+                {c.description && <span className="text-slate-400"> — {safeText(c.description)}</span>}
               </li>
             ))}
           </ul>
@@ -724,8 +725,8 @@ function SpellPreview({ mods }) {
             <ul className="text-[10px] text-slate-400 mt-1 space-y-0.5">
               {mods.alternative_costs.after_effects.map((ae, i) => (
                 <li key={i}>
-                  After {ae.trigger?.replaceAll("_", " ")}: {ae.effect_type} {ae.amount}
-                  {ae.condition && <span> (if {ae.condition})</span>}
+                  After {safeText(ae.trigger)?.replaceAll?.("_", " ")}: {safeText(ae.effect_type)} {safeText(ae.amount)}
+                  {ae.condition && <span> (if {safeText(ae.condition)})</span>}
                 </li>
               ))}
             </ul>
@@ -747,14 +748,14 @@ function ClassFeaturePreview({ mods }) {
       <Row label="Recharge" value={mods.recharge} />
       <Row label="Effect" value={mods.effect_type} />
       <Row label="Resolution" value={mods.resolution} />
-      <Row label="Damage" value={mods.damage_dice ? `${mods.damage_dice} ${mods.damage_type || ""}`.trim() : null} />
+      <Row label="Damage" value={mods.damage_dice ? `${safeText(mods.damage_dice)} ${safeText(mods.damage_type)}`.trim() : null} />
       <Row label="Healing" value={mods.healing_dice} />
       <Row label="Save" value={mods.save_ability || mods.condition_save} />
       <Row label="Condition" value={mods.condition_applied} />
-      <Row label="Resource" value={mods.resource_restored ? `${mods.resource_restored}${mods.resource_amount ? ` (${mods.resource_amount})` : ""}` : null} />
-      <Row label="Trigger" value={mods.trigger?.event ? mods.trigger.event.replaceAll("_", " ") : null} />
+      <Row label="Resource" value={mods.resource_restored ? `${safeText(mods.resource_restored)}${mods.resource_amount ? ` (${safeText(mods.resource_amount)})` : ""}` : null} />
+      <Row label="Trigger" value={mods.trigger?.event ? safeText(mods.trigger.event)?.replaceAll?.("_", " ") : null} />
       {mods.description && (
-        <p className="text-xs text-slate-300 mt-2 whitespace-pre-wrap">{mods.description}</p>
+        <p className="text-xs text-slate-300 mt-2 whitespace-pre-wrap">{safeText(mods.description)}</p>
       )}
       {mods.type === "Feature Menu" && mods.menu?.options?.length > 0 && (
         <div className="mt-3 bg-[#050816] border border-[#1e293b] rounded p-2">
@@ -763,17 +764,17 @@ function ClassFeaturePreview({ mods }) {
           </div>
           {Array.isArray(mods.menu.learn_count) && mods.menu.learn_count.length > 0 && (
             <p className="text-[10px] text-slate-400 mb-2">
-              Schedule: {mods.menu.learn_count.map((r) => `L${r.level}→${r.count}`).join(", ")}
-              {mods.menu.swap_on_level_up ? ` · swap ${mods.menu.swap_count || 1}/lvl` : ""}
+              Schedule: {mods.menu.learn_count.map((r) => `L${safeText(r.level)}→${safeText(r.count)}`).join(", ")}
+              {mods.menu.swap_on_level_up ? ` · swap ${safeText(mods.menu.swap_count) || 1}/lvl` : ""}
             </p>
           )}
           <ul className="space-y-1.5">
             {mods.menu.options.map((o, i) => (
               <li key={i} className="text-[11px]">
-                <span className="text-white font-bold">{o.name}</span>
-                {o.level_requirement > 0 && <span className="text-amber-300"> (Lvl {o.level_requirement}+)</span>}
-                {o.prerequisite && <span className="text-slate-400"> — {o.prerequisite}</span>}
-                {o.description && <div className="text-slate-400 leading-snug">{o.description}</div>}
+                <span className="text-white font-bold">{safeText(o.name)}</span>
+                {o.level_requirement > 0 && <span className="text-amber-300"> (Lvl {safeText(o.level_requirement)}+)</span>}
+                {o.prerequisite && <span className="text-slate-400"> — {safeText(o.prerequisite)}</span>}
+                {o.description && <div className="text-slate-400 leading-snug">{safeText(o.description)}</div>}
               </li>
             ))}
           </ul>

@@ -12,7 +12,14 @@ import { Save, X, Upload, Lock, Languages, Plus, Trash2 } from "lucide-react";
 import { uploadFile } from "@/utils/uploadFile";
 import { TEMPLATE_TYPES, templateById } from "@/data/worldLoreTemplates";
 import SketchCanvas from "@/components/shared/SketchCanvas";
+import SymbolPicker from "@/components/shared/SymbolPicker";
 import { SKILLS, ABILITIES } from "@/utils/languageComprehension";
+import {
+  THIEVES_CANT_SYMBOLS, CANT_CATEGORIES, CANT_COLOR_PRESETS, CANT_DEFAULT_COLOR,
+} from "@/config/thievesCantSymbols";
+import {
+  DRUIDIC_SYMBOLS, DRUIDIC_CATEGORIES, DRUIDIC_COLOR_PRESETS, DRUIDIC_DEFAULT_COLOR,
+} from "@/config/druidicSymbols";
 
 const GATE_LANGUAGE_OPTIONS = [
   "Abyssal", "Celestial", "Common", "Deep Speech", "Draconic",
@@ -87,6 +94,18 @@ export default function EntryForm({
   const [druidicMessage, setDruidicMessage] = useState(
     initial?.metadata?.druidic_message || "",
   );
+  const [cantSymbols, setCantSymbols] = useState(
+    Array.isArray(initial?.metadata?.thieves_cant_symbols) ? initial.metadata.thieves_cant_symbols : [],
+  );
+  const [cantColor, setCantColor] = useState(
+    initial?.metadata?.thieves_cant_color || CANT_DEFAULT_COLOR,
+  );
+  const [druidicSymbols, setDruidicSymbolsState] = useState(
+    Array.isArray(initial?.metadata?.druidic_symbols) ? initial.metadata.druidic_symbols : [],
+  );
+  const [druidicColor, setDruidicColor] = useState(
+    initial?.metadata?.druidic_color || DRUIDIC_DEFAULT_COLOR,
+  );
 
   const template = useMemo(() => templateById(templateType), [templateType]);
 
@@ -122,6 +141,20 @@ export default function EntryForm({
     else delete mergedMetadata.thieves_cant_message;
     if (druidicMessage.trim()) mergedMetadata.druidic_message = druidicMessage.trim();
     else delete mergedMetadata.druidic_message;
+    if (cantSymbols.length > 0) {
+      mergedMetadata.thieves_cant_symbols = cantSymbols;
+      mergedMetadata.thieves_cant_color = cantColor;
+    } else {
+      delete mergedMetadata.thieves_cant_symbols;
+      delete mergedMetadata.thieves_cant_color;
+    }
+    if (druidicSymbols.length > 0) {
+      mergedMetadata.druidic_symbols = druidicSymbols;
+      mergedMetadata.druidic_color = druidicColor;
+    } else {
+      delete mergedMetadata.druidic_symbols;
+      delete mergedMetadata.druidic_color;
+    }
 
     onSave({
       id: initial?.id,
@@ -427,32 +460,70 @@ export default function EntryForm({
 
       {/* Hidden class-specific annotations. Rendered only for the
           character that knows the language; others never see them. */}
-      <div className="border border-dashed border-slate-600 rounded-lg p-3">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-sm text-slate-400">🗡️ Thieves&apos; Cant Hidden Message (Optional)</span>
-        </div>
+      <div className="border border-dashed border-slate-600 rounded-lg p-3 space-y-3">
+        <span className="text-sm text-slate-400">🗡️ Thieves&apos; Cant (Optional)</span>
+        <SymbolPicker
+          symbols={THIEVES_CANT_SYMBOLS}
+          categories={CANT_CATEGORIES}
+          selected={cantSymbols}
+          defaultColor={cantColor}
+          colorOptions={CANT_COLOR_PRESETS}
+          label="Thieves' Cant"
+          icon="🗡️"
+          onSelect={(sym) =>
+            setCantSymbols((prev) =>
+              prev.some((s) => s.id === sym.id)
+                ? prev
+                : [...prev, { id: sym.id, color: cantColor }],
+            )
+          }
+          onRemove={(id) => setCantSymbols((prev) => prev.filter((s) => s.id !== id))}
+          onColorChange={(c) => {
+            setCantColor(c);
+            setCantSymbols((prev) => prev.map((s) => ({ ...s, color: c })));
+          }}
+        />
         <Textarea
           placeholder="Hidden message only Rogues with Thieves' Cant can see…"
           value={thievesCantMessage}
           onChange={(e) => setThievesCantMessage(e.target.value)}
           className="bg-[#0f1219] border-slate-700 text-white"
         />
-        <p className="text-xs text-slate-500 mt-1">
-          Shown as a highlighted annotation only to characters who know Thieves&apos; Cant. Others don&apos;t see it at all.
+        <p className="text-xs text-slate-500">
+          Symbols and message are only visible to characters who know Thieves&apos; Cant.
         </p>
       </div>
-      <div className="border border-dashed border-slate-600 rounded-lg p-3">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-sm text-slate-400">🌿 Druidic Hidden Message (Optional)</span>
-        </div>
+      <div className="border border-dashed border-slate-600 rounded-lg p-3 space-y-3">
+        <span className="text-sm text-slate-400">🌿 Druidic (Optional)</span>
+        <SymbolPicker
+          symbols={DRUIDIC_SYMBOLS}
+          categories={DRUIDIC_CATEGORIES}
+          selected={druidicSymbols}
+          defaultColor={druidicColor}
+          colorOptions={DRUIDIC_COLOR_PRESETS}
+          label="Druidic"
+          icon="🌿"
+          onSelect={(sym) =>
+            setDruidicSymbolsState((prev) =>
+              prev.some((s) => s.id === sym.id)
+                ? prev
+                : [...prev, { id: sym.id, color: druidicColor }],
+            )
+          }
+          onRemove={(id) => setDruidicSymbolsState((prev) => prev.filter((s) => s.id !== id))}
+          onColorChange={(c) => {
+            setDruidicColor(c);
+            setDruidicSymbolsState((prev) => prev.map((s) => ({ ...s, color: c })));
+          }}
+        />
         <Textarea
           placeholder="Hidden message only Druids can see…"
           value={druidicMessage}
           onChange={(e) => setDruidicMessage(e.target.value)}
           className="bg-[#0f1219] border-slate-700 text-white"
         />
-        <p className="text-xs text-slate-500 mt-1">
-          Shown only to Druids. Uses the same silent-invisible rule as Thieves&apos; Cant.
+        <p className="text-xs text-slate-500">
+          Symbols and message are only visible to Druids.
         </p>
       </div>
 

@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { Package, Sword, Coins } from "lucide-react";
+import { safeText } from "@/utils/safeRender";
 
 const CURRENCY_ORDER = [
   { key: "pp", label: "PP", color: "#e5e7eb" },
@@ -77,9 +78,9 @@ function ItemGrid({ items }) {
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
       {items.map((item, idx) => (
         <div
-          key={`${item.name || "item"}-${idx}`}
+          key={`${safeText(item.name) || "item"}-${idx}`}
           className="bg-[#0b1220] border border-[#1e293b] rounded-lg p-2 flex items-center gap-2"
-          title={item.description || item.desc || ""}
+          title={safeText(item.description || item.desc || "")}
         >
           {item.image_url ? (
             <img src={item.image_url} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
@@ -89,9 +90,9 @@ function ItemGrid({ items }) {
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <div className="text-sm text-white font-bold truncate">{item.name || "Unnamed item"}</div>
+            <div className="text-sm text-white font-bold truncate">{safeText(item.name) || "Unnamed item"}</div>
             {(item.quantity ?? 1) > 1 && (
-              <div className="text-[10px] text-slate-400">×{item.quantity}</div>
+              <div className="text-[10px] text-slate-400">×{safeText(item.quantity)}</div>
             )}
           </div>
         </div>

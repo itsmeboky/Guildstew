@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Shield, Zap, Skull, Crosshair } from "lucide-react";
 import { itemIcons } from "@/components/dnd5e/itemData";
 import { spellIcons } from "@/components/dnd5e/spellData";
+import { safeText } from "@/utils/safeRender";
 
 const CLASS_ICONS = {
   "Barbarian": "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/a6652f2d8_Barbarian1.png",
@@ -195,16 +196,16 @@ export default function PlayerLeftPanel({ character, userProfile }) {
           {Array.from({ length: 18 }).map((_, i) => {
             const item = character.inventory?.[i];
             return (
-              <div key={i} className="aspect-square bg-[#111827] rounded border border-gray-800 flex items-center justify-center overflow-hidden relative group" title={item?.name}>
+              <div key={i} className="aspect-square bg-[#111827] rounded border border-gray-800 flex items-center justify-center overflow-hidden relative group" title={safeText(item?.name)}>
                 {item ? (
                   <>
                     {item.image_url ? (
-                      <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                      <img src={item.image_url} alt={safeText(item.name)} className="w-full h-full object-cover" />
                     ) : (
-                      <span className="text-[8px] text-gray-400">{item.name.slice(0, 2)}</span>
+                      <span className="text-[8px] text-gray-400">{safeText(item.name).slice(0, 2)}</span>
                     )}
                     {item.quantity > 1 && (
-                      <span className="absolute bottom-0 right-0 text-[8px] bg-black/70 text-white px-1 rounded-tl">{item.quantity}</span>
+                      <span className="absolute bottom-0 right-0 text-[8px] bg-black/70 text-white px-1 rounded-tl">{safeText(item.quantity)}</span>
                     )}
                   </>
                 ) : null}
