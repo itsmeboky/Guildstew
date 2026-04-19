@@ -47,7 +47,7 @@ export default function PortraitWithState({
         <img
           src={src}
           alt={alt}
-          className={`w-full h-full object-cover transition-[filter] duration-300 ${
+          className={`w-full h-full object-cover object-top transition-[filter] duration-300 ${
             state === 'dead' ? 'grayscale' : ''
           }`}
           draggable={false}
