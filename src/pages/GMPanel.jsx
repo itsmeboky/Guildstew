@@ -6853,6 +6853,12 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                           stats.features || character.features || [];
   const legendaryActions = stats.legendary_actions || character.legendary_actions || [];
   const reactions = stats.reactions || character.reactions || [];
+  const bonusActions = stats.bonus_actions || character.bonus_actions || [];
+  const lairActions = stats.lair_actions || character.lair_actions || [];
+  const auras = stats.auras || character.auras || [];
+  const multiattack = stats.multiattack || character.multiattack || null;
+  const legendaryPerRound = stats.legendary_actions_per_round ?? character.legendary_actions_per_round ?? null;
+  const legendaryResistances = stats.legendary_resistances ?? character.legendary_resistances ?? null;
 
   const skills = stats.skills || character.skills || {};
   // Senses / languages on reseeded SRD monsters are objects /
@@ -7048,12 +7054,29 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                 </div>
               )}
 
-              {/* Legendary Actions */}
-              {legendaryActions.length > 0 && (
+              {/* Multi-Attack callout */}
+              {multiattack && multiattack.enabled && (multiattack.description || (Array.isArray(multiattack.attacks) && multiattack.attacks.length > 0)) && (
                 <div>
-                  <p className="text-[10px] text-purple-400 uppercase tracking-wide mb-2 font-bold border-b border-purple-500/20 pb-1">Legendary Actions</p>
+                  <p className="text-[10px] text-amber-400 uppercase tracking-wide mb-2 font-bold border-b border-amber-500/20 pb-1">Multi-Attack</p>
+                  {multiattack.description && (
+                    <p className="text-[11px] text-slate-300 leading-relaxed mb-1">{multiattack.description}</p>
+                  )}
+                  {Array.isArray(multiattack.attacks) && multiattack.attacks.length > 0 && (
+                    <ul className="text-[11px] text-slate-400 list-disc list-inside">
+                      {multiattack.attacks.map((a, i) => (
+                        <li key={i}>{a.count > 1 ? `${a.count}× ` : ""}{a.name}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+              {/* Bonus Actions */}
+              {bonusActions.length > 0 && (
+                <div>
+                  <p className="text-[10px] text-cyan-400 uppercase tracking-wide mb-2 font-bold border-b border-cyan-500/20 pb-1">Bonus Actions</p>
                   <div className="space-y-3">
-                    {legendaryActions.map((action, idx) => (
+                    {bonusActions.map((action, idx) => (
                       <div key={idx} className="text-[11px]">
                         <span className="text-white font-bold">{action.name}. </span>
                         <span className="text-slate-300 leading-relaxed">{action.desc || action.description}</span>
@@ -7063,11 +7086,93 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                 </div>
               )}
 
+              {/* Legendary Actions */}
+              {legendaryActions.length > 0 && (
+                <div>
+                  <p className="text-[10px] text-purple-400 uppercase tracking-wide mb-2 font-bold border-b border-purple-500/20 pb-1">
+                    Legendary Actions
+                    {legendaryPerRound != null && Number(legendaryPerRound) > 0 && (
+                      <span className="text-slate-500 normal-case ml-2 font-normal">
+                        ({legendaryPerRound}/round)
+                      </span>
+                    )}
+                  </p>
+                  <div className="space-y-3">
+                    {legendaryActions.map((action, idx) => (
+                      <div key={idx} className="text-[11px]">
+                        <span className="text-white font-bold">
+                          {action.name}
+                          {action.legendary_cost > 1 && (
+                            <span className="text-purple-300"> (Costs {action.legendary_cost})</span>
+                          )}
+                          . </span>
+                        <span className="text-slate-300 leading-relaxed">{action.desc || action.description}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Legendary Resistances */}
+              {legendaryResistances != null && Number(legendaryResistances) > 0 && (
+                <div>
+                  <p className="text-[10px] text-fuchsia-400 uppercase tracking-wide mb-2 font-bold border-b border-fuchsia-500/20 pb-1">Legendary Resistance</p>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    If the creature fails a saving throw, it can choose to succeed instead.
+                    <span className="text-fuchsia-300 ml-1 font-bold">{legendaryResistances}/day</span>
+                  </p>
+                </div>
+              )}
+
+              {/* Lair Actions */}
+              {lairActions.length > 0 && (
+                <div>
+                  <p className="text-[10px] text-lime-400 uppercase tracking-wide mb-2 font-bold border-b border-lime-500/20 pb-1">Lair Actions</p>
+                  <p className="text-[10px] text-slate-400 italic mb-2">On initiative count 20 (losing ties), the creature takes one lair action.</p>
+                  <div className="space-y-3">
+                    {lairActions.map((action, idx) => (
+                      <div key={idx} className="text-[11px]">
+                        <span className="text-white font-bold">{action.name}. </span>
+                        <span className="text-slate-300 leading-relaxed">{action.desc || action.description}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Auras */}
+              {auras.length > 0 && (
+                <div>
+                  <p className="text-[10px] text-pink-400 uppercase tracking-wide mb-2 font-bold border-b border-pink-500/20 pb-1">Auras</p>
+                  <div className="space-y-3">
+                    {auras.map((aura, idx) => (
+                      <div key={idx} className="text-[11px]">
+                        <span className="text-white font-bold">{aura.name}. </span>
+                        <span className="text-slate-400">({aura.radius || "—"})</span>
+                        {aura.description && (
+                          <span className="text-slate-300 leading-relaxed"> {aura.description}</span>
+                        )}
+                        {(aura.damage_dice || aura.applies_condition) && (
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            {aura.damage_dice && <span>Damage: {aura.damage_dice} {aura.damage_type || ""}</span>}
+                            {aura.save_ability && <span className="ml-2">Save: DC {aura.save_dc || "?"} {aura.save_ability}</span>}
+                            {aura.applies_condition && <span className="ml-2">Applies: {aura.applies_condition}</span>}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {traits.length === 0
                 && specialAbilities.length === 0
                 && actions.length === 0
+                && bonusActions.length === 0
                 && reactions.length === 0
                 && legendaryActions.length === 0
+                && lairActions.length === 0
+                && auras.length === 0
                 && !damageResistances
                 && !damageImmunities
                 && !damageVulnerabilities

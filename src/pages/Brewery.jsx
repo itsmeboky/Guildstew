@@ -178,7 +178,7 @@ export default function Brewery() {
               <SelectItem value="custom_item">Custom Item</SelectItem>
               <SelectItem value="custom_monster">Custom Monster</SelectItem>
               <SelectItem value="custom_spell">Custom Spell</SelectItem>
-              <SelectItem value="custom_ability">Custom Ability</SelectItem>
+              <SelectItem value="custom_class_feature">Custom Class Feature</SelectItem>
             </SelectContent>
           </Select>
           <Select value={systemFilter} onValueChange={setSystemFilter}>

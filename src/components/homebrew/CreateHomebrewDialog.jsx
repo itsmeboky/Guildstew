@@ -55,11 +55,11 @@ import { trackEvent } from "@/utils/analytics";
 // stores rule-tree deltas in `modifications`; `custom_item` stores a
 // full item record.
 const CONTENT_TYPES = [
-  { value: "rule_modification", label: "Rule Modification", description: "Change how an existing rule works." },
-  { value: "custom_item",       label: "Custom Item",        description: "Weapon, armor, potion, or wondrous item." },
-  { value: "custom_monster",    label: "Custom Monster",     description: "A new creature with a full stat block." },
-  { value: "custom_spell",      label: "Custom Spell",       description: "A new spell with effects and upcasting." },
-  { value: "custom_ability",    label: "Custom Ability",     description: "A class feature, racial trait, or general ability." },
+  { value: "rule_modification",   label: "Rule Modification",   description: "Change how an existing rule works." },
+  { value: "custom_item",         label: "Custom Item",         description: "Weapon, armor, potion, wondrous item, or scroll." },
+  { value: "custom_monster",      label: "Custom Monster",      description: "A new creature with a full combat-ready stat block." },
+  { value: "custom_spell",        label: "Custom Spell",        description: "A new spell with effects and upcasting." },
+  { value: "custom_class_feature",label: "Custom Class Feature",description: "A class feature, racial trait, or general ability." },
 ];
 
 // Ability-score order used throughout the monster form.
@@ -105,17 +105,118 @@ const SPELL_CLASSES = Object.keys(CLASS_HIT_DICE);
 
 const SPELL_EFFECT_TYPES = ["Damage", "Healing", "Condition", "Buff", "Debuff", "Utility"];
 
-const ABILITY_SOURCE_TYPES = ["Class Feature", "Racial Feature", "General Ability"];
-const ABILITY_COSTS = ["Action", "Bonus Action", "Reaction", "Free", "Passive"];
-const ABILITY_USES = [
+const FEATURE_SOURCE_TYPES = ["Class Feature", "Racial Feature", "General Ability"];
+const FEATURE_COSTS = ["Action", "Bonus Action", "Reaction", "Free", "Passive"];
+const FEATURE_USES = [
   "At Will",
   "1/Short Rest",
   "1/Long Rest",
   "2/Long Rest",
+  "3/Long Rest",
   "Proficiency Bonus/Long Rest",
+  "Charges (see Recharge)",
   "Special",
 ];
-const ABILITY_EFFECT_TYPES = ["Damage", "Healing", "Condition", "Buff", "Utility"];
+const FEATURE_RECHARGE = ["Short Rest", "Long Rest", "Dawn", "Dusk", "Never"];
+const FEATURE_EFFECT_TYPES = ["Damage", "Healing", "Condition", "Resource", "Buff", "Utility"];
+const FEATURE_RESOLUTIONS = [
+  { value: "attack",  label: "Attack roll" },
+  { value: "save",    label: "Saving throw" },
+  { value: "no_roll", label: "No roll (auto)" },
+];
+const RESOURCE_POOLS = [
+  "Hit Points",
+  "Temporary Hit Points",
+  "Spell Slot",
+  "Ki / Focus",
+  "Sorcery Points",
+  "Superiority Dice",
+  "Bardic Inspiration",
+  "Rages",
+  "Hit Dice",
+];
+const CONDITION_DC_SOURCES = [
+  { value: "spell_dc",   label: "Spell save DC (8 + prof + ability mod)" },
+  { value: "feature_dc", label: "Feature DC (defined below)" },
+  { value: "fixed",      label: "Fixed DC" },
+];
+
+// Expanded monster-action schema. Every action stores how combat should
+// resolve it (attack / save / no_roll) plus optional rider effects.
+const ACTION_TYPES = [
+  { value: "melee_attack",  label: "Melee Attack"  },
+  { value: "ranged_attack", label: "Ranged Attack" },
+  { value: "saving_throw",  label: "Saving Throw"  },
+  { value: "healing",       label: "Healing"       },
+  { value: "no_roll",       label: "No Roll / Auto" },
+];
+
+const ACTION_COSTS = ["Action", "Bonus Action", "Reaction", "Free", "Legendary"];
+
+const RECHARGE_OPTIONS = [
+  { value: "",       label: "None / at will"   },
+  { value: "5-6",    label: "Recharge 5–6"     },
+  { value: "6",      label: "Recharge 6"       },
+  { value: "short",  label: "Short Rest"       },
+  { value: "long",   label: "Long Rest"        },
+  { value: "dawn",   label: "Dawn"             },
+];
+
+const AOE_SHAPES = ["", "Cone", "Line", "Sphere", "Cube", "Cylinder"];
+
+const CONDITION_END_OPTIONS = [
+  { value: "save_each_turn",      label: "Save at end of each turn" },
+  { value: "save_at_end",         label: "Save at end — ends effect" },
+  { value: "fixed_duration",      label: "Fixed duration (enter below)" },
+  { value: "until_concentration", label: "Until concentration ends" },
+];
+
+const BLANK_MONSTER_ACTION = {
+  name: "",
+  description: "",
+  action_type: "melee_attack",    // melee_attack | ranged_attack | saving_throw | healing | no_roll
+  action_cost: "Action",          // Action | Bonus Action | Reaction | Free | Legendary
+  legendary_cost: 1,              // only used when action_cost === "Legendary"
+  recharge: "",                   // "" | "5-6" | "6" | "short" | "long" | "dawn"
+  reaction_trigger: "",           // free text describing the trigger
+  // Attack-based
+  attack_bonus: "",               // flat to-hit bonus
+  damage: "",                     // primary damage dice, e.g. "2d6+4"
+  damage_type: "bludgeoning",
+  reach: "",                      // "5 ft" or "60/120 ft"
+  // Bonus rider damage (e.g. +7 fire on a bite)
+  bonus_damage_dice: "",
+  bonus_damage_type: "",
+  // Save-based
+  save_ability: "DEX",
+  save_dc: "",
+  half_on_save: true,
+  // Area of effect (any type)
+  aoe_shape: "",                  // "" | Cone | Line | Sphere | Cube | Cylinder
+  aoe_size: "",                   // e.g. "15 ft cone", "60 ft line", "20 ft radius"
+  target_count: "",               // "" | "1" | "all in area" — free text
+  // Rider condition (applied on hit / failed save)
+  applies_condition: "",
+  condition_save: "",             // save to resist (if different from main)
+  condition_dc: "",               // optional override DC for the rider
+  condition_end: "save_each_turn",
+  condition_duration: "",
+  // Healing
+  healing_dice: "",
+  healing_flat: "",
+};
+
+const BLANK_AURA = {
+  name: "",
+  description: "",
+  radius: "10 ft",
+  damage_dice: "",
+  damage_type: "",
+  save_ability: "",
+  save_dc: "",
+  trigger: "start_of_turn",       // start_of_turn | enter_aura | end_of_turn
+  applies_condition: "",
+};
 
 const BLANK_MONSTER = {
   name: "",
@@ -138,6 +239,14 @@ const BLANK_MONSTER = {
   image_url: "",
   description: "",
   actions: [],
+  bonus_actions: [],
+  reactions: [],
+  legendary_actions: [],
+  lair_actions: [],
+  auras: [],
+  multiattack: { enabled: false, description: "", attacks: [] },
+  legendary_actions_per_round: 3,
+  legendary_resistances: 0,
 };
 
 const BLANK_SPELL = {
@@ -171,16 +280,60 @@ const BLANK_SPELL = {
   effect_description: "",
 };
 
-const BLANK_ABILITY = {
+const BLANK_CLASS_FEATURE = {
   name: "",
-  type: "Class Feature",
+  type: "Class Feature",     // Class Feature | Racial Feature | General Ability
   class: "Fighter",
   level: 1,
   description: "",
-  cost: "Action",
-  uses: "At Will",
-  effect_type: "Utility",
   image_url: "",
+
+  // Action economy
+  cost: "Action",            // from FEATURE_COSTS
+  uses: "At Will",           // from FEATURE_USES
+  recharge: "Long Rest",     // from FEATURE_RECHARGE
+  reaction_trigger: "",      // required when cost === Reaction
+
+  // Mechanical shape
+  effect_type: "Utility",    // from FEATURE_EFFECT_TYPES
+  resolution: "no_roll",     // attack | save | no_roll
+
+  // Damage branch
+  damage_dice: "",
+  damage_type: "slashing",
+  save_ability: "DEX",       // if resolution === save
+  half_on_save: true,
+
+  // Healing branch
+  healing_dice: "",
+  add_level: false,          // add character level to healing (Second Wind etc.)
+  add_ability_mod: false,    // add spellcasting / class mod to healing
+
+  // Condition branch
+  condition_applied: "Prone",
+  condition_save: "STR",
+  condition_dc_source: "feature_dc", // spell_dc | feature_dc | fixed
+  condition_dc_fixed: 13,
+  condition_duration: "1 minute",
+
+  // Resource branch (Second Wind, Ki, Sorcery, Spell Slots)
+  resource_restored: "Hit Points",
+  resource_amount: "",       // dice OR flat, free text — "1d10 + level"
+
+  // Scaling die (monk martial arts, barbarian rage damage, bard inspiration)
+  scaling_die: {
+    enabled: false,
+    base_die: "1d4",
+    progression: [],         // [{level:5, die:"1d6"}, ...]
+    usage: "",               // free text describing when the die is rolled
+  },
+
+  // Feature DC (overrides spell DC for saves this feature requires)
+  feature_dc: {
+    enabled: false,
+    formula: "8 + prof + ability",
+    ability: "STR",          // ability used in the DC
+  },
 };
 
 // Item types the creator can pick; the form below reveals different
@@ -191,12 +344,29 @@ const ITEM_TYPES = [
   "Armor",
   "Shield",
   "Potion",
+  "Scroll",
   "Wondrous Item",
   "Adventuring Gear",
   "Ammunition",
 ];
 
-const ITEM_RARITIES = ["Common", "Uncommon", "Rare", "Very Rare", "Legendary"];
+const ITEM_RARITIES = ["Common", "Uncommon", "Rare", "Very Rare", "Legendary", "Artifact"];
+
+// Wondrous item "Bonus To" targets — covers the most common 5e rider
+// shapes (ring of protection, cloak of elvenkind, bracers of archery, etc.).
+const WONDROUS_BONUS_TARGETS = [
+  "AC",
+  "All Saves",
+  "STR Save", "DEX Save", "CON Save", "INT Save", "WIS Save", "CHA Save",
+  "Attack Rolls",
+  "Damage Rolls",
+  "Ranged Attack Damage",
+  "Spell Save DC",
+  "Initiative",
+  "Skill: Stealth", "Skill: Perception", "Skill: Athletics",
+  "Speed",
+  "Max HP",
+];
 
 const BLANK_ITEM = {
   name: "",
@@ -213,6 +383,9 @@ const BLANK_ITEM = {
   range: "",
   weapon_category: "Simple",
   versatile_damage: "",
+  magic_bonus: 0,              // +1 / +2 / +3 magical bonus
+  bonus_damage_dice: "",       // e.g. "1d6"
+  bonus_damage_type: "",       // e.g. "fire" — flame tongue rider
   // Armor defaults
   base_ac: 11,
   armor_type: "light",
@@ -228,11 +401,23 @@ const BLANK_ITEM = {
   requires_attunement: false,
   charges: 0,
   recharge: "Dawn",
+  bonus_to: [],                // [{ target:"AC", amount:1 }, ...]
+  condition_applied: "",       // applies a condition when used / hit
+  save_ability: "",            // save to resist it
+  save_dc: "",                 // fixed DC for wondrous save
+  // Scroll defaults
+  scroll_spell: "",            // name of the spell inscribed
+  scroll_level: 1,             // spell slot level it's cast at
 };
 
 function itemFromModifications(mods) {
   if (!mods || typeof mods !== "object") return { ...BLANK_ITEM };
-  return { ...BLANK_ITEM, ...mods, properties: Array.isArray(mods.properties) ? mods.properties : [] };
+  return {
+    ...BLANK_ITEM,
+    ...mods,
+    properties: Array.isArray(mods.properties) ? mods.properties : [],
+    bonus_to: Array.isArray(mods.bonus_to) ? mods.bonus_to : [],
+  };
 }
 
 export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
@@ -264,20 +449,22 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
   // the `modifications` JSONB for custom_item brews.
   const [item, setItem] = useState(BLANK_ITEM);
 
-  // Custom-monster / custom-spell / custom-ability state. Each holds
-  // the full record for its type and is serialized on save.
+  // Custom-monster / custom-spell / custom-class-feature state. Each
+  // holds the full record for its type and is serialized on save.
   const [monster, setMonster] = useState(BLANK_MONSTER);
   const [spell, setSpell] = useState(BLANK_SPELL);
-  const [ability, setAbility] = useState(BLANK_ABILITY);
+  const [classFeature, setClassFeature] = useState(BLANK_CLASS_FEATURE);
 
   // Populate state whenever the dialog opens / the brew prop changes.
   useEffect(() => {
     if (!open) return;
+    // Legacy `custom_ability` rows map to `custom_class_feature`.
     const CATEGORY_TO_TYPE = {
       custom_item: "custom_item",
       custom_monster: "custom_monster",
       custom_spell: "custom_spell",
-      custom_ability: "custom_ability",
+      custom_class_feature: "custom_class_feature",
+      custom_ability: "custom_class_feature",
     };
     const incomingType = CATEGORY_TO_TYPE[brew?.category] || "rule_modification";
     setContentType(incomingType);
@@ -298,7 +485,7 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
     setItem(BLANK_ITEM);
     setMonster(BLANK_MONSTER);
     setSpell(BLANK_SPELL);
-    setAbility(BLANK_ABILITY);
+    setClassFeature(BLANK_CLASS_FEATURE);
     setModifications({});
     if (incomingType === "custom_item") {
       setItem(itemFromModifications(brew?.modifications));
@@ -306,8 +493,8 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
       setMonster(monsterFromModifications(brew?.modifications));
     } else if (incomingType === "custom_spell") {
       setSpell(spellFromModifications(brew?.modifications));
-    } else if (incomingType === "custom_ability") {
-      setAbility(abilityFromModifications(brew?.modifications));
+    } else if (incomingType === "custom_class_feature") {
+      setClassFeature(classFeatureFromModifications(brew?.modifications));
     } else {
       setModifications(
         brew?.modifications && typeof brew.modifications === "object" && !Array.isArray(brew.modifications)
@@ -327,21 +514,21 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const isCustomItem    = contentType === "custom_item";
-      const isCustomMonster = contentType === "custom_monster";
-      const isCustomSpell   = contentType === "custom_spell";
-      const isCustomAbility = contentType === "custom_ability";
+      const isCustomItem         = contentType === "custom_item";
+      const isCustomMonster      = contentType === "custom_monster";
+      const isCustomSpell        = contentType === "custom_spell";
+      const isCustomClassFeature = contentType === "custom_class_feature";
       const typeName =
-        isCustomItem    ? item.name :
-        isCustomMonster ? monster.name :
-        isCustomSpell   ? spell.name :
-        isCustomAbility ? ability.name : "";
+        isCustomItem         ? item.name :
+        isCustomMonster      ? monster.name :
+        isCustomSpell        ? spell.name :
+        isCustomClassFeature ? classFeature.name : "";
       const effectiveTitle = (typeName || title).trim();
       const typeDesc =
-        isCustomItem    ? item.description :
-        isCustomMonster ? monster.description :
-        isCustomSpell   ? spell.description :
-        isCustomAbility ? ability.description : "";
+        isCustomItem         ? item.description :
+        isCustomMonster      ? monster.description :
+        isCustomSpell        ? spell.description :
+        isCustomClassFeature ? classFeature.description : "";
       const effectiveDescription = (typeDesc || description).trim();
       if (!effectiveTitle) throw new Error(`${CONTENT_TYPES.find(t => t.value === contentType)?.label || "Content"} name is required`);
       if (!effectiveDescription) throw new Error("Description is required");
@@ -366,9 +553,9 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
       } else if (contentType === "custom_spell") {
         mods = buildSpellModifications(spell);
         effectiveCategory = "custom_spell";
-      } else if (contentType === "custom_ability") {
-        mods = buildAbilityModifications(ability);
-        effectiveCategory = "custom_ability";
+      } else if (contentType === "custom_class_feature") {
+        mods = buildClassFeatureModifications(classFeature);
+        effectiveCategory = "custom_class_feature";
       } else {
         mods = modifications;
         effectiveCategory = category;
@@ -692,9 +879,9 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
             </Section>
           )}
 
-          {contentType === "custom_ability" && (
-            <Section title="Ability">
-              <CustomAbilityForm ability={ability} setAbility={setAbility} />
+          {contentType === "custom_class_feature" && (
+            <Section title="Class Feature">
+              <CustomClassFeatureForm feature={classFeature} setFeature={setClassFeature} />
             </Section>
           )}
         </div>
@@ -1031,13 +1218,23 @@ function CustomItemForm({ item, setItem }) {
     patch({ properties: props });
   };
 
-  const isWeapon = item.type === "Weapon";
-  const isArmor = item.type === "Armor" || item.type === "Shield";
-  const isPotion = item.type === "Potion";
+  const isWeapon   = item.type === "Weapon";
+  const isArmor    = item.type === "Armor" || item.type === "Shield";
+  const isPotion   = item.type === "Potion";
   const isWondrous = item.type === "Wondrous Item";
+  const isScroll   = item.type === "Scroll";
   const isRanged = Array.isArray(item.properties) && (
     item.properties.includes("Thrown") || item.properties.includes("Ammunition") || item.properties.includes("Range")
   );
+
+  // Wondrous bonus_to list helpers. Each row is { target, amount }.
+  const bonusRows = Array.isArray(item.bonus_to) ? item.bonus_to : [];
+  const setBonusRows = (next) => patch({ bonus_to: next });
+  const addBonusRow = () => setBonusRows([...bonusRows, { target: "AC", amount: 1 }]);
+  const updateBonusRow = (idx, fields) => setBonusRows(
+    bonusRows.map((r, i) => (i === idx ? { ...r, ...fields } : r)),
+  );
+  const removeBonusRow = (idx) => setBonusRows(bonusRows.filter((_, i) => i !== idx));
 
   return (
     <div className="space-y-4">
@@ -1188,6 +1385,33 @@ function CustomItemForm({ item, setItem }) {
               />
             </Field>
           )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Field label="Magic bonus (+N to hit & damage)">
+              <Input
+                type="number" min={0} max={5}
+                value={item.magic_bonus ?? 0}
+                onChange={(e) => patch({ magic_bonus: Number(e.target.value) || 0 })}
+                className="bg-[#0b1220] border-slate-700 text-white"
+              />
+            </Field>
+            <Field label="Bonus damage dice (rider)">
+              <Input
+                value={item.bonus_damage_dice || ""}
+                onChange={(e) => patch({ bonus_damage_dice: e.target.value })}
+                placeholder="e.g., 1d6 (Flame Tongue)"
+                className="bg-[#0b1220] border-slate-700 text-white"
+              />
+            </Field>
+            <Field label="Bonus damage type">
+              <Select value={item.bonus_damage_type || ""} onValueChange={(v) => patch({ bonus_damage_type: v === "__none" ? "" : v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">None</SelectItem>
+                  {DAMAGE_TYPES.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
         </div>
       )}
 
@@ -1258,6 +1482,14 @@ function CustomItemForm({ item, setItem }) {
                 />
               </Field>
             )}
+            <Field label="Magic bonus (+N to AC)">
+              <Input
+                type="number" min={0} max={5}
+                value={item.magic_bonus ?? 0}
+                onChange={(e) => patch({ magic_bonus: Number(e.target.value) || 0 })}
+                className="bg-[#0b1220] border-slate-700 text-white"
+              />
+            </Field>
           </div>
         </div>
       )}
@@ -1353,6 +1585,128 @@ function CustomItemForm({ item, setItem }) {
               className="bg-[#0b1220] border-slate-700 text-white"
             />
           </Field>
+
+          {/* Passive numeric bonuses (ring of protection, cloak of
+              elvenkind, bracers of archery, etc.). Stored as a list of
+              { target, amount } rows so the character sheet can sum
+              them directly. */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-xs text-slate-300 font-semibold">Passive bonuses (while attuned / worn)</Label>
+              <Button type="button" variant="outline" size="sm" onClick={addBonusRow}>
+                <Plus className="w-3 h-3 mr-1" /> Add Bonus
+              </Button>
+            </div>
+            {bonusRows.length === 0 ? (
+              <p className="text-[11px] text-slate-500 italic">No passive bonuses.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {bonusRows.map((row, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                    <div className="col-span-7">
+                      <Select value={row.target || "AC"} onValueChange={(v) => updateBonusRow(idx, { target: v })}>
+                        <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent className="max-h-64">
+                          {WONDROUS_BONUS_TARGETS.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-4">
+                      <Input
+                        type="number"
+                        value={row.amount ?? 0}
+                        onChange={(e) => updateBonusRow(idx, { amount: Number(e.target.value) || 0 })}
+                        className="bg-[#0b1220] border-slate-700 text-white h-8 text-xs"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeBonusRow(idx)}
+                      className="col-span-1 text-slate-400 hover:text-red-400 flex justify-center"
+                      title="Remove"
+                    >
+                      <Trash className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Optional "applies condition" rider — e.g. Cloak of
+              Billowing that imposes Frightened on a failed save when
+              triggered. Only persisted if a condition is chosen. */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Field label="Applies condition (optional)">
+              <Select
+                value={item.condition_applied || ""}
+                onValueChange={(v) => patch({ condition_applied: v === "__none" ? "" : v })}
+              >
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent className="max-h-64">
+                  <SelectItem value="__none">None</SelectItem>
+                  {Object.keys(CONDITION_COLORS).map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+            {item.condition_applied && (
+              <>
+                <Field label="Save to resist">
+                  <Select value={item.save_ability || "DEX"} onValueChange={(v) => patch({ save_ability: v })}>
+                    <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {SAVE_ABILITIES.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Save DC">
+                  <Input
+                    type="number" min={1}
+                    value={item.save_dc ?? ""}
+                    onChange={(e) => patch({ save_dc: e.target.value === "" ? "" : Number(e.target.value) })}
+                    placeholder="e.g., 13"
+                    className="bg-[#0b1220] border-slate-700 text-white"
+                  />
+                </Field>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* --- Scroll --- */}
+      {isScroll && (
+        <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3 space-y-3">
+          <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Scroll Details</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Field label="Spell name" required>
+              <Input
+                value={item.scroll_spell || ""}
+                onChange={(e) => patch({ scroll_spell: e.target.value })}
+                placeholder="e.g., Fireball"
+                className="bg-[#0b1220] border-slate-700 text-white"
+              />
+            </Field>
+            <Field label="Spell level">
+              <Select
+                value={String(item.scroll_level ?? 1)}
+                onValueChange={(v) => patch({ scroll_level: Number(v) })}
+              >
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 10 }).map((_, i) => (
+                    <SelectItem key={i} value={String(i)}>
+                      {i === 0 ? "Cantrip (0)" : `Level ${i}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            The scroll consumes itself on use. Damage / saves / effects
+            come from the referenced spell in the spell library.
+          </p>
         </div>
       )}
     </div>
@@ -1434,6 +1788,9 @@ export function buildItemModifications(item) {
       range: item.range || "",
       weapon_category: item.weapon_category || "Simple",
       versatile_damage: item.versatile_damage || "",
+      magic_bonus: Number(item.magic_bonus) || 0,
+      bonus_damage_dice: item.bonus_damage_dice || "",
+      bonus_damage_type: item.bonus_damage_type || "",
     };
   }
   if (item.type === "Armor" || item.type === "Shield") {
@@ -1447,6 +1804,7 @@ export function buildItemModifications(item) {
         item.max_dex_bonus === null || item.max_dex_bonus === "" || item.max_dex_bonus === undefined
           ? null
           : Number(item.max_dex_bonus),
+      magic_bonus: Number(item.magic_bonus) || 0,
     };
   }
   if (item.type === "Potion") {
@@ -1465,6 +1823,22 @@ export function buildItemModifications(item) {
       effect_description: item.effect_description || "",
       charges: Number(item.charges) || 0,
       recharge: item.recharge || "Dawn",
+      bonus_to: Array.isArray(item.bonus_to)
+        ? item.bonus_to
+            .filter((r) => r && r.target)
+            .map((r) => ({ target: r.target, amount: Number(r.amount) || 0 }))
+        : [],
+      condition_applied: item.condition_applied || "",
+      save_ability: item.condition_applied ? (item.save_ability || "DEX") : "",
+      save_dc: item.condition_applied && item.save_dc !== "" && item.save_dc != null
+        ? Number(item.save_dc) : null,
+    };
+  }
+  if (item.type === "Scroll") {
+    return {
+      ...base,
+      scroll_spell: item.scroll_spell || "",
+      scroll_level: Number(item.scroll_level) || 0,
     };
   }
   return base;
@@ -1502,27 +1876,42 @@ function CustomMonsterForm({ monster, setMonster }) {
     patch({ stats: next });
   };
 
-  // Actions list helpers. Monster actions are a repeatable list —
-  // the user can add / remove / reorder entries freely.
-  const actions = Array.isArray(monster.actions) ? monster.actions : [];
-  const setActions = (next) => patch({ actions: next });
-  const addAction = () => setActions([
-    ...actions,
-    { name: "", description: "", attack_bonus: "", damage: "", damage_type: "bludgeoning", reach: "" },
-  ]);
-  const updateAction = (idx, fields) => {
-    const next = actions.map((a, i) => (i === idx ? { ...a, ...fields } : a));
-    setActions(next);
+  // Generic list helpers scoped to a monster field. The monster has
+  // five action-style lists (actions / bonus_actions / reactions /
+  // legendary_actions / lair_actions) and the auras list, all of
+  // which need add / remove / reorder / update operations.
+  const makeListOps = (key, defaultItem) => {
+    const list = Array.isArray(monster[key]) ? monster[key] : [];
+    const setList = (next) => patch({ [key]: next });
+    return {
+      list,
+      setList,
+      add: (overrides = {}) => setList([...list, { ...defaultItem, ...overrides }]),
+      update: (idx, fields) => setList(list.map((a, i) => (i === idx ? { ...a, ...fields } : a))),
+      remove: (idx) => setList(list.filter((_, i) => i !== idx)),
+      move: (idx, direction) => {
+        const target = idx + direction;
+        if (target < 0 || target >= list.length) return;
+        const next = [...list];
+        const [moved] = next.splice(idx, 1);
+        next.splice(target, 0, moved);
+        setList(next);
+      },
+    };
   };
-  const removeAction = (idx) => setActions(actions.filter((_, i) => i !== idx));
-  const moveAction = (idx, direction) => {
-    const target = idx + direction;
-    if (target < 0 || target >= actions.length) return;
-    const next = [...actions];
-    const [moved] = next.splice(idx, 1);
-    next.splice(target, 0, moved);
-    setActions(next);
-  };
+
+  const actionsOps     = makeListOps("actions",           { ...BLANK_MONSTER_ACTION });
+  const bonusOps       = makeListOps("bonus_actions",     { ...BLANK_MONSTER_ACTION, action_cost: "Bonus Action" });
+  const reactionsOps   = makeListOps("reactions",         { ...BLANK_MONSTER_ACTION, action_cost: "Reaction" });
+  const legendaryOps   = makeListOps("legendary_actions", { ...BLANK_MONSTER_ACTION, action_cost: "Legendary", legendary_cost: 1 });
+  const lairOps        = makeListOps("lair_actions",      { ...BLANK_MONSTER_ACTION, action_cost: "Free", action_type: "no_roll" });
+  const aurasOps       = makeListOps("auras",             { ...BLANK_AURA });
+
+  // Multiattack is a single embedded object, not a list.
+  const multiattack = monster.multiattack || { enabled: false, description: "", attacks: [] };
+  const patchMultiattack = (fields) => patch({ multiattack: { ...multiattack, ...fields } });
+  const multiattackAttacks = Array.isArray(multiattack.attacks) ? multiattack.attacks : [];
+  const setMultiattackAttacks = (next) => patchMultiattack({ attacks: next });
 
   return (
     <div className="space-y-4">
@@ -1742,50 +2131,168 @@ function CustomMonsterForm({ monster, setMonster }) {
         />
       </Field>
 
+      {/* --- Multi-Attack --- */}
+      <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Multi-Attack</h4>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={!!multiattack.enabled}
+              onCheckedChange={(c) => patchMultiattack({ enabled: c })}
+            />
+            <span className="text-[10px] text-slate-400">{multiattack.enabled ? "On" : "Off"}</span>
+          </div>
+        </div>
+        {multiattack.enabled && (
+          <>
+            <Textarea
+              value={multiattack.description || ""}
+              onChange={(e) => patchMultiattack({ description: e.target.value })}
+              placeholder='e.g., "The dragon makes three attacks: one bite and two claws."'
+              rows={2}
+              className="bg-[#0b1220] border-slate-700 text-white text-xs"
+            />
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <Label className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Component attacks</Label>
+                <Button
+                  type="button" variant="outline" size="sm"
+                  onClick={() => setMultiattackAttacks([...multiattackAttacks, { name: "", count: 1 }])}
+                >
+                  <Plus className="w-3 h-3 mr-1" /> Add
+                </Button>
+              </div>
+              {multiattackAttacks.length === 0 ? (
+                <p className="text-[11px] text-slate-500 italic">
+                  Add the component attacks Multi-Attack fires — name matches an Action below, count is how many times it resolves.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {multiattackAttacks.map((row, i) => (
+                    <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                      <Input
+                        value={row.name || ""}
+                        onChange={(e) => {
+                          const next = multiattackAttacks.map((a, j) => (j === i ? { ...a, name: e.target.value } : a));
+                          setMultiattackAttacks(next);
+                        }}
+                        placeholder="Attack name (match an Action below)"
+                        className="bg-[#0b1220] border-slate-700 text-white text-xs col-span-8"
+                      />
+                      <Input
+                        type="number" min={1}
+                        value={row.count ?? 1}
+                        onChange={(e) => {
+                          const n = Number(e.target.value) || 1;
+                          const next = multiattackAttacks.map((a, j) => (j === i ? { ...a, count: n } : a));
+                          setMultiattackAttacks(next);
+                        }}
+                        className="bg-[#0b1220] border-slate-700 text-white text-xs col-span-3"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setMultiattackAttacks(multiattackAttacks.filter((_, j) => j !== i))}
+                        className="col-span-1 text-slate-400 hover:text-red-400 flex justify-center"
+                        title="Remove"
+                      >
+                        <Trash className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
       {/* --- Actions repeater --- */}
+      <MonsterActionList
+        title="Actions"
+        emptyHint="Add Bite, Claw, Breath Weapon, etc."
+        ops={actionsOps}
+      />
+
+      {/* --- Bonus Actions --- */}
+      <MonsterActionList
+        title="Bonus Actions"
+        emptyHint="Cunning Action, Shadow Step, etc."
+        ops={bonusOps}
+        defaultCost="Bonus Action"
+      />
+
+      {/* --- Reactions --- */}
+      <MonsterActionList
+        title="Reactions"
+        emptyHint="Parry, Shield, Uncanny Dodge, etc."
+        ops={reactionsOps}
+        defaultCost="Reaction"
+        showReactionTrigger
+      />
+
+      {/* --- Legendary Actions --- */}
+      <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Field label="Legendary actions per round">
+            <Input
+              type="number" min={0} max={5}
+              value={monster.legendary_actions_per_round ?? 0}
+              onChange={(e) => patch({ legendary_actions_per_round: Number(e.target.value) || 0 })}
+              className="bg-[#0b1220] border-slate-700 text-white"
+            />
+          </Field>
+          <Field label="Legendary resistances / day">
+            <Input
+              type="number" min={0} max={5}
+              value={monster.legendary_resistances ?? 0}
+              onChange={(e) => patch({ legendary_resistances: Number(e.target.value) || 0 })}
+              className="bg-[#0b1220] border-slate-700 text-white"
+            />
+          </Field>
+        </div>
+        <MonsterActionList
+          title="Legendary Actions"
+          emptyHint="Tail Attack, Wing Buffet, Frightful Presence, etc."
+          ops={legendaryOps}
+          defaultCost="Legendary"
+          showLegendaryCost
+          flat
+        />
+      </div>
+
+      {/* --- Lair Actions --- */}
+      <MonsterActionList
+        title="Lair Actions"
+        emptyHint="On initiative count 20, the lair takes one of these actions."
+        ops={lairOps}
+      />
+
+      {/* --- Auras --- */}
       <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3">
         <div className="flex items-center justify-between mb-2">
-          <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Actions</h4>
-          <Button type="button" variant="outline" size="sm" onClick={addAction}>
-            <Plus className="w-3 h-3 mr-1" /> Add Action
+          <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Auras</h4>
+          <Button type="button" variant="outline" size="sm" onClick={() => aurasOps.add()}>
+            <Plus className="w-3 h-3 mr-1" /> Add Aura
           </Button>
         </div>
-        {actions.length === 0 ? (
+        {aurasOps.list.length === 0 ? (
           <p className="text-[11px] text-slate-500 italic text-center py-3">
-            No actions yet. Click "Add Action" to add Bite, Breath Weapon, etc.
+            No auras. Paladin auras, fire shroud, frightful presence, etc.
           </p>
         ) : (
           <div className="space-y-2">
-            {actions.map((action, idx) => (
+            {aurasOps.list.map((aura, idx) => (
               <div key={idx} className="bg-[#0b1220] border border-[#1e293b] rounded-lg p-2 space-y-2">
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => moveAction(idx, -1)}
-                    disabled={idx === 0}
-                    className="text-slate-400 hover:text-white disabled:opacity-30"
-                    title="Move up"
-                  >
-                    <ChevronUp className="w-3 h-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveAction(idx, 1)}
-                    disabled={idx === actions.length - 1}
-                    className="text-slate-400 hover:text-white disabled:opacity-30"
-                    title="Move down"
-                  >
-                    <ChevronDown className="w-3 h-3" />
-                  </button>
                   <Input
-                    value={action.name || ""}
-                    onChange={(e) => updateAction(idx, { name: e.target.value })}
-                    placeholder="Action name (e.g., Bite)"
+                    value={aura.name || ""}
+                    onChange={(e) => aurasOps.update(idx, { name: e.target.value })}
+                    placeholder="Aura name (e.g., Frightful Presence)"
                     className="bg-[#050816] border-slate-700 text-white flex-1"
                   />
                   <button
                     type="button"
-                    onClick={() => removeAction(idx)}
+                    onClick={() => aurasOps.remove(idx)}
                     className="text-slate-400 hover:text-red-400"
                     title="Remove"
                   >
@@ -1793,52 +2300,93 @@ function CustomMonsterForm({ monster, setMonster }) {
                   </button>
                 </div>
                 <Textarea
-                  value={action.description || ""}
-                  onChange={(e) => updateAction(idx, { description: e.target.value })}
-                  placeholder="Description / trigger / effect…"
+                  value={aura.description || ""}
+                  onChange={(e) => aurasOps.update(idx, { description: e.target.value })}
+                  placeholder="What does the aura do?"
                   rows={2}
                   className="bg-[#050816] border-slate-700 text-white text-xs"
                 />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   <div>
-                    <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Atk bonus</Label>
+                    <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Radius</Label>
                     <Input
-                      type="number"
-                      value={action.attack_bonus ?? ""}
-                      onChange={(e) => updateAction(idx, { attack_bonus: e.target.value === "" ? "" : Number(e.target.value) })}
+                      value={aura.radius || ""}
+                      onChange={(e) => aurasOps.update(idx, { radius: e.target.value })}
+                      placeholder="10 ft"
+                      className="bg-[#050816] border-slate-700 text-white text-xs"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Trigger</Label>
+                    <Select
+                      value={aura.trigger || "start_of_turn"}
+                      onValueChange={(v) => aurasOps.update(idx, { trigger: v })}
+                    >
+                      <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="start_of_turn">Start of target's turn</SelectItem>
+                        <SelectItem value="enter_aura">On entering the aura</SelectItem>
+                        <SelectItem value="end_of_turn">End of target's turn</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Damage dice</Label>
+                    <Input
+                      value={aura.damage_dice || ""}
+                      onChange={(e) => aurasOps.update(idx, { damage_dice: e.target.value })}
                       placeholder="blank for none"
                       className="bg-[#050816] border-slate-700 text-white text-xs"
                     />
                   </div>
                   <div>
-                    <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Damage</Label>
-                    <Input
-                      value={action.damage || ""}
-                      onChange={(e) => updateAction(idx, { damage: e.target.value })}
-                      placeholder="2d6+4"
-                      className="bg-[#050816] border-slate-700 text-white text-xs"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Type</Label>
+                    <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Damage type</Label>
                     <Select
-                      value={action.damage_type || "bludgeoning"}
-                      onValueChange={(v) => updateAction(idx, { damage_type: v })}
+                      value={aura.damage_type || ""}
+                      onValueChange={(v) => aurasOps.update(idx, { damage_type: v === "__none" ? "" : v })}
                     >
-                      <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="None" /></SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="__none">None</SelectItem>
                         {DAMAGE_TYPES.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Reach / Range</Label>
+                    <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Save ability</Label>
+                    <Select
+                      value={aura.save_ability || ""}
+                      onValueChange={(v) => aurasOps.update(idx, { save_ability: v === "__none" ? "" : v })}
+                    >
+                      <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="None" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">None</SelectItem>
+                        {SAVE_ABILITIES.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Save DC</Label>
                     <Input
-                      value={action.reach || ""}
-                      onChange={(e) => updateAction(idx, { reach: e.target.value })}
-                      placeholder="5 ft / 60/120 ft"
+                      type="number" min={1}
+                      value={aura.save_dc ?? ""}
+                      onChange={(e) => aurasOps.update(idx, { save_dc: e.target.value === "" ? "" : Number(e.target.value) })}
+                      placeholder="blank = spell DC"
                       className="bg-[#050816] border-slate-700 text-white text-xs"
                     />
+                  </div>
+                  <div>
+                    <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Applies condition</Label>
+                    <Select
+                      value={aura.applies_condition || ""}
+                      onValueChange={(v) => aurasOps.update(idx, { applies_condition: v === "__none" ? "" : v })}
+                    >
+                      <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="None" /></SelectTrigger>
+                      <SelectContent className="max-h-64">
+                        <SelectItem value="__none">None</SelectItem>
+                        {Object.keys(CONDITION_COLORS).map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
@@ -1852,6 +2400,431 @@ function CustomMonsterForm({ monster, setMonster }) {
 
 // Small reusable chip-style multi-select. Used across the monster
 // form for damage type / condition lists.
+// Shared repeater for every monster action-style list (Actions, Bonus
+// Actions, Reactions, Legendary Actions, Lair Actions). Each row
+// reveals fields based on action_type so "Saving Throw" actions show
+// save ability/DC instead of an attack bonus, and "No Roll" actions
+// hide both. Condition riders and bonus damage are always available.
+function MonsterActionList({ title, emptyHint, ops, defaultCost, showReactionTrigger, showLegendaryCost, flat }) {
+  const Wrapper = flat ? "div" : "div";
+  const wrapperClass = flat
+    ? "space-y-2"
+    : "bg-[#050816] border border-[#1e293b] rounded-lg p-3";
+  return (
+    <Wrapper className={wrapperClass}>
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">{title}</h4>
+        <Button
+          type="button" variant="outline" size="sm"
+          onClick={() => ops.add(defaultCost ? { action_cost: defaultCost } : {})}
+        >
+          <Plus className="w-3 h-3 mr-1" /> Add
+        </Button>
+      </div>
+      {ops.list.length === 0 ? (
+        <p className="text-[11px] text-slate-500 italic text-center py-3">{emptyHint}</p>
+      ) : (
+        <div className="space-y-2">
+          {ops.list.map((action, idx) => (
+            <MonsterActionRow
+              key={idx}
+              action={action}
+              idx={idx}
+              isFirst={idx === 0}
+              isLast={idx === ops.list.length - 1}
+              ops={ops}
+              showReactionTrigger={showReactionTrigger}
+              showLegendaryCost={showLegendaryCost}
+            />
+          ))}
+        </div>
+      )}
+    </Wrapper>
+  );
+}
+
+function MonsterActionRow({ action, idx, isFirst, isLast, ops, showReactionTrigger, showLegendaryCost }) {
+  const type = action.action_type || "melee_attack";
+  const isAttack  = type === "melee_attack" || type === "ranged_attack";
+  const isSave    = type === "saving_throw";
+  const isHealing = type === "healing";
+  return (
+    <div className="bg-[#0b1220] border border-[#1e293b] rounded-lg p-2 space-y-2">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => ops.move(idx, -1)}
+          disabled={isFirst}
+          className="text-slate-400 hover:text-white disabled:opacity-30"
+          title="Move up"
+        >
+          <ChevronUp className="w-3 h-3" />
+        </button>
+        <button
+          type="button"
+          onClick={() => ops.move(idx, 1)}
+          disabled={isLast}
+          className="text-slate-400 hover:text-white disabled:opacity-30"
+          title="Move down"
+        >
+          <ChevronDown className="w-3 h-3" />
+        </button>
+        <Input
+          value={action.name || ""}
+          onChange={(e) => ops.update(idx, { name: e.target.value })}
+          placeholder="Name (e.g., Bite)"
+          className="bg-[#050816] border-slate-700 text-white flex-1"
+        />
+        <button
+          type="button"
+          onClick={() => ops.remove(idx)}
+          className="text-slate-400 hover:text-red-400"
+          title="Remove"
+        >
+          <Trash className="w-3 h-3" />
+        </button>
+      </div>
+      <Textarea
+        value={action.description || ""}
+        onChange={(e) => ops.update(idx, { description: e.target.value })}
+        placeholder="Description / trigger / effect…"
+        rows={2}
+        className="bg-[#050816] border-slate-700 text-white text-xs"
+      />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div>
+          <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Type</Label>
+          <Select
+            value={action.action_type || "melee_attack"}
+            onValueChange={(v) => ops.update(idx, { action_type: v })}
+          >
+            <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {ACTION_TYPES.map((t) => (<SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Cost</Label>
+          <Select
+            value={action.action_cost || "Action"}
+            onValueChange={(v) => ops.update(idx, { action_cost: v })}
+          >
+            <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {ACTION_COSTS.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Recharge</Label>
+          <Select
+            value={action.recharge || ""}
+            onValueChange={(v) => ops.update(idx, { recharge: v })}
+          >
+            <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {RECHARGE_OPTIONS.map((r) => (<SelectItem key={r.value || "none"} value={r.value || "__none"}>{r.label}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
+        {showLegendaryCost && action.action_cost === "Legendary" && (
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Legendary cost</Label>
+            <Input
+              type="number" min={1} max={3}
+              value={action.legendary_cost ?? 1}
+              onChange={(e) => ops.update(idx, { legendary_cost: Number(e.target.value) || 1 })}
+              className="bg-[#050816] border-slate-700 text-white text-xs"
+            />
+          </div>
+        )}
+      </div>
+
+      {showReactionTrigger && action.action_cost === "Reaction" && (
+        <div>
+          <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Reaction trigger</Label>
+          <Input
+            value={action.reaction_trigger || ""}
+            onChange={(e) => ops.update(idx, { reaction_trigger: e.target.value })}
+            placeholder='e.g., "when a creature hits the dragon with a melee attack"'
+            className="bg-[#050816] border-slate-700 text-white text-xs"
+          />
+        </div>
+      )}
+
+      {/* Attack-specific fields */}
+      {isAttack && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Atk bonus</Label>
+            <Input
+              type="number"
+              value={action.attack_bonus ?? ""}
+              onChange={(e) => ops.update(idx, { attack_bonus: e.target.value === "" ? "" : Number(e.target.value) })}
+              placeholder="blank for none"
+              className="bg-[#050816] border-slate-700 text-white text-xs"
+            />
+          </div>
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Damage</Label>
+            <Input
+              value={action.damage || ""}
+              onChange={(e) => ops.update(idx, { damage: e.target.value })}
+              placeholder="2d6+4"
+              className="bg-[#050816] border-slate-700 text-white text-xs"
+            />
+          </div>
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Damage type</Label>
+            <Select
+              value={action.damage_type || "bludgeoning"}
+              onValueChange={(v) => ops.update(idx, { damage_type: v })}
+            >
+              <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {DAMAGE_TYPES.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Reach / Range</Label>
+            <Input
+              value={action.reach || ""}
+              onChange={(e) => ops.update(idx, { reach: e.target.value })}
+              placeholder="5 ft / 60/120 ft"
+              className="bg-[#050816] border-slate-700 text-white text-xs"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Save-specific fields */}
+      {isSave && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Save ability</Label>
+            <Select
+              value={action.save_ability || "DEX"}
+              onValueChange={(v) => ops.update(idx, { save_ability: v })}
+            >
+              <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {SAVE_ABILITIES.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Save DC</Label>
+            <Input
+              type="number" min={1}
+              value={action.save_dc ?? ""}
+              onChange={(e) => ops.update(idx, { save_dc: e.target.value === "" ? "" : Number(e.target.value) })}
+              placeholder="e.g., 14"
+              className="bg-[#050816] border-slate-700 text-white text-xs"
+            />
+          </div>
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Damage</Label>
+            <Input
+              value={action.damage || ""}
+              onChange={(e) => ops.update(idx, { damage: e.target.value })}
+              placeholder="7d6"
+              className="bg-[#050816] border-slate-700 text-white text-xs"
+            />
+          </div>
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Damage type</Label>
+            <Select
+              value={action.damage_type || "fire"}
+              onValueChange={(v) => ops.update(idx, { damage_type: v })}
+            >
+              <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {DAMAGE_TYPES.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2 col-span-2">
+            <Switch
+              checked={!!action.half_on_save}
+              onCheckedChange={(c) => ops.update(idx, { half_on_save: c })}
+            />
+            <Label className="text-[10px] text-slate-300">Half damage on successful save</Label>
+          </div>
+        </div>
+      )}
+
+      {/* Healing fields */}
+      {isHealing && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Healing dice</Label>
+            <Input
+              value={action.healing_dice || ""}
+              onChange={(e) => ops.update(idx, { healing_dice: e.target.value })}
+              placeholder="3d8"
+              className="bg-[#050816] border-slate-700 text-white text-xs"
+            />
+          </div>
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Flat bonus</Label>
+            <Input
+              value={action.healing_flat || ""}
+              onChange={(e) => ops.update(idx, { healing_flat: e.target.value })}
+              placeholder="+5"
+              className="bg-[#050816] border-slate-700 text-white text-xs"
+            />
+          </div>
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Target count</Label>
+            <Input
+              value={action.target_count || ""}
+              onChange={(e) => ops.update(idx, { target_count: e.target.value })}
+              placeholder="1 / up to 6 / self"
+              className="bg-[#050816] border-slate-700 text-white text-xs"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* AoE shape + size (applies to save + no_roll) */}
+      {(isSave || type === "no_roll" || isHealing) && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">AoE shape</Label>
+            <Select
+              value={action.aoe_shape || ""}
+              onValueChange={(v) => ops.update(idx, { aoe_shape: v === "__none" ? "" : v })}
+            >
+              <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="None" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none">None</SelectItem>
+                {AOE_SHAPES.filter(Boolean).map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Size</Label>
+            <Input
+              value={action.aoe_size || ""}
+              onChange={(e) => ops.update(idx, { aoe_size: e.target.value })}
+              placeholder="15 ft cone"
+              className="bg-[#050816] border-slate-700 text-white text-xs"
+            />
+          </div>
+          {!isHealing && (
+            <div>
+              <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Targets</Label>
+              <Input
+                value={action.target_count || ""}
+                onChange={(e) => ops.update(idx, { target_count: e.target.value })}
+                placeholder="1 / all in area"
+                className="bg-[#050816] border-slate-700 text-white text-xs"
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Bonus damage rider (any action type that deals damage) */}
+      {(isAttack || isSave) && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Bonus damage dice</Label>
+            <Input
+              value={action.bonus_damage_dice || ""}
+              onChange={(e) => ops.update(idx, { bonus_damage_dice: e.target.value })}
+              placeholder="1d6"
+              className="bg-[#050816] border-slate-700 text-white text-xs"
+            />
+          </div>
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Bonus damage type</Label>
+            <Select
+              value={action.bonus_damage_type || ""}
+              onValueChange={(v) => ops.update(idx, { bonus_damage_type: v === "__none" ? "" : v })}
+            >
+              <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="None" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none">None</SelectItem>
+                {DAMAGE_TYPES.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
+      {/* Rider condition (any action type can apply a condition) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="md:col-span-1">
+          <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Applies condition</Label>
+          <Select
+            value={action.applies_condition || ""}
+            onValueChange={(v) => ops.update(idx, { applies_condition: v === "__none" ? "" : v })}
+          >
+            <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="None" /></SelectTrigger>
+            <SelectContent className="max-h-64">
+              <SelectItem value="__none">None</SelectItem>
+              {Object.keys(CONDITION_COLORS).map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
+        {action.applies_condition && (
+          <>
+            <div>
+              <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Condition save</Label>
+              <Select
+                value={action.condition_save || ""}
+                onValueChange={(v) => ops.update(idx, { condition_save: v === "__none" ? "" : v })}
+              >
+                <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="Use main save" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">Use main save</SelectItem>
+                  {SAVE_ABILITIES.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Cond. DC</Label>
+              <Input
+                type="number" min={1}
+                value={action.condition_dc ?? ""}
+                onChange={(e) => ops.update(idx, { condition_dc: e.target.value === "" ? "" : Number(e.target.value) })}
+                placeholder="blank = main DC"
+                className="bg-[#050816] border-slate-700 text-white text-xs"
+              />
+            </div>
+            <div>
+              <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Ends</Label>
+              <Select
+                value={action.condition_end || "save_each_turn"}
+                onValueChange={(v) => ops.update(idx, { condition_end: v })}
+              >
+                <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CONDITION_END_OPTIONS.map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            {action.condition_end === "fixed_duration" && (
+              <div className="md:col-span-2">
+                <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Duration</Label>
+                <Input
+                  value={action.condition_duration || ""}
+                  onChange={(e) => ops.update(idx, { condition_duration: e.target.value })}
+                  placeholder="1 minute"
+                  className="bg-[#050816] border-slate-700 text-white text-xs"
+                />
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ChipMultiSelect({ label, options, values, onChange }) {
   const selected = Array.isArray(values) ? values : [];
   const toggle = (value) => {
@@ -1922,6 +2895,30 @@ function HomebrewImageUpload({ url, onChange, path }) {
   );
 }
 
+// Legacy actions had { name, description, attack_bonus, damage,
+// damage_type, reach }. Normalize them into the expanded shape so the
+// form can edit them cleanly on load. Anything that smells like an
+// attack stays an attack; everything else becomes no_roll (the old
+// free-text effect entries).
+function normalizeAction(a) {
+  if (!a || typeof a !== "object") return { ...BLANK_MONSTER_ACTION };
+  const hasAttack = a.attack_bonus !== undefined && a.attack_bonus !== null && a.attack_bonus !== "";
+  const hasDamage = !!a.damage;
+  const inferredType =
+    a.action_type
+    || (hasAttack ? "melee_attack" : hasDamage ? "saving_throw" : "no_roll");
+  return {
+    ...BLANK_MONSTER_ACTION,
+    ...a,
+    action_type: inferredType,
+  };
+}
+
+function normalizeAura(a) {
+  if (!a || typeof a !== "object") return { ...BLANK_AURA };
+  return { ...BLANK_AURA, ...a };
+}
+
 export function monsterFromModifications(mods) {
   if (!mods || typeof mods !== "object") return { ...BLANK_MONSTER };
   return {
@@ -1934,25 +2931,99 @@ export function monsterFromModifications(mods) {
     damage_immunities:     Array.isArray(mods.damage_immunities)     ? mods.damage_immunities     : [],
     damage_vulnerabilities:Array.isArray(mods.damage_vulnerabilities)? mods.damage_vulnerabilities: [],
     condition_immunities:  Array.isArray(mods.condition_immunities)  ? mods.condition_immunities  : [],
-    actions: Array.isArray(mods.actions) ? mods.actions : [],
+    actions:           Array.isArray(mods.actions)           ? mods.actions.map(normalizeAction)           : [],
+    bonus_actions:     Array.isArray(mods.bonus_actions)     ? mods.bonus_actions.map(normalizeAction)     : [],
+    reactions:         Array.isArray(mods.reactions)         ? mods.reactions.map(normalizeAction)         : [],
+    legendary_actions: Array.isArray(mods.legendary_actions) ? mods.legendary_actions.map(normalizeAction) : [],
+    lair_actions:      Array.isArray(mods.lair_actions)      ? mods.lair_actions.map(normalizeAction)      : [],
+    auras:             Array.isArray(mods.auras)             ? mods.auras.map(normalizeAura)               : [],
+    multiattack: mods.multiattack && typeof mods.multiattack === "object"
+      ? {
+          enabled: !!mods.multiattack.enabled,
+          description: mods.multiattack.description || "",
+          attacks: Array.isArray(mods.multiattack.attacks) ? mods.multiattack.attacks : [],
+        }
+      : { ...BLANK_MONSTER.multiattack },
+    legendary_actions_per_round: Number(mods.legendary_actions_per_round ?? BLANK_MONSTER.legendary_actions_per_round) || 0,
+    legendary_resistances: Number(mods.legendary_resistances ?? 0) || 0,
     // `cr` and `challenge_rating` are used interchangeably — honour
     // whichever the caller stored.
     cr: String(mods.cr ?? mods.challenge_rating ?? "1"),
   };
 }
 
-export function buildMonsterModifications(monster) {
-  if (!monster || typeof monster !== "object") return {};
-  const actions = Array.isArray(monster.actions) ? monster.actions.map((a) => ({
+function serializeAction(a) {
+  if (!a || typeof a !== "object") return null;
+  return {
     name: a.name || "",
     description: a.description || "",
-    attack_bonus: a.attack_bonus === "" || a.attack_bonus === null || a.attack_bonus === undefined
+    action_type: a.action_type || "melee_attack",
+    action_cost: a.action_cost || "Action",
+    legendary_cost: a.action_cost === "Legendary" ? (Number(a.legendary_cost) || 1) : null,
+    recharge: a.recharge || "",
+    reaction_trigger: a.action_cost === "Reaction" ? (a.reaction_trigger || "") : "",
+    attack_bonus: a.attack_bonus === "" || a.attack_bonus == null
       ? null
       : Number(a.attack_bonus),
     damage: a.damage || "",
     damage_type: a.damage_type || "",
     reach: a.reach || "",
-  })) : [];
+    bonus_damage_dice: a.bonus_damage_dice || "",
+    bonus_damage_type: a.bonus_damage_type || "",
+    save_ability: a.save_ability || "",
+    save_dc: a.save_dc === "" || a.save_dc == null ? null : Number(a.save_dc),
+    half_on_save: !!a.half_on_save,
+    aoe_shape: a.aoe_shape || "",
+    aoe_size: a.aoe_size || "",
+    target_count: a.target_count || "",
+    applies_condition: a.applies_condition || "",
+    condition_save: a.applies_condition ? (a.condition_save || "") : "",
+    condition_dc: a.condition_dc === "" || a.condition_dc == null ? null : Number(a.condition_dc),
+    condition_end: a.condition_end || "save_each_turn",
+    condition_duration: a.condition_duration || "",
+    healing_dice: a.healing_dice || "",
+    healing_flat: a.healing_flat || "",
+  };
+}
+
+function serializeAura(a) {
+  if (!a || typeof a !== "object") return null;
+  return {
+    name: a.name || "",
+    description: a.description || "",
+    radius: a.radius || "",
+    damage_dice: a.damage_dice || "",
+    damage_type: a.damage_type || "",
+    save_ability: a.save_ability || "",
+    save_dc: a.save_dc === "" || a.save_dc == null ? null : Number(a.save_dc),
+    trigger: a.trigger || "start_of_turn",
+    applies_condition: a.applies_condition || "",
+  };
+}
+
+export function buildMonsterModifications(monster) {
+  if (!monster || typeof monster !== "object") return {};
+  const serializeList = (list) =>
+    Array.isArray(list) ? list.map(serializeAction).filter(Boolean) : [];
+  const actions           = serializeList(monster.actions);
+  const bonus_actions     = serializeList(monster.bonus_actions);
+  const reactions         = serializeList(monster.reactions);
+  const legendary_actions = serializeList(monster.legendary_actions);
+  const lair_actions      = serializeList(monster.lair_actions);
+  const auras             = Array.isArray(monster.auras)
+    ? monster.auras.map(serializeAura).filter(Boolean)
+    : [];
+  const multiattack = monster.multiattack && typeof monster.multiattack === "object"
+    ? {
+        enabled: !!monster.multiattack.enabled,
+        description: monster.multiattack.description || "",
+        attacks: Array.isArray(monster.multiattack.attacks)
+          ? monster.multiattack.attacks
+              .filter((a) => a && a.name)
+              .map((a) => ({ name: a.name, count: Number(a.count) || 1 }))
+          : [],
+      }
+    : { enabled: false, description: "", attacks: [] };
   return {
     name: monster.name || "",
     size: monster.size || "Medium",
@@ -1979,6 +3050,14 @@ export function buildMonsterModifications(monster) {
     image_url: monster.image_url || "",
     description: monster.description || "",
     actions,
+    bonus_actions,
+    reactions,
+    legendary_actions,
+    lair_actions,
+    auras,
+    multiattack,
+    legendary_actions_per_round: Number(monster.legendary_actions_per_round) || 0,
+    legendary_resistances: Number(monster.legendary_resistances) || 0,
   };
 }
 
@@ -2102,36 +3181,113 @@ export function buildSpellModifications(spell) {
   // already captured by base.
   return base;
 }
-export function abilityFromModifications(mods) {
-  if (!mods || typeof mods !== "object") return { ...BLANK_ABILITY };
+export function classFeatureFromModifications(mods) {
+  if (!mods || typeof mods !== "object") return { ...BLANK_CLASS_FEATURE };
   // Honour legacy field names a prior stub saved under different keys.
+  const scaling_die = mods.scaling_die && typeof mods.scaling_die === "object"
+    ? {
+        enabled: !!mods.scaling_die.enabled,
+        base_die: mods.scaling_die.base_die || "1d4",
+        progression: Array.isArray(mods.scaling_die.progression) ? mods.scaling_die.progression : [],
+        usage: mods.scaling_die.usage || "",
+      }
+    : { ...BLANK_CLASS_FEATURE.scaling_die };
+  const feature_dc = mods.feature_dc && typeof mods.feature_dc === "object"
+    ? {
+        enabled: !!mods.feature_dc.enabled,
+        formula: mods.feature_dc.formula || "8 + prof + ability",
+        ability: mods.feature_dc.ability || "STR",
+      }
+    : { ...BLANK_CLASS_FEATURE.feature_dc };
   return {
-    ...BLANK_ABILITY,
+    ...BLANK_CLASS_FEATURE,
     ...mods,
     type: mods.type || mods.source_type || "Class Feature",
     class: mods.class || mods.class_name || "Fighter",
     level: Number(mods.level ?? mods.level_requirement ?? 1),
     image_url: mods.image_url || "",
+    scaling_die,
+    feature_dc,
   };
 }
 
-export function buildAbilityModifications(ability) {
-  if (!ability || typeof ability !== "object") return {};
-  const type = ability.type || "Class Feature";
+// Back-compat alias for anything still importing the old name.
+export const abilityFromModifications = classFeatureFromModifications;
+
+export function buildClassFeatureModifications(feature) {
+  if (!feature || typeof feature !== "object") return {};
+  const type = feature.type || "Class Feature";
+  const effectType = feature.effect_type || "Utility";
+  const resolution = feature.resolution || "no_roll";
   const base = {
-    name: ability.name || "",
+    name: feature.name || "",
     type,
-    level: Number(ability.level) || 1,
-    description: ability.description || "",
-    cost: ability.cost || "Action",
-    uses: ability.uses || "At Will",
-    effect_type: ability.effect_type || "Utility",
-    image_url: ability.image_url || "",
+    level: Number(feature.level) || 1,
+    description: feature.description || "",
+    cost: feature.cost || "Action",
+    uses: feature.uses || "At Will",
+    recharge: feature.recharge || "Long Rest",
+    reaction_trigger: feature.cost === "Reaction" ? (feature.reaction_trigger || "") : "",
+    effect_type: effectType,
+    resolution,
+    image_url: feature.image_url || "",
+    source: "homebrew",
   };
   // Only class features carry a class key.
-  if (type === "Class Feature") base.class = ability.class || "Fighter";
+  if (type === "Class Feature") base.class = feature.class || "Fighter";
+
+  if (effectType === "Damage") {
+    base.damage_dice = feature.damage_dice || "";
+    base.damage_type = feature.damage_type || "slashing";
+    if (resolution === "save") {
+      base.save_ability = feature.save_ability || "DEX";
+      base.half_on_save = !!feature.half_on_save;
+    }
+  }
+  if (effectType === "Healing") {
+    base.healing_dice = feature.healing_dice || "";
+    base.add_level = !!feature.add_level;
+    base.add_ability_mod = !!feature.add_ability_mod;
+  }
+  if (effectType === "Condition") {
+    base.condition_applied = feature.condition_applied || "";
+    base.condition_save = feature.condition_save || "DEX";
+    base.condition_dc_source = feature.condition_dc_source || "spell_dc";
+    if (base.condition_dc_source === "fixed") {
+      base.condition_dc_fixed = Number(feature.condition_dc_fixed) || 13;
+    }
+    base.condition_duration = feature.condition_duration || "";
+  }
+  if (effectType === "Resource") {
+    base.resource_restored = feature.resource_restored || "Hit Points";
+    base.resource_amount = feature.resource_amount || "";
+  }
+  // Scaling die — serialize only if enabled.
+  if (feature.scaling_die?.enabled) {
+    base.scaling_die = {
+      enabled: true,
+      base_die: feature.scaling_die.base_die || "1d4",
+      progression: Array.isArray(feature.scaling_die.progression)
+        ? feature.scaling_die.progression
+            .filter((r) => r && r.level)
+            .map((r) => ({ level: Number(r.level), die: r.die || "" }))
+        : [],
+      usage: feature.scaling_die.usage || "",
+    };
+  }
+  // Feature DC — only if enabled.
+  if (feature.feature_dc?.enabled) {
+    base.feature_dc = {
+      enabled: true,
+      formula: feature.feature_dc.formula || "8 + prof + ability",
+      ability: feature.feature_dc.ability || "STR",
+    };
+  }
   return base;
 }
+
+// Back-compat alias for anything still importing the old name.
+export const buildAbilityModifications = buildClassFeatureModifications;
 
 function CustomSpellForm({ spell, setSpell }) {
   const patch = (fields) => setSpell((prev) => ({ ...prev, ...fields }));
@@ -2466,9 +3622,32 @@ function CustomSpellForm({ spell, setSpell }) {
   );
 }
 
-function CustomAbilityForm({ ability, setAbility }) {
-  const patch = (fields) => setAbility((prev) => ({ ...prev, ...fields }));
-  const isClassFeature = ability.type === "Class Feature";
+function CustomClassFeatureForm({ feature, setFeature }) {
+  const patch = (fields) => setFeature((prev) => ({ ...prev, ...fields }));
+  const patchScaling = (fields) => setFeature((prev) => ({
+    ...prev,
+    scaling_die: { ...(prev.scaling_die || {}), ...fields },
+  }));
+  const patchFeatureDC = (fields) => setFeature((prev) => ({
+    ...prev,
+    feature_dc: { ...(prev.feature_dc || {}), ...fields },
+  }));
+  const isClassFeature = feature.type === "Class Feature";
+  const effect = feature.effect_type || "Utility";
+  const resolution = feature.resolution || "no_roll";
+
+  const scaling = feature.scaling_die || { enabled: false, base_die: "1d4", progression: [], usage: "" };
+  const featureDC = feature.feature_dc || { enabled: false, formula: "8 + prof + ability", ability: "STR" };
+  const progression = Array.isArray(scaling.progression) ? scaling.progression : [];
+  const addProgressionRow = () => patchScaling({
+    progression: [...progression, { level: 5, die: "1d6" }],
+  });
+  const updateProgressionRow = (idx, fields) => patchScaling({
+    progression: progression.map((r, i) => (i === idx ? { ...r, ...fields } : r)),
+  });
+  const removeProgressionRow = (idx) => patchScaling({
+    progression: progression.filter((_, i) => i !== idx),
+  });
 
   return (
     <div className="space-y-4">
@@ -2476,23 +3655,23 @@ function CustomAbilityForm({ ability, setAbility }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Field label="Name" required>
           <Input
-            value={ability.name || ""}
+            value={feature.name || ""}
             onChange={(e) => patch({ name: e.target.value })}
             placeholder="e.g., Thunderous Rebuke"
             className="bg-[#0b1220] border-slate-700 text-white"
           />
         </Field>
         <Field label="Type">
-          <Select value={ability.type} onValueChange={(v) => patch({ type: v })}>
+          <Select value={feature.type} onValueChange={(v) => patch({ type: v })}>
             <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {ABILITY_SOURCE_TYPES.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+              {FEATURE_SOURCE_TYPES.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
             </SelectContent>
           </Select>
         </Field>
         {isClassFeature && (
           <Field label="Class">
-            <Select value={ability.class} onValueChange={(v) => patch({ class: v })}>
+            <Select value={feature.class} onValueChange={(v) => patch({ class: v })}>
               <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
               <SelectContent className="max-h-72">
                 {SPELL_CLASSES.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
@@ -2503,7 +3682,7 @@ function CustomAbilityForm({ ability, setAbility }) {
         <Field label="Level requirement">
           <Input
             type="number" min={1} max={20}
-            value={ability.level ?? 1}
+            value={feature.level ?? 1}
             onChange={(e) => patch({ level: Number(e.target.value) || 1 })}
             className="bg-[#0b1220] border-slate-700 text-white"
           />
@@ -2512,50 +3691,340 @@ function CustomAbilityForm({ ability, setAbility }) {
 
       <Field label="Description" required>
         <Textarea
-          value={ability.description || ""}
+          value={feature.description || ""}
           onChange={(e) => patch({ description: e.target.value })}
-          placeholder="What does the ability do, narratively and mechanically?"
+          placeholder="What does the feature do, narratively and mechanically?"
           rows={4}
           className="bg-[#0b1220] border-slate-700 text-white"
         />
       </Field>
 
-      {/* --- Mechanical shape --- */}
+      {/* --- Action Economy --- */}
       <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3 space-y-3">
         <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Action Economy</h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Field label="Action cost">
-            <Select value={ability.cost} onValueChange={(v) => patch({ cost: v })}>
+            <Select value={feature.cost} onValueChange={(v) => patch({ cost: v })}>
               <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {ABILITY_COSTS.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                {FEATURE_COSTS.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
               </SelectContent>
             </Select>
           </Field>
           <Field label="Uses">
-            <Select value={ability.uses} onValueChange={(v) => patch({ uses: v })}>
+            <Select value={feature.uses} onValueChange={(v) => patch({ uses: v })}>
               <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {ABILITY_USES.map((u) => (<SelectItem key={u} value={u}>{u}</SelectItem>))}
+                {FEATURE_USES.map((u) => (<SelectItem key={u} value={u}>{u}</SelectItem>))}
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Effect type">
-            <Select value={ability.effect_type} onValueChange={(v) => patch({ effect_type: v })}>
+          <Field label="Recharge">
+            <Select value={feature.recharge} onValueChange={(v) => patch({ recharge: v })}>
               <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {ABILITY_EFFECT_TYPES.map((e) => (<SelectItem key={e} value={e}>{e}</SelectItem>))}
+                {FEATURE_RECHARGE.map((r) => (<SelectItem key={r} value={r}>{r}</SelectItem>))}
               </SelectContent>
             </Select>
           </Field>
         </div>
+        {feature.cost === "Reaction" && (
+          <Field label="Reaction trigger">
+            <Input
+              value={feature.reaction_trigger || ""}
+              onChange={(e) => patch({ reaction_trigger: e.target.value })}
+              placeholder='e.g., "when you are hit by a melee attack"'
+              className="bg-[#0b1220] border-slate-700 text-white"
+            />
+          </Field>
+        )}
+      </div>
+
+      {/* --- Mechanical Shape --- */}
+      <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3 space-y-3">
+        <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Mechanical Shape</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Field label="Effect type">
+            <Select value={feature.effect_type} onValueChange={(v) => patch({ effect_type: v })}>
+              <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {FEATURE_EFFECT_TYPES.map((e) => (<SelectItem key={e} value={e}>{e}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </Field>
+          {(effect === "Damage" || effect === "Condition") && (
+            <Field label="Resolution">
+              <Select value={feature.resolution} onValueChange={(v) => patch({ resolution: v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FEATURE_RESOLUTIONS.map((r) => (<SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+        </div>
+
+        {effect === "Damage" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Field label="Damage dice">
+              <Input
+                value={feature.damage_dice || ""}
+                onChange={(e) => patch({ damage_dice: e.target.value })}
+                placeholder="e.g., 2d8"
+                className="bg-[#0b1220] border-slate-700 text-white"
+              />
+            </Field>
+            <Field label="Damage type">
+              <Select value={feature.damage_type || "slashing"} onValueChange={(v) => patch({ damage_type: v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DAMAGE_TYPES.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+            {resolution === "save" && (
+              <>
+                <Field label="Save ability">
+                  <Select value={feature.save_ability || "DEX"} onValueChange={(v) => patch({ save_ability: v })}>
+                    <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {SAVE_ABILITIES.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Half damage on save">
+                  <div className="flex items-center gap-2 h-10">
+                    <Switch
+                      checked={!!feature.half_on_save}
+                      onCheckedChange={(c) => patch({ half_on_save: c })}
+                    />
+                    <span className="text-xs text-slate-300">{feature.half_on_save ? "Yes" : "No"}</span>
+                  </div>
+                </Field>
+              </>
+            )}
+          </div>
+        )}
+
+        {effect === "Healing" && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Field label="Healing dice">
+              <Input
+                value={feature.healing_dice || ""}
+                onChange={(e) => patch({ healing_dice: e.target.value })}
+                placeholder="e.g., 1d10"
+                className="bg-[#0b1220] border-slate-700 text-white"
+              />
+            </Field>
+            <Field label="Add character level">
+              <div className="flex items-center gap-2 h-10">
+                <Switch
+                  checked={!!feature.add_level}
+                  onCheckedChange={(c) => patch({ add_level: c })}
+                />
+                <span className="text-xs text-slate-300">{feature.add_level ? "Yes" : "No"}</span>
+              </div>
+            </Field>
+            <Field label="Add ability modifier">
+              <div className="flex items-center gap-2 h-10">
+                <Switch
+                  checked={!!feature.add_ability_mod}
+                  onCheckedChange={(c) => patch({ add_ability_mod: c })}
+                />
+                <span className="text-xs text-slate-300">{feature.add_ability_mod ? "Yes" : "No"}</span>
+              </div>
+            </Field>
+          </div>
+        )}
+
+        {effect === "Condition" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Field label="Condition applied">
+              <Select value={feature.condition_applied || "Prone"} onValueChange={(v) => patch({ condition_applied: v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent className="max-h-64">
+                  {Object.keys(CONDITION_COLORS).map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Save to resist">
+              <Select value={feature.condition_save || "STR"} onValueChange={(v) => patch({ condition_save: v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SAVE_ABILITIES.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="DC source">
+              <Select value={feature.condition_dc_source || "feature_dc"} onValueChange={(v) => patch({ condition_dc_source: v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CONDITION_DC_SOURCES.map((s) => (<SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+            {feature.condition_dc_source === "fixed" && (
+              <Field label="Fixed DC">
+                <Input
+                  type="number" min={1}
+                  value={feature.condition_dc_fixed ?? 13}
+                  onChange={(e) => patch({ condition_dc_fixed: Number(e.target.value) || 13 })}
+                  className="bg-[#0b1220] border-slate-700 text-white"
+                />
+              </Field>
+            )}
+            <Field label="Duration">
+              <Input
+                value={feature.condition_duration || ""}
+                onChange={(e) => patch({ condition_duration: e.target.value })}
+                placeholder="1 minute"
+                className="bg-[#0b1220] border-slate-700 text-white"
+              />
+            </Field>
+          </div>
+        )}
+
+        {effect === "Resource" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Field label="Resource restored">
+              <Select value={feature.resource_restored || "Hit Points"} onValueChange={(v) => patch({ resource_restored: v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {RESOURCE_POOLS.map((r) => (<SelectItem key={r} value={r}>{r}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Amount (dice or flat)">
+              <Input
+                value={feature.resource_amount || ""}
+                onChange={(e) => patch({ resource_amount: e.target.value })}
+                placeholder="1d10 + level  /  2  /  all"
+                className="bg-[#0b1220] border-slate-700 text-white"
+              />
+            </Field>
+          </div>
+        )}
+      </div>
+
+      {/* --- Scaling die (Martial Arts, Rage damage, Bardic Inspiration) --- */}
+      <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Scaling Die</h4>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={!!scaling.enabled}
+              onCheckedChange={(c) => patchScaling({ enabled: c })}
+            />
+            <span className="text-[10px] text-slate-400">{scaling.enabled ? "On" : "Off"}</span>
+          </div>
+        </div>
+        {scaling.enabled && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Field label="Base die (level 1)">
+                <Input
+                  value={scaling.base_die || ""}
+                  onChange={(e) => patchScaling({ base_die: e.target.value })}
+                  placeholder="e.g., 1d4"
+                  className="bg-[#0b1220] border-slate-700 text-white"
+                />
+              </Field>
+              <Field label="When used">
+                <Input
+                  value={scaling.usage || ""}
+                  onChange={(e) => patchScaling({ usage: e.target.value })}
+                  placeholder='"On unarmed strikes" / "Added to weapon damage"'
+                  className="bg-[#0b1220] border-slate-700 text-white"
+                />
+              </Field>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <Label className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Progression</Label>
+                <Button type="button" variant="outline" size="sm" onClick={addProgressionRow}>
+                  <Plus className="w-3 h-3 mr-1" /> Add Step
+                </Button>
+              </div>
+              {progression.length === 0 ? (
+                <p className="text-[11px] text-slate-500 italic">No steps — die stays at the base value.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {progression.map((row, i) => (
+                    <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-4">
+                        <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">At level</Label>
+                        <Input
+                          type="number" min={1} max={20}
+                          value={row.level ?? 1}
+                          onChange={(e) => updateProgressionRow(i, { level: Number(e.target.value) || 1 })}
+                          className="bg-[#0b1220] border-slate-700 text-white text-xs"
+                        />
+                      </div>
+                      <div className="col-span-7">
+                        <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Die</Label>
+                        <Input
+                          value={row.die || ""}
+                          onChange={(e) => updateProgressionRow(i, { die: e.target.value })}
+                          placeholder="1d6"
+                          className="bg-[#0b1220] border-slate-700 text-white text-xs"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeProgressionRow(i)}
+                        className="col-span-1 text-slate-400 hover:text-red-400 flex justify-center mt-4"
+                        title="Remove"
+                      >
+                        <Trash className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* --- Feature DC (overrides Spell DC for this feature's saves) --- */}
+      <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Feature DC (optional)</h4>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={!!featureDC.enabled}
+              onCheckedChange={(c) => patchFeatureDC({ enabled: c })}
+            />
+            <span className="text-[10px] text-slate-400">{featureDC.enabled ? "On" : "Off"}</span>
+          </div>
+        </div>
+        {featureDC.enabled && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Field label="Ability used">
+              <Select value={featureDC.ability || "STR"} onValueChange={(v) => patchFeatureDC({ ability: v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SAVE_ABILITIES.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Formula">
+              <Input
+                value={featureDC.formula || ""}
+                onChange={(e) => patchFeatureDC({ formula: e.target.value })}
+                placeholder="8 + prof + ability"
+                className="bg-[#0b1220] border-slate-700 text-white"
+              />
+            </Field>
+          </div>
+        )}
       </div>
 
       <Field label="Image">
         <HomebrewImageUpload
-          url={ability.image_url}
+          url={feature.image_url}
           onChange={(url) => patch({ image_url: url })}
-          path="homebrew/abilities"
+          path="homebrew/class-features"
         />
       </Field>
     </div>
