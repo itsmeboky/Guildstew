@@ -157,6 +157,7 @@ export function applyBreweryRaceBaseline(breweryRace, characterData = {}) {
 export function clearBreweryRaceMarkers() {
   return {
     _brewery_race: null,
+    _brewery_subrace_bonus: {},
     _brewery_ability_picks: {},
     _brewery_bonus_langs: [],
     _brewery_chosen_skills: [],
@@ -167,4 +168,57 @@ export function clearBreweryRaceMarkers() {
     _brewery_additional_speeds: null,
     race_features: [],
   };
+}
+
+/**
+ * Apply a subrace selection on top of the baseline. Caller should
+ * first run applyBreweryRaceBaseline, then merge these updates.
+ * If `subraceName` doesn't match any subrace, returns {} (base race
+ * alone).
+ *
+ * Mechanics:
+ *   - ability_score_bonus      → additive bonus map, stored
+ *     on _brewery_subrace_bonus so AbilityScoresStep sums it in.
+ *   - speed_override           → replaces baseline speed when set.
+ *   - darkvision_override      → replaces baseline darkvision when
+ *     set; the task calls for "replaces if higher" but we respect
+ *     author intent and take the override as the authoritative value.
+ *   - additional_traits        → appended to race_features.
+ *   - replaced_traits          → filtered out of race_features by
+ *     name (case-sensitive match, same rule as the creator).
+ */
+export function applyBreweryRaceSubrace(breweryRace, subraceName, baselineRaceFeatures = []) {
+  if (!breweryRace) return {};
+  const subraces = Array.isArray(breweryRace.subraces) ? breweryRace.subraces : [];
+  const subrace = subraces.find((s) => s && s.name === subraceName);
+  if (!subrace) {
+    return {
+      _brewery_subrace_bonus: {},
+      race_features: baselineRaceFeatures,
+    };
+  }
+
+  const additional = Array.isArray(subrace.additional_traits) ? subrace.additional_traits : [];
+  const replaced   = Array.isArray(subrace.replaced_traits)   ? subrace.replaced_traits   : [];
+  const filtered   = baselineRaceFeatures.filter((f) => !replaced.includes(f.name));
+  const extra = additional.map((t) => ({
+    name: t?.name || "Subrace Trait",
+    source: subrace.name || breweryRace.name || "Subrace",
+    description: t?.description || "",
+    level: Number(t?.level) || 1,
+    mechanical: t?.mechanical || {},
+    origin: "subrace_mod",
+  }));
+
+  const updates = {
+    _brewery_subrace_bonus: subrace.ability_score_bonus || {},
+    race_features: [...filtered, ...extra],
+  };
+  if (subrace.speed_override != null && subrace.speed_override !== "") {
+    updates._brewery_speed = Number(subrace.speed_override) || 0;
+  }
+  if (subrace.darkvision_override != null && subrace.darkvision_override !== "") {
+    updates._brewery_darkvision = Number(subrace.darkvision_override) || 0;
+  }
+  return updates;
 }

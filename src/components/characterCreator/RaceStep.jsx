@@ -9,6 +9,7 @@ import { RACES } from '@/components/dnd5e/dnd5eRules';
 import { getModdedRaces } from '@/lib/modEngine';
 import {
   applyBreweryRaceBaseline,
+  applyBreweryRaceSubrace,
   clearBreweryRaceMarkers,
 } from '@/lib/breweryRaceApply';
 
@@ -310,11 +311,18 @@ export default function RaceStep({ characterData, updateCharacterData, campaignI
       subrace: race.subtypes[0],
     };
     if (race._source === "brewery") {
+      const baseline = applyBreweryRaceBaseline(race._raw || null, characterData);
+      const subraceUpdates = applyBreweryRaceSubrace(
+        race._raw || null,
+        race.subtypes[0],
+        baseline.race_features || [],
+      );
       return {
         ...base,
         ...clearBreweryRaceMarkers(),
         _brewery_race: race._raw || null,
-        ...applyBreweryRaceBaseline(race._raw || null, characterData),
+        ...baseline,
+        ...subraceUpdates,
       };
     }
     return { ...base, ...clearBreweryRaceMarkers() };
@@ -468,7 +476,22 @@ export default function RaceStep({ characterData, updateCharacterData, campaignI
             <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide">Subrace</Label>
             <Select
               value={characterData.subrace || currentRace.subtypes[0]}
-              onValueChange={(value) => updateCharacterData({ subrace: value })}
+              onValueChange={(value) => {
+                const updates = { subrace: value };
+                // Brewery subraces trigger a recompute: run the
+                // baseline to reset any previously-applied subrace
+                // state, then stack the new subrace's deltas on top.
+                if (currentRace._source === "brewery" && currentRace._raw) {
+                  const baseline = applyBreweryRaceBaseline(currentRace._raw, characterData);
+                  const subraceUpdates = applyBreweryRaceSubrace(
+                    currentRace._raw,
+                    value,
+                    baseline.race_features || [],
+                  );
+                  Object.assign(updates, baseline, subraceUpdates);
+                }
+                updateCharacterData(updates);
+              }}
             >
               <SelectTrigger className="bg-[#2A3441]/80 border-[#37F2D1]/20 text-white h-12 hover:border-[#37F2D1]/60 transition-colors">
                 <SelectValue />
