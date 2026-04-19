@@ -261,6 +261,14 @@ export default function CharacterCreator() {
 
   const createMutation = useMutation({
     mutationFn: (stats) => {
+      // Preserve any mod_dependencies the wizard state already carries
+      // — Brewery Part 2 will populate this when the race/class steps
+      // read from getModdedRaces()/getModdedClasses(). Today the field
+      // is usually empty; wiring it through now means the character
+      // row is already dependency-aware when the modded creator ships.
+      if (Array.isArray(characterData.mod_dependencies)) {
+        stats = { ...stats, mod_dependencies: characterData.mod_dependencies };
+      }
       if (campaignId && !editCharacterId) {
         // New NPC
         const npcPayload = npcPayloadFromStats(stats, {

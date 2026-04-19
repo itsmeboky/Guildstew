@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
+import { validateInstalledMods } from "@/lib/modEngine";
 
 /**
  * Campaign Home — the lobby players and GMs see when they're NOT
@@ -57,13 +58,26 @@ export default function CampaignView() {
         || (Array.isArray(campaign.co_dm_ids) && campaign.co_dm_ids.includes(user?.id)));
 
   const startSession = useMutation({
-    mutationFn: () => base44.entities.Campaign.update(campaignId, {
-      session_active: true,
-      session_started_at: new Date().toISOString(),
-      active_session_players: campaign?.player_ids || [],
-      disconnected_players: [],
-      is_session_active: true,
-    }),
+    mutationFn: async () => {
+      // Brewery mod gate — block session start when any installed mod
+      // has validation errors. Brings up a blocking toast that lists
+      // the broken mod count; the GM opens Campaign Settings to fix
+      // them via the BreweryModsPanel.
+      const modErrors = await validateInstalledMods(campaignId);
+      if (modErrors.length > 0) {
+        const names = modErrors.map((m) => m.mod_name).join(", ");
+        throw new Error(
+          `${modErrors.length} mod(s) have errors: ${names}. Open Campaign Settings → House Rules → Brewery Mods to disable or uninstall them.`,
+        );
+      }
+      return base44.entities.Campaign.update(campaignId, {
+        session_active: true,
+        session_started_at: new Date().toISOString(),
+        active_session_players: campaign?.player_ids || [],
+        disconnected_players: [],
+        is_session_active: true,
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
       navigate(createPageUrl("GMPanel") + `?id=${campaignId}`);
