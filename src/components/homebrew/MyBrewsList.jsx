@@ -348,12 +348,13 @@ function AddToCampaignDialog({ brew, currentUser, onClose }) {
         });
       } else if (brew.category === "custom_ability") {
         const mods = brew.modifications || {};
-        // The CampaignAbility entity is wired in the adapter; the
-        // underlying table is campaign_abilities.
+        // The underlying table is campaign_class_features (formerly
+        // campaign_abilities). Either entity key resolves to the
+        // same table through the alias in entities.js.
         try {
-          await base44.entities.CampaignAbility.create({
+          await base44.entities.CampaignClassFeature.create({
             campaign_id: campaignId,
-            name: mods.name || brew.title || "Custom Ability",
+            name: mods.name || brew.title || "Custom Class Feature",
             description: mods.description || brew.description || "",
             type: mods.type || "General Ability",
             class_name: mods.type === "Class Feature" ? (mods.class || null) : null,
@@ -366,8 +367,8 @@ function AddToCampaignDialog({ brew, currentUser, onClose }) {
           // friendlier error but still let the campaign_homebrew
           // join row get written so My Brews can show the install
           // checkmark.
-          console.warn("CampaignAbility create failed:", err?.message || err);
-          toast.error("campaign_abilities table unavailable — install recorded but row not created.");
+          console.warn("CampaignClassFeature create failed:", err?.message || err);
+          toast.error("campaign_class_features table unavailable — install recorded but row not created.");
         }
       }
       // Every attach path also records the install so MyBrews can
