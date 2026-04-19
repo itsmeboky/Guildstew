@@ -9,6 +9,7 @@ import { createPageUrl } from "@/utils";
 import { canModifySettings, isMainGM } from "@/components/campaigns/permissions";
 import ImagePositionEditor from "@/components/campaigns/ImagePositionEditor";
 import HouseRulesPanel from "@/components/campaigns/HouseRulesPanel";
+import BreweryModsPanel from "@/components/campaigns/BreweryModsPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -860,6 +861,10 @@ export default function CampaignSettings() {
             <TabsContent value="houseRules" className="space-y-6">
               <HouseRulesPanel
                 campaign={campaign}
+                campaignId={campaignId}
+                canEdit={canModifySettings(campaign, user?.id)}
+              />
+              <BreweryModsPanel
                 campaignId={campaignId}
                 canEdit={canModifySettings(campaign, user?.id)}
               />
