@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { X, Search, Filter, Users, Skull } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { safeText } from "@/utils/safeRender";
 
 const CR_OPTIONS = [
   { value: "all", label: "All CRs" },
@@ -310,6 +311,17 @@ export default function CharacterSelector({
 function CharacterCard({ character, type, onClick }) {
   const imageUrl = character.image_url || character.avatar_url;
   const isMonster = type === 'monster';
+  const name = safeText(character.name);
+  const cr = safeText(character.challenge_rating ?? character.cr ?? '?');
+  const size = safeText(character.size);
+  const creatureType = safeText(character.type);
+  const description = safeText(character.description);
+  const stats = character.stats || {};
+  const acText = safeText(stats.armor_class);
+  const hpValue = stats.hit_points;
+  const hpText = hpValue && typeof hpValue === 'object' && !Array.isArray(hpValue)
+    ? safeText(hpValue.max ?? hpValue.current ?? hpValue.value ?? '')
+    : safeText(hpValue);
 
   return (
     <button
@@ -318,9 +330,9 @@ function CharacterCard({ character, type, onClick }) {
     >
       <div className="relative h-36 bg-[#0b1220]">
         {imageUrl ? (
-          <img 
-            src={imageUrl} 
-            alt={character.name} 
+          <img
+            src={imageUrl}
+            alt={name}
             className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
@@ -328,8 +340,7 @@ function CharacterCard({ character, type, onClick }) {
             {isMonster ? '👹' : '👤'}
           </div>
         )}
-        
-        {/* Type badge */}
+
         <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold ${
           isMonster ? 'bg-red-500/80 text-white' : 'bg-[#37F2D1]/80 text-black'
         }`}>
@@ -338,35 +349,24 @@ function CharacterCard({ character, type, onClick }) {
       </div>
 
       <div className="p-3 space-y-1">
-        <h3 className="text-white font-bold text-sm truncate">{character.name}</h3>
-        
+        <h3 className="text-white font-bold text-sm truncate">{name}</h3>
+
         {isMonster ? (
           <div className="flex items-center gap-2 text-xs text-slate-400">
-            <span className="px-1.5 py-0.5 rounded bg-[#111827]">
-              CR {character.challenge_rating ?? '?'}
-            </span>
-            {character.size && (
-              <span className="capitalize">{character.size}</span>
-            )}
-            {character.type && (
-              <span className="capitalize truncate">{character.type}</span>
-            )}
+            <span className="px-1.5 py-0.5 rounded bg-[#111827]">CR {cr}</span>
+            {size && (<span className="capitalize">{size}</span>)}
+            {creatureType && (<span className="capitalize truncate">{creatureType}</span>)}
           </div>
         ) : (
           <p className="text-slate-400 text-xs truncate">
-            {character.description?.slice(0, 50) || 'No description'}
+            {description ? description.slice(0, 50) : 'No description'}
           </p>
         )}
 
-        {/* Quick stats for monsters */}
         {isMonster && character.stats && (
           <div className="flex gap-2 text-[10px] text-slate-500 pt-1">
-            {character.stats.armor_class && (
-              <span>AC {character.stats.armor_class}</span>
-            )}
-            {character.stats.hit_points && (
-              <span>HP {character.stats.hit_points}</span>
-            )}
+            {acText && (<span>AC {acText}</span>)}
+            {hpText && (<span>HP {hpText}</span>)}
           </div>
         )}
       </div>

@@ -23,6 +23,7 @@ import MoneyCounter from "@/components/shared/MoneyCounter";
 import ItemTooltip from "@/components/shared/ItemTooltip";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
 import { computeArmorClass } from "@/components/dnd5e/armorClass";
+import { safeText } from "@/utils/safeRender";
 
 // Helpers to extract the character's fighting-style names from any of
 // the several shapes a sheet might use. Used by AC (Defense +1) and
@@ -4721,11 +4722,11 @@ export default function GMPanel() {
                           </div>
                           <div className="p-3">
                             <h3 className="text-white font-bold text-sm truncate">
-                              {monster.name || 'Unknown Creature'}
+                              {safeText(monster.name) || 'Unknown Creature'}
                             </h3>
                             <p className="text-slate-400 text-xs truncate">
-                              {monster.type || 'monster'}
-                              {monster.stats?.challenge_rating != null ? ` • CR ${monster.stats.challenge_rating}` : ''}
+                              {safeText(monster.type) || 'monster'}
+                              {monster.stats?.challenge_rating != null ? ` • CR ${safeText(monster.stats.challenge_rating)}` : ''}
                             </p>
                           </div>
                         </button>
@@ -5656,7 +5657,7 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
                           >
                             <div className="w-10 h-10 rounded-full bg-cover bg-center bg-[#111827]" style={{ backgroundImage: (monster.image_url || monster.avatar_url) ? `url(${monster.image_url || monster.avatar_url})` : 'none' }} />
                             <div className="text-left min-w-0 flex-1">
-                              <p className="text-sm font-bold text-white truncate">{monster.name}</p>
+                              <p className="text-sm font-bold text-white truncate">{safeText(monster.name)}</p>
                               {adjustingHp ? (
                                 <div className="w-full bg-[#111827] h-1.5 rounded-full mt-1 overflow-hidden">
                                   <div
@@ -5864,9 +5865,9 @@ function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPosses
         <>
           <div className="text-center space-y-1">
             <p className="text-[11px] tracking-[0.24em] uppercase text-amber-300">
-              Level {character.level || character.stats?.level || character.challenge_rating || character.stats?.challenge_rating || '?'} • {character.type || 'NPC'}
+              Level {safeText(character.level || character.stats?.level || character.challenge_rating || character.stats?.challenge_rating) || '?'} • {safeText(character.type) || 'NPC'}
             </p>
-            <p className="text-sm text-slate-300">{character.name}</p>
+            <p className="text-sm text-slate-300">{safeText(character.name)}</p>
           </div>
 
           <button
@@ -6134,10 +6135,10 @@ function EquipmentSlot({ label, size = 'normal', item, slotId, onDrop, onDragSta
         className={`${slotSize} rounded-xl bg-[#0b1220] border-2 transition-all shadow-[0_8px_20px_rgba(0,0,0,0.7)] flex items-center justify-center cursor-pointer overflow-hidden ${borderColor} ${isDragOver ? 'scale-105' : ''}`}
       >
         {item && itemImage ? (
-          <img src={itemImage} alt={item.name} className="w-full h-full object-cover" />
+          <img src={itemImage} alt={safeText(item.name)} className="w-full h-full object-cover" />
         ) : item ? (
           <span className="text-[8px] text-center text-slate-300 px-1 line-clamp-2">
-            {item.name}
+            {safeText(item.name)}
           </span>
         ) : (
           <span className="text-[8px] text-center text-slate-600 px-1 leading-tight font-medium">{label}</span>
@@ -6145,7 +6146,7 @@ function EquipmentSlot({ label, size = 'normal', item, slotId, onDrop, onDragSta
       </div>
       {showTooltip && (
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-[#1E2430] text-white px-2 py-1 rounded text-[10px] whitespace-nowrap z-50 shadow-xl border border-[#37F2D1]">
-          {item ? `${label}: ${item.name} (double-click to unequip)` : label}
+          {item ? `${label}: ${safeText(item.name)} (double-click to unequip)` : label}
         </div>
       )}
     </div>
@@ -6277,10 +6278,10 @@ function QuickSlots({ quickSlots, setQuickSlots, inventory }) {
             >
               {item ? (
                 item.image_url ? (
-                  <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                  <img src={item.image_url} alt={safeText(item.name)} className="w-full h-full object-cover" />
                 ) : (
                   <div className="text-center p-1">
-                    <span className="text-[9px] text-slate-300 line-clamp-2">{item.name}</span>
+                    <span className="text-[9px] text-slate-300 line-clamp-2">{safeText(item.name)}</span>
                   </div>
                 )
               ) : (
@@ -6331,9 +6332,9 @@ function QuickSlots({ quickSlots, setQuickSlots, inventory }) {
                         </div>
                       )}
                       <div className="flex-1">
-                        <p className="text-white text-sm font-medium">{item.name}</p>
+                        <p className="text-white text-sm font-medium">{safeText(item.name)}</p>
                         {item.quantity > 1 && (
-                          <p className="text-xs text-slate-400">Qty: {item.quantity}</p>
+                          <p className="text-xs text-slate-400">Qty: {safeText(item.quantity)}</p>
                         )}
                       </div>
                     </button>
@@ -6421,9 +6422,9 @@ function MonsterQuickEquip({ inventory, setInventory, onClose, monsterName }) {
                     {item.image_url && (
                       <img src={item.image_url} alt="" className="w-5 h-5 rounded object-cover" />
                     )}
-                    <span className="text-white">{item.name}</span>
+                    <span className="text-white">{safeText(item.name)}</span>
                     {item.quantity > 1 && (
-                      <span className="text-[#37F2D1] text-xs">x{item.quantity}</span>
+                      <span className="text-[#37F2D1] text-xs">x{safeText(item.quantity)}</span>
                     )}
                     <button
                       onClick={() => removeItem(item.name)}
@@ -6484,9 +6485,9 @@ function MonsterQuickEquip({ inventory, setInventory, onClose, monsterName }) {
                   >
                     <div className="flex items-start gap-3">
                       {itemIcons[item.name] ? (
-                        <img 
-                          src={itemIcons[item.name]} 
-                          alt={item.name} 
+                        <img
+                          src={itemIcons[item.name]}
+                          alt={safeText(item.name)}
                           className="w-12 h-12 rounded-lg object-cover flex-shrink-0 group-hover:scale-105 transition-transform"
                         />
                       ) : (
@@ -6495,9 +6496,9 @@ function MonsterQuickEquip({ inventory, setInventory, onClose, monsterName }) {
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-white text-sm font-medium truncate">{item.name}</p>
-                        <p className="text-[10px] text-slate-500">{item.type}</p>
-                        <p className="text-[10px] text-slate-400">{item.cost} • {item.weight} lb</p>
+                        <p className="text-white text-sm font-medium truncate">{safeText(item.name)}</p>
+                        <p className="text-[10px] text-slate-500">{safeText(item.type)}</p>
+                        <p className="text-[10px] text-slate-400">{safeText(item.cost)} • {safeText(item.weight)} lb</p>
                       </div>
                     </div>
                   </button>
@@ -6589,9 +6590,9 @@ function InventoryOrganizer({ inventory, setInventory, onClose, isMonsterInvento
                               <img src={item.image_url} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
                             )}
                             <div className="flex-1 min-w-0">
-                              <p className="text-white font-semibold text-sm truncate">{item.name}</p>
+                              <p className="text-white font-semibold text-sm truncate">{safeText(item.name)}</p>
                               {item.quantity > 1 && (
-                                <p className="text-xs text-slate-400">Quantity: {item.quantity}</p>
+                                <p className="text-xs text-slate-400">Quantity: {safeText(item.quantity)}</p>
                               )}
                             </div>
                             <button
@@ -7007,7 +7008,7 @@ function MonsterStatBlock({ character, className, onActionClick }) {
   );
 
   return (
-    <SectionCard title={character.name || 'Monster Stats'} className={`${className} flex flex-col`}>
+    <SectionCard title={safeText(character.name) || 'Monster Stats'} className={`${className} flex flex-col`}>
       <div className="flex flex-col h-full">
         {/* Tabs */}
         <div className="flex gap-1 bg-[#0b1220] rounded-lg p-0.5 mb-3 flex-shrink-0">
@@ -7034,19 +7035,19 @@ function MonsterStatBlock({ character, className, onActionClick }) {
               <div className="grid grid-cols-4 gap-2 text-[10px] bg-[#0b1220] p-2 rounded-xl border border-[#111827]">
                 <div className="text-center">
                   <span className="text-slate-400 block text-[9px] uppercase tracking-wider">AC</span>
-                  <span className="text-white font-bold text-sm">{ac}</span>
+                  <span className="text-white font-bold text-sm">{safeText(ac)}</span>
                 </div>
                 <div className="text-center border-l border-[#1e293b]">
                   <span className="text-slate-400 block text-[9px] uppercase tracking-wider">HP</span>
-                  <span className="text-white font-bold text-sm">{hp}</span>
+                  <span className="text-white font-bold text-sm">{safeText(hp)}</span>
                 </div>
                 <div className="text-center border-l border-[#1e293b]">
                   <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Speed</span>
-                  <span className="text-white font-bold text-sm">{speed}</span>
+                  <span className="text-white font-bold text-sm">{safeText(speed)}</span>
                 </div>
                 <div className="text-center border-l border-[#1e293b]">
                   <span className="text-slate-400 block text-[9px] uppercase tracking-wider">CR</span>
-                  <span className="text-amber-400 font-bold text-sm">{cr}</span>
+                  <span className="text-amber-400 font-bold text-sm">{safeText(cr)}</span>
                 </div>
               </div>
 
@@ -7057,8 +7058,8 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                   <div className="space-y-3">
                     {[...traits, ...specialAbilities].map((trait, idx) => (
                       <div key={idx} className="text-[11px]">
-                        <span className="text-white font-bold">{trait.name}. </span>
-                        <span className="text-slate-300 leading-relaxed">{trait.desc || trait.description}</span>
+                        <span className="text-white font-bold">{safeText(trait.name)}. </span>
+                        <span className="text-slate-300 leading-relaxed">{safeText(trait.desc || trait.description)}</span>
                       </div>
                     ))}
                   </div>
@@ -7075,25 +7076,25 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                     {damageVulnerabilities && (
                       <div>
                         <span className="text-slate-400 uppercase tracking-wide text-[9px]">Vulnerabilities </span>
-                        <span className="text-rose-300">{Array.isArray(damageVulnerabilities) ? damageVulnerabilities.join(', ') : damageVulnerabilities}</span>
+                        <span className="text-rose-300">{safeText(damageVulnerabilities)}</span>
                       </div>
                     )}
                     {damageResistances && (
                       <div>
                         <span className="text-slate-400 uppercase tracking-wide text-[9px]">Resistances </span>
-                        <span className="text-emerald-300">{Array.isArray(damageResistances) ? damageResistances.join(', ') : damageResistances}</span>
+                        <span className="text-emerald-300">{safeText(damageResistances)}</span>
                       </div>
                     )}
                     {damageImmunities && (
                       <div>
                         <span className="text-slate-400 uppercase tracking-wide text-[9px]">Damage Immunities </span>
-                        <span className="text-slate-200">{Array.isArray(damageImmunities) ? damageImmunities.join(', ') : damageImmunities}</span>
+                        <span className="text-slate-200">{safeText(damageImmunities)}</span>
                       </div>
                     )}
                     {conditionImmunities && (
                       <div>
                         <span className="text-slate-400 uppercase tracking-wide text-[9px]">Condition Immunities </span>
-                        <span className="text-slate-200">{Array.isArray(conditionImmunities) ? conditionImmunities.join(', ') : conditionImmunities}</span>
+                        <span className="text-slate-200">{safeText(conditionImmunities)}</span>
                       </div>
                     )}
                   </div>
@@ -7125,8 +7126,8 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                           }
                         }}
                       >
-                        <span className="text-white font-bold group-hover:text-[#37F2D1] transition-colors">{action.name}. </span>
-                        <span className="text-slate-300 leading-relaxed">{action.desc || action.description}</span>
+                        <span className="text-white font-bold group-hover:text-[#37F2D1] transition-colors">{safeText(action.name)}. </span>
+                        <span className="text-slate-300 leading-relaxed">{safeText(action.desc || action.description)}</span>
                       </div>
                     ))}
                   </div>
@@ -7140,8 +7141,8 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                   <div className="space-y-3">
                     {reactions.map((reaction, idx) => (
                       <div key={idx} className="text-[11px]">
-                        <span className="text-white font-bold">{reaction.name}. </span>
-                        <span className="text-slate-300 leading-relaxed">{reaction.desc || reaction.description}</span>
+                        <span className="text-white font-bold">{safeText(reaction.name)}. </span>
+                        <span className="text-slate-300 leading-relaxed">{safeText(reaction.desc || reaction.description)}</span>
                       </div>
                     ))}
                   </div>
@@ -7153,12 +7154,12 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                 <div>
                   <p className="text-[10px] text-amber-400 uppercase tracking-wide mb-2 font-bold border-b border-amber-500/20 pb-1">Multi-Attack</p>
                   {multiattack.description && (
-                    <p className="text-[11px] text-slate-300 leading-relaxed mb-1">{multiattack.description}</p>
+                    <p className="text-[11px] text-slate-300 leading-relaxed mb-1">{safeText(multiattack.description)}</p>
                   )}
                   {Array.isArray(multiattack.attacks) && multiattack.attacks.length > 0 && (
                     <ul className="text-[11px] text-slate-400 list-disc list-inside">
                       {multiattack.attacks.map((a, i) => (
-                        <li key={i}>{a.count > 1 ? `${a.count}× ` : ""}{a.name}</li>
+                        <li key={i}>{a.count > 1 ? `${safeText(a.count)}× ` : ""}{safeText(a.name)}</li>
                       ))}
                     </ul>
                   )}
@@ -7172,8 +7173,8 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                   <div className="space-y-3">
                     {bonusActions.map((action, idx) => (
                       <div key={idx} className="text-[11px]">
-                        <span className="text-white font-bold">{action.name}. </span>
-                        <span className="text-slate-300 leading-relaxed">{action.desc || action.description}</span>
+                        <span className="text-white font-bold">{safeText(action.name)}. </span>
+                        <span className="text-slate-300 leading-relaxed">{safeText(action.desc || action.description)}</span>
                       </div>
                     ))}
                   </div>
@@ -7187,7 +7188,7 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                     Legendary Actions
                     {legendaryPerRound != null && Number(legendaryPerRound) > 0 && (
                       <span className="text-slate-500 normal-case ml-2 font-normal">
-                        ({legendaryPerRound}/round)
+                        ({safeText(legendaryPerRound)}/round)
                       </span>
                     )}
                   </p>
@@ -7195,12 +7196,12 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                     {legendaryActions.map((action, idx) => (
                       <div key={idx} className="text-[11px]">
                         <span className="text-white font-bold">
-                          {action.name}
+                          {safeText(action.name)}
                           {action.legendary_cost > 1 && (
-                            <span className="text-purple-300"> (Costs {action.legendary_cost})</span>
+                            <span className="text-purple-300"> (Costs {safeText(action.legendary_cost)})</span>
                           )}
                           . </span>
-                        <span className="text-slate-300 leading-relaxed">{action.desc || action.description}</span>
+                        <span className="text-slate-300 leading-relaxed">{safeText(action.desc || action.description)}</span>
                       </div>
                     ))}
                   </div>
@@ -7213,7 +7214,7 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                   <p className="text-[10px] text-fuchsia-400 uppercase tracking-wide mb-2 font-bold border-b border-fuchsia-500/20 pb-1">Legendary Resistance</p>
                   <p className="text-[11px] text-slate-300 leading-relaxed">
                     If the creature fails a saving throw, it can choose to succeed instead.
-                    <span className="text-fuchsia-300 ml-1 font-bold">{legendaryResistances}/day</span>
+                    <span className="text-fuchsia-300 ml-1 font-bold">{safeText(legendaryResistances)}/day</span>
                   </p>
                 </div>
               )}
@@ -7226,8 +7227,8 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                   <div className="space-y-3">
                     {lairActions.map((action, idx) => (
                       <div key={idx} className="text-[11px]">
-                        <span className="text-white font-bold">{action.name}. </span>
-                        <span className="text-slate-300 leading-relaxed">{action.desc || action.description}</span>
+                        <span className="text-white font-bold">{safeText(action.name)}. </span>
+                        <span className="text-slate-300 leading-relaxed">{safeText(action.desc || action.description)}</span>
                       </div>
                     ))}
                   </div>
@@ -7241,16 +7242,16 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                   <div className="space-y-3">
                     {auras.map((aura, idx) => (
                       <div key={idx} className="text-[11px]">
-                        <span className="text-white font-bold">{aura.name}. </span>
-                        <span className="text-slate-400">({aura.radius || "—"})</span>
+                        <span className="text-white font-bold">{safeText(aura.name)}. </span>
+                        <span className="text-slate-400">({safeText(aura.radius) || "—"})</span>
                         {aura.description && (
-                          <span className="text-slate-300 leading-relaxed"> {aura.description}</span>
+                          <span className="text-slate-300 leading-relaxed"> {safeText(aura.description)}</span>
                         )}
                         {(aura.damage_dice || aura.applies_condition) && (
                           <div className="text-[10px] text-slate-400 mt-0.5">
-                            {aura.damage_dice && <span>Damage: {aura.damage_dice} {aura.damage_type || ""}</span>}
-                            {aura.save_ability && <span className="ml-2">Save: DC {aura.save_dc || "?"} {aura.save_ability}</span>}
-                            {aura.applies_condition && <span className="ml-2">Applies: {aura.applies_condition}</span>}
+                            {aura.damage_dice && <span>Damage: {safeText(aura.damage_dice)} {safeText(aura.damage_type)}</span>}
+                            {aura.save_ability && <span className="ml-2">Save: DC {safeText(aura.save_dc) || "?"} {safeText(aura.save_ability)}</span>}
+                            {aura.applies_condition && <span className="ml-2">Applies: {safeText(aura.applies_condition)}</span>}
                           </div>
                         )}
                       </div>
@@ -7284,13 +7285,13 @@ function MonsterStatBlock({ character, className, onActionClick }) {
               <div className="grid grid-cols-2 gap-2 mb-4">
                 {Object.entries(abilityScores).map(([name, score]) => (
                   <div key={name} className="flex justify-between items-center bg-[#0b1220] rounded-lg p-2 border border-[#111827]">
-                    <span className="text-xs text-amber-400 font-bold w-8">{name}</span>
-                    <span className="text-white font-bold text-sm">{score}</span>
+                    <span className="text-xs text-amber-400 font-bold w-8">{safeText(name)}</span>
+                    <span className="text-white font-bold text-sm">{safeText(score)}</span>
                     <span className="text-xs text-slate-400 w-8 text-right">{getMod(score)}</span>
                   </div>
                 ))}
               </div>
-              
+
               {/* Saves if available */}
               {stats.saving_throws && Object.keys(stats.saving_throws).length > 0 && (
                 <div className="mt-4">
@@ -7298,7 +7299,7 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(stats.saving_throws).filter(([_, p]) => p).map(([key, val]) => (
                       <span key={key} className="text-xs bg-[#1a1f2e] px-2 py-1 rounded text-slate-300 border border-[#2A3441]">
-                        {key.toUpperCase()} +{getMod(abilityScores[key.toUpperCase()]) + proficiencyBonus}
+                        {safeText(key).toUpperCase()} +{getMod(abilityScores[key.toUpperCase()]) + proficiencyBonus}
                       </span>
                     ))}
                   </div>
@@ -7328,13 +7329,13 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                         
                         return (
                           <div key={skill} className="flex justify-between bg-[#0b1220] px-2 py-1.5 rounded text-xs">
-                            <span className="text-slate-300">{skill}</span>
-                            <span className="text-[#37F2D1]">{bonus}</span>
+                            <span className="text-slate-300">{safeText(skill)}</span>
+                            <span className="text-[#37F2D1]">{safeText(bonus)}</span>
                           </div>
                         );
                       })
                     ) : (
-                      <p className="text-xs text-slate-300 col-span-2">{Array.isArray(skills) ? skills.join(', ') : String(skills)}</p>
+                      <p className="text-xs text-slate-300 col-span-2">{Array.isArray(skills) ? skills.map((s) => safeText(s)).join(', ') : safeText(skills)}</p>
                     )}
                   </div>
                 </div>
@@ -7345,13 +7346,13 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                   {senses && (
                     <div>
                       <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Senses</p>
-                      <p className="text-xs text-white bg-[#0b1220] p-2 rounded">{senses}</p>
+                      <p className="text-xs text-white bg-[#0b1220] p-2 rounded">{safeText(senses)}</p>
                     </div>
                   )}
                   {languages && (
                     <div>
                       <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Languages</p>
-                      <p className="text-xs text-white bg-[#0b1220] p-2 rounded">{languages}</p>
+                      <p className="text-xs text-white bg-[#0b1220] p-2 rounded">{safeText(languages)}</p>
                     </div>
                   )}
                 </div>
@@ -7365,16 +7366,16 @@ function MonsterStatBlock({ character, className, onActionClick }) {
               {typeof spellsData === 'object' && !Array.isArray(spellsData) ? (
                 Object.entries(spellsData).map(([level, spells]) => {
                   if (!spells || spells.length === 0) return null;
-                  const label = level === 'cantrips' ? 'Cantrips' : 
-                               level.startsWith('level') ? `Level ${level.replace('level', '')}` : 
+                  const label = level === 'cantrips' ? 'Cantrips' :
+                               level.startsWith('level') ? `Level ${level.replace('level', '')}` :
                                level;
                   return (
                     <div key={level}>
-                      <p className="text-[10px] text-purple-400 uppercase tracking-wide mb-2 font-bold sticky top-0 bg-[#050816] py-1">{label}</p>
+                      <p className="text-[10px] text-purple-400 uppercase tracking-wide mb-2 font-bold sticky top-0 bg-[#050816] py-1">{safeText(label)}</p>
                       <div className="space-y-1">
                         {spells.map((spell, idx) => (
                           <div key={idx} className="text-xs bg-[#0b1220] p-2 rounded border border-[#111827]">
-                            <span className="text-white font-medium">{typeof spell === 'string' ? spell : spell.name}</span>
+                            <span className="text-white font-medium">{safeText(typeof spell === 'string' ? spell : spell?.name)}</span>
                           </div>
                         ))}
                       </div>
@@ -7866,28 +7867,28 @@ function VillainActionPrompt({ prompt, onClose, onConfirm }) {
           <span className="bg-rose-600/20 border border-rose-600/60 rounded px-2 py-0.5">Round {round}</span>
           Villain Action
         </div>
-        <h3 className="text-2xl font-black text-rose-100 mb-1">{action.name}</h3>
-        <p className="text-xs text-slate-400 mb-4">{villain.name}</p>
+        <h3 className="text-2xl font-black text-rose-100 mb-1">{safeText(action.name)}</h3>
+        <p className="text-xs text-slate-400 mb-4">{safeText(villain.name)}</p>
         {action.description && (
           <p className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed mb-4">
-            {action.description}
+            {safeText(action.description)}
           </p>
         )}
         <div className="grid grid-cols-2 gap-2 text-xs text-slate-300 mb-6">
           {action.save_dc && (
-            <div><span className="text-rose-300">DC</span> {action.save_dc} {action.save_ability || "save"}</div>
+            <div><span className="text-rose-300">DC</span> {safeText(action.save_dc)} {safeText(action.save_ability) || "save"}</div>
           )}
           {action.attack_bonus != null && action.attack_bonus !== "" && (
-            <div><span className="text-rose-300">Attack</span> +{action.attack_bonus}</div>
+            <div><span className="text-rose-300">Attack</span> +{safeText(action.attack_bonus)}</div>
           )}
           {action.damage_dice && (
-            <div><span className="text-rose-300">Damage</span> {action.damage_dice} {action.damage_type || ""}</div>
+            <div><span className="text-rose-300">Damage</span> {safeText(action.damage_dice)} {safeText(action.damage_type)}</div>
           )}
           {action.aoe_size && (
-            <div><span className="text-rose-300">Area</span> {action.aoe_shape || ""} {action.aoe_size}</div>
+            <div><span className="text-rose-300">Area</span> {safeText(action.aoe_shape)} {safeText(action.aoe_size)}</div>
           )}
           {action.applies_condition && (
-            <div><span className="text-rose-300">Condition</span> {action.applies_condition}</div>
+            <div><span className="text-rose-300">Condition</span> {safeText(action.applies_condition)}</div>
           )}
         </div>
         <div className="flex gap-2 justify-end">

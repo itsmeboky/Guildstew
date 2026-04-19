@@ -4,6 +4,7 @@ import { User } from "lucide-react";
 import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
 import { spellDetails } from "@/components/dnd5e/spellData";
 import { abilityModifier, proficiencyBonus, CLASS_HIT_DICE } from '@/components/dnd5e/dnd5eRules';
+import { safeText } from "@/utils/safeRender";
 
 const classes = [
   { name: "Barbarian", icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/a6652f2d8_Barbarian1.png" },
@@ -470,7 +471,7 @@ export default function ReviewStep({ characterData }) {
               <div className="space-y-1 text-sm text-white">
                 {characterData.inventory.slice(0, 8).map((item, idx) => (
                   <div key={idx}>
-                    • {item.name} {item.quantity > 1 ? `(×${item.quantity})` : ''}
+                    • {safeText(item.name)} {item.quantity > 1 ? `(×${safeText(item.quantity)})` : ''}
                   </div>
                 ))}
                 {characterData.inventory.length > 8 && (

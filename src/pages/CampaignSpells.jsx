@@ -7,6 +7,7 @@ import { createPageUrl } from "@/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { safeText as sharedSafeText } from "@/utils/safeRender";
 
 /**
  * Campaign Spells tab. Split-panel layout: the selected spell's
@@ -30,13 +31,9 @@ function levelLabel(level) {
   return Number(level || 0) === 0 ? "Cantrip" : `Level ${level}`;
 }
 
-function safeText(val) {
-  if (val == null) return "";
-  if (typeof val === "string") return val;
-  if (typeof val === "number" || typeof val === "boolean") return String(val);
-  if (Array.isArray(val)) return val.map(safeText).filter(Boolean).join(", ");
-  return "";
-}
+// Delegate to the shared safeText helper so every render site in the
+// app goes through the same coercion — see src/utils/safeRender.js.
+const safeText = sharedSafeText;
 
 export default function CampaignSpells({ embedded = false, campaignId: campaignIdOverride } = {}) {
   const navigate = useNavigate();

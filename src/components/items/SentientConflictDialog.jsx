@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
+import { safeText } from "@/utils/safeRender";
 
 /**
  * Tier 3 §B3 — Sentient Item Conflict.
@@ -74,7 +75,7 @@ export default function SentientConflictDialog({ open, onClose, item, wielder, o
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-cyan-300">
             <Sparkles className="w-5 h-5" />
-            Sentient Item Conflict — {item.name || "Unnamed"}
+            Sentient Item Conflict — {safeText(item.name) || "Unnamed"}
           </DialogTitle>
         </DialogHeader>
 
@@ -87,7 +88,7 @@ export default function SentientConflictDialog({ open, onClose, item, wielder, o
               <p className="text-xs text-slate-500 italic">No structured triggers — the GM decides when conflict starts.</p>
             ) : (
               <ul className="text-sm text-slate-200 list-disc list-inside space-y-0.5">
-                {triggers.map((t, i) => (<li key={i}>{t}</li>))}
+                {triggers.map((t, i) => (<li key={i}>{safeText(t)}</li>))}
               </ul>
             )}
           </div>

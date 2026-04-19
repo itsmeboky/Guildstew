@@ -30,6 +30,7 @@ import { spellDetails, spellIcons } from "@/components/dnd5e/spellData";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
+import { safeText } from "@/utils/safeRender";
 
 const skillAbilityMap = {
   "Athletics": "Str",
@@ -1020,17 +1021,17 @@ export default function CharacterLibrary() {
                       <div key={idx} className="bg-gradient-to-r from-[#2A3441] to-[#1E2430] rounded-lg p-3 border border-gray-700 hover:border-[#37F2D1] transition-all">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
-                            <p className="text-white font-semibold">{item.name}</p>
+                            <p className="text-white font-semibold">{safeText(item.name)}</p>
                             {item.description && (
-                              <p className="text-gray-400 text-sm mt-1">{item.description}</p>
+                              <p className="text-gray-400 text-sm mt-1">{safeText(item.description)}</p>
                             )}
                           </div>
                           <div className="text-right ml-3">
                             {item.quantity > 1 && (
-                              <p className="text-[#37F2D1] font-bold text-lg">×{item.quantity}</p>
+                              <p className="text-[#37F2D1] font-bold text-lg">×{safeText(item.quantity)}</p>
                             )}
                             {item.weight && (
-                              <p className="text-gray-500 text-xs">{item.weight} lb</p>
+                              <p className="text-gray-500 text-xs">{safeText(item.weight)} lb</p>
                             )}
                           </div>
                         </div>

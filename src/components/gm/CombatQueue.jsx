@@ -6,6 +6,7 @@ import { enrichMonster } from "./monsterEnrichment";
 import { readCombatQueue, writeCombatQueue, FACTION_STYLES, FACTIONS } from "@/utils/combatQueue";
 import { normalizeHp } from "@/components/combat/hpColor";
 import { base44 } from "@/api/base44Client";
+import { safeText } from "@/utils/safeRender";
 
 const SAVED_LOADOUTS_KEY = 'gm_saved_monster_loadouts';
 
@@ -196,14 +197,14 @@ export default function CombatQueue({
                     className={`w-14 h-14 rounded-xl bg-[#0b1220] border-2 ${style.outline} hover:brightness-125 overflow-hidden transition-all flex-shrink-0`}
                   >
                     {monster.image_url || monster.avatar_url ? (
-                      <img 
-                        src={monster.image_url || monster.avatar_url} 
-                        alt={monster.name} 
+                      <img
+                        src={monster.image_url || monster.avatar_url}
+                        alt={safeText(monster.name)}
                         className="w-full h-full object-cover"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-500">
-                        {monster.name?.charAt(0)}
+                        {safeText(monster.name)?.charAt(0)}
                       </div>
                     )}
                     {(monster.inventory?.length > 0 || monster.spells?.length > 0) && (
@@ -244,7 +245,7 @@ export default function CombatQueue({
                   {/* Name tooltip */}
                   <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
                     <div className={`px-2 py-1 rounded text-[9px] whitespace-nowrap ${style.pill} border ${style.outline}`}>
-                      {monster.name}
+                      {safeText(monster.name)}
                       <span className="ml-1 opacity-80">({style.label})</span>
                     </div>
                   </div>
@@ -579,7 +580,7 @@ function EditLoadoutDialog({ monster, savedLoadouts, onUpdate, onSaveLoadout, on
               <div className="w-10 h-10 rounded-lg bg-[#111827] flex items-center justify-center text-slate-600">?</div>
             )}
             <div>
-              <h2 className="text-lg font-bold">{monster.name}</h2>
+              <h2 className="text-lg font-bold">{safeText(monster.name)}</h2>
               <p className="text-xs text-slate-400">Edit loadout</p>
             </div>
           </div>
@@ -646,8 +647,8 @@ function EditLoadoutDialog({ monster, savedLoadouts, onUpdate, onSaveLoadout, on
                     {monster.inventory.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-2 bg-[#1a1f2e] rounded-lg px-3 py-1.5 text-sm border border-[#111827]">
                         {item.image_url && <img src={item.image_url} alt="" className="w-5 h-5 rounded object-cover" />}
-                        <span className="text-white">{item.name}</span>
-                        {item.quantity > 1 && <span className="text-[#37F2D1] text-xs">x{item.quantity}</span>}
+                        <span className="text-white">{safeText(item.name)}</span>
+                        {item.quantity > 1 && <span className="text-[#37F2D1] text-xs">x{safeText(item.quantity)}</span>}
                         <button onClick={() => removeItem(item.name)} className="text-red-400 hover:text-red-300 ml-1">×</button>
                       </div>
                     ))}
@@ -692,7 +693,7 @@ function EditLoadoutDialog({ monster, savedLoadouts, onUpdate, onSaveLoadout, on
                           <Package className="w-4 h-4 text-slate-600" />
                         </div>
                       )}
-                      <span className="text-white text-xs truncate">{item.name}</span>
+                      <span className="text-white text-xs truncate">{safeText(item.name)}</span>
                     </button>
                   ))}
                 </div>
@@ -712,7 +713,7 @@ function EditLoadoutDialog({ monster, savedLoadouts, onUpdate, onSaveLoadout, on
                     {monster.spells.map((spellName, idx) => (
                       <div key={idx} className="flex items-center gap-2 bg-[#1a1f2e] rounded-lg px-3 py-1.5 text-sm border border-purple-500/30">
                         {spellIcons[spellName] && <img src={spellIcons[spellName]} alt="" className="w-5 h-5 rounded object-cover" />}
-                        <span className="text-white">{spellName}</span>
+                        <span className="text-white">{safeText(spellName)}</span>
                         <button onClick={() => removeSpell(spellName)} className="text-red-400 hover:text-red-300 ml-1">×</button>
                       </div>
                     ))}
@@ -750,9 +751,9 @@ function EditLoadoutDialog({ monster, savedLoadouts, onUpdate, onSaveLoadout, on
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <span className="text-white text-xs block truncate">{spellName}</span>
+                        <span className="text-white text-xs block truncate">{safeText(spellName)}</span>
                         {spellDetails[spellName] && (
-                          <span className="text-[9px] text-slate-500">{spellDetails[spellName].level}</span>
+                          <span className="text-[9px] text-slate-500">{safeText(spellDetails[spellName].level)}</span>
                         )}
                       </div>
                     </button>

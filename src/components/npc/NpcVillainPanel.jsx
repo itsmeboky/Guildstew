@@ -91,7 +91,7 @@ const BLANK_AURA = {
   applies_condition: "",
 };
 
-export default function NpcVillainPanel({ value, onChange }) {
+export default function NpcVillainPanel({ value, onChange, baseActionNames = [] }) {
   const data = value || {};
   const patch = (fields) => onChange({ ...data, ...fields });
 
@@ -291,6 +291,7 @@ export default function NpcVillainPanel({ value, onChange }) {
               <PhaseCard
                 key={idx}
                 phase={phase}
+                baseActionNames={baseActionNames}
                 onChange={(fields) => updatePhase(idx, fields)}
                 onRemove={() => removePhase(idx)}
               />
@@ -466,7 +467,40 @@ function VillainActionCard({ action, round, onChange }) {
   );
 }
 
-function PhaseCard({ phase, onChange, onRemove }) {
+function PhaseCard({ phase, onChange, onRemove, baseActionNames }) {
+  const unlocked = Array.isArray(phase.unlocked_actions) ? phase.unlocked_actions : [];
+  const disabled = Array.isArray(phase.disabled_actions) ? phase.disabled_actions : [];
+
+  const BLANK_PHASE_ACTION = {
+    name: "",
+    description: "",
+    action_type: "melee_attack",
+    action_cost: "Action",
+    attack_bonus: "",
+    save_ability: "",
+    save_dc: "",
+    half_on_save: true,
+    damage_dice: "",
+    damage_type: "",
+    reach: "",
+    applies_condition: "",
+    aoe_shape: "",
+    aoe_size: "",
+    recharge: "",
+  };
+
+  const addAction = () => onChange({ unlocked_actions: [...unlocked, { ...BLANK_PHASE_ACTION }] });
+  const updateAction = (idx, fields) => onChange({
+    unlocked_actions: unlocked.map((a, i) => (i === idx ? { ...a, ...fields } : a)),
+  });
+  const removeAction = (idx) => onChange({ unlocked_actions: unlocked.filter((_, i) => i !== idx) });
+
+  const toggleDisabled = (name) => {
+    const set = new Set(disabled);
+    if (set.has(name)) set.delete(name); else set.add(name);
+    onChange({ disabled_actions: Array.from(set) });
+  };
+
   return (
     <div className="bg-[#0b1220] border border-indigo-500/40 rounded-lg p-3 space-y-2">
       <div className="flex items-center gap-2">
@@ -481,7 +515,7 @@ function PhaseCard({ phase, onChange, onRemove }) {
           value={phase.phase_color || "#ef4444"}
           onChange={(e) => onChange({ phase_color: e.target.value })}
           className="w-10 h-9 rounded border border-slate-700 bg-[#050816]"
-          title="Phase color (tints portrait/HP bar)"
+          title="Phase color (tints portrait/HP bar + badge on unlocked actions)"
         />
         <button
           type="button"
@@ -533,6 +567,228 @@ function PhaseCard({ phase, onChange, onRemove }) {
         rows={2}
         className="bg-[#050816] border-slate-700 text-white text-xs"
       />
+
+      <div className="bg-[#050816] border border-indigo-400/30 rounded p-2 space-y-2">
+        <div className="flex items-center justify-between">
+          <Label className="text-[10px] uppercase tracking-widest text-indigo-200 font-bold">
+            Unlocked actions (new, phase-only)
+          </Label>
+          <Button type="button" variant="outline" size="sm" onClick={addAction}>
+            <Plus className="w-3 h-3 mr-1" /> Add Action
+          </Button>
+        </div>
+        {unlocked.length === 0 ? (
+          <p className="text-[11px] text-slate-500 italic text-center py-2">
+            No phase-only actions. Add Desperate Frenzy, Wing Buffet, etc.
+          </p>
+        ) : (
+          unlocked.map((a, idx) => (
+            <PhaseActionEditor
+              key={idx}
+              action={a}
+              tint={phase.phase_color || "#ef4444"}
+              onChange={(fields) => updateAction(idx, fields)}
+              onRemove={() => removeAction(idx)}
+            />
+          ))
+        )}
+      </div>
+
+      {Array.isArray(baseActionNames) && baseActionNames.length > 0 && (
+        <div className="bg-[#050816] border border-indigo-400/30 rounded p-2 space-y-1">
+          <Label className="text-[10px] uppercase tracking-widest text-indigo-200 font-bold block">
+            Disabled base actions (hidden during this phase)
+          </Label>
+          <div className="flex flex-wrap gap-1.5">
+            {baseActionNames.map((name) => {
+              const active = disabled.includes(name);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => toggleDisabled(name)}
+                  className={`text-[10px] font-semibold px-2 py-1 rounded border transition-colors ${
+                    active
+                      ? "bg-red-500 text-white border-red-500"
+                      : "bg-[#0b1220] border-slate-700 text-slate-300 hover:border-red-400"
+                  }`}
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Full authoring form for a phase-unlocked action. Mirrors the
+// monster-action fields from Tier 1 (attack / save / no_roll / healing
+// resolution, damage, conditions, AoE, recharge) so GMs can build
+// entirely new actions that only appear when a phase fires.
+function PhaseActionEditor({ action, tint, onChange, onRemove }) {
+  const type = action.action_type || "melee_attack";
+  const isAttack = type === "melee_attack" || type === "ranged_attack";
+  const isSave = type === "saving_throw";
+  const isHealing = type === "healing";
+  return (
+    <div
+      className="bg-[#0b1220] border-2 rounded-lg p-2 space-y-2"
+      style={{ borderColor: `${tint}55` }}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded"
+          style={{ background: `${tint}30`, color: tint, border: `1px solid ${tint}80` }}
+        >
+          Phase
+        </span>
+        <Input
+          value={action.name || ""}
+          onChange={(e) => onChange({ name: e.target.value })}
+          placeholder="Action name (e.g., Desperate Frenzy)"
+          className="bg-[#050816] border-slate-700 text-white flex-1"
+        />
+        <button type="button" onClick={onRemove} className="text-slate-400 hover:text-red-400">
+          <Trash className="w-3 h-3" />
+        </button>
+      </div>
+      <Textarea
+        value={action.description || ""}
+        onChange={(e) => onChange({ description: e.target.value })}
+        placeholder="Description"
+        rows={2}
+        className="bg-[#050816] border-slate-700 text-white text-xs"
+      />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <CompactSelect
+          label="Type"
+          value={type}
+          onChange={(v) => onChange({ action_type: v })}
+          options={[
+            { value: "melee_attack",  label: "Melee Attack" },
+            { value: "ranged_attack", label: "Ranged Attack" },
+            { value: "saving_throw",  label: "Saving Throw" },
+            { value: "healing",       label: "Healing" },
+            { value: "no_roll",       label: "No Roll" },
+          ]}
+        />
+        <CompactSelect
+          label="Cost"
+          value={action.action_cost || "Action"}
+          onChange={(v) => onChange({ action_cost: v })}
+          options={[
+            { value: "Action",        label: "Action" },
+            { value: "Bonus Action",  label: "Bonus Action" },
+            { value: "Reaction",      label: "Reaction" },
+            { value: "Free",          label: "Free" },
+            { value: "Legendary",     label: "Legendary" },
+          ]}
+        />
+        <CompactInput
+          label="Recharge"
+          value={action.recharge || ""}
+          onChange={(e) => onChange({ recharge: e.target.value })}
+          placeholder="5-6 / 6 / short"
+        />
+        {isAttack && (
+          <CompactInput
+            label="Atk bonus"
+            type="number"
+            value={action.attack_bonus ?? ""}
+            onChange={(e) => onChange({ attack_bonus: e.target.value === "" ? "" : Number(e.target.value) })}
+            placeholder="+9"
+          />
+        )}
+        {isSave && (
+          <>
+            <CompactSelect
+              label="Save ability"
+              value={action.save_ability || "DEX"}
+              onChange={(v) => onChange({ save_ability: v })}
+              options={SAVE_ABILITIES.map((s) => ({ value: s, label: s }))}
+            />
+            <CompactInput
+              label="Save DC"
+              type="number"
+              value={action.save_dc ?? ""}
+              onChange={(e) => onChange({ save_dc: e.target.value === "" ? "" : Number(e.target.value) })}
+              placeholder="17"
+            />
+            <div className="flex items-center gap-1 mt-5">
+              <Switch
+                checked={!!action.half_on_save}
+                onCheckedChange={(c) => onChange({ half_on_save: c })}
+              />
+              <span className="text-[10px] text-slate-300">Half on save</span>
+            </div>
+          </>
+        )}
+        {(isAttack || isSave) && (
+          <>
+            <CompactInput
+              label="Damage dice"
+              value={action.damage_dice || ""}
+              onChange={(e) => onChange({ damage_dice: e.target.value })}
+              placeholder="3d8+5"
+            />
+            <CompactSelect
+              label="Damage type"
+              value={action.damage_type || "slashing"}
+              onChange={(v) => onChange({ damage_type: v })}
+              options={DAMAGE_TYPES.map((d) => ({ value: d, label: d }))}
+            />
+          </>
+        )}
+        {isAttack && (
+          <CompactInput
+            label="Reach / Range"
+            value={action.reach || ""}
+            onChange={(e) => onChange({ reach: e.target.value })}
+            placeholder="5 ft / 60/120 ft"
+          />
+        )}
+        {isHealing && (
+          <CompactInput
+            label="Healing dice"
+            value={action.damage_dice || ""}
+            onChange={(e) => onChange({ damage_dice: e.target.value })}
+            placeholder="4d8+10"
+          />
+        )}
+        <CompactSelect
+          label="Condition"
+          value={action.applies_condition || ""}
+          onChange={(v) => onChange({ applies_condition: v === "__none" ? "" : v })}
+          placeholder="None"
+          options={[
+            { value: "__none", label: "None" },
+            ...Object.keys(CONDITION_COLORS).map((c) => ({ value: c, label: c })),
+          ]}
+        />
+        <CompactSelect
+          label="AoE shape"
+          value={action.aoe_shape || ""}
+          onChange={(v) => onChange({ aoe_shape: v === "__none" ? "" : v })}
+          placeholder="None"
+          options={[
+            { value: "__none", label: "None" },
+            { value: "Cone",     label: "Cone" },
+            { value: "Line",     label: "Line" },
+            { value: "Sphere",   label: "Sphere" },
+            { value: "Cube",     label: "Cube" },
+            { value: "Cylinder", label: "Cylinder" },
+          ]}
+        />
+        <CompactInput
+          label="AoE size"
+          value={action.aoe_size || ""}
+          onChange={(e) => onChange({ aoe_size: e.target.value })}
+          placeholder="30 ft"
+        />
+      </div>
     </div>
   );
 }

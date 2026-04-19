@@ -1,6 +1,7 @@
 import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Download, Star, FlaskConical } from "lucide-react";
+import { safeText } from "@/utils/safeRender";
 
 /**
  * Brewery card — compact summary of a homebrew_rules row on the
@@ -50,11 +51,11 @@ export default function BreweryCard({ brew, onOpen }) {
       {/* Body */}
       <div className="flex-1 flex flex-col p-3 gap-1.5">
         <h3 className="text-base font-bold text-white line-clamp-1 group-hover:text-[#37F2D1]">
-          {brew.title || "Untitled brew"}
+          {safeText(brew.title) || "Untitled brew"}
         </h3>
         {brew.description && (
           <p className="text-[11px] text-slate-400 line-clamp-2 min-h-[28px]">
-            {brew.description}
+            {safeText(brew.description)}
           </p>
         )}
 
@@ -77,10 +78,10 @@ export default function BreweryCard({ brew, onOpen }) {
           <div className="flex flex-wrap gap-1 pt-1 border-t border-[#1e293b] mt-1">
             {tags.map((t) => (
               <span
-                key={t}
+                key={safeText(t)}
                 className="text-[9px] font-semibold uppercase tracking-wider text-[#37F2D1] bg-[#37F2D1]/10 border border-[#37F2D1]/30 rounded-full px-1.5 py-0.5"
               >
-                {t}
+                {safeText(t)}
               </span>
             ))}
           </div>

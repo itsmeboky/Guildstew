@@ -13,6 +13,7 @@ import PlayerNotesTab   from "@/components/party/PlayerNotesTab";
 import {
   isUserGM, ownsCharacter, canSeeRelationships,
 } from "@/components/party/partyPermissions";
+import { safeText } from "@/utils/safeRender";
 
 /**
  * Adventuring Party panel rendered inside the session modal. Mirrors
@@ -163,6 +164,7 @@ function PartyRow({ character, selected, onClick }) {
   const level = character.level || character?.stats?.level || 1;
   const className = [character.race || character?.stats?.race,
                      character.class || character?.stats?.class]
+    .map((v) => safeText(v))
     .filter(Boolean).join(" · ");
   return (
     <li>
@@ -188,13 +190,13 @@ function PartyRow({ character, selected, onClick }) {
         )}
         <div className="flex-1 min-w-0">
           <div className={`text-sm font-bold truncate ${selected ? "text-[#37F2D1]" : "text-[#37F2D1]/80"}`}>
-            {character.name}
+            {safeText(character.name)}
             {character.active_title && (
-              <span className="text-[#37F2D1]/70 ml-1 font-normal">{character.active_title}</span>
+              <span className="text-[#37F2D1]/70 ml-1 font-normal">{safeText(character.active_title)}</span>
             )}
           </div>
           <div className="text-[10px] text-slate-400 truncate">
-            Lvl {level}{className ? ` ${className}` : ""}
+            Lvl {safeText(level)}{className ? ` ${className}` : ""}
           </div>
         </div>
       </button>

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sparkles, Search, BookOpen, Edit, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { safeText } from "@/utils/safeRender";
 
 const SCHOOL_COLORS = {
   abjuration: "#3B82F6",
@@ -135,17 +136,17 @@ export default function GrimoireViewer({ spells, entries, canEdit, onSelectSpell
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
                       <h4 className="font-bold text-white group-hover:text-[#37F2D1] transition-colors">
-                        {spell.name}
+                        {safeText(spell.name)}
                       </h4>
                       <div className="flex items-center gap-2 mt-1">
-                        <span 
+                        <span
                           className="text-xs px-2 py-0.5 rounded font-semibold"
-                          style={{ 
+                          style={{
                             backgroundColor: `${SCHOOL_COLORS[spell.school]}20`,
                             color: SCHOOL_COLORS[spell.school]
                           }}
                         >
-                          {spell.school}
+                          {safeText(spell.school)}
                         </span>
                         {!spell.discovered && canEdit && (
                           <span className="text-xs text-yellow-500">Hidden</span>
@@ -182,7 +183,7 @@ export default function GrimoireViewer({ spells, entries, canEdit, onSelectSpell
                     )}
                   </div>
                   <div className="text-xs text-gray-400">
-                    {spell.casting_time} • {spell.range}
+                    {safeText(spell.casting_time)} • {safeText(spell.range)}
                   </div>
                 </motion.div>
               ))}
@@ -211,19 +212,19 @@ export default function GrimoireViewer({ spells, entries, canEdit, onSelectSpell
         >
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h3 className="text-3xl font-bold text-white mb-2">{selectedSpell.name}</h3>
+              <h3 className="text-3xl font-bold text-white mb-2">{safeText(selectedSpell.name)}</h3>
               <div className="flex items-center gap-2">
-                <span 
+                <span
                   className="text-sm px-3 py-1 rounded font-semibold"
-                  style={{ 
+                  style={{
                     backgroundColor: `${SCHOOL_COLORS[selectedSpell.school]}20`,
                     color: SCHOOL_COLORS[selectedSpell.school]
                   }}
                 >
-                  {selectedSpell.school}
+                  {safeText(selectedSpell.school)}
                 </span>
                 <span className="text-sm text-gray-400">
-                  {selectedSpell.level === 0 ? 'Cantrip' : `Level ${selectedSpell.level}`}
+                  {selectedSpell.level === 0 ? 'Cantrip' : `Level ${safeText(selectedSpell.level)}`}
                 </span>
               </div>
             </div>
@@ -240,37 +241,37 @@ export default function GrimoireViewer({ spells, entries, canEdit, onSelectSpell
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 text-sm">
             <div className="bg-[#1E2430] rounded-lg p-3 border border-gray-700/50">
               <div className="text-gray-400 text-xs mb-1">Casting Time</div>
-              <div className="text-white font-semibold">{selectedSpell.casting_time}</div>
+              <div className="text-white font-semibold">{safeText(selectedSpell.casting_time)}</div>
             </div>
             <div className="bg-[#1E2430] rounded-lg p-3 border border-gray-700/50">
               <div className="text-gray-400 text-xs mb-1">Range</div>
-              <div className="text-white font-semibold">{selectedSpell.range}</div>
+              <div className="text-white font-semibold">{safeText(selectedSpell.range)}</div>
             </div>
             <div className="bg-[#1E2430] rounded-lg p-3 border border-gray-700/50">
               <div className="text-gray-400 text-xs mb-1">Components</div>
-              <div className="text-white font-semibold">{getComponents(selectedSpell.components)}</div>
+              <div className="text-white font-semibold">{safeText(getComponents(selectedSpell.components))}</div>
             </div>
             <div className="bg-[#1E2430] rounded-lg p-3 border border-gray-700/50">
               <div className="text-gray-400 text-xs mb-1">Duration</div>
-              <div className="text-white font-semibold">{selectedSpell.duration}</div>
+              <div className="text-white font-semibold">{safeText(selectedSpell.duration)}</div>
             </div>
           </div>
 
           {selectedSpell.components?.material && selectedSpell.components.materials_needed && (
             <div className="bg-[#1E2430] rounded-lg p-3 border border-gray-700/50 mb-4">
               <div className="text-gray-400 text-xs mb-1">Materials</div>
-              <div className="text-white text-sm">{selectedSpell.components.materials_needed}</div>
+              <div className="text-white text-sm">{safeText(selectedSpell.components.materials_needed)}</div>
             </div>
           )}
 
           <div className="bg-[#1E2430] rounded-lg p-4 border border-gray-700/50 mb-4">
-            <p className="text-gray-300 whitespace-pre-wrap">{selectedSpell.description}</p>
+            <p className="text-gray-300 whitespace-pre-wrap">{safeText(selectedSpell.description)}</p>
           </div>
 
           {selectedSpell.at_higher_levels && (
             <div className="bg-[#1E2430] rounded-lg p-4 border border-gray-700/50 mb-4">
               <div className="text-[#37F2D1] font-semibold text-sm mb-2">At Higher Levels</div>
-              <p className="text-gray-300 text-sm whitespace-pre-wrap">{selectedSpell.at_higher_levels}</p>
+              <p className="text-gray-300 text-sm whitespace-pre-wrap">{safeText(selectedSpell.at_higher_levels)}</p>
             </div>
           )}
 

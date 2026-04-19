@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Trash2, Upload, ArrowLeft, Copy, Edit, Search, Skull } from "lucide-react";
+import { Plus, Trash2, Upload, ArrowLeft, Copy, Edit, Search, Skull, EyeOff, Sprout } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import NpcVillainPanel from "@/components/npc/NpcVillainPanel";
+import { safeText } from "@/utils/safeRender";
 
 export default function CampaignNPCs({ embedded = false, campaignId: campaignIdOverride } = {}) {
   const urlParams = new URLSearchParams(window.location.search);
@@ -242,13 +243,17 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
               </Button>
               <h1 className="text-2xl font-bold text-white">NPCs</h1>
             </div>
-            <Button onClick={handleCreateNew} className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] font-bold">
-              <Plus className="w-4 h-4 mr-2" /> New NPC
-            </Button>
+            <div className="flex items-center gap-2">
+              <ClonePlantButton campaign={campaign} campaignId={campaignId} queryClient={queryClient} />
+              <Button onClick={handleCreateNew} className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] font-bold">
+                <Plus className="w-4 h-4 mr-2" /> New NPC
+              </Button>
+            </div>
           </header>
         )}
         {embedded && (
-          <div className="flex justify-end mb-3 flex-shrink-0">
+          <div className="flex justify-end mb-3 flex-shrink-0 gap-2">
+            <ClonePlantButton campaign={campaign} campaignId={campaignId} queryClient={queryClient} />
             <Button onClick={handleCreateNew} className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] font-bold">
               <Plus className="w-4 h-4 mr-2" /> New NPC
             </Button>
@@ -275,13 +280,13 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                         )}
                       </div>
                       <div>
-                        <h2 className="text-3xl font-bold text-white">{selectedNPC.name}</h2>
+                        <h2 className="text-3xl font-bold text-white">{safeText(selectedNPC.name)}</h2>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[#37F2D1] font-semibold">Level {stats.level || 1}</span>
+                          <span className="text-[#37F2D1] font-semibold">Level {safeText(stats.level) || 1}</span>
                           <span className="text-gray-400">•</span>
-                          <span className="text-gray-300">{stats.race} {stats.class}</span>
+                          <span className="text-gray-300">{safeText(stats.race)} {safeText(stats.class)}</span>
                         </div>
-                        <div className="text-sm text-gray-400 mt-1">{stats.background} • {stats.alignment}</div>
+                        <div className="text-sm text-gray-400 mt-1">{safeText(stats.background)} • {safeText(stats.alignment)}</div>
                       </div>
                     </div>
                     
@@ -338,12 +343,12 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                       {/* Core Stats */}
                       <div className="grid grid-cols-4 gap-4">
                         <div className="bg-[#1E2430] rounded-xl p-4 text-center border border-gray-700/50">
-                          <div className="text-2xl font-bold text-[#FF5722]">{stats.armor_class || 10}</div>
+                          <div className="text-2xl font-bold text-[#FF5722]">{safeText(stats.armor_class) || 10}</div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider mt-1">Armor Class</div>
                         </div>
                         <div className="bg-[#1E2430] rounded-xl p-4 text-center border border-gray-700/50">
                           <div className="text-2xl font-bold text-[#37F2D1]">
-                            {(stats.hit_points?.current ?? stats.hit_points?.max ?? 0)}/{stats.hit_points?.max || 0}
+                            {safeText(stats.hit_points?.current ?? stats.hit_points?.max ?? 0)}/{safeText(stats.hit_points?.max) || 0}
                           </div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider mt-1">Hit Points</div>
                         </div>
@@ -352,7 +357,7 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                           <div className="text-xs text-gray-400 uppercase tracking-wider mt-1">Initiative</div>
                         </div>
                         <div className="bg-[#1E2430] rounded-xl p-4 text-center border border-gray-700/50">
-                          <div className="text-2xl font-bold text-white">{stats.speed || 30} ft</div>
+                          <div className="text-2xl font-bold text-white">{safeText(stats.speed) || 30} ft</div>
                           <div className="text-xs text-gray-400 uppercase tracking-wider mt-1">Speed</div>
                         </div>
                       </div>
@@ -361,8 +366,8 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                       <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
                         {Object.entries(stats.attributes || {}).map(([key, value]) => (
                           <div key={key} className="bg-[#1E2430] rounded-lg p-3 text-center border border-gray-700/50">
-                            <div className="text-xs text-gray-500 uppercase mb-1">{key}</div>
-                            <div className="text-xl font-bold text-white">{value}</div>
+                            <div className="text-xs text-gray-500 uppercase mb-1">{safeText(key)}</div>
+                            <div className="text-xl font-bold text-white">{safeText(value)}</div>
                             <div className="text-xs text-[#37F2D1]">{formatModifier(getAbilityMod(value))}</div>
                           </div>
                         ))}
@@ -378,7 +383,7 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                               const mod = getAbilityMod(abilityScore) + (stats.proficiency_bonus || 2);
                               return (
                                 <div key={ability} className="px-3 py-1.5 bg-[#1E2430] rounded border border-gray-700 flex items-center gap-2">
-                                  <span className="text-xs text-gray-400 uppercase">{ability}</span>
+                                  <span className="text-xs text-gray-400 uppercase">{safeText(ability)}</span>
                                   <span className="text-sm font-bold text-[#37F2D1]">{formatModifier(mod)}</span>
                                 </div>
                               );
@@ -409,7 +414,7 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                             return (
                               <div key={skill} className="flex items-center justify-between bg-[#1E2430] rounded-lg p-3 border border-gray-700/50">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm text-gray-300">{skill}</span>
+                                  <span className="text-sm text-gray-300">{safeText(skill)}</span>
                                   {isExpertise && <span className="text-[#FF5722] text-[10px] border border-[#FF5722] px-1 rounded">EXP</span>}
                                 </div>
                                 <span className="font-bold text-[#37F2D1]">{formatModifier(mod)}</span>
@@ -440,8 +445,8 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {spells.map((spell, idx) => (
                                   <div key={idx} className="bg-[#1E2430] rounded-lg p-3 border border-gray-700/50 hover:border-[#37F2D1]/50 transition-colors">
-                                    <div className="font-bold text-white">{spell.name || spell}</div>
-                                    {spell.description && <div className="text-xs text-gray-400 mt-1 line-clamp-2">{spell.description}</div>}
+                                    <div className="font-bold text-white">{safeText(spell?.name || spell)}</div>
+                                    {spell?.description && <div className="text-xs text-gray-400 mt-1 line-clamp-2">{safeText(spell.description)}</div>}
                                   </div>
                                 ))}
                               </div>
@@ -459,10 +464,10 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                         {stats.features?.map((feature, idx) => (
                           <div key={idx} className="bg-[#1E2430] rounded-lg p-4 border border-gray-700/50">
                             <div className="flex items-baseline justify-between mb-1">
-                              <div className="font-bold text-[#37F2D1]">{feature.name}</div>
-                              {feature.source && <div className="text-xs text-gray-500">{feature.source}</div>}
+                              <div className="font-bold text-[#37F2D1]">{safeText(feature?.name)}</div>
+                              {feature?.source && <div className="text-xs text-gray-500">{safeText(feature.source)}</div>}
                             </div>
-                            <div className="text-sm text-gray-300 leading-relaxed">{feature.description}</div>
+                            <div className="text-sm text-gray-300 leading-relaxed">{safeText(feature?.description)}</div>
                           </div>
                         ))}
                         {(!stats.features || stats.features.length === 0) && (
@@ -478,8 +483,8 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                           <div className="space-y-2">
                             {stats.equipment.weapons.map((weapon, idx) => (
                               <div key={idx} className="bg-[#1E2430] rounded-lg p-3 border border-gray-700/50 flex justify-between items-center">
-                                <span className="font-semibold text-white">{weapon.name}</span>
-                                <Badge variant="outline" className="text-gray-300 border-gray-600">{weapon.damage}</Badge>
+                                <span className="font-semibold text-white">{safeText(weapon?.name)}</span>
+                                <Badge variant="outline" className="text-gray-300 border-gray-600">{safeText(weapon?.damage)}</Badge>
                               </div>
                             ))}
                           </div>
@@ -491,8 +496,8 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                           {/* Fallback to top-level inventory if stats.inventory is empty, although mapping should handle it */}
                           {(stats.inventory?.length > 0 ? stats.inventory : selectedNPC.inventory)?.map((item, idx) => (
                             <div key={idx} className="bg-[#1E2430] rounded-lg p-3 border border-gray-700/50 flex justify-between items-center">
-                              <span className="text-gray-300">{item.name}</span>
-                              <span className="text-xs text-gray-500">x{item.quantity || 1}</span>
+                              <span className="text-gray-300">{safeText(item?.name)}</span>
+                              <span className="text-xs text-gray-500">x{safeText(item?.quantity) || 1}</span>
                             </div>
                           ))}
                           {(!stats.inventory && !selectedNPC.inventory || (stats.inventory?.length === 0 && selectedNPC.inventory?.length === 0)) && (
@@ -512,52 +517,13 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                     </TabsContent>
 
                     <TabsContent value="villain" className="animate-in fade-in duration-300 space-y-4">
-                      <div className="bg-gradient-to-br from-[#1a0514] to-[#2A1014] border-2 border-rose-600/40 rounded-xl p-5">
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <h3 className="text-lg font-black uppercase tracking-widest text-rose-300 flex items-center gap-2">
-                              <Skull className="w-5 h-5" /> Promote to Villain
-                            </h3>
-                            <p className="text-xs text-slate-400 mt-1 max-w-prose">
-                              Promoting this NPC unlocks boss mechanics: villain actions, legendary
-                              resistances, phase transitions, and auras. In combat the NPC renders
-                              identically to a monster with the same systems.
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2 pt-1">
-                            <Switch
-                              checked={!!selectedNPC.is_villain}
-                              onCheckedChange={(on) => {
-                                updateNPCMutation.mutate({
-                                  id: selectedNPC.id,
-                                  data: { is_villain: on, villain_data: selectedNPC.villain_data || {} },
-                                });
-                                setSelectedNPC({
-                                  ...selectedNPC,
-                                  is_villain: on,
-                                  villain_data: selectedNPC.villain_data || {},
-                                });
-                              }}
-                            />
-                            <span className="text-xs text-slate-400">
-                              {selectedNPC.is_villain ? "Villain" : "Off"}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {selectedNPC.is_villain && (
-                        <NpcVillainPanel
-                          value={selectedNPC.villain_data || {}}
-                          onChange={(nextData) => {
-                            setSelectedNPC({ ...selectedNPC, villain_data: nextData });
-                            updateNPCMutation.mutate({
-                              id: selectedNPC.id,
-                              data: { villain_data: nextData },
-                            });
-                          }}
-                        />
-                      )}
+                      <VillainTabBody
+                        selectedNPC={selectedNPC}
+                        setSelectedNPC={setSelectedNPC}
+                        campaignId={campaignId}
+                        updateNPCMutation={updateNPCMutation}
+                        queryClient={queryClient}
+                      />
                     </TabsContent>
                   </Tabs>
                 </div>
@@ -593,8 +559,8 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                     const stats = getNpcStats(npc);
                     const imgUrl = npc.avatar_url || stats.profile_avatar_url || stats.avatar_url;
                     const active = selectedNPC?.id === npc.id;
-                    const subLine = [stats.race, stats.class, stats.level ? `Lvl ${stats.level}` : null]
-                      .filter(Boolean).join(" • ") || npc.faction || npc.location || "—";
+                    const subLine = [safeText(stats.race), safeText(stats.class), stats.level ? `Lvl ${safeText(stats.level)}` : null]
+                      .filter(Boolean).join(" • ") || safeText(npc.faction) || safeText(npc.location) || "—";
                     const isAlive = npc.is_alive !== false;
                     return (
                       <li key={npc.id}>
@@ -621,13 +587,22 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                               />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-gray-500">
-                                {npc.name?.charAt(0) || "?"}
+                                {safeText(npc.name)?.charAt(0) || "?"}
                               </div>
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className={`text-sm font-semibold truncate ${active ? "text-[#37F2D1]" : "text-white"}`}>
-                              {npc.name}
+                            <div className={`text-sm font-semibold truncate flex items-center gap-1 ${active ? "text-[#37F2D1]" : "text-white"}`}>
+                              {safeText(npc.name)}
+                              {npc.is_plant && (
+                                <Sprout className="w-3 h-3 text-emerald-400 flex-shrink-0" title="Plant" />
+                              )}
+                              {npc.is_villain && npc.villain_secret && (
+                                <EyeOff className="w-3 h-3 text-amber-400 flex-shrink-0" title="Secret villain" />
+                              )}
+                              {npc.is_villain && !npc.villain_secret && (
+                                <Skull className="w-3 h-3 text-rose-400 flex-shrink-0" title="Villain" />
+                              )}
                             </div>
                             <div className="text-xs text-slate-400 truncate">{subLine}</div>
                           </div>
@@ -712,6 +687,309 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
         onClose={() => setShowQuickCreate(false)}
         onCharacterCreated={handleCharacterCreated}
       />
+    </>
+  );
+}
+// Encapsulates the villain tab authoring UI so CampaignNPCs' render
+// body stays readable. Handles: villain toggle, secret-villain switch,
+// Reveal button (dramatic session notification), plant-clone badge +
+// Sync from Player button, and the NpcVillainPanel editor itself.
+function VillainTabBody({ selectedNPC, setSelectedNPC, campaignId, updateNPCMutation, queryClient }) {
+  const isVillain = !!selectedNPC?.is_villain;
+  const isSecret = !!selectedNPC?.villain_secret;
+  const isPlant = !!selectedNPC?.is_plant;
+  const sourceCharacterId = selectedNPC?.source_character_id || null;
+
+  const { data: sourceCharacter } = useQuery({
+    queryKey: ["sourceCharacter", sourceCharacterId],
+    queryFn: async () => {
+      if (!sourceCharacterId) return null;
+      const rows = await base44.entities.Character.filter({ id: sourceCharacterId });
+      return rows?.[0] || null;
+    },
+    enabled: !!sourceCharacterId,
+  });
+
+  const baseActionNames = React.useMemo(() => {
+    const stats = selectedNPC?.stats || {};
+    const list = Array.isArray(selectedNPC?.actions)
+      ? selectedNPC.actions
+      : Array.isArray(stats.actions)
+      ? stats.actions
+      : [];
+    return list.map((a) => a?.name).filter(Boolean);
+  }, [selectedNPC]);
+
+  const patchNPC = (data) => {
+    updateNPCMutation.mutate({ id: selectedNPC.id, data });
+    setSelectedNPC({ ...selectedNPC, ...data });
+  };
+
+  const handleReveal = async () => {
+    patchNPC({ villain_secret: false });
+    toast(`⚡ ${selectedNPC.name || "The NPC"} reveals their true nature!`, {
+      description: "The villain is now visible to all players.",
+      duration: 6000,
+    });
+    try {
+      await base44.entities.CampaignLogEntry.create({
+        campaign_id: campaignId,
+        entry_type: "villain_reveal",
+        content: `${selectedNPC.name || "An NPC"} reveals their true nature!`,
+        metadata: { npc_id: selectedNPC.id, kind: "villain_reveal" },
+      });
+    } catch (err) {
+      console.warn("villain_reveal log entry failed:", err?.message || err);
+    }
+  };
+
+  const handleSync = async () => {
+    if (!sourceCharacter) {
+      toast.error("Source character not found.");
+      return;
+    }
+    const synced = {
+      avatar_url: sourceCharacter.avatar_url || selectedNPC.avatar_url,
+      level: sourceCharacter.level ?? selectedNPC.level,
+      // stats + spells + inventory are stored as JSONB columns on both
+      // tables; shallow-copy them so GM-specific villain edits living
+      // in villain_data remain untouched.
+      stats: { ...(selectedNPC.stats || {}), ...(sourceCharacter.stats || {}) },
+      spells: sourceCharacter.spells || selectedNPC.spells,
+      inventory: sourceCharacter.inventory || selectedNPC.inventory,
+    };
+    patchNPC(synced);
+    queryClient.invalidateQueries({ queryKey: ["campaignNPCs", campaignId] });
+    toast.success("Synced from player character.");
+  };
+
+  return (
+    <>
+      {isPlant && (
+        <div className="bg-gradient-to-br from-[#0b2415] to-[#050816] border-2 border-emerald-500/40 rounded-xl p-4 flex items-center gap-3">
+          <div className="text-2xl">🌱</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.25em] text-emerald-300 font-black">Plant</div>
+            <div className="text-sm text-white truncate">
+              Cloned from <span className="text-emerald-200">{safeText(sourceCharacter?.name) || "a player character"}</span>
+            </div>
+            <div className="text-[10px] text-slate-400 truncate">
+              GM edits here don't touch the player's live sheet.
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleSync}
+            disabled={!sourceCharacter}
+            className="text-emerald-300 border-emerald-500/50"
+          >
+            Sync from Player
+          </Button>
+        </div>
+      )}
+
+      <div className="bg-gradient-to-br from-[#1a0514] to-[#2A1014] border-2 border-rose-600/40 rounded-xl p-5 space-y-3">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-black uppercase tracking-widest text-rose-300 flex items-center gap-2">
+              <Skull className="w-5 h-5" /> Promote to Villain
+              {isVillain && isSecret && (
+                <span className="inline-flex items-center gap-1 bg-slate-800 border border-amber-500/60 text-amber-300 text-[9px] font-black tracking-widest px-2 py-0.5 rounded">
+                  <EyeOff className="w-3 h-3" /> SECRET
+                </span>
+              )}
+            </h3>
+            <p className="text-xs text-slate-400 mt-1 max-w-prose">
+              Promoting this NPC unlocks boss mechanics: villain actions, legendary
+              resistances, phase transitions, and auras. In combat the NPC renders
+              identically to a monster with the same systems.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <Switch
+              checked={isVillain}
+              onCheckedChange={(on) => {
+                patchNPC({
+                  is_villain: on,
+                  villain_secret: on ? (selectedNPC.villain_secret ?? true) : false,
+                  villain_data: selectedNPC.villain_data || {},
+                });
+              }}
+            />
+            <span className="text-xs text-slate-400">
+              {isVillain ? "Villain" : "Off"}
+            </span>
+          </div>
+        </div>
+
+        {isVillain && (
+          <div className="bg-[#050816] border border-rose-600/30 rounded-lg p-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <Switch
+                checked={isSecret}
+                onCheckedChange={(on) => patchNPC({ villain_secret: on })}
+              />
+              <div className="min-w-0">
+                <div className="text-sm text-white font-semibold">Keep villain status secret from players</div>
+                <div className="text-[10px] text-slate-400">
+                  Players see a normal NPC. You can reveal at any time.
+                </div>
+              </div>
+            </div>
+            {isSecret && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleReveal}
+                className="bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-wider shadow-[0_0_18px_rgba(225,29,72,0.5)]"
+              >
+                Reveal Villain
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {isVillain && (
+        <NpcVillainPanel
+          value={selectedNPC.villain_data || {}}
+          baseActionNames={baseActionNames}
+          onChange={(nextData) => {
+            setSelectedNPC({ ...selectedNPC, villain_data: nextData });
+            updateNPCMutation.mutate({
+              id: selectedNPC.id,
+              data: { villain_data: nextData },
+            });
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+// GM-side trigger for the mole-to-plant pipeline. Opens a dialog
+// listing the campaign's current moles; picking one clones their live
+// character into campaign_npcs with is_plant=true + source_character_id
+// so the GM can build villain features without touching the player's
+// sheet. Only shown when the campaign actually has moles configured.
+function ClonePlantButton({ campaign, campaignId, queryClient }) {
+  const [open, setOpen] = useState(false);
+  const moleIds = (() => {
+    if (Array.isArray(campaign?.mole_ids)) return campaign.mole_ids;
+    if (campaign?.mole_player_id) return [campaign.mole_player_id];
+    return [];
+  })();
+
+  // Mole player IDs are user IDs; moles' live characters are rows in
+  // the characters table whose user_id or created_by matches. Pull
+  // every character belonging to any mole player in the campaign.
+  const { data: moleCharacters = [] } = useQuery({
+    queryKey: ["moleCharacters", campaignId, moleIds.join(",")],
+    queryFn: async () => {
+      if (moleIds.length === 0) return [];
+      const all = await base44.entities.Character.filter({ campaign_id: campaignId }).catch(() => []);
+      return (all || []).filter((c) => {
+        const uid = c.user_id || c.owner_id;
+        return moleIds.includes(uid);
+      });
+    },
+    enabled: open && moleIds.length > 0,
+    initialData: [],
+  });
+
+  const cloneMutation = useMutation({
+    mutationFn: async (character) => {
+      const stats = character.stats || {};
+      return base44.entities.CampaignNPC.create({
+        campaign_id: campaignId,
+        name: character.name || stats.name || "Plant NPC",
+        description: character.description || stats.description || "",
+        avatar_url: character.profile_avatar_url || character.avatar_url || stats.profile_avatar_url || stats.avatar_url,
+        stats,
+        abilities: character.features || stats.features || [],
+        inventory: character.inventory || stats.inventory || [],
+        spells: character.spells || stats.spells || null,
+        notes: "",
+        is_plant: true,
+        source_character_id: character.id,
+        // Plants default to villain-secret — the whole point of the
+        // pipeline is a hidden twist. The GM can flip villain_secret
+        // off any time from the villain tab.
+        is_villain: false,
+        villain_secret: true,
+        villain_data: {},
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["campaignNPCs", campaignId] });
+      toast.success("Plant NPC created — open the Villain tab to add boss mechanics.");
+      setOpen(false);
+    },
+    onError: (err) => {
+      toast.error(err?.message || "Couldn't clone plant.");
+    },
+  });
+
+  if (moleIds.length === 0) return null;
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => setOpen(true)}
+        className="text-emerald-300 border-emerald-500/60 hover:bg-emerald-500/10 hover:text-emerald-200"
+      >
+        <Sprout className="w-4 h-4 mr-2" /> Clone Mole → Plant
+      </Button>
+      <Dialog open={open} onOpenChange={(o) => { if (!o) setOpen(false); }}>
+        <DialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-300">
+              <Sprout className="w-5 h-5" /> Clone a Mole's Character
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-slate-400 mb-4">
+            Cloning makes a separate NPC record linked to the player's live character. The
+            player keeps playing normally — edits here stay in the GM's copy. Use the Villain
+            tab to add villain actions, phases, and other boss mechanics.
+          </p>
+          {moleCharacters.length === 0 ? (
+            <p className="text-sm text-slate-500 italic text-center py-6">
+              No mole characters found in this campaign.
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {moleCharacters.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  disabled={cloneMutation.isPending}
+                  onClick={() => cloneMutation.mutate(c)}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg border border-emerald-500/40 bg-[#0b1220] hover:bg-emerald-500/10 text-left"
+                >
+                  {(c.profile_avatar_url || c.avatar_url) && (
+                    <img
+                      src={c.profile_avatar_url || c.avatar_url}
+                      alt=""
+                      className="w-10 h-10 rounded-lg object-cover object-top flex-shrink-0"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-white truncate">{safeText(c.name) || "Unnamed"}</div>
+                    <div className="text-[10px] text-slate-400 truncate">
+                      {safeText(c.stats?.race)} {safeText(c.stats?.class)} · Lvl {safeText(c.stats?.level ?? c.level ?? 1)}
+                    </div>
+                  </div>
+                  <Sprout className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                </button>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
