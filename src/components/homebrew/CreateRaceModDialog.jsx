@@ -9,13 +9,19 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Button } from "@/components/ui/button";
+import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import {
   BLANK_RACE,
+  BLANK_TRAIT,
   RACE_ABILITY_MODES,
   RACE_SIZES,
   DARKVISION_OPTIONS,
   SPEED_TYPES,
   DAMAGE_TYPES,
+  TRAIT_EFFECT_TYPES,
+  TRAIT_COSTS,
+  TRAIT_RECHARGE,
 } from "@/config/breweryRaceSchema";
 import { CONDITIONS } from "@/components/combat/conditions";
 
@@ -132,6 +138,7 @@ export default function CreateRaceModDialog({ open, onClose, mod = null }) {
           <LanguagesSection formData={formData} setField={setField} />
           <ProficienciesSection formData={formData} setField={setField} />
           <ResistancesSection formData={formData} setField={setField} />
+          <TraitsSection formData={formData} setField={setField} />
         </div>
       </DialogContent>
     </Dialog>
@@ -592,5 +599,246 @@ function ResistancesSection({ formData, setField }) {
         />
       </Field>
     </Section>
+  );
+}
+
+// ──────────────────────── B7 Racial Traits ───────────────────────
+
+function cloneBlankTrait() {
+  return JSON.parse(JSON.stringify(BLANK_TRAIT));
+}
+
+function TraitsSection({ formData, setField }) {
+  const traits = Array.isArray(formData.traits) ? formData.traits : [];
+  const add = () => setField("traits", [...traits, cloneBlankTrait()]);
+  const update = (idx, next) =>
+    setField("traits", traits.map((t, i) => (i === idx ? next : t)));
+  const remove = (idx) =>
+    setField("traits", traits.filter((_, i) => i !== idx));
+  const move = (idx, dir) => {
+    const target = idx + dir;
+    if (target < 0 || target >= traits.length) return;
+    const next = [...traits];
+    [next[idx], next[target]] = [next[target], next[idx]];
+    setField("traits", next);
+  };
+
+  return (
+    <Section title="Racial Traits">
+      {traits.length === 0 && (
+        <p className="text-xs text-slate-500 italic">
+          No traits yet — click "Add Trait" to create the first racial feature.
+        </p>
+      )}
+      <div className="space-y-3">
+        {traits.map((trait, idx) => (
+          <TraitEditor
+            key={idx}
+            trait={trait}
+            idx={idx}
+            total={traits.length}
+            onChange={(next) => update(idx, next)}
+            onRemove={() => remove(idx)}
+            onMoveUp={() => move(idx, -1)}
+            onMoveDown={() => move(idx, 1)}
+          />
+        ))}
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={add}
+        className="mt-2"
+      >
+        <Plus className="w-3 h-3 mr-1" /> Add Trait
+      </Button>
+    </Section>
+  );
+}
+
+function TraitEditor({ trait, idx, total, onChange, onRemove, onMoveUp, onMoveDown }) {
+  const set = (key, value) => onChange({ ...trait, [key]: value });
+  return (
+    <div className="bg-[#050816] border border-slate-700 rounded-lg p-3 space-y-2">
+      <div className="flex items-center gap-1">
+        <span className="text-[10px] uppercase tracking-widest text-slate-400 font-bold flex-1">
+          Trait #{idx + 1}
+        </span>
+        <button
+          type="button"
+          onClick={onMoveUp}
+          disabled={idx === 0}
+          className="p-1 text-slate-400 hover:text-white disabled:opacity-30"
+          title="Move up"
+        >
+          <ChevronUp className="w-3 h-3" />
+        </button>
+        <button
+          type="button"
+          onClick={onMoveDown}
+          disabled={idx === total - 1}
+          className="p-1 text-slate-400 hover:text-white disabled:opacity-30"
+          title="Move down"
+        >
+          <ChevronDown className="w-3 h-3" />
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="p-1 text-red-400 hover:text-red-300"
+          title="Delete trait"
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+        <div className="md:col-span-3">
+          <Field label="Name">
+            <Input
+              value={trait.name || ""}
+              onChange={(e) => set("name", e.target.value)}
+              placeholder="e.g., Feline Agility"
+              className="bg-[#1E2430] border-slate-700 text-white"
+            />
+          </Field>
+        </div>
+        <Field label="Level">
+          <NumberInput
+            value={trait.level ?? 1}
+            onChange={(v) => set("level", v)}
+            min={1}
+            max={20}
+          />
+        </Field>
+      </div>
+
+      <Field label="Description">
+        <Textarea
+          value={trait.description || ""}
+          onChange={(e) => set("description", e.target.value)}
+          placeholder="What the trait does, in plain language."
+          rows={3}
+          className="bg-[#1E2430] border-slate-700 text-white"
+        />
+      </Field>
+
+      <details className="bg-[#0b1220] border border-slate-700 rounded p-2">
+        <summary className="cursor-pointer text-xs text-slate-300 font-semibold">
+          Mechanical Effect
+        </summary>
+        <div className="mt-3">
+          <MechanicalEffectFields
+            value={trait.mechanical || {}}
+            onChange={(next) => set("mechanical", next)}
+          />
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function MechanicalEffectFields({ value, onChange }) {
+  const effect = value?.effect_type || "utility";
+  const set = (key, v) => onChange({ ...(value || {}), [key]: v });
+  const isDamage  = effect === "damage";
+  const isHealing = effect === "healing";
+  const isLimitedUse = effect !== "utility" || (value?.uses && value.uses !== "At Will");
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+      <Field label="Effect Type">
+        <Select value={effect} onValueChange={(v) => set("effect_type", v)}>
+          <SelectTrigger className="bg-[#1E2430] border-slate-700 text-white">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TRAIT_EFFECT_TYPES.map((t) => (
+              <SelectItem key={t} value={t}>{t}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Cost">
+        <Select value={value?.cost || "passive"} onValueChange={(v) => set("cost", v)}>
+          <SelectTrigger className="bg-[#1E2430] border-slate-700 text-white">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TRAIT_COSTS.map((t) => (
+              <SelectItem key={t} value={t}>{t.replace("_", " ")}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+
+      {isDamage && (
+        <>
+          <Field label="Damage Dice">
+            <Input
+              value={value?.damage_dice || ""}
+              onChange={(e) => set("damage_dice", e.target.value)}
+              placeholder="e.g., 1d4"
+              className="bg-[#1E2430] border-slate-700 text-white"
+            />
+          </Field>
+          <Field label="Damage Type">
+            <Select
+              value={value?.damage_type || ""}
+              onValueChange={(v) => set("damage_type", v)}
+            >
+              <SelectTrigger className="bg-[#1E2430] border-slate-700 text-white">
+                <SelectValue placeholder="select…" />
+              </SelectTrigger>
+              <SelectContent>
+                {DAMAGE_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </>
+      )}
+
+      {isHealing && (
+        <Field label="Healing Dice">
+          <Input
+            value={value?.healing_dice || ""}
+            onChange={(e) => set("healing_dice", e.target.value)}
+            placeholder="e.g., 1d6 + CON"
+            className="bg-[#1E2430] border-slate-700 text-white"
+          />
+        </Field>
+      )}
+
+      {isLimitedUse && (
+        <>
+          <Field label="Uses">
+            <Input
+              value={value?.uses || ""}
+              onChange={(e) => set("uses", e.target.value)}
+              placeholder='e.g., "1", "At Will", "Prof/LR"'
+              className="bg-[#1E2430] border-slate-700 text-white"
+            />
+          </Field>
+          <Field label="Recharge">
+            <Select
+              value={value?.recharge || ""}
+              onValueChange={(v) => set("recharge", v)}
+            >
+              <SelectTrigger className="bg-[#1E2430] border-slate-700 text-white">
+                <SelectValue placeholder="(none)" />
+              </SelectTrigger>
+              <SelectContent>
+                {TRAIT_RECHARGE.map((t) => (
+                  <SelectItem key={t} value={t}>{t.replace("_", " ")}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </>
+      )}
+    </div>
   );
 }
