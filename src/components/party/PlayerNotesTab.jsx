@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
@@ -7,36 +7,43 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Lock, Users, Crown, Pencil, Trash2, Plus, X, Save, Upload } from "lucide-react";
+import { Lock, Users, Eye, Pencil, Trash2, Plus, X, Save, Upload } from "lucide-react";
 import { uploadFile } from "@/utils/uploadFile";
 import { canSeeNote } from "./partyPermissions";
 import { timeAgo, formatDate } from "@/utils/timeAgo";
 import SketchCanvas from "@/components/shared/SketchCanvas";
 
 const VISIBILITY = [
-  { value: "private",  label: "Private",  icon: Lock,  cls: "bg-red-900/30 text-red-400 border-red-800/30",          hint: "Only you and the GM." },
-  { value: "party",    label: "Party",    icon: Users, cls: "bg-emerald-900/30 text-emerald-400 border-emerald-800/30", hint: "Every party member can read." },
-  { value: "gm_only",  label: "GM Only",  icon: Crown, cls: "bg-amber-900/30 text-amber-400 border-amber-800/30",     hint: "Only the GM sees this." },
+  { value: "gm_only",  label: "GM Only", icon: Lock,  cls: "bg-amber-900/30 text-amber-400 border-amber-800/30",     hint: "Only the GM sees this." },
+  { value: "public",   label: "Party",   icon: Users, cls: "bg-emerald-900/30 text-emerald-400 border-emerald-800/30", hint: "Every party member can read." },
+  { value: "selected", label: "Selected", icon: Eye,  cls: "bg-blue-900/30 text-blue-400 border-blue-800/30",          hint: "Pick specific players below." },
 ];
 const VIS_MAP = Object.fromEntries(VISIBILITY.map((v) => [v.value, v]));
-
-function uid() {
-  return `note_${Math.random().toString(36).slice(2, 10)}`;
-}
 
 /**
  * Forum-style notes. Each note renders as a post: character portrait
  * as author avatar, timestamp, visibility pill, body, optional
- * attached image. The Adventuring Party panel's equivalent of a
- * thread list.
+ * attached image. Persists to `player_notes` — one row per note,
+ * scoped to a character. Visibility is gm_only / public / selected
+ * with an optional per-user allow-list when the author picks
+ * "selected players".
  */
 export default function PlayerNotesTab({ character, viewer }) {
   const queryClient = useQueryClient();
   const canEdit = !!(viewer?.isGM || viewer?.ownsTarget);
-  const allNotes = Array.isArray(character?.player_notes) ? character.player_notes : [];
+
+  const { data: allNotes = [] } = useQuery({
+    queryKey: ["playerNotes", character?.id],
+    queryFn: () => base44.entities.PlayerNote
+      .filter({ character_id: character.id })
+      .catch(() => []),
+    enabled: !!character?.id,
+    initialData: [],
+  });
 
   const notes = useMemo(() => {
     const filtered = allNotes.filter((n) => canSeeNote(n, viewer));
@@ -48,28 +55,36 @@ export default function PlayerNotesTab({ character, viewer }) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
-  const writeMutation = useMutation({
-    mutationFn: async (next) => base44.entities.Character.update(character.id, { player_notes: next }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["campaignCharacters", character.campaign_id] });
-    },
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["playerNotes", character?.id] });
+  };
+
+  const addMutation = useMutation({
+    mutationFn: (entry) => base44.entities.PlayerNote.create({
+      campaign_id: character.campaign_id,
+      character_id: character.id,
+      author_id: viewer?.viewerUserId || null,
+      title: entry.title,
+      content: entry.content,
+      visibility: entry.visibility,
+      visible_to_players: entry.visible_to_players || [],
+      image_url: entry.image_url || null,
+    }),
+    onSuccess: () => { invalidate(); setAdding(false); toast.success("Note saved."); },
     onError: (err) => toast.error(err?.message || "Couldn't save that note."),
   });
 
-  const persist = (next) => writeMutation.mutate(next);
+  const updateMutation = useMutation({
+    mutationFn: ({ id, patch }) => base44.entities.PlayerNote.update(id, patch),
+    onSuccess: () => { invalidate(); setEditingId(null); toast.success("Note updated."); },
+    onError: (err) => toast.error(err?.message || "Couldn't update that note."),
+  });
 
-  const addOne = (entry) => {
-    persist([...allNotes, { id: uid(), created_at: new Date().toISOString(), ...entry }]);
-    setAdding(false);
-  };
-  const updateOne = (id, patch) => {
-    persist(allNotes.map((n) => (n.id === id ? { ...n, ...patch } : n)));
-    setEditingId(null);
-  };
-  const removeOne = (id) => {
-    if (!confirm("Delete this note?")) return;
-    persist(allNotes.filter((n) => n.id !== id));
-  };
+  const deleteMutation = useMutation({
+    mutationFn: (id) => base44.entities.PlayerNote.delete(id),
+    onSuccess: () => { invalidate(); toast.success("Note deleted."); },
+    onError: (err) => toast.error(err?.message || "Couldn't delete that note."),
+  });
 
   return (
     <div className="space-y-3">
@@ -77,9 +92,9 @@ export default function PlayerNotesTab({ character, viewer }) {
         <div className="flex items-center justify-between">
           <p className="text-xs text-slate-400">
             {viewer?.isGM
-              ? "GM view — every note is visible, including private and GM-only."
+              ? "GM view — every note is visible, including selected-only and GM-only."
               : viewer?.ownsTarget
-                ? "Your private scratchpad. Set visibility per note to share with the party or flag for the GM."
+                ? "Your scratchpad. Choose visibility per note to share with the party, a few players, or flag for the GM."
                 : "Party-visible notes only."}
           </p>
           <Button
@@ -95,7 +110,7 @@ export default function PlayerNotesTab({ character, viewer }) {
         <NoteForm
           character={character}
           onCancel={() => setAdding(false)}
-          onSave={addOne}
+          onSave={(entry) => addMutation.mutate(entry)}
         />
       )}
 
@@ -113,7 +128,7 @@ export default function PlayerNotesTab({ character, viewer }) {
               character={character}
               initial={note}
               onCancel={() => setEditingId(null)}
-              onSave={(patch) => updateOne(note.id, patch)}
+              onSave={(patch) => updateMutation.mutate({ id: note.id, patch })}
             />
           ) : (
             <NotePost
@@ -122,7 +137,9 @@ export default function PlayerNotesTab({ character, viewer }) {
               note={note}
               canEdit={canEdit}
               onEdit={() => setEditingId(note.id)}
-              onRemove={() => removeOne(note.id)}
+              onRemove={() => {
+                if (confirm("Delete this note?")) deleteMutation.mutate(note.id);
+              }}
             />
           ),
         )}
@@ -132,7 +149,7 @@ export default function PlayerNotesTab({ character, viewer }) {
 }
 
 function NotePost({ character, note, canEdit, onEdit, onRemove }) {
-  const vis = VIS_MAP[note.visibility] || VIS_MAP.private;
+  const vis = VIS_MAP[note.visibility] || VIS_MAP.gm_only;
   return (
     <article className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-6">
       <header className="flex items-start gap-4 mb-4">
@@ -182,9 +199,30 @@ function NotePost({ character, note, canEdit, onEdit, onRemove }) {
 function NoteForm({ character, initial, onSave, onCancel }) {
   const [title, setTitle] = useState(initial?.title || "");
   const [content, setContent] = useState(initial?.content || "");
-  const [visibility, setVisibility] = useState(initial?.visibility || "private");
+  const [visibility, setVisibility] = useState(initial?.visibility || "gm_only");
+  const [visibleTo, setVisibleTo] = useState(
+    Array.isArray(initial?.visible_to_players) ? initial.visible_to_players : [],
+  );
   const [imageUrl, setImageUrl] = useState(initial?.image_url || "");
   const [uploading, setUploading] = useState(false);
+
+  // Pull other party characters so the GM / owner can pick who to
+  // share a "selected" note with. No perfect list here without
+  // drilling a prop down, so we load the campaign's characters
+  // lazily via a useQuery mirroring what AdventuringParty already
+  // caches.
+  const { data: partyPlayers = [] } = useQuery({
+    queryKey: ["partyPlayersForSelect", character?.campaign_id],
+    queryFn: async () => {
+      const rows = await base44.entities.Character
+        .filter({ campaign_id: character.campaign_id })
+        .catch(() => []);
+      const withUsers = (rows || []).filter((c) => c.user_id && c.user_id !== character?.user_id);
+      return withUsers.map((c) => ({ user_id: c.user_id, name: c.name || "Player" }));
+    },
+    enabled: !!character?.campaign_id,
+    initialData: [],
+  });
 
   const handleUpload = async (file) => {
     if (!file) return;
@@ -199,12 +237,21 @@ function NoteForm({ character, initial, onSave, onCancel }) {
     }
   };
 
+  const toggleVisibleTo = (userId, on) => {
+    setVisibleTo((prev) => {
+      const set = new Set(prev);
+      if (on) set.add(userId); else set.delete(userId);
+      return Array.from(set);
+    });
+  };
+
   const handleSave = () => {
     if (!title.trim()) { toast.error("Give the note a title."); return; }
     onSave({
       title: title.trim(),
       content: content.trim(),
       visibility,
+      visible_to_players: visibility === "selected" ? visibleTo : [],
       image_url: imageUrl || null,
     });
   };
@@ -242,6 +289,27 @@ function NoteForm({ character, initial, onSave, onCancel }) {
             ))}
           </SelectContent>
         </Select>
+        {visibility === "selected" && (
+          <div className="mt-2 bg-[#0f1219] border border-slate-700 rounded p-2">
+            {partyPlayers.length === 0 ? (
+              <p className="text-xs text-slate-500 italic">
+                No other party members with user profiles to pick from.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-1">
+                {partyPlayers.map((p) => (
+                  <label key={p.user_id} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                    <Checkbox
+                      checked={visibleTo.includes(p.user_id)}
+                      onCheckedChange={(v) => toggleVisibleTo(p.user_id, !!v)}
+                    />
+                    <span className="truncate">{p.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       <div>
         <Label className="text-sm text-slate-300">Image (optional)</Label>

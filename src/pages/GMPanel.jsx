@@ -807,7 +807,13 @@ export default function GMPanel() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
       toast.success('Session ended.');
-      navigate(createPageUrl("CampaignView") + `?id=${campaignId}`);
+      // CampaignGMPanel renders the full GM lobby — hero banner,
+      // class-iconed player cards, and the Layout's campaign nav
+      // (Invite Players / Player Management / Campaign Archives /
+      // Campaign Statistics / Campaign Settings). CampaignView is
+      // bypassed from Layout and renders a slimmer version without
+      // that nav, so End Session pointed at the wrong page.
+      navigate(createPageUrl("CampaignGMPanel") + `?id=${campaignId}`);
     },
   });
 

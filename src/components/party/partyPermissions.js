@@ -33,14 +33,25 @@ export function ownsCharacter(character, user) {
 }
 
 /**
- * Notes are private / party / gm_only. A viewer can see a note when:
+ * Notes are gm_only / public / selected. A viewer can see a note
+ * when:
  *   - they're the GM, OR
- *   - they own the character (they're looking at their own notes), OR
- *   - the note's visibility is 'party' (public to the party)
+ *   - they own the character (reading their own notes), OR
+ *   - the note's visibility is 'public', OR
+ *   - the note's visibility is 'selected' and the viewer's user id
+ *     is in visible_to_players.
+ * Legacy rows using 'private' / 'party' still resolve: 'private'
+ * stays GM + owner only; 'party' maps to the new 'public' intent.
  */
-export function canSeeNote(note, { isGM, ownsTarget }) {
+export function canSeeNote(note, { isGM, ownsTarget, viewerUserId } = {}) {
   if (isGM || ownsTarget) return true;
-  return (note?.visibility || "private") === "party";
+  const vis = note?.visibility || "private";
+  if (vis === "public" || vis === "party") return true;
+  if (vis === "selected") {
+    const allow = Array.isArray(note?.visible_to_players) ? note.visible_to_players : [];
+    return !!viewerUserId && allow.includes(viewerUserId);
+  }
+  return false;
 }
 
 /**

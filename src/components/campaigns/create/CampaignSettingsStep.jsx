@@ -1,6 +1,6 @@
 import React from "react";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+import { TIME_OPTIONS } from "@/utils/sessionTime";
 import { Switch } from "@/components/ui/switch";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -46,12 +46,20 @@ export default function CampaignSettingsStep({ data, onChange }) {
           </div>
           <div>
             <Label className="text-white mb-1 block text-sm">Start time</Label>
-            <Input
-              type="time"
-              value={data.session_time || ""}
-              onChange={(e) => onChange({ session_time: e.target.value })}
-              className="bg-[#0b1220] border-gray-700 text-white"
-            />
+            <Select
+              value={data.session_time || "__none"}
+              onValueChange={(v) => onChange({ session_time: v === "__none" ? "" : v })}
+            >
+              <SelectTrigger className="bg-[#0b1220] border-gray-700 text-white">
+                <SelectValue placeholder="Select time…" />
+              </SelectTrigger>
+              <SelectContent className="bg-[#1a1f2e] border-slate-700 text-white max-h-64">
+                <SelectItem value="__none">Not scheduled yet</SelectItem>
+                {TIME_OPTIONS.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <p className="text-xs text-gray-500">

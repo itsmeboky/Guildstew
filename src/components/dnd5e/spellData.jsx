@@ -777,10 +777,18 @@ export function getAllAvailableSpells(primaryClass, multiclasses = [], fullSpell
     };
 
     const classes = [primaryClass, ...multiclasses.map(mc => mc.class)].filter(Boolean);
+    const classesLower = new Set(classes.map((c) => String(c).toLowerCase()));
 
     fullSpellsList.forEach(spell => {
-      const spellClasses = spell.classes || [];
-      const belongsToClass = spellClasses.some(cls => classes.includes(cls));
+      // `spell.classes` on dnd5e_spells may be an array of strings
+      // (["Wizard"]) or an array of objects ([{ name: "Wizard" }]).
+      // Normalise either shape into lowercase names before comparing.
+      const rawClasses = Array.isArray(spell.classes) ? spell.classes : [];
+      const spellClasses = rawClasses
+        .map((c) => (typeof c === "object" ? c?.name : c))
+        .filter(Boolean)
+        .map((c) => String(c).toLowerCase());
+      const belongsToClass = spellClasses.some((cls) => classesLower.has(cls));
       if (!belongsToClass) return;
 
       let levelKey;

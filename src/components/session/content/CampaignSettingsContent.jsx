@@ -3,9 +3,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Lock } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import { TIME_OPTIONS } from "@/utils/sessionTime";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -105,13 +105,24 @@ export default function CampaignSettingsContent({ campaignId, campaign, allUserP
           </div>
           <div>
             <label className="text-xs text-slate-400 uppercase tracking-wider block mb-2">Session Time</label>
-            <Input
-              type="time"
-              value={sessionTime}
-              onChange={(e) => setSessionTime(e.target.value)}
-              onBlur={() => updateCampaign.mutate({ session_time: sessionTime })}
-              className="bg-[#0f1219] border-slate-700 text-white"
-            />
+            <Select
+              value={sessionTime || "__none"}
+              onValueChange={(v) => {
+                const next = v === "__none" ? "" : v;
+                setSessionTime(next);
+                updateCampaign.mutate({ session_time: next });
+              }}
+            >
+              <SelectTrigger className="bg-[#0f1219] border-slate-700 text-white">
+                <SelectValue placeholder="Select time…" />
+              </SelectTrigger>
+              <SelectContent className="bg-[#1a1f2e] border-slate-700 text-white max-h-64">
+                <SelectItem value="__none">Unscheduled</SelectItem>
+                {TIME_OPTIONS.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </section>
