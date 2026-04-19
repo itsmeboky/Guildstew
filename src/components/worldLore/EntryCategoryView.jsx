@@ -14,6 +14,7 @@ import {
 import { timeAgo, formatDate } from "@/utils/timeAgo";
 import { templateById } from "@/data/worldLoreTemplates";
 import EntryForm from "./EntryForm";
+import GatedEntryView from "./GatedEntryView";
 import CommentThread from "./CommentThread";
 
 /**
@@ -35,6 +36,8 @@ export default function EntryCategoryView({
   emptyLabel,
   metadataFields = [],
   renderList,
+  campaign,
+  viewerCharacter,
 }) {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState("list");
@@ -182,6 +185,8 @@ export default function EntryCategoryView({
           profilesById={profilesById}
           metadataFields={metadataFields}
           isGM={isGM}
+          campaign={campaign}
+          character={viewerCharacter}
           onEdit={() => setMode("edit")}
           onDelete={() => {
             if (confirm(`Delete "${selected.title}"?`)) deleteMutation.mutate(selected.id);
@@ -299,10 +304,47 @@ function ForumRow({ entry, authorProfile, commentCount, onClick }) {
   );
 }
 
-function EntryDetail({ entry, profilesById, metadataFields, isGM, onEdit, onDelete }) {
+function EntryDetail({ entry, profilesById, metadataFields, isGM, campaign, character, onEdit, onDelete }) {
   const author = profilesById.get(entry.created_by) || {};
   const template = templateById(entry.template_type);
   const structuredMetadataKeys = template.fields?.map((f) => f.key) || [];
+
+  // Render the entry body through the gated-view wrapper. It
+  // handles skill/ability locks, language comprehension tiers, and
+  // Thieves' Cant / Druidic annotations. GMs pass through unblocked.
+  const renderBody = () => (
+    <>
+      {template.id !== "freeform" && structuredMetadataKeys.length > 0 && (
+        <div className="space-y-3 mb-5">
+          {template.fields.map((field) => {
+            const val = entry?.metadata?.[field.key];
+            if (!val) return null;
+            if (field.type === "image") {
+              return (
+                <div key={field.key}>
+                  <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">{field.label}</div>
+                  <img src={val} alt="" className="max-h-80 rounded-lg border border-slate-700" />
+                </div>
+              );
+            }
+            return (
+              <div key={field.key} className="bg-[#0f1219] border border-slate-700 rounded-lg p-3">
+                <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">{field.label}</div>
+                <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{val}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {template.id === "freeform" && entry.content && (
+        <div
+          className="prose prose-invert max-w-none text-slate-300 leading-relaxed"
+          dangerouslySetInnerHTML={{ __html: entry.content }}
+        />
+      )}
+    </>
+  );
 
   return (
     <article className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-6">
@@ -336,37 +378,13 @@ function EntryDetail({ entry, profilesById, metadataFields, isGM, onEdit, onDele
         </div>
       )}
 
-      {/* Template-specific structured body */}
-      {template.id !== "freeform" && structuredMetadataKeys.length > 0 && (
-        <div className="space-y-3 mb-5">
-          {template.fields.map((field) => {
-            const val = entry?.metadata?.[field.key];
-            if (!val) return null;
-            if (field.type === "image") {
-              return (
-                <div key={field.key}>
-                  <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">{field.label}</div>
-                  <img src={val} alt="" className="max-h-80 rounded-lg border border-slate-700" />
-                </div>
-              );
-            }
-            return (
-              <div key={field.key} className="bg-[#0f1219] border border-slate-700 rounded-lg p-3">
-                <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">{field.label}</div>
-                <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{val}</p>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Freeform content */}
-      {template.id === "freeform" && entry.content && (
-        <div
-          className="prose prose-invert max-w-none text-slate-300 leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: entry.content }}
-        />
-      )}
+      <GatedEntryView
+        entry={entry}
+        character={character}
+        campaign={campaign}
+        isGM={isGM}
+        renderBody={renderBody}
+      />
 
       {entry.image_url && (
         <img
