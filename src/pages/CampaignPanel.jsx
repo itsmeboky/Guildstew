@@ -85,35 +85,22 @@ export default function CampaignPanel() {
 
   const players = React.useMemo(() => {
     const playerMap = new Map();
-    const claimedCharacterIds = new Set();
 
+    // One card per row in campaign.player_ids. Orphan characters
+    // (old seeds, GM-controlled NPCs, etc.) no longer surface on
+    // the lobby — this is the campaign home, not the combat view.
     if (campaign?.player_ids && allUserProfiles) {
       const uniquePlayerIds = [...new Set(campaign.player_ids)];
       uniquePlayerIds.forEach(playerId => {
         const profile = allUserProfiles.find(u => u.user_id === playerId);
-        if (profile && !playerMap.has(playerId)) {
-          const character = characters?.find(c => c.created_by === profile.email && c.campaign_id === campaignId);
-          if (character) claimedCharacterIds.add(character.id);
-          playerMap.set(playerId, { ...profile, character });
-        }
+        if (!profile || playerMap.has(playerId)) return;
+        const character = characters?.find(c =>
+          (c.user_id === playerId || c.created_by === profile.email)
+          && c.campaign_id === campaignId,
+        );
+        playerMap.set(playerId, { ...profile, character });
       });
     }
-
-    (characters || []).forEach(char => {
-      if (char.campaign_id !== campaignId) return;
-      if (claimedCharacterIds.has(char.id)) return;
-      const ghostKey = `ghost-${char.id}`;
-      playerMap.set(ghostKey, {
-        user_id: ghostKey,
-        email: char.created_by || 'ghost@local',
-        username: char.name || 'Unclaimed',
-        avatar_url: char.profile_avatar_url,
-        profile_color_1: '#FF5722',
-        profile_color_2: '#37F2D1',
-        character: char,
-        isGhost: true,
-      });
-    });
 
     return Array.from(playerMap.values());
   }, [campaign?.player_ids, allUserProfiles, characters, campaignId]);
@@ -212,7 +199,7 @@ export default function CampaignPanel() {
           <div className="text-center">
             <p className="text-xl text-white/80 mb-2">Campaign Lobby</p>
             <h1 className="text-6xl font-bold text-white mb-8" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.8)' }}>
-              {campaign.title}
+              {campaign?.name || campaign?.title}
             </h1>
             <div className="flex items-center justify-center gap-4">
               <Button 
@@ -306,11 +293,13 @@ export default function CampaignPanel() {
                       {character ? `Level ${character.level} ${character.class}` : 'Not created'}
                     </p>
                     <p className="text-white/70 text-xs">
-                      {player.isGhost ? (
-                        <>GM-controlled</>
-                      ) : (
-                        <>Played by: <Link to={createPageUrl("UserProfile") + `?id=${player.user_id}`} className="text-[#37F2D1] hover:text-[#2dd9bd] transition-colors">@{player.username}</Link></>
-                      )}
+                      Played by:{" "}
+                      <Link
+                        to={createPageUrl("UserProfile") + `?id=${player.user_id}`}
+                        className="text-[#37F2D1] hover:text-[#2dd9bd] transition-colors"
+                      >
+                        @{player.username}
+                      </Link>
                     </p>
                   </div>
                 </div>
