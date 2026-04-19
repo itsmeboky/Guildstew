@@ -676,6 +676,7 @@ export function resolveAction(action, actor) {
   // === MONSTER/NPC ACTIONS ===
   if (action.type === "monster_action"
       || action.type === "villain_action"
+      || action.type === "phase_action"
       || action.attack_bonus !== undefined
       || action.damage) {
     // Normalise the action cost into the action economy vocabulary.
