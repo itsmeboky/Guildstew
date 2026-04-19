@@ -6,6 +6,7 @@ import { base44 } from "@/api/base44Client";
 import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
 import { toast } from "sonner";
 import ItemTooltip from "@/components/shared/ItemTooltip";
+import { safeText } from "@/utils/safeRender";
 
 // D&D 5e DMG individual treasure tables. One table per CR bucket.
 // Dice expressions use "NdF" or "NdF*M" where M is a flat multiplier
@@ -517,9 +518,9 @@ export default function LootManager({ campaignId, lootData, players, onUpdateLoo
             <div key={idx} className="relative group">
               <div className="w-12 h-12 rounded-lg bg-[#0b1220] border border-[#111827] flex items-center justify-center overflow-hidden">
                 {itemIcons[item.name] || item.image_url ? (
-                  <img src={itemIcons[item.name] || item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                  <img src={itemIcons[item.name] || item.image_url} alt={safeText(item.name)} className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-[8px] text-center px-1 text-slate-400 line-clamp-2">{item.name}</span>
+                  <span className="text-[8px] text-center px-1 text-slate-400 line-clamp-2">{safeText(item.name)}</span>
                 )}
               </div>
               <button
@@ -707,24 +708,24 @@ function ManualDistributionModal({ players, poolCurrency, poolItems, settings, o
                   <div key={item.id} className="bg-[#1a1f2e] p-3 rounded-lg border border-[#2A3441] flex items-center gap-3">
                     <div className="w-10 h-10 rounded bg-[#0b1220] border border-[#111827] flex items-center justify-center overflow-hidden flex-shrink-0">
                       {itemIcons[item.name] ? (
-                        <img src={itemIcons[item.name]} alt={item.name} className="w-full h-full object-cover" />
+                        <img src={itemIcons[item.name]} alt={safeText(item.name)} className="w-full h-full object-cover" />
                       ) : (
                         <Package className="w-5 h-5 text-slate-600" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-white truncate">{item.name}</div>
-                      <div className="text-[10px] text-slate-500">{item.rarity || 'Common'}</div>
+                      <div className="text-sm font-medium text-white truncate">{safeText(item.name)}</div>
+                      <div className="text-[10px] text-slate-500">{safeText(item.rarity) || 'Common'}</div>
                     </div>
                     <div className="flex-shrink-0">
-                      <select 
+                      <select
                         className="bg-[#0b1220] border border-[#2A3441] text-xs text-white rounded px-2 py-1 outline-none focus:border-purple-500"
                         value={itemDist[item.id] || ""}
                         onChange={(e) => assignItem(item.id, e.target.value)}
                       >
                         <option value="">Loot Box</option>
                         {players.map(p => (
-                          <option key={p.user_id} value={p.user_id}>{p.character?.name || p.username}</option>
+                          <option key={p.user_id} value={p.user_id}>{safeText(p.character?.name) || safeText(p.username)}</option>
                         ))}
                       </select>
                     </div>
@@ -828,8 +829,8 @@ function ItemSelectorModal({ onClose, onSelect }) {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-slate-200 group-hover:text-white truncate">{item.name}</div>
-                        <div className="text-[10px] text-slate-500">{item.type} • {item.rarity || 'Common'}</div>
+                        <div className="text-sm font-medium text-slate-200 group-hover:text-white truncate">{safeText(item.name)}</div>
+                        <div className="text-[10px] text-slate-500">{safeText(item.type)} • {safeText(item.rarity) || 'Common'}</div>
                       </div>
                     </button>
                     <ItemTooltip item={item} placement="left" />

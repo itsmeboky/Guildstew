@@ -222,13 +222,13 @@ function EquipSlot({ item, label, className }) {
   return (
     <div className={`w-10 h-10 bg-[#111827] border border-gray-700 rounded flex items-center justify-center relative group ${className}`}>
       {item ? (
-        <img src={item.image_url || itemIcons[item.name]} alt={item.name} className="w-full h-full object-cover rounded" />
+        <img src={item.image_url || itemIcons[item.name]} alt={safeText(item.name)} className="w-full h-full object-cover rounded" />
       ) : (
         <span className="text-[8px] text-gray-600 uppercase">{label}</span>
       )}
       {item && (
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-black text-white text-xs px-2 py-1 rounded whitespace-nowrap z-10">
-          {item.name}
+          {safeText(item.name)}
         </div>
       )}
     </div>
