@@ -1382,12 +1382,36 @@ const MONSTER_GROUP_COLORS = {
   lime:  { label: "text-lime-300",    border: "border-lime-500/70",   glow: "shadow-[0_0_10px_rgba(132,204,22,0.35)]" },
 };
 
+// SRD monster data is wildly inconsistent in shape. A field nominally
+// expected to be a string ("damage", "description", "reach") sometimes
+// arrives as a structured object ({ damage_dice, damage_type }) or an
+// array (legendary-action usage). `toText` collapses any of those to a
+// plain string so downstream JSX can render it without blowing up.
+function toText(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map(toText).filter(Boolean).join(", ");
+  if (typeof value === "object") {
+    if (value.damage_dice || value.damage_type) {
+      return [toText(value.damage_dice), toText(value.damage_type)].filter(Boolean).join(" ").trim();
+    }
+    if (typeof value.text === "string") return value.text;
+    if (typeof value.name === "string") return value.name;
+    if (typeof value.value !== "undefined") return toText(value.value);
+    if (typeof value.desc === "string") return value.desc;
+    if (typeof value.description === "string") return value.description;
+    return "";
+  }
+  return String(value);
+}
+
 function pickActionIconKind(action) {
   if (!action) return "generic";
   if (action._isMulti) return "multi";
-  const desc = (action.description || action.desc || "").toLowerCase();
-  const name = (action.name || "").toLowerCase();
-  const actionType = (action.action_type || "").toLowerCase();
+  const desc = toText(action.description || action.desc).toLowerCase();
+  const name = toText(action.name).toLowerCase();
+  const actionType = toText(action.action_type).toLowerCase();
   if (actionType === "healing" || name.includes("heal") || desc.includes("regain hit points")) return "healing";
   if (actionType === "saving_throw" || action.save_dc || action.save_ability || desc.includes("saving throw")) return "burst";
   if (actionType === "melee_attack" || actionType === "ranged_attack"
@@ -1414,14 +1438,14 @@ function MonsterActionGroup({ label, color, actions, onActionClick, badge }) {
           badge={badge}
           onClick={() => onActionClick && onActionClick({
             type: "monster_action",
-            name: action.name,
-            description: action.description || action.desc,
+            name: toText(action.name),
+            description: toText(action.description || action.desc),
             attack_bonus: action.attack_bonus,
-            damage: action.damage,
-            damage_type: action.damage_type,
-            save_ability: action.save_ability,
+            damage: toText(action.damage),
+            damage_type: toText(action.damage_type),
+            save_ability: toText(action.save_ability),
             save_dc: action.save_dc,
-            action_type: action.action_type,
+            action_type: toText(action.action_type),
             action_cost: action._cost,
             _raw: action,
           })}
@@ -1440,25 +1464,30 @@ function MonsterActionSlot({ action, palette, badge, onClick }) {
     kind === "burst"   ? Sparkles :
     kind === "healing" ? PlusIcon :
     Star;
-  const name = action.name || "Action";
+  const name = toText(action.name) || "Action";
   const truncated = name.length > 10 ? `${name.slice(0, 9)}…` : name;
+  const reachText = toText(action.reach);
+  const damageText = toText(action.damage);
+  const damageTypeText = toText(action.damage_type);
+  const saveAbilityText = toText(action.save_ability);
+  const descText = toText(action.description || action.desc);
   const tooltip = (
     <div className="max-w-[260px]">
       <div className="font-bold text-[#37F2D1] mb-1">
         {name}{action.legendary_cost > 1 ? ` (Costs ${action.legendary_cost})` : ""}
       </div>
       {action.attack_bonus != null && action.attack_bonus !== "" && (
-        <div className="text-[10px] text-slate-400 mb-1">+{action.attack_bonus} to hit{action.reach ? ` · ${action.reach}` : ""}</div>
+        <div className="text-[10px] text-slate-400 mb-1">+{action.attack_bonus} to hit{reachText ? ` · ${reachText}` : ""}</div>
       )}
       {action.save_dc && (
-        <div className="text-[10px] text-slate-400 mb-1">DC {action.save_dc} {action.save_ability || "save"}</div>
+        <div className="text-[10px] text-slate-400 mb-1">DC {action.save_dc} {saveAbilityText || "save"}</div>
       )}
-      {action.damage && (
-        <div className="text-[10px] text-slate-400 mb-1">{action.damage} {action.damage_type || ""}</div>
+      {damageText && (
+        <div className="text-[10px] text-slate-400 mb-1">{damageText} {damageTypeText}</div>
       )}
-      {(action.description || action.desc) && (
+      {descText && (
         <div className="text-[10px] text-slate-300 whitespace-pre-wrap leading-snug">
-          {(action.description || action.desc).slice(0, 280)}
+          {descText.slice(0, 280)}
         </div>
       )}
     </div>
