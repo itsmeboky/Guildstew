@@ -1,10 +1,49 @@
 import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ChevronLeft, ChevronRight, Flame, Shield, Eye, Sword, Wind, Droplet, Heart } from "lucide-react";
+import { ChevronLeft, ChevronRight, Flame, Shield, Eye, Sword, Wind, Droplet, Heart, Sparkles } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { motion, AnimatePresence } from "framer-motion";
 import { RACES } from '@/components/dnd5e/dnd5eRules';
+import { getModdedRaces } from '@/lib/modEngine';
+
+// Normalize a brewery race (modEngine metadata shape) into the same
+// shape the SRD race list uses — { name, subtypes, description,
+// subtypeDescriptions, traits, icon, image } — so the existing
+// carousel / detail UI keeps working without a parallel branch.
+// Brewery-flavored fields (_source, _mod_id, _mod_name, and the raw
+// schema blob under _raw) ride along so later steps can apply them.
+function normalizeBreweryRace(mod) {
+  const subraces = Array.isArray(mod.subraces) ? mod.subraces : [];
+  const subtypes = subraces.length > 0 ? subraces.map((s) => s.name).filter(Boolean) : ["Standard"];
+  const subtypeDescriptions = {};
+  if (subraces.length > 0) {
+    for (const s of subraces) {
+      if (s?.name) subtypeDescriptions[s.name] = s.description || "";
+    }
+  } else {
+    subtypeDescriptions["Standard"] = mod.description || "";
+  }
+  const traits = (Array.isArray(mod.traits) ? mod.traits : []).map((t) => ({
+    icon: Sparkles,
+    name: t?.name || "Trait",
+    description: t?.description || "",
+  }));
+  return {
+    name: mod.name || mod._mod_name || "Unnamed Race",
+    subtypes,
+    description: mod.description || "",
+    subtypeDescriptions,
+    traits,
+    icon: mod.image_url || "",
+    image: mod.image_url || "",
+    _source: "brewery",
+    _mod_id: mod._mod_id,
+    _mod_name: mod._mod_name || mod.name,
+    _raw: mod,
+  };
+}
 
 // Helper: read the registry's ability bonuses for a race name and
 // format them as a human-readable string for display. Falls back to
@@ -235,36 +274,52 @@ const backgrounds = [
   }
 ];
 
-export default function RaceStep({ characterData, updateCharacterData }) {
+export default function RaceStep({ characterData, updateCharacterData, campaignId }) {
   const [selectedRaceIndex, setSelectedRaceIndex] = useState(0);
   const [hoveredTrait, setHoveredTrait] = useState(null);
-  const currentRace = races[selectedRaceIndex];
+
+  // Modded races only appear when the creator is opened against a
+  // campaign — library-only characters can't depend on a campaign's
+  // installed mods, so brewery races are hidden there.
+  const { data: moddedRaces = [] } = useQuery({
+    queryKey: ["characterCreator", "moddedRaces", campaignId],
+    queryFn: () => getModdedRaces(campaignId),
+    enabled: !!campaignId,
+    initialData: [],
+  });
+
+  const combinedRaces = React.useMemo(() => {
+    if (!moddedRaces || moddedRaces.length === 0) return races;
+    return [...races, ...moddedRaces.map(normalizeBreweryRace)];
+  }, [moddedRaces]);
+
+  const currentRace = combinedRaces[selectedRaceIndex] || combinedRaces[0];
   const selectedBackground = backgrounds.find(b => b.name === characterData.background);
 
   const handleRaceChange = (direction) => {
     let newIndex = selectedRaceIndex + direction;
-    if (newIndex < 0) newIndex = races.length - 1;
-    if (newIndex >= races.length) newIndex = 0;
+    if (newIndex < 0) newIndex = combinedRaces.length - 1;
+    if (newIndex >= combinedRaces.length) newIndex = 0;
     setSelectedRaceIndex(newIndex);
-    updateCharacterData({ 
-      race: races[newIndex].name,
-      subrace: races[newIndex].subtypes[0]
+    updateCharacterData({
+      race: combinedRaces[newIndex].name,
+      subrace: combinedRaces[newIndex].subtypes[0],
     });
   };
 
   React.useEffect(() => {
     if (!characterData.race) {
-      updateCharacterData({ 
+      updateCharacterData({
         race: currentRace.name,
-        subrace: currentRace.subtypes[0]
+        subrace: currentRace.subtypes[0],
       });
     } else {
-      const initialRaceIndex = races.findIndex(race => race.name === characterData.race);
+      const initialRaceIndex = combinedRaces.findIndex(race => race.name === characterData.race);
       if (initialRaceIndex !== -1 && initialRaceIndex !== selectedRaceIndex) {
         setSelectedRaceIndex(initialRaceIndex);
       }
     }
-  }, [characterData.race, selectedRaceIndex, updateCharacterData, currentRace.name, currentRace.subtypes]);
+  }, [characterData.race, selectedRaceIndex, updateCharacterData, currentRace.name, currentRace.subtypes, combinedRaces]);
 
   const selectedSubraceDesc = currentRace.subtypeDescriptions[characterData.subrace || currentRace.subtypes[0]];
 
