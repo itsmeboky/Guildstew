@@ -58,6 +58,57 @@ export const racialSkills = {
   "Human": 1 // Extra skill proficiency
 };
 
+/**
+ * Racial skill proficiencies. Matches the racial-language pattern:
+ *   - `fixed`  — auto-granted, rendered as locked chips the player
+ *                can't deselect.
+ *   - `choose` — how many extra skills the player picks.
+ *   - `from`   — either the string "any" (pick from ALL_SKILLS) or
+ *                an explicit array of allowed skills.
+ *
+ * Subrace keys (High Elf / Mountain Dwarf / Variant Human) take
+ * precedence over base race when both are present. Base "Human"
+ * has no racial skill (Variant Human is the skill-granting variant),
+ * so a PHB Human picker that doesn't choose the variant gets 0.
+ */
+export const RACE_SKILL_PROFICIENCIES = {
+  Elf:             { fixed: ["Perception"], choose: 0, from: [] },
+  "High Elf":      { fixed: ["Perception"], choose: 0, from: [] },
+  "Wood Elf":      { fixed: ["Perception"], choose: 0, from: [] },
+  "Dark Elf":      { fixed: ["Perception"], choose: 0, from: [] },
+  "Dark Elf (Drow)": { fixed: ["Perception"], choose: 0, from: [] },
+  "Half-Elf":      { fixed: [], choose: 2, from: "any" },
+  "Half-Orc":      { fixed: ["Intimidation"], choose: 0, from: [] },
+  Dwarf:           { fixed: [], choose: 0, from: [] },
+  "Mountain Dwarf": { fixed: [], choose: 0, from: [] },
+  "Hill Dwarf":    { fixed: [], choose: 0, from: [] },
+  Human:           { fixed: [], choose: 0, from: [] },
+  "Variant Human": { fixed: [], choose: 1, from: "any" },
+  Halfling:        { fixed: [], choose: 0, from: [] },
+  Lightfoot:       { fixed: [], choose: 0, from: [] },
+  Stout:           { fixed: [], choose: 0, from: [] },
+  Gnome:           { fixed: [], choose: 0, from: [] },
+  "Forest Gnome":  { fixed: [], choose: 0, from: [] },
+  "Rock Gnome":    { fixed: [], choose: 0, from: [] },
+  Tiefling:        { fixed: [], choose: 0, from: [] },
+  Dragonborn:      { fixed: [], choose: 0, from: [] },
+};
+
+/**
+ * Resolve the racial skill rule for a race / subrace combo. Subrace
+ * wins when present; otherwise we fall back to the base race. An
+ * unrecognised race collapses to the empty rule so callers never
+ * need to null-check.
+ */
+export function getRaceSkillProficiencies(race, subrace) {
+  const empty = { fixed: [], choose: 0, from: [] };
+  return (
+    (subrace && RACE_SKILL_PROFICIENCIES[subrace])
+    || (race && RACE_SKILL_PROFICIENCIES[race])
+    || empty
+  );
+}
+
 export function getRacialAbilityBonuses(race, subrace) {
   const raceData = racialBonuses[race];
   if (!raceData) return {};
