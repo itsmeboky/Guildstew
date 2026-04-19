@@ -135,6 +135,16 @@ export default function CampaignWorldLore({ embedded = false, campaignId: campai
     navigate(createPageUrl("CampaignGMPanel") + `?id=${campaignId}`);
   };
 
+  // The user's own character for this campaign — used by the
+  // gated-entry view to roll skill / ability / decipher checks.
+  const viewerCharacter = useMemo(
+    () => characters.find((c) =>
+      (c.user_id && c.user_id === user?.id)
+      || (c.created_by && user?.email && c.created_by === user.email),
+    ) || null,
+    [characters, user?.id, user?.email],
+  );
+
   const entryView = (key) => (
     <EntryCategoryView
       campaignId={campaignId}
@@ -147,6 +157,8 @@ export default function CampaignWorldLore({ embedded = false, campaignId: campai
       emptyLabel={EMPTY_COPY[key]}
       metadataFields={METADATA[key] || []}
       renderList={key === "history" ? historyTimelineRenderer : undefined}
+      campaign={campaign}
+      viewerCharacter={viewerCharacter}
     />
   );
 
