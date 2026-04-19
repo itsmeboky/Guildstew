@@ -23,7 +23,7 @@ export default function CharacterGrid({ characters }) {
             <img
               src={character.avatar_url || 'https://images.unsplash.com/photo-1589254065878-42c9da997008?w=400&h=400&fit=crop'}
               alt={character.name}
-              className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+              className="w-full h-full object-cover object-top group-hover:scale-110 transition-transform"
             />
           </div>
           

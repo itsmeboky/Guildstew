@@ -154,7 +154,7 @@ function NotePost({ character, note, canEdit, onEdit, onRemove }) {
     <article className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-6">
       <header className="flex items-start gap-4 mb-4">
         {character?.avatar_url ? (
-          <img src={character.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
+          <img src={character.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover object-top flex-shrink-0" />
         ) : (
           <div className="w-12 h-12 rounded-full bg-slate-700 flex-shrink-0" />
         )}

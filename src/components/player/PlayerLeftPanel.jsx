@@ -92,7 +92,7 @@ export default function PlayerLeftPanel({ character, userProfile }) {
         <div className="relative w-24 h-24 rounded-full border-2 border-[#37F2D1] p-1 mb-3">
           <div className="w-full h-full rounded-full overflow-hidden bg-gray-800">
             {character.profile_avatar_url ? (
-              <img src={character.profile_avatar_url} alt={character.name} className="w-full h-full object-cover" />
+              <img src={character.profile_avatar_url} alt={character.name} className="w-full h-full object-cover object-top" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-2xl">?</div>
             )}

@@ -39,7 +39,7 @@ export default function PlayerRightPanel({ campaignId, players, currentUser }) {
               <div key={player.user_id} className="bg-[#111827] rounded-xl overflow-hidden border border-gray-700 relative h-24">
                 <div className="absolute inset-0">
                   {char.profile_avatar_url ? (
-                    <img src={char.profile_avatar_url} alt={char.name} className="w-full h-full object-cover opacity-60" />
+                    <img src={char.profile_avatar_url} alt={char.name} className="w-full h-full object-cover object-top opacity-60" />
                   ) : (
                     <div className="w-full h-full bg-gray-800" />
                   )}

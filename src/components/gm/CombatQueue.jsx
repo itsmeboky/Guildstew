@@ -334,7 +334,7 @@ function AddMonsterDialog({ monsters, npcs, onAdd, onClose, onCreateNpc }) {
           <div className="p-5 space-y-5">
             <div className="flex justify-center">
               {selected.image_url || selected.avatar_url ? (
-                <img src={selected.image_url || selected.avatar_url} alt="" className="w-24 h-24 rounded-2xl object-cover shadow-lg border border-[#111827]" />
+                <img src={selected.image_url || selected.avatar_url} alt="" className="w-24 h-24 rounded-2xl object-cover object-top shadow-lg border border-[#111827]" />
               ) : (
                 <div className="w-24 h-24 rounded-2xl bg-[#111827] flex items-center justify-center text-slate-600 text-2xl font-bold">
                   {selected.name?.charAt(0)}
