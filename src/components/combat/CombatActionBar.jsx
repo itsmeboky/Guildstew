@@ -615,7 +615,26 @@ export default function CombatActionBar({
       .filter((a) => a && (a.name || a.desc || a.description))
       .map((a) => ({ ...a, _cost: a.action_cost || a.cost || defaultCost }));
 
-    const rawActions = tag(pickList("actions"), "action");
+    // Phase context. When a phase is active, its disabled_actions
+    // hide matching base-action names and its unlocked_actions land in
+    // a dedicated coloured group. Phases can live on the monster stat
+    // block (`stats.phases`) or the villain_data shape (§B5).
+    const phases = Array.isArray(stats.phases) ? stats.phases
+      : Array.isArray(character.phases) ? character.phases
+      : Array.isArray(character.villain_data?.phases) ? character.villain_data.phases
+      : [];
+    const activePhaseIndex = typeof character.active_phase_index === "number"
+      ? character.active_phase_index
+      : (typeof character.active_phase === "number" ? character.active_phase : -1);
+    const activePhase = activePhaseIndex >= 0 && activePhaseIndex < phases.length
+      ? phases[activePhaseIndex]
+      : null;
+    const disabledNames = new Set(
+      (activePhase?.disabled_actions || []).map((n) => String(n || "").toLowerCase()),
+    );
+    const notDisabled = (a) => !disabledNames.has(String(a?.name || "").toLowerCase());
+
+    const rawActions = tag(pickList("actions"), "action").filter(notDisabled);
     let inlineMulti = null;
     const actions = [];
     for (const a of rawActions) {
@@ -638,18 +657,36 @@ export default function CombatActionBar({
     if (multi) groups.push({ key: "multi", label: "Multi-Attack", color: "amber", actions: [multi] });
     if (actions.length)
       groups.push({ key: "actions", label: "Actions", color: "orange", actions });
-    const bonusList = tag(pickList("bonus_actions"), "bonus_action");
+    const bonusList = tag(pickList("bonus_actions"), "bonus_action").filter(notDisabled);
     if (bonusList.length)
       groups.push({ key: "bonus", label: "Bonus", color: "pink", actions: bonusList });
-    const reactionList = tag(pickList("reactions"), "reaction");
+    const reactionList = tag(pickList("reactions"), "reaction").filter(notDisabled);
     if (reactionList.length)
       groups.push({ key: "reactions", label: "Reactions", color: "sky", actions: reactionList });
-    const legendaryList = tag(pickList("legendary_actions"), "legendary");
+    const legendaryList = tag(pickList("legendary_actions"), "legendary").filter(notDisabled);
     if (legendaryList.length)
       groups.push({ key: "legendary", label: legendaryLabel, color: "gold", actions: legendaryList, badge: "L" });
-    const lairList = tag(pickList("lair_actions"), "lair");
+    const lairList = tag(pickList("lair_actions"), "lair").filter(notDisabled);
     if (lairList.length)
       groups.push({ key: "lair", label: "Lair", color: "lime", actions: lairList });
+
+    // Phase-unlocked actions. Each entry inherits its own action_cost
+    // from the card; the `_phaseColor` hint drives the action-bar
+    // group's tint so "this came from Phase 2" reads at a glance.
+    if (activePhase && Array.isArray(activePhase.unlocked_actions)) {
+      const pActions = activePhase.unlocked_actions
+        .filter((a) => a && (a.name || a.description || a.desc))
+        .map((a) => ({ ...a, _cost: a.action_cost || "action", _isPhase: true, _phaseColor: activePhase.phase_color }));
+      if (pActions.length > 0) {
+        groups.push({
+          key: `phase-${activePhaseIndex}`,
+          label: activePhase.name || "Phase",
+          color: "phase",
+          phaseColor: activePhase.phase_color || "#ef4444",
+          actions: pActions,
+        });
+      }
+    }
 
     // Villain actions sit in their own block with round badges. The
     // `_spent` flag lives in combat state (character.villain_spent[]),
@@ -1231,6 +1268,7 @@ export default function CombatActionBar({
                   key={g.key}
                   label={g.label}
                   color={g.color}
+                  phaseColor={g.phaseColor}
                   actions={g.actions}
                   badge={g.badge}
                   onActionClick={onActionClick}
@@ -1406,6 +1444,7 @@ const MONSTER_GROUP_COLORS = {
   gold:    { label: "text-yellow-300",  border: "border-yellow-400/80", glow: "shadow-[0_0_12px_rgba(250,204,21,0.45)]" },
   lime:    { label: "text-lime-300",    border: "border-lime-500/70",   glow: "shadow-[0_0_10px_rgba(132,204,22,0.35)]" },
   crimson: { label: "text-rose-300",    border: "border-rose-600/80",  glow: "shadow-[0_0_14px_rgba(225,29,72,0.55)]" },
+  phase:   { label: "text-white",       border: "",                     glow: "" },
 };
 
 // SRD monster data is wildly inconsistent in shape. A field nominally
@@ -1464,13 +1503,17 @@ function pickActionIconKind(action) {
   return "generic";
 }
 
-function MonsterActionGroup({ label, color, actions, onActionClick, badge }) {
+function MonsterActionGroup({ label, color, phaseColor, actions, onActionClick, badge }) {
   const palette = MONSTER_GROUP_COLORS[color] || MONSTER_GROUP_COLORS.orange;
+  const labelStyle = color === "phase" && phaseColor ? { color: phaseColor } : undefined;
   return (
     <div className="flex items-center gap-2 flex-shrink-0">
       <div className="h-10 w-[2px] bg-[#1e2636] flex-shrink-0" />
       <div className="flex flex-col items-start gap-0.5 pr-1 flex-shrink-0">
-        <span className={`text-[9px] uppercase tracking-[0.22em] font-bold leading-none ${palette.label}`}>
+        <span
+          className={`text-[9px] uppercase tracking-[0.22em] font-bold leading-none ${color === "phase" ? "" : palette.label}`}
+          style={labelStyle}
+        >
           {safeRender(label)}
         </span>
       </div>
@@ -1479,9 +1522,14 @@ function MonsterActionGroup({ label, color, actions, onActionClick, badge }) {
           key={`${safeRender(label)}-${safeRender(action.name) || "action"}-${idx}`}
           action={action}
           palette={palette}
+          phaseColor={phaseColor}
           badge={badge}
           onClick={() => onActionClick && onActionClick({
-            type: action._isVillain ? "villain_action" : "monster_action",
+            type: action._isVillain
+              ? "villain_action"
+              : action._isPhase
+              ? "phase_action"
+              : "monster_action",
             name: toText(action.name),
             description: toText(action.description || action.desc),
             attack_bonus: action.attack_bonus,
@@ -1501,7 +1549,7 @@ function MonsterActionGroup({ label, color, actions, onActionClick, badge }) {
   );
 }
 
-function MonsterActionSlot({ action, palette, badge, onClick }) {
+function MonsterActionSlot({ action, palette, badge, phaseColor, onClick }) {
   const [showTooltip, setShowTooltip] = useState(false);
   const kind = pickActionIconKind(action);
   const Icon =
@@ -1549,7 +1597,13 @@ function MonsterActionSlot({ action, palette, badge, onClick }) {
       onClick={onClick}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
-      className={`relative w-[52px] h-[52px] rounded-xl bg-[#050816] border-2 ${palette.border} ${palette.glow} flex-shrink-0 flex flex-col items-center justify-center transition hover:-translate-y-[1px] ${spent ? "opacity-30 grayscale cursor-not-allowed" : ""}`}
+      className={`relative w-[52px] h-[52px] rounded-xl bg-[#050816] border-2 ${action._isPhase ? "" : palette.border} ${action._isPhase ? "" : palette.glow} flex-shrink-0 flex flex-col items-center justify-center transition hover:-translate-y-[1px] ${spent ? "opacity-30 grayscale cursor-not-allowed" : ""}`}
+      style={action._isPhase && (action._phaseColor || phaseColor)
+        ? {
+            borderColor: action._phaseColor || phaseColor,
+            boxShadow: `0 0 10px ${action._phaseColor || phaseColor}55`,
+          }
+        : undefined}
       title={name}
     >
       {action._isMulti ? (
@@ -1558,11 +1612,32 @@ function MonsterActionSlot({ action, palette, badge, onClick }) {
           <Swords className={`absolute right-0 bottom-0 w-4 h-4 ${palette.label}`} />
         </span>
       ) : (
-        <Icon className={`w-5 h-5 ${palette.label}`} />
+        <Icon
+          className="w-5 h-5"
+          style={action._isPhase && (action._phaseColor || phaseColor)
+            ? { color: action._phaseColor || phaseColor }
+            : undefined}
+        />
       )}
-      <span className={`text-[7px] leading-none font-bold uppercase mt-0.5 ${palette.label} truncate max-w-[46px]`}>
+      <span
+        className={`text-[7px] leading-none font-bold uppercase mt-0.5 truncate max-w-[46px] ${action._isPhase ? "" : palette.label}`}
+        style={action._isPhase && (action._phaseColor || phaseColor)
+          ? { color: action._phaseColor || phaseColor }
+          : undefined}
+      >
         {truncated}
       </span>
+      {action._isPhase && (
+        <span
+          className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[7px] font-black uppercase tracking-widest px-1 rounded"
+          style={{
+            background: (action._phaseColor || phaseColor || "#ef4444") + "cc",
+            color: "white",
+          }}
+        >
+          P
+        </span>
+      )}
       {badge && (
         <span className="absolute -top-1 -right-1 bg-black border border-yellow-400 text-yellow-300 text-[8px] font-black rounded-full w-4 h-4 flex items-center justify-center">
           {safeRender(badge)}
