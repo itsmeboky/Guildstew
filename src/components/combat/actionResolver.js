@@ -674,7 +674,10 @@ export function resolveAction(action, actor) {
   }
 
   // === MONSTER/NPC ACTIONS ===
-  if (action.type === "monster_action" || action.attack_bonus !== undefined || action.damage) {
+  if (action.type === "monster_action"
+      || action.type === "villain_action"
+      || action.attack_bonus !== undefined
+      || action.damage) {
     // Normalise the action cost into the action economy vocabulary.
     const costTag = (action.action_cost || "").toLowerCase();
     const cost = action.costOverride

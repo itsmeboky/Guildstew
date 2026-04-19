@@ -1,6 +1,14 @@
 import React, { useState } from "react";
-import { Heart, Circle, Triangle, Music, Zap, ChevronLeft, ChevronRight, Flame, Swords, ShieldPlus, Bolt, Sword, Sparkles, Plus as PlusIcon, Star, Crown, ShieldAlert } from "lucide-react";
+import { Heart, Circle, Triangle, Music, Zap, ChevronLeft, ChevronRight, Swords, Sword, Sparkles, Plus as PlusIcon, Star } from "lucide-react";
 import { spellIcons, spellDetails as hardcodedSpellDetails } from "@/components/dnd5e/spellData";
+
+const SPELL_ICONS_CI = Object.fromEntries(
+  Object.entries(spellIcons).map(([k, v]) => [k.toLowerCase(), v]),
+);
+const getSpellIcon = (name) => {
+  if (!name) return undefined;
+  return spellIcons[name] || SPELL_ICONS_CI[String(name).toLowerCase()];
+};
 import { hpBarColor } from "@/components/combat/hpColor";
 import {
   RAGES_PER_DAY,
@@ -591,73 +599,81 @@ export default function CombatActionBar({
     []
   );
 
-  // Monster action groups. SRD monsters store their action lists under
-  // `stats.actions / reactions / legendary_actions / lair_actions`, but
-  // some older shapes flatten them on the root character. Normalise
-  // each list + tag every entry with the action cost inferred from the
-  // section so the action resolver / dice window sees a consistent
-  // shape regardless of source. Every list also gets an `_iconKind`
-  // hint used by the render layer to pick a generic lucide icon when
-  // the monster action has no asset.
+  // Ordered list of monster action groups for the right-side render.
+  // Each entry: { key, label, color, actions, badge? }. The multiattack
+  // slot rides at the front so the GM sees it first; stat-block-level
+  // `multiattack.enabled` wins over an inline "Multiattack" action.
   const monsterActionGroups = React.useMemo(() => {
-    if (!isCreature || !character) return null;
+    if (!isCreature || !character) return [];
     const stats = character.stats || {};
     const pickList = (key) => {
-      const top = Array.isArray(character[key]) ? character[key] : [];
-      const nested = Array.isArray(stats[key]) ? stats[key] : [];
-      return nested.length > 0 ? nested : top;
+      const nested = Array.isArray(stats[key]) ? stats[key] : null;
+      if (nested && nested.length > 0) return nested;
+      return Array.isArray(character[key]) ? character[key] : [];
     };
-
-    const tag = (list, defaultCost) => (Array.isArray(list) ? list : [])
+    const tag = (list, defaultCost) => list
       .filter((a) => a && (a.name || a.desc || a.description))
       .map((a) => ({ ...a, _cost: a.action_cost || a.cost || defaultCost }));
 
-    const actions   = tag(pickList("actions"),           "action");
-    const bonuses   = tag(pickList("bonus_actions"),     "bonus_action");
-    const reactions = tag(pickList("reactions"),         "reaction");
-    const legendary = tag(pickList("legendary_actions"), "legendary");
-    const lair      = tag(pickList("lair_actions"),      "lair");
-
-    // Split a Multiattack entry out so we can render it first.
-    let multi = null;
-    const rest = [];
-    for (const a of actions) {
+    const rawActions = tag(pickList("actions"), "action");
+    let inlineMulti = null;
+    const actions = [];
+    for (const a of rawActions) {
       const name = (a?.name || "").toLowerCase();
-      if (!multi && (name === "multiattack" || name === "multi-attack" || name === "multi attack")) {
-        multi = a;
+      if (!inlineMulti && (name === "multiattack" || name === "multi-attack" || name === "multi attack")) {
+        inlineMulti = a;
       } else {
-        rest.push(a);
+        actions.push(a);
       }
     }
-    // Stat-block-level multiattack object (from the expanded homebrew schema)
-    // wins if present; the inline Multiattack action is kept as a
-    // fallback so SRD monsters still show something.
-    const multiattackObj = stats.multiattack || character.multiattack || null;
-    const multiActive = multiattackObj?.enabled
-      ? {
-          name: "Multiattack",
-          description: multiattackObj.description || "",
-          attacks: multiattackObj.attacks || [],
-          _cost: "action",
-        }
-      : multi;
+    const multiObj = stats.multiattack || character.multiattack || null;
+    const multi = multiObj?.enabled
+      ? { name: "Multiattack", description: multiObj.description || "", attacks: multiObj.attacks || [], _cost: "action", _isMulti: true }
+      : (inlineMulti ? { ...inlineMulti, _isMulti: true } : null);
 
-    return {
-      multiattack: multiActive,
-      actions: rest,
-      bonus_actions: bonuses,
-      reactions,
-      legendary_actions: legendary,
-      lair_actions: lair,
-      legendary_per_round: stats.legendary_actions_per_round ?? character.legendary_actions_per_round ?? null,
-      legendary_resistances: stats.legendary_resistances ?? character.legendary_resistances ?? null,
-    };
+    const legendaryPerRound = stats.legendary_actions_per_round ?? character.legendary_actions_per_round ?? null;
+    const legendaryLabel = legendaryPerRound ? `Legendary (${legendaryPerRound}/rd)` : "Legendary";
+
+    const groups = [];
+    if (multi) groups.push({ key: "multi", label: "Multi-Attack", color: "amber", actions: [multi] });
+    if (actions.length)
+      groups.push({ key: "actions", label: "Actions", color: "orange", actions });
+    const bonusList = tag(pickList("bonus_actions"), "bonus_action");
+    if (bonusList.length)
+      groups.push({ key: "bonus", label: "Bonus", color: "pink", actions: bonusList });
+    const reactionList = tag(pickList("reactions"), "reaction");
+    if (reactionList.length)
+      groups.push({ key: "reactions", label: "Reactions", color: "sky", actions: reactionList });
+    const legendaryList = tag(pickList("legendary_actions"), "legendary");
+    if (legendaryList.length)
+      groups.push({ key: "legendary", label: legendaryLabel, color: "gold", actions: legendaryList, badge: "L" });
+    const lairList = tag(pickList("lair_actions"), "lair");
+    if (lairList.length)
+      groups.push({ key: "lair", label: "Lair", color: "lime", actions: lairList });
+
+    // Villain actions sit in their own block with round badges. The
+    // `_spent` flag lives in combat state (character.villain_spent[]),
+    // which the GM sets when the prompt fires at the end of a turn.
+    const villain = stats.villain_actions
+      || character.villain_actions
+      || character.villain_data?.villain_actions
+      || null;
+    if (villain?.enabled && Array.isArray(villain.actions)) {
+      const spent = Array.isArray(character.villain_spent) ? character.villain_spent : [];
+      const vActions = villain.actions.map((a, i) => ({
+        ...a,
+        _cost: "free",
+        _isVillain: true,
+        _round: a.round || (i + 1),
+        _spent: spent.includes(a.round || (i + 1)),
+      }));
+      if (vActions.length > 0) {
+        groups.push({ key: "villain", label: "Villain Actions", color: "crimson", actions: vActions });
+      }
+    }
+    return groups;
   }, [character, isCreature]);
 
-  // Monster spells. Supports three storage shapes:
-  //   1. `stats.spells` array of strings (SRD bucketed list flattened)
-  //   2. `stats.spellcasting.spells` / `stats.spells` nested by level
-  //   3. Individual spell action entries (rare — already appear under actions)
   const monsterSpells = React.useMemo(() => {
     if (!isCreature || !character) return [];
     const stats = character.stats || {};
@@ -1171,14 +1187,7 @@ export default function CombatActionBar({
               return (
                 <div key={`sp-${scrollPosition + idx}`} className="relative">
                   <SpellSlot
-                    src={
-                      spellIcons[spellName] ||
-                      spellIcons[
-                        Object.keys(spellIcons).find(
-                          (k) => k.toLowerCase() === spellName?.toLowerCase()
-                        )
-                      ]
-                    }
+                    src={getSpellIcon(spellName)}
                     tooltip={spellName}
                     onHover={() => handleSpellHover(spellName)}
                     onLeave={handleSpellLeave}
@@ -1215,61 +1224,18 @@ export default function CombatActionBar({
                 </div>
               );
             })}
-          {/* Monster actions — grouped by cost with a label per group.
-              Multiattack leads (distinct stacked visual). Falls through
-              to the empty-state text only when the monster truly has
-              no actions AND no spells. */}
-          {isCreature && monsterActionGroups && (
+          {isCreature && (
             <>
-              {monsterActionGroups.multiattack && (
+              {monsterActionGroups.map((g) => (
                 <MonsterActionGroup
-                  label="Multi-Attack"
-                  color="amber"
-                  actions={[{ ...monsterActionGroups.multiattack, _isMulti: true }]}
+                  key={g.key}
+                  label={g.label}
+                  color={g.color}
+                  actions={g.actions}
+                  badge={g.badge}
                   onActionClick={onActionClick}
                 />
-              )}
-              {monsterActionGroups.actions.length > 0 && (
-                <MonsterActionGroup
-                  label="Actions"
-                  color="orange"
-                  actions={monsterActionGroups.actions}
-                  onActionClick={onActionClick}
-                />
-              )}
-              {monsterActionGroups.bonus_actions.length > 0 && (
-                <MonsterActionGroup
-                  label="Bonus"
-                  color="pink"
-                  actions={monsterActionGroups.bonus_actions}
-                  onActionClick={onActionClick}
-                />
-              )}
-              {monsterActionGroups.reactions.length > 0 && (
-                <MonsterActionGroup
-                  label="Reactions"
-                  color="sky"
-                  actions={monsterActionGroups.reactions}
-                  onActionClick={onActionClick}
-                />
-              )}
-              {monsterActionGroups.legendary_actions.length > 0 && (
-                <MonsterActionGroup
-                  label={`Legendary${monsterActionGroups.legendary_per_round ? ` (${monsterActionGroups.legendary_per_round}/rd)` : ""}`}
-                  color="gold"
-                  actions={monsterActionGroups.legendary_actions}
-                  onActionClick={onActionClick}
-                  badge="L"
-                />
-              )}
-              {monsterActionGroups.lair_actions.length > 0 && (
-                <MonsterActionGroup
-                  label="Lair"
-                  color="lime"
-                  actions={monsterActionGroups.lair_actions}
-                  onActionClick={onActionClick}
-                />
-              )}
+              ))}
               {monsterSpells.length > 0 && (
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <div className="h-10 w-[2px] bg-[#1e2636] flex-shrink-0" />
@@ -1281,10 +1247,7 @@ export default function CombatActionBar({
                   {monsterSpells.map((spell, idx) => (
                     <SpellSlot
                       key={`msp-${idx}`}
-                      src={
-                        spellIcons[spell.name] ||
-                        spellIcons[Object.keys(spellIcons).find((k) => k.toLowerCase() === spell.name.toLowerCase())]
-                      }
+                      src={getSpellIcon(spell.name)}
                       tooltip={spell.level != null ? `${spell.name} (L${spell.level})` : spell.name}
                       onHover={() => handleSpellHover(spell.name)}
                       onLeave={handleSpellLeave}
@@ -1305,15 +1268,8 @@ export default function CombatActionBar({
           )}
           {defaultSpells.length === 0
             && classBonusActions.length === 0
-            && (!isCreature
-              || !monsterActionGroups
-              || (monsterActionGroups.actions.length === 0
-                && monsterActionGroups.bonus_actions.length === 0
-                && monsterActionGroups.reactions.length === 0
-                && monsterActionGroups.legendary_actions.length === 0
-                && monsterActionGroups.lair_actions.length === 0
-                && !monsterActionGroups.multiattack
-                && monsterSpells.length === 0)) && (
+            && monsterActionGroups.length === 0
+            && monsterSpells.length === 0 && (
             <div className="text-slate-500 text-xs italic flex items-center px-4">
               No spells or abilities
             </div>
@@ -1438,23 +1394,46 @@ function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick
   );
 }
 
-// Colour map used by MonsterActionGroup. Each cost gets distinct
-// border + text so the GM can scan the bar by role.
 const MONSTER_GROUP_COLORS = {
-  amber: { label: "text-amber-300",   border: "border-amber-500/70",  glow: "shadow-[0_0_10px_rgba(245,158,11,0.35)]" },
-  orange:{ label: "text-orange-300",  border: "border-orange-500/70", glow: "shadow-[0_0_10px_rgba(249,115,22,0.35)]" },
-  pink:  { label: "text-pink-300",    border: "border-pink-500/70",   glow: "shadow-[0_0_10px_rgba(236,72,153,0.35)]" },
-  sky:   { label: "text-sky-300",     border: "border-sky-500/70",    glow: "shadow-[0_0_10px_rgba(14,165,233,0.35)]" },
-  gold:  { label: "text-yellow-300",  border: "border-yellow-400/80", glow: "shadow-[0_0_12px_rgba(250,204,21,0.45)]" },
-  lime:  { label: "text-lime-300",    border: "border-lime-500/70",   glow: "shadow-[0_0_10px_rgba(132,204,22,0.35)]" },
+  amber:   { label: "text-amber-300",   border: "border-amber-500/70",  glow: "shadow-[0_0_10px_rgba(245,158,11,0.35)]" },
+  orange:  { label: "text-orange-300",  border: "border-orange-500/70", glow: "shadow-[0_0_10px_rgba(249,115,22,0.35)]" },
+  pink:    { label: "text-pink-300",    border: "border-pink-500/70",   glow: "shadow-[0_0_10px_rgba(236,72,153,0.35)]" },
+  sky:     { label: "text-sky-300",     border: "border-sky-500/70",    glow: "shadow-[0_0_10px_rgba(14,165,233,0.35)]" },
+  gold:    { label: "text-yellow-300",  border: "border-yellow-400/80", glow: "shadow-[0_0_12px_rgba(250,204,21,0.45)]" },
+  lime:    { label: "text-lime-300",    border: "border-lime-500/70",   glow: "shadow-[0_0_10px_rgba(132,204,22,0.35)]" },
+  crimson: { label: "text-rose-300",    border: "border-rose-600/80",  glow: "shadow-[0_0_14px_rgba(225,29,72,0.55)]" },
 };
+
+// SRD monster data is wildly inconsistent in shape. A field nominally
+// expected to be a string ("damage", "description", "reach") sometimes
+// arrives as a structured object ({ damage_dice, damage_type }) or an
+// array (legendary-action usage). `toText` collapses any of those to a
+// plain string so downstream JSX can render it without blowing up.
+function toText(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map(toText).filter(Boolean).join(", ");
+  if (typeof value === "object") {
+    if (value.damage_dice || value.damage_type) {
+      return [toText(value.damage_dice), toText(value.damage_type)].filter(Boolean).join(" ").trim();
+    }
+    if (typeof value.text === "string") return value.text;
+    if (typeof value.name === "string") return value.name;
+    if (typeof value.value !== "undefined") return toText(value.value);
+    if (typeof value.desc === "string") return value.desc;
+    if (typeof value.description === "string") return value.description;
+    return "";
+  }
+  return String(value);
+}
 
 function pickActionIconKind(action) {
   if (!action) return "generic";
   if (action._isMulti) return "multi";
-  const desc = (action.description || action.desc || "").toLowerCase();
-  const name = (action.name || "").toLowerCase();
-  const actionType = (action.action_type || "").toLowerCase();
+  const desc = toText(action.description || action.desc).toLowerCase();
+  const name = toText(action.name).toLowerCase();
+  const actionType = toText(action.action_type).toLowerCase();
   if (actionType === "healing" || name.includes("heal") || desc.includes("regain hit points")) return "healing";
   if (actionType === "saving_throw" || action.save_dc || action.save_ability || desc.includes("saving throw")) return "burst";
   if (actionType === "melee_attack" || actionType === "ranged_attack"
@@ -1480,21 +1459,18 @@ function MonsterActionGroup({ label, color, actions, onActionClick, badge }) {
           palette={palette}
           badge={badge}
           onClick={() => onActionClick && onActionClick({
-            type: "monster_action",
-            name: action.name,
-            description: action.description || action.desc,
+            type: action._isVillain ? "villain_action" : "monster_action",
+            name: toText(action.name),
+            description: toText(action.description || action.desc),
             attack_bonus: action.attack_bonus,
-            damage: action.damage,
-            damage_type: action.damage_type,
-            save_ability: action.save_ability,
+            damage: toText(action.damage || action.damage_dice),
+            damage_type: toText(action.damage_type),
+            save_ability: toText(action.save_ability),
             save_dc: action.save_dc,
-            action_type: action.action_type,
+            action_type: toText(action.action_type),
             action_cost: action._cost,
-            costOverride: action._cost === "bonus_action" ? "bonus"
-                        : action._cost === "reaction" ? "reaction"
-                        : action._cost === "legendary" ? "free"
-                        : action._cost === "lair" ? "free"
-                        : "action",
+            villain_round: action._round,
+            trigger: action.trigger || null,
             _raw: action,
           })}
         />
@@ -1512,41 +1488,46 @@ function MonsterActionSlot({ action, palette, badge, onClick }) {
     kind === "burst"   ? Sparkles :
     kind === "healing" ? PlusIcon :
     Star;
-  const name = action.name || "Action";
+  const name = toText(action.name) || "Action";
   const truncated = name.length > 10 ? `${name.slice(0, 9)}…` : name;
+  const reachText = toText(action.reach);
+  const damageText = toText(action.damage);
+  const damageTypeText = toText(action.damage_type);
+  const saveAbilityText = toText(action.save_ability);
+  const descText = toText(action.description || action.desc);
   const tooltip = (
     <div className="max-w-[260px]">
       <div className="font-bold text-[#37F2D1] mb-1">
         {name}{action.legendary_cost > 1 ? ` (Costs ${action.legendary_cost})` : ""}
       </div>
       {action.attack_bonus != null && action.attack_bonus !== "" && (
-        <div className="text-[10px] text-slate-400 mb-1">+{action.attack_bonus} to hit{action.reach ? ` · ${action.reach}` : ""}</div>
+        <div className="text-[10px] text-slate-400 mb-1">+{action.attack_bonus} to hit{reachText ? ` · ${reachText}` : ""}</div>
       )}
       {action.save_dc && (
-        <div className="text-[10px] text-slate-400 mb-1">DC {action.save_dc} {action.save_ability || "save"}</div>
+        <div className="text-[10px] text-slate-400 mb-1">DC {action.save_dc} {saveAbilityText || "save"}</div>
       )}
-      {action.damage && (
-        <div className="text-[10px] text-slate-400 mb-1">{action.damage} {action.damage_type || ""}</div>
+      {damageText && (
+        <div className="text-[10px] text-slate-400 mb-1">{damageText} {damageTypeText}</div>
       )}
-      {(action.description || action.desc) && (
+      {descText && (
         <div className="text-[10px] text-slate-300 whitespace-pre-wrap leading-snug">
-          {(action.description || action.desc).slice(0, 280)}
+          {descText.slice(0, 280)}
         </div>
       )}
     </div>
   );
+  const spent = !!action._spent;
   return (
     <button
       type="button"
+      disabled={spent}
       onClick={onClick}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
-      className={`relative w-[52px] h-[52px] rounded-xl bg-[#050816] border-2 ${palette.border} ${palette.glow} flex-shrink-0 flex flex-col items-center justify-center transition hover:-translate-y-[1px]`}
+      className={`relative w-[52px] h-[52px] rounded-xl bg-[#050816] border-2 ${palette.border} ${palette.glow} flex-shrink-0 flex flex-col items-center justify-center transition hover:-translate-y-[1px] ${spent ? "opacity-30 grayscale cursor-not-allowed" : ""}`}
       title={name}
     >
       {action._isMulti ? (
-        // Stacked icon for Multi-Attack — two sword icons offset so the
-        // GM can pick it out at a glance without reading the label.
         <span className="relative inline-block w-6 h-6">
           <Swords className={`absolute left-0 top-0 w-4 h-4 ${palette.label} opacity-70`} />
           <Swords className={`absolute right-0 bottom-0 w-4 h-4 ${palette.label}`} />
@@ -1560,6 +1541,11 @@ function MonsterActionSlot({ action, palette, badge, onClick }) {
       {badge && (
         <span className="absolute -top-1 -right-1 bg-black border border-yellow-400 text-yellow-300 text-[8px] font-black rounded-full w-4 h-4 flex items-center justify-center">
           {badge}
+        </span>
+      )}
+      {action._isVillain && action._round && (
+        <span className="absolute -top-1 -right-1 bg-black border border-rose-500 text-rose-300 text-[8px] font-black rounded-full w-5 h-4 flex items-center justify-center">
+          R{action._round}
         </span>
       )}
       {action._isMulti && Array.isArray(action.attacks) && action.attacks.length > 0 && (
