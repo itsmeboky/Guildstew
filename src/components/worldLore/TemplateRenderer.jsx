@@ -24,16 +24,17 @@ export default function TemplateRenderer({ entry }) {
     case "secret_document":  return <SecretDocumentTemplate  entry={entry} metadata={metadata} />;
     case "sketch":           return <SketchTemplate          entry={entry} metadata={metadata} />;
 
-    // Not yet implemented (shipped in Part 2B/2C) — render as freeform
+    case "artifact_card":    return <ArtifactCardTemplate    entry={entry} metadata={metadata} />;
+    case "cursed_item":      return <CursedItemTemplate      entry={entry} metadata={metadata} />;
+    case "lost_relic":       return <LostRelicTemplate       entry={entry} metadata={metadata} />;
+    case "faction_profile":  return <FactionProfileTemplate  entry={entry} metadata={metadata} />;
+    case "location":         return <LocationTemplate        entry={entry} metadata={metadata} />;
+    case "landmark":         return <LandmarkTemplate        entry={entry} metadata={metadata} />;
+    case "map_note":         return <MapNoteTemplate         entry={entry} metadata={metadata} />;
+
+    // Not yet implemented (shipped in Part 2C) — render as freeform
     // so the switch already lists every template_type; each later
     // commit replaces a single fallback branch with its real renderer.
-    case "artifact_card":
-    case "cursed_item":
-    case "lost_relic":
-    case "faction_profile":
-    case "location":
-    case "landmark":
-    case "map_note":
     case "deity_profile":
     case "prayer":
     case "holy_site":
@@ -238,6 +239,465 @@ function SketchTemplate({ entry, metadata }) {
           {caption}
         </p>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────── Artifacts ─────────────────────────────
+
+// Rarity → palette mapping shared by the three artifact-style
+// templates. Cursed Item and Lost Relic override/decorate on top of
+// the base artifact look.
+const RARITY_STYLES = {
+  "Common":    { border: "border-slate-500",   bg: "bg-[#1a1f2e]", badge: "bg-slate-700 text-slate-300" },
+  "Uncommon":  { border: "border-emerald-700", bg: "bg-[#1a2420]", badge: "bg-emerald-900/50 text-emerald-400" },
+  "Rare":      { border: "border-blue-700",    bg: "bg-[#1a1f2e]", badge: "bg-blue-900/50 text-blue-400" },
+  "Very Rare": { border: "border-purple-700",  bg: "bg-[#201a2e]", badge: "bg-purple-900/50 text-purple-400" },
+  "Legendary": { border: "border-orange-600",  bg: "bg-[#2e2218]", badge: "bg-orange-900/50 text-orange-400" },
+  "Artifact":  { border: "border-red-700",     bg: "bg-[#2e1a1a]", badge: "bg-red-900/50 text-red-400" },
+};
+
+function pickRarityStyle(rarity) {
+  return RARITY_STYLES[rarity] || RARITY_STYLES["Common"];
+}
+
+function ArtifactCardTemplate({ entry, metadata }) {
+  const rarity  = safeText(metadata.rarity) || "Common";
+  const style   = pickRarityStyle(rarity);
+  const title   = safeText(entry.title);
+  const image   = safeText(metadata.image_url);
+  const type    = safeText(metadata.item_type);
+  const attune  = !!metadata.attunement;
+  const props   = safeText(metadata.properties);
+  const content = safeText(entry.content);
+  const holder  = safeText(metadata.current_holder);
+  const origin  = safeText(metadata.origin);
+  return (
+    <div className="max-w-sm mx-auto">
+      <div className={`rounded-lg overflow-hidden border-2 shadow-lg ${style.border} ${style.bg}`}>
+        {image && (
+          <div className="h-48 overflow-hidden">
+            <img src={image} className="w-full h-full object-cover object-top" alt="" />
+          </div>
+        )}
+        <div className="p-5">
+          <div className="flex items-center justify-between mb-2 gap-2">
+            <h3 className="text-lg font-bold text-white truncate">{title}</h3>
+            <span className={`text-xs px-2 py-0.5 rounded font-semibold flex-shrink-0 ${style.badge}`}>
+              {rarity}
+            </span>
+          </div>
+          {(type || attune) && (
+            <p className="text-xs text-slate-400 italic mb-3">
+              {type}{type && attune ? " " : ""}{attune ? "(requires attunement)" : ""}
+            </p>
+          )}
+          {props && (
+            <div className="text-sm text-slate-300 mb-3 whitespace-pre-wrap">{props}</div>
+          )}
+          {content && (
+            <div className="border-t border-slate-700/50 pt-3 mt-3">
+              <p className="text-sm text-slate-400 italic whitespace-pre-wrap">{content}</p>
+            </div>
+          )}
+          {holder && (
+            <p className="text-xs text-slate-500 mt-3">
+              Currently held by: <span className="text-[#37F2D1]">{holder}</span>
+            </p>
+          )}
+          {origin && (
+            <div className="mt-3 pt-3 border-t border-slate-700/40">
+              <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Origin</p>
+              <p className="text-xs text-slate-400 whitespace-pre-wrap">{origin}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CursedItemTemplate({ entry, metadata }) {
+  const rarity       = safeText(metadata.rarity) || "Common";
+  const baseBadge    = pickRarityStyle(rarity).badge;
+  const title        = safeText(entry.title);
+  const image        = safeText(metadata.image_url);
+  const type         = safeText(metadata.item_type);
+  const attune       = !!metadata.attunement;
+  const props        = safeText(metadata.properties);
+  const content      = safeText(entry.content);
+  const holder       = safeText(metadata.current_holder);
+  const curse        = safeText(metadata.curse_description);
+  const removeCurse  = safeText(metadata.remove_curse);
+  return (
+    <div className="max-w-sm mx-auto">
+      <div className="relative rounded-lg overflow-hidden border-2 border-red-800 bg-[#1e1215] shadow-lg">
+        <div
+          className="absolute top-2 right-2 z-10 bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded px-2 py-1 shadow-lg"
+          style={{ transform: "rotate(4deg)" }}
+        >
+          ⚠️ Cursed
+        </div>
+        {image && (
+          <div className="h-48 overflow-hidden">
+            <img src={image} className="w-full h-full object-cover object-top" alt="" />
+          </div>
+        )}
+        <div className="p-5">
+          <div className="flex items-center justify-between mb-2 gap-2 pr-20">
+            <h3 className="text-lg font-bold text-white truncate">{title}</h3>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded opacity-80 flex-shrink-0 ${baseBadge}`}>
+              {rarity}
+            </span>
+          </div>
+          {(type || attune) && (
+            <p className="text-xs text-slate-400 italic mb-3">
+              {type}{type && attune ? " " : ""}{attune ? "(requires attunement)" : ""}
+            </p>
+          )}
+          {props && (
+            <div className="text-sm text-slate-300 mb-3 whitespace-pre-wrap">{props}</div>
+          )}
+          {content && (
+            <div className="border-t border-red-900/40 pt-3 mt-3">
+              <p className="text-sm text-slate-400 italic whitespace-pre-wrap">{content}</p>
+            </div>
+          )}
+          {curse && (
+            <div className="border-t border-red-900/40 pt-3 mt-3">
+              <p className="text-[10px] uppercase tracking-widest text-red-400 font-black mb-1">Curse</p>
+              <p className="text-sm text-red-300 whitespace-pre-wrap">{curse}</p>
+            </div>
+          )}
+          {removeCurse && (
+            <div className="border-t border-red-900/40 pt-3 mt-3">
+              <p className="text-[10px] uppercase tracking-widest text-red-400/80 font-bold mb-1">How to Remove</p>
+              <p className="text-xs text-red-200/80 whitespace-pre-wrap">{removeCurse}</p>
+            </div>
+          )}
+          {holder && (
+            <p className="text-xs text-slate-500 mt-3">
+              Currently held by: <span className="text-[#37F2D1]">{holder}</span>
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LostRelicTemplate({ entry, metadata }) {
+  const rarity        = safeText(metadata.rarity) || "Common";
+  const style         = pickRarityStyle(rarity);
+  const title         = safeText(entry.title);
+  const image         = safeText(metadata.image_url);
+  const type          = safeText(metadata.item_type);
+  const attune        = !!metadata.attunement;
+  const props         = safeText(metadata.properties);
+  const content       = safeText(entry.content);
+  const lastLocation  = safeText(metadata.last_location);
+  const cluesRaw      = safeText(metadata.clues);
+  const clues = cluesRaw
+    ? cluesRaw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+    : [];
+  return (
+    <div className="max-w-sm mx-auto">
+      <div className={`relative rounded-lg overflow-hidden border-2 shadow-lg ${style.border} ${style.bg}`}>
+        {/* "Location unknown" watermark — low-opacity, rotated, pointer-events none
+            so clicks still reach the card body. */}
+        <span
+          className="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
+          aria-hidden
+        >
+          <span
+            className="text-slate-400/10 text-4xl font-black tracking-[0.25em] uppercase whitespace-nowrap"
+            style={{ transform: "rotate(-30deg)" }}
+          >
+            Location Unknown
+          </span>
+        </span>
+        {image && (
+          <div className="h-48 overflow-hidden">
+            <img src={image} className="w-full h-full object-cover object-top opacity-90" alt="" />
+          </div>
+        )}
+        <div className="p-5 relative z-10">
+          <div className="flex items-center justify-between mb-2 gap-2">
+            <h3 className="text-lg font-bold text-white truncate">{title}</h3>
+            <span className={`text-xs px-2 py-0.5 rounded font-semibold flex-shrink-0 ${style.badge}`}>
+              {rarity}
+            </span>
+          </div>
+          {(type || attune) && (
+            <p className="text-xs text-slate-400 italic mb-3">
+              {type}{type && attune ? " " : ""}{attune ? "(requires attunement)" : ""}
+            </p>
+          )}
+          {props && (
+            <div className="text-sm text-slate-300 mb-3 whitespace-pre-wrap">{props}</div>
+          )}
+          {content && (
+            <div className="border-t border-slate-700/50 pt-3 mt-3">
+              <p className="text-sm text-slate-400 italic whitespace-pre-wrap">{content}</p>
+            </div>
+          )}
+          {lastLocation && (
+            <div className="mt-3 pt-3 border-t border-slate-700/40">
+              <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1 flex items-center gap-1">
+                <span aria-hidden>📍</span> Last Known Location
+              </p>
+              <p className="text-sm text-slate-300">{lastLocation}</p>
+            </div>
+          )}
+          {clues.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-slate-700/40">
+              <p className="text-[10px] uppercase tracking-widest text-amber-400/80 font-bold mb-1">Clues</p>
+              <ol className="list-decimal list-inside space-y-0.5 text-xs text-amber-200/80">
+                {clues.map((clue, i) => (<li key={i}>{clue}</li>))}
+              </ol>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────── Factions ──────────────────────────────
+
+function FactionProfileTemplate({ entry, metadata }) {
+  const banner         = safeText(metadata.banner_url);
+  const leaderPortrait = safeText(metadata.leader_portrait);
+  const title          = safeText(entry.title);
+  const alignment      = safeText(metadata.alignment);
+  const status         = safeText(metadata.status);
+  const leader         = safeText(metadata.leader);
+  const content        = safeText(entry.content);
+  const goals          = safeText(metadata.goals);
+  const territory      = safeText(metadata.territory);
+  const knownMembers   = safeText(metadata.known_members);
+  const statusClass =
+    status === "Active"    ? "bg-emerald-900/30 text-emerald-400" :
+    status === "Secret"    ? "bg-purple-900/30 text-purple-400" :
+    status === "Disbanded" ? "bg-red-900/30 text-red-400" :
+    status                 ? "bg-amber-900/30 text-amber-400" :
+    "";
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg overflow-hidden">
+        {banner && (
+          <div className="h-32 overflow-hidden">
+            <img src={banner} className="w-full h-full object-cover" alt="" />
+          </div>
+        )}
+        <div className="p-6">
+          <div className="flex items-start gap-4">
+            {leaderPortrait && (
+              <img
+                src={leaderPortrait}
+                className="w-16 h-16 rounded-full border-2 border-slate-600 object-cover object-top flex-shrink-0"
+                alt=""
+              />
+            )}
+            <div className="flex-1 min-w-0">
+              <h2 className="text-2xl font-bold text-white">{title}</h2>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                {alignment && (
+                  <span className="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-300">
+                    {alignment}
+                  </span>
+                )}
+                {status && (
+                  <span className={`text-xs px-2 py-0.5 rounded ${statusClass}`}>{status}</span>
+                )}
+              </div>
+              {leader && (
+                <p className="text-sm text-slate-400 mt-2">
+                  Led by <span className="text-[#37F2D1]">{leader}</span>
+                </p>
+              )}
+            </div>
+          </div>
+
+          {content && (
+            <div className="mt-4 text-slate-300 whitespace-pre-wrap leading-relaxed">{content}</div>
+          )}
+
+          {goals && (
+            <div className="mt-4 pt-4 border-t border-slate-700/30">
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Goals</p>
+              <p className="text-sm text-slate-300 whitespace-pre-line">{goals}</p>
+            </div>
+          )}
+          {territory && (
+            <div className="mt-4 pt-4 border-t border-slate-700/30">
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Territory</p>
+              <p className="text-sm text-slate-300">{territory}</p>
+            </div>
+          )}
+          {knownMembers && (
+            <div className="mt-4 pt-4 border-t border-slate-700/30">
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Known Members</p>
+              <p className="text-sm text-slate-400 whitespace-pre-line">{knownMembers}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────── Regions ───────────────────────────────
+
+const DANGER_COLOR = {
+  "Safe":     "text-emerald-400",
+  "Low":      "text-teal-400",
+  "Moderate": "text-amber-400",
+  "High":     "text-orange-400",
+  "Deadly":   "text-red-400",
+};
+
+function LocationTemplate({ entry, metadata }) {
+  const cover        = safeText(metadata.cover_url);
+  const title        = safeText(entry.title);
+  const locationType = safeText(metadata.location_type);
+  const population   = safeText(metadata.population);
+  const climate      = safeText(metadata.climate);
+  const danger       = safeText(metadata.danger_level);
+  const content      = safeText(entry.content);
+  const features     = safeText(metadata.notable_features);
+  const dangers      = safeText(metadata.dangers);
+  const connectedRaw = safeText(metadata.connected_locations);
+  const connected = connectedRaw
+    ? connectedRaw.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
+  const dangerClass = DANGER_COLOR[danger] || "text-slate-300";
+  return (
+    <div className="max-w-3xl mx-auto">
+      <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg overflow-hidden">
+        {cover && (
+          <div className="h-48 md:h-60 overflow-hidden relative">
+            <img src={cover} className="w-full h-full object-cover" alt="" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#1a1f2e] via-transparent to-transparent" />
+          </div>
+        )}
+        <div className="p-6">
+          <h2 className="text-2xl font-bold text-white mb-4">{title}</h2>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+            <InfoCell label="Type"       value={locationType} />
+            <InfoCell label="Population" value={population} />
+            <InfoCell label="Climate"    value={climate} />
+            <InfoCell label="Danger"     value={danger} valueClass={dangerClass} />
+          </div>
+
+          {content && (
+            <div className="text-slate-300 whitespace-pre-wrap leading-relaxed mb-4">{content}</div>
+          )}
+
+          {features && (
+            <div className="mt-4 pt-4 border-t border-slate-700/30">
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Notable Features</p>
+              <p className="text-sm text-slate-300 whitespace-pre-line">{features}</p>
+            </div>
+          )}
+
+          {dangers && (
+            <div className="mt-4 pt-4 border-t border-slate-700/30">
+              <p className="text-xs text-red-400/70 uppercase tracking-wider mb-1">Dangers</p>
+              <p className="text-sm text-slate-300 whitespace-pre-line">{dangers}</p>
+            </div>
+          )}
+
+          {connected.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-700/30">
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Connected Locations</p>
+              <div className="flex flex-wrap gap-1.5">
+                {connected.map((name, i) => (
+                  <span
+                    key={i}
+                    className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#050816] border border-slate-700 text-slate-300"
+                  >
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InfoCell({ label, value, valueClass = "text-slate-200" }) {
+  if (!value) return (
+    <div className="bg-[#0f1219] border border-slate-700/50 rounded p-2">
+      <div className="text-[9px] uppercase tracking-widest text-slate-500 font-bold">{label}</div>
+      <div className="text-sm text-slate-600">—</div>
+    </div>
+  );
+  return (
+    <div className="bg-[#0f1219] border border-slate-700/50 rounded p-2">
+      <div className="text-[9px] uppercase tracking-widest text-slate-500 font-bold">{label}</div>
+      <div className={`text-sm font-semibold ${valueClass}`}>{value}</div>
+    </div>
+  );
+}
+
+function LandmarkTemplate({ entry, metadata }) {
+  const image        = safeText(metadata.image_url);
+  const title        = safeText(entry.title);
+  const content      = safeText(entry.content);
+  const significance = safeText(metadata.significance);
+  return (
+    <div className="max-w-md mx-auto">
+      <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg overflow-hidden shadow-lg">
+        {image ? (
+          <div className="relative h-72 overflow-hidden">
+            <img src={image} className="w-full h-full object-cover" alt="" />
+            {/* Gradient fade that melts the bottom of the image into
+                the card; the title floats over the fade. */}
+            <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-[#1a1f2e] via-[#1a1f2e]/80 to-transparent" />
+            <h2 className="absolute left-0 right-0 bottom-3 text-center text-2xl font-bold text-white px-4 drop-shadow-lg">
+              {title}
+            </h2>
+          </div>
+        ) : (
+          <h2 className="text-2xl font-bold text-white p-5">{title}</h2>
+        )}
+        <div className="p-5 space-y-4">
+          {content && (
+            <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{content}</p>
+          )}
+          {significance && (
+            <div className="pt-3 border-t border-slate-700/30">
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Significance</p>
+              <p className="text-sm text-slate-300 whitespace-pre-line">{significance}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MapNoteTemplate({ entry }) {
+  const content = safeText(entry.content);
+  const title   = safeText(entry.title);
+  return (
+    <div className="max-w-xs mx-auto">
+      <div
+        className="bg-amber-950/20 border border-amber-900/30 border-l-4 border-l-amber-600/50 rounded p-3 shadow-md"
+        style={{ transform: "rotate(-1.5deg)" }}
+      >
+        {title && (
+          <p className="text-[10px] uppercase tracking-widest text-amber-400/70 font-bold mb-1">
+            {title}
+          </p>
+        )}
+        <p className="text-sm text-amber-100/90 whitespace-pre-wrap leading-snug">{content}</p>
+      </div>
     </div>
   );
 }
