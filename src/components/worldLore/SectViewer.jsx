@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Church, Eye, EyeOff, Edit, Trash2, TrendingUp, Target, Package, Users as UsersIcon } from "lucide-react";
 import { motion } from "framer-motion";
+import { safeText } from "@/utils/safeRender";
 
 const SECT_TYPE_COLORS = {
   religious_order: "#8b5cf6",
@@ -247,15 +248,15 @@ export default function SectViewer({ sects, entries, characters, npcs, canEdit, 
                     return (
                       <div key={idx} className="bg-[#1E2430] rounded-lg p-3 flex items-start gap-3">
                         {npc.avatar_url && (
-                          <img src={npc.avatar_url} alt={npc.name} className="w-12 h-12 rounded-full border-2 border-[#37F2D1]" />
+                          <img src={npc.avatar_url} alt={safeText(npc.name)} className="w-12 h-12 rounded-full border-2 border-[#37F2D1]" />
                         )}
                         <div className="flex-1 min-w-0">
-                          <h5 className="text-white font-semibold">{npc.name}</h5>
+                          <h5 className="text-white font-semibold">{safeText(npc.name)}</h5>
                           {linkedNpc.rank && (
-                            <p className="text-xs text-[#37F2D1] font-semibold mt-0.5">{linkedNpc.rank}</p>
+                            <p className="text-xs text-[#37F2D1] font-semibold mt-0.5">{safeText(linkedNpc.rank)}</p>
                           )}
                           {linkedNpc.role_description && (
-                            <p className="text-sm text-gray-400 mt-2">{linkedNpc.role_description}</p>
+                            <p className="text-sm text-gray-400 mt-2">{safeText(linkedNpc.role_description)}</p>
                           )}
                         </div>
                       </div>

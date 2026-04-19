@@ -1,4 +1,5 @@
 import React from "react";
+import { safeText } from "@/utils/safeRender";
 
 /**
  * Rarity palette used across every item tooltip + card in the GM /
@@ -69,23 +70,23 @@ export default function ItemTooltip({ item, show, placement = "top" }) {
             className="text-xs font-black uppercase tracking-wide truncate"
             style={{ color: rarityColor }}
           >
-            {item.name || "Unknown"}
+            {safeText(item.name) || "Unknown"}
           </span>
           {item.quantity > 1 && (
             <span className="text-[9px] text-slate-400 bg-[#111827] rounded px-1.5 py-0.5 flex-shrink-0">
-              ×{item.quantity}
+              ×{safeText(item.quantity)}
             </span>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-1 text-[9px] uppercase tracking-wider">
           {item.type && (
-            <span className="text-slate-400">{item.type}</span>
+            <span className="text-slate-400">{safeText(item.type)}</span>
           )}
           {item.rarity && (
             <>
               {item.type && <span className="text-slate-700">•</span>}
               <span style={{ color: rarityColor }}>
-                {item.rarity}
+                {safeText(item.rarity)}
               </span>
             </>
           )}
@@ -96,12 +97,12 @@ export default function ItemTooltip({ item, show, placement = "top" }) {
           <div className="flex items-center gap-3 text-[10px] text-slate-400 mt-1">
             {item.weight != null && (
               <span>
-                <span className="text-slate-500">Wt:</span> {item.weight} lb
+                <span className="text-slate-500">Wt:</span> {safeText(item.weight)} lb
               </span>
             )}
             {item.cost != null && (
               <span>
-                <span className="text-slate-500">Cost:</span> {item.cost}
+                <span className="text-slate-500">Cost:</span> {safeText(item.cost)}
               </span>
             )}
           </div>
@@ -110,26 +111,26 @@ export default function ItemTooltip({ item, show, placement = "top" }) {
         {/* Damage / armor class line for weapons and armor */}
         {item.damage && (
           <div className="text-[10px] text-orange-300 mt-1">
-            <span className="text-slate-500">Damage:</span> {item.damage}
+            <span className="text-slate-500">Damage:</span> {safeText(item.damage)}
           </div>
         )}
         {item.armorClass && (
           <div className="text-[10px] text-sky-300 mt-1">
-            <span className="text-slate-500">AC:</span> {item.armorClass}
+            <span className="text-slate-500">AC:</span> {safeText(item.armorClass)}
           </div>
         )}
 
         {/* Properties */}
         {item.properties && (
           <div className="text-[10px] text-slate-300 mt-1 italic">
-            {item.properties}
+            {safeText(item.properties)}
           </div>
         )}
 
         {/* Description (longer prose, capped height) */}
         {item.description && (
           <div className="text-[10px] text-slate-400 leading-snug mt-1 max-h-32 overflow-y-auto custom-scrollbar">
-            {item.description}
+            {safeText(item.description)}
           </div>
         )}
 

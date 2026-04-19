@@ -14,6 +14,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import { safeText } from "@/utils/safeRender";
 
 /**
  * Campaign Items tab. Split-panel layout: the selected item on the
@@ -44,13 +45,9 @@ const SOURCE_OPTIONS = [
   { value: "homebrew", label: "Homebrew" },
 ];
 
-function safeString(val) {
-  if (val == null) return "";
-  if (typeof val === "string") return val;
-  if (typeof val === "number" || typeof val === "boolean") return String(val);
-  if (Array.isArray(val)) return val.map(safeString).filter(Boolean).join(", ");
-  return "";
-}
+// Delegate to the shared safeText helper so every render site in the
+// app goes through the same coercion — see src/utils/safeRender.js.
+const safeString = safeText;
 
 /**
  * Item-field accessors. The reseeded dnd5e_items rows store the raw

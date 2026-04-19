@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Shield, Zap, Skull, Crosshair } from "lucide-react";
 import { itemIcons } from "@/components/dnd5e/itemData";
 import { spellIcons } from "@/components/dnd5e/spellData";
+import { safeText } from "@/utils/safeRender";
 
 const CLASS_ICONS = {
   "Barbarian": "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/a6652f2d8_Barbarian1.png",
@@ -195,16 +196,16 @@ export default function PlayerLeftPanel({ character, userProfile }) {
           {Array.from({ length: 18 }).map((_, i) => {
             const item = character.inventory?.[i];
             return (
-              <div key={i} className="aspect-square bg-[#111827] rounded border border-gray-800 flex items-center justify-center overflow-hidden relative group" title={item?.name}>
+              <div key={i} className="aspect-square bg-[#111827] rounded border border-gray-800 flex items-center justify-center overflow-hidden relative group" title={safeText(item?.name)}>
                 {item ? (
                   <>
                     {item.image_url ? (
-                      <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                      <img src={item.image_url} alt={safeText(item.name)} className="w-full h-full object-cover" />
                     ) : (
-                      <span className="text-[8px] text-gray-400">{item.name.slice(0, 2)}</span>
+                      <span className="text-[8px] text-gray-400">{safeText(item.name).slice(0, 2)}</span>
                     )}
                     {item.quantity > 1 && (
-                      <span className="absolute bottom-0 right-0 text-[8px] bg-black/70 text-white px-1 rounded-tl">{item.quantity}</span>
+                      <span className="absolute bottom-0 right-0 text-[8px] bg-black/70 text-white px-1 rounded-tl">{safeText(item.quantity)}</span>
                     )}
                   </>
                 ) : null}
@@ -221,13 +222,13 @@ function EquipSlot({ item, label, className }) {
   return (
     <div className={`w-10 h-10 bg-[#111827] border border-gray-700 rounded flex items-center justify-center relative group ${className}`}>
       {item ? (
-        <img src={item.image_url || itemIcons[item.name]} alt={item.name} className="w-full h-full object-cover rounded" />
+        <img src={item.image_url || itemIcons[item.name]} alt={safeText(item.name)} className="w-full h-full object-cover rounded" />
       ) : (
         <span className="text-[8px] text-gray-600 uppercase">{label}</span>
       )}
       {item && (
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-black text-white text-xs px-2 py-1 rounded whitespace-nowrap z-10">
-          {item.name}
+          {safeText(item.name)}
         </div>
       )}
     </div>

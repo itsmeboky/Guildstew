@@ -3,6 +3,7 @@ import { CircleDollarSign, Package, Check, ArrowRight } from "lucide-react";
 import { itemIcons } from "@/components/dnd5e/itemData";
 import { motion, AnimatePresence } from "framer-motion";
 import { base44 } from "@/api/base44Client";
+import { safeText } from "@/utils/safeRender";
 
 export default function LootBox({ lootData, onTakeItem, onTakeCurrency, canTake, onDragStart }) {
   const items = lootData?.items || [];
@@ -75,12 +76,12 @@ export default function LootBox({ lootData, onTakeItem, onTakeCurrency, canTake,
                     onDragStart={() => onDragStart && onDragStart(item, idx)}
                     onClick={() => canTake && onTakeItem(item, idx)}
                     className={`w-full aspect-square rounded-xl bg-[#1a1f2e] border border-[#2A3441] hover:border-[#37F2D1] hover:shadow-[0_0_15px_rgba(55,242,209,0.2)] transition-all flex items-center justify-center overflow-hidden relative cursor-grab active:cursor-grabbing`}
-                    title={`${item.name}\nDrag to inventory or click to take`}
+                    title={`${safeText(item.name)}\nDrag to inventory or click to take`}
                   >
                     {itemIcons[item.name] ? (
-                      <img src={itemIcons[item.name]} alt={item.name} className="w-full h-full object-cover" />
+                      <img src={itemIcons[item.name]} alt={safeText(item.name)} className="w-full h-full object-cover" />
                     ) : (
-                      <span className="text-[8px] text-center px-1 text-slate-400 line-clamp-2">{item.name}</span>
+                      <span className="text-[8px] text-center px-1 text-slate-400 line-clamp-2">{safeText(item.name)}</span>
                     )}
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                       <Check className="w-4 h-4 text-[#37F2D1]" />

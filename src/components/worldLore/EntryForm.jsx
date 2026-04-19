@@ -11,8 +11,20 @@ import {
 import { Save, X, Upload, Lock, Languages, Plus, Trash2 } from "lucide-react";
 import { uploadFile } from "@/utils/uploadFile";
 import { TEMPLATE_TYPES, templateById } from "@/data/worldLoreTemplates";
+import {
+  ENTRY_TEMPLATES,
+  getTemplatesForCategory,
+  templateByKey as entryTemplateByKey,
+} from "@/config/entryTemplates";
 import SketchCanvas from "@/components/shared/SketchCanvas";
+import SymbolPicker from "@/components/shared/SymbolPicker";
 import { SKILLS, ABILITIES } from "@/utils/languageComprehension";
+import {
+  THIEVES_CANT_SYMBOLS, CANT_CATEGORIES, CANT_COLOR_PRESETS, CANT_DEFAULT_COLOR,
+} from "@/config/thievesCantSymbols";
+import {
+  DRUIDIC_SYMBOLS, DRUIDIC_CATEGORIES, DRUIDIC_COLOR_PRESETS, DRUIDIC_DEFAULT_COLOR,
+} from "@/config/druidicSymbols";
 
 const GATE_LANGUAGE_OPTIONS = [
   "Abyssal", "Celestial", "Common", "Deep Speech", "Draconic",
@@ -37,6 +49,7 @@ function gateId() {
  */
 export default function EntryForm({
   initial,
+  categoryKey,
   categoryMetadataFields = [],
   partyPlayers = [],
   campaignId,
@@ -87,15 +100,44 @@ export default function EntryForm({
   const [druidicMessage, setDruidicMessage] = useState(
     initial?.metadata?.druidic_message || "",
   );
+  const [cantSymbols, setCantSymbols] = useState(
+    Array.isArray(initial?.metadata?.thieves_cant_symbols) ? initial.metadata.thieves_cant_symbols : [],
+  );
+  const [cantColor, setCantColor] = useState(
+    initial?.metadata?.thieves_cant_color || CANT_DEFAULT_COLOR,
+  );
+  const [druidicSymbols, setDruidicSymbolsState] = useState(
+    Array.isArray(initial?.metadata?.druidic_symbols) ? initial.metadata.druidic_symbols : [],
+  );
+  const [druidicColor, setDruidicColor] = useState(
+    initial?.metadata?.druidic_color || DRUIDIC_DEFAULT_COLOR,
+  );
 
-  const template = useMemo(() => templateById(templateType), [templateType]);
+  // Resolve the active template definition. The new catalog in
+  // src/config/entryTemplates wins; the legacy templates in
+  // src/data/worldLoreTemplates remain as a fallback so in-flight
+  // entries that pointed at old template keys keep opening cleanly.
+  const templateOptions = useMemo(() => getTemplatesForCategory(categoryKey), [categoryKey]);
+  const categorySpecificCount = useMemo(
+    () => (ENTRY_TEMPLATES[categoryKey]?.length || 0),
+    [categoryKey],
+  );
+  const template = useMemo(() => {
+    const fromCatalog = entryTemplateByKey(templateType);
+    if (fromCatalog && fromCatalog.key === templateType) return fromCatalog;
+    return templateById(templateType);
+  }, [templateType]);
+  // Backward compat: the legacy templates set `forceVisibility`; the
+  // new catalog uses `autoVisibility`. Both keys flow through the
+  // same visibility-locking code path below.
+  const effectiveForceVisibility = template?.forceVisibility || template?.autoVisibility || null;
 
   // Secret Document auto-forces GM Only visibility. When the GM
   // switches to another template, they're free to change visibility
   // back.
   useEffect(() => {
-    if (template.forceVisibility) setVisibility(template.forceVisibility);
-  }, [template]);
+    if (effectiveForceVisibility) setVisibility(effectiveForceVisibility);
+  }, [effectiveForceVisibility]);
 
   const setMeta = (key, value) => setMetadata((m) => ({ ...m, [key]: value }));
   const togglePlayer = (id) => setVisibleTo(
@@ -122,6 +164,20 @@ export default function EntryForm({
     else delete mergedMetadata.thieves_cant_message;
     if (druidicMessage.trim()) mergedMetadata.druidic_message = druidicMessage.trim();
     else delete mergedMetadata.druidic_message;
+    if (cantSymbols.length > 0) {
+      mergedMetadata.thieves_cant_symbols = cantSymbols;
+      mergedMetadata.thieves_cant_color = cantColor;
+    } else {
+      delete mergedMetadata.thieves_cant_symbols;
+      delete mergedMetadata.thieves_cant_color;
+    }
+    if (druidicSymbols.length > 0) {
+      mergedMetadata.druidic_symbols = druidicSymbols;
+      mergedMetadata.druidic_color = druidicColor;
+    } else {
+      delete mergedMetadata.druidic_symbols;
+      delete mergedMetadata.druidic_color;
+    }
 
     onSave({
       id: initial?.id,
@@ -156,9 +212,20 @@ export default function EntryForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {TEMPLATE_TYPES.map((t) => (
-                <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
-              ))}
+              {templateOptions.map((t, i) => [
+                // Divider between category-specific and global rows.
+                i === categorySpecificCount && categorySpecificCount > 0 ? (
+                  <div key={`divider-${t.key}`} className="my-1 border-t border-slate-700" aria-hidden />
+                ) : null,
+                <SelectItem key={t.key} value={t.key}>
+                  <span className="flex items-center gap-2">
+                    <span>{t.label}</span>
+                    {t.autoVisibility === "gm_only" && (
+                      <span className="text-[9px] uppercase tracking-widest text-amber-400">GM only</span>
+                    )}
+                  </span>
+                </SelectItem>,
+              ])}
             </SelectContent>
           </Select>
           {template?.description && (
@@ -176,18 +243,30 @@ export default function EntryForm({
         />
       </div>
 
-      {templateType === "freeform" && (
-        <div>
-          <Label className="text-sm text-slate-300">Content</Label>
-          <Textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            rows={10}
-            placeholder="Write whatever you want. Supports rich text / HTML."
-            className="bg-[#0f1219] border-slate-600 text-white placeholder:text-slate-500 mt-1"
-          />
-        </div>
-      )}
+      {/* Content body. Freeform uses it as the whole entry; structured
+          templates use it as their main description area. Legacy
+          templates without a contentField get the editor too so the
+          upgrade is non-breaking. */}
+      {(() => {
+        const contentField = template?.contentField || (
+          templateType === "freeform" || template?.fields?.length === 0
+            ? { label: "Content", placeholder: "Write whatever you want." }
+            : null
+        );
+        if (!contentField) return null;
+        return (
+          <div>
+            <Label className="text-sm text-slate-300">{contentField.label}</Label>
+            <Textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              rows={10}
+              placeholder={contentField.placeholder || "Supports rich text / HTML."}
+              className="bg-[#0f1219] border-slate-600 text-white placeholder:text-slate-500 mt-1"
+            />
+          </div>
+        );
+      })()}
 
       {template?.fields?.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-[#0f1219] border border-slate-700 rounded-lg p-3">
@@ -427,32 +506,70 @@ export default function EntryForm({
 
       {/* Hidden class-specific annotations. Rendered only for the
           character that knows the language; others never see them. */}
-      <div className="border border-dashed border-slate-600 rounded-lg p-3">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-sm text-slate-400">🗡️ Thieves&apos; Cant Hidden Message (Optional)</span>
-        </div>
+      <div className="border border-dashed border-slate-600 rounded-lg p-3 space-y-3">
+        <span className="text-sm text-slate-400">🗡️ Thieves&apos; Cant (Optional)</span>
+        <SymbolPicker
+          symbols={THIEVES_CANT_SYMBOLS}
+          categories={CANT_CATEGORIES}
+          selected={cantSymbols}
+          defaultColor={cantColor}
+          colorOptions={CANT_COLOR_PRESETS}
+          label="Thieves' Cant"
+          icon="🗡️"
+          onSelect={(sym) =>
+            setCantSymbols((prev) =>
+              prev.some((s) => s.id === sym.id)
+                ? prev
+                : [...prev, { id: sym.id, color: cantColor }],
+            )
+          }
+          onRemove={(id) => setCantSymbols((prev) => prev.filter((s) => s.id !== id))}
+          onColorChange={(c) => {
+            setCantColor(c);
+            setCantSymbols((prev) => prev.map((s) => ({ ...s, color: c })));
+          }}
+        />
         <Textarea
           placeholder="Hidden message only Rogues with Thieves' Cant can see…"
           value={thievesCantMessage}
           onChange={(e) => setThievesCantMessage(e.target.value)}
           className="bg-[#0f1219] border-slate-700 text-white"
         />
-        <p className="text-xs text-slate-500 mt-1">
-          Shown as a highlighted annotation only to characters who know Thieves&apos; Cant. Others don&apos;t see it at all.
+        <p className="text-xs text-slate-500">
+          Symbols and message are only visible to characters who know Thieves&apos; Cant.
         </p>
       </div>
-      <div className="border border-dashed border-slate-600 rounded-lg p-3">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-sm text-slate-400">🌿 Druidic Hidden Message (Optional)</span>
-        </div>
+      <div className="border border-dashed border-slate-600 rounded-lg p-3 space-y-3">
+        <span className="text-sm text-slate-400">🌿 Druidic (Optional)</span>
+        <SymbolPicker
+          symbols={DRUIDIC_SYMBOLS}
+          categories={DRUIDIC_CATEGORIES}
+          selected={druidicSymbols}
+          defaultColor={druidicColor}
+          colorOptions={DRUIDIC_COLOR_PRESETS}
+          label="Druidic"
+          icon="🌿"
+          onSelect={(sym) =>
+            setDruidicSymbolsState((prev) =>
+              prev.some((s) => s.id === sym.id)
+                ? prev
+                : [...prev, { id: sym.id, color: druidicColor }],
+            )
+          }
+          onRemove={(id) => setDruidicSymbolsState((prev) => prev.filter((s) => s.id !== id))}
+          onColorChange={(c) => {
+            setDruidicColor(c);
+            setDruidicSymbolsState((prev) => prev.map((s) => ({ ...s, color: c })));
+          }}
+        />
         <Textarea
           placeholder="Hidden message only Druids can see…"
           value={druidicMessage}
           onChange={(e) => setDruidicMessage(e.target.value)}
           className="bg-[#0f1219] border-slate-700 text-white"
         />
-        <p className="text-xs text-slate-500 mt-1">
-          Shown only to Druids. Uses the same silent-invisible rule as Thieves&apos; Cant.
+        <p className="text-xs text-slate-500">
+          Symbols and message are only visible to Druids.
         </p>
       </div>
 
@@ -461,7 +578,7 @@ export default function EntryForm({
         <Select
           value={visibility}
           onValueChange={setVisibility}
-          disabled={!!template.forceVisibility}
+          disabled={!!effectiveForceVisibility}
         >
           <SelectTrigger className="bg-[#050816] border-slate-600 text-white">
             <SelectValue />
@@ -472,9 +589,9 @@ export default function EntryForm({
             <SelectItem value="selected">👁️ Selected Players</SelectItem>
           </SelectContent>
         </Select>
-        {template.forceVisibility && (
+        {effectiveForceVisibility && (
           <p className="text-[11px] text-amber-400">
-            Secret documents are locked to GM Only.
+            This template is locked to {effectiveForceVisibility === "gm_only" ? "GM Only" : effectiveForceVisibility}.
           </p>
         )}
         {visibility === "selected" && (
@@ -556,6 +673,41 @@ function TemplateField({ field, value, onChange, campaignId }) {
   }
   if (type === "image") {
     return <ImageField label={label} value={value} onChange={onChange} campaignId={campaignId} />;
+  }
+  if (type === "checkbox") {
+    return (
+      <div className="flex items-center gap-2 h-9 mt-5">
+        <Checkbox
+          checked={!!value}
+          onCheckedChange={(c) => onChange(!!c)}
+        />
+        <Label className="text-xs text-slate-300">{label}</Label>
+      </div>
+    );
+  }
+  if (type === "tags") {
+    // Stored as a string[]; editor is a comma-separated text input
+    // for simplicity — matches how other comma-separated lists are
+    // authored elsewhere in the app.
+    const displayText = Array.isArray(value) ? value.join(", ") : (value || "");
+    return (
+      <div className="md:col-span-2">
+        <Label className="text-[10px] uppercase tracking-widest text-slate-400">{label}</Label>
+        <Input
+          value={displayText}
+          onChange={(e) =>
+            onChange(
+              e.target.value
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean),
+            )
+          }
+          placeholder={placeholder || "Tag, Tag, Tag"}
+          className="bg-[#050816] border-slate-600 text-white placeholder:text-slate-500 h-9 text-xs mt-1"
+        />
+      </div>
+    );
   }
   return (
     <div>

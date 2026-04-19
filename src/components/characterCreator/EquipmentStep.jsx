@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import { base44 } from "@/api/base44Client";
 import { STARTING_EQUIPMENT } from "@/components/dnd5e/dnd5eRules";
+import { safeText } from "@/utils/safeRender";
 
 /** STARTING_EQUIPMENT[class].choices is an array of objects like
  *  { option1: 'Mace', option2: 'Warhammer (if proficient)' } — one
@@ -238,14 +239,14 @@ export default function EquipmentStep({ characterData, updateCharacterData }) {
                     ) : (
                       <div className="w-6 h-6 rounded bg-slate-800 flex-shrink-0" />
                     )}
-                    <span className="text-white text-sm truncate">{item.name}</span>
+                    <span className="text-white text-sm truncate">{safeText(item.name)}</span>
                     {item.type && (
-                      <span className="text-xs text-slate-500 flex-shrink-0">{item.type}</span>
+                      <span className="text-xs text-slate-500 flex-shrink-0">{safeText(item.type)}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
                     {item.cost && (
-                      <span className="text-xs text-slate-400">{typeof item.cost === "string" ? item.cost : ""}</span>
+                      <span className="text-xs text-slate-400">{typeof item.cost === "string" ? item.cost : safeText(item.cost)}</span>
                     )}
                     <Plus className="w-4 h-4 text-[#37F2D1]" />
                   </div>
