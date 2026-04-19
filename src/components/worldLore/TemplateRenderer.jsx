@@ -32,17 +32,15 @@ export default function TemplateRenderer({ entry }) {
     case "landmark":         return <LandmarkTemplate        entry={entry} metadata={metadata} />;
     case "map_note":         return <MapNoteTemplate         entry={entry} metadata={metadata} />;
 
-    // Not yet implemented (shipped in Part 2C) — render as freeform
-    // so the switch already lists every template_type; each later
-    // commit replaces a single fallback branch with its real renderer.
-    case "deity_profile":
-    case "prayer":
-    case "holy_site":
-    case "historical_event":
-    case "era_summary":
-    case "battle_report":
-    case "political_decree":
-    case "treaty":
+    case "deity_profile":    return <DeityProfileTemplate    entry={entry} metadata={metadata} />;
+    case "prayer":           return <PrayerTemplate          entry={entry} metadata={metadata} />;
+    case "holy_site":        return <HolySiteTemplate        entry={entry} metadata={metadata} />;
+    case "historical_event": return <HistoricalEventTemplate entry={entry} metadata={metadata} />;
+    case "era_summary":      return <EraSummaryTemplate      entry={entry} metadata={metadata} />;
+    case "battle_report":    return <BattleReportTemplate    entry={entry} metadata={metadata} />;
+    case "political_decree": return <PoliticalDecreeTemplate entry={entry} metadata={metadata} />;
+    case "treaty":           return <TreatyTemplate          entry={entry} metadata={metadata} />;
+
     case "freeform":
     default:
       return <FreeformTemplate entry={entry} />;
@@ -697,6 +695,504 @@ function MapNoteTemplate({ entry }) {
           </p>
         )}
         <p className="text-sm text-amber-100/90 whitespace-pre-wrap leading-snug">{content}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────── Religion ──────────────────────────────
+
+function DeityProfileTemplate({ entry, metadata }) {
+  const image     = safeText(metadata.image_url);
+  const title     = safeText(entry.title);
+  const alignment = safeText(metadata.alignment);
+  const content   = safeText(entry.content);
+  const symbols   = safeText(metadata.symbols);
+  const sects     = safeText(metadata.sects);
+
+  // Domains land as an array from the tags field, but tolerate legacy
+  // string / object shapes too.
+  const domains = Array.isArray(metadata.domains)
+    ? metadata.domains.map((d) => safeText(d)).filter(Boolean)
+    : (safeText(metadata.domains) || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+  // Commandments rendered one-per-line, split at line breaks.
+  const commandmentsRaw = safeText(metadata.commandments);
+  const commandments = commandmentsRaw
+    ? commandmentsRaw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    : [];
+
+  return (
+    <div className="max-w-xl mx-auto">
+      <div className="bg-[#1a1814] border border-amber-900/30 rounded-lg p-6 shadow-lg">
+        <div className="flex flex-col items-center">
+          {image ? (
+            <img
+              src={image}
+              alt=""
+              className="w-24 h-24 rounded-full object-cover object-top border-2 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+            />
+          ) : (
+            <div className="w-24 h-24 rounded-full bg-[#050816] border-2 border-amber-500/30 flex items-center justify-center text-amber-400/60 text-3xl">
+              ✦
+            </div>
+          )}
+          <h2 className="text-2xl font-black text-amber-100 mt-3 text-center">{title}</h2>
+          {alignment && (
+            <span className="mt-2 text-[10px] uppercase tracking-widest text-amber-400/70 bg-amber-900/20 border border-amber-700/40 rounded px-2 py-0.5">
+              {alignment}
+            </span>
+          )}
+          {domains.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 justify-center mt-3">
+              {domains.map((d, i) => (
+                <span
+                  key={i}
+                  className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#37F2D1]/10 text-[#37F2D1] border border-[#37F2D1]/30"
+                >
+                  {d}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {content && (
+          <div className="mt-5 text-slate-300 whitespace-pre-wrap leading-relaxed">{content}</div>
+        )}
+
+        {commandments.length > 0 && (
+          <div className="mt-5 pt-4 border-t border-amber-900/20">
+            <p className="text-[10px] uppercase tracking-widest text-amber-400/80 font-black mb-2">
+              Commandments
+            </p>
+            <ol className="list-decimal list-inside space-y-1 text-sm text-slate-200 marker:text-amber-400 marker:font-bold">
+              {commandments.map((c, i) => (<li key={i}>{c}</li>))}
+            </ol>
+          </div>
+        )}
+
+        {symbols && (
+          <div className="mt-4 pt-4 border-t border-amber-900/20">
+            <p className="text-[10px] uppercase tracking-widest text-amber-400/60 font-bold mb-1">Sacred Symbols</p>
+            <p className="text-sm text-slate-300">{symbols}</p>
+          </div>
+        )}
+
+        {sects && (
+          <p className="mt-3 text-[11px] text-amber-200/60 italic text-center">
+            Associated sects: {sects}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PrayerTemplate({ entry, metadata }) {
+  const content     = safeText(entry.content);
+  const attribution = safeText(metadata.attribution);
+  const deity       = safeText(metadata.deity);
+  return (
+    <div className="max-w-lg mx-auto">
+      <div className="bg-[#1a1918] border border-amber-900/20 rounded-lg p-8 shadow-lg">
+        <div className="border-t border-amber-700/30 w-24 mx-auto mb-6" />
+        {content && (
+          <p className="text-base text-amber-50/90 leading-loose text-center whitespace-pre-wrap italic">
+            {content}
+          </p>
+        )}
+        <div className="border-t border-amber-700/30 w-24 mx-auto mt-6" />
+        {(attribution || deity) && (
+          <div className="mt-4 text-right text-[11px] text-amber-200/60 italic">
+            {attribution && <p>— {attribution}</p>}
+            {deity && <p className="mt-0.5">From the teachings of {deity}</p>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HolySiteTemplate({ entry, metadata }) {
+  const cover            = safeText(metadata.cover_url);
+  const title            = safeText(entry.title);
+  const deity            = safeText(metadata.deity);
+  const content          = safeText(entry.content);
+  const significance     = safeText(metadata.significance);
+  const pilgrimageNotes  = safeText(metadata.pilgrimage_notes);
+  return (
+    <div className="max-w-3xl mx-auto">
+      <div className="bg-[#1a1814] border border-amber-600/30 rounded-lg overflow-hidden shadow-lg">
+        {cover && (
+          <div className="h-48 md:h-60 overflow-hidden relative">
+            <img src={cover} className="w-full h-full object-cover" alt="" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#1a1814] via-transparent to-transparent" />
+          </div>
+        )}
+        <div className="p-6">
+          <h2 className="text-2xl font-bold text-amber-100">{title}</h2>
+          {deity && (
+            <p className="text-sm text-amber-300/80 italic mt-1">
+              <span aria-hidden className="mr-1">✦</span> Sacred to {deity}
+            </p>
+          )}
+
+          {content && (
+            <div className="mt-4 text-slate-300 whitespace-pre-wrap leading-relaxed">{content}</div>
+          )}
+
+          {significance && (
+            <div className="mt-4 pt-4 border-t border-amber-900/20">
+              <p className="text-[10px] uppercase tracking-widest text-amber-400/70 font-bold mb-1">
+                Religious Significance
+              </p>
+              <p className="text-sm text-slate-300 whitespace-pre-line">{significance}</p>
+            </div>
+          )}
+          {pilgrimageNotes && (
+            <div className="mt-4 pt-4 border-t border-amber-900/20">
+              <p className="text-[10px] uppercase tracking-widest text-amber-400/70 font-bold mb-1">
+                Pilgrimage Notes
+              </p>
+              <p className="text-sm text-slate-300 whitespace-pre-line">{pilgrimageNotes}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────── History ───────────────────────────────
+
+function HistoricalEventTemplate({ entry, metadata }) {
+  const date         = safeText(metadata.date);
+  const era          = safeText(metadata.era);
+  const title        = safeText(entry.title);
+  const content      = safeText(entry.content);
+  const consequences = safeText(metadata.consequences);
+
+  const keyFigures = Array.isArray(metadata.key_figures)
+    ? metadata.key_figures.map((f) => safeText(f)).filter(Boolean)
+    : (safeText(metadata.key_figures) || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-6">
+        <div className="flex items-start gap-4 flex-wrap">
+          {(date || era) && (
+            <div className="bg-slate-800 border border-slate-700 rounded px-3 py-1.5 flex-shrink-0">
+              {date && <div className="text-sm font-bold text-white leading-tight">{date}</div>}
+              {era && <div className="text-[10px] uppercase tracking-widest text-slate-400 leading-tight">{era}</div>}
+            </div>
+          )}
+          <h2 className="flex-1 min-w-[200px] text-2xl font-bold text-white">{title}</h2>
+        </div>
+
+        {content && (
+          <div className="mt-4 text-slate-300 whitespace-pre-wrap leading-relaxed">{content}</div>
+        )}
+
+        {keyFigures.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-slate-700/30">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Key Figures</p>
+            <div className="flex flex-wrap gap-1.5">
+              {keyFigures.map((f, i) => (
+                <span
+                  key={i}
+                  className="text-xs bg-[#37F2D1]/10 text-[#37F2D1] rounded px-2 py-0.5 border border-[#37F2D1]/30"
+                >
+                  {f}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {consequences && (
+          <div className="mt-4 pt-4 border-t border-slate-700/30">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Consequences</p>
+            <div className="border-l-2 border-amber-600/40 pl-3 text-sm text-slate-300 whitespace-pre-line">
+              {consequences}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EraSummaryTemplate({ entry, metadata }) {
+  const title     = safeText(entry.title);
+  const startDate = safeText(metadata.start_date);
+  const endDate   = safeText(metadata.end_date);
+  const content   = safeText(entry.content);
+
+  const definingEvents = safeText(metadata.defining_events)
+    ? safeText(metadata.defining_events).split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    : [];
+
+  const majorFigures = Array.isArray(metadata.major_figures)
+    ? metadata.major_figures.map((f) => safeText(f)).filter(Boolean)
+    : (safeText(metadata.major_figures) || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+  const range = [startDate, endDate].filter(Boolean).join(" — ");
+
+  return (
+    <div className="max-w-3xl mx-auto">
+      <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-6">
+        <h2 className="text-3xl font-black text-white">{title}</h2>
+        {range && (
+          <p className="text-sm text-slate-400 italic mt-1">{range}</p>
+        )}
+
+        {content && (
+          <div className="mt-4 text-slate-300 whitespace-pre-wrap leading-relaxed">{content}</div>
+        )}
+
+        {definingEvents.length > 0 && (
+          <div className="mt-5 pt-4 border-t border-slate-700/30">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-3">Defining Events</p>
+            <ol className="border-l-2 border-slate-600 pl-4 space-y-2">
+              {definingEvents.map((e, i) => (
+                <li key={i} className="relative text-sm text-slate-300">
+                  <span
+                    className="absolute -left-[22px] top-1.5 w-2 h-2 rounded-full bg-slate-400"
+                    aria-hidden
+                  />
+                  {e}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
+        {majorFigures.length > 0 && (
+          <div className="mt-5 pt-4 border-t border-slate-700/30">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">Major Figures</p>
+            <div className="flex flex-wrap gap-1.5">
+              {majorFigures.map((f, i) => (
+                <span
+                  key={i}
+                  className="text-xs bg-[#37F2D1]/10 text-[#37F2D1] rounded px-2 py-0.5 border border-[#37F2D1]/30"
+                >
+                  {f}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BattleReportTemplate({ entry, metadata }) {
+  const force1       = safeText(metadata.force_1);
+  const force2       = safeText(metadata.force_2);
+  const location     = safeText(metadata.location);
+  const date         = safeText(metadata.date);
+  const title        = safeText(entry.title);
+  const content      = safeText(entry.content);
+  const outcome      = safeText(metadata.outcome);
+  const casualties   = safeText(metadata.casualties);
+  const significance = safeText(metadata.significance);
+
+  const outcomeLower = outcome.toLowerCase();
+  const outcomeClass =
+    /victory|won|triumph/.test(outcomeLower) ? "bg-emerald-900/30 text-emerald-400 border-emerald-700/50" :
+    /defeat|lost|rout/.test(outcomeLower)    ? "bg-red-900/30 text-red-400 border-red-700/50" :
+    /draw|stalemate|pyrrhic/.test(outcomeLower) ? "bg-amber-900/30 text-amber-400 border-amber-700/50" :
+    "bg-slate-700 text-slate-300 border-slate-600";
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-6">
+        <h2 className="text-2xl font-black text-white text-center mb-3">{title}</h2>
+
+        <div className="grid grid-cols-[1fr,auto,1fr] gap-3 items-center mb-4">
+          <div className="text-right">
+            <p className="text-xs text-slate-500 uppercase tracking-widest">Force 1</p>
+            <p className="text-sm font-bold text-white">{force1 || "—"}</p>
+          </div>
+          <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500 border border-slate-700 rounded px-2 py-0.5">vs</span>
+          <div className="text-left">
+            <p className="text-xs text-slate-500 uppercase tracking-widest">Force 2</p>
+            <p className="text-sm font-bold text-white">{force2 || "—"}</p>
+          </div>
+        </div>
+
+        {(location || date) && (
+          <p className="text-xs text-slate-400 text-center italic mb-5">
+            {[location, date].filter(Boolean).join(" · ")}
+          </p>
+        )}
+
+        {content && (
+          <div className="text-slate-300 whitespace-pre-wrap leading-relaxed mb-5">{content}</div>
+        )}
+
+        {outcome && (
+          <div className="flex justify-center my-4">
+            <span className={`inline-block px-3 py-1 rounded border text-sm font-bold uppercase tracking-wider ${outcomeClass}`}>
+              {outcome}
+            </span>
+          </div>
+        )}
+
+        {casualties && (
+          <div className="mt-4 pt-4 border-t border-slate-700/30">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Casualties</p>
+            <p className="text-sm text-slate-300 whitespace-pre-line">{casualties}</p>
+          </div>
+        )}
+
+        {significance && (
+          <div className="mt-4 pt-4 border-t border-slate-700/30">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Significance</p>
+            <p className="text-sm text-slate-300 whitespace-pre-line">{significance}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────── Political ─────────────────────────────
+
+function PoliticalDecreeTemplate({ entry, metadata }) {
+  const authority = safeText(metadata.authority);
+  const title     = safeText(entry.title);
+  const date      = safeText(metadata.date);
+  const content   = safeText(entry.content);
+  const seal      = safeText(metadata.seal);
+  const penalties = safeText(metadata.penalties);
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="bg-[#1a1f2e] border border-slate-700/50 border-l-4 border-l-amber-700/50 rounded-lg overflow-hidden">
+        <div className="border-t-4 border-double border-amber-700/30" />
+        <div className="p-6">
+          {authority && (
+            <>
+              <p className="text-xs uppercase tracking-[0.2em] text-amber-400/60 text-center">
+                By Order of
+              </p>
+              <p className="text-xl font-black text-amber-100 text-center mt-1">{authority}</p>
+            </>
+          )}
+          <h2 className="text-lg font-bold text-white text-center mt-4">{title}</h2>
+
+          {content && (
+            <div className="mt-5 text-slate-200 whitespace-pre-wrap leading-relaxed">{content}</div>
+          )}
+
+          {penalties && (
+            <div className="mt-5 pt-4 border-t border-red-900/30">
+              <p className="text-[10px] uppercase tracking-widest text-red-400/80 font-bold mb-1">
+                Penalties for Violation
+              </p>
+              <p className="text-sm text-red-300/90 whitespace-pre-line">{penalties}</p>
+            </div>
+          )}
+
+          <div className="mt-6 flex items-center justify-between flex-wrap gap-3">
+            {seal ? (
+              <p className="text-[11px] text-amber-200/60 italic">
+                <span aria-hidden className="mr-1">⚜</span> Sealed: {seal}
+              </p>
+            ) : <span />}
+            {date && (
+              <p className="text-[11px] text-slate-400 italic">{date}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TreatyTemplate({ entry, metadata }) {
+  const party1       = safeText(metadata.party_1);
+  const party2       = safeText(metadata.party_2);
+  const party1Crest  = safeText(metadata.party_1_crest);
+  const party2Crest  = safeText(metadata.party_2_crest);
+  const title        = safeText(entry.title);
+  const content      = safeText(entry.content);
+  const status       = safeText(metadata.status);
+  const date         = safeText(metadata.date);
+
+  const statusClass =
+    status === "Active"  ? "bg-emerald-900/30 text-emerald-400 border-emerald-700/50" :
+    status === "Broken"  ? "bg-red-900/30 text-red-400 border-red-700/50" :
+    status === "Pending" ? "bg-amber-900/30 text-amber-400 border-amber-700/50" :
+    status === "Expired" ? "bg-slate-700 text-slate-400 border-slate-600" :
+    "bg-slate-700 text-slate-300 border-slate-600";
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-6">
+        {title && (
+          <h2 className="text-xl font-black text-white text-center mb-4">{title}</h2>
+        )}
+
+        <div className="grid grid-cols-[1fr,auto,1fr] gap-3 items-center mb-4">
+          <div className="flex flex-col items-center text-center gap-2">
+            {party1Crest ? (
+              <img
+                src={party1Crest}
+                alt=""
+                className="w-16 h-16 rounded-full border-2 border-slate-600 object-cover"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-[#050816] border-2 border-slate-700" />
+            )}
+            <p className="text-sm font-bold text-white">{party1 || "—"}</p>
+          </div>
+          <div className="flex flex-col items-center text-slate-500">
+            <span className="text-xl" aria-hidden>🤝</span>
+            <span className="text-[10px] uppercase tracking-widest mt-1">Treaty</span>
+          </div>
+          <div className="flex flex-col items-center text-center gap-2">
+            {party2Crest ? (
+              <img
+                src={party2Crest}
+                alt=""
+                className="w-16 h-16 rounded-full border-2 border-slate-600 object-cover"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-[#050816] border-2 border-slate-700" />
+            )}
+            <p className="text-sm font-bold text-white">{party2 || "—"}</p>
+          </div>
+        </div>
+
+        {status && (
+          <div className="flex justify-center my-4">
+            <span className={`inline-block px-3 py-1 rounded border text-xs font-bold uppercase tracking-wider ${statusClass}`}>
+              {status}
+            </span>
+          </div>
+        )}
+
+        {content && (
+          <div className="mt-4 pt-4 border-t border-slate-700/30 text-slate-300 whitespace-pre-wrap leading-relaxed">
+            {content}
+          </div>
+        )}
+
+        {date && (
+          <p className="mt-5 text-right text-[11px] text-slate-400 italic">Signed: {date}</p>
+        )}
       </div>
     </div>
   );
