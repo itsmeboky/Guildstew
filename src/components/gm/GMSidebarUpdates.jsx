@@ -3,6 +3,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
 
+function formatUpdateTimestamp(update) {
+  const raw = update?.created_at || update?.created_date;
+  if (!raw) return "";
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-US", {
+    month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit",
+  });
+}
+
 /**
  * Post a CampaignUpdate from inside the GM sidebar so the players'
  * dashboards pick it up without the GM leaving the session. Shows
@@ -74,7 +85,12 @@ export default function GMSidebarUpdates({ campaignId }) {
           <ul className="space-y-2">
             {recent.map((u) => (
               <li key={u.id} className="bg-[#0f1219] border border-slate-700/40 rounded p-2">
-                <p className="text-xs text-white font-semibold truncate">{u.title}</p>
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-xs text-white font-semibold truncate">{u.title}</p>
+                  <span className="text-[10px] text-slate-500 flex-shrink-0">
+                    {formatUpdateTimestamp(u)}
+                  </span>
+                </div>
                 <p className="text-[10px] text-slate-400 line-clamp-2">{u.content}</p>
               </li>
             ))}

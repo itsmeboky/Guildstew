@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { uploadFile } from "@/utils/uploadFile";
@@ -16,42 +16,68 @@ import {
 } from "lucide-react";
 
 const TYPES = [
-  { value: "Pet",               cls: "bg-orange-500/20 text-orange-300 border-orange-500/40" },
-  { value: "Familiar",          cls: "bg-purple-500/20 text-purple-300 border-purple-500/40" },
-  { value: "Mount",             cls: "bg-amber-500/20 text-amber-300 border-amber-500/40" },
-  { value: "Animal Companion",  cls: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" },
+  { value: "Beast",     cls: "bg-orange-500/20 text-orange-300 border-orange-500/40" },
+  { value: "Familiar",  cls: "bg-purple-500/20 text-purple-300 border-purple-500/40" },
+  { value: "Mount",     cls: "bg-amber-500/20 text-amber-300 border-amber-500/40" },
+  { value: "Summon",    cls: "bg-blue-500/20 text-blue-300 border-blue-500/40" },
+  { value: "Other",     cls: "bg-slate-500/20 text-slate-300 border-slate-500/40" },
 ];
 const TYPE_MAP = Object.fromEntries(TYPES.map((t) => [t.value, t]));
 
-function uid() {
-  return `comp_${Math.random().toString(36).slice(2, 10)}`;
-}
-
+/**
+ * Companions persist in the `companions` table now, not as a
+ * JSONB array on the character row. Each row carries name, type,
+ * description, stats JSONB (species / ac / speed / abilities),
+ * image_url, hp_current, hp_max. The Adventuring Party panel is
+ * the only surface that reads/writes them; deletion cascades when
+ * the owning character is removed.
+ */
 export default function CompanionTab({ character, canEdit }) {
   const queryClient = useQueryClient();
-  const companions = Array.isArray(character?.companions) ? character.companions : [];
+
+  const { data: companions = [] } = useQuery({
+    queryKey: ["companions", character?.id],
+    queryFn: () => base44.entities.Companion
+      .filter({ character_id: character.id })
+      .catch(() => []),
+    enabled: !!character?.id,
+    initialData: [],
+  });
+
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
-  const writeMutation = useMutation({
-    mutationFn: async (next) => base44.entities.Character.update(character.id, { companions: next }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["campaignCharacters", character.campaign_id] });
-    },
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["companions", character?.id] });
+  };
+
+  const addMutation = useMutation({
+    mutationFn: (entry) => base44.entities.Companion.create({
+      campaign_id: character.campaign_id,
+      character_id: character.id,
+      name: entry.name,
+      type: entry.type,
+      description: entry.description,
+      hp_current: entry.hp_current,
+      hp_max: entry.hp_max,
+      image_url: entry.image_url,
+      stats: entry.stats || {},
+    }),
+    onSuccess: () => { invalidate(); setAdding(false); toast.success("Companion added."); },
     onError: (err) => toast.error(err?.message || "Couldn't save that companion."),
   });
 
-  const persist = (next) => writeMutation.mutate(next);
+  const updateMutation = useMutation({
+    mutationFn: ({ id, patch }) => base44.entities.Companion.update(id, patch),
+    onSuccess: () => { invalidate(); setEditingId(null); toast.success("Companion updated."); },
+    onError: (err) => toast.error(err?.message || "Couldn't update that companion."),
+  });
 
-  const addOne = (entry) => { persist([...companions, { id: uid(), ...entry }]); setAdding(false); };
-  const updateOne = (id, patch) => {
-    persist(companions.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-    setEditingId(null);
-  };
-  const removeOne = (id) => {
-    if (!confirm("Remove this companion?")) return;
-    persist(companions.filter((c) => c.id !== id));
-  };
+  const deleteMutation = useMutation({
+    mutationFn: (id) => base44.entities.Companion.delete(id),
+    onSuccess: () => { invalidate(); toast.success("Companion removed."); },
+    onError: (err) => toast.error(err?.message || "Couldn't remove that companion."),
+  });
 
   return (
     <div className="space-y-3">
@@ -70,7 +96,7 @@ export default function CompanionTab({ character, canEdit }) {
       {adding && (
         <CompanionForm
           onCancel={() => setAdding(false)}
-          onSave={addOne}
+          onSave={(entry) => addMutation.mutate(entry)}
         />
       )}
 
@@ -87,7 +113,7 @@ export default function CompanionTab({ character, canEdit }) {
               key={c.id}
               value={c}
               onCancel={() => setEditingId(null)}
-              onSave={(entry) => updateOne(c.id, entry)}
+              onSave={(entry) => updateMutation.mutate({ id: c.id, patch: entry })}
             />
           ) : (
             <CompanionCard
@@ -95,7 +121,9 @@ export default function CompanionTab({ character, canEdit }) {
               companion={c}
               canEdit={canEdit}
               onEdit={() => setEditingId(c.id)}
-              onRemove={() => removeOne(c.id)}
+              onRemove={() => {
+                if (confirm("Remove this companion?")) deleteMutation.mutate(c.id);
+              }}
             />
           ),
         )}
@@ -105,30 +133,35 @@ export default function CompanionTab({ character, canEdit }) {
 }
 
 function CompanionCard({ companion: c, canEdit, onEdit, onRemove }) {
-  const typeStyle = TYPE_MAP[c.type] || TYPE_MAP.Pet;
-  const hp = Number(c.hp) || 0;
-  const maxHp = Number(c.max_hp ?? c.maxHp ?? hp) || 0;
+  const typeStyle = TYPE_MAP[c.type] || TYPE_MAP.Beast;
+  const stats = c?.stats || {};
+  const hp = Number(c.hp_current ?? stats.hp ?? 0) || 0;
+  const maxHp = Number(c.hp_max ?? stats.max_hp ?? stats.maxHp ?? hp) || 0;
   const hpPct = maxHp > 0 ? Math.round((hp / maxHp) * 100) : 0;
+  const species = c?.stats?.species || "";
+  const ac = c?.stats?.ac ?? "—";
+  const speed = c?.stats?.speed ? `${c.stats.speed} ft` : "—";
+  const abilities = Array.isArray(c?.stats?.abilities) ? c.stats.abilities : [];
 
   return (
     <div className="bg-[#0b1220] border border-[#1e293b] rounded-xl p-3">
       <div className="flex items-start gap-3">
-        {c.portrait_url ? (
-          <img src={c.portrait_url} alt="" className="w-20 h-20 rounded-lg object-cover flex-shrink-0" />
+        {c.image_url ? (
+          <img src={c.image_url} alt="" className="w-20 h-20 rounded-lg object-cover flex-shrink-0" />
         ) : (
           <div className="w-20 h-20 rounded-lg bg-slate-800 flex-shrink-0" />
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <div className="text-base font-bold text-white truncate">{c.name || "Unnamed"}</div>
-            <Badge variant="outline" className={`text-[10px] ${typeStyle.cls}`}>{c.type || "Pet"}</Badge>
+            <Badge variant="outline" className={`text-[10px] ${typeStyle.cls}`}>{c.type || "Beast"}</Badge>
           </div>
-          <div className="text-[11px] text-slate-400">{c.species || ""}</div>
+          <div className="text-[11px] text-slate-400">{species}</div>
 
           <div className="grid grid-cols-3 gap-2 mt-2 text-[11px]">
             <StatBox icon={Heart} label="HP" value={`${hp}/${maxHp || "?"}`} color="#ef4444" />
-            <StatBox icon={Shield} label="AC" value={c.ac ?? "—"} color="#3b82f6" />
-            <StatBox icon={Footprints} label="Speed" value={c.speed ? `${c.speed} ft` : "—"} color="#22c55e" />
+            <StatBox icon={Shield} label="AC" value={ac} color="#3b82f6" />
+            <StatBox icon={Footprints} label="Speed" value={speed} color="#22c55e" />
           </div>
 
           {maxHp > 0 && (
@@ -144,11 +177,11 @@ function CompanionCard({ companion: c, canEdit, onEdit, onRemove }) {
             <p className="text-xs text-slate-300 mt-2 whitespace-pre-wrap leading-relaxed">{c.description}</p>
           )}
 
-          {Array.isArray(c.abilities) && c.abilities.length > 0 && (
+          {abilities.length > 0 && (
             <div className="mt-3">
               <div className="text-[10px] uppercase tracking-widest text-amber-400 font-bold mb-1">Abilities</div>
               <ul className="space-y-1">
-                {c.abilities.map((a, idx) => (
+                {abilities.map((a, idx) => (
                   <li key={idx} className="text-[11px]">
                     <span className="text-white font-bold">{a.name}. </span>
                     <span className="text-slate-300">{a.desc || a.description}</span>
@@ -184,16 +217,17 @@ function StatBox({ icon: Icon, label, value, color }) {
 }
 
 function CompanionForm({ value, onSave, onCancel }) {
+  const stats = value?.stats || {};
   const [name, setName] = useState(value?.name || "");
-  const [species, setSpecies] = useState(value?.species || "");
-  const [type, setType] = useState(value?.type || "Pet");
-  const [hp, setHp] = useState(value?.hp ?? 0);
-  const [maxHp, setMaxHp] = useState(value?.max_hp ?? value?.maxHp ?? 0);
-  const [ac, setAc] = useState(value?.ac ?? 10);
-  const [speed, setSpeed] = useState(value?.speed ?? 30);
+  const [species, setSpecies] = useState(stats.species || "");
+  const [type, setType] = useState(value?.type || "Beast");
+  const [hp, setHp] = useState(value?.hp_current ?? 0);
+  const [maxHp, setMaxHp] = useState(value?.hp_max ?? 0);
+  const [ac, setAc] = useState(stats.ac ?? 10);
+  const [speed, setSpeed] = useState(stats.speed ?? 30);
   const [description, setDescription] = useState(value?.description || "");
-  const [portraitUrl, setPortraitUrl] = useState(value?.portrait_url || "");
-  const [abilities, setAbilities] = useState(Array.isArray(value?.abilities) ? value.abilities : []);
+  const [imageUrl, setImageUrl] = useState(value?.image_url || "");
+  const [abilities, setAbilities] = useState(Array.isArray(stats.abilities) ? stats.abilities : []);
   const [uploading, setUploading] = useState(false);
 
   const handleImage = async (file) => {
@@ -201,7 +235,7 @@ function CompanionForm({ value, onSave, onCancel }) {
     setUploading(true);
     try {
       const { file_url } = await uploadFile(file, "avatars", "companions");
-      setPortraitUrl(file_url);
+      setImageUrl(file_url);
     } catch (err) {
       toast.error(err?.message || "Upload failed");
     } finally {
@@ -217,17 +251,19 @@ function CompanionForm({ value, onSave, onCancel }) {
     if (!name.trim()) { toast.error("Name your companion."); return; }
     onSave({
       name: name.trim(),
-      species: species.trim(),
       type,
-      hp: Number(hp) || 0,
-      max_hp: Number(maxHp) || 0,
-      ac: Number(ac) || 10,
-      speed: Number(speed) || 30,
       description: description.trim(),
-      portrait_url: portraitUrl || null,
-      abilities: abilities
-        .map((a) => ({ name: (a.name || "").trim(), desc: (a.desc || "").trim() }))
-        .filter((a) => a.name),
+      image_url: imageUrl || null,
+      hp_current: Number(hp) || 0,
+      hp_max: Number(maxHp) || 0,
+      stats: {
+        species: species.trim() || null,
+        ac: Number(ac) || 10,
+        speed: Number(speed) || 30,
+        abilities: abilities
+          .map((a) => ({ name: (a.name || "").trim(), desc: (a.desc || "").trim() }))
+          .filter((a) => a.name),
+      },
     });
   };
 
@@ -235,8 +271,8 @@ function CompanionForm({ value, onSave, onCancel }) {
     <div className="bg-[#0b1220] border border-[#37F2D1]/40 rounded-xl p-3 space-y-2 col-span-1 md:col-span-2">
       <div className="flex items-start gap-3">
         <div className="flex flex-col items-center gap-2 flex-shrink-0">
-          {portraitUrl ? (
-            <img src={portraitUrl} alt="" className="w-20 h-20 rounded-lg object-cover" />
+          {imageUrl ? (
+            <img src={imageUrl} alt="" className="w-20 h-20 rounded-lg object-cover" />
           ) : (
             <div className="w-20 h-20 rounded-lg bg-slate-800" />
           )}
