@@ -10,13 +10,14 @@ import {
 } from "@/components/ui/select";
 
 /**
- * Two-pane scratch pad. Left: a list of saved notes stored as an
- * array on campaigns.gm_quick_notes. Right: editor for the note in
- * focus. Saving optionally promotes the note into a
- * WorldLoreEntry (tagged with the chosen category) or a Party
- * Note (world_lore_entries with category='party_notes' and the
- * chosen visibility) so scratch notes can graduate to real
- * campaign content in one click.
+ * Two-pane scratch pad. Notes persist on campaigns.settings under
+ * a `quick_notes` array so we don't need a new column or table —
+ * campaigns.settings is already JSONB and every campaign has one.
+ * Saving optionally promotes the note into a WorldLoreEntry
+ * (tagged with the chosen category) or a Party Note
+ * (world_lore_entries with category='party_notes' and the chosen
+ * visibility) so scratch notes can graduate to real campaign
+ * content in one click.
  */
 const WORLD_LORE_CATEGORIES = [
   { value: "regions",   label: "Regions & Maps" },
@@ -41,10 +42,19 @@ function makeId() {
 
 export default function QuickNotesContent({ campaignId, campaign, user }) {
   const queryClient = useQueryClient();
-  const savedNotes = useMemo(
-    () => Array.isArray(campaign?.gm_quick_notes) ? campaign.gm_quick_notes : [],
-    [campaign?.gm_quick_notes],
-  );
+
+  // Notes live under campaigns.settings.quick_notes. Fall back to
+  // the old top-level gm_quick_notes shape once so any notes
+  // written before this migration still show up until the next
+  // save promotes them into settings.
+  const savedNotes = useMemo(() => {
+    const fromSettings = campaign?.settings?.quick_notes;
+    if (Array.isArray(fromSettings)) return fromSettings;
+    const legacy = campaign?.gm_quick_notes;
+    return Array.isArray(legacy) ? legacy : [];
+  }, [campaign?.settings?.quick_notes, campaign?.gm_quick_notes]);
+
+  const settings = campaign?.settings || {};
 
   const [draft, setDraft] = useState(EMPTY_NOTE);
 
@@ -66,13 +76,18 @@ export default function QuickNotesContent({ campaignId, campaign, user }) {
         category: draft.category || null,
         saveTarget: draft.saveTarget,
         visibility: draft.visibility,
+        created_at: draft.id
+          ? (savedNotes.find((n) => n.id === id)?.created_at || new Date().toISOString())
+          : new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
       const nextList = draft.id
         ? savedNotes.map((n) => (n.id === id ? record : n))
         : [record, ...savedNotes];
 
-      await base44.entities.Campaign.update(campaignId, { gm_quick_notes: nextList });
+      await base44.entities.Campaign.update(campaignId, {
+        settings: { ...settings, quick_notes: nextList },
+      });
 
       if (draft.saveTarget?.startsWith("world_lore_")) {
         const category = draft.saveTarget.replace("world_lore_", "");
@@ -111,7 +126,9 @@ export default function QuickNotesContent({ campaignId, campaign, user }) {
   const deleteMutation = useMutation({
     mutationFn: async (id) => {
       const next = savedNotes.filter((n) => n.id !== id);
-      await base44.entities.Campaign.update(campaignId, { gm_quick_notes: next });
+      await base44.entities.Campaign.update(campaignId, {
+        settings: { ...settings, quick_notes: next },
+      });
       return id;
     },
     onSuccess: (id) => {

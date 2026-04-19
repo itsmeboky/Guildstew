@@ -142,7 +142,7 @@ export default function CampaignView() {
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
           <div className="absolute bottom-4 left-4 right-4 text-left">
             <p className="text-sm text-slate-300">Currently Playing</p>
-            <h1 className="text-3xl font-bold text-white">{campaign.title || campaign.name}</h1>
+            <h1 className="text-3xl font-bold text-white">{campaign?.name || campaign?.title}</h1>
           </div>
         </div>
 

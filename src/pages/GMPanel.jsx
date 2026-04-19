@@ -417,41 +417,23 @@ export default function GMPanel() {
 
   const players = React.useMemo(() => {
     const playerMap = new Map();
-    const claimedCharacterIds = new Set();
 
-    // 1. Real players: those in campaign.player_ids with a matching profile.
+    // One card per player_ids entry. The old ghost/orphan branch
+    // that surfaced unclaimed characters alongside real players
+    // was duplicating cards in the Adventurers row — characters
+    // whose owner isn't in player_ids stay out of this list.
     if (campaign?.player_ids) {
       const uniquePlayerIds = [...new Set(campaign.player_ids)];
       uniquePlayerIds.forEach(playerId => {
         const profile = allUserProfiles.find(u => u.user_id === playerId);
-        if (profile && !playerMap.has(playerId)) {
-          const character = characters.find(c => c.created_by === profile.email && c.campaign_id === campaignId);
-          if (character) claimedCharacterIds.add(character.id);
-          playerMap.set(playerId, { ...profile, character });
-        }
+        if (!profile || playerMap.has(playerId)) return;
+        const character = characters.find(c =>
+          (c.user_id === playerId || c.created_by === profile.email)
+          && c.campaign_id === campaignId,
+        );
+        playerMap.set(playerId, { ...profile, character });
       });
     }
-
-    // 2. Orphan characters: any character in this campaign not already linked
-    // to a profile-based player. This covers test/seeded data, characters
-    // whose owners left the campaign, and GM-controlled NPCs. Each becomes
-    // a synthetic "ghost" player entry so the GM can see and control them
-    // through the same UI flows.
-    characters.forEach(char => {
-      if (char.campaign_id !== campaignId) return;
-      if (claimedCharacterIds.has(char.id)) return;
-      const ghostKey = `ghost-${char.id}`;
-      playerMap.set(ghostKey, {
-        user_id: ghostKey,
-        email: char.created_by || 'ghost@local',
-        username: char.name || 'Unclaimed',
-        avatar_url: char.profile_avatar_url,
-        profile_color_1: '#FF5722',
-        profile_color_2: '#37F2D1',
-        character: char,
-        isGhost: true,
-      });
-    });
 
     return Array.from(playerMap.values());
   }, [campaign?.player_ids, allUserProfiles, characters, campaignId]);
@@ -3959,13 +3941,6 @@ export default function GMPanel() {
                     </>
                   )}
                 </div>
-                <button 
-                  onClick={() => setShowEndSessionAlert(true)}
-                  className="text-[10px] text-red-400 hover:text-red-300 font-semibold flex items-center gap-1 transition-colors bg-[#050816]/80 px-3 py-1 rounded-full border border-red-500/20 hover:border-red-500/50"
-                >
-                  <LogOut className="w-3 h-3" />
-                  END SESSION
-                </button>
               </div>
             </div>
 
@@ -4299,10 +4274,26 @@ export default function GMPanel() {
                   <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar">
                     {players.map((player) => {
                       const character = player.character;
+                      const stats = character?.stats || {};
                       const color1 = player.profile_color_1 || "#FF5722";
                       const color2 = player.profile_color_2 || "#37F2D1";
-                      const currentHp = character?.hit_points?.current || 0;
-                      const maxHp = character?.hit_points?.max || 0;
+                      // HP / AC / race / class all live on
+                      // character.stats (JSONB) for reseeded rows —
+                      // the old top-level fields kept showing 0/0
+                      // and AC 10 for every card. Fall through to
+                      // the legacy flat shape for older rows.
+                      const currentHp =
+                        character?.hp_current
+                        ?? character?.hit_points?.current
+                        ?? stats?.hit_points?.current
+                        ?? stats?.hit_points
+                        ?? 0;
+                      const maxHp =
+                        character?.hp_max
+                        ?? character?.hit_points?.max
+                        ?? stats?.hit_points?.max
+                        ?? stats?.hit_points
+                        ?? 0;
                       // Effective AC: derive from equipped armor + DEX
                       // when the character has anything in their gear
                       // slots, otherwise fall back to the static
@@ -4320,7 +4311,14 @@ export default function GMPanel() {
                             fightingStyles: collectFightingStyles(character),
                           }).total
                         : null;
-                      const ac = computedAC || character?.armor_class || 10;
+                      const ac =
+                        computedAC
+                        ?? character?.armor_class
+                        ?? stats?.armor_class
+                        ?? stats?.ac
+                        ?? 10;
+                      const characterRace  = character?.race  ?? stats?.race;
+                      const characterClass = character?.class ?? stats?.class;
 
                       return (
                         <div
@@ -4379,7 +4377,7 @@ export default function GMPanel() {
                               </span>
                             </div>
                             <p className="text-[10px] text-slate-400 truncate">
-                              {character?.race || '?'} • {character?.class || '?'}
+                              {characterRace || '?'} • {characterClass || '?'}
                             </p>
                             <div className="flex justify-between items-center pt-1">
                               <span className="text-[10px] text-slate-400">
