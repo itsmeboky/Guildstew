@@ -85,7 +85,13 @@ export const entities = {
   CampaignInvitation:   createEntity('campaign_invitations'),
   CampaignItem:         createEntity('campaign_items'),
   CampaignLogEntry:     createEntity('campaign_log_entries'),
-  CampaignAbility:      createEntity('campaign_abilities'),
+  // Class feature tables were renamed on the server
+  // (campaign_abilities → campaign_class_features,
+  // dnd5e_abilities    → dnd5e_class_features). Both the new and
+  // old JS key names point at the new tables so existing callsites
+  // keep working while the rename lands.
+  CampaignClassFeature: createEntity('campaign_class_features'),
+  CampaignAbility:      createEntity('campaign_class_features'),
   CampaignHomebrew:     createEntity('campaign_homebrew'),
   CampaignMap:          createEntity('campaign_maps'),
   CampaignNPC:          createEntity('campaign_npcs'),
@@ -98,10 +104,11 @@ export const entities = {
   CharacterRelationship: createEntity('character_relationships'),
   // Shared SRD reference tables. Read-only from the app's
   // perspective (populated by seed scripts). The per-campaign
-  // tables (monsters / campaign_items / spells / campaign_abilities)
+  // tables (monsters / campaign_items / spells / campaign_class_features)
   // now only hold GM homebrew — a campaign-create trigger used to
   // copy SRD rows in but it's gone.
-  Dnd5eAbility:         createEntity('dnd5e_abilities'),
+  Dnd5eClassFeature:    createEntity('dnd5e_class_features'),
+  Dnd5eAbility:         createEntity('dnd5e_class_features'),
   Dnd5eItem:            createEntity('dnd5e_items'),
   Dnd5eMonster:         createEntity('dnd5e_monsters'),
   Dnd5eSpell:            createEntity('dnd5e_spells'),

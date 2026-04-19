@@ -135,6 +135,16 @@ export default function CampaignWorldLore({ embedded = false, campaignId: campai
     navigate(createPageUrl("CampaignGMPanel") + `?id=${campaignId}`);
   };
 
+  // The user's own character for this campaign — used by the
+  // gated-entry view to roll skill / ability / decipher checks.
+  const viewerCharacter = useMemo(
+    () => characters.find((c) =>
+      (c.user_id && c.user_id === user?.id)
+      || (c.created_by && user?.email && c.created_by === user.email),
+    ) || null,
+    [characters, user?.id, user?.email],
+  );
+
   const entryView = (key) => (
     <EntryCategoryView
       campaignId={campaignId}
@@ -147,6 +157,8 @@ export default function CampaignWorldLore({ embedded = false, campaignId: campai
       emptyLabel={EMPTY_COPY[key]}
       metadataFields={METADATA[key] || []}
       renderList={key === "history" ? historyTimelineRenderer : undefined}
+      campaign={campaign}
+      viewerCharacter={viewerCharacter}
     />
   );
 
@@ -167,18 +179,18 @@ export default function CampaignWorldLore({ embedded = false, campaignId: campai
         </header>
       )}
 
-      <nav className="px-6 border-b border-slate-800 bg-[#050816] overflow-x-auto">
-        <div className="flex items-center gap-1">
+      <nav className="px-4 py-2 border-b border-slate-800 bg-[#050816]">
+        <div className="flex flex-wrap gap-1">
           <button
             type="button"
             onClick={() => setCategory(null)}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors border ${
               category === null
-                ? "border-[#37F2D1] text-[#37F2D1]"
-                : "border-transparent text-slate-400 hover:text-white"
+                ? "bg-[#37F2D1]/10 text-[#37F2D1] border-[#37F2D1]/30"
+                : "text-slate-400 hover:text-white hover:bg-[#252b3d] border-transparent"
             }`}
           >
-            <Home className="w-4 h-4" /> Overview
+            <Home className="w-3.5 h-3.5" /> Overview
           </button>
           {CATEGORIES.map((c) => {
             const Icon = c.icon;
@@ -188,13 +200,13 @@ export default function CampaignWorldLore({ embedded = false, campaignId: campai
                 key={c.key}
                 type="button"
                 onClick={() => setCategory(c.key)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors border ${
                   active
-                    ? "border-[#37F2D1] text-[#37F2D1]"
-                    : "border-transparent text-slate-400 hover:text-white"
+                    ? "bg-[#37F2D1]/10 text-[#37F2D1] border-[#37F2D1]/30"
+                    : "text-slate-400 hover:text-white hover:bg-[#252b3d] border-transparent"
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                <Icon className="w-3.5 h-3.5" />
                 {c.label}
               </button>
             );
