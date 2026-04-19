@@ -16,6 +16,7 @@ import {
   CLASS_ABILITY_MECHANICS,
 } from "@/components/dnd5e/dnd5eRules";
 import { computeArmorClass } from "@/components/dnd5e/armorClass";
+import { safeText } from "@/utils/safeRender";
 
 const PC_ICON_BASE = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/abilities/basic%20actions";
 const MONSTER_ICON_BASE = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/monsters/monster%20abilities";
@@ -1447,47 +1448,10 @@ const MONSTER_GROUP_COLORS = {
   phase:   { label: "text-white",       border: "",                     glow: "" },
 };
 
-// SRD monster data is wildly inconsistent in shape. A field nominally
-// expected to be a string ("damage", "description", "reach") sometimes
-// arrives as a structured object ({ damage_dice, damage_type }, or
-// `{ type, value }` from the 5e-api AC/senses payloads) or an array
-// (legendary-action usage). `toText` collapses any of those to a
-// plain string so downstream JSX can render it without blowing up.
-function toText(value) {
-  if (value == null) return "";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  if (Array.isArray(value)) return value.map(toText).filter(Boolean).join(", ");
-  if (typeof value === "object") {
-    if (value.damage_dice || value.damage_type) {
-      return [toText(value.damage_dice), toText(value.damage_type)].filter(Boolean).join(" ").trim();
-    }
-    // `{ type, value }` — 5e-api AC entries (`{ type: "natural", value: 17 }`),
-    // proficiency rows, and anything else that splits a label from a
-    // number. Prefer "type: value" so both pieces survive.
-    if ("type" in value && "value" in value) {
-      const t = toText(value.type);
-      const v = toText(value.value);
-      return t && v ? `${t}: ${v}` : (v || t);
-    }
-    if (typeof value.text === "string") return value.text;
-    if (typeof value.name === "string") return value.name;
-    if (typeof value.value !== "undefined") return toText(value.value);
-    if (typeof value.desc === "string") return value.desc;
-    if (typeof value.description === "string") return value.description;
-    return "";
-  }
-  return String(value);
-}
-
-// Narrow wrapper that always returns a React-safe value. Use on ANY
-// interpolated field sourced from a monster / spell / action / ability
-// payload — those shapes drift enough that raw JSX interpolation is a
-// liability.
-function safeRender(value) {
-  const text = toText(value);
-  return text || "";
-}
+// Delegate to the shared safeText helper so every render site in the
+// app goes through the same coercion — see src/utils/safeRender.js.
+const toText = safeText;
+const safeRender = safeText;
 
 function pickActionIconKind(action) {
   if (!action) return "generic";

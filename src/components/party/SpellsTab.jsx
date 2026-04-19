@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { Clock, Sparkles } from "lucide-react";
 import { spellDetails as HARDCODED_SPELLS } from "@/components/dnd5e/spellData";
+import { safeText } from "@/utils/safeRender";
 
 const LEVEL_LABELS = {
   0: "Cantrips",
@@ -74,7 +75,7 @@ export default function SpellsTab({ character }) {
   if (groups.length === 0) {
     return (
       <div className="bg-[#0b1220] border border-[#1e293b] rounded-xl p-10 text-center text-slate-500 text-sm">
-        {character?.name || "This character"} doesn't have any spells recorded.
+        {safeText(character?.name) || "This character"} doesn't have any spells recorded.
       </div>
     );
   }
@@ -84,23 +85,23 @@ export default function SpellsTab({ character }) {
       {groups.map(([level, spells]) => (
         <div key={level}>
           <div className="text-[11px] uppercase tracking-widest text-purple-400 font-bold border-b border-purple-500/20 pb-1 mb-2">
-            {LEVEL_LABELS[level] || `Level ${level}`}
+            {LEVEL_LABELS[level] || `Level ${safeText(level)}`}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {spells.map((s, idx) => (
               <div
-                key={`${s.name}-${idx}`}
+                key={`${safeText(s.name)}-${idx}`}
                 className="bg-[#0b1220] border border-[#1e293b] rounded-lg px-3 py-2 flex items-center gap-2"
               >
                 <Sparkles className="w-4 h-4 text-purple-300 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-white font-bold truncate">{s.name}</div>
+                  <div className="text-sm text-white font-bold truncate">{safeText(s.name)}</div>
                   <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
-                    {s.school && <span className="uppercase tracking-widest">{s.school}</span>}
+                    {s.school && <span className="uppercase tracking-widest">{safeText(s.school)}</span>}
                     {s.castingTime && (
                       <span className="inline-flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        {s.castingTime}
+                        {safeText(s.castingTime)}
                       </span>
                     )}
                   </div>

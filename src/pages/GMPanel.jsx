@@ -23,6 +23,7 @@ import MoneyCounter from "@/components/shared/MoneyCounter";
 import ItemTooltip from "@/components/shared/ItemTooltip";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
 import { computeArmorClass } from "@/components/dnd5e/armorClass";
+import { safeText } from "@/utils/safeRender";
 
 // Helpers to extract the character's fighting-style names from any of
 // the several shapes a sheet might use. Used by AC (Defense +1) and
@@ -7034,19 +7035,19 @@ function MonsterStatBlock({ character, className, onActionClick }) {
               <div className="grid grid-cols-4 gap-2 text-[10px] bg-[#0b1220] p-2 rounded-xl border border-[#111827]">
                 <div className="text-center">
                   <span className="text-slate-400 block text-[9px] uppercase tracking-wider">AC</span>
-                  <span className="text-white font-bold text-sm">{ac}</span>
+                  <span className="text-white font-bold text-sm">{safeText(ac)}</span>
                 </div>
                 <div className="text-center border-l border-[#1e293b]">
                   <span className="text-slate-400 block text-[9px] uppercase tracking-wider">HP</span>
-                  <span className="text-white font-bold text-sm">{hp}</span>
+                  <span className="text-white font-bold text-sm">{safeText(hp)}</span>
                 </div>
                 <div className="text-center border-l border-[#1e293b]">
                   <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Speed</span>
-                  <span className="text-white font-bold text-sm">{speed}</span>
+                  <span className="text-white font-bold text-sm">{safeText(speed)}</span>
                 </div>
                 <div className="text-center border-l border-[#1e293b]">
                   <span className="text-slate-400 block text-[9px] uppercase tracking-wider">CR</span>
-                  <span className="text-amber-400 font-bold text-sm">{cr}</span>
+                  <span className="text-amber-400 font-bold text-sm">{safeText(cr)}</span>
                 </div>
               </div>
 
@@ -7057,8 +7058,8 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                   <div className="space-y-3">
                     {[...traits, ...specialAbilities].map((trait, idx) => (
                       <div key={idx} className="text-[11px]">
-                        <span className="text-white font-bold">{trait.name}. </span>
-                        <span className="text-slate-300 leading-relaxed">{trait.desc || trait.description}</span>
+                        <span className="text-white font-bold">{safeText(trait.name)}. </span>
+                        <span className="text-slate-300 leading-relaxed">{safeText(trait.desc || trait.description)}</span>
                       </div>
                     ))}
                   </div>
@@ -7075,25 +7076,25 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                     {damageVulnerabilities && (
                       <div>
                         <span className="text-slate-400 uppercase tracking-wide text-[9px]">Vulnerabilities </span>
-                        <span className="text-rose-300">{Array.isArray(damageVulnerabilities) ? damageVulnerabilities.join(', ') : damageVulnerabilities}</span>
+                        <span className="text-rose-300">{safeText(damageVulnerabilities)}</span>
                       </div>
                     )}
                     {damageResistances && (
                       <div>
                         <span className="text-slate-400 uppercase tracking-wide text-[9px]">Resistances </span>
-                        <span className="text-emerald-300">{Array.isArray(damageResistances) ? damageResistances.join(', ') : damageResistances}</span>
+                        <span className="text-emerald-300">{safeText(damageResistances)}</span>
                       </div>
                     )}
                     {damageImmunities && (
                       <div>
                         <span className="text-slate-400 uppercase tracking-wide text-[9px]">Damage Immunities </span>
-                        <span className="text-slate-200">{Array.isArray(damageImmunities) ? damageImmunities.join(', ') : damageImmunities}</span>
+                        <span className="text-slate-200">{safeText(damageImmunities)}</span>
                       </div>
                     )}
                     {conditionImmunities && (
                       <div>
                         <span className="text-slate-400 uppercase tracking-wide text-[9px]">Condition Immunities </span>
-                        <span className="text-slate-200">{Array.isArray(conditionImmunities) ? conditionImmunities.join(', ') : conditionImmunities}</span>
+                        <span className="text-slate-200">{safeText(conditionImmunities)}</span>
                       </div>
                     )}
                   </div>
@@ -7125,8 +7126,8 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                           }
                         }}
                       >
-                        <span className="text-white font-bold group-hover:text-[#37F2D1] transition-colors">{action.name}. </span>
-                        <span className="text-slate-300 leading-relaxed">{action.desc || action.description}</span>
+                        <span className="text-white font-bold group-hover:text-[#37F2D1] transition-colors">{safeText(action.name)}. </span>
+                        <span className="text-slate-300 leading-relaxed">{safeText(action.desc || action.description)}</span>
                       </div>
                     ))}
                   </div>
@@ -7140,8 +7141,8 @@ function MonsterStatBlock({ character, className, onActionClick }) {
                   <div className="space-y-3">
                     {reactions.map((reaction, idx) => (
                       <div key={idx} className="text-[11px]">
-                        <span className="text-white font-bold">{reaction.name}. </span>
-                        <span className="text-slate-300 leading-relaxed">{reaction.desc || reaction.description}</span>
+                        <span className="text-white font-bold">{safeText(reaction.name)}. </span>
+                        <span className="text-slate-300 leading-relaxed">{safeText(reaction.desc || reaction.description)}</span>
                       </div>
                     ))}
                   </div>
