@@ -650,6 +650,27 @@ export default function CombatActionBar({
     const lairList = tag(pickList("lair_actions"), "lair");
     if (lairList.length)
       groups.push({ key: "lair", label: "Lair", color: "lime", actions: lairList });
+
+    // Villain actions sit in their own block with round badges. The
+    // `_spent` flag lives in combat state (character.villain_spent[]),
+    // which the GM sets when the prompt fires at the end of a turn.
+    const villain = stats.villain_actions
+      || character.villain_actions
+      || character.villain_data?.villain_actions
+      || null;
+    if (villain?.enabled && Array.isArray(villain.actions)) {
+      const spent = Array.isArray(character.villain_spent) ? character.villain_spent : [];
+      const vActions = villain.actions.map((a, i) => ({
+        ...a,
+        _cost: "free",
+        _isVillain: true,
+        _round: a.round || (i + 1),
+        _spent: spent.includes(a.round || (i + 1)),
+      }));
+      if (vActions.length > 0) {
+        groups.push({ key: "villain", label: "Villain Actions", color: "crimson", actions: vActions });
+      }
+    }
     return groups;
   }, [character, isCreature]);
 
@@ -1374,12 +1395,13 @@ function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick
 }
 
 const MONSTER_GROUP_COLORS = {
-  amber: { label: "text-amber-300",   border: "border-amber-500/70",  glow: "shadow-[0_0_10px_rgba(245,158,11,0.35)]" },
-  orange:{ label: "text-orange-300",  border: "border-orange-500/70", glow: "shadow-[0_0_10px_rgba(249,115,22,0.35)]" },
-  pink:  { label: "text-pink-300",    border: "border-pink-500/70",   glow: "shadow-[0_0_10px_rgba(236,72,153,0.35)]" },
-  sky:   { label: "text-sky-300",     border: "border-sky-500/70",    glow: "shadow-[0_0_10px_rgba(14,165,233,0.35)]" },
-  gold:  { label: "text-yellow-300",  border: "border-yellow-400/80", glow: "shadow-[0_0_12px_rgba(250,204,21,0.45)]" },
-  lime:  { label: "text-lime-300",    border: "border-lime-500/70",   glow: "shadow-[0_0_10px_rgba(132,204,22,0.35)]" },
+  amber:   { label: "text-amber-300",   border: "border-amber-500/70",  glow: "shadow-[0_0_10px_rgba(245,158,11,0.35)]" },
+  orange:  { label: "text-orange-300",  border: "border-orange-500/70", glow: "shadow-[0_0_10px_rgba(249,115,22,0.35)]" },
+  pink:    { label: "text-pink-300",    border: "border-pink-500/70",   glow: "shadow-[0_0_10px_rgba(236,72,153,0.35)]" },
+  sky:     { label: "text-sky-300",     border: "border-sky-500/70",    glow: "shadow-[0_0_10px_rgba(14,165,233,0.35)]" },
+  gold:    { label: "text-yellow-300",  border: "border-yellow-400/80", glow: "shadow-[0_0_12px_rgba(250,204,21,0.45)]" },
+  lime:    { label: "text-lime-300",    border: "border-lime-500/70",   glow: "shadow-[0_0_10px_rgba(132,204,22,0.35)]" },
+  crimson: { label: "text-rose-300",    border: "border-rose-600/80",  glow: "shadow-[0_0_14px_rgba(225,29,72,0.55)]" },
 };
 
 // SRD monster data is wildly inconsistent in shape. A field nominally
@@ -1437,16 +1459,18 @@ function MonsterActionGroup({ label, color, actions, onActionClick, badge }) {
           palette={palette}
           badge={badge}
           onClick={() => onActionClick && onActionClick({
-            type: "monster_action",
+            type: action._isVillain ? "villain_action" : "monster_action",
             name: toText(action.name),
             description: toText(action.description || action.desc),
             attack_bonus: action.attack_bonus,
-            damage: toText(action.damage),
+            damage: toText(action.damage || action.damage_dice),
             damage_type: toText(action.damage_type),
             save_ability: toText(action.save_ability),
             save_dc: action.save_dc,
             action_type: toText(action.action_type),
             action_cost: action._cost,
+            villain_round: action._round,
+            trigger: action.trigger || null,
             _raw: action,
           })}
         />
@@ -1492,18 +1516,18 @@ function MonsterActionSlot({ action, palette, badge, onClick }) {
       )}
     </div>
   );
+  const spent = !!action._spent;
   return (
     <button
       type="button"
+      disabled={spent}
       onClick={onClick}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
-      className={`relative w-[52px] h-[52px] rounded-xl bg-[#050816] border-2 ${palette.border} ${palette.glow} flex-shrink-0 flex flex-col items-center justify-center transition hover:-translate-y-[1px]`}
+      className={`relative w-[52px] h-[52px] rounded-xl bg-[#050816] border-2 ${palette.border} ${palette.glow} flex-shrink-0 flex flex-col items-center justify-center transition hover:-translate-y-[1px] ${spent ? "opacity-30 grayscale cursor-not-allowed" : ""}`}
       title={name}
     >
       {action._isMulti ? (
-        // Stacked icon for Multi-Attack — two sword icons offset so the
-        // GM can pick it out at a glance without reading the label.
         <span className="relative inline-block w-6 h-6">
           <Swords className={`absolute left-0 top-0 w-4 h-4 ${palette.label} opacity-70`} />
           <Swords className={`absolute right-0 bottom-0 w-4 h-4 ${palette.label}`} />
@@ -1517,6 +1541,11 @@ function MonsterActionSlot({ action, palette, badge, onClick }) {
       {badge && (
         <span className="absolute -top-1 -right-1 bg-black border border-yellow-400 text-yellow-300 text-[8px] font-black rounded-full w-4 h-4 flex items-center justify-center">
           {badge}
+        </span>
+      )}
+      {action._isVillain && action._round && (
+        <span className="absolute -top-1 -right-1 bg-black border border-rose-500 text-rose-300 text-[8px] font-black rounded-full w-5 h-4 flex items-center justify-center">
+          R{action._round}
         </span>
       )}
       {action._isMulti && Array.isArray(action.attacks) && action.attacks.length > 0 && (

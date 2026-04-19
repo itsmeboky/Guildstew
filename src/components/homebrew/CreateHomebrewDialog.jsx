@@ -105,7 +105,7 @@ const SPELL_CLASSES = Object.keys(CLASS_HIT_DICE);
 
 const SPELL_EFFECT_TYPES = ["Damage", "Healing", "Condition", "Buff", "Debuff", "Utility"];
 
-const FEATURE_SOURCE_TYPES = ["Class Feature", "Racial Feature", "General Ability"];
+const FEATURE_SOURCE_TYPES = ["Class Feature", "Racial Feature", "General Ability", "Feature Menu"];
 const FEATURE_COSTS = ["Action", "Bonus Action", "Reaction", "Free", "Passive"];
 const FEATURE_USES = [
   "At Will",
@@ -171,6 +171,226 @@ const CONDITION_END_OPTIONS = [
   { value: "until_concentration", label: "Until concentration ends" },
 ];
 
+// Tier 3 — Event trigger system. Attaches to any entity that can
+// "react to events": monster actions, class features, item abilities,
+// auras. The combat loop inspects these after each relevant event.
+const TRIGGER_EVENTS = [
+  { value: "",                       label: "— No trigger —" },
+  { value: "on_hit",                 label: "On hit (this creature hits)" },
+  { value: "on_hit_by",              label: "On hit by (this creature is hit)" },
+  { value: "on_crit",                label: "On crit (this creature crits)" },
+  { value: "on_crit_by",             label: "On crit by" },
+  { value: "on_miss",                label: "On miss" },
+  { value: "on_missed_by",           label: "On missed by" },
+  { value: "on_deal_damage",         label: "On deal damage" },
+  { value: "on_take_damage",         label: "On take damage" },
+  { value: "on_take_damage_type",    label: "On take damage (type filter)" },
+  { value: "on_reduced_to_zero",     label: "On dropped to 0 HP" },
+  { value: "on_bloodied",            label: "On bloodied (first time < ½ HP)" },
+  { value: "on_ally_reduced_to_zero",label: "On ally dropped to 0 HP" },
+  { value: "on_kill",                label: "On kill" },
+  { value: "on_kill_type",           label: "On kill (creature type filter)" },
+  { value: "on_turn_start",          label: "On turn start" },
+  { value: "on_turn_end",            label: "On turn end" },
+  { value: "on_enemy_turn_end",      label: "On enemy turn end (villain timing)" },
+  { value: "on_save_success",        label: "On save success" },
+  { value: "on_save_fail",           label: "On save fail" },
+  { value: "on_target_save_fail",    label: "On target fails save vs this" },
+  { value: "on_spell_cast",          label: "On spell cast" },
+  { value: "on_concentration_break", label: "On concentration broken" },
+  { value: "on_enter_range",         label: "On enter range" },
+  { value: "on_leave_range",         label: "On leave range" },
+  { value: "on_short_rest",          label: "On short rest" },
+  { value: "on_long_rest",           label: "On long rest" },
+  { value: "on_initiative",          label: "On initiative roll" },
+  { value: "on_round_start",         label: "On round start" },
+  { value: "initiative_count_20",    label: "Initiative count 20 (lair timing)" },
+];
+
+const TRIGGER_GATES = [
+  { value: "unlimited",        label: "Unlimited" },
+  { value: "once_per_turn",    label: "Once per turn" },
+  { value: "once_per_round",   label: "Once per round" },
+  { value: "once_per_rest",    label: "Once per rest" },
+  { value: "X_per_short_rest", label: "X per short rest" },
+  { value: "X_per_long_rest",  label: "X per long rest" },
+];
+
+const TRIGGER_SOURCE_TARGETS = [
+  { value: "",      label: "Any" },
+  { value: "self",  label: "Self" },
+  { value: "ally",  label: "Ally" },
+  { value: "enemy", label: "Enemy" },
+  { value: "any",   label: "Any" },
+];
+
+const TRIGGER_EFFECT_TYPES = [
+  { value: "",          label: "— Description only —" },
+  { value: "damage",    label: "Damage" },
+  { value: "healing",   label: "Healing" },
+  { value: "condition", label: "Condition" },
+  { value: "recharge",  label: "Recharge (self or ally)" },
+  { value: "temp_hp",   label: "Temp HP" },
+  { value: "movement",  label: "Movement" },
+  { value: "custom",    label: "Custom (see description)" },
+];
+
+const BLANK_TRIGGER = {
+  event: "",
+  filters: {
+    damage_type: "",
+    weapon_type: "",
+    source: "",
+    target: "",
+    range: null,
+    creature_type: "",
+  },
+  gate: "unlimited",
+  gate_count: null,
+  effect: {
+    effect_type: "",
+    damage_dice: "",
+    damage_type: "",
+    healing_dice: "",
+    applies_condition: "",
+    condition_save: "",
+    condition_dc: null,
+    temp_hp: "",
+    description: "",
+  },
+};
+
+// Tier 3 — Tiered save failures. Standard 5e pass/fail, extended with
+// margin-based escalation. Tiers cumulative on resolution.
+const BLANK_SAVE_TIER = {
+  margin: 0,
+  damage_dice: "",
+  damage_type: "",
+  applies_condition: "",
+  condition_end: "",
+  description: "",
+};
+
+// Tier 3 — MCDM villain actions. Exactly 3, one per round.
+const BLANK_VILLAIN_ACTION = {
+  name: "",
+  round: 1,
+  description: "",
+  action_type: "no_roll",
+  save_ability: "",
+  save_dc: "",
+  attack_bonus: "",
+  damage_dice: "",
+  damage_type: "",
+  healing_dice: "",
+  half_on_save: true,
+  applies_condition: "",
+  condition_end: "",
+  aoe_shape: "",
+  aoe_size: "",
+};
+
+// Tier 3 — Menu-style class features (Invocations, Maneuvers, ...).
+const MENU_FEATURE_EFFECT_TYPES = [
+  "Passive Modifier", "Damage", "Healing", "Condition", "Spell", "Buff", "Utility",
+];
+const BLANK_MENU_OPTION = {
+  name: "",
+  description: "",
+  level_requirement: 0,
+  prerequisite: "",
+  effect_type: "Passive Modifier",
+  cost: "Passive",
+  // Conditional fields based on effect_type:
+  damage_dice: "",
+  damage_type: "",
+  healing_dice: "",
+  applies_condition: "",
+  spell_reference: "",
+  spell_cost: "slot",
+  modifier_target: "",
+  modifier_value: "",
+};
+
+// Tier 3 — Non-slot spell costs.
+const SPELL_COST_TYPES = [
+  { value: "hp",                 label: "Hit Points (blood magic)" },
+  { value: "temp_hp",            label: "Temporary HP" },
+  { value: "hit_dice",           label: "Hit Dice" },
+  { value: "exhaustion",         label: "Exhaustion level" },
+  { value: "material_consumed",  label: "Material component consumed" },
+  { value: "custom",             label: "Custom resource" },
+];
+const BLANK_ALT_COST = {
+  type: "hp",
+  amount: "",
+  amount_per_level: null,
+  description: "",
+};
+const BLANK_ALT_AFTER_EFFECT = {
+  trigger: "on_cast",
+  effect_type: "exhaustion",
+  amount: 1,
+  condition: "",
+  description: "",
+};
+
+// Tier 3 — Cursed items.
+const CURSE_TYPES = [
+  { value: "stat_penalty",     label: "Stat penalty" },
+  { value: "forced_behavior",  label: "Forced behavior" },
+  { value: "recurring_damage", label: "Recurring damage" },
+  { value: "cannot_unattune",  label: "Cannot unattune" },
+  { value: "progressive",      label: "Progressive (escalates over time)" },
+  { value: "custom",           label: "Custom (see description)" },
+];
+const CURSE_REVEAL_TRIGGERS = [
+  { value: "on_attune",     label: "On attunement" },
+  { value: "on_first_use",  label: "On first use" },
+  { value: "on_condition",  label: "On specific condition" },
+  { value: "never_auto",    label: "Never (GM reveals manually)" },
+];
+const BLANK_CURSE = {
+  enabled: false,
+  identified_as_cursed: false,
+  reveal_trigger: "on_attune",
+  curse_type: "stat_penalty",
+  description: "",
+  stat_penalty: { ability: "WIS", amount: -2 },
+  forced_behavior: { description: "", save_to_resist: false, save_ability: "WIS", save_dc: 15 },
+  recurring: { damage_dice: "", damage_type: "", trigger: "dawn" },
+  cannot_unattune: false,
+  remove_curse_dc: null,
+  progressive: { stages: [] },
+};
+
+// Tier 3 — Sentient items.
+const SENTIENCE_COMMUNICATION = [
+  { value: "empathy",   label: "Empathy only" },
+  { value: "telepathy", label: "Telepathy with wielder" },
+  { value: "speech",    label: "Speech" },
+];
+const SENTIENCE_SENSES = [
+  "Hearing", "Blindsight 30ft", "Darkvision 60ft", "Darkvision 120ft", "Truesight",
+];
+const BLANK_SENTIENCE = {
+  enabled: false,
+  intelligence: 10,
+  wisdom: 10,
+  charisma: 10,
+  senses: [],
+  communication: "empathy",
+  languages: [],
+  alignment: "True Neutral",
+  personality: "",
+  purpose: "",
+  conflict: {
+    trigger_conditions: [],
+    contest_type: "charisma",
+    on_loss: "",
+  },
+};
+
 const BLANK_MONSTER_ACTION = {
   name: "",
   description: "",
@@ -204,6 +424,9 @@ const BLANK_MONSTER_ACTION = {
   // Healing
   healing_dice: "",
   healing_flat: "",
+  // Tier 3 — event trigger + tiered save failures
+  trigger: null,                  // populated with BLANK_TRIGGER when author enables
+  save_tiers: [],                 // optional escalating-fail tiers (cumulative)
 };
 
 const BLANK_AURA = {
@@ -247,6 +470,16 @@ const BLANK_MONSTER = {
   multiattack: { enabled: false, description: "", attacks: [] },
   legendary_actions_per_round: 3,
   legendary_resistances: 0,
+  // Tier 3 — MCDM villain actions. Mutually exclusive with legendary
+  // actions; the form enforces the XOR via `villain_actions.enabled`.
+  villain_actions: {
+    enabled: false,
+    actions: [
+      { ...BLANK_VILLAIN_ACTION, round: 1 },
+      { ...BLANK_VILLAIN_ACTION, round: 2 },
+      { ...BLANK_VILLAIN_ACTION, round: 3 },
+    ],
+  },
 };
 
 const BLANK_SPELL = {
@@ -278,6 +511,15 @@ const BLANK_SPELL = {
   condition_duration: "1 minute",
   // Buff / debuff / utility narrative
   effect_description: "",
+  // Tier 3 — alternative casting costs (blood magic, exhaustion, ...)
+  alternative_costs: {
+    enabled: false,
+    replaces_slot: true,
+    costs: [],
+    after_effects: [],
+  },
+  // Tier 3 — tiered save failures (only meaningful for save resolution)
+  save_tiers: [],
 };
 
 const BLANK_CLASS_FEATURE = {
@@ -334,6 +576,21 @@ const BLANK_CLASS_FEATURE = {
     formula: "8 + prof + ability",
     ability: "STR",          // ability used in the DC
   },
+
+  // Tier 3 — event trigger. Optional; present when the author opts in.
+  trigger: null,
+  // Tier 3 — menu-style features (Invocations, Maneuvers, ...). Only
+  // meaningful when `type === "Feature Menu"` (which is added to
+  // FEATURE_SOURCE_TYPES at runtime below).
+  menu: {
+    enabled: false,
+    learn_count: [{ level: 1, count: 1 }],
+    swap_on_level_up: false,
+    swap_count: 1,
+    options: [],
+  },
+  // Tier 3 — tiered save failures, mirrored from monster action schema.
+  save_tiers: [],
 };
 
 // Item types the creator can pick; the form below reveals different
@@ -408,6 +665,10 @@ const BLANK_ITEM = {
   // Scroll defaults
   scroll_spell: "",            // name of the spell inscribed
   scroll_level: 1,             // spell slot level it's cast at
+  // Tier 3 — curse + sentience blocks (attached to wondrous / weapon /
+  // armor / any item type that can be attuned to).
+  curse: { ...BLANK_CURSE },
+  sentience: { ...BLANK_SENTIENCE },
 };
 
 function itemFromModifications(mods) {
@@ -2378,6 +2639,11 @@ function CustomMonsterForm({ monster, setMonster }) {
           </div>
         )}
       </div>
+
+      <VillainActionsSection
+        monster={monster}
+        patch={patch}
+      />
     </div>
   );
 }
@@ -2801,6 +3067,481 @@ function MonsterActionRow({ action, idx, isFirst, isLast, ops, showReactionTrigg
           </>
         )}
       </div>
+
+      <TriggerFields
+        value={action.trigger || null}
+        onChange={(next) => ops.update(idx, { trigger: next })}
+      />
+    </div>
+  );
+}
+
+// Tier 3 — MCDM villain actions. A boss monster or villain NPC uses
+// EITHER villain actions OR legendary actions; enabling villain
+// actions auto-clears any legendary actions on the monster so the XOR
+// invariant holds without a confirmation nag.
+function VillainActionsSection({ monster, patch }) {
+  const villain = monster.villain_actions || { enabled: false, actions: [] };
+  const hasLegendary = Array.isArray(monster.legendary_actions) && monster.legendary_actions.length > 0;
+
+  const setEnabled = (on) => {
+    if (on && hasLegendary) {
+      // XOR — dropping legendary when villain kicks on. Legendary
+      // resistances stay (villains have those too).
+      patch({
+        villain_actions: { enabled: true, actions: villain.actions?.length ? villain.actions : [
+          { ...BLANK_VILLAIN_ACTION, round: 1 },
+          { ...BLANK_VILLAIN_ACTION, round: 2 },
+          { ...BLANK_VILLAIN_ACTION, round: 3 },
+        ] },
+        legendary_actions: [],
+        legendary_actions_per_round: 0,
+      });
+      return;
+    }
+    const actions = villain.actions?.length === 3 ? villain.actions : [
+      { ...BLANK_VILLAIN_ACTION, round: 1 },
+      { ...BLANK_VILLAIN_ACTION, round: 2 },
+      { ...BLANK_VILLAIN_ACTION, round: 3 },
+    ];
+    patch({ villain_actions: { enabled: on, actions } });
+  };
+
+  const updateAction = (idx, fields) => {
+    const next = villain.actions.map((a, i) => (i === idx ? { ...a, ...fields } : a));
+    patch({ villain_actions: { ...villain, actions: next } });
+  };
+
+  return (
+    <div className="bg-gradient-to-br from-[#1a0514] to-[#050816] border-2 border-rose-600/40 rounded-lg p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="text-[11px] uppercase tracking-widest text-rose-300 font-black">Villain Actions (MCDM)</h4>
+          <p className="text-[10px] text-slate-400">Three cinematic single-use actions, one per round, fired at the end of an enemy turn.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch checked={!!villain.enabled} onCheckedChange={setEnabled} />
+          <span className="text-[10px] text-slate-400">{villain.enabled ? "On" : "Off"}</span>
+        </div>
+      </div>
+      {villain.enabled && (
+        <>
+          {hasLegendary && (
+            <p className="text-[10px] text-amber-300 italic">
+              Villain Actions replace Legendary Actions. Enabling this cleared the legendary list.
+            </p>
+          )}
+          <p className="text-[10px] text-slate-500 italic">
+            A monster uses one system or the other. Legendary Actions are disabled while Villain Actions are on.
+          </p>
+          <div className="space-y-2">
+            {villain.actions.map((action, idx) => (
+              <VillainActionCard
+                key={idx}
+                action={action}
+                round={idx + 1}
+                onChange={(fields) => updateAction(idx, fields)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function VillainActionCard({ action, round, onChange }) {
+  const type = action.action_type || "no_roll";
+  const isSave = type === "save";
+  const isAttack = type === "attack";
+  const isHealing = type === "healing";
+  return (
+    <div className="bg-[#0b1220] border border-rose-600/50 rounded-lg p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] font-black uppercase tracking-widest text-rose-300 bg-rose-600/20 border border-rose-600/60 rounded px-2 py-0.5">
+          Round {round}
+        </span>
+        <Input
+          value={action.name || ""}
+          onChange={(e) => onChange({ name: e.target.value })}
+          placeholder={`Villain Action ${round} name`}
+          className="bg-[#050816] border-slate-700 text-white flex-1"
+        />
+      </div>
+      <Textarea
+        value={action.description || ""}
+        onChange={(e) => onChange({ description: e.target.value })}
+        placeholder="Cinematic description the GM reads aloud."
+        rows={2}
+        className="bg-[#050816] border-slate-700 text-white text-xs"
+      />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div>
+          <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Resolution</Label>
+          <Select value={type} onValueChange={(v) => onChange({ action_type: v })}>
+            <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="no_roll">No Roll (narrative)</SelectItem>
+              <SelectItem value="save">Saving Throw</SelectItem>
+              <SelectItem value="attack">Attack Roll</SelectItem>
+              <SelectItem value="healing">Healing</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {isSave && (
+          <>
+            <div>
+              <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Save ability</Label>
+              <Select value={action.save_ability || "DEX"} onValueChange={(v) => onChange({ save_ability: v })}>
+                <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SAVE_ABILITIES.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Save DC</Label>
+              <Input
+                type="number" min={1}
+                value={action.save_dc ?? ""}
+                onChange={(e) => onChange({ save_dc: e.target.value === "" ? "" : Number(e.target.value) })}
+                placeholder="18"
+                className="bg-[#050816] border-slate-700 text-white text-xs"
+              />
+            </div>
+            <div className="col-span-2 md:col-span-1 flex items-center gap-2 mt-4">
+              <Switch checked={!!action.half_on_save} onCheckedChange={(c) => onChange({ half_on_save: c })} />
+              <span className="text-[10px] text-slate-300">Half on save</span>
+            </div>
+          </>
+        )}
+        {isAttack && (
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Attack bonus</Label>
+            <Input
+              type="number"
+              value={action.attack_bonus ?? ""}
+              onChange={(e) => onChange({ attack_bonus: e.target.value === "" ? "" : Number(e.target.value) })}
+              placeholder="+12"
+              className="bg-[#050816] border-slate-700 text-white text-xs"
+            />
+          </div>
+        )}
+        {isHealing && (
+          <div>
+            <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Healing dice</Label>
+            <Input
+              value={action.healing_dice || ""}
+              onChange={(e) => onChange({ healing_dice: e.target.value })}
+              placeholder="4d8+10"
+              className="bg-[#050816] border-slate-700 text-white text-xs"
+            />
+          </div>
+        )}
+        {(isSave || isAttack) && (
+          <>
+            <div>
+              <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Damage dice</Label>
+              <Input
+                value={action.damage_dice || ""}
+                onChange={(e) => onChange({ damage_dice: e.target.value })}
+                placeholder="6d6"
+                className="bg-[#050816] border-slate-700 text-white text-xs"
+              />
+            </div>
+            <div>
+              <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Damage type</Label>
+              <Select value={action.damage_type || "fire"} onValueChange={(v) => onChange({ damage_type: v })}>
+                <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DAMAGE_TYPES.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
+        <div>
+          <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Applies condition</Label>
+          <Select
+            value={action.applies_condition || ""}
+            onValueChange={(v) => onChange({ applies_condition: v === "__none" ? "" : v })}
+          >
+            <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="None" /></SelectTrigger>
+            <SelectContent className="max-h-64">
+              <SelectItem value="__none">None</SelectItem>
+              {Object.keys(CONDITION_COLORS).map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">AoE shape</Label>
+          <Select
+            value={action.aoe_shape || ""}
+            onValueChange={(v) => onChange({ aoe_shape: v === "__none" ? "" : v })}
+          >
+            <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="None" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none">None</SelectItem>
+              {AOE_SHAPES.filter(Boolean).map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">AoE size</Label>
+          <Input
+            value={action.aoe_size || ""}
+            onChange={(e) => onChange({ aoe_size: e.target.value })}
+            placeholder="30 ft"
+            className="bg-[#050816] border-slate-700 text-white text-xs"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Tier 3 — shared Trigger authoring block. Renders into any entity
+// that can react to events (monster actions, class features, item
+// abilities, auras). `value` is null until the author flips the
+// toggle; once enabled the object is populated from BLANK_TRIGGER.
+function TriggerFields({ value, onChange }) {
+  const trigger = value || null;
+  const enabled = !!trigger;
+  const setEnabled = (on) => onChange(on ? { ...BLANK_TRIGGER } : null);
+  const patch = (fields) => onChange({ ...(trigger || BLANK_TRIGGER), ...fields });
+  const patchFilters = (fields) => patch({ filters: { ...((trigger || BLANK_TRIGGER).filters), ...fields } });
+  const patchEffect = (fields) => patch({ effect: { ...((trigger || BLANK_TRIGGER).effect), ...fields } });
+
+  const event = trigger?.event || "";
+  const isDamageEvent = /damage/.test(event);
+  const isAttackEvent = /^on_(hit|crit|miss)/.test(event);
+  const isProximityEvent = /range/.test(event);
+  const isKillEvent = /kill/.test(event);
+  const gate = trigger?.gate || "unlimited";
+  const needsGateCount = gate === "X_per_short_rest" || gate === "X_per_long_rest";
+  const effectType = trigger?.effect?.effect_type || "";
+
+  return (
+    <div className="bg-[#050816] border border-[#1e293b] rounded-lg p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Trigger (when X happens, do Y)</h4>
+        <div className="flex items-center gap-2">
+          <Switch checked={enabled} onCheckedChange={setEnabled} />
+          <span className="text-[10px] text-slate-400">{enabled ? "On" : "Off"}</span>
+        </div>
+      </div>
+      {enabled && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Field label="Event">
+              <Select value={event} onValueChange={(v) => patch({ event: v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {TRIGGER_EVENTS.map((e) => (<SelectItem key={e.value || "none"} value={e.value || "__none"}>{e.label}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Gate">
+              <Select value={gate} onValueChange={(v) => patch({ gate: v })}>
+                <SelectTrigger className="bg-[#0b1220] border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TRIGGER_GATES.map((g) => (<SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </Field>
+            {needsGateCount && (
+              <Field label="X count">
+                <Input
+                  type="number" min={1} max={10}
+                  value={trigger?.gate_count ?? 1}
+                  onChange={(e) => patch({ gate_count: Number(e.target.value) || 1 })}
+                  className="bg-[#0b1220] border-slate-700 text-white"
+                />
+              </Field>
+            )}
+          </div>
+
+          <div className="bg-[#0b1220] border border-[#1e293b] rounded p-2 space-y-2">
+            <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Filters (optional — narrow when it fires)</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              {(isDamageEvent || isAttackEvent) && (
+                <Field label="Damage type">
+                  <Select
+                    value={trigger?.filters?.damage_type || ""}
+                    onValueChange={(v) => patchFilters({ damage_type: v === "__none" ? "" : v })}
+                  >
+                    <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="Any" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">Any</SelectItem>
+                      {DAMAGE_TYPES.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+              {isAttackEvent && (
+                <Field label="Weapon type">
+                  <Select
+                    value={trigger?.filters?.weapon_type || ""}
+                    onValueChange={(v) => patchFilters({ weapon_type: v === "__none" ? "" : v })}
+                  >
+                    <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="Any" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">Any</SelectItem>
+                      <SelectItem value="melee">Melee</SelectItem>
+                      <SelectItem value="ranged">Ranged</SelectItem>
+                      <SelectItem value="spell">Spell</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+              <Field label="Source">
+                <Select
+                  value={trigger?.filters?.source || ""}
+                  onValueChange={(v) => patchFilters({ source: v === "__any" ? "" : v })}
+                >
+                  <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="Any" /></SelectTrigger>
+                  <SelectContent>
+                    {TRIGGER_SOURCE_TARGETS.map((o) => (<SelectItem key={o.value || "__any"} value={o.value || "__any"}>{o.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Target">
+                <Select
+                  value={trigger?.filters?.target || ""}
+                  onValueChange={(v) => patchFilters({ target: v === "__any" ? "" : v })}
+                >
+                  <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="Any" /></SelectTrigger>
+                  <SelectContent>
+                    {TRIGGER_SOURCE_TARGETS.map((o) => (<SelectItem key={o.value || "__any"} value={o.value || "__any"}>{o.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              {isProximityEvent && (
+                <Field label="Range (ft)">
+                  <Input
+                    type="number" min={0}
+                    value={trigger?.filters?.range ?? ""}
+                    onChange={(e) => patchFilters({ range: e.target.value === "" ? null : Number(e.target.value) })}
+                    placeholder="10"
+                    className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+                  />
+                </Field>
+              )}
+              {isKillEvent && (
+                <Field label="Creature type (optional)">
+                  <Input
+                    value={trigger?.filters?.creature_type || ""}
+                    onChange={(e) => patchFilters({ creature_type: e.target.value })}
+                    placeholder="Undead, Fiend, ..."
+                    className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+                  />
+                </Field>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-[#0b1220] border border-[#1e293b] rounded p-2 space-y-2">
+            <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Effect</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <Field label="Effect type">
+                <Select value={effectType} onValueChange={(v) => patchEffect({ effect_type: v === "__none" ? "" : v })}>
+                  <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    {TRIGGER_EFFECT_TYPES.map((t) => (<SelectItem key={t.value || "__none"} value={t.value || "__none"}>{t.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              {effectType === "damage" && (
+                <>
+                  <Field label="Damage dice">
+                    <Input
+                      value={trigger?.effect?.damage_dice || ""}
+                      onChange={(e) => patchEffect({ damage_dice: e.target.value })}
+                      placeholder="2d6"
+                      className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+                    />
+                  </Field>
+                  <Field label="Damage type">
+                    <Select
+                      value={trigger?.effect?.damage_type || "fire"}
+                      onValueChange={(v) => patchEffect({ damage_type: v })}
+                    >
+                      <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {DAMAGE_TYPES.map((d) => (<SelectItem key={d} value={d}>{d}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </>
+              )}
+              {effectType === "healing" && (
+                <Field label="Healing dice">
+                  <Input
+                    value={trigger?.effect?.healing_dice || ""}
+                    onChange={(e) => patchEffect({ healing_dice: e.target.value })}
+                    placeholder="1d8"
+                    className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+                  />
+                </Field>
+              )}
+              {effectType === "temp_hp" && (
+                <Field label="Temp HP">
+                  <Input
+                    value={trigger?.effect?.temp_hp || ""}
+                    onChange={(e) => patchEffect({ temp_hp: e.target.value })}
+                    placeholder="1d4+CON"
+                    className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+                  />
+                </Field>
+              )}
+              {effectType === "condition" && (
+                <>
+                  <Field label="Condition">
+                    <Select
+                      value={trigger?.effect?.applies_condition || ""}
+                      onValueChange={(v) => patchEffect({ applies_condition: v === "__none" ? "" : v })}
+                    >
+                      <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="None" /></SelectTrigger>
+                      <SelectContent className="max-h-64">
+                        <SelectItem value="__none">None</SelectItem>
+                        {Object.keys(CONDITION_COLORS).map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Save to resist">
+                    <Select
+                      value={trigger?.effect?.condition_save || ""}
+                      onValueChange={(v) => patchEffect({ condition_save: v === "__none" ? "" : v })}
+                    >
+                      <SelectTrigger className="bg-[#050816] border-slate-700 text-white text-xs h-8"><SelectValue placeholder="None" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">None</SelectItem>
+                        {SAVE_ABILITIES.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="DC">
+                    <Input
+                      type="number" min={1}
+                      value={trigger?.effect?.condition_dc ?? ""}
+                      onChange={(e) => patchEffect({ condition_dc: e.target.value === "" ? null : Number(e.target.value) })}
+                      placeholder="13"
+                      className="bg-[#050816] border-slate-700 text-white text-xs h-8"
+                    />
+                  </Field>
+                </>
+              )}
+            </div>
+            <Textarea
+              value={trigger?.effect?.description || ""}
+              onChange={(e) => patchEffect({ description: e.target.value })}
+              placeholder="Description (required for custom effects; optional otherwise)"
+              rows={2}
+              className="bg-[#050816] border-slate-700 text-white text-xs"
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -2891,6 +3632,20 @@ function normalizeAction(a) {
     ...BLANK_MONSTER_ACTION,
     ...a,
     action_type: inferredType,
+    trigger: a.trigger && typeof a.trigger === "object" ? a.trigger : null,
+    save_tiers: Array.isArray(a.save_tiers) ? a.save_tiers : [],
+  };
+}
+
+function normalizeVillainActions(value) {
+  const actions = Array.isArray(value?.actions) ? value.actions : [];
+  const padded = [1, 2, 3].map((round) => {
+    const existing = actions.find((a) => a?.round === round) || actions[round - 1];
+    return { ...BLANK_VILLAIN_ACTION, round, ...(existing || {}) };
+  });
+  return {
+    enabled: !!value?.enabled,
+    actions: padded,
   };
 }
 
@@ -2926,6 +3681,7 @@ export function monsterFromModifications(mods) {
       : { ...BLANK_MONSTER.multiattack },
     legendary_actions_per_round: Number(mods.legendary_actions_per_round ?? BLANK_MONSTER.legendary_actions_per_round) || 0,
     legendary_resistances: Number(mods.legendary_resistances ?? 0) || 0,
+    villain_actions: normalizeVillainActions(mods.villain_actions),
     // `cr` and `challenge_rating` are used interchangeably — honour
     // whichever the caller stored.
     cr: String(mods.cr ?? mods.challenge_rating ?? "1"),
@@ -2963,6 +3719,65 @@ function serializeAction(a) {
     condition_duration: a.condition_duration || "",
     healing_dice: a.healing_dice || "",
     healing_flat: a.healing_flat || "",
+    trigger: serializeTrigger(a.trigger),
+    save_tiers: Array.isArray(a.save_tiers) ? a.save_tiers : [],
+  };
+}
+
+function serializeTrigger(t) {
+  if (!t || typeof t !== "object" || !t.event) return null;
+  const filters = t.filters || {};
+  const effect = t.effect || {};
+  return {
+    event: t.event,
+    filters: {
+      damage_type:   filters.damage_type   || "",
+      weapon_type:   filters.weapon_type   || "",
+      source:        filters.source        || "",
+      target:        filters.target        || "",
+      range:         filters.range == null || filters.range === "" ? null : Number(filters.range),
+      creature_type: filters.creature_type || "",
+    },
+    gate: t.gate || "unlimited",
+    gate_count: t.gate_count == null || t.gate_count === "" ? null : Number(t.gate_count),
+    effect: {
+      effect_type:       effect.effect_type       || "",
+      damage_dice:       effect.damage_dice       || "",
+      damage_type:       effect.damage_type       || "",
+      healing_dice:      effect.healing_dice      || "",
+      applies_condition: effect.applies_condition || "",
+      condition_save:    effect.condition_save    || "",
+      condition_dc:      effect.condition_dc == null || effect.condition_dc === "" ? null : Number(effect.condition_dc),
+      temp_hp:           effect.temp_hp           || "",
+      description:       effect.description       || "",
+    },
+  };
+}
+
+function serializeVillainActions(v) {
+  if (!v || typeof v !== "object" || !v.enabled) {
+    return { enabled: false, actions: [] };
+  }
+  const actions = Array.isArray(v.actions) ? v.actions : [];
+  return {
+    enabled: true,
+    actions: actions.slice(0, 3).map((a, i) => ({
+      name: a?.name || "",
+      round: Number(a?.round) || (i + 1),
+      description: a?.description || "",
+      action_type: a?.action_type || "no_roll",
+      save_ability: a?.save_ability || "",
+      save_dc: a?.save_dc === "" || a?.save_dc == null ? null : Number(a.save_dc),
+      attack_bonus: a?.attack_bonus === "" || a?.attack_bonus == null ? null : Number(a.attack_bonus),
+      damage_dice: a?.damage_dice || "",
+      damage_type: a?.damage_type || "",
+      healing_dice: a?.healing_dice || "",
+      half_on_save: !!a?.half_on_save,
+      applies_condition: a?.applies_condition || "",
+      condition_end: a?.condition_end || "",
+      aoe_shape: a?.aoe_shape || "",
+      aoe_size: a?.aoe_size || "",
+    })),
   };
 }
 
@@ -3040,6 +3855,7 @@ export function buildMonsterModifications(monster) {
     multiattack,
     legendary_actions_per_round: Number(monster.legendary_actions_per_round) || 0,
     legendary_resistances: Number(monster.legendary_resistances) || 0,
+    villain_actions: serializeVillainActions(monster.villain_actions),
   };
 }
 
@@ -3190,6 +4006,7 @@ export function classFeatureFromModifications(mods) {
     image_url: mods.image_url || "",
     scaling_die,
     feature_dc,
+    trigger: mods.trigger && typeof mods.trigger === "object" ? mods.trigger : null,
   };
 }
 
@@ -3264,6 +4081,8 @@ export function buildClassFeatureModifications(feature) {
       ability: feature.feature_dc.ability || "STR",
     };
   }
+  const trigger = serializeTrigger(feature.trigger);
+  if (trigger) base.trigger = trigger;
   return base;
 }
 
@@ -4000,6 +4819,11 @@ function CustomClassFeatureForm({ feature, setFeature }) {
           </div>
         )}
       </div>
+
+      <TriggerFields
+        value={feature.trigger || null}
+        onChange={(next) => patch({ trigger: next })}
+      />
 
       <Field label="Image">
         <HomebrewImageUpload
