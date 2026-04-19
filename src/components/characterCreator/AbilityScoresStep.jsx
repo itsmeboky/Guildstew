@@ -50,10 +50,14 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
   const breweryPicks = characterData._brewery_ability_picks || {};
   const pickerSpec = getBreweryAbilityPickerSpec(breweryRace);
   const breweryBonuses = getBreweryRaceBonuses(breweryRace, breweryPicks);
+  const subraceBonuses = breweryRace ? (characterData._brewery_subrace_bonus || {}) : {};
   const srdBonuses = breweryRace ? {} : getRacialAbilityBonuses(characterData.race, characterData.subrace);
   const racialBonuses = { ...srdBonuses };
   for (const [k, v] of Object.entries(breweryBonuses)) {
     racialBonuses[k] = (racialBonuses[k] || 0) + v;
+  }
+  for (const [k, v] of Object.entries(subraceBonuses)) {
+    racialBonuses[k] = (racialBonuses[k] || 0) + (Number(v) || 0);
   }
 
   const picksMade = Object.values(breweryPicks).filter(Boolean).length;
@@ -70,7 +74,10 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
     const nextBreweryBonuses = getBreweryRaceBonuses(breweryRace, nextPicks);
     const finalScores = {};
     Object.keys(baseScores).forEach((k) => {
-      finalScores[k] = baseScores[k] + (srdBonuses[k] || 0) + (nextBreweryBonuses[k] || 0);
+      finalScores[k] = baseScores[k]
+        + (srdBonuses[k] || 0)
+        + (nextBreweryBonuses[k] || 0)
+        + (Number(subraceBonuses[k]) || 0);
     });
     updateCharacterData({
       _brewery_ability_picks: nextPicks,
