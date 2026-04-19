@@ -148,7 +148,7 @@ export default function EntryForm({
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await uploadFile(file, "campaign-assets", "worldlore");
+      const { file_url } = await uploadFile(file, "user-assets", "worldlore", { uploadType: "worldLore" });
       setImageUrl(file_url);
     } catch (err) {
       toast.error(err?.message || "Upload failed");
@@ -729,7 +729,7 @@ function ImageField({ label, value, onChange, campaignId }) {
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await uploadFile(file, "campaign-assets", "worldlore");
+      const { file_url } = await uploadFile(file, "user-assets", "worldlore", { uploadType: "worldLore" });
       onChange(file_url);
     } catch (err) {
       toast.error(err?.message || "Upload failed");
@@ -775,7 +775,7 @@ function AttachmentsField({ images, onChange, campaignId }) {
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await uploadFile(file, "campaign-assets", "worldlore");
+      const { file_url } = await uploadFile(file, "user-assets", "worldlore", { uploadType: "worldLore" });
       add(file_url);
     } catch (err) {
       toast.error(err?.message || "Upload failed");

@@ -57,7 +57,7 @@ export default function SupportTicketDialog({ open, onClose, userId }) {
       if (screenshot) {
         setUploading(true);
         try {
-          const { file_url } = await uploadFile(screenshot, "campaign-assets", "support");
+          const { file_url } = await uploadFile(screenshot, "user-assets", "support", { uploadType: "general" });
           screenshot_url = file_url;
         } finally {
           setUploading(false);

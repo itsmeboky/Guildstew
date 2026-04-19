@@ -234,7 +234,7 @@ function CompanionForm({ value, onSave, onCancel }) {
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await uploadFile(file, "avatars", "companions");
+      const { file_url } = await uploadFile(file, "user-assets", "companions", { uploadType: "avatar" });
       setImageUrl(file_url);
     } catch (err) {
       toast.error(err?.message || "Upload failed");

@@ -876,7 +876,7 @@ export default function CreateHomebrewDialog({ open, onClose, brew = null }) {
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await uploadFile(file, "campaign-assets", "homebrew");
+      const { file_url } = await uploadFile(file, "user-assets", "homebrew", { uploadType: "homebrew" });
       setCoverImageUrl(file_url);
     } catch (err) {
       toast.error("Image upload failed");
@@ -1992,7 +1992,7 @@ function ItemImageUpload({ url, onChange }) {
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await uploadFile(file, "campaign-assets", "homebrew/items");
+      const { file_url } = await uploadFile(file, "user-assets", "homebrew/items", { uploadType: "homebrew" });
       onChange(file_url);
     } catch (err) {
       toast.error("Item image upload failed");
@@ -4555,7 +4555,7 @@ function HomebrewImageUpload({ url, onChange, path }) {
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await uploadFile(file, "campaign-assets", path || "homebrew");
+      const { file_url } = await uploadFile(file, "user-assets", path || "homebrew", { uploadType: "homebrew" });
       onChange(file_url);
     } catch (err) {
       toast.error("Image upload failed");

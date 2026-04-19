@@ -1,12 +1,13 @@
 import React, { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, Users, Sword, Trophy, ShoppingBag, DollarSign,
-  LifeBuoy, Flag, ScrollText, GamepadIcon,
+  LifeBuoy, Flag, ScrollText, GamepadIcon, Home,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { createPageUrl } from "@/utils";
 import OverviewTab from "@/components/admin/OverviewTab";
 import UsersTab from "@/components/admin/UsersTab";
 import GameplayTab from "@/components/admin/GameplayTab";
@@ -65,11 +66,18 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-[#050816] text-white">
       <div className="flex">
-        <aside className="w-64 min-h-screen bg-[#0b1220] border-r border-[#1e293b] p-4">
-          <div className="mb-6">
+        <aside className="w-64 min-h-screen bg-[#0b1220] border-r border-[#1e293b] p-4 flex flex-col">
+          <div className="mb-4">
             <h1 className="text-lg font-black text-white tracking-wider">ADMIN</h1>
             <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">{user.email}</p>
           </div>
+          <Link
+            to={createPageUrl("Home")}
+            className="mb-4 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-300 hover:text-[#37F2D1] border border-[#1e293b] hover:border-[#37F2D1]/60 transition-colors"
+          >
+            <Home className="w-4 h-4" />
+            <span>Back to Homepage</span>
+          </Link>
           <nav className="space-y-1">
             {TABS.map((t) => {
               const Icon = t.icon;

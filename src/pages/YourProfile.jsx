@@ -165,7 +165,7 @@ console.log('PROFILE PAGE USER:', user)
     mutationFn: async (data) => {
       let imageUrl = null;
       if (postImage) {
-        const { file_url } = await uploadFile(postImage, 'avatars', `${user.id}/posts`);
+        const { file_url } = await uploadFile(postImage, 'user-assets', `users/${user.id}/posts`, { userId: user.id, uploadType: 'general' });
         imageUrl = file_url;
       }
 

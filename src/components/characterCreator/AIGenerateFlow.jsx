@@ -71,7 +71,7 @@ export default function AIGenerateFlow({ onBack, onComplete, campaignId, busy = 
     if (!file) return;
     setPortraitUploading(true);
     try {
-      const { file_url } = await uploadFile(file, "avatars", "characters");
+      const { file_url } = await uploadFile(file, "user-assets", "characters", { uploadType: "avatar" });
       setPortrait({ image_url: file_url, replaced: true });
     } catch (err) {
       toast.error("Upload failed");
