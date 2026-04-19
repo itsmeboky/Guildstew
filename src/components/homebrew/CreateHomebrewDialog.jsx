@@ -1586,10 +1586,6 @@ function CustomItemForm({ item, setItem }) {
             />
           </Field>
 
-          {/* Passive numeric bonuses (ring of protection, cloak of
-              elvenkind, bracers of archery, etc.). Stored as a list of
-              { target, amount } rows so the character sheet can sum
-              them directly. */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <Label className="text-xs text-slate-300 font-semibold">Passive bonuses (while attuned / worn)</Label>
@@ -1633,9 +1629,6 @@ function CustomItemForm({ item, setItem }) {
             )}
           </div>
 
-          {/* Optional "applies condition" rider — e.g. Cloak of
-              Billowing that imposes Frightened on a failed save when
-              triggered. Only persisted if a condition is chosen. */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Field label="Applies condition (optional)">
               <Select
@@ -1876,10 +1869,6 @@ function CustomMonsterForm({ monster, setMonster }) {
     patch({ stats: next });
   };
 
-  // Generic list helpers scoped to a monster field. The monster has
-  // five action-style lists (actions / bonus_actions / reactions /
-  // legendary_actions / lair_actions) and the auras list, all of
-  // which need add / remove / reorder / update operations.
   const makeListOps = (key, defaultItem) => {
     const list = Array.isArray(monster[key]) ? monster[key] : [];
     const setList = (next) => patch({ [key]: next });
@@ -2213,20 +2202,16 @@ function CustomMonsterForm({ monster, setMonster }) {
         ops={actionsOps}
       />
 
-      {/* --- Bonus Actions --- */}
       <MonsterActionList
         title="Bonus Actions"
         emptyHint="Cunning Action, Shadow Step, etc."
         ops={bonusOps}
-        defaultCost="Bonus Action"
       />
 
-      {/* --- Reactions --- */}
       <MonsterActionList
         title="Reactions"
         emptyHint="Parry, Shield, Uncanny Dodge, etc."
         ops={reactionsOps}
-        defaultCost="Reaction"
         showReactionTrigger
       />
 
@@ -2254,7 +2239,6 @@ function CustomMonsterForm({ monster, setMonster }) {
           title="Legendary Actions"
           emptyHint="Tail Attack, Wing Buffet, Frightful Presence, etc."
           ops={legendaryOps}
-          defaultCost="Legendary"
           showLegendaryCost
           flat
         />
@@ -2405,19 +2389,15 @@ function CustomMonsterForm({ monster, setMonster }) {
 // reveals fields based on action_type so "Saving Throw" actions show
 // save ability/DC instead of an attack bonus, and "No Roll" actions
 // hide both. Condition riders and bonus damage are always available.
-function MonsterActionList({ title, emptyHint, ops, defaultCost, showReactionTrigger, showLegendaryCost, flat }) {
-  const Wrapper = flat ? "div" : "div";
+function MonsterActionList({ title, emptyHint, ops, showReactionTrigger, showLegendaryCost, flat }) {
   const wrapperClass = flat
     ? "space-y-2"
     : "bg-[#050816] border border-[#1e293b] rounded-lg p-3";
   return (
-    <Wrapper className={wrapperClass}>
+    <div className={wrapperClass}>
       <div className="flex items-center justify-between mb-2">
         <h4 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">{title}</h4>
-        <Button
-          type="button" variant="outline" size="sm"
-          onClick={() => ops.add(defaultCost ? { action_cost: defaultCost } : {})}
-        >
+        <Button type="button" variant="outline" size="sm" onClick={() => ops.add()}>
           <Plus className="w-3 h-3 mr-1" /> Add
         </Button>
       </div>
@@ -2439,7 +2419,7 @@ function MonsterActionList({ title, emptyHint, ops, defaultCost, showReactionTri
           ))}
         </div>
       )}
-    </Wrapper>
+    </div>
   );
 }
 
@@ -3013,6 +2993,7 @@ export function buildMonsterModifications(monster) {
   const auras             = Array.isArray(monster.auras)
     ? monster.auras.map(serializeAura).filter(Boolean)
     : [];
+  const statsCopy = { ...(monster.stats || {}) };
   const multiattack = monster.multiattack && typeof monster.multiattack === "object"
     ? {
         enabled: !!monster.multiattack.enabled,
@@ -3036,8 +3017,9 @@ export function buildMonsterModifications(monster) {
     armor_class: Number(monster.armor_class) || 0,
     hit_points: monster.hit_points || "",
     speed: monster.speed || "",
-    abilities: { ...(monster.stats || {}) },
-    stats: { ...(monster.stats || {}) },
+    // Duplicate `abilities` + `stats` keys: legacy readers hit one or the other.
+    abilities: statsCopy,
+    stats: statsCopy,
     saving_throws: Array.isArray(monster.saves) ? monster.saves : [],
     saves: Array.isArray(monster.saves) ? monster.saves : [],
     skills: Array.isArray(monster.skills) ? monster.skills : [],
@@ -3262,7 +3244,6 @@ export function buildClassFeatureModifications(feature) {
     base.resource_restored = feature.resource_restored || "Hit Points";
     base.resource_amount = feature.resource_amount || "";
   }
-  // Scaling die — serialize only if enabled.
   if (feature.scaling_die?.enabled) {
     base.scaling_die = {
       enabled: true,
