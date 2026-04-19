@@ -11,9 +11,10 @@ import { Badge } from "@/components/ui/badge";
 /**
  * Campaign Class Features tab. Split-panel layout — the selected
  * feature's detail on the left, a class selector + feature list on
- * the right. SRD class features live in the shared dnd5e_abilities
- * reference table; per-campaign homebrew features live in
- * campaign_abilities. Each row gets a _source tag so we can render
+ * the right. SRD class features live in the shared
+ * dnd5e_class_features reference table; per-campaign homebrew
+ * features live in campaign_class_features. Each row gets a
+ * _source tag so we can render
  * the SRD vs Homebrew badge and respect read-only SRD rules.
  *
  * Filtering keys off `source_class` (new SRD schema) with a
@@ -101,16 +102,16 @@ export default function CampaignAbilities({ embedded = false, campaignId: campai
   const [selected, setSelected] = useState(null);
 
   const { data: srd = [] } = useQuery({
-    queryKey: ["srdAbilities"],
-    queryFn: () => base44.entities.Dnd5eAbility
+    queryKey: ["srdClassFeatures"],
+    queryFn: () => base44.entities.Dnd5eClassFeature
       .list("name")
       .then((rows) => (rows || []).map((a) => ({ ...a, _source: "srd" })))
       .catch(() => []),
     initialData: [],
   });
   const { data: custom = [] } = useQuery({
-    queryKey: ["homebrewAbilities", campaignId],
-    queryFn: () => base44.entities.CampaignAbility
+    queryKey: ["homebrewClassFeatures", campaignId],
+    queryFn: () => base44.entities.CampaignClassFeature
       .filter({ campaign_id: campaignId })
       .then((rows) => (rows || []).map((a) => ({ ...a, _source: "homebrew" })))
       .catch(() => []),

@@ -811,8 +811,18 @@ export function getAllAvailableSpells(primaryClass, multiclasses = [], fullSpell
       }
     });
 
+    // Supplement cantrips + level 1 from the hardcoded list so we
+    // don't lose anything the reseed hasn't caught yet. DB is still
+    // authoritative for level 2+.
+    classes.forEach((cls) => {
+      const hardcoded = spellsByClass[cls];
+      if (!hardcoded) return;
+      if (Array.isArray(hardcoded.cantrips)) allSpells.cantrips.push(...hardcoded.cantrips);
+      if (Array.isArray(hardcoded.level1))   allSpells.level1.push(...hardcoded.level1);
+    });
+
     Object.keys(allSpells).forEach(key => {
-      allSpells[key].sort();
+      allSpells[key] = Array.from(new Set(allSpells[key])).sort();
     });
 
     return allSpells;

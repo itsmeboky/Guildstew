@@ -8,10 +8,21 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Save, X, Upload } from "lucide-react";
+import { Save, X, Upload, Lock, Languages, Plus, Trash2 } from "lucide-react";
 import { uploadFile } from "@/utils/uploadFile";
 import { TEMPLATE_TYPES, templateById } from "@/data/worldLoreTemplates";
 import SketchCanvas from "@/components/shared/SketchCanvas";
+import { SKILLS, ABILITIES } from "@/utils/languageComprehension";
+
+const GATE_LANGUAGE_OPTIONS = [
+  "Abyssal", "Celestial", "Common", "Deep Speech", "Draconic",
+  "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin",
+  "Halfling", "Infernal", "Orc", "Primordial", "Sylvan", "Undercommon",
+];
+
+function gateId() {
+  return `g_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
 
 /**
  * Template-aware entry editor. Shared by all five entry-based
@@ -46,6 +57,37 @@ export default function EntryForm({
   const [imageUrl, setImageUrl] = useState(initial?.image_url || "");
   const [uploading, setUploading] = useState(false);
 
+  // Knowledge gates (skill / ability / language checks) — stored on
+  // world_lore_entries.knowledge_gates as a JSONB array.
+  const [gates, setGates] = useState(
+    Array.isArray(initial?.knowledge_gates) ? initial.knowledge_gates : [],
+  );
+  const addGate = () => setGates((prev) => [
+    ...prev,
+    { id: gateId(), type: "skill_check", skill: "Arcana", dc: 15, gated_content: "full", failure_text: "" },
+  ]);
+  const updateGate = (idx, patch) => setGates(
+    (prev) => prev.map((g, i) => (i === idx ? { ...g, ...patch } : g)),
+  );
+  const removeGate = (idx) => setGates((prev) => prev.filter((_, i) => i !== idx));
+
+  // Language gating — which language the text is written in,
+  // partial-speaker gist, Intelligence DC to decipher.
+  const [language, setLanguage] = useState(initial?.language || null);
+  const [gist, setGist] = useState(initial?.gist || "");
+  const [decipherDc, setDecipherDc] = useState(
+    Number.isFinite(initial?.decipher_dc) ? initial.decipher_dc : 15,
+  );
+
+  // Hidden class-specific annotations. Kept in metadata JSONB so
+  // we don't need new columns for two short strings.
+  const [thievesCantMessage, setThievesCantMessage] = useState(
+    initial?.metadata?.thieves_cant_message || "",
+  );
+  const [druidicMessage, setDruidicMessage] = useState(
+    initial?.metadata?.druidic_message || "",
+  );
+
   const template = useMemo(() => templateById(templateType), [templateType]);
 
   // Secret Document auto-forces GM Only visibility. When the GM
@@ -75,6 +117,12 @@ export default function EntryForm({
 
   const handleSave = () => {
     if (!title.trim()) { toast.error("Give the entry a title."); return; }
+    const mergedMetadata = { ...(metadata || {}) };
+    if (thievesCantMessage.trim()) mergedMetadata.thieves_cant_message = thievesCantMessage.trim();
+    else delete mergedMetadata.thieves_cant_message;
+    if (druidicMessage.trim()) mergedMetadata.druidic_message = druidicMessage.trim();
+    else delete mergedMetadata.druidic_message;
+
     onSave({
       id: initial?.id,
       title: title.trim(),
@@ -82,9 +130,13 @@ export default function EntryForm({
       template_type: templateType,
       visibility,
       visible_to_players: visibility === "selected" ? visibleTo : [],
-      metadata,
+      metadata: mergedMetadata,
       image_url: imageUrl || null,
       images,
+      knowledge_gates: gates,
+      language: language || null,
+      gist: gist.trim() || null,
+      decipher_dc: language ? Math.max(1, Math.min(30, Number(decipherDc) || 15)) : null,
     });
   };
 
@@ -198,6 +250,211 @@ export default function EntryForm({
         onChange={setImages}
         campaignId={campaignId}
       />
+
+      {/* Knowledge gates — optional skill / ability / language
+          checks that lock this entry until passed. */}
+      <div className="border border-slate-700/50 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+            <Lock className="w-4 h-4 text-amber-400" />
+            Knowledge Gates (Optional)
+          </h4>
+          <Button variant="outline" size="sm" onClick={addGate}>
+            <Plus className="w-3 h-3 mr-1" /> Add Gate
+          </Button>
+        </div>
+        {gates.length === 0 ? (
+          <p className="text-xs text-slate-500 italic">
+            No gates yet. Add one to lock this entry behind a skill check, ability check, or language requirement.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {gates.map((gate, idx) => (
+              <div key={gate.id || idx} className="bg-[#0f1219] border border-slate-700 rounded-lg p-3 space-y-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-[10px] uppercase tracking-widest text-slate-400">Gate Type</Label>
+                    <Select value={gate.type} onValueChange={(v) => updateGate(idx, { type: v })}>
+                      <SelectTrigger className="bg-[#050816] border-slate-600 text-white h-9 text-xs mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="skill_check">Skill Check</SelectItem>
+                        <SelectItem value="ability_check">Ability Check</SelectItem>
+                        <SelectItem value="language">Language Required</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {gate.type === "skill_check" && (
+                    <>
+                      <div>
+                        <Label className="text-[10px] uppercase tracking-widest text-slate-400">Skill</Label>
+                        <Select value={gate.skill || "Arcana"} onValueChange={(v) => updateGate(idx, { skill: v })}>
+                          <SelectTrigger className="bg-[#050816] border-slate-600 text-white h-9 text-xs mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SKILLS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-[10px] uppercase tracking-widest text-slate-400">DC</Label>
+                        <Input
+                          type="number" min={1} max={30}
+                          value={gate.dc ?? 15}
+                          onChange={(e) => updateGate(idx, { dc: Number(e.target.value) || 15 })}
+                          className="bg-[#050816] border-slate-600 text-white h-9 text-xs mt-1 w-24"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {gate.type === "ability_check" && (
+                    <>
+                      <div>
+                        <Label className="text-[10px] uppercase tracking-widest text-slate-400">Ability</Label>
+                        <Select value={gate.ability || "int"} onValueChange={(v) => updateGate(idx, { ability: v })}>
+                          <SelectTrigger className="bg-[#050816] border-slate-600 text-white h-9 text-xs mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ABILITIES.map((a) => <SelectItem key={a} value={a}>{a.toUpperCase()}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-[10px] uppercase tracking-widest text-slate-400">DC</Label>
+                        <Input
+                          type="number" min={1} max={30}
+                          value={gate.dc ?? 15}
+                          onChange={(e) => updateGate(idx, { dc: Number(e.target.value) || 15 })}
+                          className="bg-[#050816] border-slate-600 text-white h-9 text-xs mt-1 w-24"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {gate.type === "language" && (
+                    <div className="md:col-span-1">
+                      <Label className="text-[10px] uppercase tracking-widest text-slate-400">Language</Label>
+                      <Select value={gate.language || "Common"} onValueChange={(v) => updateGate(idx, { language: v })}>
+                        <SelectTrigger className="bg-[#050816] border-slate-600 text-white h-9 text-xs mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {GATE_LANGUAGE_OPTIONS.map((lang) => (
+                            <SelectItem key={lang} value={lang}>{lang}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+
+                <Input
+                  placeholder="What players see on failure (optional)…"
+                  value={gate.failure_text || ""}
+                  onChange={(e) => updateGate(idx, { failure_text: e.target.value })}
+                  className="bg-[#050816] border-slate-600 text-white h-9 text-xs"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeGate(idx)}
+                  className="text-red-400 hover:text-red-300"
+                >
+                  <Trash2 className="w-3 h-3 mr-1" /> Remove Gate
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Language gating — entry-wide language + gist + decipher
+          DC. Independent of the per-gate "Language Required" type
+          (that one locks the entry entirely; this one drives the
+          comprehension tier + font rendering). */}
+      <div className="border border-slate-700/50 rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+          <Languages className="w-4 h-4 text-amber-400" />
+          Language Gating (Optional)
+        </h4>
+        <Select
+          value={language || "none"}
+          onValueChange={(v) => setLanguage(v === "none" ? null : v)}
+        >
+          <SelectTrigger className="bg-[#0f1219] border-slate-700 text-white">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">None — readable by all</SelectItem>
+            {GATE_LANGUAGE_OPTIONS.map((lang) => (
+              <SelectItem key={lang} value={lang}>{lang}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {language && (
+          <>
+            <Textarea
+              placeholder="What a partial speaker catches at a glance. e.g. 'Some kind of warning about the bridge.'"
+              value={gist}
+              onChange={(e) => setGist(e.target.value)}
+              className="mt-3 bg-[#0f1219] border-slate-700 text-white"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              Partial speakers see this gist. Leave blank to give them no advantage over unknown speakers.
+            </p>
+
+            <div className="mt-3">
+              <Label className="text-xs text-slate-400">Decipher DC</Label>
+              <Input
+                type="number" min={1} max={30}
+                value={decipherDc}
+                onChange={(e) => setDecipherDc(Number(e.target.value) || 15)}
+                className="w-24 bg-[#0f1219] border-slate-700 text-white mt-1"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Intelligence check for partial speakers to unlock full text. Default 15.
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Hidden class-specific annotations. Rendered only for the
+          character that knows the language; others never see them. */}
+      <div className="border border-dashed border-slate-600 rounded-lg p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-sm text-slate-400">🗡️ Thieves&apos; Cant Hidden Message (Optional)</span>
+        </div>
+        <Textarea
+          placeholder="Hidden message only Rogues with Thieves' Cant can see…"
+          value={thievesCantMessage}
+          onChange={(e) => setThievesCantMessage(e.target.value)}
+          className="bg-[#0f1219] border-slate-700 text-white"
+        />
+        <p className="text-xs text-slate-500 mt-1">
+          Shown as a highlighted annotation only to characters who know Thieves&apos; Cant. Others don&apos;t see it at all.
+        </p>
+      </div>
+      <div className="border border-dashed border-slate-600 rounded-lg p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-sm text-slate-400">🌿 Druidic Hidden Message (Optional)</span>
+        </div>
+        <Textarea
+          placeholder="Hidden message only Druids can see…"
+          value={druidicMessage}
+          onChange={(e) => setDruidicMessage(e.target.value)}
+          className="bg-[#0f1219] border-slate-700 text-white"
+        />
+        <p className="text-xs text-slate-500 mt-1">
+          Shown only to Druids. Uses the same silent-invisible rule as Thieves&apos; Cant.
+        </p>
+      </div>
 
       <div className="bg-[#0f1219] border border-slate-700 rounded-lg p-3 space-y-2">
         <Label className="text-sm text-slate-300">Visibility</Label>

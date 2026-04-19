@@ -10,6 +10,12 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { SubscriptionProvider } from '@/lib/SubscriptionContext';
 import { PresenceProvider } from '@/lib/PresenceContext';
 import LegalReconsentGate from '@/components/legal/LegalReconsentGate';
+import { loadLanguageFonts } from '@/utils/languageFonts';
+
+// Inject the @font-face rules for every D&D language TTF once per
+// page load. The function is idempotent so hot reloads during dev
+// don't stack up extra <style> blocks.
+loadLanguageFonts();
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
