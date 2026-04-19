@@ -139,7 +139,7 @@ export default function AIGenerateFlow({ onBack, onComplete, campaignId, busy = 
             <img
               src={portrait.image_url}
               alt="Portrait"
-              className="w-52 h-52 rounded-xl object-cover border-2 border-[#a855f7]/60 shadow-[0_0_25px_rgba(168,85,247,0.3)]"
+              className="w-52 h-52 rounded-xl object-cover object-top border-2 border-[#a855f7]/60 shadow-[0_0_25px_rgba(168,85,247,0.3)]"
             />
           ) : (
             <div className="w-52 h-52 rounded-xl bg-[#050816] border-2 border-slate-700 flex items-center justify-center">

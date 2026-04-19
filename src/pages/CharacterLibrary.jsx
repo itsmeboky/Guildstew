@@ -273,7 +273,11 @@ export default function CharacterLibrary() {
                         className="w-full h-full"
                         style={{
                           objectFit: 'cover',
-                          objectPosition: 'center',
+                          // Default to "top" so tall portraits keep the face in
+                          // frame instead of anchoring to the midsection. A
+                          // character-specific profile_position still wins
+                          // through the transform below.
+                          objectPosition: 'top',
                           transform: character.profile_position && character.profile_zoom
                             ? `translate(${character.profile_position.x}px, ${character.profile_position.y}px) scale(${character.profile_zoom})`
                             : 'none',

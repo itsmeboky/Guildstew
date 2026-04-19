@@ -32,7 +32,7 @@ export default function CharacterTab({ character }) {
           <img
             src={character.avatar_url}
             alt={character.name}
-            className="w-48 h-48 rounded-2xl object-cover border-2 border-[#37F2D1]/60 shadow-[0_0_25px_rgba(55,242,209,0.25)] flex-shrink-0"
+            className="w-48 h-48 rounded-2xl object-cover object-top border-2 border-[#37F2D1]/60 shadow-[0_0_25px_rgba(55,242,209,0.25)] flex-shrink-0"
           />
         ) : (
           <div className="w-48 h-48 rounded-2xl bg-slate-800 flex-shrink-0" />

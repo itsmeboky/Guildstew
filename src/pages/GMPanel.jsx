@@ -4358,11 +4358,11 @@ export default function GMPanel() {
                               {activeConditions[`player-${player.user_id}`][0]}
                             </div>
                           )}
-                          <div 
-                            className="h-24 bg-cover bg-center relative"
-                            style={{ 
-                              backgroundImage: character?.profile_avatar_url 
-                                ? `url(${character.profile_avatar_url})` 
+                          <div
+                            className="h-24 bg-cover bg-top relative"
+                            style={{
+                              backgroundImage: character?.profile_avatar_url
+                                ? `url(${character.profile_avatar_url})`
                                 : 'none',
                               backgroundColor: '#1a1f2e'
                             }}

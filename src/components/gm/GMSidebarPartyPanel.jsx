@@ -43,7 +43,7 @@ export default function GMSidebarPartyPanel({ campaignId, campaign, allUserProfi
         <div key={row.uid} className="bg-[#0f1219] border border-slate-700/40 rounded-lg p-2 flex items-center gap-3">
           <div className="relative w-10 h-10 rounded-full overflow-hidden bg-slate-700 flex-shrink-0">
             {row.avatar ? (
-              <img src={row.avatar} alt="" className="w-full h-full object-cover" />
+              <img src={row.avatar} alt="" className="w-full h-full object-cover object-top" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-slate-300 text-sm font-bold">
                 {row.name.charAt(0)}
