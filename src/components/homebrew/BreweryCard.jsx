@@ -101,7 +101,8 @@ export function formatCategoryLabel(category) {
     case "custom_item":     return "Custom Item";
     case "custom_monster":  return "Custom Monster";
     case "custom_spell":    return "Custom Spell";
-    case "custom_ability":  return "Custom Ability";
+    case "custom_class_feature":
+    case "custom_ability":  return "Custom Class Feature";
     default:                return category || "Homebrew";
   }
 }
@@ -115,6 +116,7 @@ export function categoryColorClass(category) {
     case "custom_item":     return "bg-emerald-500 text-black";
     case "custom_monster":  return "bg-purple-500 text-white";
     case "custom_spell":    return "bg-blue-500 text-white";
+    case "custom_class_feature":
     case "custom_ability":  return "bg-amber-500 text-black";
     default:                return "bg-slate-600 text-white";
   }
@@ -130,6 +132,7 @@ function categoryGradient(category) {
     case "custom_item":     return "bg-gradient-to-br from-emerald-600/60 to-teal-500/50";
     case "custom_monster":  return "bg-gradient-to-br from-purple-700/60 to-indigo-500/50";
     case "custom_spell":    return "bg-gradient-to-br from-blue-600/60 to-cyan-500/50";
+    case "custom_class_feature":
     case "custom_ability":  return "bg-gradient-to-br from-amber-600/60 to-orange-500/50";
     default:                return "bg-gradient-to-br from-slate-600/60 to-slate-800/60";
   }

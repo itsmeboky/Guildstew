@@ -247,12 +247,12 @@ export default function CampaignPanel() {
                   )}
                   
                   {character?.profile_avatar_url ? (
-                    <LazyImage 
-                      src={character.profile_avatar_url} 
+                    <LazyImage
+                      src={character.profile_avatar_url}
                       alt={character.name}
                       className="w-full h-full"
                       style={{
-                        objectPosition: 'center center',
+                        objectPosition: 'top',
                         transform: character.profile_position && character.profile_zoom
                           ? `translate(${character.profile_position.x}px, ${character.profile_position.y}px) scale(${character.profile_zoom})`
                           : 'none',

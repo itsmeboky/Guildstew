@@ -179,7 +179,7 @@ function PartyRow({ character, selected, onClick }) {
           <img
             src={character.avatar_url}
             alt=""
-            className={`w-12 h-12 rounded-lg object-cover flex-shrink-0 border ${
+            className={`w-12 h-12 rounded-lg object-cover object-top flex-shrink-0 border ${
               selected ? "border-[#37F2D1]" : "border-slate-700"
             }`}
           />

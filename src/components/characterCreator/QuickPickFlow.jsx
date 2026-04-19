@@ -286,7 +286,7 @@ export default function QuickPickFlow({ onBack, onComplete, campaignId, busy = f
             <img
               src={portrait.image_url}
               alt="Portrait"
-              className="w-48 h-48 rounded-xl object-cover border-2 border-[#37F2D1]/60 shadow-[0_0_25px_rgba(55,242,209,0.25)]"
+              className="w-48 h-48 rounded-xl object-cover object-top border-2 border-[#37F2D1]/60 shadow-[0_0_25px_rgba(55,242,209,0.25)]"
             />
           ) : (
             <div className="w-48 h-48 rounded-xl bg-[#050816] border-2 border-slate-700 flex items-center justify-center">

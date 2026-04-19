@@ -246,7 +246,8 @@ function formatCategory(category) {
     case "custom_item":     return "Custom Item";
     case "custom_monster":  return "Custom Monster";
     case "custom_spell":    return "Custom Spell";
-    case "custom_ability":  return "Custom Ability";
+    case "custom_class_feature":
+    case "custom_ability":  return "Custom Class Feature";
     default:                return category || "Other";
   }
 }
@@ -346,7 +347,7 @@ function AddToCampaignDialog({ brew, currentUser, onClose }) {
           source: "homebrew",
           is_system: false,
         });
-      } else if (brew.category === "custom_ability") {
+      } else if (brew.category === "custom_class_feature" || brew.category === "custom_ability") {
         const mods = brew.modifications || {};
         // The underlying table is campaign_class_features (formerly
         // campaign_abilities). Either entity key resolves to the

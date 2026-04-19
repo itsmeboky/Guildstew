@@ -484,7 +484,8 @@ function ModificationsPreview({ brew }) {
     case "custom_item":    return <ItemPreview mods={mods} />;
     case "custom_monster": return <MonsterPreview mods={mods} />;
     case "custom_spell":   return <SpellPreview mods={mods} />;
-    case "custom_ability": return <AbilityPreview mods={mods} />;
+    case "custom_class_feature":
+    case "custom_ability": return <ClassFeaturePreview mods={mods} />;
     default:               return <RuleModPreview mods={mods} />;
   }
 }
@@ -629,7 +630,7 @@ function SpellPreview({ mods }) {
   );
 }
 
-function AbilityPreview({ mods }) {
+function ClassFeaturePreview({ mods }) {
   return (
     <div className="space-y-1">
       <Row label="Type" value={mods.type} />
@@ -637,7 +638,14 @@ function AbilityPreview({ mods }) {
       <Row label="Level" value={mods.level} />
       <Row label="Cost" value={mods.cost} />
       <Row label="Uses" value={mods.uses} />
+      <Row label="Recharge" value={mods.recharge} />
       <Row label="Effect" value={mods.effect_type} />
+      <Row label="Resolution" value={mods.resolution} />
+      <Row label="Damage" value={mods.damage_dice ? `${mods.damage_dice} ${mods.damage_type || ""}`.trim() : null} />
+      <Row label="Healing" value={mods.healing_dice} />
+      <Row label="Save" value={mods.save_ability || mods.condition_save} />
+      <Row label="Condition" value={mods.condition_applied} />
+      <Row label="Resource" value={mods.resource_restored ? `${mods.resource_restored}${mods.resource_amount ? ` (${mods.resource_amount})` : ""}` : null} />
       {mods.description && (
         <p className="text-xs text-slate-300 mt-2 whitespace-pre-wrap">{mods.description}</p>
       )}

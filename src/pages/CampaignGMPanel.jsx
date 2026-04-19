@@ -260,12 +260,16 @@ export default function CampaignGMPanel() {
                     </div>
                   )}
                   {character?.profile_avatar_url ? (
-                    <LazyImage 
-                      src={character.profile_avatar_url} 
+                    <LazyImage
+                      src={character.profile_avatar_url}
                       alt={character.name}
                       className="w-full h-full"
                       style={{
-                        objectPosition: 'center center',
+                        // Anchor to the top so tall portraits show
+                        // the face; a character-specific
+                        // profile_position transform still overrides
+                        // below.
+                        objectPosition: 'top',
                         transform: character.profile_position && character.profile_zoom
                           ? `translate(${character.profile_position.x}px, ${character.profile_position.y}px) scale(${character.profile_zoom})`
                           : 'none',

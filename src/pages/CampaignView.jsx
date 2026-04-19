@@ -172,7 +172,7 @@ export default function CampaignView() {
                     <img
                       src={player.avatar_url}
                       alt=""
-                      className="w-16 h-16 rounded-full mx-auto mb-2 object-cover"
+                      className="w-16 h-16 rounded-full mx-auto mb-2 object-cover object-top"
                     />
                   ) : (
                     <div className="w-16 h-16 rounded-full mx-auto mb-2 bg-slate-700 flex items-center justify-center text-slate-300 font-bold">

@@ -263,7 +263,7 @@ export default function CampaignNPCs({ embedded = false, campaignId: campaignIdO
                     <div className="flex items-center gap-6">
                       <div className="w-24 h-24 rounded-xl bg-[#1E2430] overflow-hidden border-2 border-[#37F2D1] shadow-lg shadow-[#37F2D1]/20">
                         {selectedNPC.avatar_url || stats.profile_avatar_url || stats.avatar_url ? (
-                          <img src={selectedNPC.avatar_url || stats.profile_avatar_url || stats.avatar_url} alt={selectedNPC.name} className="w-full h-full object-cover" />
+                          <img src={selectedNPC.avatar_url || stats.profile_avatar_url || stats.avatar_url} alt={selectedNPC.name} className="w-full h-full object-cover object-top" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-4xl text-gray-600">?</div>
                         )}
