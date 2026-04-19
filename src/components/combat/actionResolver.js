@@ -675,10 +675,49 @@ export function resolveAction(action, actor) {
 
   // === MONSTER/NPC ACTIONS ===
   if (action.type === "monster_action" || action.attack_bonus !== undefined || action.damage) {
+    // Normalise the action cost into the action economy vocabulary.
+    const costTag = (action.action_cost || "").toLowerCase();
+    const cost = action.costOverride
+      || (costTag === "bonus_action" || costTag === "bonus action" || costTag === "bonus" ? "bonus"
+        : costTag === "reaction" ? "reaction"
+        : costTag === "free" || costTag === "legendary" || costTag === "lair" ? "free"
+        : "action");
+    const explicitType = (action.action_type || "").toLowerCase();
+    // Save-based monster actions route through the saving_throw flow so
+    // the dice window prompts the target for a save vs DC instead of
+    // rolling a to-hit the monster doesn't have.
+    if (explicitType === "saving_throw" || (action.save_dc && !action.attack_bonus)) {
+      return {
+        rollType: "saving_throw",
+        save: (action.save_ability || "DEX").toLowerCase(),
+        saveDC: action.save_dc ? Number(action.save_dc) : undefined,
+        cost,
+        requiresTarget: true,
+        description: action.name || "Monster Save",
+        weapon: action,
+      };
+    }
+    if (explicitType === "no_roll") {
+      return {
+        rollType: "no_roll",
+        cost,
+        requiresTarget: false,
+        description: action.name || "Monster Action",
+      };
+    }
+    if (explicitType === "healing") {
+      return {
+        rollType: "no_roll",
+        cost,
+        requiresTarget: true,
+        description: action.name || "Heal",
+        healing: action.healing_dice,
+      };
+    }
     return {
       rollType: "attack",
       attackType: "monster",
-      cost: "action",
+      cost,
       requiresTarget: true,
       description: action.name || "Monster Attack",
       weapon: action,

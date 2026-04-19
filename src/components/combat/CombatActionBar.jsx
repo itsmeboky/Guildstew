@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Heart, Circle, Triangle, Music, Zap, ChevronLeft, ChevronRight, Flame, Swords, ShieldPlus, Bolt } from "lucide-react";
+import { Heart, Circle, Triangle, Music, Zap, ChevronLeft, ChevronRight, Flame, Swords, ShieldPlus, Bolt, Sword, Sparkles, Plus as PlusIcon, Star, Crown, ShieldAlert } from "lucide-react";
 import { spellIcons, spellDetails as hardcodedSpellDetails } from "@/components/dnd5e/spellData";
 import { hpBarColor } from "@/components/combat/hpColor";
 import {
@@ -591,6 +591,117 @@ export default function CombatActionBar({
     []
   );
 
+  // Monster action groups. SRD monsters store their action lists under
+  // `stats.actions / reactions / legendary_actions / lair_actions`, but
+  // some older shapes flatten them on the root character. Normalise
+  // each list + tag every entry with the action cost inferred from the
+  // section so the action resolver / dice window sees a consistent
+  // shape regardless of source. Every list also gets an `_iconKind`
+  // hint used by the render layer to pick a generic lucide icon when
+  // the monster action has no asset.
+  const monsterActionGroups = React.useMemo(() => {
+    if (!isCreature || !character) return null;
+    const stats = character.stats || {};
+    const pickList = (key) => {
+      const top = Array.isArray(character[key]) ? character[key] : [];
+      const nested = Array.isArray(stats[key]) ? stats[key] : [];
+      return nested.length > 0 ? nested : top;
+    };
+
+    const tag = (list, defaultCost) => (Array.isArray(list) ? list : [])
+      .filter((a) => a && (a.name || a.desc || a.description))
+      .map((a) => ({ ...a, _cost: a.action_cost || a.cost || defaultCost }));
+
+    const actions   = tag(pickList("actions"),           "action");
+    const bonuses   = tag(pickList("bonus_actions"),     "bonus_action");
+    const reactions = tag(pickList("reactions"),         "reaction");
+    const legendary = tag(pickList("legendary_actions"), "legendary");
+    const lair      = tag(pickList("lair_actions"),      "lair");
+
+    // Split a Multiattack entry out so we can render it first.
+    let multi = null;
+    const rest = [];
+    for (const a of actions) {
+      const name = (a?.name || "").toLowerCase();
+      if (!multi && (name === "multiattack" || name === "multi-attack" || name === "multi attack")) {
+        multi = a;
+      } else {
+        rest.push(a);
+      }
+    }
+    // Stat-block-level multiattack object (from the expanded homebrew schema)
+    // wins if present; the inline Multiattack action is kept as a
+    // fallback so SRD monsters still show something.
+    const multiattackObj = stats.multiattack || character.multiattack || null;
+    const multiActive = multiattackObj?.enabled
+      ? {
+          name: "Multiattack",
+          description: multiattackObj.description || "",
+          attacks: multiattackObj.attacks || [],
+          _cost: "action",
+        }
+      : multi;
+
+    return {
+      multiattack: multiActive,
+      actions: rest,
+      bonus_actions: bonuses,
+      reactions,
+      legendary_actions: legendary,
+      lair_actions: lair,
+      legendary_per_round: stats.legendary_actions_per_round ?? character.legendary_actions_per_round ?? null,
+      legendary_resistances: stats.legendary_resistances ?? character.legendary_resistances ?? null,
+    };
+  }, [character, isCreature]);
+
+  // Monster spells. Supports three storage shapes:
+  //   1. `stats.spells` array of strings (SRD bucketed list flattened)
+  //   2. `stats.spellcasting.spells` / `stats.spells` nested by level
+  //   3. Individual spell action entries (rare — already appear under actions)
+  const monsterSpells = React.useMemo(() => {
+    if (!isCreature || !character) return [];
+    const stats = character.stats || {};
+    const collect = [];
+    const push = (name, level) => {
+      if (!name) return;
+      const clean = typeof name === "string" ? name.trim() : name?.name?.trim();
+      if (!clean) return;
+      collect.push({ name: clean, level: typeof level === "number" ? level : undefined });
+    };
+    const sources = [stats.spells, stats.spellcasting?.spells, character.spells];
+    for (const src of sources) {
+      if (!src) continue;
+      if (Array.isArray(src)) {
+        for (const s of src) push(s, typeof s === "object" ? s?.level : undefined);
+      } else if (typeof src === "object") {
+        const buckets = [
+          { level: 0, arr: src.cantrips || src.at_will || src["at will"] || src.atWill },
+          { level: 1, arr: src.level1 || src["1"] || src.first },
+          { level: 2, arr: src.level2 || src["2"] || src.second },
+          { level: 3, arr: src.level3 || src["3"] || src.third },
+          { level: 4, arr: src.level4 || src["4"] || src.fourth },
+          { level: 5, arr: src.level5 || src["5"] || src.fifth },
+          { level: 6, arr: src.level6 || src["6"] || src.sixth },
+          { level: 7, arr: src.level7 || src["7"] || src.seventh },
+          { level: 8, arr: src.level8 || src["8"] || src.eighth },
+          { level: 9, arr: src.level9 || src["9"] || src.ninth },
+        ];
+        for (const { level, arr } of buckets) {
+          if (!Array.isArray(arr)) continue;
+          for (const s of arr) push(s, level);
+        }
+      }
+    }
+    // Dedupe by lowercase name.
+    const seen = new Set();
+    return collect.filter((s) => {
+      const k = s.name.toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }, [character, isCreature]);
+
   const canScrollLeft = scrollPosition > 0;
   const canScrollRight = scrollPosition + visibleSpellCount < defaultSpells.length;
 
@@ -625,8 +736,8 @@ export default function CombatActionBar({
           <StatHump label="SPEED" value={`${speed} ft.`} short />
         </div>
         <div className="flex items-center gap-3">
-          <div className="w-14 h-14 rounded-full bg-[#050816] border border-[#111827] flex items-center justify-center relative shadow-lg">
-            <Heart className="w-6 h-6 text-white fill-transparent" strokeWidth={2.5} />
+          <div className="w-12 h-12 rounded-full bg-[#050816] border border-[#111827] flex items-center justify-center relative shadow-lg">
+            <Heart className="w-5 h-5 text-white fill-transparent" strokeWidth={2.5} />
           </div>
           <div className="w-64">
             <div className="h-5 rounded-full bg-[#111827] overflow-hidden relative border border-[#1e293b]">
@@ -1019,7 +1130,7 @@ export default function CombatActionBar({
                       title={ability.name}
                       disabled={ability.disabled}
                       onClick={() => onClassAbility && onClassAbility(ability.id, ability)}
-                      className={`w-11 h-11 rounded-xl border-2 flex flex-col items-center justify-center transition-all text-[8px] font-black uppercase tracking-wider leading-none ${
+                      className={`w-[44px] h-[44px] rounded-xl border-2 flex flex-col items-center justify-center transition-all text-[8px] font-black uppercase tracking-wider leading-none ${
                         ability.disabled
                           ? 'bg-[#0b1220] border-[#111827] text-slate-600 opacity-50 cursor-not-allowed'
                           : isActive
@@ -1104,7 +1215,105 @@ export default function CombatActionBar({
                 </div>
               );
             })}
-          {defaultSpells.length === 0 && classBonusActions.length === 0 && (
+          {/* Monster actions — grouped by cost with a label per group.
+              Multiattack leads (distinct stacked visual). Falls through
+              to the empty-state text only when the monster truly has
+              no actions AND no spells. */}
+          {isCreature && monsterActionGroups && (
+            <>
+              {monsterActionGroups.multiattack && (
+                <MonsterActionGroup
+                  label="Multi-Attack"
+                  color="amber"
+                  actions={[{ ...monsterActionGroups.multiattack, _isMulti: true }]}
+                  onActionClick={onActionClick}
+                />
+              )}
+              {monsterActionGroups.actions.length > 0 && (
+                <MonsterActionGroup
+                  label="Actions"
+                  color="orange"
+                  actions={monsterActionGroups.actions}
+                  onActionClick={onActionClick}
+                />
+              )}
+              {monsterActionGroups.bonus_actions.length > 0 && (
+                <MonsterActionGroup
+                  label="Bonus"
+                  color="pink"
+                  actions={monsterActionGroups.bonus_actions}
+                  onActionClick={onActionClick}
+                />
+              )}
+              {monsterActionGroups.reactions.length > 0 && (
+                <MonsterActionGroup
+                  label="Reactions"
+                  color="sky"
+                  actions={monsterActionGroups.reactions}
+                  onActionClick={onActionClick}
+                />
+              )}
+              {monsterActionGroups.legendary_actions.length > 0 && (
+                <MonsterActionGroup
+                  label={`Legendary${monsterActionGroups.legendary_per_round ? ` (${monsterActionGroups.legendary_per_round}/rd)` : ""}`}
+                  color="gold"
+                  actions={monsterActionGroups.legendary_actions}
+                  onActionClick={onActionClick}
+                  badge="L"
+                />
+              )}
+              {monsterActionGroups.lair_actions.length > 0 && (
+                <MonsterActionGroup
+                  label="Lair"
+                  color="lime"
+                  actions={monsterActionGroups.lair_actions}
+                  onActionClick={onActionClick}
+                />
+              )}
+              {monsterSpells.length > 0 && (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="h-10 w-[2px] bg-[#1e2636] flex-shrink-0" />
+                  <div className="flex flex-col items-start gap-0.5 pr-1 flex-shrink-0">
+                    <span className="text-[9px] uppercase tracking-[0.22em] text-indigo-300 font-bold leading-none">
+                      Spells
+                    </span>
+                  </div>
+                  {monsterSpells.map((spell, idx) => (
+                    <SpellSlot
+                      key={`msp-${idx}`}
+                      src={
+                        spellIcons[spell.name] ||
+                        spellIcons[Object.keys(spellIcons).find((k) => k.toLowerCase() === spell.name.toLowerCase())]
+                      }
+                      tooltip={spell.level != null ? `${spell.name} (L${spell.level})` : spell.name}
+                      onHover={() => handleSpellHover(spell.name)}
+                      onLeave={handleSpellLeave}
+                      onClick={() =>
+                        onActionClick &&
+                        onActionClick({
+                          type: "spell",
+                          name: spell.name,
+                          level: spell.level,
+                          spell,
+                        })
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+          {defaultSpells.length === 0
+            && classBonusActions.length === 0
+            && (!isCreature
+              || !monsterActionGroups
+              || (monsterActionGroups.actions.length === 0
+                && monsterActionGroups.bonus_actions.length === 0
+                && monsterActionGroups.reactions.length === 0
+                && monsterActionGroups.legendary_actions.length === 0
+                && monsterActionGroups.lair_actions.length === 0
+                && !monsterActionGroups.multiattack
+                && monsterSpells.length === 0)) && (
             <div className="text-slate-500 text-xs italic flex items-center px-4">
               No spells or abilities
             </div>
@@ -1154,9 +1363,9 @@ function ActionButton({ active, onClick, color, icon: Icon }) {
     <button
       onClick={onClick}
       disabled={!interactive}
-      className={`w-12 h-12 rounded-[14px] border flex items-center justify-center transition-all ${active ? `bg-[#050816] ${colorClass} shadow-[0_0_15px_rgba(0,0,0,0.3)]` : 'bg-[#050816] border-[#111827] opacity-50'} ${interactive ? 'cursor-pointer' : 'cursor-default'}`}
+      className={`w-10 h-10 rounded-[12px] border flex items-center justify-center transition-all ${active ? `bg-[#050816] ${colorClass} shadow-[0_0_15px_rgba(0,0,0,0.3)]` : 'bg-[#050816] border-[#111827] opacity-50'} ${interactive ? 'cursor-pointer' : 'cursor-default'}`}
     >
-      <Icon className={`w-4 h-4 fill-current ${active ? colorClass.split(' ')[0] : 'text-slate-500'}`} />
+      <Icon className={`w-3.5 h-3.5 fill-current ${active ? colorClass.split(' ')[0] : 'text-slate-500'}`} />
     </button>
   );
 }
@@ -1199,7 +1408,7 @@ function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick
   return (
     <button
       disabled={!!disabled}
-      className={`w-16 h-16 rounded-2xl bg-[#050816] border-2 border-[#111827] p-[2px] flex-shrink-0 shadow-[0_14px_32px_rgba(0,0,0,0.8)] transition relative ${disabled ? 'opacity-30 grayscale cursor-not-allowed' : 'hover:-translate-y-[1px]'}`}
+      className={`w-[52px] h-[52px] rounded-xl bg-[#050816] border-2 border-[#111827] p-[2px] flex-shrink-0 shadow-[0_14px_32px_rgba(0,0,0,0.8)] transition relative ${disabled ? 'opacity-30 grayscale cursor-not-allowed' : 'hover:-translate-y-[1px]'}`}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
       onClick={(e) => {
@@ -1210,7 +1419,7 @@ function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick
       }}
       style={activeStyle}
     >
-      <div className="w-full h-full rounded-[18px] bg-[#050816] overflow-hidden flex items-center justify-center">
+      <div className="w-full h-full rounded-[10px] bg-[#050816] overflow-hidden flex items-center justify-center">
         {src ? (
           <img
             src={src}
@@ -1229,12 +1438,150 @@ function BasicActionSlot({ src, tooltip, toggleable, isActive, onToggle, onClick
   );
 }
 
+// Colour map used by MonsterActionGroup. Each cost gets distinct
+// border + text so the GM can scan the bar by role.
+const MONSTER_GROUP_COLORS = {
+  amber: { label: "text-amber-300",   border: "border-amber-500/70",  glow: "shadow-[0_0_10px_rgba(245,158,11,0.35)]" },
+  orange:{ label: "text-orange-300",  border: "border-orange-500/70", glow: "shadow-[0_0_10px_rgba(249,115,22,0.35)]" },
+  pink:  { label: "text-pink-300",    border: "border-pink-500/70",   glow: "shadow-[0_0_10px_rgba(236,72,153,0.35)]" },
+  sky:   { label: "text-sky-300",     border: "border-sky-500/70",    glow: "shadow-[0_0_10px_rgba(14,165,233,0.35)]" },
+  gold:  { label: "text-yellow-300",  border: "border-yellow-400/80", glow: "shadow-[0_0_12px_rgba(250,204,21,0.45)]" },
+  lime:  { label: "text-lime-300",    border: "border-lime-500/70",   glow: "shadow-[0_0_10px_rgba(132,204,22,0.35)]" },
+};
+
+function pickActionIconKind(action) {
+  if (!action) return "generic";
+  if (action._isMulti) return "multi";
+  const desc = (action.description || action.desc || "").toLowerCase();
+  const name = (action.name || "").toLowerCase();
+  const actionType = (action.action_type || "").toLowerCase();
+  if (actionType === "healing" || name.includes("heal") || desc.includes("regain hit points")) return "healing";
+  if (actionType === "saving_throw" || action.save_dc || action.save_ability || desc.includes("saving throw")) return "burst";
+  if (actionType === "melee_attack" || actionType === "ranged_attack"
+    || action.attack_bonus != null
+    || /\bto hit\b|melee attack|ranged attack|\battacks?\b/.test(desc)) return "attack";
+  return "generic";
+}
+
+function MonsterActionGroup({ label, color, actions, onActionClick, badge }) {
+  const palette = MONSTER_GROUP_COLORS[color] || MONSTER_GROUP_COLORS.orange;
+  return (
+    <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="h-10 w-[2px] bg-[#1e2636] flex-shrink-0" />
+      <div className="flex flex-col items-start gap-0.5 pr-1 flex-shrink-0">
+        <span className={`text-[9px] uppercase tracking-[0.22em] font-bold leading-none ${palette.label}`}>
+          {label}
+        </span>
+      </div>
+      {actions.map((action, idx) => (
+        <MonsterActionSlot
+          key={`${label}-${action.name || "action"}-${idx}`}
+          action={action}
+          palette={palette}
+          badge={badge}
+          onClick={() => onActionClick && onActionClick({
+            type: "monster_action",
+            name: action.name,
+            description: action.description || action.desc,
+            attack_bonus: action.attack_bonus,
+            damage: action.damage,
+            damage_type: action.damage_type,
+            save_ability: action.save_ability,
+            save_dc: action.save_dc,
+            action_type: action.action_type,
+            action_cost: action._cost,
+            costOverride: action._cost === "bonus_action" ? "bonus"
+                        : action._cost === "reaction" ? "reaction"
+                        : action._cost === "legendary" ? "free"
+                        : action._cost === "lair" ? "free"
+                        : "action",
+            _raw: action,
+          })}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MonsterActionSlot({ action, palette, badge, onClick }) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const kind = pickActionIconKind(action);
+  const Icon =
+    kind === "multi"   ? Swords :
+    kind === "attack"  ? Sword :
+    kind === "burst"   ? Sparkles :
+    kind === "healing" ? PlusIcon :
+    Star;
+  const name = action.name || "Action";
+  const truncated = name.length > 10 ? `${name.slice(0, 9)}…` : name;
+  const tooltip = (
+    <div className="max-w-[260px]">
+      <div className="font-bold text-[#37F2D1] mb-1">
+        {name}{action.legendary_cost > 1 ? ` (Costs ${action.legendary_cost})` : ""}
+      </div>
+      {action.attack_bonus != null && action.attack_bonus !== "" && (
+        <div className="text-[10px] text-slate-400 mb-1">+{action.attack_bonus} to hit{action.reach ? ` · ${action.reach}` : ""}</div>
+      )}
+      {action.save_dc && (
+        <div className="text-[10px] text-slate-400 mb-1">DC {action.save_dc} {action.save_ability || "save"}</div>
+      )}
+      {action.damage && (
+        <div className="text-[10px] text-slate-400 mb-1">{action.damage} {action.damage_type || ""}</div>
+      )}
+      {(action.description || action.desc) && (
+        <div className="text-[10px] text-slate-300 whitespace-pre-wrap leading-snug">
+          {(action.description || action.desc).slice(0, 280)}
+        </div>
+      )}
+    </div>
+  );
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+      className={`relative w-[52px] h-[52px] rounded-xl bg-[#050816] border-2 ${palette.border} ${palette.glow} flex-shrink-0 flex flex-col items-center justify-center transition hover:-translate-y-[1px]`}
+      title={name}
+    >
+      {action._isMulti ? (
+        // Stacked icon for Multi-Attack — two sword icons offset so the
+        // GM can pick it out at a glance without reading the label.
+        <span className="relative inline-block w-6 h-6">
+          <Swords className={`absolute left-0 top-0 w-4 h-4 ${palette.label} opacity-70`} />
+          <Swords className={`absolute right-0 bottom-0 w-4 h-4 ${palette.label}`} />
+        </span>
+      ) : (
+        <Icon className={`w-5 h-5 ${palette.label}`} />
+      )}
+      <span className={`text-[7px] leading-none font-bold uppercase mt-0.5 ${palette.label} truncate max-w-[46px]`}>
+        {truncated}
+      </span>
+      {badge && (
+        <span className="absolute -top-1 -right-1 bg-black border border-yellow-400 text-yellow-300 text-[8px] font-black rounded-full w-4 h-4 flex items-center justify-center">
+          {badge}
+        </span>
+      )}
+      {action._isMulti && Array.isArray(action.attacks) && action.attacks.length > 0 && (
+        <span className="absolute -top-1 -left-1 bg-black border border-amber-400 text-amber-300 text-[8px] font-black rounded-full px-1 flex items-center justify-center">
+          ×{action.attacks.reduce((n, a) => n + (a?.count || 1), 0)}
+        </span>
+      )}
+      {showTooltip && (
+        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-[#1E2430] text-white px-3 py-2 rounded-lg text-[11px] shadow-xl border border-[#37F2D1] z-50 pointer-events-none">
+          {tooltip}
+        </div>
+      )}
+    </button>
+  );
+}
+
 function SpellSlot({ src, tooltip, onHover, onLeave, onClick }) {
   const [showTooltip, setShowTooltip] = useState(false);
   
   return (
     <button 
-      className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#4c1d95] via-[#6366f1] to-[#22d3ee] p-[2px] flex-shrink-0 shadow-[0_14px_32px_rgba(0,0,0,0.8)] hover:-translate-y-[1px] transition relative"
+      className="w-[52px] h-[52px] rounded-xl bg-gradient-to-br from-[#4c1d95] via-[#6366f1] to-[#22d3ee] p-[2px] flex-shrink-0 shadow-[0_14px_32px_rgba(0,0,0,0.8)] hover:-translate-y-[1px] transition relative"
       onMouseEnter={() => {
         setShowTooltip(true);
         if (onHover) onHover();
@@ -1245,7 +1592,7 @@ function SpellSlot({ src, tooltip, onHover, onLeave, onClick }) {
       }}
       onClick={onClick}
     >
-      <div className="w-full h-full rounded-[18px] bg-black/60 overflow-hidden">
+      <div className="w-full h-full rounded-[10px] bg-black/60 overflow-hidden">
         {src ? <img src={src} alt={tooltip || ""} className="w-full h-full object-cover" /> : null}
       </div>
       {showTooltip && tooltip && (
