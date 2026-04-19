@@ -296,23 +296,36 @@ export default function RaceStep({ characterData, updateCharacterData, campaignI
   const currentRace = combinedRaces[selectedRaceIndex] || combinedRaces[0];
   const selectedBackground = backgrounds.find(b => b.name === characterData.background);
 
+  // Pack brewery-race metadata onto characterData so downstream
+  // steps (abilities / skills / features) can read it without
+  // re-fetching. SRD selections wipe the slate so switching away
+  // from a brewery race cleans up its bonuses.
+  const buildRaceUpdates = (race) => {
+    const updates = {
+      race: race.name,
+      subrace: race.subtypes[0],
+    };
+    if (race._source === "brewery") {
+      updates._brewery_race = race._raw || null;
+      updates._brewery_ability_picks = {};
+    } else {
+      updates._brewery_race = null;
+      updates._brewery_ability_picks = {};
+    }
+    return updates;
+  };
+
   const handleRaceChange = (direction) => {
     let newIndex = selectedRaceIndex + direction;
     if (newIndex < 0) newIndex = combinedRaces.length - 1;
     if (newIndex >= combinedRaces.length) newIndex = 0;
     setSelectedRaceIndex(newIndex);
-    updateCharacterData({
-      race: combinedRaces[newIndex].name,
-      subrace: combinedRaces[newIndex].subtypes[0],
-    });
+    updateCharacterData(buildRaceUpdates(combinedRaces[newIndex]));
   };
 
   React.useEffect(() => {
     if (!characterData.race) {
-      updateCharacterData({
-        race: currentRace.name,
-        subrace: currentRace.subtypes[0],
-      });
+      updateCharacterData(buildRaceUpdates(currentRace));
     } else {
       const initialRaceIndex = combinedRaces.findIndex(race => race.name === characterData.race);
       if (initialRaceIndex !== -1 && initialRaceIndex !== selectedRaceIndex) {

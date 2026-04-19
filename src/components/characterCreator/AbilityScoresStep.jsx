@@ -2,9 +2,14 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dices, HelpCircle, X } from "lucide-react";
+import { Dices, HelpCircle, X, Sparkles } from "lucide-react";
 import { getRacialAbilityBonuses } from "@/components/dnd5e/raceData";
 import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
+import {
+  getBreweryRaceBonuses,
+  getBreweryAbilityPickerSpec,
+  BREWERY_ABILITY_KEYS,
+} from "@/lib/breweryRaceApply";
 
 const abilities = [
   { key: "str", name: "Strength", description: "Physical power, athleticism, and carrying capacity" },
@@ -37,7 +42,41 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
   const [assignedScores, setAssignedScores] = useState({});
   const [baseScores, setBaseScores] = useState(characterData.attributes || { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 });
 
-  const racialBonuses = getRacialAbilityBonuses(characterData.race, characterData.subrace);
+  // Mix brewery-race bonuses in on top of the SRD lookup. The
+  // brewery race metadata hangs on characterData._brewery_race and
+  // user picks for `choose` / `custom` modes live on
+  // characterData._brewery_ability_picks.
+  const breweryRace = characterData._brewery_race || null;
+  const breweryPicks = characterData._brewery_ability_picks || {};
+  const pickerSpec = getBreweryAbilityPickerSpec(breweryRace);
+  const breweryBonuses = getBreweryRaceBonuses(breweryRace, breweryPicks);
+  const srdBonuses = breweryRace ? {} : getRacialAbilityBonuses(characterData.race, characterData.subrace);
+  const racialBonuses = { ...srdBonuses };
+  for (const [k, v] of Object.entries(breweryBonuses)) {
+    racialBonuses[k] = (racialBonuses[k] || 0) + v;
+  }
+
+  const picksMade = Object.values(breweryPicks).filter(Boolean).length;
+  const pickLimit = pickerSpec.needed ? pickerSpec.count : 0;
+  const togglePick = (key) => {
+    const current = !!breweryPicks[key];
+    if (!current && pickerSpec.needed && pickerSpec.excluded.includes(key)) return;
+    if (!current && picksMade >= pickLimit) return;
+    const nextPicks = { ...breweryPicks };
+    if (current) delete nextPicks[key];
+    else nextPicks[key] = true;
+    // Recompute final attributes so the UI reflects the new bonus
+    // without waiting for the user to touch a base score again.
+    const nextBreweryBonuses = getBreweryRaceBonuses(breweryRace, nextPicks);
+    const finalScores = {};
+    Object.keys(baseScores).forEach((k) => {
+      finalScores[k] = baseScores[k] + (srdBonuses[k] || 0) + (nextBreweryBonuses[k] || 0);
+    });
+    updateCharacterData({
+      _brewery_ability_picks: nextPicks,
+      attributes: finalScores,
+    });
+  };
 
   const calculateModifier = (score) => {
     const mod = abilityModifier(score);
@@ -276,7 +315,14 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
       {/* Racial Bonus Display */}
       {Object.keys(racialBonuses).length > 0 && (
         <div className="bg-[#37F2D1]/10 border-2 border-[#37F2D1]/30 rounded-xl p-4 mb-6">
-          <h3 className="text-[#37F2D1] font-bold mb-2">Racial Bonuses from {characterData.race}{characterData.subrace ? ` (${characterData.subrace})` : ''}</h3>
+          <h3 className="text-[#37F2D1] font-bold mb-2 flex items-center gap-2">
+            Racial Bonuses from {characterData.race}{characterData.subrace ? ` (${characterData.subrace})` : ''}
+            {breweryRace && (
+              <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1.5 py-0.5">
+                <Sparkles className="w-3 h-3" /> Brewery
+              </span>
+            )}
+          </h3>
           <div className="flex gap-3 flex-wrap">
             {Object.entries(racialBonuses).map(([key, bonus]) => (
               <div key={key} className="bg-[#2A3441] px-3 py-1 rounded-lg">
@@ -284,6 +330,45 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
                 <span className="text-[#37F2D1] ml-2">+{bonus}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Brewery race ability picker — shown for 'choose' / 'custom'
+          modes. 'fixed' races auto-apply and skip the picker entirely. */}
+      {pickerSpec.needed && (
+        <div className="bg-[#0b1220] border-2 border-[#37F2D1]/40 rounded-xl p-4 mb-6">
+          <h3 className="text-[#37F2D1] font-bold mb-1 flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
+            Choose {pickerSpec.count} {pickerSpec.count === 1 ? "score" : "scores"} — each gets +{pickerSpec.amount}
+          </h3>
+          <p className="text-xs text-white/60 mb-3">
+            Picked {picksMade} of {pickerSpec.count}
+            {pickerSpec.excluded.length > 0 ? ` · excluded: ${pickerSpec.excluded.map((e) => e.toUpperCase()).join(", ")}` : ""}
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            {BREWERY_ABILITY_KEYS.map((key) => {
+              const excluded = pickerSpec.excluded.includes(key);
+              const active   = !!breweryPicks[key];
+              const disabled = excluded || (!active && picksMade >= pickerSpec.count);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => togglePick(key)}
+                  disabled={disabled}
+                  className={`px-3 py-1.5 rounded border text-xs font-black uppercase tracking-widest transition-colors ${
+                    active
+                      ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                      : disabled
+                        ? "bg-[#1E2430] text-slate-600 border-slate-800 cursor-not-allowed"
+                        : "bg-[#1E2430] text-slate-300 border-slate-700 hover:border-[#37F2D1]/60"
+                  }`}
+                >
+                  {key}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
