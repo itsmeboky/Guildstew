@@ -90,6 +90,12 @@ export const entities = {
   CampaignMap:          createEntity('campaign_maps'),
   CampaignNPC:          createEntity('campaign_npcs'),
   CampaignUpdate:       createEntity('campaign_updates'),
+  // Per-character notes / companions / relationships. These used
+  // to live as JSONB arrays on the character row; they're now top-
+  // level tables with their own visibility + directional semantics.
+  PlayerNote:            createEntity('player_notes'),
+  Companion:             createEntity('companions'),
+  CharacterRelationship: createEntity('character_relationships'),
   // Shared SRD reference tables. Read-only from the app's
   // perspective (populated by seed scripts). The per-campaign
   // tables (monsters / campaign_items / spells / campaign_abilities)
