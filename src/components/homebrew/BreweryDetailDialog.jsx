@@ -654,6 +654,31 @@ function SpellPreview({ mods }) {
           <p className="text-xs text-slate-300 whitespace-pre-wrap">{mods.higher_level}</p>
         </div>
       )}
+      {mods.alternative_costs?.enabled && Array.isArray(mods.alternative_costs.costs) && mods.alternative_costs.costs.length > 0 && (
+        <div className="mt-2 bg-[#1a0514]/60 border border-rose-600/40 rounded p-2">
+          <div className="text-[10px] uppercase tracking-widest text-rose-300 font-bold mb-1">
+            Alternative Cost {mods.alternative_costs.replaces_slot ? "(instead of slot)" : "(in addition to slot)"}
+          </div>
+          <ul className="text-[11px] text-slate-200 space-y-0.5">
+            {mods.alternative_costs.costs.map((c, i) => (
+              <li key={i}>
+                <span className="text-rose-300 capitalize">{c.type?.replaceAll("_", " ")}:</span> {c.amount}
+                {c.description && <span className="text-slate-400"> — {c.description}</span>}
+              </li>
+            ))}
+          </ul>
+          {Array.isArray(mods.alternative_costs.after_effects) && mods.alternative_costs.after_effects.length > 0 && (
+            <ul className="text-[10px] text-slate-400 mt-1 space-y-0.5">
+              {mods.alternative_costs.after_effects.map((ae, i) => (
+                <li key={i}>
+                  After {ae.trigger?.replaceAll("_", " ")}: {ae.effect_type} {ae.amount}
+                  {ae.condition && <span> (if {ae.condition})</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -677,6 +702,29 @@ function ClassFeaturePreview({ mods }) {
       <Row label="Trigger" value={mods.trigger?.event ? mods.trigger.event.replaceAll("_", " ") : null} />
       {mods.description && (
         <p className="text-xs text-slate-300 mt-2 whitespace-pre-wrap">{mods.description}</p>
+      )}
+      {mods.type === "Feature Menu" && mods.menu?.options?.length > 0 && (
+        <div className="mt-3 bg-[#050816] border border-[#1e293b] rounded p-2">
+          <div className="text-[10px] uppercase tracking-widest text-[#37F2D1] font-bold mb-1">
+            Menu options ({mods.menu.options.length})
+          </div>
+          {Array.isArray(mods.menu.learn_count) && mods.menu.learn_count.length > 0 && (
+            <p className="text-[10px] text-slate-400 mb-2">
+              Schedule: {mods.menu.learn_count.map((r) => `L${r.level}→${r.count}`).join(", ")}
+              {mods.menu.swap_on_level_up ? ` · swap ${mods.menu.swap_count || 1}/lvl` : ""}
+            </p>
+          )}
+          <ul className="space-y-1.5">
+            {mods.menu.options.map((o, i) => (
+              <li key={i} className="text-[11px]">
+                <span className="text-white font-bold">{o.name}</span>
+                {o.level_requirement > 0 && <span className="text-amber-300"> (Lvl {o.level_requirement}+)</span>}
+                {o.prerequisite && <span className="text-slate-400"> — {o.prerequisite}</span>}
+                {o.description && <div className="text-slate-400 leading-snug">{o.description}</div>}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );
