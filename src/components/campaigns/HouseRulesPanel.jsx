@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { RotateCcw, Trash2, Swords, Moon, UserCircle, Sparkles, FlaskConical, ExternalLink } from "lucide-react";
+import { RotateCcw, Trash2, Swords, Moon, UserCircle, Sparkles, FlaskConical, ExternalLink, ShieldAlert } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { base44 } from "@/api/base44Client";
@@ -338,6 +338,8 @@ export default function HouseRulesPanel({ campaign, campaignId, canEdit = true }
         );
       })}
 
+      <BanListsSection campaign={campaign} campaignId={campaignId} canEdit={canEdit} />
+
       {/* Installed Brewery homebrew — merged on top of manual rules at combat time. */}
       <div className="bg-[#2A3441] rounded-xl p-6">
         <h2 className="text-2xl font-bold mb-1">Installed Homebrew</h2>
@@ -545,6 +547,140 @@ function RuleRow({ row, rules, canEdit, onUpdate, onReset, onApplyCritMode, onRe
           >
             <RotateCcw className="w-4 h-4" />
           </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────── Ban lists ────────────────────────────
+//
+// Simple spell / class ban lists live on campaign.settings.banned_* so
+// they travel with the campaign row without extra tables. Character
+// creator + spell flows read these to grey out disallowed picks. The
+// Brewery is for mechanical mods; banning is a single-boolean toggle
+// per item so it stays here.
+
+const CLASSES_FOR_BAN = [
+  "Artificer", "Barbarian", "Bard", "Cleric", "Druid", "Fighter",
+  "Monk", "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard",
+  "Blood Hunter",
+];
+
+function BanListsSection({ campaign, campaignId, canEdit }) {
+  const queryClient = useQueryClient();
+  const settings = campaign?.settings && typeof campaign.settings === "object" ? campaign.settings : {};
+  const bannedSpells  = Array.isArray(settings.banned_spells)  ? settings.banned_spells  : [];
+  const bannedClasses = Array.isArray(settings.banned_classes) ? settings.banned_classes : [];
+
+  // Campaign-visible spell list (SRD + homebrew). We reuse the
+  // entities layer which already filters by campaign + SRD seed.
+  const { data: availableSpells = [] } = useQuery({
+    queryKey: ["spellsForBan", campaignId],
+    queryFn: async () => {
+      try {
+        const srd = await base44.entities.Dnd5eSpell.list();
+        return (Array.isArray(srd) ? srd : []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!campaignId,
+    initialData: [],
+  });
+
+  const saveSettings = useMutation({
+    mutationFn: async (nextSettings) =>
+      base44.entities.Campaign.update(campaignId, { settings: nextSettings }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+      toast.success("Ban list updated");
+    },
+    onError: (err) => toast.error(err?.message || "Couldn't save ban list"),
+  });
+
+  const toggleSpell = (name) => {
+    const next = bannedSpells.includes(name)
+      ? bannedSpells.filter((s) => s !== name)
+      : [...bannedSpells, name];
+    saveSettings.mutate({ ...settings, banned_spells: next });
+  };
+  const toggleClass = (name) => {
+    const next = bannedClasses.includes(name)
+      ? bannedClasses.filter((s) => s !== name)
+      : [...bannedClasses, name];
+    saveSettings.mutate({ ...settings, banned_classes: next });
+  };
+
+  return (
+    <div className="bg-[#2A3441] rounded-xl p-6 space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold mb-1 flex items-center gap-2">
+          <ShieldAlert className="w-5 h-5 text-rose-400" /> Banned Classes
+        </h2>
+        <p className="text-sm text-slate-400 mb-3">
+          Classes on this list are hidden in the character creator for this campaign.
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {CLASSES_FOR_BAN.map((cls) => {
+            const banned = bannedClasses.includes(cls);
+            return (
+              <button
+                key={cls}
+                type="button"
+                disabled={!canEdit}
+                onClick={() => toggleClass(cls)}
+                className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors ${
+                  banned
+                    ? "bg-rose-500 text-white border-rose-500"
+                    : "bg-[#1E2430] border-slate-700 text-slate-300 hover:border-rose-400"
+                } disabled:opacity-60 disabled:cursor-not-allowed`}
+              >
+                {cls}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <h2 className="text-2xl font-bold mb-1 flex items-center gap-2">
+          <ShieldAlert className="w-5 h-5 text-rose-400" /> Banned Spells
+        </h2>
+        <p className="text-sm text-slate-400 mb-3">
+          Click a spell to toggle it. Banned spells can't be learned, prepared, or cast in this campaign.
+        </p>
+        {availableSpells.length === 0 ? (
+          <p className="text-xs text-slate-500 italic">Loading spells…</p>
+        ) : (
+          <div className="max-h-64 overflow-y-auto pr-1 flex flex-wrap gap-1">
+            {availableSpells.map((sp) => {
+              const name = sp?.name;
+              if (!name) return null;
+              const banned = bannedSpells.includes(name);
+              return (
+                <button
+                  key={sp.id || name}
+                  type="button"
+                  disabled={!canEdit}
+                  onClick={() => toggleSpell(name)}
+                  className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
+                    banned
+                      ? "bg-rose-500 text-white border-rose-500"
+                      : "bg-[#1E2430] border-slate-700 text-slate-300 hover:border-rose-400"
+                  } disabled:opacity-60 disabled:cursor-not-allowed`}
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {bannedSpells.length > 0 && (
+          <p className="text-[11px] text-slate-500 mt-2">
+            {bannedSpells.length} banned · click again to unban.
+          </p>
         )}
       </div>
     </div>
