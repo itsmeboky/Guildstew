@@ -6,7 +6,7 @@ import { base44 } from "@/api/base44Client";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+import { TIME_OPTIONS } from "@/utils/sessionTime";
 
 /**
  * In-session Campaign Settings editor. Exposes the knobs a GM
@@ -209,12 +209,20 @@ export default function GMSidebarSettings({ campaignId, campaign, allUserProfile
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm text-slate-300">Time</span>
-            <Input
-              type="time"
-              value={sessionTime}
-              onChange={(e) => setSessionTime(e.target.value)}
-              className="w-32 bg-[#0f1219] border-slate-700 text-white"
-            />
+            <Select
+              value={sessionTime || "__none"}
+              onValueChange={(v) => setSessionTime(v === "__none" ? "" : v)}
+            >
+              <SelectTrigger className="w-32 bg-[#0f1219] border-slate-700 text-white">
+                <SelectValue placeholder="Time…" />
+              </SelectTrigger>
+              <SelectContent className="bg-[#1a1f2e] border-slate-700 text-white max-h-64">
+                <SelectItem value="__none">Unscheduled</SelectItem>
+                {TIME_OPTIONS.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <button
             type="button"
