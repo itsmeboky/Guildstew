@@ -15,7 +15,9 @@ import {
   RACE_SIZES,
   DARKVISION_OPTIONS,
   SPEED_TYPES,
+  DAMAGE_TYPES,
 } from "@/config/breweryRaceSchema";
+import { CONDITIONS } from "@/components/combat/conditions";
 
 /**
  * Race mod creator — dialog form that authors a brewery_mods row
@@ -43,6 +45,48 @@ const ASI_MODE_LABELS = {
 const GAME_SYSTEMS = [
   { value: "dnd5e", label: "D&D 5e" },
 ];
+
+// Option lists for B4-B6. Hard-coded here rather than pulled from
+// dnd5eRules so a later system can swap them without refactoring
+// the creator form.
+const LANGUAGE_OPTIONS = [
+  "Common", "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin",
+  "Halfling", "Orc", "Abyssal", "Celestial", "Draconic", "Deep Speech",
+  "Infernal", "Primordial", "Sylvan", "Undercommon",
+];
+
+const SKILL_OPTIONS = [
+  "Acrobatics", "Animal Handling", "Arcana", "Athletics", "Deception",
+  "History", "Insight", "Intimidation", "Investigation", "Medicine",
+  "Nature", "Perception", "Performance", "Persuasion", "Religion",
+  "Sleight of Hand", "Stealth", "Survival",
+];
+
+const ARMOR_OPTIONS = ["Light", "Medium", "Heavy", "Shields"];
+
+const WEAPON_OPTIONS = [
+  "Simple Weapons", "Martial Weapons",
+  "Club", "Dagger", "Greatclub", "Handaxe", "Javelin", "Light Hammer",
+  "Mace", "Quarterstaff", "Sickle", "Spear", "Light Crossbow", "Dart",
+  "Shortbow", "Sling",
+  "Battleaxe", "Flail", "Glaive", "Greataxe", "Greatsword", "Halberd",
+  "Lance", "Longsword", "Maul", "Morningstar", "Pike", "Rapier",
+  "Scimitar", "Shortsword", "Trident", "War Pick", "Warhammer", "Whip",
+  "Blowgun", "Hand Crossbow", "Heavy Crossbow", "Longbow", "Net",
+];
+
+const TOOL_OPTIONS = [
+  "Alchemist's supplies", "Brewer's supplies", "Calligrapher's supplies",
+  "Carpenter's tools", "Cartographer's tools", "Cobbler's tools",
+  "Cook's utensils", "Disguise kit", "Forgery kit", "Glassblower's tools",
+  "Herbalism kit", "Jeweler's tools", "Leatherworker's tools",
+  "Mason's tools", "Navigator's tools", "Painter's supplies",
+  "Poisoner's kit", "Potter's tools", "Smith's tools", "Thieves' tools",
+  "Tinker's tools", "Weaver's tools", "Woodcarver's tools",
+  "Vehicles (land)", "Vehicles (water)",
+];
+
+const CONDITION_OPTIONS = Object.keys(CONDITIONS || {});
 
 function cloneBlankRace() {
   return JSON.parse(JSON.stringify(BLANK_RACE));
@@ -85,6 +129,9 @@ export default function CreateRaceModDialog({ open, onClose, mod = null }) {
           />
           <AbilityScoresSection formData={formData} setAsi={setAsi} />
           <BasicsSection formData={formData} setField={setField} />
+          <LanguagesSection formData={formData} setField={setField} />
+          <ProficienciesSection formData={formData} setField={setField} />
+          <ResistancesSection formData={formData} setField={setField} />
         </div>
       </DialogContent>
     </Dialog>
@@ -111,6 +158,37 @@ function Field({ label, children, required }) {
         {label}{required && <span className="text-red-400 ml-1">*</span>}
       </Label>
       {children}
+    </div>
+  );
+}
+
+function ChipMultiSelect({ options, values, onChange }) {
+  const selected = Array.isArray(values) ? values : [];
+  const toggle = (opt) => {
+    const next = selected.includes(opt)
+      ? selected.filter((v) => v !== opt)
+      : [...selected, opt];
+    onChange(next);
+  };
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((opt) => {
+        const active = selected.includes(opt);
+        return (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => toggle(opt)}
+            className={`text-[10px] font-semibold px-2 py-1 rounded border transition-colors capitalize ${
+              active
+                ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                : "bg-[#050816] border-slate-700 text-slate-300 hover:border-[#37F2D1]/60"
+            }`}
+          >
+            {opt}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -388,6 +466,131 @@ function BasicsSection({ formData, setField }) {
           ))}
         </div>
       </details>
+    </Section>
+  );
+}
+
+// ───────────────────────── B4 Languages ──────────────────────────
+
+function LanguagesSection({ formData, setField }) {
+  const langs = formData.languages || { fixed: [], bonus_picks: 0, restricted_to: [] };
+  const setLang = (key, value) =>
+    setField("languages", { ...langs, [key]: value });
+
+  return (
+    <Section title="Languages">
+      <Field label="Fixed Languages (auto-granted)">
+        <ChipMultiSelect
+          options={LANGUAGE_OPTIONS}
+          values={langs.fixed || []}
+          onChange={(v) => setLang("fixed", v)}
+        />
+      </Field>
+      <Field label="Bonus Language Picks">
+        <NumberInput
+          value={langs.bonus_picks ?? 0}
+          onChange={(v) => setLang("bonus_picks", v)}
+          min={0}
+          max={10}
+        />
+      </Field>
+      <Field label="Restricted To (leave empty to allow any language)">
+        <ChipMultiSelect
+          options={LANGUAGE_OPTIONS}
+          values={langs.restricted_to || []}
+          onChange={(v) => setLang("restricted_to", v)}
+        />
+      </Field>
+    </Section>
+  );
+}
+
+// ──────────────────────── B5 Proficiencies ───────────────────────
+
+function ProficienciesSection({ formData, setField }) {
+  const skills = formData.skill_proficiencies || { fixed: [], choose: 0, choose_from: [] };
+  const setSkills = (key, value) =>
+    setField("skill_proficiencies", { ...skills, [key]: value });
+
+  return (
+    <Section title="Proficiencies">
+      <Field label="Fixed Skill Proficiencies">
+        <ChipMultiSelect
+          options={SKILL_OPTIONS}
+          values={skills.fixed || []}
+          onChange={(v) => setSkills("fixed", v)}
+        />
+      </Field>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <Field label="Choose X Skills">
+          <NumberInput
+            value={skills.choose ?? 0}
+            onChange={(v) => setSkills("choose", v)}
+            min={0}
+            max={10}
+          />
+        </Field>
+        <div className="md:col-span-2">
+          <Field label="…from (leave empty for any skill)">
+            <ChipMultiSelect
+              options={SKILL_OPTIONS}
+              values={skills.choose_from || []}
+              onChange={(v) => setSkills("choose_from", v)}
+            />
+          </Field>
+        </div>
+      </div>
+      <Field label="Weapon Proficiencies">
+        <ChipMultiSelect
+          options={WEAPON_OPTIONS}
+          values={formData.weapon_proficiencies || []}
+          onChange={(v) => setField("weapon_proficiencies", v)}
+        />
+      </Field>
+      <Field label="Armor Proficiencies">
+        <ChipMultiSelect
+          options={ARMOR_OPTIONS}
+          values={formData.armor_proficiencies || []}
+          onChange={(v) => setField("armor_proficiencies", v)}
+        />
+      </Field>
+      <Field label="Tool Proficiencies">
+        <ChipMultiSelect
+          options={TOOL_OPTIONS}
+          values={formData.tool_proficiencies || []}
+          onChange={(v) => setField("tool_proficiencies", v)}
+        />
+      </Field>
+    </Section>
+  );
+}
+
+// ───────────────────────── B6 Resistances ────────────────────────
+
+function ResistancesSection({ formData, setField }) {
+  return (
+    <Section title="Resistances & Immunities">
+      <Field label="Damage Resistances">
+        <ChipMultiSelect
+          options={DAMAGE_TYPES}
+          values={formData.damage_resistances || []}
+          onChange={(v) => setField("damage_resistances", v)}
+        />
+      </Field>
+      <Field label="Damage Immunities">
+        <ChipMultiSelect
+          options={DAMAGE_TYPES}
+          values={formData.damage_immunities || []}
+          onChange={(v) => setField("damage_immunities", v)}
+        />
+      </Field>
+      <Field label="Condition Resistances (advantage on saves vs.)">
+        <ChipMultiSelect
+          options={CONDITION_OPTIONS}
+          values={formData.condition_resistances || []}
+          onChange={(v) => setField("condition_resistances", v)}
+        />
+      </Field>
     </Section>
   );
 }
