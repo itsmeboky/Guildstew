@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { safeText } from "@/utils/safeRender";
 import {
   Dialog,
   DialogContent,
@@ -166,7 +167,7 @@ function BrewCard({ brew, onEdit, onPublishToggle, onDelete, onAddToCampaign, bu
         {brew.cover_image_url ? (
           <img
             src={brew.cover_image_url}
-            alt={brew.title}
+            alt={safeText(brew.title)}
             className="w-16 h-16 rounded-lg object-cover flex-shrink-0 border border-slate-700"
           />
         ) : (
@@ -181,7 +182,7 @@ function BrewCard({ brew, onEdit, onPublishToggle, onDelete, onAddToCampaign, bu
               onClick={onEdit}
               title="Edit"
             >
-              {brew.title}
+              {safeText(brew.title)}
             </h3>
             <Badge className={brew.is_published
               ? "bg-[#22c55e] text-black hover:bg-[#22c55e]"
@@ -193,10 +194,10 @@ function BrewCard({ brew, onEdit, onPublishToggle, onDelete, onAddToCampaign, bu
             <Badge variant="outline" className="text-slate-300 border-slate-600 text-[10px]">
               {categoryLabel}
             </Badge>
-            <span className="text-[10px] text-slate-400">v{brew.version || "1.0.0"}</span>
+            <span className="text-[10px] text-slate-400">v{safeText(brew.version) || "1.0.0"}</span>
           </div>
           {brew.description && (
-            <p className="text-xs text-slate-400 mt-2 line-clamp-2">{brew.description}</p>
+            <p className="text-xs text-slate-400 mt-2 line-clamp-2">{safeText(brew.description)}</p>
           )}
         </div>
       </div>

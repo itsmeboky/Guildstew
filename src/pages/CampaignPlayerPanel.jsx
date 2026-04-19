@@ -29,6 +29,7 @@ import { getConditionModifiers } from "@/components/combat/conditions";
 import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
 import { toast } from "sonner";
 import { supabase } from "@/api/supabaseClient";
+import { safeText } from "@/utils/safeRender";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -2004,16 +2005,16 @@ function EquipmentSlot({ label, size = 'normal', item, onDrop, onDragStart, onUn
         className={`${slotSize} rounded-xl bg-[#0b1220] border-2 transition-all shadow-[0_8px_20px_rgba(0,0,0,0.7)] flex items-center justify-center cursor-pointer overflow-hidden ${borderColor} ${isDragOver ? 'scale-105' : ''}`}
       >
         {item && itemImage ? (
-          <img src={itemImage} alt={item.name} className="w-full h-full object-cover" />
+          <img src={itemImage} alt={safeText(item.name)} className="w-full h-full object-cover" />
         ) : item ? (
-          <span className="text-[8px] text-center text-slate-300 px-1 line-clamp-2">{item.name}</span>
+          <span className="text-[8px] text-center text-slate-300 px-1 line-clamp-2">{safeText(item.name)}</span>
         ) : (
           <span className="text-[8px] text-center text-slate-600 px-1 leading-tight font-medium">{label}</span>
         )}
       </div>
       {showTooltip && (
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-[#1E2430] text-white px-2 py-1 rounded text-[10px] whitespace-nowrap z-50 shadow-xl border border-[#37F2D1]">
-          {item ? `${label}: ${item.name} (double-click to unequip)` : label}
+          {item ? `${label}: ${safeText(item.name)} (double-click to unequip)` : label}
         </div>
       )}
     </div>
@@ -2022,19 +2023,20 @@ function EquipmentSlot({ label, size = 'normal', item, onDrop, onDragStart, onUn
 
 function InventorySlot({ item, draggable, onDragStart }) {
   const imgSrc = item ? (item.image_url || itemIcons[item.name] || itemIcons[Object.keys(itemIcons).find(k => k.toLowerCase() === item.name?.toLowerCase())]) : null;
-  
+  const itemNameStr = safeText(item?.name);
+
   return (
-    <div 
+    <div
       draggable={draggable}
       onDragStart={onDragStart}
       className={`w-11 h-11 rounded-lg bg-[#0b1220] border border-[#111827] shadow-[0_4px_12px_rgba(0,0,0,0.5)] flex items-center justify-center ${item ? 'bg-[#111827] cursor-grab' : ''}`}
-      title={item ? `${item.name}${item.quantity > 1 ? ` (x${item.quantity})` : ''}\n${item.description || ''}` : ''}
+      title={item ? `${itemNameStr}${item.quantity > 1 ? ` (x${safeText(item.quantity)})` : ''}\n${safeText(item.description) || ''}` : ''}
     >
       {item && (
-        imgSrc ? <img src={imgSrc} alt={item.name} className="w-8 h-8 rounded object-cover" /> : <span className="text-[8px] text-slate-400 text-center px-0.5 truncate">{item.name ? (item.name.length > 8 ? item.name.substring(0, 6) + '..' : item.name) : (item.quantity > 1 ? item.quantity : '•')}</span>
+        imgSrc ? <img src={imgSrc} alt={itemNameStr} className="w-8 h-8 rounded object-cover" /> : <span className="text-[8px] text-slate-400 text-center px-0.5 truncate">{itemNameStr ? (itemNameStr.length > 8 ? itemNameStr.substring(0, 6) + '..' : itemNameStr) : (item.quantity > 1 ? safeText(item.quantity) : '•')}</span>
       )}
       {item && item.quantity > 1 && imgSrc && (
-        <span className="absolute bottom-0.5 right-1 text-[8px] text-white font-bold drop-shadow-md">x{item.quantity}</span>
+        <span className="absolute bottom-0.5 right-1 text-[8px] text-white font-bold drop-shadow-md">x{safeText(item.quantity)}</span>
       )}
     </div>
   );
@@ -2491,7 +2493,7 @@ function QuickSlots({ quickSlots, setQuickSlots, inventory }) {
       {quickSlots.map((item, idx) => (
         <div key={idx} className="w-full aspect-square rounded-2xl bg-[#050816] border border-[#111827] flex items-center justify-center">
           {item ? (
-            item.image_url ? <img src={item.image_url} alt="" className="w-full h-full object-cover rounded-2xl" /> : <span className="text-[9px]">{item.name}</span>
+            item.image_url ? <img src={item.image_url} alt="" className="w-full h-full object-cover rounded-2xl" /> : <span className="text-[9px]">{safeText(item.name)}</span>
           ) : <span className="text-[10px] text-slate-600">{idx + 1}</span>}
         </div>
       ))}
