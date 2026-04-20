@@ -183,21 +183,31 @@ export async function installContentPack(campaignId, modId, metadata) {
 
 /**
  * Uninstall removes every row across the four campaign tables that
- * carries this pack's mod id. The GM's own homebrew (no
- * brewery_pack_mod_id set) is untouched.
+ * carries this pack's mod id on `source_mod_id`. The GM's own
+ * homebrew (no source_mod_id set) is untouched. Runs the four
+ * table deletes in parallel via Promise.all; a per-table error
+ * logs to the console but never aborts the other deletes so an
+ * uninstall finishes as much as it can rather than leaving
+ * orphaned rows.
  */
 export async function uninstallContentPack(campaignId, modId) {
   if (!campaignId || !modId) return { success: false, reason: "Missing campaign or mod id." };
   const tables = ["monsters", "campaign_items", "spells", "campaign_class_features"];
-  for (const t of tables) {
+  const results = await Promise.all(tables.map(async (t) => {
     const { error } = await supabase
       .from(t)
       .delete()
       .eq("campaign_id", campaignId)
-      .eq("brewery_pack_mod_id", modId);
+      .eq("source_mod_id", modId);
     if (error) {
       console.warn(`uninstallContentPack(${t}) failed:`, error.message);
+      return { table: t, error: error.message };
     }
-  }
-  return { success: true };
+    return { table: t };
+  }));
+  const failures = results.filter((r) => r.error);
+  return {
+    success: failures.length === 0,
+    failures,
+  };
 }
