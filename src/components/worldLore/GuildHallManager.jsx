@@ -11,6 +11,7 @@ import {
   UPGRADE_CATEGORIES,
   upgradesForCategory,
   isUpgradeAvailable,
+  resolvePurchasedUpgrades,
   COMMON_ROOM_UPGRADE_ID,
 } from "@/config/guildHallUpgrades";
 
@@ -572,6 +573,35 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
           );
         })}
       </div>
+
+      {/* Active effects summary — flat list of every purchased
+          upgrade's human-readable effect text, prefixed with the
+          category icon and suffixed with "(Upgrade Name)" so the
+          party can tell at a glance which upgrade granted what. */}
+      <ActiveEffectsSummary purchasedIds={purchasedUpgrades} />
+    </div>
+  );
+}
+
+function ActiveEffectsSummary({ purchasedIds }) {
+  const upgrades = resolvePurchasedUpgrades(purchasedIds);
+  if (upgrades.length === 0) return null;
+  const iconFor = (categoryKey) =>
+    UPGRADE_CATEGORIES.find((c) => c.key === categoryKey)?.icon || "•";
+  return (
+    <div className="bg-[#0f1219]/90 backdrop-blur-sm rounded-xl p-6 border border-cyan-400/30">
+      <h3 className="text-xl font-bold text-white mb-3">Active Guild Hall Effects</h3>
+      <ul className="space-y-1.5">
+        {upgrades.map((u) => (
+          <li key={u.id} className="flex items-start gap-2 text-sm text-slate-300">
+            <span className="text-base leading-5" aria-hidden="true">{iconFor(u.category)}</span>
+            <span>
+              {u.effect}
+              <span className="text-slate-500"> ({u.name})</span>
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
