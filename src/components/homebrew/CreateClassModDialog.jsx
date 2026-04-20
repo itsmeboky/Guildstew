@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   BLANK_CLASS,
@@ -103,6 +105,7 @@ export default function CreateClassModDialog({ open, onClose, mod = null }) {
           />
           <CoreSection formData={formData} setField={setField} />
           <ProficienciesSection formData={formData} setField={setField} />
+          <StartingEquipmentSection formData={formData} setField={setField} />
         </div>
       </DialogContent>
     </Dialog>
@@ -309,5 +312,129 @@ function ProficienciesSection({ formData, setField }) {
         </div>
       </div>
     </Section>
+  );
+}
+
+// ─────────────────────── B4 Starting Equipment ───────────────────
+
+function StartingEquipmentSection({ formData, setField }) {
+  const equipment = formData.starting_equipment || { choices: [], fixed: [] };
+  const fixed   = Array.isArray(equipment.fixed)   ? equipment.fixed   : [];
+  const choices = Array.isArray(equipment.choices) ? equipment.choices : [];
+
+  const setEquipment = (next) =>
+    setField("starting_equipment", { ...equipment, ...next });
+
+  // Fixed items: plain string list. One input per row; empty rows
+  // are stripped on save, not on change, so the user can clear a row
+  // mid-edit without losing focus.
+  const addFixed   = () => setEquipment({ fixed: [...fixed, ""] });
+  const updateFixed = (idx, value) =>
+    setEquipment({ fixed: fixed.map((v, i) => (i === idx ? value : v)) });
+  const removeFixed = (idx) =>
+    setEquipment({ fixed: fixed.filter((_, i) => i !== idx) });
+
+  // Choice groups: each is { options: string[] } with 2-3 options.
+  // The UI always shows three option slots and treats empties as
+  // "not an option"; the save path trims them.
+  const addChoice = () => setEquipment({ choices: [...choices, { options: ["", "", ""] }] });
+  const updateChoice = (idx, nextOptions) =>
+    setEquipment({ choices: choices.map((c, i) => (i === idx ? { ...c, options: nextOptions } : c)) });
+  const removeChoice = (idx) =>
+    setEquipment({ choices: choices.filter((_, i) => i !== idx) });
+
+  return (
+    <Section title="Starting Equipment">
+      <div>
+        <Label className="block mb-1 text-xs text-slate-300 font-semibold">Fixed Items</Label>
+        <p className="text-[10px] text-slate-500 mb-2">
+          Items every character of this class starts with — one per row.
+        </p>
+        <div className="space-y-2">
+          {fixed.map((item, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <Input
+                value={item}
+                onChange={(e) => updateFixed(idx, e.target.value)}
+                placeholder="e.g., Explorer's Pack"
+                className="bg-[#050816] border-slate-700 text-white"
+              />
+              <button
+                type="button"
+                onClick={() => removeFixed(idx)}
+                className="p-2 text-red-400 hover:text-red-300"
+                title="Remove item"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={addFixed} className="mt-2">
+          <Plus className="w-3 h-3 mr-1" /> Add Fixed Item
+        </Button>
+      </div>
+
+      <div className="pt-3 border-t border-[#1e293b]">
+        <Label className="block mb-1 text-xs text-slate-300 font-semibold">Equipment Choices</Label>
+        <p className="text-[10px] text-slate-500 mb-2">
+          Each group lets the player pick one of 2–3 options (e.g., "(a) a longsword or (b) any simple weapon").
+        </p>
+        <div className="space-y-3">
+          {choices.map((choice, idx) => (
+            <EquipmentChoiceRow
+              key={idx}
+              idx={idx}
+              options={choice.options || ["", "", ""]}
+              onChange={(nextOptions) => updateChoice(idx, nextOptions)}
+              onRemove={() => removeChoice(idx)}
+            />
+          ))}
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={addChoice} className="mt-2">
+          <Plus className="w-3 h-3 mr-1" /> Add Choice Group
+        </Button>
+      </div>
+    </Section>
+  );
+}
+
+function EquipmentChoiceRow({ idx, options, onChange, onRemove }) {
+  // Always render three option slots so the user can fill any of
+  // them. A group with only one filled option is nonsensical but we
+  // leave that validation to save time — save-path trimming drops
+  // anything empty.
+  const setOpt = (pos, value) => {
+    const next = [...options];
+    next[pos] = value;
+    onChange(next);
+  };
+  return (
+    <div className="bg-[#050816] border border-slate-700 rounded-lg p-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">
+          Choice Group #{idx + 1}
+        </span>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="p-1 text-red-400 hover:text-red-300"
+          title="Remove choice group"
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        {[0, 1, 2].map((pos) => (
+          <Input
+            key={pos}
+            value={options[pos] || ""}
+            onChange={(e) => setOpt(pos, e.target.value)}
+            placeholder={`Option ${String.fromCharCode(97 + pos)}`}
+            className="bg-[#1E2430] border-slate-700 text-white"
+          />
+        ))}
+      </div>
+    </div>
   );
 }
