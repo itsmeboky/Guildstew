@@ -44,6 +44,7 @@ export default function TavernItemDetailDialog({ item: itemProp, open, onClose, 
   const [ratingValue, setRatingValue] = useState(5);
   const [reviewText, setReviewText] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [reviewLimit, setReviewLimit] = useState(10);
 
   const { data: item } = useQuery({
     queryKey: ["tavernItem", itemProp?.id],
@@ -75,6 +76,30 @@ export default function TavernItemDetailDialog({ item: itemProp, open, onClose, 
     queryFn: () => getItemRatings(item.id),
     enabled: !!item?.id && open,
   });
+
+  // Join reviewer usernames in one batch so the list doesn't hit the
+  // network per-row. Fine to keep anonymous if the profile fetch fails.
+  const reviewerIds = useMemo(
+    () => Array.from(new Set((ratings || []).map((r) => r.user_id).filter(Boolean))),
+    [ratings],
+  );
+  const { data: reviewers = [] } = useQuery({
+    queryKey: ["tavernReviewers", reviewerIds.sort().join(",")],
+    queryFn: async () => {
+      if (reviewerIds.length === 0) return [];
+      const { supabase } = await import("@/api/supabaseClient");
+      const { data } = await supabase
+        .from("user_profiles")
+        .select("user_id, username, full_name")
+        .in("user_id", reviewerIds);
+      return data || [];
+    },
+    enabled: reviewerIds.length > 0,
+  });
+  const reviewerName = (id) => {
+    const r = reviewers.find((p) => p.user_id === id);
+    return r?.username || r?.full_name || "Anonymous";
+  };
 
   const entitlement = useMemo(() => {
     if (!item) return null;
@@ -282,23 +307,39 @@ export default function TavernItemDetailDialog({ item: itemProp, open, onClose, 
         {/* Existing ratings */}
         {ratings.length > 0 && (
           <div className="space-y-2">
-            <h3 className="text-xs uppercase tracking-widest text-slate-500 font-bold">Reviews</h3>
-            {ratings.slice(0, 20).map((r) => (
+            <h3 className="text-xs uppercase tracking-widest text-slate-500 font-bold">
+              Reviews ({ratings.length})
+            </h3>
+            {ratings.slice(0, reviewLimit).map((r) => (
               <div key={r.id} className="bg-[#050816] border border-slate-800 rounded p-3">
-                <div className="flex items-center gap-1 mb-1">
+                <div className="flex items-center gap-1 mb-1 flex-wrap">
                   {[1, 2, 3, 4, 5].map((n) => (
                     <Star
                       key={n}
                       className={`w-3.5 h-3.5 ${n <= r.rating ? "text-amber-400 fill-amber-400" : "text-slate-700"}`}
                     />
                   ))}
-                  <span className="text-[11px] text-slate-500 ml-2">
+                  <span className="text-[11px] text-slate-400 ml-2 font-semibold">
+                    {reviewerName(r.user_id)}
+                  </span>
+                  <span className="text-[11px] text-slate-500">·</span>
+                  <span className="text-[11px] text-slate-500">
                     {new Date(r.created_at).toLocaleDateString()}
                   </span>
                 </div>
                 {r.review && <p className="text-sm text-slate-300 whitespace-pre-wrap">{r.review}</p>}
               </div>
             ))}
+            {ratings.length > reviewLimit && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setReviewLimit((n) => n + 10)}
+                className="w-full"
+              >
+                Load more reviews
+              </Button>
+            )}
           </div>
         )}
 
