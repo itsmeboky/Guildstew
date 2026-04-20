@@ -1,12 +1,23 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, Wand2 } from "lucide-react";
+import { ArrowLeft, Search, Wand2, Plus } from "lucide-react";
+import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { supabase } from "@/api/supabaseClient";
+import { useAuth } from "@/lib/AuthContext";
 
 /**
  * Campaign Class Features tab. Split-panel layout — the selected
@@ -94,12 +105,40 @@ function featureLevel(feature) {
 
 export default function CampaignAbilities({ embedded = false, campaignId: campaignIdOverride } = {}) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
   const params = new URLSearchParams(window.location.search);
   const campaignId = campaignIdOverride ?? params.get("id");
 
   const [search, setSearch] = useState("");
   const [selectedClass, setSelectedClass] = useState("Barbarian");
   const [selected, setSelected] = useState(null);
+  const [creating, setCreating] = useState(false);
+
+  const createMutation = useMutation({
+    mutationFn: async (payload) => {
+      const { data, error } = await supabase
+        .from("campaign_class_features")
+        .insert([{
+          ...payload,
+          campaign_id: campaignId,
+          is_system: false,
+          created_by: user?.id || null,
+          created_at: new Date().toISOString(),
+        }])
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (row) => {
+      queryClient.invalidateQueries({ queryKey: ["homebrewClassFeatures", campaignId] });
+      setCreating(false);
+      setSelected({ ...row, _source: "homebrew" });
+      toast.success(`${row?.name || "Feature"} saved.`);
+    },
+    onError: (err) => toast.error(err?.message || "Failed to save feature."),
+  });
 
   const { data: srd = [] } = useQuery({
     queryKey: ["srdClassFeatures"],
@@ -160,6 +199,13 @@ export default function CampaignAbilities({ embedded = false, campaignId: campai
               <Wand2 className="w-5 h-5 text-[#37F2D1]" /> Class Features
             </h1>
           </div>
+          <Button
+            onClick={() => setCreating(true)}
+            size="sm"
+            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
+          >
+            <Plus className="w-4 h-4 mr-1" /> New Feature
+          </Button>
         </header>
       )}
 
@@ -242,6 +288,14 @@ export default function CampaignAbilities({ embedded = false, campaignId: campai
           </div>
         </div>
       </div>
+
+      <NewFeatureDialog
+        open={creating}
+        onClose={() => setCreating(false)}
+        onSave={(payload) => createMutation.mutate(payload)}
+        saving={createMutation.isPending}
+        defaultClass={selectedClass}
+      />
     </div>
   );
 }
@@ -321,5 +375,220 @@ function FeatureDetail({ feature }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ─────────────── NewFeatureDialog ───────────────
+
+const FEATURE_TYPES = ["Class Feature", "Racial Trait", "Feat", "General Ability"];
+const FEATURE_EFFECT_TYPES = ["damage", "healing", "buff", "condition", "utility", "resource"];
+const FEATURE_COSTS = ["passive", "free", "action", "bonus_action", "reaction"];
+const FEATURE_USES = [
+  "At Will",
+  "1/Short Rest",
+  "1/Long Rest",
+  "2/Long Rest",
+  "3/Long Rest",
+  "Proficiency Bonus/Long Rest",
+  "Charges",
+  "Special",
+];
+const FEATURE_RECHARGE = ["", "short_rest", "long_rest", "dawn", "dusk", "special"];
+const DAMAGE_TYPES_SHORT = [
+  "acid", "bludgeoning", "cold", "fire", "force", "lightning",
+  "necrotic", "piercing", "poison", "psychic", "radiant", "slashing", "thunder",
+];
+
+function NewFeatureDialog({ open, onClose, onSave, saving, defaultClass }) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [classAssoc, setClassAssoc] = useState(defaultClass || "Barbarian");
+  const [level, setLevel] = useState(1);
+  const [type, setType] = useState("Class Feature");
+  const [effectType, setEffectType] = useState("utility");
+  const [cost, setCost] = useState("action");
+  const [uses, setUses] = useState("At Will");
+  const [recharge, setRecharge] = useState("");
+  const [damageDice, setDamageDice] = useState("");
+  const [damageType, setDamageType] = useState("bludgeoning");
+  const [healingDice, setHealingDice] = useState("");
+
+  // Re-seed the class default whenever the dialog reopens.
+  if (open && classAssoc == null && defaultClass) setClassAssoc(defaultClass);
+
+  const reset = () => {
+    setName(""); setDescription("");
+    setClassAssoc(defaultClass || "Barbarian");
+    setLevel(1); setType("Class Feature");
+    setEffectType("utility"); setCost("action"); setUses("At Will"); setRecharge("");
+    setDamageDice(""); setDamageType("bludgeoning"); setHealingDice("");
+  };
+
+  const handleSave = () => {
+    if (!name.trim()) { toast.error("Name the feature."); return; }
+    const mechanical = {
+      effect_type: effectType,
+      cost,
+      uses,
+      recharge,
+    };
+    if (effectType === "damage") {
+      mechanical.damage_dice = damageDice.trim();
+      mechanical.damage_type = damageType;
+    } else if (effectType === "healing") {
+      mechanical.healing_dice = healingDice.trim();
+    }
+    // Payload shape mirrors campaign_class_features columns: name,
+    // description, type, class_name (nullable — only meaningful for
+    // Class Feature type), level, properties (full mechanical blob).
+    onSave({
+      name: name.trim(),
+      description: description.trim(),
+      type,
+      class_name: type === "Class Feature" ? classAssoc : null,
+      level: Number(level) || 1,
+      properties: { ...mechanical, class: classAssoc },
+    });
+    reset();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="bg-[#1a1f2e] border border-slate-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>New Class Feature</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="md:col-span-2">
+              <Label className="text-xs text-slate-300">Name</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)}
+                placeholder="e.g., Second Wind"
+                className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs text-slate-300">Type</Label>
+              <Select value={type} onValueChange={setType}>
+                <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FEATURE_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-slate-300">Class</Label>
+              <Select value={classAssoc} onValueChange={setClassAssoc}>
+                <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-slate-300">Level</Label>
+              <Input type="number" value={level}
+                onChange={(e) => setLevel(Number(e.target.value) || 1)}
+                className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-xs text-slate-300">Description</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              placeholder="What the feature does in plain language."
+              className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+          </div>
+
+          <div className="bg-[#0b1220] border border-[#1e293b] rounded-lg p-3 space-y-3">
+            <h3 className="text-[11px] font-black uppercase tracking-widest text-[#37F2D1]">
+              Mechanical Effect
+            </h3>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-[10px] text-slate-400">Effect Type</Label>
+                <Select value={effectType} onValueChange={setEffectType}>
+                  <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {FEATURE_EFFECT_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[10px] text-slate-400">Action Cost</Label>
+                <Select value={cost} onValueChange={setCost}>
+                  <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {FEATURE_COSTS.map((c) => (
+                      <SelectItem key={c} value={c}>{c.replace("_", " ")}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[10px] text-slate-400">Uses</Label>
+                <Select value={uses} onValueChange={setUses}>
+                  <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {FEATURE_USES.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[10px] text-slate-400">Recharge</Label>
+                <Select value={recharge || "none"} onValueChange={(v) => setRecharge(v === "none" ? "" : v)}>
+                  <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">(none)</SelectItem>
+                    {FEATURE_RECHARGE.filter(Boolean).map((r) => (
+                      <SelectItem key={r} value={r}>{r.replace("_", " ")}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {effectType === "damage" && (
+                <>
+                  <div>
+                    <Label className="text-[10px] text-slate-400">Damage Dice</Label>
+                    <Input value={damageDice}
+                      onChange={(e) => setDamageDice(e.target.value)}
+                      placeholder="1d6"
+                      className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] text-slate-400">Damage Type</Label>
+                    <Select value={damageType} onValueChange={setDamageType}>
+                      <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {DAMAGE_TYPES_SHORT.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
+              {effectType === "healing" && (
+                <div className="col-span-2">
+                  <Label className="text-[10px] text-slate-400">Healing Dice</Label>
+                  <Input value={healingDice}
+                    onChange={(e) => setHealingDice(e.target.value)}
+                    placeholder="1d10 + level"
+                    className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
+          >
+            {saving ? "Saving…" : "Save Feature"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
