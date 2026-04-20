@@ -2,11 +2,12 @@ import React, { useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
-import { Sparkles, ShieldHalf, Package, Code2 } from "lucide-react";
+import { Sparkles, ShieldHalf, Package, Code2, Wand2 } from "lucide-react";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { tierAtLeast } from "@/api/billingClient";
 import CreateRaceModDialog from "./CreateRaceModDialog";
 import CreateClassModDialog from "./CreateClassModDialog";
+import CreateReskinModDialog from "./CreateReskinModDialog";
 
 /**
  * Brewery → Create New Mod entry point.
@@ -44,6 +45,13 @@ const MOD_TYPES = [
     label: "Content Pack",
     icon: Package,
     description: "Bundle pre-made monsters, items, spells, and class features for others to install.",
+    veteranOnly: false,
+  },
+  {
+    value: "reskin",
+    label: "Reskin",
+    icon: Wand2,
+    description: "Rename game terms (HP → Wounds, STR → Might) without changing any math. Pick a genre preset to start.",
     veteranOnly: false,
   },
   {
@@ -128,6 +136,10 @@ export default function CreateModDialog({ open, onClose }) {
       />
       <CreateClassModDialog
         open={openType === "class"}
+        onClose={closeChild}
+      />
+      <CreateReskinModDialog
+        open={openType === "reskin"}
         onClose={closeChild}
       />
 
