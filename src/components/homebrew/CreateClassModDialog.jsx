@@ -11,10 +11,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   BLANK_CLASS,
   HIT_DICE,
   ABILITIES,
+  CASTER_TYPES,
+  SPELL_KNOWLEDGE_TYPES,
+  SPELL_LIST_SOURCES,
+  FULL_CASTER_SLOTS,
+  HALF_CASTER_SLOTS,
 } from "@/config/breweryClassSchema";
 
 /**
@@ -106,6 +113,7 @@ export default function CreateClassModDialog({ open, onClose, mod = null }) {
           <CoreSection formData={formData} setField={setField} />
           <ProficienciesSection formData={formData} setField={setField} />
           <StartingEquipmentSection formData={formData} setField={setField} />
+          <SpellcastingSection formData={formData} setField={setField} />
         </div>
       </DialogContent>
     </Dialog>
@@ -436,5 +444,333 @@ function EquipmentChoiceRow({ idx, options, onChange, onRemove }) {
         ))}
       </div>
     </div>
+  );
+}
+
+// ─────────────────────────── B5 Spellcasting ─────────────────────
+
+// Empty 20-row custom slot table used when the author flips to
+// "custom" caster type. Level 1..20 × spell level 1..9 = 20 rows
+// of 9 zeros.
+function blankCustomSlotTable() {
+  return Array.from({ length: 20 }, (_, i) => ({
+    level: i + 1,
+    slots: [0, 0, 0, 0, 0, 0, 0, 0, 0],
+  }));
+}
+
+// Empty spells-known schedule: 20 rows of { level, cantrips, known }
+// used for Known casters (sorcerer / bard style) when the editor
+// wants to hand-author the knowledge curve.
+function blankKnownSchedule() {
+  return Array.from({ length: 20 }, (_, i) => ({
+    level: i + 1,
+    cantrips: 0,
+    known: 0,
+  }));
+}
+
+function SpellcastingSection({ formData, setField }) {
+  const sc = formData.spellcasting || {};
+  const enabled = !!sc.enabled;
+  const setSc = (patch) => setField("spellcasting", { ...sc, ...patch });
+
+  const onCasterTypeChange = (nextType) => {
+    const patch = { slot_progression: nextType };
+    // Auto-populate / clear custom_slots so the editor only shows
+    // the 20×9 grid when the author actually wants to hand-tune.
+    if (nextType === "custom") {
+      patch.custom_slots = Array.isArray(sc.custom_slots) && sc.custom_slots.length === 20
+        ? sc.custom_slots
+        : blankCustomSlotTable();
+    } else {
+      patch.custom_slots = null;
+    }
+    setSc(patch);
+  };
+
+  const onKnowledgeTypeChange = (nextType) => {
+    const patch = { type: nextType };
+    // Known casters get an editable cantrip / spells-known schedule;
+    // Prepared + Ritual Only don't need one.
+    if (nextType === "known") {
+      patch.spells_known_schedule = Array.isArray(sc.spells_known_schedule) && sc.spells_known_schedule.length === 20
+        ? sc.spells_known_schedule
+        : blankKnownSchedule();
+    } else {
+      patch.spells_known_schedule = [];
+    }
+    setSc(patch);
+  };
+
+  return (
+    <Section title="Spellcasting">
+      <div className="flex items-center gap-3">
+        <Switch
+          checked={enabled}
+          onCheckedChange={(v) => setSc({ enabled: v })}
+          id="spellcasting-toggle"
+        />
+        <Label htmlFor="spellcasting-toggle" className="text-sm text-slate-300">
+          This class can cast spells
+        </Label>
+      </div>
+
+      {enabled && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Field label="Spellcasting Ability">
+              <Select value={sc.ability || "INT"} onValueChange={(v) => setSc({ ability: v })}>
+                <SelectTrigger className="bg-[#050816] border-slate-700 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["INT", "WIS", "CHA"].map((a) => (
+                    <SelectItem key={a} value={a}>{a}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Caster Type">
+              <Select value={sc.slot_progression || "none"} onValueChange={onCasterTypeChange}>
+                <SelectTrigger className="bg-[#050816] border-slate-700 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CASTER_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Knowledge Type">
+              <Select value={sc.type || "prepared"} onValueChange={onKnowledgeTypeChange}>
+                <SelectTrigger className="bg-[#050816] border-slate-700 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SPELL_KNOWLEDGE_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>{t.replace("_", " ")}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+
+          {/* Preview slot tables for the non-custom progressions so
+              authors see what their caster type actually grants. */}
+          {sc.slot_progression === "full" && (
+            <SlotTablePreview title="Full Caster Slots" rows={FULL_CASTER_SLOTS} />
+          )}
+          {sc.slot_progression === "half" && (
+            <SlotTablePreview title="Half Caster Slots" rows={HALF_CASTER_SLOTS} />
+          )}
+          {sc.slot_progression === "custom" && (
+            <CustomSlotEditor
+              rows={Array.isArray(sc.custom_slots) && sc.custom_slots.length === 20
+                ? sc.custom_slots
+                : blankCustomSlotTable()}
+              onChange={(next) => setSc({ custom_slots: next })}
+            />
+          )}
+
+          {sc.type === "known" && (
+            <KnownSpellsSchedule
+              schedule={Array.isArray(sc.spells_known_schedule) && sc.spells_known_schedule.length === 20
+                ? sc.spells_known_schedule
+                : blankKnownSchedule()}
+              onChange={(next) => setSc({ spells_known_schedule: next })}
+            />
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-[#1e293b]">
+            <Field label="Spell List Source">
+              <Select
+                value={sc.spell_list_source || "custom"}
+                onValueChange={(v) => setSc({ spell_list_source: v })}
+              >
+                <SelectTrigger className="bg-[#050816] border-slate-700 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SPELL_LIST_SOURCES.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <div className="flex items-end gap-2">
+              <Checkbox
+                id="ritual-casting"
+                checked={!!sc.ritual_casting}
+                onCheckedChange={(v) => setSc({ ritual_casting: !!v })}
+              />
+              <Label htmlFor="ritual-casting" className="text-sm text-slate-300 mb-1">
+                Can cast rituals
+              </Label>
+            </div>
+          </div>
+
+          {sc.spell_list_source === "custom" && (
+            <CustomSpellList
+              list={Array.isArray(sc.custom_spell_list) ? sc.custom_spell_list : []}
+              onChange={(next) => setSc({ custom_spell_list: next })}
+            />
+          )}
+        </>
+      )}
+    </Section>
+  );
+}
+
+function SlotTablePreview({ title, rows }) {
+  return (
+    <div className="bg-[#050816] border border-slate-700 rounded-lg p-3">
+      <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-2">{title}</p>
+      <div className="overflow-x-auto">
+        <table className="text-[10px] min-w-full">
+          <thead>
+            <tr className="text-slate-400">
+              <th className="text-left pr-2">Lvl</th>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((s) => (
+                <th key={s} className="px-1 text-center">{s}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="text-slate-300">
+            {rows.map((row) => (
+              <tr key={row.level}>
+                <td className="pr-2 font-bold">{row.level}</td>
+                {row.slots.map((n, i) => (
+                  <td key={i} className="px-1 text-center">{n || "—"}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function CustomSlotEditor({ rows, onChange }) {
+  const setCell = (rowIdx, slotIdx, value) => {
+    const next = rows.map((r, i) => {
+      if (i !== rowIdx) return r;
+      const nextSlots = [...r.slots];
+      nextSlots[slotIdx] = Number(value) || 0;
+      return { ...r, slots: nextSlots };
+    });
+    onChange(next);
+  };
+  return (
+    <div className="bg-[#050816] border border-slate-700 rounded-lg p-3">
+      <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-2">
+        Custom Slot Table (Level × Spell Level)
+      </p>
+      <div className="overflow-x-auto">
+        <table className="text-[10px]">
+          <thead>
+            <tr className="text-slate-400">
+              <th className="text-left pr-2">Lvl</th>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((s) => (
+                <th key={s} className="px-1 text-center w-10">{s}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rowIdx) => (
+              <tr key={row.level}>
+                <td className="pr-2 font-bold text-slate-300">{row.level}</td>
+                {row.slots.map((n, slotIdx) => (
+                  <td key={slotIdx} className="px-0.5">
+                    <input
+                      type="number"
+                      min={0}
+                      max={9}
+                      value={n}
+                      onChange={(e) => setCell(rowIdx, slotIdx, e.target.value)}
+                      className="w-10 bg-[#1E2430] border border-slate-700 text-white text-center rounded px-1 py-0.5"
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function KnownSpellsSchedule({ schedule, onChange }) {
+  const setCell = (rowIdx, key, value) => {
+    const next = schedule.map((r, i) => (i === rowIdx ? { ...r, [key]: Number(value) || 0 } : r));
+    onChange(next);
+  };
+  return (
+    <div className="bg-[#050816] border border-slate-700 rounded-lg p-3">
+      <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-2">
+        Cantrips / Spells Known per Class Level
+      </p>
+      <div className="overflow-x-auto">
+        <table className="text-[10px]">
+          <thead>
+            <tr className="text-slate-400">
+              <th className="text-left pr-2">Lvl</th>
+              <th className="px-2">Cantrips</th>
+              <th className="px-2">Spells Known</th>
+            </tr>
+          </thead>
+          <tbody>
+            {schedule.map((row, rowIdx) => (
+              <tr key={row.level}>
+                <td className="pr-2 font-bold text-slate-300">{row.level}</td>
+                <td className="px-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={12}
+                    value={row.cantrips}
+                    onChange={(e) => setCell(rowIdx, "cantrips", e.target.value)}
+                    className="w-16 bg-[#1E2430] border border-slate-700 text-white text-center rounded px-1 py-0.5"
+                  />
+                </td>
+                <td className="px-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={30}
+                    value={row.known}
+                    onChange={(e) => setCell(rowIdx, "known", e.target.value)}
+                    className="w-16 bg-[#1E2430] border border-slate-700 text-white text-center rounded px-1 py-0.5"
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function CustomSpellList({ list, onChange }) {
+  // Simple textarea — one spell name per line. Keeps the UI light
+  // at this stage; a picker that reads from the SRD spell DB can
+  // layer on later without schema changes.
+  const text = list.join("\n");
+  return (
+    <Field label="Custom Spell List (one spell per line)">
+      <Textarea
+        value={text}
+        onChange={(e) =>
+          onChange(e.target.value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean))
+        }
+        rows={6}
+        placeholder={"Fireball\nMage Armor\nShield"}
+        className="bg-[#050816] border-slate-700 text-white"
+      />
+    </Field>
   );
 }
