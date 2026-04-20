@@ -1,10 +1,54 @@
 import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ChevronLeft, ChevronRight, Flame, Shield, Eye, Sword, Wind, Droplet, Heart } from "lucide-react";
+import { ChevronLeft, ChevronRight, Flame, Shield, Eye, Sword, Wind, Droplet, Heart, Sparkles } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { motion, AnimatePresence } from "framer-motion";
 import { RACES } from '@/components/dnd5e/dnd5eRules';
+import { getModdedRaces } from '@/lib/modEngine';
+import {
+  applyBreweryRaceBaseline,
+  applyBreweryRaceSubrace,
+  clearBreweryRaceMarkers,
+} from '@/lib/breweryRaceApply';
+
+// Normalize a brewery race (modEngine metadata shape) into the same
+// shape the SRD race list uses — { name, subtypes, description,
+// subtypeDescriptions, traits, icon, image } — so the existing
+// carousel / detail UI keeps working without a parallel branch.
+// Brewery-flavored fields (_source, _mod_id, _mod_name, and the raw
+// schema blob under _raw) ride along so later steps can apply them.
+function normalizeBreweryRace(mod) {
+  const subraces = Array.isArray(mod.subraces) ? mod.subraces : [];
+  const subtypes = subraces.length > 0 ? subraces.map((s) => s.name).filter(Boolean) : ["Standard"];
+  const subtypeDescriptions = {};
+  if (subraces.length > 0) {
+    for (const s of subraces) {
+      if (s?.name) subtypeDescriptions[s.name] = s.description || "";
+    }
+  } else {
+    subtypeDescriptions["Standard"] = mod.description || "";
+  }
+  const traits = (Array.isArray(mod.traits) ? mod.traits : []).map((t) => ({
+    icon: Sparkles,
+    name: t?.name || "Trait",
+    description: t?.description || "",
+  }));
+  return {
+    name: mod.name || mod._mod_name || "Unnamed Race",
+    subtypes,
+    description: mod.description || "",
+    subtypeDescriptions,
+    traits,
+    icon: mod.image_url || "",
+    image: mod.image_url || "",
+    _source: "brewery",
+    _mod_id: mod._mod_id,
+    _mod_name: mod._mod_name || mod.name,
+    _raw: mod,
+  };
+}
 
 // Helper: read the registry's ability bonuses for a race name and
 // format them as a human-readable string for display. Falls back to
@@ -235,36 +279,89 @@ const backgrounds = [
   }
 ];
 
-export default function RaceStep({ characterData, updateCharacterData }) {
+export default function RaceStep({ characterData, updateCharacterData, campaignId }) {
   const [selectedRaceIndex, setSelectedRaceIndex] = useState(0);
   const [hoveredTrait, setHoveredTrait] = useState(null);
-  const currentRace = races[selectedRaceIndex];
+
+  // Modded races only appear when the creator is opened against a
+  // campaign — library-only characters can't depend on a campaign's
+  // installed mods, so brewery races are hidden there.
+  const { data: moddedRaces = [] } = useQuery({
+    queryKey: ["characterCreator", "moddedRaces", campaignId],
+    queryFn: () => getModdedRaces(campaignId),
+    enabled: !!campaignId,
+    initialData: [],
+  });
+
+  const combinedRaces = React.useMemo(() => {
+    if (!moddedRaces || moddedRaces.length === 0) return races;
+    return [...races, ...moddedRaces.map(normalizeBreweryRace)];
+  }, [moddedRaces]);
+
+  const currentRace = combinedRaces[selectedRaceIndex] || combinedRaces[0];
   const selectedBackground = backgrounds.find(b => b.name === characterData.background);
+
+  // Pack brewery-race metadata onto characterData so downstream
+  // steps (abilities / skills / features) can read it without
+  // re-fetching. SRD selections wipe the slate so switching away
+  // from a brewery race cleans up its bonuses.
+  const buildRaceUpdates = (race) => {
+    const base = {
+      race: race.name,
+      subrace: race.subtypes[0],
+    };
+    if (race._source === "brewery") {
+      const baseline = applyBreweryRaceBaseline(race._raw || null, characterData);
+      const subraceUpdates = applyBreweryRaceSubrace(
+        race._raw || null,
+        race.subtypes[0],
+        baseline.race_features || [],
+      );
+      // Strip any previously-tagged race mod, then (re-)tag this one
+      // so the character row records a single race dependency for
+      // the library's campaign compatibility check.
+      const priorDeps = Array.isArray(characterData.mod_dependencies) ? characterData.mod_dependencies : [];
+      const nonRaceDeps = priorDeps.filter((d) => d?.mod_type !== "race");
+      const raceDep = race._mod_id
+        ? [{ mod_id: race._mod_id, mod_name: race._mod_name || race.name, mod_type: "race" }]
+        : [];
+      return {
+        ...base,
+        ...clearBreweryRaceMarkers(),
+        _brewery_race: race._raw || null,
+        mod_dependencies: [...nonRaceDeps, ...raceDep],
+        ...baseline,
+        ...subraceUpdates,
+      };
+    }
+    // Drop the race dependency tag when switching back to SRD.
+    const priorDeps = Array.isArray(characterData.mod_dependencies) ? characterData.mod_dependencies : [];
+    const nonRaceDeps = priorDeps.filter((d) => d?.mod_type !== "race");
+    return {
+      ...base,
+      ...clearBreweryRaceMarkers(),
+      mod_dependencies: nonRaceDeps,
+    };
+  };
 
   const handleRaceChange = (direction) => {
     let newIndex = selectedRaceIndex + direction;
-    if (newIndex < 0) newIndex = races.length - 1;
-    if (newIndex >= races.length) newIndex = 0;
+    if (newIndex < 0) newIndex = combinedRaces.length - 1;
+    if (newIndex >= combinedRaces.length) newIndex = 0;
     setSelectedRaceIndex(newIndex);
-    updateCharacterData({ 
-      race: races[newIndex].name,
-      subrace: races[newIndex].subtypes[0]
-    });
+    updateCharacterData(buildRaceUpdates(combinedRaces[newIndex]));
   };
 
   React.useEffect(() => {
     if (!characterData.race) {
-      updateCharacterData({ 
-        race: currentRace.name,
-        subrace: currentRace.subtypes[0]
-      });
+      updateCharacterData(buildRaceUpdates(currentRace));
     } else {
-      const initialRaceIndex = races.findIndex(race => race.name === characterData.race);
+      const initialRaceIndex = combinedRaces.findIndex(race => race.name === characterData.race);
       if (initialRaceIndex !== -1 && initialRaceIndex !== selectedRaceIndex) {
         setSelectedRaceIndex(initialRaceIndex);
       }
     }
-  }, [characterData.race, selectedRaceIndex, updateCharacterData, currentRace.name, currentRace.subtypes]);
+  }, [characterData.race, selectedRaceIndex, updateCharacterData, currentRace.name, currentRace.subtypes, combinedRaces]);
 
   const selectedSubraceDesc = currentRace.subtypeDescriptions[characterData.subrace || currentRace.subtypes[0]];
 
@@ -365,10 +462,23 @@ export default function RaceStep({ characterData, updateCharacterData }) {
               <ChevronLeft className="w-6 h-6" />
             </button>
             <div className="flex items-center gap-3">
-              <img src={currentRace.icon} alt={currentRace.name} className="w-12 h-12" />
-              <h2 className="text-2xl font-bold text-white">
-                {currentRace.name}
-              </h2>
+              {currentRace.icon ? (
+                <img src={currentRace.icon} alt={currentRace.name} className="w-12 h-12" />
+              ) : (
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-[#37F2D1]/30 to-[#8B5CF6]/30 flex items-center justify-center">
+                  <Sparkles className="w-6 h-6 text-[#37F2D1]" />
+                </div>
+              )}
+              <div className="flex flex-col items-start">
+                <h2 className="text-2xl font-bold text-white">
+                  {currentRace.name}
+                </h2>
+                {currentRace._source === "brewery" && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1.5 py-0.5 mt-1">
+                    <Sparkles className="w-3 h-3" /> Brewery
+                  </span>
+                )}
+              </div>
             </div>
             <button
               onClick={() => handleRaceChange(1)}
@@ -382,7 +492,22 @@ export default function RaceStep({ characterData, updateCharacterData }) {
             <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide">Subrace</Label>
             <Select
               value={characterData.subrace || currentRace.subtypes[0]}
-              onValueChange={(value) => updateCharacterData({ subrace: value })}
+              onValueChange={(value) => {
+                const updates = { subrace: value };
+                // Brewery subraces trigger a recompute: run the
+                // baseline to reset any previously-applied subrace
+                // state, then stack the new subrace's deltas on top.
+                if (currentRace._source === "brewery" && currentRace._raw) {
+                  const baseline = applyBreweryRaceBaseline(currentRace._raw, characterData);
+                  const subraceUpdates = applyBreweryRaceSubrace(
+                    currentRace._raw,
+                    value,
+                    baseline.race_features || [],
+                  );
+                  Object.assign(updates, baseline, subraceUpdates);
+                }
+                updateCharacterData(updates);
+              }}
             >
               <SelectTrigger className="bg-[#2A3441]/80 border-[#37F2D1]/20 text-white h-12 hover:border-[#37F2D1]/60 transition-colors">
                 <SelectValue />
@@ -453,8 +578,171 @@ export default function RaceStep({ characterData, updateCharacterData }) {
               </p>
             </motion.div>
           )}
+
+          {currentRace._source === "brewery" && (
+            <BreweryRacePickers
+              characterData={characterData}
+              updateCharacterData={updateCharacterData}
+            />
+          )}
         </motion.div>
       </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// Bonus-language + skill-choice pickers for modded races. Rendered
+// in-panel under the race description when the selected race is
+// brewery-sourced and its schema includes picks.
+function BreweryRacePickers({ characterData, updateCharacterData }) {
+  const race = characterData._brewery_race;
+  if (!race) return null;
+
+  const bonusLangPicks = Number(race.languages?.bonus_picks) || 0;
+  const restrictedTo   = Array.isArray(race.languages?.restricted_to) ? race.languages.restricted_to : [];
+  const skillChoose    = Number(race.skill_proficiencies?.choose) || 0;
+  const chooseFrom     = Array.isArray(race.skill_proficiencies?.choose_from) ? race.skill_proficiencies.choose_from : [];
+
+  const fixedLangs = Array.isArray(race.languages?.fixed) ? race.languages.fixed : [];
+  const fixedSkills = Array.isArray(race.skill_proficiencies?.fixed) ? race.skill_proficiencies.fixed : [];
+
+  const existingLangs = Array.isArray(characterData.languages) ? characterData.languages : [];
+  const existingBonus = Array.isArray(characterData._brewery_bonus_langs) ? characterData._brewery_bonus_langs : [];
+  const existingChosenSkills = Array.isArray(characterData._brewery_chosen_skills) ? characterData._brewery_chosen_skills : [];
+
+  const langOptions = restrictedTo.length > 0
+    ? restrictedTo.filter((l) => !fixedLangs.includes(l))
+    : [
+        "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin", "Halfling", "Orc",
+        "Abyssal", "Celestial", "Draconic", "Deep Speech", "Infernal",
+        "Primordial", "Sylvan", "Undercommon",
+      ].filter((l) => !fixedLangs.includes(l));
+  const skillOptionList = chooseFrom.length > 0
+    ? chooseFrom.filter((s) => !fixedSkills.includes(s))
+    : [
+        "Acrobatics", "Animal Handling", "Arcana", "Athletics", "Deception",
+        "History", "Insight", "Intimidation", "Investigation", "Medicine",
+        "Nature", "Perception", "Performance", "Persuasion", "Religion",
+        "Sleight of Hand", "Stealth", "Survival",
+      ].filter((s) => !fixedSkills.includes(s));
+
+  const toggleLang = (lang) => {
+    const active = existingBonus.includes(lang);
+    if (!active && existingBonus.length >= bonusLangPicks) return;
+    const nextBonus = active
+      ? existingBonus.filter((l) => l !== lang)
+      : [...existingBonus, lang];
+    // Keep characterData.languages in sync: fixed + any bonus.
+    const mergedLangs = Array.from(new Set([
+      ...existingLangs.filter((l) => !existingBonus.includes(l) || nextBonus.includes(l)),
+      ...nextBonus,
+    ]));
+    updateCharacterData({
+      _brewery_bonus_langs: nextBonus,
+      languages: mergedLangs,
+    });
+  };
+
+  const toggleSkill = (skill) => {
+    const active = existingChosenSkills.includes(skill);
+    if (!active && existingChosenSkills.length >= skillChoose) return;
+    const nextChosen = active
+      ? existingChosenSkills.filter((s) => s !== skill)
+      : [...existingChosenSkills, skill];
+    // Mirror in characterData.skills so the Skills step sees them
+    // as proficient. Dropped picks untoggle the corresponding skill
+    // unless it came from elsewhere (fixed race skill, class, etc.).
+    const nextSkills = { ...(characterData.skills || {}) };
+    if (active) {
+      if (!fixedSkills.includes(skill)) delete nextSkills[skill];
+    } else {
+      nextSkills[skill] = true;
+    }
+    updateCharacterData({
+      _brewery_chosen_skills: nextChosen,
+      skills: nextSkills,
+    });
+  };
+
+  if (bonusLangPicks === 0 && skillChoose === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mt-4 space-y-3"
+    >
+      {bonusLangPicks > 0 && (
+        <div className="bg-[#0b1220] border-2 border-[#37F2D1]/30 rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-[#37F2D1] font-bold text-xs uppercase tracking-widest">
+              Bonus Languages
+            </h4>
+            <span className="text-[10px] text-white/60">
+              {existingBonus.length} / {bonusLangPicks}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {langOptions.map((lang) => {
+              const active = existingBonus.includes(lang);
+              const disabled = !active && existingBonus.length >= bonusLangPicks;
+              return (
+                <button
+                  key={lang}
+                  type="button"
+                  onClick={() => toggleLang(lang)}
+                  disabled={disabled}
+                  className={`px-2 py-1 rounded border text-[10px] font-semibold transition-colors ${
+                    active
+                      ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                      : disabled
+                        ? "bg-[#1E2430] text-slate-600 border-slate-800 cursor-not-allowed"
+                        : "bg-[#1E2430] text-slate-300 border-slate-700 hover:border-[#37F2D1]/60"
+                  }`}
+                >
+                  {lang}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {skillChoose > 0 && (
+        <div className="bg-[#0b1220] border-2 border-[#37F2D1]/30 rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-[#37F2D1] font-bold text-xs uppercase tracking-widest">
+              Skill Choices
+            </h4>
+            <span className="text-[10px] text-white/60">
+              {existingChosenSkills.length} / {skillChoose}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {skillOptionList.map((skill) => {
+              const active = existingChosenSkills.includes(skill);
+              const disabled = !active && existingChosenSkills.length >= skillChoose;
+              return (
+                <button
+                  key={skill}
+                  type="button"
+                  onClick={() => toggleSkill(skill)}
+                  disabled={disabled}
+                  className={`px-2 py-1 rounded border text-[10px] font-semibold transition-colors ${
+                    active
+                      ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                      : disabled
+                        ? "bg-[#1E2430] text-slate-600 border-slate-800 cursor-not-allowed"
+                        : "bg-[#1E2430] text-slate-300 border-slate-700 hover:border-[#37F2D1]/60"
+                  }`}
+                >
+                  {skill}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

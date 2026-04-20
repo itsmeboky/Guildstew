@@ -4,18 +4,19 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Sparkles, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
-import { 
-  spellsByClass, 
-  recommendedSpells, 
-  spellDetails as hardcodedSpellDetails, 
-  effectDescriptions, 
-  getSpellSlots, 
-  getAllAvailableSpells, 
-  spellIcons, 
+import {
+  spellsByClass,
+  recommendedSpells,
+  spellDetails as hardcodedSpellDetails,
+  effectDescriptions,
+  getSpellSlots,
+  getAllAvailableSpells,
+  spellIcons,
   fetchAllSpells,
   getPactSlots,
   getMaxSpellLevelForCharacter
 } from "@/components/dnd5e/spellData";
+import { getBreweryClassSpellSlots } from "@/lib/breweryClassApply";
 
 export default function SpellsStep({ characterData, updateCharacterData }) {
   const [hoveredEffect, setHoveredEffect] = useState(null);
@@ -28,7 +29,13 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
     staleTime: 1000 * 60 * 60, // 1 hour
   });
   
-  const spellSlots = getSpellSlots(characterData.class, characterData.level, characterData.multiclasses || []);
+  // Brewery classes authored their own slot progression in the
+  // mod's spellcasting.slot_progression block — when the selected
+  // class is brewery-sourced, those slots win over the SRD lookup.
+  const breweryClass = characterData._brewery_class || null;
+  const spellSlots = breweryClass?.spellcasting?.enabled
+    ? getBreweryClassSpellSlots(breweryClass, characterData.level)
+    : getSpellSlots(characterData.class, characterData.level, characterData.multiclasses || []);
   const availableSpells = getAllAvailableSpells(characterData.class, characterData.multiclasses || [], fullSpellsList);
   
   const selectedSpells = characterData.spells || {};

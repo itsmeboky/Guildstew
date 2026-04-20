@@ -1,11 +1,12 @@
 
 import React, { useState, useRef, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, User, Move, ZoomIn, ZoomOut, Save, Pencil } from "lucide-react";
+import { Upload, User, Move, ZoomIn, ZoomOut, Save, Pencil, Sparkles } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
 import {
@@ -16,8 +17,46 @@ import {
   CLASS_WEAPON_PROFICIENCIES,
   ABILITY_NAMES,
 } from '@/components/dnd5e/dnd5eRules';
+import { getModdedClasses } from '@/lib/modEngine';
+import {
+  applyBreweryClassBaseline,
+  clearBreweryClassMarkers,
+  getBreweryClassFeaturesAtLevel,
+  getBreweryClassAsiLevels,
+  getBreweryClassResource,
+} from '@/lib/breweryClassApply';
 import { Slider } from "@/components/ui/slider";
 import { motion } from "framer-motion";
+
+// Normalize a brewery class (modEngine metadata shape) into the
+// same shape the SRD class list uses. Keeps provenance (_source,
+// _mod_id, _raw) so later steps can read the full class schema.
+function normalizeBreweryClass(mod) {
+  const features = Array.isArray(mod.features) ? mod.features : [];
+  const level1Features = features
+    .filter((f) => Number(f?.level) === 1 && !f?.is_asi)
+    .map((f) => f?.name)
+    .filter(Boolean);
+  const savePrimary = Array.isArray(mod.saving_throws) && mod.saving_throws.length > 0
+    ? ABILITY_NAMES[mod.saving_throws[0]?.toLowerCase?.() || ""] || mod.saving_throws[0]
+    : "";
+  return {
+    name: mod.name || mod._mod_name || "Unnamed Class",
+    description: mod.description || "",
+    playstyle: "",
+    hitDie: mod.hit_die || "d8",
+    primaryAbility: savePrimary,
+    savingThrows: Array.isArray(mod.saving_throws)
+      ? mod.saving_throws.map((s) => ABILITY_NAMES[s?.toLowerCase?.() || ""] || s)
+      : [],
+    features: level1Features,
+    icon: mod.image_url || "",
+    _source: "brewery",
+    _mod_id: mod._mod_id,
+    _mod_name: mod._mod_name || mod.name,
+    _raw: mod,
+  };
+}
 
 const classes = [
   {
@@ -201,7 +240,22 @@ const companionTypes = {
   Druid: { name: "Animal Companion", description: "A creature of nature bonded to you" }
 };
 
-export default function ClassStep({ characterData, updateCharacterData }) {
+export default function ClassStep({ characterData, updateCharacterData, campaignId }) {
+  // Modded classes only appear when the creator is opened against a
+  // campaign — library-only characters can't depend on a campaign's
+  // installed mods, so brewery classes are hidden there.
+  const { data: moddedClasses = [] } = useQuery({
+    queryKey: ["characterCreator", "moddedClasses", campaignId],
+    queryFn: () => getModdedClasses(campaignId),
+    enabled: !!campaignId,
+    initialData: [],
+  });
+
+  const combinedClasses = React.useMemo(() => {
+    if (!moddedClasses || moddedClasses.length === 0) return classes;
+    return [...classes, ...moddedClasses.map(normalizeBreweryClass)];
+  }, [moddedClasses]);
+
   const [uploading, setUploading] = useState(false);
   const [uploadingProfile, setUploadingProfile] = useState(false);
   const [uploadingCompanion, setUploadingCompanion] = useState(false);
@@ -215,7 +269,7 @@ export default function ClassStep({ characterData, updateCharacterData }) {
   const [fullBodySaved, setFullBodySaved] = useState(!!characterData.avatar_position);
   const [profileSaved, setProfileSaved] = useState(!!characterData.profile_position);
   
-  const selectedClass = classes.find(c => c.name === characterData.class);
+  const selectedClass = combinedClasses.find(c => c.name === characterData.class);
   const selectedAlignment = alignments.find(a => a.name === characterData.alignment);
   const companionInfo = companionTypes[characterData.class];
 
@@ -335,24 +389,50 @@ export default function ClassStep({ characterData, updateCharacterData }) {
           <Select
             value={characterData.class}
             onValueChange={(value) => {
-              const cls = classes.find(c => c.name === value);
-              updateCharacterData({ 
+              const cls = combinedClasses.find(c => c.name === value);
+              const baseUpdates = {
                 class: value,
-                features: cls.features.map(f => ({ name: f, source: value, description: "" }))
-              });
+                features: (cls?.features || []).map(f => ({ name: f, source: value, description: "" })),
+              };
+              // Strip the previously-tagged class mod (if any),
+              // then re-tag when the new pick is a brewery class.
+              const priorDeps = Array.isArray(characterData.mod_dependencies) ? characterData.mod_dependencies : [];
+              const nonClassDeps = priorDeps.filter((d) => d?.mod_type !== "class");
+              if (cls?._source === "brewery" && cls?._raw) {
+                Object.assign(
+                  baseUpdates,
+                  clearBreweryClassMarkers(),
+                  applyBreweryClassBaseline(cls._raw, characterData),
+                );
+                const classDep = cls._mod_id
+                  ? [{ mod_id: cls._mod_id, mod_name: cls._mod_name || cls.name, mod_type: "class" }]
+                  : [];
+                baseUpdates.mod_dependencies = [...nonClassDeps, ...classDep];
+              } else {
+                Object.assign(baseUpdates, clearBreweryClassMarkers());
+                baseUpdates.mod_dependencies = nonClassDeps;
+              }
+              updateCharacterData(baseUpdates);
             }}
           >
             <SelectTrigger className="bg-[#2A3441]/80 border-[#37F2D1]/30 text-white text-base h-12 hover:border-[#37F2D1]/60 transition-colors">
               <SelectValue placeholder="Select class" />
             </SelectTrigger>
             <SelectContent className="bg-[#1E2430] border-[#2A3441]">
-              {classes.map((cls) => (
-                <SelectItem 
-                  key={cls.name} 
-                  value={cls.name} 
+              {combinedClasses.map((cls) => (
+                <SelectItem
+                  key={cls.name}
+                  value={cls.name}
                   className="text-white hover:bg-[#2A3441] focus:bg-[#2A3441]"
                 >
-                  {cls.name}
+                  <span className="inline-flex items-center gap-2">
+                    {cls.name}
+                    {cls._source === "brewery" && (
+                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1 py-0.5">
+                        <Sparkles className="w-2.5 h-2.5" /> Brewery
+                      </span>
+                    )}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -367,10 +447,23 @@ export default function ClassStep({ characterData, updateCharacterData }) {
             className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
           >
             <div className="flex items-center gap-4 mb-4">
-              <img src={selectedClass.icon} alt={selectedClass.name} className="w-20 h-20 object-contain" />
+              {selectedClass.icon ? (
+                <img src={selectedClass.icon} alt={selectedClass.name} className="w-20 h-20 object-contain" />
+              ) : (
+                <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-[#37F2D1]/30 to-[#8B5CF6]/30 flex items-center justify-center">
+                  <Sparkles className="w-10 h-10 text-[#37F2D1]" />
+                </div>
+              )}
               <div className="flex-1">
-                <h3 className="text-2xl font-bold text-white mb-1">{selectedClass.name}</h3>
-                <p className="text-sm text-white/60">Hit Die: {selectedClass.hitDie}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-2xl font-bold text-white">{selectedClass.name}</h3>
+                  {selectedClass._source === "brewery" && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1.5 py-0.5">
+                      <Sparkles className="w-3 h-3" /> Brewery
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-white/60 mt-1">Hit Die: {selectedClass.hitDie}</p>
               </div>
             </div>
             <p className="text-white/80 mb-4 text-sm leading-relaxed">{selectedClass.description}</p>
@@ -385,10 +478,17 @@ export default function ClassStep({ characterData, updateCharacterData }) {
               </div>
               <div className="flex justify-between">
                 <span className="text-white/60">Saving Throws:</span>
-                <span className="text-white">{selectedClass.savingThrows.join(", ")}</span>
+                <span className="text-white">{(selectedClass.savingThrows || []).join(", ")}</span>
               </div>
             </div>
           </motion.div>
+        )}
+
+        {selectedClass?._source === "brewery" && (
+          <BreweryClassPickers
+            characterData={characterData}
+            updateCharacterData={updateCharacterData}
+          />
         )}
 
         <motion.div
@@ -745,6 +845,267 @@ export default function ClassStep({ characterData, updateCharacterData }) {
           />
         </motion.div>
       </div>
+    </motion.div>
+  );
+}
+
+// Skill + equipment pickers rendered under the detail panel when
+// the selected class is brewery-sourced. The skill picker mirrors
+// the race-side BreweryRacePickers style so both creators feel
+// consistent.
+const CLASS_SKILL_OPTIONS = [
+  "Acrobatics", "Animal Handling", "Arcana", "Athletics", "Deception",
+  "History", "Insight", "Intimidation", "Investigation", "Medicine",
+  "Nature", "Perception", "Performance", "Persuasion", "Religion",
+  "Sleight of Hand", "Stealth", "Survival",
+];
+
+function BreweryClassPickers({ characterData, updateCharacterData }) {
+  const cls = characterData._brewery_class;
+  if (!cls) return null;
+
+  const lvl = Number(characterData.level) || 1;
+  const earnedFeatures = getBreweryClassFeaturesAtLevel(
+    cls,
+    lvl,
+    characterData._brewery_class_subclass,
+  );
+  const asiLevels = getBreweryClassAsiLevels(cls);
+  const asiReached = asiLevels.filter((l) => l <= lvl);
+
+  const skillCfg = cls.skill_proficiencies || { choose: 0, from: [] };
+  const choose = Number(skillCfg.choose) || 0;
+  const fromRaw = Array.isArray(skillCfg.from) ? skillCfg.from : [];
+  const from = fromRaw.length > 0 ? fromRaw : CLASS_SKILL_OPTIONS;
+  const chosen = Array.isArray(characterData._brewery_class_skill_picks)
+    ? characterData._brewery_class_skill_picks
+    : [];
+
+  const toggleSkill = (skill) => {
+    const active = chosen.includes(skill);
+    if (!active && chosen.length >= choose) return;
+    const next = active ? chosen.filter((s) => s !== skill) : [...chosen, skill];
+    const nextSkills = { ...(characterData.skills || {}) };
+    if (active) delete nextSkills[skill];
+    else nextSkills[skill] = true;
+    updateCharacterData({
+      _brewery_class_skill_picks: next,
+      skills: nextSkills,
+    });
+  };
+
+  const fixed   = Array.isArray(cls.starting_equipment?.fixed)   ? cls.starting_equipment.fixed   : [];
+  const choices = Array.isArray(cls.starting_equipment?.choices) ? cls.starting_equipment.choices : [];
+  const equipState = characterData._brewery_class_equipment || { fixed_confirmed: true, choices: {} };
+  const picks = equipState.choices || {};
+
+  const pickOption = (groupIdx, option) => {
+    updateCharacterData({
+      _brewery_class_equipment: {
+        ...equipState,
+        choices: { ...picks, [groupIdx]: option },
+      },
+    });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441] space-y-4"
+    >
+      <h4 className="text-[#37F2D1] font-bold text-sm uppercase tracking-widest flex items-center gap-2">
+        <Sparkles className="w-4 h-4" /> Brewery Class Choices
+      </h4>
+
+      {choose > 0 && (
+        <div className="bg-[#0b1220] border border-[#37F2D1]/30 rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-white/70 font-semibold">
+              Pick {choose} skill{choose > 1 ? "s" : ""}{fromRaw.length > 0 ? " from the class list" : ""}
+            </p>
+            <span className="text-[10px] text-white/50">{chosen.length} / {choose}</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {from.map((skill) => {
+              const active = chosen.includes(skill);
+              const disabled = !active && chosen.length >= choose;
+              return (
+                <button
+                  key={skill}
+                  type="button"
+                  onClick={() => toggleSkill(skill)}
+                  disabled={disabled}
+                  className={`px-2 py-1 rounded border text-[10px] font-semibold transition-colors ${
+                    active
+                      ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                      : disabled
+                        ? "bg-[#050816] text-slate-600 border-slate-800 cursor-not-allowed"
+                        : "bg-[#050816] text-slate-300 border-slate-700 hover:border-[#37F2D1]/60"
+                  }`}
+                >
+                  {skill}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {earnedFeatures.length > 0 && (
+        <div className="bg-[#0b1220] border border-[#37F2D1]/30 rounded-lg p-3">
+          <p className="text-xs text-white/70 font-semibold uppercase tracking-wide mb-2">
+            Features Earned by Level {lvl}
+          </p>
+          <div className="space-y-1">
+            {earnedFeatures.map((f, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <span className="text-[10px] text-[#37F2D1] font-bold w-8 shrink-0">L{f.level}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold text-white">{f.name}</span>
+                    {f.is_asi && (
+                      <span className="text-[9px] bg-amber-500 text-black rounded px-1 font-bold">ASI</span>
+                    )}
+                    {f.is_subclass_choice && (
+                      <span className="text-[9px] bg-purple-500 text-white rounded px-1 font-bold">SUBCLASS</span>
+                    )}
+                  </div>
+                  {f.description && (
+                    <p className="text-[10px] text-white/60 line-clamp-2">{f.description}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          {asiReached.length > 0 && (
+            <p className="mt-2 pt-2 border-t border-slate-700 text-[10px] text-amber-300">
+              ASI pending at level{asiReached.length > 1 ? "s" : ""}: {asiReached.join(", ")} —
+              choose +2 to one score or +1 to two scores (or a feat, DM permitting).
+            </p>
+          )}
+        </div>
+      )}
+
+      {(() => {
+        const resource = getBreweryClassResource(cls, lvl);
+        if (!resource) return null;
+        return (
+          <div className="bg-[#0b1220] border border-amber-400/40 rounded-lg p-3">
+            <p className="text-xs text-white/70 font-semibold uppercase tracking-wide mb-1 flex items-center gap-2">
+              <span>{resource.name}</span>
+              {resource.abbreviation && (
+                <span className="text-[9px] text-amber-300">({resource.abbreviation})</span>
+              )}
+            </p>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl font-black text-amber-300">
+                {resource.current} / {resource.max}
+              </span>
+              <span className="text-[10px] text-white/60 uppercase tracking-widest">
+                recharges on {resource.recharge.replace("_", " ")}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
+
+      {Array.isArray(cls.subclass?.options) && cls.subclass.options.length > 0 && (() => {
+        const chooseAt = Number(cls.subclass.choose_at_level) || 3;
+        const canPick  = lvl >= chooseAt;
+        const chosen   = characterData._brewery_class_subclass || "";
+        const label    = cls.subclass.name || "Subclass";
+        return (
+          <div className="bg-[#0b1220] border border-[#37F2D1]/30 rounded-lg p-3">
+            <p className="text-xs text-white/70 font-semibold uppercase tracking-wide mb-2 flex items-center gap-2">
+              <span>{label} Selection</span>
+              {!canPick && (
+                <span className="text-[9px] bg-slate-700 text-slate-300 rounded px-1.5 py-0.5 uppercase tracking-widest">
+                  Unlocks at Lvl {chooseAt}
+                </span>
+              )}
+            </p>
+            {canPick ? (
+              <div className="space-y-2">
+                {cls.subclass.options.map((opt) => {
+                  const active = chosen === opt.name;
+                  return (
+                    <button
+                      key={opt.name}
+                      type="button"
+                      onClick={() => updateCharacterData({
+                        _brewery_class_subclass: opt.name,
+                        subclass: opt.name,
+                      })}
+                      className={`w-full text-left rounded-lg p-3 border transition-colors ${
+                        active
+                          ? "bg-[#37F2D1]/20 border-[#37F2D1]"
+                          : "bg-[#050816] border-slate-700 hover:border-[#37F2D1]/60"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-bold text-white">{opt.name}</span>
+                        {active && (
+                          <span className="text-[9px] bg-[#37F2D1] text-[#050816] rounded px-1.5 py-0.5 font-black uppercase tracking-widest">
+                            Chosen
+                          </span>
+                        )}
+                      </div>
+                      {opt.description && (
+                        <p className="text-[11px] text-white/70 mt-1">{opt.description}</p>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-[11px] text-white/50 italic">
+                Bump this character's level to {chooseAt} or higher to pick a {label.toLowerCase()}.
+              </p>
+            )}
+          </div>
+        );
+      })()}
+
+      {(fixed.length > 0 || choices.length > 0) && (
+        <div className="bg-[#0b1220] border border-[#37F2D1]/30 rounded-lg p-3 space-y-3">
+          <p className="text-xs text-white/70 font-semibold uppercase tracking-wide">Starting Equipment</p>
+          {fixed.length > 0 && (
+            <div>
+              <p className="text-[10px] text-white/50 mb-1">You automatically start with:</p>
+              <ul className="text-xs text-white/80 list-disc list-inside">
+                {fixed.map((item, i) => (<li key={i}>{item}</li>))}
+              </ul>
+            </div>
+          )}
+          {choices.map((group, idx) => {
+            const options = (group.options || []).filter((o) => typeof o === "string" && o.trim());
+            if (options.length === 0) return null;
+            const active = picks[idx];
+            return (
+              <div key={idx}>
+                <p className="text-[10px] text-white/50 mb-1">Choose one (group #{idx + 1}):</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {options.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => pickOption(idx, opt)}
+                      className={`px-2 py-1 rounded border text-[10px] font-semibold transition-colors ${
+                        active === opt
+                          ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                          : "bg-[#050816] text-slate-300 border-slate-700 hover:border-[#37F2D1]/60"
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </motion.div>
   );
 }

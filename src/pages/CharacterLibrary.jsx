@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Edit, Trash2, User, Shield, Heart, Zap, Eye, Footprints, Swords } from "lucide-react";
+import { Plus, Edit, Trash2, User, Shield, Heart, Zap, Eye, Footprints, Swords, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import CreateCharacterDialog from "@/components/characters/CreateCharacterDialog";
@@ -366,8 +366,22 @@ export default function CharacterLibrary() {
                 </button>
               </div>
             </div>
-            <p className="text-gray-300 text-lg mb-3">
-              Level {selectedCharacter.level} {selectedCharacter.race || ''} {selectedCharacter.class}
+            <p className="text-gray-300 text-lg mb-3 flex items-center gap-2 flex-wrap">
+              <span>
+                Level {selectedCharacter.level} {selectedCharacter.race || ''} {selectedCharacter.class}
+              </span>
+              {Array.isArray(selectedCharacter.mod_dependencies)
+                && selectedCharacter.mod_dependencies.some((d) => d?.mod_type === "race") && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1.5 py-0.5">
+                  <Sparkles className="w-3 h-3" /> Brewery Race
+                </span>
+              )}
+              {Array.isArray(selectedCharacter.mod_dependencies)
+                && selectedCharacter.mod_dependencies.some((d) => d?.mod_type === "class") && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1.5 py-0.5">
+                  <Sparkles className="w-3 h-3" /> Brewery Class
+                </span>
+              )}
             </p>
             {selectedCharacter.tags && selectedCharacter.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">
