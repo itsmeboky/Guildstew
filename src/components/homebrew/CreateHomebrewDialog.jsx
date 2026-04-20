@@ -490,6 +490,13 @@ const BLANK_SPELL = {
   range: "60 feet",
   components: { v: true, s: true, m: false, material: "" },
   duration: "Instantaneous",
+  // Explicit booleans so the combat layer can branch without
+  // parsing the duration string. Authors still type the human-
+  // readable duration; these flags drive concentration tracking
+  // (one concentration spell at a time) and ritual casting
+  // (cast without a slot for an extra 10 minutes).
+  concentration: false,
+  ritual: false,
   description: "",
   higher_level: "",
   classes: [],
@@ -4905,6 +4912,13 @@ function serializeAlternativeCosts(value) {
 
 export function spellFromModifications(mods) {
   if (!mods || typeof mods !== "object") return { ...BLANK_SPELL };
+  // Older spells encoded concentration / ritual into the duration
+  // string ("Concentration, up to 1 minute"). When the explicit
+  // boolean isn't present, sniff the duration so the toggle
+  // reflects the spell's actual state on first edit.
+  const durationText = (mods.duration || "").toLowerCase();
+  const inferredConcentration = /concentration/.test(durationText);
+  const inferredRitual = /ritual/.test(durationText);
   return {
     ...BLANK_SPELL,
     ...mods,
@@ -4922,6 +4936,8 @@ export function spellFromModifications(mods) {
       || (mods.attack_roll ? "attack" : mods.save ? "save" : "save"),
     save: (mods.save || "DEX").toString().toUpperCase(),
     condition_save: (mods.condition_save || "WIS").toString().toUpperCase(),
+    concentration: typeof mods.concentration === "boolean" ? mods.concentration : inferredConcentration,
+    ritual: typeof mods.ritual === "boolean" ? mods.ritual : inferredRitual,
     alternative_costs: normalizeAlternativeCosts(mods.alternative_costs),
   };
 }
@@ -4938,6 +4954,11 @@ export function buildSpellModifications(spell) {
     components: formatComponents(spell.components),
     components_detail: { ...(spell.components || {}) }, // keep structured form for downstream consumers
     duration: spell.duration || "Instantaneous",
+    // Explicit flags so combat doesn't have to parse the duration
+    // string. Spells table has dedicated columns for these on the
+    // SRD side; keep the names matching.
+    concentration: !!spell.concentration,
+    ritual: !!spell.ritual,
     description: spell.description || "",
     higher_level: spell.higher_level || "",
     classes: Array.isArray(spell.classes) ? spell.classes : [],
@@ -5231,10 +5252,38 @@ function CustomSpellForm({ spell, setSpell }) {
           <Input
             value={spell.duration || ""}
             onChange={(e) => patch({ duration: e.target.value })}
-            placeholder="Instantaneous, Concentration, up to 1 minute, 1 hour"
+            placeholder="Instantaneous, up to 1 minute, 1 hour"
             className="bg-[#0b1220] border-slate-700 text-white"
           />
         </Field>
+      </div>
+
+      {/* --- Concentration + Ritual flags --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <label className="flex items-center gap-2 text-xs text-slate-300 bg-[#0b1220] border border-slate-700 rounded-lg p-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!spell.concentration}
+            onChange={(e) => patch({ concentration: e.target.checked })}
+            className="accent-[#37F2D1]"
+          />
+          <span>
+            <span className="font-bold text-white">Concentration</span> — only one
+            concentration spell can be active per caster.
+          </span>
+        </label>
+        <label className="flex items-center gap-2 text-xs text-slate-300 bg-[#0b1220] border border-slate-700 rounded-lg p-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!spell.ritual}
+            onChange={(e) => patch({ ritual: e.target.checked })}
+            className="accent-[#37F2D1]"
+          />
+          <span>
+            <span className="font-bold text-white">Ritual</span> — can also be cast
+            without a spell slot, taking +10 minutes.
+          </span>
+        </label>
       </div>
 
       {/* --- Components --- */}
