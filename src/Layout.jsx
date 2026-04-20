@@ -3,8 +3,9 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Play, Users, Trophy, PieChart, Settings, Beer, LogOut, Plus, Radio, UserPlus, Search, ChevronDown, ChevronRight, CreditCard, Palette, MessageSquare, FileText, HelpCircle, Upload, ShoppingBag, DollarSign, AlertCircle, BookOpen, Menu, Sparkles, Globe, UsersIcon, Clock, Scroll, Wand2, Wrench, Church, Skull, Flower2, Crown, Shield, Calendar as CalendarIcon, Layers, NotebookPen, Flame } from "lucide-react";
 import { getWalletBalance } from "@/lib/spiceWallet";
-import { formatSpice } from "@/config/spiceConfig";
+import { formatSpice, MONTHLY_STIPENDS } from "@/config/spiceConfig";
 import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
+import { supabase } from "@/api/supabaseClient";
 import ChatPanel from "@/components/chat/ChatPanel";
 import SessionReminderNotification from "@/components/notifications/SessionReminderNotification";
 import DiceRoller from "@/components/dice/DiceRoller";
@@ -49,8 +50,14 @@ function LegalFooter() {
 function SpiceBalance() {
   // Nav-bar Spice pill. Shows the current balance in warm gold so it
   // stands visually distinct from the teal accents. Clicking opens
-  // the Buy Spice dialog. Hidden until the user's auth + balance
-  // resolve so it doesn't flash "0" during initial load.
+  // the Buy Spice dialog.
+  //
+  // A small notification dot appears when the user's subscription
+  // tier earns a stipend AND they haven't received one in 30+ days.
+  // The actual grant fires from SubscriptionContext on login; the
+  // dot simply signals "something new arrived" until the wallet
+  // re-fetches.
+  const sub = useSubscription();
   const { data: authUser } = useQuery({ queryKey: ['currentUser'] });
   const [dialogOpen, setDialogOpen] = useState(false);
   const { data: wallet } = useQuery({
@@ -60,6 +67,28 @@ function SpiceBalance() {
     staleTime: 30_000,
   });
 
+  const { data: stipendMeta } = useQuery({
+    queryKey: ['spiceWalletStipend', authUser?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('spice_wallets')
+        .select('last_stipend_at')
+        .eq('user_id', authUser.id)
+        .maybeSingle();
+      return data || null;
+    },
+    enabled: !!authUser?.id,
+    staleTime: 60_000,
+  });
+
+  const stipendAmount = MONTHLY_STIPENDS[sub.tier] || 0;
+  const hasStipendDue = (() => {
+    if (stipendAmount === 0) return false;
+    const last = stipendMeta?.last_stipend_at;
+    if (!last) return true;
+    return (Date.now() - new Date(last).getTime()) >= 30 * 24 * 60 * 60 * 1000;
+  })();
+
   if (!authUser?.id) return null;
 
   return (
@@ -67,11 +96,17 @@ function SpiceBalance() {
       <button
         type="button"
         onClick={() => setDialogOpen(true)}
-        title="Buy more Spice"
-        className="inline-flex items-center gap-1 text-[12px] font-black rounded-full px-2.5 py-1 bg-amber-500/15 border border-amber-500/40 text-amber-200 hover:bg-amber-500/25 transition-colors"
+        title={hasStipendDue ? "Monthly stipend ready" : "Buy more Spice"}
+        className="relative inline-flex items-center gap-1 text-[12px] font-black rounded-full px-2.5 py-1 bg-amber-500/15 border border-amber-500/40 text-amber-200 hover:bg-amber-500/25 transition-colors"
       >
         <Flame className="w-3.5 h-3.5 text-amber-400" />
         <span>{formatSpice(wallet?.balance || 0)}</span>
+        {hasStipendDue && (
+          <span
+            aria-hidden
+            className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#2A3441]"
+          />
+        )}
       </button>
       <BuySpiceDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
     </>
