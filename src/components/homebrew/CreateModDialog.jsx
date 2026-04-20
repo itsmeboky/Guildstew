@@ -10,6 +10,7 @@ import CreateClassModDialog from "./CreateClassModDialog";
 import CreateReskinModDialog from "./CreateReskinModDialog";
 import CreateSheetModDialog from "./CreateSheetModDialog";
 import CreateContentPackDialog from "./CreateContentPackDialog";
+import CreateCodeModDialog from "./CreateCodeModDialog";
 
 /**
  * Brewery → Create New Mod entry point.
@@ -164,13 +165,10 @@ export default function CreateModDialog({ open, onClose }) {
         open={openType === "content_pack"}
         onClose={closeChild}
       />
-      {openType === "code_mod" && (
-        <ComingSoonDialog
-          title="Code Mod creator"
-          note="Custom triggers and formulas land in a follow-up part. The mod engine's validateFormula already gates against unsafe expressions — the editor + signing flow is the missing piece."
-          onClose={closeChild}
-        />
-      )}
+      <CreateCodeModDialog
+        open={openType === "code_mod"}
+        onClose={closeChild}
+      />
     </>
   );
 }
