@@ -28,6 +28,7 @@ import {
   resolvePurchasedUpgrades,
   COMMON_ROOM_UPGRADE_ID,
 } from "@/config/guildHallUpgrades";
+import GuildHallTrainingSection from "./GuildHallTrainingSection";
 
 export default function GuildHallManager({ campaign, guildHall, options, canEdit, onUpdate, onRefresh }) {
   const [deedCost, setDeedCost] = useState(guildHall?.deed_cost || 0);
@@ -540,6 +541,14 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
           );
         })}
       </div>
+
+      {/* Training — gated to campaigns with at least one
+          training-related upgrade; self-hides otherwise. */}
+      <GuildHallTrainingSection
+        campaign={campaign}
+        purchasedUpgrades={purchasedUpgrades}
+        canEdit={canEdit}
+      />
 
       {/* Active effects summary — flat list of every purchased
           upgrade's human-readable effect text, prefixed with the
