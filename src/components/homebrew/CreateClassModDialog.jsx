@@ -132,6 +132,8 @@ export default function CreateClassModDialog({ open, onClose, mod = null }) {
             title="Feature Schedule — Levels 11–20"
           />
           <SubclassSection formData={formData} setField={setField} />
+          <ClassResourceSection formData={formData} setField={setField} />
+          <MulticlassSection formData={formData} setField={setField} />
         </div>
       </DialogContent>
     </Dialog>
@@ -1272,5 +1274,149 @@ function SubclassOptionCard({ idx, option, onChange, onRemove }) {
         </Button>
       </div>
     </div>
+  );
+}
+
+// ───────────────────────── B8 Class Resource ─────────────────────
+
+const RESOURCE_RECHARGES = ["short_rest", "long_rest", "dawn", "dusk", "special"];
+
+function blankResourceCountsByLevel() {
+  return Array.from({ length: 20 }, (_, i) => ({ level: i + 1, count: 0 }));
+}
+
+function ClassResourceSection({ formData, setField }) {
+  const res = formData.class_resource || {
+    enabled: false,
+    name: "",
+    abbreviation: "",
+    count_by_level: blankResourceCountsByLevel(),
+    recharge: "long_rest",
+  };
+  const counts = Array.isArray(res.count_by_level) && res.count_by_level.length === 20
+    ? res.count_by_level
+    : blankResourceCountsByLevel();
+
+  const setRes = (patch) => setField("class_resource", { ...res, ...patch });
+
+  const setCount = (rowIdx, value) => {
+    const next = counts.map((r, i) => (i === rowIdx ? { ...r, count: Number(value) || 0 } : r));
+    setRes({ count_by_level: next });
+  };
+
+  return (
+    <Section title="Class Resource">
+      <div className="flex items-center gap-3">
+        <Switch
+          checked={!!res.enabled}
+          onCheckedChange={(v) => setRes({ enabled: v })}
+          id="resource-toggle"
+        />
+        <Label htmlFor="resource-toggle" className="text-sm text-slate-300">
+          This class has a tracked resource (Ki, Rages, Superiority Dice, etc.)
+        </Label>
+      </div>
+
+      {res.enabled && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2">
+              <Field label="Resource Name">
+                <Input
+                  value={res.name || ""}
+                  onChange={(e) => setRes({ name: e.target.value })}
+                  placeholder="e.g., Ki Points"
+                  className="bg-[#050816] border-slate-700 text-white"
+                />
+              </Field>
+            </div>
+            <Field label="Abbreviation">
+              <Input
+                value={res.abbreviation || ""}
+                onChange={(e) => setRes({ abbreviation: e.target.value })}
+                placeholder="e.g., Ki"
+                className="bg-[#050816] border-slate-700 text-white"
+              />
+            </Field>
+          </div>
+
+          <Field label="Recharges On">
+            <Select value={res.recharge || "long_rest"} onValueChange={(v) => setRes({ recharge: v })}>
+              <SelectTrigger className="bg-[#050816] border-slate-700 text-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {RESOURCE_RECHARGES.map((r) => (
+                  <SelectItem key={r} value={r}>{r.replace("_", " ")}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <div className="bg-[#050816] border border-slate-700 rounded-lg p-3">
+            <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-2">
+              Count by Class Level
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              {counts.map((row, rowIdx) => (
+                <div key={row.level} className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-400 font-bold w-6 text-right">{row.level}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={99}
+                    value={row.count}
+                    onChange={(e) => setCount(rowIdx, e.target.value)}
+                    className="w-14 bg-[#1E2430] border border-slate-700 text-white text-center rounded px-1 py-0.5"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </Section>
+  );
+}
+
+// ────────────────────────── B9 Multiclass ────────────────────────
+
+function MulticlassSection({ formData, setField }) {
+  const mc = formData.multiclass || { ability_requirement: {}, proficiencies_gained: [] };
+  const setMc = (patch) => setField("multiclass", { ...mc, ...patch });
+
+  const setReq = (ab, value) => {
+    const next = { ...(mc.ability_requirement || {}) };
+    const n = Number(value) || 0;
+    if (n <= 0) delete next[ab];
+    else next[ab] = n;
+    setMc({ ability_requirement: next });
+  };
+
+  return (
+    <Section title="Multiclass Requirements">
+      <p className="text-[11px] text-slate-500 -mt-1">
+        Minimum ability scores to multiclass into or out of this class. Leave a score at 0 to skip that requirement.
+      </p>
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+        {ABILITIES.map((ab) => (
+          <Field key={ab} label={ab}>
+            <NumberInput
+              value={(mc.ability_requirement || {})[ab] ?? 0}
+              onChange={(v) => setReq(ab, v)}
+              min={0}
+              max={20}
+            />
+          </Field>
+        ))}
+      </div>
+      <Field label="Proficiencies Granted on Multiclass Entry">
+        <ChipMultiSelect
+          options={[...ARMOR_OPTIONS, ...WEAPON_OPTIONS, ...TOOL_OPTIONS, ...SKILL_OPTIONS]}
+          values={mc.proficiencies_gained || []}
+          onChange={(v) => setMc({ proficiencies_gained: v })}
+        />
+      </Field>
+    </Section>
   );
 }
