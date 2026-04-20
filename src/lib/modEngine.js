@@ -125,7 +125,7 @@ export async function checkCharacterCompatibility(character, campaignId) {
  * when the mod's game_system doesn't match the campaign's.
  * Returns { success } or { success: false, conflicts, reason }.
  */
-export async function installMod(campaignId, modId, userId) {
+export async function installMod(campaignId, modId, userId, { configValues } = {}) {
   const { data: mod, error: modErr } = await supabase
     .from("brewery_mods")
     .select("*")
@@ -151,17 +151,34 @@ export async function installMod(campaignId, modId, userId) {
     return { success: false, conflicts };
   }
 
+  // Code mods pin `config_values` onto pinned_metadata so formulas
+  // can resolve config.<key> at runtime. The caller's `configValues`
+  // object overrides per-param defaults; any param the caller didn't
+  // supply falls back to the creator's default.
+  const pinnedMetadata = {
+    ...(mod.metadata || {}),
+    mod_type: mod.mod_type,
+    name: mod.name,
+  };
+  if (mod.mod_type === "code_mod") {
+    const schema = Array.isArray(mod.metadata?.config_schema) ? mod.metadata.config_schema : [];
+    const merged = {};
+    for (const p of schema) {
+      if (!p?.key) continue;
+      merged[p.key] = configValues && Object.prototype.hasOwnProperty.call(configValues, p.key)
+        ? configValues[p.key]
+        : p.default;
+    }
+    pinnedMetadata.config_values = merged;
+  }
+
   const { error: insErr } = await supabase.from("campaign_installed_mods").insert({
     campaign_id: campaignId,
     mod_id: modId,
     installed_by: userId,
     installed_version: mod.version || "1.0.0",
     pinned_patches: mod.patches || [],
-    pinned_metadata: {
-      ...(mod.metadata || {}),
-      mod_type: mod.mod_type,
-      name: mod.name,
-    },
+    pinned_metadata: pinnedMetadata,
     status: "active",
   });
   if (insErr) return { success: false, reason: insErr.message };
