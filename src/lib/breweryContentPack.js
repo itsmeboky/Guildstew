@@ -88,8 +88,9 @@ export function contentPackSummary(metadata) {
 
 /**
  * Install a content pack into a campaign. Each entry is stamped
- * with the pack's mod_id so uninstall can target just this pack's
- * rows. is_system stays false — these are user-installed.
+ * with the pack's mod_id (in the canonical `source_mod_id` column)
+ * so uninstall can target just this pack's rows. is_system stays
+ * false — these are user-installed.
  *
  * Returns { success, counts: { monsters, items, spells, class_features } }
  * or { success: false, reason }.
@@ -111,7 +112,7 @@ export async function installContentPack(campaignId, modId, metadata) {
       image_url: m.image_url || null,
       is_system: false,
       is_active: true,
-      brewery_pack_mod_id: modId,
+      source_mod_id: modId,
     }));
     const { error } = await supabase.from("monsters").insert(rows);
     if (error) return { success: false, reason: `monsters: ${error.message}` };
@@ -129,7 +130,7 @@ export async function installContentPack(campaignId, modId, metadata) {
       properties: it,
       image_url: it.image_url || null,
       is_system: false,
-      brewery_pack_mod_id: modId,
+      source_mod_id: modId,
     }));
     const { error } = await supabase.from("campaign_items").insert(rows);
     if (error) return { success: false, reason: `items: ${error.message}` };
@@ -152,7 +153,7 @@ export async function installContentPack(campaignId, modId, metadata) {
       classes: Array.isArray(sp.classes) ? sp.classes : [],
       source: "brewery_pack",
       is_system: false,
-      brewery_pack_mod_id: modId,
+      source_mod_id: modId,
     }));
     const { error } = await supabase.from("spells").insert(rows);
     if (error) return { success: false, reason: `spells: ${error.message}` };
@@ -170,7 +171,7 @@ export async function installContentPack(campaignId, modId, metadata) {
       level: Number(cf.level) || 1,
       properties: cf,
       is_system: false,
-      brewery_pack_mod_id: modId,
+      source_mod_id: modId,
     }));
     const { error } = await supabase.from("campaign_class_features").insert(rows);
     if (error) return { success: false, reason: `class_features: ${error.message}` };
