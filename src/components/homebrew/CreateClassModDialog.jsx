@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,8 +10,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Save, Lock, Globe } from "lucide-react";
 import { toast } from "sonner";
+import { base44 } from "@/api/base44Client";
+import { supabase } from "@/api/supabaseClient";
+import { useSubscription } from "@/lib/SubscriptionContext";
+import { tierAtLeast } from "@/api/billingClient";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -85,6 +90,10 @@ function cloneBlankClass() {
 export default function CreateClassModDialog({ open, onClose, mod = null }) {
   const [formData, setFormData] = useState(cloneBlankClass);
   const [gameSystem, setGameSystem] = useState("dnd5e");
+  const queryClient = useQueryClient();
+  const sub = useSubscription();
+  const canPublish = tierAtLeast(sub?.tier || "free", "veteran");
+  const isEdit = !!mod?.id;
 
   useEffect(() => {
     if (!open) return;
@@ -99,11 +108,91 @@ export default function CreateClassModDialog({ open, onClose, mod = null }) {
 
   const setField = (key, value) => setFormData((f) => ({ ...f, [key]: value }));
 
+  const saveMutation = useMutation({
+    mutationFn: async ({ mode }) => {
+      const name = (formData.name || "").trim();
+      if (!name) throw new Error("Class name is required");
+      const description = (formData.description || "").trim();
+      if (!description) throw new Error("Description is required");
+
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData?.user) throw new Error("Not authenticated");
+      const userId = authData.user.id;
+
+      const isDraft      = mode === "draft";
+      const isPublishing = mode === "publish";
+      if (isPublishing && !canPublish) {
+        throw new Error("Publishing to the Brewery requires a Veteran subscription");
+      }
+
+      const metadata = {
+        ...formData,
+        name,
+        description,
+        mod_type: "class",
+        // Trim starting equipment on save: drop empty fixed rows
+        // and empty options within choice groups.
+        starting_equipment: {
+          fixed: (formData.starting_equipment?.fixed || [])
+            .map((s) => (typeof s === "string" ? s.trim() : s))
+            .filter(Boolean),
+          choices: (formData.starting_equipment?.choices || [])
+            .map((c) => ({
+              ...c,
+              options: (c.options || []).map((o) => (typeof o === "string" ? o.trim() : o)).filter(Boolean),
+            }))
+            .filter((c) => (c.options || []).length > 0),
+        },
+      };
+
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+      const payload = {
+        name,
+        slug,
+        description,
+        mod_type: "class",
+        game_system: gameSystem || "dnd5e",
+        creator_id: userId,
+        creator_tier: sub?.tier || "free",
+        metadata,
+        patches: [{
+          target: "classes",
+          operation: "extend",
+          field: "available_classes",
+          value: name,
+        }],
+        is_private: !isPublishing,
+        published: isPublishing,
+        status: isDraft ? "draft" : "active",
+      };
+
+      if (isEdit) {
+        return base44.entities.BreweryMod.update(mod.id, payload);
+      }
+      return base44.entities.BreweryMod.create({ ...payload, version: "1.0.0" });
+    },
+    onSuccess: (_row, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["myMods"] });
+      queryClient.invalidateQueries({ queryKey: ["brewery", "mods"] });
+      const msg =
+        vars.mode === "draft"   ? "Saved as draft" :
+        vars.mode === "publish" ? "Published to The Brewery" :
+                                  "Saved privately — only you can install it";
+      toast.success(msg);
+      onClose?.();
+    },
+    onError: (err) => {
+      toast.error(err?.message || "Failed to save class mod");
+      console.error(err);
+    },
+  });
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose?.(); }}>
       <DialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{mod ? "Edit Class Mod" : "Create Class Mod"}</DialogTitle>
+          <DialogTitle>{isEdit ? "Edit Class Mod" : "Create Class Mod"}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -135,6 +224,37 @@ export default function CreateClassModDialog({ open, onClose, mod = null }) {
           <ClassResourceSection formData={formData} setField={setField} />
           <MulticlassSection formData={formData} setField={setField} />
         </div>
+
+        <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => saveMutation.mutate({ mode: "draft" })}
+            disabled={saveMutation.isPending}
+            className="text-slate-300"
+          >
+            <Save className="w-4 h-4 mr-1" /> Save as Draft
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => saveMutation.mutate({ mode: "private" })}
+            disabled={saveMutation.isPending}
+            className="text-amber-300 border-amber-400/40"
+          >
+            <Lock className="w-4 h-4 mr-1" /> Save &amp; Use Privately
+          </Button>
+          <Button
+            type="button"
+            onClick={() => saveMutation.mutate({ mode: "publish" })}
+            disabled={saveMutation.isPending || !canPublish}
+            title={canPublish ? "Publish to The Brewery" : "Veteran subscription required"}
+            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold disabled:opacity-50"
+          >
+            <Globe className="w-4 h-4 mr-1" />
+            {canPublish ? "Publish to Brewery" : "Publish (Veteran+)"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
