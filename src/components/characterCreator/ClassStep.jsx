@@ -18,6 +18,10 @@ import {
   ABILITY_NAMES,
 } from '@/components/dnd5e/dnd5eRules';
 import { getModdedClasses } from '@/lib/modEngine';
+import {
+  applyBreweryClassBaseline,
+  clearBreweryClassMarkers,
+} from '@/lib/breweryClassApply';
 import { Slider } from "@/components/ui/slider";
 import { motion } from "framer-motion";
 
@@ -383,10 +387,20 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
             value={characterData.class}
             onValueChange={(value) => {
               const cls = combinedClasses.find(c => c.name === value);
-              updateCharacterData({
+              const baseUpdates = {
                 class: value,
-                features: (cls?.features || []).map(f => ({ name: f, source: value, description: "" }))
-              });
+                features: (cls?.features || []).map(f => ({ name: f, source: value, description: "" })),
+              };
+              if (cls?._source === "brewery" && cls?._raw) {
+                Object.assign(
+                  baseUpdates,
+                  clearBreweryClassMarkers(),
+                  applyBreweryClassBaseline(cls._raw, characterData),
+                );
+              } else {
+                Object.assign(baseUpdates, clearBreweryClassMarkers());
+              }
+              updateCharacterData(baseUpdates);
             }}
           >
             <SelectTrigger className="bg-[#2A3441]/80 border-[#37F2D1]/30 text-white text-base h-12 hover:border-[#37F2D1]/60 transition-colors">
@@ -452,10 +466,17 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
               </div>
               <div className="flex justify-between">
                 <span className="text-white/60">Saving Throws:</span>
-                <span className="text-white">{selectedClass.savingThrows.join(", ")}</span>
+                <span className="text-white">{(selectedClass.savingThrows || []).join(", ")}</span>
               </div>
             </div>
           </motion.div>
+        )}
+
+        {selectedClass?._source === "brewery" && (
+          <BreweryClassPickers
+            characterData={characterData}
+            updateCharacterData={updateCharacterData}
+          />
         )}
 
         <motion.div
@@ -812,6 +833,143 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
           />
         </motion.div>
       </div>
+    </motion.div>
+  );
+}
+
+// Skill + equipment pickers rendered under the detail panel when
+// the selected class is brewery-sourced. The skill picker mirrors
+// the race-side BreweryRacePickers style so both creators feel
+// consistent.
+const CLASS_SKILL_OPTIONS = [
+  "Acrobatics", "Animal Handling", "Arcana", "Athletics", "Deception",
+  "History", "Insight", "Intimidation", "Investigation", "Medicine",
+  "Nature", "Perception", "Performance", "Persuasion", "Religion",
+  "Sleight of Hand", "Stealth", "Survival",
+];
+
+function BreweryClassPickers({ characterData, updateCharacterData }) {
+  const cls = characterData._brewery_class;
+  if (!cls) return null;
+
+  const skillCfg = cls.skill_proficiencies || { choose: 0, from: [] };
+  const choose = Number(skillCfg.choose) || 0;
+  const fromRaw = Array.isArray(skillCfg.from) ? skillCfg.from : [];
+  const from = fromRaw.length > 0 ? fromRaw : CLASS_SKILL_OPTIONS;
+  const chosen = Array.isArray(characterData._brewery_class_skill_picks)
+    ? characterData._brewery_class_skill_picks
+    : [];
+
+  const toggleSkill = (skill) => {
+    const active = chosen.includes(skill);
+    if (!active && chosen.length >= choose) return;
+    const next = active ? chosen.filter((s) => s !== skill) : [...chosen, skill];
+    const nextSkills = { ...(characterData.skills || {}) };
+    if (active) delete nextSkills[skill];
+    else nextSkills[skill] = true;
+    updateCharacterData({
+      _brewery_class_skill_picks: next,
+      skills: nextSkills,
+    });
+  };
+
+  const fixed   = Array.isArray(cls.starting_equipment?.fixed)   ? cls.starting_equipment.fixed   : [];
+  const choices = Array.isArray(cls.starting_equipment?.choices) ? cls.starting_equipment.choices : [];
+  const equipState = characterData._brewery_class_equipment || { fixed_confirmed: true, choices: {} };
+  const picks = equipState.choices || {};
+
+  const pickOption = (groupIdx, option) => {
+    updateCharacterData({
+      _brewery_class_equipment: {
+        ...equipState,
+        choices: { ...picks, [groupIdx]: option },
+      },
+    });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441] space-y-4"
+    >
+      <h4 className="text-[#37F2D1] font-bold text-sm uppercase tracking-widest flex items-center gap-2">
+        <Sparkles className="w-4 h-4" /> Brewery Class Choices
+      </h4>
+
+      {choose > 0 && (
+        <div className="bg-[#0b1220] border border-[#37F2D1]/30 rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-white/70 font-semibold">
+              Pick {choose} skill{choose > 1 ? "s" : ""}{fromRaw.length > 0 ? " from the class list" : ""}
+            </p>
+            <span className="text-[10px] text-white/50">{chosen.length} / {choose}</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {from.map((skill) => {
+              const active = chosen.includes(skill);
+              const disabled = !active && chosen.length >= choose;
+              return (
+                <button
+                  key={skill}
+                  type="button"
+                  onClick={() => toggleSkill(skill)}
+                  disabled={disabled}
+                  className={`px-2 py-1 rounded border text-[10px] font-semibold transition-colors ${
+                    active
+                      ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                      : disabled
+                        ? "bg-[#050816] text-slate-600 border-slate-800 cursor-not-allowed"
+                        : "bg-[#050816] text-slate-300 border-slate-700 hover:border-[#37F2D1]/60"
+                  }`}
+                >
+                  {skill}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {(fixed.length > 0 || choices.length > 0) && (
+        <div className="bg-[#0b1220] border border-[#37F2D1]/30 rounded-lg p-3 space-y-3">
+          <p className="text-xs text-white/70 font-semibold uppercase tracking-wide">Starting Equipment</p>
+          {fixed.length > 0 && (
+            <div>
+              <p className="text-[10px] text-white/50 mb-1">You automatically start with:</p>
+              <ul className="text-xs text-white/80 list-disc list-inside">
+                {fixed.map((item, i) => (<li key={i}>{item}</li>))}
+              </ul>
+            </div>
+          )}
+          {choices.map((group, idx) => {
+            const options = (group.options || []).filter((o) => typeof o === "string" && o.trim());
+            if (options.length === 0) return null;
+            const active = picks[idx];
+            return (
+              <div key={idx}>
+                <p className="text-[10px] text-white/50 mb-1">Choose one (group #{idx + 1}):</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {options.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => pickOption(idx, opt)}
+                      className={`px-2 py-1 rounded border text-[10px] font-semibold transition-colors ${
+                        active === opt
+                          ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                          : "bg-[#050816] text-slate-300 border-slate-700 hover:border-[#37F2D1]/60"
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </motion.div>
   );
 }
