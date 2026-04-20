@@ -216,6 +216,34 @@ export function getBreweryClassAsiLevels(breweryClass) {
 }
 
 /**
+ * Resolve the class resource state at a given character level.
+ * Returns { enabled, name, abbreviation, max, current, recharge }
+ * where `max` is read from class_resource.count_by_level (Part 3B's
+ * 20-row editor) and `current` seeds at `max` unless the caller
+ * passes a previously-tracked value.
+ *
+ * Returns null when the class has no resource or the resource is
+ * disabled — callers can branch cleanly.
+ */
+export function getBreweryClassResource(breweryClass, level, currentOverride = null) {
+  const res = breweryClass?.class_resource;
+  if (!res?.enabled) return null;
+  const lvl = Math.max(1, Math.min(20, Number(level) || 1));
+  const row = (Array.isArray(res.count_by_level) ? res.count_by_level : [])
+    .find((r) => Number(r?.level) === lvl);
+  const max = Number(row?.count) || 0;
+  if (max <= 0) return null;
+  return {
+    enabled: true,
+    name: res.name || "Resource",
+    abbreviation: res.abbreviation || "",
+    max,
+    current: currentOverride == null ? max : Math.max(0, Math.min(max, Number(currentOverride) || 0)),
+    recharge: res.recharge || "long_rest",
+  };
+}
+
+/**
  * Given a class schema + the player's chosen starting_equipment
  * picks, produce a flat item list the creator/save path can push
  * onto characterData.inventory.

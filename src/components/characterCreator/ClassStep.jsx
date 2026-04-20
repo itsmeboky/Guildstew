@@ -23,6 +23,7 @@ import {
   clearBreweryClassMarkers,
   getBreweryClassFeaturesAtLevel,
   getBreweryClassAsiLevels,
+  getBreweryClassResource,
 } from '@/lib/breweryClassApply';
 import { Slider } from "@/components/ui/slider";
 import { motion } from "framer-motion";
@@ -976,6 +977,29 @@ function BreweryClassPickers({ characterData, updateCharacterData }) {
           )}
         </div>
       )}
+
+      {(() => {
+        const resource = getBreweryClassResource(cls, lvl);
+        if (!resource) return null;
+        return (
+          <div className="bg-[#0b1220] border border-amber-400/40 rounded-lg p-3">
+            <p className="text-xs text-white/70 font-semibold uppercase tracking-wide mb-1 flex items-center gap-2">
+              <span>{resource.name}</span>
+              {resource.abbreviation && (
+                <span className="text-[9px] text-amber-300">({resource.abbreviation})</span>
+              )}
+            </p>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl font-black text-amber-300">
+                {resource.current} / {resource.max}
+              </span>
+              <span className="text-[10px] text-white/60 uppercase tracking-widest">
+                recharges on {resource.recharge.replace("_", " ")}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
 
       {Array.isArray(cls.subclass?.options) && cls.subclass.options.length > 0 && (() => {
         const chooseAt = Number(cls.subclass.choose_at_level) || 3;

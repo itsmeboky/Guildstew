@@ -5,7 +5,10 @@ import {
   getSpeed,
   calculateAbilityModifier,
 } from "@/components/dnd5e/characterCalculations";
-import { getBreweryClassFeaturesAtLevel } from "@/lib/breweryClassApply";
+import {
+  getBreweryClassFeaturesAtLevel,
+  getBreweryClassResource,
+} from "@/lib/breweryClassApply";
 
 /**
  * Build a fully-derived "stats" object from CharacterCreator's characterData.
@@ -97,6 +100,16 @@ export function buildStatsFromCharacterData(characterData) {
           ritual_casting: !!characterData._brewery_class.spellcasting.ritual_casting,
         }
       : undefined,
+    // Class resource (Ki, Rages, Superiority Dice, etc.) tracked
+    // on the stats blob so the character sheet / combat HUD can
+    // render it alongside spell slots. Current value prefers any
+    // tracked value already in characterData (in-progress combat
+    // state); otherwise seeds at max.
+    brewery_class_resource: getBreweryClassResource(
+      characterData._brewery_class,
+      level,
+      characterData._brewery_class_resource?.current,
+    ) || undefined,
     damage_resistances:
       (characterData._brewery_race_resistances?.damage_resistances) || characterData.damage_resistances || [],
     damage_immunities:
