@@ -109,8 +109,12 @@ export default function Home() {
             </div>
 
             {/* Hero Slider — z-20 so the Ladle mascot (z-0 below)
-                can sit behind its top edge and look perched. */}
-            <div className="col-span-7 relative rounded-3xl overflow-hidden h-[420px] z-20">
+                can sit behind its top edge and look perched. Solid
+                #FF5722 base matches the orange used by the content
+                cards below; the slide images layer on top, and any
+                uncovered pixel shows the theme orange instead of
+                leaking Ladle through from behind. */}
+            <div className="col-span-7 relative rounded-3xl overflow-hidden h-[420px] z-20 bg-[#FF5722]">
               {HERO_SLIDES.map((slide, index) => (
                 <div
                   key={slide.id}
