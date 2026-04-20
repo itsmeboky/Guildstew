@@ -671,6 +671,30 @@ export default function CharacterLibrary() {
                 })}
               </div>
 
+              {/* Active training — only shown when the character
+                  has an in-flight training row. Progress bar +
+                  week count mirror the Guild Hall panel so the
+                  player can see the same data from their sheet. */}
+              {selectedCharacter.training_progress?.current_training && (() => {
+                const tp = selectedCharacter.training_progress;
+                const done = Number(tp.weeks_completed) || 0;
+                const need = Number(tp.weeks_required)  || 1;
+                const pct  = Math.min(100, Math.round((done / need) * 100));
+                return (
+                  <div className="bg-[#1E2430]/50 rounded-xl p-4 border border-[#37F2D1]/40 mt-4">
+                    <h3 className="text-sm font-bold text-[#37F2D1] mb-2 uppercase tracking-wide">
+                      Training: {tp.current_training}
+                    </h3>
+                    <div className="text-xs text-white/70 mb-2">
+                      {done} / {need} weeks · {pct}%
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+                      <div className="h-full bg-[#37F2D1] transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Tool Proficiencies */}
               {selectedCharacter.proficiencies?.tools && selectedCharacter.proficiencies.tools.length > 0 && (
                 <div className="bg-[#1E2430]/50 rounded-xl p-4 border border-gray-700 mt-4">

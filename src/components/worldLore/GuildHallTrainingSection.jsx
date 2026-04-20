@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -40,9 +40,11 @@ import {
 export default function GuildHallTrainingSection({ campaign, purchasedUpgrades = [], canEdit }) {
   if (!anyTrainingUnlocked(purchasedUpgrades)) return null;
 
+  const queryClient = useQueryClient();
   const campaignId = campaign?.id;
+  const charactersQueryKey = ["guildHallTraining", "characters", campaignId];
   const { data: characters = [] } = useQuery({
-    queryKey: ["guildHallTraining", "characters", campaignId],
+    queryKey: charactersQueryKey,
     queryFn: async () => {
       if (!campaignId) return [];
       const { data, error } = await supabase
@@ -55,6 +57,15 @@ export default function GuildHallTrainingSection({ campaign, purchasedUpgrades =
     enabled: !!campaignId,
     initialData: [],
   });
+
+  // Characters with an in-flight training row. training_progress is
+  // the JSONB column added in 20261101_character_training_progress.sql;
+  // the empty-object default means a character is "training" only when
+  // current_training is set.
+  const activeTrainees = useMemo(
+    () => characters.filter((c) => c?.training_progress?.current_training),
+    [characters],
+  );
 
   const [characterId, setCharacterId] = useState("");
   const [trainingType, setTrainingType] = useState("");
@@ -116,12 +127,39 @@ export default function GuildHallTrainingSection({ campaign, purchasedUpgrades =
     setTarget("");
   };
 
-  const startTraining = () => {
-    if (!character || !trainingType || !target || !quote) return;
-    // Step 3 will wire this to characters.training_progress.
-    toast.success(`${character.name} can start training ${target} — ${quote.weeks} wk, ${quote.totalCost} gp.`);
-    resetForm();
-  };
+  const startMutation = useMutation({
+    mutationFn: async () => {
+      if (!character || !trainingType || !target || !quote) {
+        throw new Error("Finish picking a character, type, and target first.");
+      }
+      if (character.training_progress?.current_training) {
+        throw new Error(`${character.name} is already training ${character.training_progress.current_training}.`);
+      }
+      const progress = {
+        current_training: target,
+        type: trainingType,
+        weeks_completed: 0,
+        weeks_required: quote.weeks,
+        cost_paid: 0,
+        total_cost: quote.totalCost,
+        started_at: new Date().toISOString(),
+      };
+      const { error } = await supabase
+        .from("characters")
+        .update({ training_progress: progress })
+        .eq("id", character.id);
+      if (error) throw error;
+      return { character, target };
+    },
+    onSuccess: ({ character: c, target: t }) => {
+      queryClient.invalidateQueries({ queryKey: charactersQueryKey });
+      toast.success(`${c.name} started training ${t}.`);
+      resetForm();
+    },
+    onError: (err) => toast.error(err?.message || "Failed to start training."),
+  });
+
+  const startTraining = () => startMutation.mutate();
 
   // Group options by `group` if any are tagged. The native <Select>
   // here is flat so we emit a single list with section dividers
@@ -165,9 +203,11 @@ export default function GuildHallTrainingSection({ campaign, purchasedUpgrades =
             <SelectContent>
               {characters.length === 0 ? (
                 <div className="px-2 py-1 text-xs text-slate-400">No characters in campaign.</div>
-              ) : characters.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name || "Unnamed"}</SelectItem>
-              ))}
+              ) : characters
+                .filter((c) => !c?.training_progress?.current_training)
+                .map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name || "Unnamed"}</SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>
@@ -241,6 +281,53 @@ export default function GuildHallTrainingSection({ campaign, purchasedUpgrades =
             Start Training
           </Button>
         </div>
+      )}
+
+      {activeTrainees.length > 0 && (
+        <div className="pt-4 border-t border-slate-700/50">
+          <h4 className="text-sm font-black uppercase tracking-widest text-slate-300 mb-3">
+            In Progress
+          </h4>
+          <div className="space-y-2">
+            {activeTrainees.map((c) => (
+              <ActiveTrainingRow key={c.id} character={c} canEdit={canEdit} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ActiveTrainingRow({ character, canEdit }) {
+  const progress = character.training_progress || {};
+  const weeksCompleted = Number(progress.weeks_completed) || 0;
+  const weeksRequired  = Number(progress.weeks_required)  || 1;
+  const pct = Math.min(100, Math.round((weeksCompleted / weeksRequired) * 100));
+  return (
+    <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-white truncate">{character.name || "Unnamed"}</div>
+          <div className="text-xs text-slate-400">
+            Training <span className="text-[#37F2D1]">{progress.current_training}</span>
+            <span className="text-slate-500"> · {progress.type}</span>
+          </div>
+        </div>
+        <div className="text-[10px] text-slate-400 whitespace-nowrap">
+          {weeksCompleted} / {weeksRequired} wk · {pct}%
+        </div>
+      </div>
+      <div className="mt-2 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+        <div
+          className="h-full bg-[#37F2D1] transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {!canEdit && (
+        <p className="mt-2 text-[10px] text-slate-500 italic">
+          GM advances training each downtime week.
+        </p>
       )}
     </div>
   );
