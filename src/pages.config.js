@@ -6,6 +6,7 @@ import Campaigns from './pages/Campaigns';
 // import Workshop from './pages/Workshop';
 import TheTavern from './pages/TheTavern';
 import MyCollection from './pages/MyCollection';
+import CreatorDashboard from './pages/CreatorDashboard';
 import Friends from './pages/Friends';
 import PIEChart from './pages/PIEChart';
 import Settings from './pages/Settings';
@@ -62,6 +63,7 @@ export const PAGES = {
     // "Workshop": Workshop,
     "TheTavern": TheTavern,
     "MyCollection": MyCollection,
+    "CreatorDashboard": CreatorDashboard,
     "Friends": Friends,
     "PIEChart": PIEChart,
     "Settings": Settings,
