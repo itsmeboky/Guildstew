@@ -347,7 +347,12 @@ function CampaignPlayerPanelContent() {
         }
       }
       toast.success('You left the session.');
-      navigate(createPageUrl('CampaignView') + `?id=${campaignId}`);
+      // Land players on the campaign lobby (CampaignPanel) — that
+      // page has isCampaignLobbyMode so Layout keeps the campaign
+      // nav bar visible. CampaignView renders its own shell
+      // outside Layout and felt "broken" relative to other
+      // campaign pages.
+      navigate(createPageUrl('CampaignPanel') + `?id=${campaignId}`);
     } catch (err) {
       toast.error(err?.message || 'Failed to leave session.');
     }
