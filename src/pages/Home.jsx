@@ -243,11 +243,11 @@ export default function Home() {
             />
           </div>
 
-          {/* Bottom Row — pushed down to give the hero area room
-              for the Karliah + Ladle mascot art to breathe. On
-              small screens where the mascots are hidden, the gap
-              shrinks to avoid a giant hole. */}
-          <div className="grid grid-cols-12 gap-6 mb-8 mt-24 md:mt-[500px]">
+          {/* Bottom Row — sits immediately below the hero row with
+              normal spacing; the mascots get their breathing room
+              from the hero section's top padding, not from a gap
+              between the hero and these cards. */}
+          <div className="grid grid-cols-12 gap-6 mb-8">
             {/* Newest Game Pack */}
             <div className="col-span-2 rounded-3xl p-5 h-[320px] flex flex-col relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-b from-[#FF5722]/60 to-[#FF5722]" />
