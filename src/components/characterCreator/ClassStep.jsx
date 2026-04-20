@@ -977,6 +977,63 @@ function BreweryClassPickers({ characterData, updateCharacterData }) {
         </div>
       )}
 
+      {Array.isArray(cls.subclass?.options) && cls.subclass.options.length > 0 && (() => {
+        const chooseAt = Number(cls.subclass.choose_at_level) || 3;
+        const canPick  = lvl >= chooseAt;
+        const chosen   = characterData._brewery_class_subclass || "";
+        const label    = cls.subclass.name || "Subclass";
+        return (
+          <div className="bg-[#0b1220] border border-[#37F2D1]/30 rounded-lg p-3">
+            <p className="text-xs text-white/70 font-semibold uppercase tracking-wide mb-2 flex items-center gap-2">
+              <span>{label} Selection</span>
+              {!canPick && (
+                <span className="text-[9px] bg-slate-700 text-slate-300 rounded px-1.5 py-0.5 uppercase tracking-widest">
+                  Unlocks at Lvl {chooseAt}
+                </span>
+              )}
+            </p>
+            {canPick ? (
+              <div className="space-y-2">
+                {cls.subclass.options.map((opt) => {
+                  const active = chosen === opt.name;
+                  return (
+                    <button
+                      key={opt.name}
+                      type="button"
+                      onClick={() => updateCharacterData({
+                        _brewery_class_subclass: opt.name,
+                        subclass: opt.name,
+                      })}
+                      className={`w-full text-left rounded-lg p-3 border transition-colors ${
+                        active
+                          ? "bg-[#37F2D1]/20 border-[#37F2D1]"
+                          : "bg-[#050816] border-slate-700 hover:border-[#37F2D1]/60"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-bold text-white">{opt.name}</span>
+                        {active && (
+                          <span className="text-[9px] bg-[#37F2D1] text-[#050816] rounded px-1.5 py-0.5 font-black uppercase tracking-widest">
+                            Chosen
+                          </span>
+                        )}
+                      </div>
+                      {opt.description && (
+                        <p className="text-[11px] text-white/70 mt-1">{opt.description}</p>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-[11px] text-white/50 italic">
+                Bump this character's level to {chooseAt} or higher to pick a {label.toLowerCase()}.
+              </p>
+            )}
+          </div>
+        );
+      })()}
+
       {(fixed.length > 0 || choices.length > 0) && (
         <div className="bg-[#0b1220] border border-[#37F2D1]/30 rounded-lg p-3 space-y-3">
           <p className="text-xs text-white/70 font-semibold uppercase tracking-wide">Starting Equipment</p>
