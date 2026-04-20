@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -569,6 +570,23 @@ function ItemDetail({ item, isGM, onEdit, onDelete }) {
   );
 }
 
+const ITEM_TYPE_OPTIONS = [
+  "Weapon", "Armor", "Shield", "Potion", "Wondrous Item",
+  "Scroll", "Ring", "Rod", "Staff", "Wand", "Ammunition", "Adventuring Gear",
+];
+const WEAPON_CATEGORIES = ["Simple", "Martial"];
+const WEAPON_DAMAGE_TYPES = [
+  "bludgeoning", "piercing", "slashing",
+  "acid", "cold", "fire", "force", "lightning",
+  "necrotic", "poison", "psychic", "radiant", "thunder",
+];
+const WEAPON_PROPERTIES = [
+  "Ammunition", "Finesse", "Heavy", "Light", "Loading",
+  "Range", "Reach", "Special", "Thrown", "Two-Handed", "Versatile",
+];
+const ARMOR_TYPES = ["light", "medium", "heavy"];
+const WONDROUS_RECHARGE = ["Dawn", "Short Rest", "Long Rest", "Never"];
+
 function EditItemDialog({ open, item, saving, onClose, onSave }) {
   const [draft, setDraft] = useState(item || {});
   // Re-seed state whenever the item we're editing changes.
@@ -584,9 +602,24 @@ function EditItemDialog({ open, item, saving, onClose, onSave }) {
     onSave({ ...draft, name: safeString(draft.name).trim() });
   };
 
+  const type = safeString(draft.type) || "Weapon";
+  const isWeapon   = type === "Weapon" || type === "Ammunition";
+  const isArmor    = type === "Armor";
+  const isShield   = type === "Shield";
+  const isPotion   = type === "Potion";
+  const isWondrous = type === "Wondrous Item" || type === "Ring"
+                  || type === "Rod" || type === "Staff" || type === "Wand";
+
+  const patch = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
+  const toggleProperty = (prop) => {
+    const current = Array.isArray(draft.properties) ? draft.properties : [];
+    const next = current.includes(prop) ? current.filter((p) => p !== prop) : [...current, prop];
+    patch("properties", next);
+  };
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="bg-[#1a1f2e] border border-slate-700 text-white max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="bg-[#1a1f2e] border border-slate-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{draft.id ? "Edit Item" : "New Item"}</DialogTitle>
         </DialogHeader>
@@ -607,29 +640,31 @@ function EditItemDialog({ open, item, saving, onClose, onSave }) {
               className="text-xs"
             />
           </div>
+
           <div>
             <label className="block text-xs text-slate-400 mb-1">Name</label>
             <Input
               value={safeString(draft.name)}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              onChange={(e) => patch("name", e.target.value)}
               className="bg-[#0f1219] border-slate-600 text-white"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+
+          <div className="grid grid-cols-3 gap-2">
             <div>
               <label className="block text-xs text-slate-400 mb-1">Type</label>
-              <Input
-                value={safeString(draft.type)}
-                onChange={(e) => setDraft({ ...draft, type: e.target.value })}
-                placeholder="Weapon, Armor, Potion, …"
-                className="bg-[#0f1219] border-slate-600 text-white"
-              />
+              <Select value={type} onValueChange={(v) => patch("type", v)}>
+                <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-[#1a1f2e] border-slate-700 text-white">
+                  {ITEM_TYPE_OPTIONS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="block text-xs text-slate-400 mb-1">Rarity</label>
               <Select
                 value={safeString(draft.rarity) || "common"}
-                onValueChange={(v) => setDraft({ ...draft, rarity: v })}
+                onValueChange={(v) => patch("rarity", v)}
               >
                 <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white">
                   <SelectValue />
@@ -645,17 +680,262 @@ function EditItemDialog({ open, item, saving, onClose, onSave }) {
               <label className="block text-xs text-slate-400 mb-1">Cost</label>
               <Input
                 value={safeString(draft.cost)}
-                onChange={(e) => setDraft({ ...draft, cost: e.target.value })}
+                onChange={(e) => patch("cost", e.target.value)}
                 placeholder="50 gp"
                 className="bg-[#0f1219] border-slate-600 text-white"
               />
             </div>
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Weight</label>
+              <Input
+                value={safeString(draft.weight)}
+                onChange={(e) => patch("weight", e.target.value)}
+                placeholder="3 lb"
+                className="bg-[#0f1219] border-slate-600 text-white"
+              />
+            </div>
           </div>
+
+          {/* Type-conditional sections below. Driven purely off the
+              `type` dropdown — switching types doesn't clear the
+              other branches so authors can flip back and forth
+              while tuning. Save path writes the full draft, and
+              readers ignore branches that don't apply to their
+              type. */}
+
+          {isWeapon && (
+            <ItemTypeSection title="Weapon details">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Damage</label>
+                  <Input
+                    value={safeString(draft.damage)}
+                    onChange={(e) => patch("damage", e.target.value)}
+                    placeholder="1d8"
+                    className="bg-[#0f1219] border-slate-600 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Damage type</label>
+                  <Select
+                    value={safeString(draft.damage_type) || "slashing"}
+                    onValueChange={(v) => patch("damage_type", v)}
+                  >
+                    <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-[#1a1f2e] border-slate-700 text-white">
+                      {WEAPON_DAMAGE_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Weapon category</label>
+                  <Select
+                    value={safeString(draft.weapon_category) || "Simple"}
+                    onValueChange={(v) => patch("weapon_category", v)}
+                  >
+                    <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-[#1a1f2e] border-slate-700 text-white">
+                      {WEAPON_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Range (if ranged/thrown)</label>
+                  <Input
+                    value={safeString(draft.range)}
+                    onChange={(e) => patch("range", e.target.value)}
+                    placeholder="80/320"
+                    className="bg-[#0f1219] border-slate-600 text-white"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Properties</label>
+                <div className="flex flex-wrap gap-1">
+                  {WEAPON_PROPERTIES.map((prop) => {
+                    const active = Array.isArray(draft.properties) && draft.properties.includes(prop);
+                    return (
+                      <button
+                        key={prop}
+                        type="button"
+                        onClick={() => toggleProperty(prop)}
+                        className={`text-[10px] font-semibold px-2 py-1 rounded border transition-colors ${
+                          active
+                            ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                            : "bg-[#050816] border-slate-700 text-slate-300 hover:border-[#37F2D1]/60"
+                        }`}
+                      >
+                        {prop}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {Array.isArray(draft.properties) && draft.properties.includes("Versatile") && (
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Versatile damage (two-handed)</label>
+                  <Input
+                    value={safeString(draft.versatile_damage)}
+                    onChange={(e) => patch("versatile_damage", e.target.value)}
+                    placeholder="1d10"
+                    className="bg-[#0f1219] border-slate-600 text-white"
+                  />
+                </div>
+              )}
+            </ItemTypeSection>
+          )}
+
+          {(isArmor || isShield) && (
+            <ItemTypeSection title={isShield ? "Shield details" : "Armor details"}>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">{isShield ? "AC bonus" : "Base AC"}</label>
+                  <Input
+                    type="number"
+                    value={Number.isFinite(draft.base_ac) ? draft.base_ac : ""}
+                    onChange={(e) => patch("base_ac", e.target.value === "" ? null : Number(e.target.value))}
+                    placeholder={isShield ? "2" : "11"}
+                    className="bg-[#0f1219] border-slate-600 text-white"
+                  />
+                </div>
+                {!isShield && (
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Armor type</label>
+                    <Select
+                      value={safeString(draft.armor_type) || "light"}
+                      onValueChange={(v) => patch("armor_type", v)}
+                    >
+                      <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white"><SelectValue /></SelectTrigger>
+                      <SelectContent className="bg-[#1a1f2e] border-slate-700 text-white">
+                        {ARMOR_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {!isShield && (
+                  <>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Max DEX bonus (blank = uncapped)</label>
+                      <Input
+                        type="number"
+                        value={Number.isFinite(draft.max_dex_bonus) ? draft.max_dex_bonus : ""}
+                        onChange={(e) => patch("max_dex_bonus", e.target.value === "" ? null : Number(e.target.value))}
+                        placeholder="2"
+                        className="bg-[#0f1219] border-slate-600 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">STR requirement</label>
+                      <Input
+                        type="number"
+                        value={Number.isFinite(draft.str_requirement) ? draft.str_requirement : ""}
+                        onChange={(e) => patch("str_requirement", e.target.value === "" ? 0 : Number(e.target.value))}
+                        placeholder="0"
+                        className="bg-[#0f1219] border-slate-600 text-white"
+                      />
+                    </div>
+                    <div className="col-span-2 flex items-center gap-2">
+                      <Checkbox
+                        id="stealth_disadvantage"
+                        checked={!!draft.stealth_disadvantage}
+                        onCheckedChange={(v) => patch("stealth_disadvantage", !!v)}
+                      />
+                      <label htmlFor="stealth_disadvantage" className="text-xs text-slate-300">
+                        Stealth disadvantage
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
+            </ItemTypeSection>
+          )}
+
+          {isPotion && (
+            <ItemTypeSection title="Potion effect">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Effect</label>
+                  <Input
+                    value={safeString(draft.potion_effect)}
+                    onChange={(e) => patch("potion_effect", e.target.value)}
+                    placeholder="Healing, Resistance, Giant Strength"
+                    className="bg-[#0f1219] border-slate-600 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Healing dice</label>
+                  <Input
+                    value={safeString(draft.healing_dice)}
+                    onChange={(e) => patch("healing_dice", e.target.value)}
+                    placeholder="2d4+2"
+                    className="bg-[#0f1219] border-slate-600 text-white"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-slate-400 mb-1">Duration</label>
+                  <Input
+                    value={safeString(draft.duration)}
+                    onChange={(e) => patch("duration", e.target.value)}
+                    placeholder="Instantaneous, 1 hour, until dispelled"
+                    className="bg-[#0f1219] border-slate-600 text-white"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-slate-400 mb-1">Effect description</label>
+                  <Textarea
+                    value={safeString(draft.effect_description)}
+                    onChange={(e) => patch("effect_description", e.target.value)}
+                    rows={2}
+                    className="bg-[#0f1219] border-slate-600 text-white"
+                  />
+                </div>
+              </div>
+            </ItemTypeSection>
+          )}
+
+          {isWondrous && (
+            <ItemTypeSection title="Wondrous item">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="col-span-2 flex items-center gap-2">
+                  <Checkbox
+                    id="requires_attunement"
+                    checked={!!draft.requires_attunement}
+                    onCheckedChange={(v) => patch("requires_attunement", !!v)}
+                  />
+                  <label htmlFor="requires_attunement" className="text-xs text-slate-300">
+                    Requires attunement
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Charges (0 = unlimited)</label>
+                  <Input
+                    type="number"
+                    value={Number.isFinite(draft.charges) ? draft.charges : 0}
+                    onChange={(e) => patch("charges", Number(e.target.value) || 0)}
+                    className="bg-[#0f1219] border-slate-600 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Recharge</label>
+                  <Select
+                    value={safeString(draft.recharge) || "Dawn"}
+                    onValueChange={(v) => patch("recharge", v)}
+                  >
+                    <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-[#1a1f2e] border-slate-700 text-white">
+                      {WONDROUS_RECHARGE.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </ItemTypeSection>
+          )}
+
           <div>
             <label className="block text-xs text-slate-400 mb-1">Description</label>
             <Textarea
               value={safeString(draft.description)}
-              onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+              onChange={(e) => patch("description", e.target.value)}
               rows={4}
               className="bg-[#0f1219] border-slate-600 text-white"
             />
@@ -673,6 +953,17 @@ function EditItemDialog({ open, item, saving, onClose, onSave }) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ItemTypeSection({ title, children }) {
+  return (
+    <div className="bg-[#0b1220] border border-[#1e293b] rounded-lg p-3 space-y-2">
+      <h3 className="text-[11px] font-black uppercase tracking-widest text-[#37F2D1]">
+        {title}
+      </h3>
+      {children}
+    </div>
   );
 }
 

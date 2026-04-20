@@ -3,6 +3,7 @@ import {
   installContentPack,
   uninstallContentPack,
 } from "@/lib/breweryContentPack";
+import { validateFormula, evaluateFormula } from "@/lib/formulaEvaluator";
 
 /**
  * Brewery mod engine — Part 1 foundation.
@@ -41,6 +42,18 @@ export async function loadCampaignMods(campaignId) {
 export function invalidateModCache(campaignId) {
   if (campaignId) modCache.delete(campaignId);
   else modCache.clear();
+  // Trigger-gate counters are scoped to the campaign's install
+  // list; wipe them whenever that list could have changed so a
+  // "once per round" gate from an uninstalled mod doesn't linger.
+  if (typeof gateTracker !== "undefined" && gateTracker?.clear) {
+    if (campaignId) {
+      for (const key of Array.from(gateTracker.keys())) {
+        if (key.startsWith(`${campaignId}:`)) gateTracker.delete(key);
+      }
+    } else {
+      gateTracker.clear();
+    }
+  }
 }
 
 /**
@@ -124,7 +137,7 @@ export async function checkCharacterCompatibility(character, campaignId) {
  * when the mod's game_system doesn't match the campaign's.
  * Returns { success } or { success: false, conflicts, reason }.
  */
-export async function installMod(campaignId, modId, userId) {
+export async function installMod(campaignId, modId, userId, { configValues } = {}) {
   const { data: mod, error: modErr } = await supabase
     .from("brewery_mods")
     .select("*")
@@ -150,17 +163,34 @@ export async function installMod(campaignId, modId, userId) {
     return { success: false, conflicts };
   }
 
+  // Code mods pin `config_values` onto pinned_metadata so formulas
+  // can resolve config.<key> at runtime. The caller's `configValues`
+  // object overrides per-param defaults; any param the caller didn't
+  // supply falls back to the creator's default.
+  const pinnedMetadata = {
+    ...(mod.metadata || {}),
+    mod_type: mod.mod_type,
+    name: mod.name,
+  };
+  if (mod.mod_type === "code_mod") {
+    const schema = Array.isArray(mod.metadata?.config_schema) ? mod.metadata.config_schema : [];
+    const merged = {};
+    for (const p of schema) {
+      if (!p?.key) continue;
+      merged[p.key] = configValues && Object.prototype.hasOwnProperty.call(configValues, p.key)
+        ? configValues[p.key]
+        : p.default;
+    }
+    pinnedMetadata.config_values = merged;
+  }
+
   const { error: insErr } = await supabase.from("campaign_installed_mods").insert({
     campaign_id: campaignId,
     mod_id: modId,
     installed_by: userId,
     installed_version: mod.version || "1.0.0",
     pinned_patches: mod.patches || [],
-    pinned_metadata: {
-      ...(mod.metadata || {}),
-      mod_type: mod.mod_type,
-      name: mod.name,
-    },
+    pinned_metadata: pinnedMetadata,
     status: "active",
   });
   if (insErr) return { success: false, reason: insErr.message };
@@ -303,24 +333,15 @@ const VALID_OPERATIONS = ["override", "extend", "modify"];
 
 /**
  * Guard against unsafe expressions before any runtime eval of a
- * code-mod formula. We don't actually eval here — just syntactic
- * sanity checks — because the engine that runs formulas will come in
- * a later part. Catches: empty strings, disallowed tokens (import,
- * require, window, document, global, process, eval, Function,
- * constructor).
+ * code-mod formula. Delegates to the real parser in
+ * src/lib/formulaEvaluator.js so session-start validation and the
+ * creator form's on-blur check use identical rules — no
+ * double-standards, no divergence between "looks safe" and
+ * "actually runs." The parser rejects unknown identifiers, unknown
+ * functions, bad dice notation, and any token outside the
+ * whitelisted grammar.
  */
-export function validateFormula(formula) {
-  if (typeof formula !== "string" || !formula.trim()) {
-    throw new Error("formula is empty");
-  }
-  const banned = /\b(import|require|window|document|globalThis|global|process|eval|Function|constructor|__proto__)\b/;
-  if (banned.test(formula)) throw new Error("formula contains a banned identifier");
-  // Allow digits, letters, arithmetic, whitespace, parens, dots,
-  // underscores, and the math operators. Anything else is rejected.
-  const allowed = /^[a-zA-Z0-9_. \t\n\r+\-*/()?:%<>=&|!,]+$/;
-  if (!allowed.test(formula)) throw new Error("formula contains disallowed characters");
-  return true;
-}
+export { validateFormula };
 
 /**
  * Run validation over every mod installed in a campaign. Each broken
@@ -467,4 +488,163 @@ export function getDisplayName(campaignMods, category, key) {
     if (category === "condition" && r.conditions?.[key])             return r.conditions[key];
   }
   return key;
+}
+
+// ──────────── Layer 3 code-mod runtime dispatch ────────────
+
+// Per-campaign gate tracking keeps track of "once per turn /
+// round / rest" triggers. Cleared when the campaign mod cache is
+// invalidated (installMod / uninstallMod) so stale gate counts
+// don't persist across install changes.
+const gateTracker = new Map(); // key: `${campaignId}:${modInstallId}:${triggerId}:${scope}` → count
+
+function trackerKey(campaignId, installId, triggerId, scope) {
+  return `${campaignId}:${installId}:${triggerId}:${scope}`;
+}
+
+export function resetTriggerGates(campaignId, scope = "all") {
+  if (!campaignId) return;
+  for (const key of Array.from(gateTracker.keys())) {
+    if (!key.startsWith(`${campaignId}:`)) continue;
+    if (scope === "all" || key.endsWith(`:${scope}`)) gateTracker.delete(key);
+  }
+}
+
+function gateScope(gate) {
+  if (gate === "once_per_turn")    return "turn";
+  if (gate === "once_per_round")   return "round";
+  if (gate === "once_per_rest")    return "rest";
+  if (gate === "proficiency_bonus") return "rest";
+  return null; // unlimited
+}
+
+function canFireGate(campaignId, installId, trigger, context) {
+  const scope = gateScope(trigger.gate);
+  if (!scope) return true;
+  const key = trackerKey(campaignId, installId, trigger.id || "_", scope);
+  const used = gateTracker.get(key) || 0;
+  if (trigger.gate === "proficiency_bonus") {
+    const cap = Number(context?.actor?.prof) || 0;
+    return used < Math.max(1, cap);
+  }
+  return used === 0;
+}
+
+function recordGateUse(campaignId, installId, trigger) {
+  const scope = gateScope(trigger.gate);
+  if (!scope) return;
+  const key = trackerKey(campaignId, installId, trigger.id || "_", scope);
+  gateTracker.set(key, (gateTracker.get(key) || 0) + 1);
+}
+
+/**
+ * Whether a trigger's filters match the combat event context.
+ * `filters` is shaped { source, weapon_type, damage_type, ... };
+ * missing fields default to "any" and always match.
+ */
+function matchesFilters(filters, context) {
+  if (!filters) return true;
+  const f = filters;
+  if (f.source && f.source !== "any") {
+    if ((context.source || "any") !== f.source) return false;
+  }
+  if (f.weapon_type && f.weapon_type !== "any") {
+    if ((context.weapon_type || "any") !== f.weapon_type) return false;
+  }
+  if (f.damage_type && f.damage_type !== "any") {
+    if ((context.damage_type || "any") !== f.damage_type) return false;
+  }
+  if (f.creature_type && f.creature_type !== "any") {
+    if ((context.creature_type || "any") !== f.creature_type) return false;
+  }
+  return true;
+}
+
+/**
+ * Walk every installed code_mod at the given event point,
+ * evaluate each matching trigger's formula against the live
+ * context, and return a list of resolved effects for the combat
+ * layer to apply. Runtime formula errors are caught per-trigger:
+ * the bad mod gets flipped to status='error' + error_message so
+ * the session-start gate surfaces it on the next reload, but
+ * combat is NEVER interrupted — other triggers keep firing.
+ *
+ * Returns [{ mod_id, mod_name, trigger_id, trigger_name,
+ *            effect_type, effect, result, description }]
+ * with { error } on failed rows so the UI can show a warning
+ * banner.
+ */
+export async function checkModTriggers(campaignId, eventType, context = {}) {
+  const mods = await loadCampaignMods(campaignId);
+  const results = [];
+
+  for (const mod of mods) {
+    if (mod.status !== "active") continue;
+    if (mod?.pinned_metadata?.mod_type !== "code_mod") continue;
+    const triggers = Array.isArray(mod.pinned_metadata.triggers) ? mod.pinned_metadata.triggers : [];
+
+    for (const trigger of triggers) {
+      if (!trigger || trigger.event !== eventType) continue;
+      if (!matchesFilters(trigger.filters, context)) continue;
+      if (!canFireGate(campaignId, mod.id, trigger, context)) continue;
+
+      const formulaContext = {
+        actor: context.actor || {},
+        target: context.target || {},
+        config: mod.pinned_metadata?.config_values || {},
+        weapon_damage_dice: context.weapon_damage_dice || 0,
+        spell_level: context.spell_level || 0,
+        damage_dealt: context.damage_dealt || 0,
+        roll_result: context.roll_result || 0,
+        save_dc: context.save_dc || 0,
+      };
+
+      try {
+        const effect = { ...(trigger.effect || {}) };
+        const formula = effect.formula;
+        const value = formula ? evaluateFormula(formula, formulaContext) : null;
+        // DC formulas (save / force_save) evaluate the same way.
+        const dcFormulaSource = effect.save_dc_formula || effect.dc_formula;
+        const dc = dcFormulaSource ? evaluateFormula(dcFormulaSource, formulaContext) : null;
+
+        recordGateUse(campaignId, mod.id, trigger);
+        results.push({
+          mod_id: mod.mod_id,
+          install_id: mod.id,
+          mod_name: mod.pinned_metadata?.name || "Unknown mod",
+          trigger_id: trigger.id,
+          trigger_name: trigger.name,
+          effect_type: effect.type,
+          effect,
+          result: value,
+          dc,
+          description: effect.description || trigger.description || "",
+        });
+      } catch (err) {
+        console.error(
+          `[ModEngine] Formula error in "${mod.pinned_metadata?.name}" / "${trigger?.name}":`,
+          err,
+        );
+        const message = `Runtime error in "${trigger?.name || "trigger"}": ${err?.message || err}`;
+        try {
+          await supabase
+            .from("campaign_installed_mods")
+            .update({ status: "error", error_message: message })
+            .eq("id", mod.id);
+        } catch (dbErr) {
+          console.warn("failed to flag mod as error:", dbErr?.message || dbErr);
+        }
+        results.push({
+          mod_id: mod.mod_id,
+          install_id: mod.id,
+          mod_name: mod.pinned_metadata?.name || "Unknown mod",
+          trigger_id: trigger.id,
+          trigger_name: trigger?.name || "unnamed",
+          error: err?.message || String(err),
+        });
+      }
+    }
+  }
+
+  return results;
 }
