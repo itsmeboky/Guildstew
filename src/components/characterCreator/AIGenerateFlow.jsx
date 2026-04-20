@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, Upload, ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { aiGenerate, generatePortrait } from "@/api/aiClient";
+import TavernPortraitPicker from "@/components/tavern/TavernPortraitPicker";
 import { uploadFile } from "@/utils/uploadFile";
 import { trackEvent } from "@/utils/analytics";
 import { useAuth } from "@/lib/AuthContext";
@@ -157,6 +158,15 @@ export default function AIGenerateFlow({ onBack, onComplete, campaignId, busy = 
               disabled={portraitUploading}
             />
           </label>
+          <div className="w-full max-w-[260px]">
+            <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">
+              Or pick from your Tavern portraits
+            </p>
+            <TavernPortraitPicker
+              selectedUrl={portrait?.image_url}
+              onSelect={(p) => setPortrait({ image_url: p.image_url, replaced: true, tavern_item_id: p.item_id })}
+            />
+          </div>
         </div>
         <div>
           <CharacterSummary character={character} />

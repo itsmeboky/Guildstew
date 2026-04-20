@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getActiveProfileBannerUrl } from "@/lib/tavernCosmetics";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,15 @@ export default function YourProfile() {
     queryKey: ['currentUser'],
     queryFn: () => base44.auth.me(),
     initialData: null
+  });
+
+  // Overridden by whatever profile_banner cosmetic the user has
+  // applied in My Collection. Falls back to their manually-set
+  // `banner_url` and then to the stock placeholder.
+  const { data: tavernBannerUrl } = useQuery({
+    queryKey: ['profileBanner', user?.id],
+    queryFn: () => getActiveProfileBannerUrl(user.id),
+    enabled: !!user?.id,
   });
 
 console.log('PROFILE PAGE USER:', user)
@@ -330,7 +340,7 @@ console.log('PROFILE PAGE USER:', user)
         <div 
           className="absolute inset-0 bg-cover bg-center"
           style={{ 
-            backgroundImage: `url(${user?.banner_url || 'https://images.unsplash.com/photo-1569003339405-ea396a5a8a90?w=1200&h=400&fit=crop'})`,
+            backgroundImage: `url(${tavernBannerUrl || user?.banner_url || 'https://images.unsplash.com/photo-1569003339405-ea396a5a8a90?w=1200&h=400&fit=crop'})`,
             filter: 'brightness(0.7)'
           }}
         />
