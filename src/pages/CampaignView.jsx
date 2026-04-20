@@ -9,6 +9,7 @@ import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
 import { validateInstalledMods } from "@/lib/modEngine";
+import { supabase } from "@/api/supabaseClient";
 
 /**
  * Campaign Home — the lobby players and GMs see when they're NOT
@@ -78,8 +79,39 @@ export default function CampaignView() {
         is_session_active: true,
       });
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
+      // Tavern rumor prompt — if the guild hall owns the Tavern
+      // (tier 2) or Grand Tavern (tier 3), surface a nudge for the
+      // GM to drop 1 or 2 rumors onto the Rumor Board this session.
+      // Auto-generation waits on the Next.js API route; until then
+      // the toast has an action that jumps to the Rumor Board tab
+      // so the GM can author them by hand.
+      try {
+        const { data: halls } = await supabase
+          .from("guild_halls")
+          .select("upgrades")
+          .eq("campaign_id", campaignId);
+        const upgrades = Array.isArray(halls?.[0]?.upgrades) ? halls[0].upgrades : [];
+        const rumorCount = upgrades.includes("grand_tavern")
+          ? 2
+          : upgrades.includes("tavern") ? 1 : 0;
+        if (rumorCount > 0) {
+          toast.info(
+            `Your Tavern generates ${rumorCount} rumor${rumorCount === 1 ? "" : "s"} this session. Add them to the Rumor Board?`,
+            {
+              duration: 10000,
+              action: {
+                label: "Open Rumor Board",
+                onClick: () =>
+                  navigate(createPageUrl("CampaignWorldLore") + `?id=${campaignId}&category=rumors`),
+              },
+            },
+          );
+        }
+      } catch (err) {
+        console.warn("tavern rumor prompt skipped:", err?.message || err);
+      }
       navigate(createPageUrl("GMPanel") + `?id=${campaignId}`);
     },
     onError: (err) => toast.error(err?.message || "Couldn't start session."),
