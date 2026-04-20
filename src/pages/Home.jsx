@@ -86,7 +86,11 @@ export default function Home() {
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/30 to-white" />
       </div>
 
-      <div className="relative z-10 p-8 pt-24">
+      {/* pt-44 (~176px) keeps the hero row clear of the nav and
+          gives Ladle the vertical runway she needs above the
+          hero box — the content cards below inherit that breathing
+          room for free without their own margin. */}
+      <div className="relative z-10 p-8 pt-44">
         <div className="max-w-[1600px] mx-auto">
           {/* Top Row */}
           <div className="grid grid-cols-12 gap-6 mb-6 relative">
