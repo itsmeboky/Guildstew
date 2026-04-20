@@ -5,6 +5,7 @@ import Campaigns from './pages/Campaigns';
 // Workshop is hidden for now — route registration is disabled below.
 // import Workshop from './pages/Workshop';
 import TheTavern from './pages/TheTavern';
+import MyCollection from './pages/MyCollection';
 import Friends from './pages/Friends';
 import PIEChart from './pages/PIEChart';
 import Settings from './pages/Settings';
@@ -60,6 +61,7 @@ export const PAGES = {
     "Campaigns": Campaigns,
     // "Workshop": Workshop,
     "TheTavern": TheTavern,
+    "MyCollection": MyCollection,
     "Friends": Friends,
     "PIEChart": PIEChart,
     "Settings": Settings,
