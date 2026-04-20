@@ -1,4 +1,8 @@
 import { supabase } from "@/api/supabaseClient";
+import {
+  installContentPack,
+  uninstallContentPack,
+} from "@/lib/breweryContentPack";
 
 /**
  * Brewery mod engine — Part 1 foundation.
@@ -161,6 +165,24 @@ export async function installMod(campaignId, modId, userId) {
   });
   if (insErr) return { success: false, reason: insErr.message };
 
+  // Content packs ship pre-bundled monsters / items / spells /
+  // class features that get copied into the campaign's homebrew
+  // tables, tagged with the pack's mod id so uninstall can pull
+  // them cleanly.
+  if (mod.mod_type === "content_pack") {
+    const result = await installContentPack(campaignId, modId, mod.metadata);
+    if (!result.success) {
+      // Roll back the install row so the mod doesn't appear
+      // half-installed if the content copy failed.
+      await supabase
+        .from("campaign_installed_mods")
+        .delete()
+        .eq("campaign_id", campaignId)
+        .eq("mod_id", modId);
+      return { success: false, reason: `Content pack install failed: ${result.reason}` };
+    }
+  }
+
   invalidateModCache(campaignId);
   return { success: true };
 }
@@ -213,6 +235,17 @@ export async function uninstallMod(campaignId, modId) {
       message: `${affected.length} character(s) depend on this mod: ${affected.map((c) => c.name).filter(Boolean).join(", ")}. Uninstalling may break them.`,
     };
   }
+  // Pull the install row first so we can detect content packs
+  // and walk back any inserted campaign content.
+  const { data: installRow } = await supabase
+    .from("campaign_installed_mods")
+    .select("pinned_metadata")
+    .eq("campaign_id", campaignId)
+    .eq("mod_id", modId)
+    .maybeSingle();
+  if (installRow?.pinned_metadata?.mod_type === "content_pack") {
+    await uninstallContentPack(campaignId, modId);
+  }
   const { error } = await supabase
     .from("campaign_installed_mods")
     .delete()
@@ -224,6 +257,15 @@ export async function uninstallMod(campaignId, modId) {
 }
 
 export async function forceUninstallMod(campaignId, modId) {
+  const { data: installRow } = await supabase
+    .from("campaign_installed_mods")
+    .select("pinned_metadata")
+    .eq("campaign_id", campaignId)
+    .eq("mod_id", modId)
+    .maybeSingle();
+  if (installRow?.pinned_metadata?.mod_type === "content_pack") {
+    await uninstallContentPack(campaignId, modId);
+  }
   await supabase
     .from("campaign_installed_mods")
     .delete()
