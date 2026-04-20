@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getSubscriptionStatus,
@@ -7,6 +7,7 @@ import {
   characterLimit,
 } from '@/api/billingClient';
 import { useAuth } from '@/lib/AuthContext';
+import { checkAndGrantStipend } from '@/lib/spiceStipend';
 
 /**
  * Subscription state for the whole app. Loads on auth, caches for
@@ -34,6 +35,25 @@ export function SubscriptionProvider({ children }) {
   });
 
   const tier = subscription?.tier || 'free';
+
+  // Monthly stipend grant. Fires once per mount-per-user once the
+  // subscription resolves. `checkAndGrantStipend` is idempotent by the
+  // 30-day guard on `last_stipend_at`, but the ref prevents the
+  // client-side network call from repeating every re-render while the
+  // query stays warm.
+  const stipendRan = useRef(null);
+  useEffect(() => {
+    if (!user?.id || isLoading) return;
+    if (stipendRan.current === user.id) return;
+    stipendRan.current = user.id;
+    const guildId = subscription?.guild_owner_id || null;
+    checkAndGrantStipend(user.id, tier, guildId)
+      .then((r) => {
+        if (r?.granted) queryClient.invalidateQueries({ queryKey: ['spiceWallet', user.id] });
+      })
+      .catch(() => {});
+  }, [user?.id, tier, isLoading, subscription?.guild_owner_id, queryClient]);
+
   const value = {
     tier,
     status: subscription?.status || 'none',
