@@ -5,6 +5,10 @@ import {
   getSpeed,
   calculateAbilityModifier,
 } from "@/components/dnd5e/characterCalculations";
+import {
+  getBreweryClassFeaturesAtLevel,
+  getBreweryClassResource,
+} from "@/lib/breweryClassApply";
 
 /**
  * Build a fully-derived "stats" object from CharacterCreator's characterData.
@@ -25,7 +29,19 @@ export function buildStatsFromCharacterData(characterData) {
   const maxHP = calculateMaxHP(characterData.class, level, attributes.con);
   const armor_class = calculateAC(attributes.dex);
   const initiative = calculateAbilityModifier(attributes.dex);
-  const speed = getSpeed(characterData.race);
+  // Brewery races override SRD-lookup basics — speed, size, and
+  // darkvision come from the mod schema when _brewery_race is set
+  // (RaceStep copies them onto characterData under _brewery_* keys).
+  const speed = characterData._brewery_speed != null
+    ? characterData._brewery_speed
+    : getSpeed(characterData.race);
+  const size = characterData._brewery_size || characterData.size || null;
+  const darkvision = characterData._brewery_darkvision != null
+    ? characterData._brewery_darkvision
+    : (characterData.darkvision || 0);
+  const additional_speeds = characterData._brewery_additional_speeds
+    || characterData.additional_speeds
+    || null;
 
   // Passive Perception with expertise support
   const perceptionMod = calculateAbilityModifier(attributes.wis);
@@ -65,6 +81,41 @@ export function buildStatsFromCharacterData(characterData) {
     armor_class,
     initiative,
     speed,
+    size,
+    darkvision,
+    additional_speeds,
+    // Brewery class spellcasting, when set, rides along on the
+    // stats blob so combat / action bar / spells screen can read it
+    // without re-opening the mod record.
+    hit_die: characterData._brewery_class?.hit_die || undefined,
+    spellcasting_ability: characterData._brewery_class?.spellcasting?.enabled
+      ? characterData._brewery_class.spellcasting.ability
+      : undefined,
+    brewery_spellcasting: characterData._brewery_class?.spellcasting?.enabled
+      ? {
+          ability: characterData._brewery_class.spellcasting.ability,
+          type: characterData._brewery_class.spellcasting.type,
+          slot_progression: characterData._brewery_class.spellcasting.slot_progression,
+          spell_list_source: characterData._brewery_class.spellcasting.spell_list_source,
+          ritual_casting: !!characterData._brewery_class.spellcasting.ritual_casting,
+        }
+      : undefined,
+    // Class resource (Ki, Rages, Superiority Dice, etc.) tracked
+    // on the stats blob so the character sheet / combat HUD can
+    // render it alongside spell slots. Current value prefers any
+    // tracked value already in characterData (in-progress combat
+    // state); otherwise seeds at max.
+    brewery_class_resource: getBreweryClassResource(
+      characterData._brewery_class,
+      level,
+      characterData._brewery_class_resource?.current,
+    ) || undefined,
+    damage_resistances:
+      (characterData._brewery_race_resistances?.damage_resistances) || characterData.damage_resistances || [],
+    damage_immunities:
+      (characterData._brewery_race_resistances?.damage_immunities) || characterData.damage_immunities || [],
+    condition_resistances:
+      (characterData._brewery_race_resistances?.condition_resistances) || characterData.condition_resistances || [],
     proficiency_bonus,
     passive_perception,
 
@@ -77,7 +128,19 @@ export function buildStatsFromCharacterData(characterData) {
       weapons: [],
       tools: [],
     },
-    features: characterData.features || [],
+    features: [
+      ...((characterData.features) || []),
+      ...((characterData.race_features) || []),
+      // Brewery class features for this character's current level,
+      // plus any subclass features the player picked. Origin is
+      // tagged so the character sheet can group them separately
+      // from SRD class features.
+      ...getBreweryClassFeaturesAtLevel(
+        characterData._brewery_class,
+        level,
+        characterData._brewery_class_subclass,
+      ),
+    ],
     feature_choices: characterData.feature_choices || {},
     multiclasses: characterData.multiclasses || [],
     spells: characterData.spells || { cantrips: [], level1: [] },

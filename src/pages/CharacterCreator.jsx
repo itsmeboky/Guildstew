@@ -672,6 +672,7 @@ const handleSubmit = () => {
             <CurrentStepComponent
               characterData={characterData}
               updateCharacterData={updateCharacterData}
+              campaignId={campaignId}
             />
           </motion.div>
         </AnimatePresence>
