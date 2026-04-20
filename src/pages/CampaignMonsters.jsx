@@ -788,70 +788,337 @@ function DamageBadge({ damage }) {
   );
 }
 
+const MONSTER_SIZES = ["Tiny", "Small", "Medium", "Large", "Huge", "Gargantuan"];
+const MONSTER_ALIGNMENTS = [
+  "Lawful Good", "Neutral Good", "Chaotic Good",
+  "Lawful Neutral", "True Neutral", "Chaotic Neutral",
+  "Lawful Evil", "Neutral Evil", "Chaotic Evil",
+  "Unaligned", "Any Alignment",
+];
+const MONSTER_CREATURE_TYPES = [
+  "Aberration", "Beast", "Celestial", "Construct", "Dragon", "Elemental",
+  "Fey", "Fiend", "Giant", "Humanoid", "Monstrosity", "Ooze", "Plant", "Undead",
+];
+const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"];
+const SAVE_KEYS = ["STR", "DEX", "CON", "INT", "WIS", "CHA"];
+const SKILL_LIST = [
+  "Acrobatics", "Animal Handling", "Arcana", "Athletics", "Deception",
+  "History", "Insight", "Intimidation", "Investigation", "Medicine",
+  "Nature", "Perception", "Performance", "Persuasion", "Religion",
+  "Sleight of Hand", "Stealth", "Survival",
+];
+const DAMAGE_TYPES = [
+  "acid", "bludgeoning", "cold", "fire", "force", "lightning",
+  "necrotic", "piercing", "poison", "psychic", "radiant", "slashing", "thunder",
+];
+const CONDITION_LIST = [
+  "Blinded", "Charmed", "Deafened", "Exhaustion", "Frightened",
+  "Grappled", "Incapacitated", "Invisible", "Paralyzed", "Petrified",
+  "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious",
+];
+const ACTION_DAMAGE_TYPES = DAMAGE_TYPES;
+
+const BLANK_MONSTER_ACTION = {
+  name: "",
+  description: "",
+  attack_bonus: "",
+  damage: "",
+  damage_type: "bludgeoning",
+  reach: "5 ft.",
+};
+
 function NewMonsterDialog({ open, onClose, onSave, saving }) {
   const [name, setName] = useState("");
-  const [type, setType] = useState("");
-  const [cr, setCr] = useState("");
-  const [ac, setAc] = useState(10);
-  const [hp, setHp] = useState(10);
+  const [size, setSize] = useState("Medium");
+  const [creatureType, setCreatureType] = useState("Humanoid");
+  const [alignment, setAlignment] = useState("True Neutral");
+  const [cr, setCr] = useState("1");
+  const [ac, setAc] = useState(12);
+  const [hp, setHp] = useState("30 (4d8 + 12)");
+  const [speed, setSpeed] = useState("30 ft.");
+  const [stats, setStats] = useState({ str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 });
+  const [saves, setSaves] = useState([]);
+  const [skills, setSkills] = useState([]);
+  const [damageResistances, setDamageResistances] = useState([]);
+  const [damageImmunities, setDamageImmunities] = useState([]);
+  const [damageVulnerabilities, setDamageVulnerabilities] = useState([]);
+  const [conditionImmunities, setConditionImmunities] = useState([]);
+  const [senses, setSenses] = useState("");
+  const [languages, setLanguages] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [description, setDescription] = useState("");
+  const [actions, setActions] = useState([]);
 
-  const reset = () => { setName(""); setType(""); setCr(""); setAc(10); setHp(10); setDescription(""); };
+  const reset = () => {
+    setName(""); setSize("Medium"); setCreatureType("Humanoid");
+    setAlignment("True Neutral"); setCr("1"); setAc(12);
+    setHp("30 (4d8 + 12)"); setSpeed("30 ft.");
+    setStats({ str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 });
+    setSaves([]); setSkills([]);
+    setDamageResistances([]); setDamageImmunities([]);
+    setDamageVulnerabilities([]); setConditionImmunities([]);
+    setSenses(""); setLanguages(""); setImageUrl("");
+    setDescription(""); setActions([]);
+  };
+
+  const toggleList = (list, setList, value) => {
+    setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
+  };
+
+  const uploadImage = async (file) => {
+    if (!file) return;
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      setImageUrl(file_url);
+    } catch (err) {
+      toast.error("Image upload failed.");
+    }
+  };
+
+  const addAction = () => setActions((a) => [...a, { ...BLANK_MONSTER_ACTION }]);
+  const updateAction = (idx, patch) => setActions((a) => a.map((v, i) => (i === idx ? { ...v, ...patch } : v)));
+  const removeAction = (idx) => setActions((a) => a.filter((_, i) => i !== idx));
 
   const handleSave = () => {
     if (!name.trim()) { toast.error("Name the monster."); return; }
+    // Combat reads monster.stats.* at runtime — mirror the full
+    // stat block under `stats` so every downstream reader
+    // (action bar, detail card, initiative picker) gets the
+    // same shape it gets from SRD monsters.
+    const statsBlob = {
+      size, creature_type: creatureType, alignment,
+      challenge_rating: cr.trim() || "0",
+      cr: cr.trim() || "0",
+      armor_class: Number(ac) || 10,
+      hit_points: typeof hp === "string" ? hp : String(hp),
+      speed: speed || "30 ft.",
+      abilities: { ...stats },
+      saves: saves.slice(),
+      skills: skills.slice(),
+      damage_resistances:    damageResistances.slice(),
+      damage_immunities:     damageImmunities.slice(),
+      damage_vulnerabilities: damageVulnerabilities.slice(),
+      condition_immunities:  conditionImmunities.slice(),
+      senses: senses.trim(),
+      languages: languages.trim(),
+      actions: actions
+        .map((a) => ({
+          name: (a.name || "").trim(),
+          description: (a.description || "").trim(),
+          attack_bonus: a.attack_bonus === "" ? null : Number(a.attack_bonus),
+          damage: (a.damage || "").trim(),
+          damage_type: a.damage_type || "bludgeoning",
+          reach: (a.reach || "").trim(),
+        }))
+        .filter((a) => a.name),
+    };
     onSave({
       name: name.trim(),
       description: description.trim() || null,
-      stats: {
-        type: type.trim() || null,
-        challenge_rating: cr.trim() || null,
-        armor_class: Number(ac) || 10,
-        hit_points: Number(hp) || 10,
-      },
+      image_url: imageUrl || null,
+      stats: statsBlob,
     });
     reset();
   };
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="bg-[#1a1f2e] border border-slate-700 text-white max-w-md">
+      <DialogContent className="bg-[#1a1f2e] border border-slate-700 text-white max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New Custom Monster</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <Label className="text-xs text-slate-300">Name</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} className="bg-[#0f1219] border-slate-600 text-white mt-1" />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label className="text-xs text-slate-300">Type</Label>
-              <Input value={type} onChange={(e) => setType(e.target.value)} placeholder="e.g. beast, undead"
-                className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+        <div className="space-y-4">
+
+          <Section title="Identity">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-slate-300">Name</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs text-slate-300">Challenge Rating</Label>
+                <Input value={cr} onChange={(e) => setCr(e.target.value)} placeholder="1/2, 5, 13"
+                  className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs text-slate-300">Size</Label>
+                <Select value={size} onValueChange={setSize}>
+                  <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>{MONSTER_SIZES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs text-slate-300">Creature Type</Label>
+                <Select value={creatureType} onValueChange={setCreatureType}>
+                  <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>{MONSTER_CREATURE_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="md:col-span-2">
+                <Label className="text-xs text-slate-300">Alignment</Label>
+                <Select value={alignment} onValueChange={setAlignment}>
+                  <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>{MONSTER_ALIGNMENTS.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+          </Section>
+
+          <Section title="Defense & Movement">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <Label className="text-xs text-slate-300">Armor Class</Label>
+                <Input type="number" value={ac} onChange={(e) => setAc(e.target.value)} className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+              </div>
+              <div className="md:col-span-2">
+                <Label className="text-xs text-slate-300">Hit Points (dice formula)</Label>
+                <Input value={hp} onChange={(e) => setHp(e.target.value)} placeholder="e.g. 39 (6d8 + 12)"
+                  className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+              </div>
+              <div className="md:col-span-3">
+                <Label className="text-xs text-slate-300">Speed</Label>
+                <Input value={speed} onChange={(e) => setSpeed(e.target.value)} placeholder="30 ft., fly 60 ft., swim 40 ft."
+                  className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+              </div>
+            </div>
+          </Section>
+
+          <Section title="Ability Scores">
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+              {ABILITY_KEYS.map((k) => (
+                <div key={k}>
+                  <Label className="text-[10px] text-slate-400 uppercase">{k}</Label>
+                  <Input
+                    type="number"
+                    value={stats[k] ?? 10}
+                    onChange={(e) => setStats((s) => ({ ...s, [k]: Number(e.target.value) || 0 }))}
+                    className="bg-[#0f1219] border-slate-600 text-white mt-1 text-center"
+                  />
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section title="Proficiencies">
+            <ChipGrid label="Saving Throws" options={SAVE_KEYS} values={saves} onToggle={(v) => toggleList(saves, setSaves, v)} />
+            <ChipGrid label="Skills"        options={SKILL_LIST} values={skills} onToggle={(v) => toggleList(skills, setSkills, v)} />
+          </Section>
+
+          <Section title="Damage & Conditions">
+            <ChipGrid label="Damage Resistances"     options={DAMAGE_TYPES}  values={damageResistances}     onToggle={(v) => toggleList(damageResistances, setDamageResistances, v)} />
+            <ChipGrid label="Damage Immunities"      options={DAMAGE_TYPES}  values={damageImmunities}      onToggle={(v) => toggleList(damageImmunities, setDamageImmunities, v)} />
+            <ChipGrid label="Damage Vulnerabilities" options={DAMAGE_TYPES}  values={damageVulnerabilities} onToggle={(v) => toggleList(damageVulnerabilities, setDamageVulnerabilities, v)} />
+            <ChipGrid label="Condition Immunities"   options={CONDITION_LIST} values={conditionImmunities}  onToggle={(v) => toggleList(conditionImmunities, setConditionImmunities, v)} />
+          </Section>
+
+          <Section title="Senses & Languages">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-slate-300">Senses</Label>
+                <Input value={senses} onChange={(e) => setSenses(e.target.value)}
+                  placeholder="darkvision 60 ft., passive Perception 14"
+                  className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs text-slate-300">Languages</Label>
+                <Input value={languages} onChange={(e) => setLanguages(e.target.value)}
+                  placeholder="Common, Draconic"
+                  className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+              </div>
+            </div>
+          </Section>
+
+          <Section title="Actions">
+            <p className="text-[11px] text-slate-500 -mt-1">
+              Attacks, abilities, breath weapons. These land on the combat action bar when the monster takes a turn.
+            </p>
+            <div className="space-y-2">
+              {actions.map((a, i) => (
+                <div key={i} className="bg-[#050816] border border-slate-700 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold flex-1">Action #{i + 1}</span>
+                    <button type="button" onClick={() => removeAction(i)} className="p-1 text-red-400 hover:text-red-300" title="Remove">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div className="md:col-span-2">
+                      <Label className="text-[10px] text-slate-400">Name</Label>
+                      <Input value={a.name} onChange={(e) => updateAction(i, { name: e.target.value })}
+                        placeholder="Bite, Breath Weapon, Multiattack"
+                        className="bg-[#1E2430] border-slate-700 text-white mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-slate-400">Reach / Range</Label>
+                      <Input value={a.reach} onChange={(e) => updateAction(i, { reach: e.target.value })}
+                        placeholder="5 ft. / 30/120 ft."
+                        className="bg-[#1E2430] border-slate-700 text-white mt-1" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-[10px] text-slate-400">Attack Bonus</Label>
+                      <Input type="number" value={a.attack_bonus}
+                        onChange={(e) => updateAction(i, { attack_bonus: e.target.value })}
+                        placeholder="+5"
+                        className="bg-[#1E2430] border-slate-700 text-white mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-slate-400">Damage</Label>
+                      <Input value={a.damage} onChange={(e) => updateAction(i, { damage: e.target.value })}
+                        placeholder="2d6+4"
+                        className="bg-[#1E2430] border-slate-700 text-white mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-slate-400">Damage Type</Label>
+                      <Select value={a.damage_type} onValueChange={(v) => updateAction(i, { damage_type: v })}>
+                        <SelectTrigger className="bg-[#1E2430] border-slate-700 text-white mt-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {ACTION_DAMAGE_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-[10px] text-slate-400">Description</Label>
+                    <Textarea value={a.description}
+                      onChange={(e) => updateAction(i, { description: e.target.value })}
+                      rows={2}
+                      placeholder="What the action does in narrative terms."
+                      className="bg-[#1E2430] border-slate-700 text-white mt-1" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={addAction} className="mt-2">
+              <Plus className="w-3 h-3 mr-1" /> Add Action
+            </Button>
+          </Section>
+
+          <Section title="Portrait & Description">
+            <div className="flex items-start gap-3">
+              {imageUrl ? (
+                <img src={imageUrl} alt="" className="w-20 h-20 rounded-lg object-cover border border-slate-700" />
+              ) : (
+                <div className="w-20 h-20 rounded-lg bg-[#0f1219] border border-slate-700 flex items-center justify-center">
+                  <Skull className="w-8 h-8 text-slate-500" />
+                </div>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => uploadImage(e.target.files?.[0])}
+                className="text-xs"
+              />
             </div>
             <div>
-              <Label className="text-xs text-slate-300">Challenge Rating</Label>
-              <Input value={cr} onChange={(e) => setCr(e.target.value)} placeholder="e.g. 1/2, 5"
+              <Label className="text-xs text-slate-300">Description</Label>
+              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3}
                 className="bg-[#0f1219] border-slate-600 text-white mt-1" />
             </div>
-            <div>
-              <Label className="text-xs text-slate-300">AC</Label>
-              <Input type="number" value={ac} onChange={(e) => setAc(e.target.value)}
-                className="bg-[#0f1219] border-slate-600 text-white mt-1" />
-            </div>
-            <div>
-              <Label className="text-xs text-slate-300">HP</Label>
-              <Input type="number" value={hp} onChange={(e) => setHp(e.target.value)}
-                className="bg-[#0f1219] border-slate-600 text-white mt-1" />
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs text-slate-300">Description (optional)</Label>
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3}
-              className="bg-[#0f1219] border-slate-600 text-white mt-1" />
-          </div>
+          </Section>
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button
@@ -864,5 +1131,41 @@ function NewMonsterDialog({ open, onClose, onSave, saving }) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <div className="bg-[#0b1220] border border-[#1e293b] rounded-lg p-3">
+      <h3 className="text-[11px] font-black uppercase tracking-widest text-[#37F2D1] mb-2">{title}</h3>
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+function ChipGrid({ label, options, values, onToggle }) {
+  return (
+    <div>
+      <Label className="text-[10px] text-slate-400 uppercase tracking-wide">{label}</Label>
+      <div className="flex flex-wrap gap-1 mt-1">
+        {options.map((opt) => {
+          const active = values.includes(opt);
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onToggle(opt)}
+              className={`text-[10px] font-semibold px-2 py-1 rounded border transition-colors capitalize ${
+                active
+                  ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                  : "bg-[#050816] border-slate-700 text-slate-300 hover:border-[#37F2D1]/60"
+              }`}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
