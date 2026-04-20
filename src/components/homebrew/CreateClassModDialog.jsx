@@ -16,6 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   BLANK_CLASS,
   BLANK_FEATURE,
+  BLANK_SUBCLASS_OPTION,
   HIT_DICE,
   ABILITIES,
   CASTER_TYPES,
@@ -130,6 +131,7 @@ export default function CreateClassModDialog({ open, onClose, mod = null }) {
             maxLevel={20}
             title="Feature Schedule — Levels 11–20"
           />
+          <SubclassSection formData={formData} setField={setField} />
         </div>
       </DialogContent>
     </Dialog>
@@ -1092,6 +1094,183 @@ function MechanicalEffectFields({ value, onChange }) {
           </Field>
         </>
       )}
+    </div>
+  );
+}
+
+// ──────────────────────── B7 Subclass Framework ──────────────────
+
+function cloneBlankSubclassOption() {
+  return JSON.parse(JSON.stringify(BLANK_SUBCLASS_OPTION));
+}
+
+function SubclassSection({ formData, setField }) {
+  const subclass = formData.subclass || { name: "", choose_at_level: 3, options: [] };
+  const options = Array.isArray(subclass.options) ? subclass.options : [];
+  const setSub = (patch) => setField("subclass", { ...subclass, ...patch });
+
+  const addOption    = () => setSub({ options: [...options, cloneBlankSubclassOption()] });
+  const updateOption = (idx, next) => setSub({ options: options.map((o, i) => (i === idx ? next : o)) });
+  const removeOption = (idx) => setSub({ options: options.filter((_, i) => i !== idx) });
+
+  return (
+    <Section title="Subclass Framework">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="md:col-span-2">
+          <Field label='Subclass Label (e.g., "Sacred Oath", "Martial Archetype")'>
+            <Input
+              value={subclass.name || ""}
+              onChange={(e) => setSub({ name: e.target.value })}
+              placeholder="What this class calls its specialization"
+              className="bg-[#050816] border-slate-700 text-white"
+            />
+          </Field>
+        </div>
+        <Field label="Choose at Level">
+          <NumberInput
+            value={subclass.choose_at_level ?? 3}
+            onChange={(v) => setSub({ choose_at_level: v })}
+            min={1}
+            max={20}
+          />
+        </Field>
+      </div>
+
+      <div className="space-y-3">
+        {options.length === 0 && (
+          <p className="text-xs text-slate-500 italic">
+            No subclass options yet — add at least one path your class can take.
+          </p>
+        )}
+        {options.map((opt, idx) => (
+          <SubclassOptionCard
+            key={idx}
+            idx={idx}
+            option={opt}
+            onChange={(next) => updateOption(idx, next)}
+            onRemove={() => removeOption(idx)}
+          />
+        ))}
+      </div>
+
+      <Button type="button" variant="outline" size="sm" onClick={addOption}>
+        <Plus className="w-3 h-3 mr-1" /> Add Subclass Option
+      </Button>
+    </Section>
+  );
+}
+
+function SubclassOptionCard({ idx, option, onChange, onRemove }) {
+  const set = (key, value) => onChange({ ...option, [key]: value });
+  const features = Array.isArray(option.features) ? option.features : [];
+
+  const addFeature    = () => set("features", [...features, { ...cloneBlankFeature(), level: 3 }]);
+  const updateFeature = (fi, next) => set("features", features.map((f, i) => (i === fi ? next : f)));
+  const removeFeature = (fi) => set("features", features.filter((_, i) => i !== fi));
+  const setFeatureLevel = (fi, level) =>
+    updateFeature(fi, { ...features[fi], level: Math.max(1, Math.min(20, Number(level) || 1)) });
+
+  return (
+    <div className="bg-[#050816] border border-slate-700 rounded-lg p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] uppercase tracking-widest text-slate-400 font-bold flex-1">
+          Subclass Option #{idx + 1}
+        </span>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="p-1 text-red-400 hover:text-red-300"
+          title="Remove subclass option"
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
+      </div>
+
+      <Field label="Name">
+        <Input
+          value={option.name || ""}
+          onChange={(e) => set("name", e.target.value)}
+          placeholder="e.g., Oath of Devotion"
+          className="bg-[#1E2430] border-slate-700 text-white"
+        />
+      </Field>
+      <Field label="Description">
+        <Textarea
+          value={option.description || ""}
+          onChange={(e) => set("description", e.target.value)}
+          rows={3}
+          className="bg-[#1E2430] border-slate-700 text-white"
+        />
+      </Field>
+
+      <div>
+        <Label className="block mb-1 text-xs text-slate-300 font-semibold">
+          Subclass Features
+        </Label>
+        {features.length === 0 ? (
+          <p className="text-[11px] text-slate-500 italic">No features yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {features.map((f, fi) => (
+              <div key={fi} className="bg-[#1E2430] border border-slate-700 rounded-lg p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase tracking-widest text-slate-400 font-bold flex-1">
+                    Feature #{fi + 1}
+                  </span>
+                  <Field label="Lvl">
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={f.level ?? 3}
+                      onChange={(e) => setFeatureLevel(fi, e.target.value)}
+                      className="w-16 bg-[#050816] border border-slate-700 text-white text-center rounded px-1 py-0.5"
+                    />
+                  </Field>
+                  <button
+                    type="button"
+                    onClick={() => removeFeature(fi)}
+                    className="p-1 text-red-400 hover:text-red-300"
+                    title="Remove feature"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+                <Field label="Name">
+                  <Input
+                    value={f.name || ""}
+                    onChange={(e) => updateFeature(fi, { ...f, name: e.target.value })}
+                    placeholder="Feature name"
+                    className="bg-[#050816] border-slate-700 text-white"
+                  />
+                </Field>
+                <Field label="Description">
+                  <Textarea
+                    value={f.description || ""}
+                    onChange={(e) => updateFeature(fi, { ...f, description: e.target.value })}
+                    rows={2}
+                    className="bg-[#050816] border-slate-700 text-white"
+                  />
+                </Field>
+                <details className="bg-[#0b1220] border border-slate-700 rounded p-2">
+                  <summary className="cursor-pointer text-xs text-slate-300 font-semibold">
+                    Mechanical Effect
+                  </summary>
+                  <div className="mt-3">
+                    <MechanicalEffectFields
+                      value={f.mechanical || {}}
+                      onChange={(next) => updateFeature(fi, { ...f, mechanical: next })}
+                    />
+                  </div>
+                </details>
+              </div>
+            ))}
+          </div>
+        )}
+        <Button type="button" variant="outline" size="sm" onClick={addFeature} className="mt-2">
+          <Plus className="w-3 h-3 mr-1" /> Add Subclass Feature
+        </Button>
+      </div>
     </div>
   );
 }
