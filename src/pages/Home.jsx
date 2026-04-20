@@ -243,7 +243,7 @@ export default function Home() {
               src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/ladleanimation1.gif"
               alt="Ladle mascot"
               className="hidden md:block absolute w-[320px] h-auto pointer-events-none z-0"
-              style={{ right: 'calc(25% - 60px)', top: '-180px' }}
+              style={{ right: 'calc(25% + 40px)', top: '-280px' }}
             />
           </div>
 
