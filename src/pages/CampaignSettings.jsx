@@ -187,6 +187,23 @@ export default function CampaignSettings() {
   const preloadMonstersMutation = { isPending: false, mutate: () => {} };
   const preloadItemsMutation = { isPending: false, mutate: () => {} };
 
+  // D&D 5e campaigns surface the Game Content + House Rules tabs.
+  // Older campaigns can carry any of a handful of system strings —
+  // the long-form label, the short "dnd5e" slug used by brewery
+  // mods, "5e", or an unset field (defaulting to 5e). Treat all of
+  // them as D&D 5e so the house-rules toggles don't vanish on
+  // campaigns created with an older system field. Anything
+  // explicitly set to a non-5e system still hides the tabs.
+  const systemRaw = (campaign?.system || "").trim().toLowerCase();
+  const isDnd5e =
+    !systemRaw
+    || systemRaw === "d&d 5e"
+    || systemRaw === "dungeons and dragons 5e"
+    || systemRaw === "dungeons & dragons 5e"
+    || systemRaw === "dnd5e"
+    || systemRaw === "dnd 5e"
+    || systemRaw === "5e";
+
   const handleImageUpload = (field, file) => {
     if (file) {
       updateImageMutation.mutate({ field, file });
@@ -373,13 +390,12 @@ export default function CampaignSettings() {
               <FileText className="w-4 h-4 mr-2" />
               Export Data
             </TabsTrigger>
-            {(campaign.system === 'D&D 5e' || campaign.system === 'Dungeons and Dragons 5e') && (
-              <TabsTrigger value="content" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
-                <Database className="w-4 h-4 mr-2" />
+            {isDnd5e && (
+              <TabsTrigger value="content" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">                <Database className="w-4 h-4 mr-2" />
                 Game Content
               </TabsTrigger>
             )}
-            {(campaign.system === 'D&D 5e' || campaign.system === 'Dungeons and Dragons 5e') && (
+            {isDnd5e && (
               <TabsTrigger value="houseRules" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
                 <Dice6 className="w-4 h-4 mr-2" />
                 House Rules
@@ -842,7 +858,7 @@ export default function CampaignSettings() {
               database trigger on campaign creation, so the tab just
               reports that status. Left in place so the tabs don't
               shift when a campaign uses the D&D 5e system. */}
-          {(campaign.system === 'D&D 5e' || campaign.system === 'Dungeons and Dragons 5e') && (
+          {isDnd5e && (
             <TabsContent value="content" className="space-y-6">
               <div className="bg-[#2A3441] rounded-xl p-6">
                 <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
@@ -858,7 +874,7 @@ export default function CampaignSettings() {
             </TabsContent>
           )}
 
-          {(campaign.system === 'D&D 5e' || campaign.system === 'Dungeons and Dragons 5e') && (
+          {isDnd5e && (
             <TabsContent value="houseRules" className="space-y-6">
               {/* Guild Hall opt-in. Column `campaigns.guild_hall_enabled`
                   defaults to true at the DB level (and undefined is
