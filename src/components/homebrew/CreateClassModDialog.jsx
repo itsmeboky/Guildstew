@@ -123,6 +123,13 @@ export default function CreateClassModDialog({ open, onClose, mod = null }) {
             maxLevel={10}
             title="Feature Schedule — Levels 1–10"
           />
+          <FeatureScheduleSection
+            formData={formData}
+            setField={setField}
+            minLevel={11}
+            maxLevel={20}
+            title="Feature Schedule — Levels 11–20"
+          />
         </div>
       </DialogContent>
     </Dialog>
