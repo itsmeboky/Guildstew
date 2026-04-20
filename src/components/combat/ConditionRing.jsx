@@ -1,5 +1,6 @@
 import React from "react";
 import { CONDITION_COLORS, CONDITIONS } from "@/components/combat/conditions";
+import { useDisplayName } from "@/hooks/useDisplayName";
 
 /**
  * SVG text-path condition ring. One ring per active condition, stacked
@@ -13,7 +14,13 @@ import { CONDITION_COLORS, CONDITIONS } from "@/components/combat/conditions";
  *   - Designed to overlay a circular portrait; position: absolute
  *     inset-0 by default, so the parent just needs relative + rounded
  */
-export default function ConditionRing({ conditions = [], size = 80 }) {
+export default function ConditionRing({ conditions = [], size = 80, campaignId = null }) {
+  // Reskin support: when an installed reskin renames a condition
+  // (Frightened → Shaken, Charmed → Dominated, etc.), display the
+  // renamed label in the ring + tooltip. Falls through to the
+  // canonical name when no reskin is installed or no campaignId
+  // is passed (most non-combat uses don't need this).
+  const display = useDisplayName({ campaignId });
   const [hovered, setHovered] = React.useState(false);
 
   if (!conditions || conditions.length === 0) return null;
@@ -139,7 +146,7 @@ export default function ConditionRing({ conditions = [], size = 80 }) {
                     className="text-xs font-bold uppercase tracking-wide"
                     style={{ color }}
                   >
-                    {name}
+                    {display("condition", name)}
                   </span>
                   {cond?.description && (
                     <span className="text-[11px] text-slate-300 leading-snug">

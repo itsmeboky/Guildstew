@@ -69,14 +69,20 @@ export default function CampaignArchives() {
         {/* If a session is active, Archives is the one page a GM is
             allowed to leave the session for — so the back button
             goes straight to the GMPanel. Otherwise this is just a
-            lobby-level compendium and we point back to the campaign
-            home. */}
+            lobby-level compendium and we point back to the
+            canonical campaign home: CampaignGMPanel for GMs (both
+            render inside Layout's isCampaignGMMode shell so the
+            persistent campaign nav bar stays visible), and
+            CampaignPanel for players (isCampaignLobbyMode). The
+            old CampaignView route rendered its own sidebar outside
+            the Layout shell, which looked "broken" relative to
+            Archives — we don't send anyone there from here. */}
         <Button
           onClick={() => {
             if (campaign?.session_active) {
               navigate(createPageUrl("GMPanel") + `?id=${campaignId}`);
             } else {
-              navigate(createPageUrl(isGM ? "CampaignView" : "CampaignPanel") + `?id=${campaignId}`);
+              navigate(createPageUrl(isGM ? "CampaignGMPanel" : "CampaignPanel") + `?id=${campaignId}`);
             }
           }}
           variant="ghost"
