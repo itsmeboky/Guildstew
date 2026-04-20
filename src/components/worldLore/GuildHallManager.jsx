@@ -3,9 +3,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Home, Upload, Sparkles, Loader2, ChevronRight, Check, Coins, Lock } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { supabase } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+
+// Thin Supabase helpers so the downstream handlers read clearly.
+// The base44 entity shim resolved to the same tables; inlining the
+// queries here makes the DB contract explicit for future auditors.
+const updateGuildHall = (id, patch) =>
+  supabase.from("guild_halls").update(patch).eq("id", id);
+const deleteGuildHall = (id) =>
+  supabase.from("guild_halls").delete().eq("id", id);
+const listGuildHallOptions = (campaignId) =>
+  supabase.from("guild_hall_options").select("*").eq("campaign_id", campaignId);
+const createGuildHallOption = (row) =>
+  supabase.from("guild_hall_options").insert(row);
+const deleteGuildHallOption = (id) =>
+  supabase.from("guild_hall_options").delete().eq("id", id);
 import {
   GUILD_HALL_UPGRADES,
   UPGRADE_CATEGORIES,
@@ -29,13 +43,13 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
   const progressPercent = totalNeeded > 0 ? Math.min((totalContributed / totalNeeded) * 100, 100) : 0;
 
   const handleSetDeedCost = async () => {
-    await base44.entities.GuildHall.update(guildHall.id, { deed_cost: deedCost });
+    await updateGuildHall(guildHall.id, { deed_cost: deedCost });
     onRefresh();
     toast.success("Deed cost set");
   };
 
   const handleGrantDeed = async () => {
-    await base44.entities.GuildHall.update(guildHall.id, { deed_purchased: true });
+    await updateGuildHall(guildHall.id, { deed_purchased: true });
     onRefresh();
     toast.success("Deed granted to players!");
   };
@@ -44,71 +58,23 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
     if (contribution <= 0) return;
     const newTotal = totalContributed + contribution;
     const updates = { total_contributed: newTotal };
-    
+
     if (newTotal >= totalNeeded && !guildHall.deed_purchased) {
       updates.deed_purchased = true;
       toast.success("Deed purchased! 🎉");
     }
-    
-    await base44.entities.GuildHall.update(guildHall.id, updates);
+
+    await updateGuildHall(guildHall.id, updates);
     setContribution(0);
     onRefresh();
   };
 
   const handleGenerateOptions = async () => {
-    setGeneratingOptions(true);
-    try {
-      const prompt = `Generate 6 unique fantasy guild hall options for a D&D campaign:
-      - 2 cheap/rundown options (100-500 gold)
-      - 2 middle-tier options (500-2000 gold)
-      - 2 expensive/luxurious options (2000-10000 gold)
-      
-      For each, provide: name, vivid description (2-3 sentences), cost, and tier (cheap/middle/expensive)`;
-
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            options: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  name: { type: "string" },
-                  description: { type: "string" },
-                  cost: { type: "number" },
-                  tier: { type: "string" }
-                }
-              }
-            }
-          }
-        }
-      });
-
-      // Generate images and create options
-      for (const opt of result.options) {
-        const imagePrompt = `Fantasy D&D guild hall: ${opt.name}. ${opt.description}. High quality, detailed illustration.`;
-        const { url } = await base44.integrations.Core.GenerateImage({ prompt: imagePrompt });
-        
-        await base44.entities.GuildHallOption.create({
-          campaign_id: campaign.id,
-          name: opt.name,
-          description: opt.description,
-          image_url: url,
-          cost: opt.cost,
-          tier: opt.tier,
-          is_ai_generated: true
-        });
-      }
-
-      onRefresh();
-      toast.success("6 guild hall options generated!");
-    } catch (error) {
-      toast.error("Failed to generate options");
-    } finally {
-      setGeneratingOptions(false);
-    }
+    // TODO: migrate to Next.js API route. The prior Base44-integrated
+    // LLM + image-generation pipeline was removed with the Supabase
+    // cut-over; wiring AI-sourced guild hall options will land when
+    // the server-side generation endpoint is rebuilt.
+    toast.error("AI guild hall generation is temporarily unavailable. Create options manually below.");
   };
 
   const handleImageUpload = async (e) => {
@@ -117,9 +83,11 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
 
     setUploadingImage(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      setNewOption({ ...newOption, image_url: file_url });
-      toast.success("Image uploaded");
+      // TODO: migrate to Next.js API route. Use the shared uploadFile
+      // helper (@/utils/uploadFile) once the Supabase bucket flow is
+      // wired for guild-hall images. Until then, surface a friendly
+      // toast and let the GM paste a URL by hand.
+      toast.error("Image upload temporarily unavailable — paste an image URL in the Image URL field instead.");
     } catch (error) {
       toast.error("Failed to upload");
     } finally {
@@ -133,11 +101,11 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
       return;
     }
 
-    await base44.entities.GuildHallOption.create({
+    await createGuildHallOption({
       campaign_id: campaign.id,
-      ...newOption
+      ...newOption,
     });
-    
+
     setCreatingOption(false);
     setNewOption({ name: "", description: "", image_url: "", cost: 0 });
     onRefresh();
@@ -145,7 +113,7 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
   };
 
   const handleSelectOption = async (optionId) => {
-    await base44.entities.GuildHall.update(guildHall.id, { current_option_id: optionId });
+    await updateGuildHall(guildHall.id, { current_option_id: optionId });
     onRefresh();
     toast.success("Guild hall selected!");
   };
@@ -183,13 +151,12 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
               <Button
                 onClick={async () => {
                   if (confirm("Revoke deed and delete all guild hall data? Players will start from zero.")) {
-                    // Delete all generated options
-                    const allOptions = await base44.entities.GuildHallOption.filter({ campaign_id: campaign.id });
-                    for (const opt of allOptions) {
-                      await base44.entities.GuildHallOption.delete(opt.id);
+                    // Delete all generated options, then the hall itself.
+                    const { data: allOptions } = await listGuildHallOptions(campaign.id);
+                    for (const opt of allOptions || []) {
+                      await deleteGuildHallOption(opt.id);
                     }
-                    // Delete the guild hall
-                    await base44.entities.GuildHall.delete(guildHall.id);
+                    await deleteGuildHall(guildHall.id);
                     onRefresh();
                     toast.success("Guild hall completely reset");
                   }
@@ -373,7 +340,7 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
     if (!guildHall?.id) return;
     if (purchasedUpgrades.includes(COMMON_ROOM_UPGRADE_ID)) return;
     const seeded = [...purchasedUpgrades, COMMON_ROOM_UPGRADE_ID];
-    base44.entities.GuildHall.update(guildHall.id, {
+    updateGuildHall(guildHall.id, {
       upgrades: seeded,
       upgrade_level: seeded.length,
     }).then(() => onRefresh?.());
@@ -398,7 +365,7 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
       gp: gpAvailable - cost,
     };
     try {
-      await base44.entities.GuildHall.update(guildHall.id, {
+      await updateGuildHall(guildHall.id, {
         upgrades: newUpgrades,
         upgrade_level: newUpgrades.length,
         coffers: newCoffers,
@@ -431,11 +398,11 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
               <Button
                 onClick={async () => {
                   if (confirm("Reset guild hall selection? Upgrades will be lost.")) {
-                    await base44.entities.GuildHall.update(guildHall.id, {
+                    await updateGuildHall(guildHall.id, {
                       current_option_id: null,
                       upgrades: [],
                       upgrade_level: 0,
-                      deed_purchased: false
+                      deed_purchased: false,
                     });
                     onRefresh();
                     toast.success("Guild hall reset");
