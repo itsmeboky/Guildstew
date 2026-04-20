@@ -333,6 +333,12 @@ function AddToCampaignDialog({ brew, currentUser, onClose }) {
         });
       } else if (brew.category === "custom_spell") {
         const mods = brew.modifications || {};
+        // Concentration / ritual flow through as proper booleans —
+        // CreateHomebrewDialog now writes them as fields on the
+        // mod object. Fallback regex sniffs the duration string
+        // for older brews that predate the explicit toggles so
+        // the attached campaign spell still tracks correctly.
+        const durationText = (mods.duration || "").toLowerCase();
         await base44.entities.Spell.create({
           campaign_id: campaignId,
           name: mods.name || brew.title || "Custom Spell",
@@ -342,6 +348,12 @@ function AddToCampaignDialog({ brew, currentUser, onClose }) {
           range: mods.range || "",
           components: mods.components || "",
           duration: mods.duration || "Instantaneous",
+          concentration: typeof mods.concentration === "boolean"
+            ? mods.concentration
+            : /concentration/.test(durationText),
+          ritual: typeof mods.ritual === "boolean"
+            ? mods.ritual
+            : /ritual/.test(durationText),
           description: mods.description || brew.description || "",
           higher_level: mods.higher_level || mods.higher_levels || "",
           classes: Array.isArray(mods.classes) ? mods.classes : [],

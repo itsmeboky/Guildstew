@@ -148,9 +148,39 @@ Action plan
 
 Step 2 (monster)         no changes — already complete.
 Step 3 (item)            no changes — already complete.
-Step 4 (spell)           add concentration + ritual booleans.
+Step 4 (spell)           DONE — added concentration + ritual
+                         booleans on BLANK_SPELL, the form (two
+                         checkbox cards under Duration), the
+                         serializer, and the hydrator (with
+                         legacy-string sniff fallback).
 Step 5 (class feature)   no changes — already complete.
-Step 6 (save flow)       verify + document the homebrew_rules
-                         → campaign-table copy path; ensure the
-                         monster `actions` array reaches
-                         monsters.stats.actions on attach.
+Step 6 (save flow)       VERIFIED end-to-end:
+
+  custom_monster → MyBrewsList.attachMutation copies
+    `mods` (the full builder output, including actions array,
+    multiattack, legendary actions, villain actions, lair
+    actions, auras, traits) onto monsters.stats. Combat reads
+    monster.stats.actions on NPC turns so every action the
+    GM authored shows on the action bar without translation.
+  custom_item → mods → campaign_items.properties (full blob)
+    + name + type + rarity (lower_snake) + description + image.
+    Item handlers downstream read .properties for the type-
+    specific fields (damage, base_ac, charges, attunement, ...).
+  custom_spell → individual SRD-shaped columns are explicitly
+    populated (name, level, school, casting_time, range,
+    components, duration, description, higher_level, classes,
+    source). Step 6 added concentration + ritual booleans to
+    this attach payload too — falls back to a regex sniff on
+    the duration string when a legacy brew doesn't carry the
+    explicit fields.
+  custom_class_feature → mods → campaign_class_features.properties
+    (full blob) + name + description + type + class_name (only
+    when type === "Class Feature") + level. Combat resolves the
+    feature's mechanical fields (effect_type, action cost,
+    uses, recharge, damage_dice, etc.) off properties.
+
+  All four attaches set is_system=false so the GM-authored row
+  is never confused for a seeded SRD entry. Monster + class
+  feature also stash the full mod blob alongside the
+  type-specific columns, so a future schema migration can pull
+  any extra fields the SRD-shaped columns don't capture.
