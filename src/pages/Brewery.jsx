@@ -7,7 +7,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  FlaskConical, User, Globe, TrendingUp, Star, Search, Sparkles,
+  FlaskConical, User, Globe, TrendingUp, Star, Search, Sparkles, Package,
 } from "lucide-react";
 import { supabase } from "@/api/supabaseClient";
 import { base44 } from "@/api/base44Client";
@@ -15,6 +15,7 @@ import MyBrewsList from "@/components/homebrew/MyBrewsList";
 import BreweryCard from "@/components/homebrew/BreweryCard";
 import BreweryDetailDialog from "@/components/homebrew/BreweryDetailDialog";
 import CreateModDialog from "@/components/homebrew/CreateModDialog";
+import ContentPackCard from "@/components/homebrew/ContentPackCard";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { Link, useNavigate } from "react-router-dom";
@@ -203,6 +204,9 @@ export default function Brewery() {
             <TabsTrigger value="top_rated" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
               <Star className="w-4 h-4 mr-2" /> Top Rated
             </TabsTrigger>
+            <TabsTrigger value="packs" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
+              <Package className="w-4 h-4 mr-2" /> Content Packs
+            </TabsTrigger>
             <TabsTrigger value="mine" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
               <User className="w-4 h-4 mr-2" /> My Brews
             </TabsTrigger>
@@ -222,6 +226,10 @@ export default function Brewery() {
               emptyMessage="No rated brews yet — leave a review on something you love!"
             />
           </TabsContent>
+          <TabsContent value="packs">
+            <ContentPacksGrid />
+          </TabsContent>
+
           <TabsContent value="mine">
             <MyBrewsList currentUser={currentUser} />
           </TabsContent>
@@ -239,6 +247,53 @@ export default function Brewery() {
         open={creating}
         onClose={() => setCreating(false)}
       />
+    </div>
+  );
+}
+
+function ContentPacksGrid() {
+  const { data: packs = [], isLoading } = useQuery({
+    queryKey: ["brewery", "content_packs"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("brewery_mods")
+        .select("*")
+        .eq("mod_type", "content_pack")
+        .eq("published", true)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) { console.warn("content packs load failed:", error.message); return []; }
+      return data || [];
+    },
+    refetchInterval: 60000,
+    initialData: [],
+  });
+
+  if (isLoading && packs.length === 0) {
+    return (
+      <div className="grid grid-cols-1 gap-4">
+        {Array.from({ length: 3 }).map((_, i) => <CardSkeleton key={i} />)}
+      </div>
+    );
+  }
+  if (packs.length === 0) {
+    return (
+      <div className="bg-[#2A3441] rounded-xl p-10 text-center text-slate-400">
+        No published content packs yet. Check back soon or publish your own via Create Mod → Content Pack.
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-1 gap-4">
+      {packs.map((p) => (
+        <ContentPackCard
+          key={p.id}
+          pack={p}
+          onInstall={() => toast.info(
+            `To install "${p.name || "this pack"}", open your campaign's Brewery Mods panel.`,
+          )}
+        />
+      ))}
     </div>
   );
 }
