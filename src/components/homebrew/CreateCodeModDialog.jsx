@@ -19,6 +19,7 @@ import { supabase } from "@/api/supabaseClient";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { tierAtLeast } from "@/api/billingClient";
 import { validateFormula, evaluateFormula } from "@/lib/formulaEvaluator";
+import CodeModHelpPanel, { CodeModHelpButton } from "./CodeModHelpPanel";
 import {
   BLANK_CODE_MOD,
   EFFECT_TYPES,
@@ -63,6 +64,7 @@ export default function CreateCodeModDialog({ open, onClose, mod = null }) {
   const canPublish = tierAtLeast(sub?.tier || "free", "veteran");
   const canCreate = canPublish;
   const isEdit = !!mod?.id;
+  const [helpOpen, setHelpOpen] = useState(false);
 
   React.useEffect(() => {
     if (!open) return;
@@ -199,16 +201,23 @@ export default function CreateCodeModDialog({ open, onClose, mod = null }) {
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose?.(); }}>
       <DialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Code2 className="w-5 h-5 text-[#37F2D1]" />
-            {mod ? "Edit Code Mod" : "Create Code Mod"}
-          </DialogTitle>
-          <DialogDescription className="text-slate-400">
-            Veteran-tier custom mechanics. Build trigger bundles that fire on combat events and
-            produce effects via a safe formula language — no JavaScript, no network access, just
-            math + dice + game-state variables.
-          </DialogDescription>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1">
+              <DialogTitle className="flex items-center gap-2">
+                <Code2 className="w-5 h-5 text-[#37F2D1]" />
+                {mod ? "Edit Code Mod" : "Create Code Mod"}
+              </DialogTitle>
+              <DialogDescription className="text-slate-400">
+                Veteran-tier custom mechanics. Build trigger bundles that fire on combat events and
+                produce effects via a safe formula language — no JavaScript, no network access, just
+                math + dice + game-state variables.
+              </DialogDescription>
+            </div>
+            <CodeModHelpButton onOpen={() => setHelpOpen(true)} />
+          </div>
         </DialogHeader>
+
+        <CodeModHelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />
 
         {!canCreate && (
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex items-start gap-2">
