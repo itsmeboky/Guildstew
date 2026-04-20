@@ -104,7 +104,7 @@ export default function Home() {
                 src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/ffd089d34_KarliahNewArt.gif"
                 alt="Karliah mascot"
                 className="absolute h-[535px] w-auto object-contain z-10 pointer-events-none"
-                style={{ top: '-20px', right: '-85px' }}
+                style={{ top: '-40px', right: '-85px' }}
               />
             </div>
 
