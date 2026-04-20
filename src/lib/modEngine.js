@@ -393,6 +393,68 @@ export async function validateInstalledMods(campaignId) {
  *   'damage_type'   — damage_types[key]          (key is lowercase damage type)
  *   'condition'     — conditions[key]            (key is condition name)
  */
+/**
+ * Merge every installed sheet_mod's `sheet_changes` blob into a
+ * single aggregate view the character sheet can consume. Later
+ * mods stack on top of earlier ones (priority order maintained by
+ * loadCampaignMods); duplicate skill names / section names are
+ * kept as-is so the sheet can render them in install order.
+ *
+ * Returns {
+ *   add_skills:                [{ name, ability, description }],
+ *   remove_skills:             string[],
+ *   rename_skills:             { [orig]: replacement },
+ *   add_proficiency_categories:[{ name, items: string[] }],
+ *   add_sections:              [{ name, position, fields: [...] }],
+ *   remove_sections:           string[],
+ * }
+ *
+ * Always returns the full shape so callers can destructure without
+ * null-checking.
+ */
+export async function getSheetModifications(campaignId) {
+  const mods = await loadCampaignMods(campaignId);
+  const result = {
+    add_skills: [],
+    remove_skills: [],
+    rename_skills: {},
+    add_proficiency_categories: [],
+    add_sections: [],
+    remove_sections: [],
+  };
+  for (const mod of mods) {
+    if (mod?.pinned_metadata?.mod_type !== "sheet_mod") continue;
+    const changes = mod.pinned_metadata.sheet_changes || {};
+    if (Array.isArray(changes.add_skills)) result.add_skills.push(...changes.add_skills);
+    if (Array.isArray(changes.remove_skills)) result.remove_skills.push(...changes.remove_skills);
+    if (changes.rename_skills && typeof changes.rename_skills === "object") {
+      Object.assign(result.rename_skills, changes.rename_skills);
+    }
+    if (Array.isArray(changes.add_proficiency_categories)) {
+      result.add_proficiency_categories.push(...changes.add_proficiency_categories);
+    }
+    if (Array.isArray(changes.add_sections)) result.add_sections.push(...changes.add_sections);
+    if (Array.isArray(changes.remove_sections)) result.remove_sections.push(...changes.remove_sections);
+  }
+  // Dedupe remove_skills so a character sheet iterating over them
+  // doesn't see the same name twice when two mods both strip it.
+  result.remove_skills = Array.from(new Set(result.remove_skills));
+  return result;
+}
+
+/**
+ * Slugify a section name so custom-section data can hang off a
+ * stable key on characterData.stats.mod_data. Matches the shape
+ * the character sheet writer + reader expect in step 5.
+ */
+export function sheetSectionSlug(name) {
+  return (name || "")
+    .toString()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
 export function getDisplayName(campaignMods, category, key) {
   if (!Array.isArray(campaignMods) || campaignMods.length === 0) return key;
   for (const mod of campaignMods) {
