@@ -10,7 +10,8 @@ import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { getWalletBalance, getGuildWalletBalance } from "@/lib/spiceWallet";
-import { listTavernItems, getUserPurchases } from "@/lib/tavernClient";
+import { listTavernItems } from "@/lib/tavernClient";
+import { listEntitlements } from "@/lib/tavernEntitlements";
 import { formatSpice } from "@/config/spiceConfig";
 import { TAVERN_CATEGORIES, SORT_OPTIONS } from "@/config/tavernCategories";
 import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
@@ -88,22 +89,20 @@ export default function TheTavern() {
     },
   });
 
-  const { data: purchases = [] } = useQuery({
-    queryKey: ["tavernPurchases", user?.id],
-    queryFn: () => getUserPurchases(user.id),
+  // Entitlements cover both personal purchases AND guild purchases
+  // made by *any* guild member — filtered by the user's current
+  // guild so leaving a guild silently strips access without touching
+  // the underlying rows.
+  const { data: entitlements = [] } = useQuery({
+    queryKey: ["tavernEntitlements", user?.id, sub.guildOwnerId],
+    queryFn: () => listEntitlements(user.id, { currentGuildId: sub.guildOwnerId }),
     enabled: !!user?.id,
   });
 
-  const ownedIds = useMemo(() => {
-    const set = new Set();
-    for (const p of purchases) {
-      // A guild-wallet purchase only counts as owned while the user
-      // is still a member of that guild. `sub.guildOwnerId` is the
-      // current guild's id (falsy when they're not in one).
-      if (!p.guild_id || p.guild_id === sub.guildOwnerId) set.add(p.item_id);
-    }
-    return set;
-  }, [purchases, sub.guildOwnerId]);
+  const ownedIds = useMemo(
+    () => new Set(entitlements.map((e) => e.item_id)),
+    [entitlements],
+  );
 
   // Pull creator names in a batch so the cards don't each hit the
   // network. auth.users isn't exposed — we read the mirrored

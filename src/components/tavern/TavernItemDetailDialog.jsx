@@ -12,8 +12,9 @@ import {
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import {
-  getItem, getItemRatings, getUserPurchases, purchaseItem, rateItem,
+  getItem, getItemRatings, purchaseItem, rateItem,
 } from "@/lib/tavernClient";
+import { listEntitlements } from "@/lib/tavernEntitlements";
 import { getWalletBalance, getGuildWalletBalance } from "@/lib/spiceWallet";
 import { formatSpice, applyDiscount } from "@/config/spiceConfig";
 import { CATEGORY_LABEL, categoryIcon } from "@/config/tavernCategories";
@@ -61,9 +62,9 @@ export default function TavernItemDetailDialog({ item: itemProp, open, onClose, 
     enabled: !!sub.guildOwnerId,
   });
 
-  const { data: purchases = [] } = useQuery({
-    queryKey: ["tavernPurchases", user?.id],
-    queryFn: () => getUserPurchases(user.id),
+  const { data: entitlements = [] } = useQuery({
+    queryKey: ["tavernEntitlements", user?.id, sub.guildOwnerId],
+    queryFn: () => listEntitlements(user.id, { currentGuildId: sub.guildOwnerId }),
     enabled: !!user?.id,
   });
 
@@ -73,12 +74,12 @@ export default function TavernItemDetailDialog({ item: itemProp, open, onClose, 
     enabled: !!item?.id && open,
   });
 
-  const owned = useMemo(() => {
-    if (!item) return false;
-    return purchases.some(
-      (p) => p.item_id === item.id && (!p.guild_id || p.guild_id === sub.guildOwnerId),
-    );
-  }, [purchases, item, sub.guildOwnerId]);
+  const entitlement = useMemo(() => {
+    if (!item) return null;
+    return entitlements.find((e) => e.item_id === item.id) || null;
+  }, [entitlements, item]);
+  const owned = !!entitlement;
+  const ownedSource = entitlement?.source; // 'personal' | 'guild'
 
   const myRating = useMemo(() => {
     if (!item || !user) return null;
@@ -118,7 +119,7 @@ export default function TavernItemDetailDialog({ item: itemProp, open, onClose, 
     onSuccess: () => {
       toast.success(`Purchased ${item.name}!`);
       queryClient.invalidateQueries({ queryKey: ["spiceWallet", user.id] });
-      queryClient.invalidateQueries({ queryKey: ["tavernPurchases", user.id] });
+      queryClient.invalidateQueries({ queryKey: ["tavernEntitlements", user.id] });
       queryClient.invalidateQueries({ queryKey: ["tavernItems"] });
       queryClient.invalidateQueries({ queryKey: ["tavernItem", item.id] });
     },
@@ -139,7 +140,7 @@ export default function TavernItemDetailDialog({ item: itemProp, open, onClose, 
     onSuccess: () => {
       toast.success(`Guild purchased ${item.name}!`);
       queryClient.invalidateQueries({ queryKey: ["guildSpiceWallet", sub.guildOwnerId] });
-      queryClient.invalidateQueries({ queryKey: ["tavernPurchases", user.id] });
+      queryClient.invalidateQueries({ queryKey: ["tavernEntitlements", user.id] });
       queryClient.invalidateQueries({ queryKey: ["tavernItems"] });
       queryClient.invalidateQueries({ queryKey: ["tavernItem", item.id] });
     },
@@ -264,8 +265,12 @@ export default function TavernItemDetailDialog({ item: itemProp, open, onClose, 
 
           <div className="flex items-center gap-2 flex-wrap">
             {owned ? (
-              <span className="inline-flex items-center gap-1 bg-emerald-600 text-white font-bold text-sm rounded px-3 py-2">
-                <Check className="w-4 h-4" /> Owned
+              <span className={`inline-flex items-center gap-1 font-bold text-sm rounded px-3 py-2 ${
+                ownedSource === "guild"
+                  ? "bg-purple-600 text-white"
+                  : "bg-emerald-600 text-white"
+              }`}>
+                <Check className="w-4 h-4" /> {ownedSource === "guild" ? "Guild-Owned" : "Owned"}
               </span>
             ) : (
               <>
