@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   BLANK_CLASS,
+  BLANK_FEATURE,
   HIT_DICE,
   ABILITIES,
   CASTER_TYPES,
@@ -22,6 +23,7 @@ import {
   SPELL_LIST_SOURCES,
   FULL_CASTER_SLOTS,
   HALF_CASTER_SLOTS,
+  STANDARD_ASI_LEVELS,
 } from "@/config/breweryClassSchema";
 
 /**
@@ -114,6 +116,13 @@ export default function CreateClassModDialog({ open, onClose, mod = null }) {
           <ProficienciesSection formData={formData} setField={setField} />
           <StartingEquipmentSection formData={formData} setField={setField} />
           <SpellcastingSection formData={formData} setField={setField} />
+          <FeatureScheduleSection
+            formData={formData}
+            setField={setField}
+            minLevel={1}
+            maxLevel={10}
+            title="Feature Schedule — Levels 1–10"
+          />
         </div>
       </DialogContent>
     </Dialog>
@@ -772,5 +781,310 @@ function CustomSpellList({ list, onChange }) {
         className="bg-[#050816] border-slate-700 text-white"
       />
     </Field>
+  );
+}
+
+// ────────────────────── B6 Feature Schedule ──────────────────────
+
+// Mechanical effect option sets — kept inline so the editor is
+// self-contained and the schema can evolve without forcing an
+// import chain.
+const FEATURE_EFFECT_TYPES = ["damage", "healing", "buff", "condition", "utility"];
+const FEATURE_COSTS        = ["passive", "free", "action", "bonus_action", "reaction"];
+const FEATURE_RECHARGE     = ["", "short_rest", "long_rest", "dawn", "dusk", "special"];
+const FEATURE_USES = [
+  "At Will",
+  "1/Short Rest",
+  "1/Long Rest",
+  "2/Long Rest",
+  "3/Long Rest",
+  "Proficiency Bonus/Long Rest",
+  "Charges",
+  "Special",
+];
+const FEATURE_DAMAGE_TYPES = [
+  "acid", "bludgeoning", "cold", "fire", "force", "lightning",
+  "necrotic", "piercing", "poison", "psychic", "radiant", "slashing", "thunder",
+];
+
+function cloneBlankFeature() {
+  return JSON.parse(JSON.stringify(BLANK_FEATURE));
+}
+
+function makeAsiFeature(level) {
+  return {
+    ...cloneBlankFeature(),
+    level,
+    name: "Ability Score Improvement",
+    description:
+      "Increase one ability score by 2, or two ability scores by 1. You can take a feat instead if the campaign allows it.",
+    is_asi: true,
+  };
+}
+
+/**
+ * Renders a range of class levels (minLevel..maxLevel) as rows. Each
+ * row lists the features currently scheduled at that level and
+ * exposes an "Add Feature" button. A single shared
+ * characterData.features array holds every feature across every
+ * level; filtering by feature.level keeps the row view simple.
+ *
+ * On first render (empty features list) an ASI feature is seeded at
+ * each level in STANDARD_ASI_LEVELS — but only for the row range
+ * this section owns, so the 1–10 and 11–20 sections can seed their
+ * own ASIs without double-seeding.
+ */
+function FeatureScheduleSection({ formData, setField, minLevel, maxLevel, title }) {
+  const features = Array.isArray(formData.features) ? formData.features : [];
+
+  // One-time ASI seed for empty schedules. Uses a ref so the hook
+  // guard is simple; effect runs only if nothing in the row range
+  // exists yet.
+  const seededRef = React.useRef(false);
+  React.useEffect(() => {
+    if (seededRef.current) return;
+    const existing = features.filter((f) => f.level >= minLevel && f.level <= maxLevel);
+    if (existing.length > 0) {
+      seededRef.current = true;
+      return;
+    }
+    const asiLevels = STANDARD_ASI_LEVELS.filter((l) => l >= minLevel && l <= maxLevel);
+    if (asiLevels.length === 0) {
+      seededRef.current = true;
+      return;
+    }
+    const seeded = asiLevels.map(makeAsiFeature);
+    setField("features", [...features, ...seeded]);
+    seededRef.current = true;
+  }, [features, minLevel, maxLevel, setField]);
+
+  const addFeatureAtLevel = (level) =>
+    setField("features", [...features, { ...cloneBlankFeature(), level }]);
+  const updateFeature = (uid, next) =>
+    setField("features", features.map((f, i) => (i === uid ? next : f)));
+  const removeFeature = (uid) =>
+    setField("features", features.filter((_, i) => i !== uid));
+
+  const rows = [];
+  for (let lvl = minLevel; lvl <= maxLevel; lvl += 1) rows.push(lvl);
+
+  return (
+    <Section title={title}>
+      <div className="space-y-3">
+        {rows.map((lvl) => {
+          const rowFeatures = features
+            .map((f, i) => ({ f, i }))
+            .filter(({ f }) => f.level === lvl);
+          return (
+            <div key={lvl} className="bg-[#050816] border border-slate-700 rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] uppercase tracking-widest font-bold text-[#37F2D1]">
+                  Level {lvl}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => addFeatureAtLevel(lvl)}
+                >
+                  <Plus className="w-3 h-3 mr-1" /> Add Feature
+                </Button>
+              </div>
+              {rowFeatures.length === 0 ? (
+                <p className="text-[11px] text-slate-500 italic">No feature scheduled at this level.</p>
+              ) : (
+                <div className="space-y-2">
+                  {rowFeatures.map(({ f, i }) => (
+                    <FeatureCard
+                      key={i}
+                      feature={f}
+                      onChange={(next) => updateFeature(i, next)}
+                      onRemove={() => removeFeature(i)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Section>
+  );
+}
+
+function FeatureCard({ feature, onChange, onRemove }) {
+  const set = (key, value) => onChange({ ...feature, [key]: value });
+  const setMech = (key, value) =>
+    onChange({ ...feature, mechanical: { ...(feature.mechanical || {}), [key]: value } });
+
+  return (
+    <div className="bg-[#1E2430] border border-slate-700 rounded-lg p-3 space-y-2">
+      <div className="flex items-center gap-1">
+        <span className="text-[10px] uppercase tracking-widest text-slate-400 font-bold flex-1">
+          Feature @ Lvl {feature.level}
+        </span>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="p-1 text-red-400 hover:text-red-300"
+          title="Remove feature"
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
+      </div>
+
+      <Field label="Name">
+        <Input
+          value={feature.name || ""}
+          onChange={(e) => set("name", e.target.value)}
+          placeholder="e.g., Second Wind"
+          className="bg-[#050816] border-slate-700 text-white"
+        />
+      </Field>
+      <Field label="Description">
+        <Textarea
+          value={feature.description || ""}
+          onChange={(e) => set("description", e.target.value)}
+          rows={3}
+          className="bg-[#050816] border-slate-700 text-white"
+        />
+      </Field>
+
+      <div className="flex items-center gap-4 flex-wrap">
+        <label className="flex items-center gap-2 text-xs text-slate-300">
+          <Checkbox
+            checked={!!feature.is_asi}
+            onCheckedChange={(v) => set("is_asi", !!v)}
+          />
+          Is ASI (Ability Score Improvement)
+        </label>
+        <label className="flex items-center gap-2 text-xs text-slate-300">
+          <Checkbox
+            checked={!!feature.is_subclass_choice}
+            onCheckedChange={(v) => set("is_subclass_choice", !!v)}
+          />
+          Is Subclass Choice
+        </label>
+      </div>
+
+      <details className="bg-[#0b1220] border border-slate-700 rounded p-2">
+        <summary className="cursor-pointer text-xs text-slate-300 font-semibold">
+          Mechanical Effect
+        </summary>
+        <div className="mt-3">
+          <MechanicalEffectFields
+            value={feature.mechanical || {}}
+            onChange={(next) => onChange({ ...feature, mechanical: next })}
+          />
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function MechanicalEffectFields({ value, onChange }) {
+  const effect = value?.effect_type || "utility";
+  const set = (key, v) => onChange({ ...(value || {}), [key]: v });
+  const isDamage  = effect === "damage";
+  const isHealing = effect === "healing";
+  const isLimited = effect !== "utility" || (value?.uses && value.uses !== "At Will");
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+      <Field label="Effect Type">
+        <Select value={effect} onValueChange={(v) => set("effect_type", v)}>
+          <SelectTrigger className="bg-[#1E2430] border-slate-700 text-white">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {FEATURE_EFFECT_TYPES.map((t) => (
+              <SelectItem key={t} value={t}>{t}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Cost">
+        <Select value={value?.cost || "passive"} onValueChange={(v) => set("cost", v)}>
+          <SelectTrigger className="bg-[#1E2430] border-slate-700 text-white">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {FEATURE_COSTS.map((t) => (
+              <SelectItem key={t} value={t}>{t.replace("_", " ")}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+
+      {isDamage && (
+        <>
+          <Field label="Damage Dice">
+            <Input
+              value={value?.damage_dice || ""}
+              onChange={(e) => set("damage_dice", e.target.value)}
+              placeholder="e.g., 1d6"
+              className="bg-[#1E2430] border-slate-700 text-white"
+            />
+          </Field>
+          <Field label="Damage Type">
+            <Select
+              value={value?.damage_type || ""}
+              onValueChange={(v) => set("damage_type", v)}
+            >
+              <SelectTrigger className="bg-[#1E2430] border-slate-700 text-white">
+                <SelectValue placeholder="select…" />
+              </SelectTrigger>
+              <SelectContent>
+                {FEATURE_DAMAGE_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </>
+      )}
+
+      {isHealing && (
+        <Field label="Healing Dice">
+          <Input
+            value={value?.healing_dice || ""}
+            onChange={(e) => set("healing_dice", e.target.value)}
+            placeholder="e.g., 1d10 + level"
+            className="bg-[#1E2430] border-slate-700 text-white"
+          />
+        </Field>
+      )}
+
+      {isLimited && (
+        <>
+          <Field label="Uses">
+            <Select value={value?.uses || "At Will"} onValueChange={(v) => set("uses", v)}>
+              <SelectTrigger className="bg-[#1E2430] border-slate-700 text-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FEATURE_USES.map((u) => (
+                  <SelectItem key={u} value={u}>{u}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Recharge">
+            <Select value={value?.recharge || ""} onValueChange={(v) => set("recharge", v)}>
+              <SelectTrigger className="bg-[#1E2430] border-slate-700 text-white">
+                <SelectValue placeholder="(none)" />
+              </SelectTrigger>
+              <SelectContent>
+                {FEATURE_RECHARGE.map((r) => (
+                  <SelectItem key={r || "none"} value={r}>
+                    {r ? r.replace("_", " ") : "(none)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </>
+      )}
+    </div>
   );
 }
