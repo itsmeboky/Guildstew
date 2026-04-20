@@ -5,6 +5,7 @@ import { Plus, Edit, Trash2, User, Shield, Heart, Zap, Eye, Footprints, Swords, 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import CreateCharacterDialog from "@/components/characters/CreateCharacterDialog";
+import { useDisplayName } from "@/hooks/useDisplayName";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
   AlertDialog,
@@ -138,6 +139,11 @@ export default function CharacterLibrary() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState(null);
   const [activeTab, setActiveTab] = useState("stats");
+  // Resolves renameable labels against the selected character's
+  // campaign mods, so a campaign with an installed reskin (HP →
+  // Wounds, STR → Might, etc.) shows the renamed labels on the
+  // sheet instead of the SRD defaults.
+  const display = useDisplayName({ campaignId: selectedCharacter?.campaign_id });
   const [hoveredItem, setHoveredItem] = useState(null);
 
   const queryClient = useQueryClient();
@@ -457,7 +463,7 @@ export default function CharacterLibrary() {
                   onMouseLeave={() => setHoveredItem(null)}
                 >
                   <Shield className="w-5 h-5 text-[#37F2D1] mx-auto mb-1" />
-                  <div className="text-xs text-gray-400 mb-1">ARMOR CLASS</div>
+                  <div className="text-xs text-gray-400 mb-1 uppercase">{display("term", "Armor Class")}</div>
                   <div className="text-3xl font-bold text-white">{selectedCharacter.armor_class || 10}</div>
                   {hoveredItem === 'ac' && (
                     <div className="absolute z-50 right-0 top-full mt-2 bg-[#1E2430] text-white p-3 rounded-lg text-xs w-64 shadow-xl border-2 border-[#37F2D1]">
@@ -472,7 +478,7 @@ export default function CharacterLibrary() {
                   onMouseLeave={() => setHoveredItem(null)}
                 >
                   <Zap className="w-5 h-5 text-[#FF5722] mx-auto mb-1" />
-                  <div className="text-xs text-gray-400 mb-1">INITIATIVE</div>
+                  <div className="text-xs text-gray-400 mb-1 uppercase">{display("term", "Initiative")}</div>
                   <div className="text-3xl font-bold text-white">{calculateModifier(selectedCharacter.attributes?.dex || 10)}</div>
                   {hoveredItem === 'initiative' && (
                     <div className="absolute z-50 right-0 top-full mt-2 bg-[#1E2430] text-white p-3 rounded-lg text-xs w-64 shadow-xl border-2 border-[#FF5722]">
@@ -506,7 +512,7 @@ export default function CharacterLibrary() {
                   onMouseLeave={() => setHoveredItem(null)}
                 >
                   <Heart className="w-5 h-5 text-red-500 mx-auto mb-1" />
-                  <div className="text-xs text-gray-400 mb-1">HIT POINTS</div>
+                  <div className="text-xs text-gray-400 mb-1 uppercase">{display("term", "Hit Points")}</div>
                   <div className="text-4xl font-bold text-white">{selectedCharacter.hit_points?.max || 10}</div>
                   {hoveredItem === 'hp' && (
                     <div className="absolute z-50 right-0 top-full mt-2 bg-[#1E2430] text-white p-3 rounded-lg text-xs w-64 shadow-xl border-2 border-red-500">
@@ -544,7 +550,7 @@ export default function CharacterLibrary() {
                         onMouseEnter={() => setHoveredItem(`ability-${key}`)}
                         onMouseLeave={() => setHoveredItem(null)}
                       >
-                        <div className="text-xs text-gray-400 uppercase text-center mb-1">{key}</div>
+                        <div className="text-xs text-gray-400 uppercase text-center mb-1">{display("abbreviation", key)}</div>
                         <div className="text-2xl font-bold text-[#FF5722] text-center">
                           {calculateModifier(value)}
                         </div>
@@ -558,7 +564,7 @@ export default function CharacterLibrary() {
                         )}
                         {hoveredItem === `ability-${key}` && (
                           <div className="absolute z-50 right-0 top-full mt-2 bg-[#1E2430] text-white p-3 rounded-lg text-xs w-48 shadow-xl border-2 border-[#FF5722]">
-                            <div className="font-bold mb-1">{key.toUpperCase()}</div>
+                            <div className="font-bold mb-1">{display("ability", key)} ({display("abbreviation", key)})</div>
                             <div>Base modifier: {calculateModifier(value)}</div>
                             {isProficient && <div className="text-yellow-400 mt-1">Proficient in saving throws</div>}
                           </div>
