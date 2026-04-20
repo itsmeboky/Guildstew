@@ -14,7 +14,7 @@ import { base44 } from "@/api/base44Client";
 import MyBrewsList from "@/components/homebrew/MyBrewsList";
 import BreweryCard from "@/components/homebrew/BreweryCard";
 import BreweryDetailDialog from "@/components/homebrew/BreweryDetailDialog";
-import CreateHomebrewDialog from "@/components/homebrew/CreateHomebrewDialog";
+import CreateModDialog from "@/components/homebrew/CreateModDialog";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { Link, useNavigate } from "react-router-dom";
@@ -129,7 +129,7 @@ export default function Brewery() {
             className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
           >
             <Sparkles className="w-4 h-4 mr-2" />
-            Create Homebrew
+            Create Mod
           </Button>
         </div>
 
@@ -235,7 +235,7 @@ export default function Brewery() {
         currentUser={currentUser}
       />
 
-      <CreateHomebrewDialog
+      <CreateModDialog
         open={creating}
         onClose={() => setCreating(false)}
       />

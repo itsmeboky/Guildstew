@@ -2,10 +2,34 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Home, Upload, Sparkles, Loader2, ChevronRight, Check, Coins } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { Home, Upload, Sparkles, Loader2, ChevronRight, Check, Coins, Lock } from "lucide-react";
+import { supabase } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+
+// Thin Supabase helpers so the downstream handlers read clearly.
+// The base44 entity shim resolved to the same tables; inlining the
+// queries here makes the DB contract explicit for future auditors.
+const updateGuildHall = (id, patch) =>
+  supabase.from("guild_halls").update(patch).eq("id", id);
+const deleteGuildHall = (id) =>
+  supabase.from("guild_halls").delete().eq("id", id);
+const listGuildHallOptions = (campaignId) =>
+  supabase.from("guild_hall_options").select("*").eq("campaign_id", campaignId);
+const createGuildHallOption = (row) =>
+  supabase.from("guild_hall_options").insert(row);
+const deleteGuildHallOption = (id) =>
+  supabase.from("guild_hall_options").delete().eq("id", id);
+import {
+  GUILD_HALL_UPGRADES,
+  UPGRADE_CATEGORIES,
+  upgradesForCategory,
+  isUpgradeAvailable,
+  resolvePurchasedUpgrades,
+  COMMON_ROOM_UPGRADE_ID,
+} from "@/config/guildHallUpgrades";
+import GuildHallTrainingSection from "./GuildHallTrainingSection";
+import GuildHallDowntimeSection from "./GuildHallDowntimeSection";
 
 export default function GuildHallManager({ campaign, guildHall, options, canEdit, onUpdate, onRefresh }) {
   const [deedCost, setDeedCost] = useState(guildHall?.deed_cost || 0);
@@ -21,13 +45,13 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
   const progressPercent = totalNeeded > 0 ? Math.min((totalContributed / totalNeeded) * 100, 100) : 0;
 
   const handleSetDeedCost = async () => {
-    await base44.entities.GuildHall.update(guildHall.id, { deed_cost: deedCost });
+    await updateGuildHall(guildHall.id, { deed_cost: deedCost });
     onRefresh();
     toast.success("Deed cost set");
   };
 
   const handleGrantDeed = async () => {
-    await base44.entities.GuildHall.update(guildHall.id, { deed_purchased: true });
+    await updateGuildHall(guildHall.id, { deed_purchased: true });
     onRefresh();
     toast.success("Deed granted to players!");
   };
@@ -36,71 +60,23 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
     if (contribution <= 0) return;
     const newTotal = totalContributed + contribution;
     const updates = { total_contributed: newTotal };
-    
+
     if (newTotal >= totalNeeded && !guildHall.deed_purchased) {
       updates.deed_purchased = true;
       toast.success("Deed purchased! 🎉");
     }
-    
-    await base44.entities.GuildHall.update(guildHall.id, updates);
+
+    await updateGuildHall(guildHall.id, updates);
     setContribution(0);
     onRefresh();
   };
 
   const handleGenerateOptions = async () => {
-    setGeneratingOptions(true);
-    try {
-      const prompt = `Generate 6 unique fantasy guild hall options for a D&D campaign:
-      - 2 cheap/rundown options (100-500 gold)
-      - 2 middle-tier options (500-2000 gold)
-      - 2 expensive/luxurious options (2000-10000 gold)
-      
-      For each, provide: name, vivid description (2-3 sentences), cost, and tier (cheap/middle/expensive)`;
-
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            options: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  name: { type: "string" },
-                  description: { type: "string" },
-                  cost: { type: "number" },
-                  tier: { type: "string" }
-                }
-              }
-            }
-          }
-        }
-      });
-
-      // Generate images and create options
-      for (const opt of result.options) {
-        const imagePrompt = `Fantasy D&D guild hall: ${opt.name}. ${opt.description}. High quality, detailed illustration.`;
-        const { url } = await base44.integrations.Core.GenerateImage({ prompt: imagePrompt });
-        
-        await base44.entities.GuildHallOption.create({
-          campaign_id: campaign.id,
-          name: opt.name,
-          description: opt.description,
-          image_url: url,
-          cost: opt.cost,
-          tier: opt.tier,
-          is_ai_generated: true
-        });
-      }
-
-      onRefresh();
-      toast.success("6 guild hall options generated!");
-    } catch (error) {
-      toast.error("Failed to generate options");
-    } finally {
-      setGeneratingOptions(false);
-    }
+    // TODO: migrate to Next.js API route. The prior Base44-integrated
+    // LLM + image-generation pipeline was removed with the Supabase
+    // cut-over; wiring AI-sourced guild hall options will land when
+    // the server-side generation endpoint is rebuilt.
+    toast.error("AI guild hall generation is temporarily unavailable. Create options manually below.");
   };
 
   const handleImageUpload = async (e) => {
@@ -109,9 +85,11 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
 
     setUploadingImage(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      setNewOption({ ...newOption, image_url: file_url });
-      toast.success("Image uploaded");
+      // TODO: migrate to Next.js API route. Use the shared uploadFile
+      // helper (@/utils/uploadFile) once the Supabase bucket flow is
+      // wired for guild-hall images. Until then, surface a friendly
+      // toast and let the GM paste a URL by hand.
+      toast.error("Image upload temporarily unavailable — paste an image URL in the Image URL field instead.");
     } catch (error) {
       toast.error("Failed to upload");
     } finally {
@@ -125,11 +103,11 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
       return;
     }
 
-    await base44.entities.GuildHallOption.create({
+    await createGuildHallOption({
       campaign_id: campaign.id,
-      ...newOption
+      ...newOption,
     });
-    
+
     setCreatingOption(false);
     setNewOption({ name: "", description: "", image_url: "", cost: 0 });
     onRefresh();
@@ -137,7 +115,7 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
   };
 
   const handleSelectOption = async (optionId) => {
-    await base44.entities.GuildHall.update(guildHall.id, { current_option_id: optionId });
+    await updateGuildHall(guildHall.id, { current_option_id: optionId });
     onRefresh();
     toast.success("Guild hall selected!");
   };
@@ -175,13 +153,12 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
               <Button
                 onClick={async () => {
                   if (confirm("Revoke deed and delete all guild hall data? Players will start from zero.")) {
-                    // Delete all generated options
-                    const allOptions = await base44.entities.GuildHallOption.filter({ campaign_id: campaign.id });
-                    for (const opt of allOptions) {
-                      await base44.entities.GuildHallOption.delete(opt.id);
+                    // Delete all generated options, then the hall itself.
+                    const { data: allOptions } = await listGuildHallOptions(campaign.id);
+                    for (const opt of allOptions || []) {
+                      await deleteGuildHallOption(opt.id);
                     }
-                    // Delete the guild hall
-                    await base44.entities.GuildHall.delete(guildHall.id);
+                    await deleteGuildHall(guildHall.id);
                     onRefresh();
                     toast.success("Guild hall completely reset");
                   }
@@ -351,27 +328,55 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
     );
   }
 
-  // Step 3: Manage Upgrades
-  const availableUpgrades = [
-    { id: "finding_work", name: "Job Board", description: "Access to guild contracts and quests", cost: 500 },
-    { id: "training", name: "Training Facilities", description: "Learn new skills from guild masters", cost: 1000 },
-    { id: "resources", name: "Supply Access", description: "Discounted equipment and supplies", cost: 750 },
-    { id: "networking", name: "Common Room", description: "Network with other adventurers", cost: 300 },
-    { id: "library", name: "Guild Library", description: "Research and lore archives", cost: 1200 }
-  ];
-
+  // Step 3+: upgrades come from the config in
+  // src/config/guildHallUpgrades.js — 8 categories × 3 tiers, each
+  // card either OWNED / available / locked by prerequisite.
   const purchasedUpgrades = guildHall?.upgrades || [];
+  const gpAvailable = Number(guildHall?.coffers?.gp) || 0;
 
-  const handlePurchaseUpgrade = async (upgradeId, cost) => {
+  // Seed the free Common Room exactly once per hall so the party
+  // always starts with "long rest allowed" at their HQ. Skips when
+  // the hall's already got it or there's no coffers shape yet (still
+  // on deed-purchase step).
+  React.useEffect(() => {
+    if (!guildHall?.id) return;
+    if (purchasedUpgrades.includes(COMMON_ROOM_UPGRADE_ID)) return;
+    const seeded = [...purchasedUpgrades, COMMON_ROOM_UPGRADE_ID];
+    updateGuildHall(guildHall.id, {
+      upgrades: seeded,
+      upgrade_level: seeded.length,
+    }).then(() => onRefresh?.());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guildHall?.id]);
+
+  const handlePurchaseUpgrade = async (upgradeId) => {
+    const upgrade = GUILD_HALL_UPGRADES[upgradeId];
+    if (!upgrade) return;
     if (purchasedUpgrades.includes(upgradeId)) return;
-    
+    if (!isUpgradeAvailable(upgrade, purchasedUpgrades)) return;
+
+    const cost = Number(upgrade.cost) || 0;
+    if (cost > gpAvailable) {
+      toast.error("Not enough gold in guild coffers.");
+      return;
+    }
+
     const newUpgrades = [...purchasedUpgrades, upgradeId];
-    await base44.entities.GuildHall.update(guildHall.id, { 
-      upgrades: newUpgrades,
-      upgrade_level: newUpgrades.length
-    });
-    onRefresh();
-    toast.success("Upgrade purchased!");
+    const newCoffers = {
+      ...(guildHall.coffers || {}),
+      gp: gpAvailable - cost,
+    };
+    try {
+      await updateGuildHall(guildHall.id, {
+        upgrades: newUpgrades,
+        upgrade_level: newUpgrades.length,
+        coffers: newCoffers,
+      });
+      onRefresh();
+      toast.success(`Purchased ${upgrade.name}!`);
+    } catch (err) {
+      toast.error(err?.message || "Failed to purchase upgrade.");
+    }
   };
 
   return (
@@ -395,11 +400,11 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
               <Button
                 onClick={async () => {
                   if (confirm("Reset guild hall selection? Upgrades will be lost.")) {
-                    await base44.entities.GuildHall.update(guildHall.id, {
+                    await updateGuildHall(guildHall.id, {
                       current_option_id: null,
                       upgrades: [],
                       upgrade_level: 0,
-                      deed_purchased: false
+                      deed_purchased: false,
                     });
                     onRefresh();
                     toast.success("Guild hall reset");
@@ -450,46 +455,138 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
         </div>
       </div>
 
-      {/* Upgrades */}
-      <div className="bg-[#0f1219]/90 backdrop-blur-sm rounded-xl p-6 border border-cyan-400/30">
-        <h3 className="text-2xl font-bold text-white mb-6">Guild Hall Upgrades</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {availableUpgrades.map(upgrade => {
-            const isPurchased = purchasedUpgrades.includes(upgrade.id);
-            return (
-              <div
-                key={upgrade.id}
-                className={`bg-[#1a1f2e] rounded-lg p-4 border ${
-                  isPurchased ? 'border-green-500' : 'border-slate-700'
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1">
-                    <h4 className="text-lg font-bold text-white">{upgrade.name}</h4>
-                    <p className="text-sm text-gray-400 mt-1">{upgrade.description}</p>
-                  </div>
-                  {isPurchased && <Check className="w-5 h-5 text-green-500" />}
+      {/* Upgrades — 8 categories × 3 tiers from the config. Each
+          category renders a labeled header row and three cards in a
+          horizontal progression. A card is:
+            - owned     → teal border + OWNED badge, no buy button
+            - available → amber border + "Buy — N gp" button
+                          (not owned, prerequisite met or none)
+            - locked    → greyed + lock icon + "Requires: X"
+          Purchase logic hangs on the Buy button; step 4 ties it to
+          the gold check in coffers. */}
+      <div className="bg-[#0f1219]/90 backdrop-blur-sm rounded-xl p-6 border border-cyan-400/30 space-y-6">
+        <h3 className="text-2xl font-bold text-white">Guild Hall Upgrades</h3>
+        {UPGRADE_CATEGORIES.map((cat) => {
+          const tiers = upgradesForCategory(cat.key);
+          return (
+            <div key={cat.key} className="space-y-3">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl" aria-hidden="true">{cat.icon}</span>
+                <div>
+                  <h4 className="text-lg font-bold text-white">{cat.label}</h4>
+                  <p className="text-xs text-slate-400">{cat.description}</p>
                 </div>
-                
-
-
-                {!isPurchased && (
-                  <div className="flex items-center justify-between mt-3">
-                    <span className="text-[#37F2D1] font-bold">{upgrade.cost} GP</span>
-                    <Button
-                      onClick={() => handlePurchaseUpgrade(upgrade.id, upgrade.cost)}
-                      size="sm"
-                      className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430]"
-                    >
-                      Purchase
-                    </Button>
-                  </div>
-                )}
               </div>
-            );
-          })}
-        </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {tiers.map((upgrade) => {
+                  const owned = purchasedUpgrades.includes(upgrade.id);
+                  const available = !owned && isUpgradeAvailable(upgrade, purchasedUpgrades);
+                  const locked = !owned && !available;
+                  const prereq = upgrade.prerequisite ? GUILD_HALL_UPGRADES[upgrade.prerequisite] : null;
+
+                  const borderClass = owned
+                    ? "border-[#37F2D1]/50"
+                    : available
+                      ? "border-amber-600/50"
+                      : "border-slate-700/50";
+                  const opacityClass = locked ? "opacity-50" : "";
+
+                  return (
+                    <div
+                      key={upgrade.id}
+                      className={`bg-[#1a1f2e] rounded-lg p-4 border flex flex-col gap-2 ${borderClass} ${opacityClass}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">
+                          Tier {upgrade.tier}
+                        </span>
+                        {owned && (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1.5 py-0.5">
+                            <Check className="w-3 h-3" /> Owned
+                          </span>
+                        )}
+                        {locked && (
+                          <Lock className="w-3.5 h-3.5 text-slate-500" />
+                        )}
+                      </div>
+                      <h5 className="text-base font-bold text-white leading-tight">{upgrade.name}</h5>
+                      <p className="text-xs text-slate-400">{upgrade.description}</p>
+                      <p className="text-xs text-[#37F2D1] italic">{upgrade.effect}</p>
+                      {locked && prereq && (
+                        <p className="text-[10px] text-amber-300 mt-auto">
+                          Requires: {prereq.name}
+                        </p>
+                      )}
+                      {available && (
+                        <div className="mt-auto pt-2">
+                          <Button
+                            onClick={() => handlePurchaseUpgrade(upgrade.id)}
+                            disabled={!canEdit}
+                            size="sm"
+                            className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold"
+                          >
+                            Buy — {upgrade.cost} gp
+                          </Button>
+                        </div>
+                      )}
+                      {owned && upgrade.cost > 0 && (
+                        <div className="mt-auto pt-2 text-[10px] text-slate-500">
+                          Built for {upgrade.cost} gp
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      {/* Training — gated to campaigns with at least one
+          training-related upgrade; self-hides otherwise. */}
+      <GuildHallTrainingSection
+        campaign={campaign}
+        purchasedUpgrades={purchasedUpgrades}
+        canEdit={canEdit}
+      />
+
+      {/* Downtime Activities — self-hides when none of the
+          category upgrades are owned. */}
+      <GuildHallDowntimeSection
+        campaign={campaign}
+        purchasedUpgrades={purchasedUpgrades}
+        canEdit={canEdit}
+      />
+
+      {/* Active effects summary — flat list of every purchased
+          upgrade's human-readable effect text, prefixed with the
+          category icon and suffixed with "(Upgrade Name)" so the
+          party can tell at a glance which upgrade granted what. */}
+      <ActiveEffectsSummary purchasedIds={purchasedUpgrades} />
+    </div>
+  );
+}
+
+function ActiveEffectsSummary({ purchasedIds }) {
+  const upgrades = resolvePurchasedUpgrades(purchasedIds);
+  if (upgrades.length === 0) return null;
+  const iconFor = (categoryKey) =>
+    UPGRADE_CATEGORIES.find((c) => c.key === categoryKey)?.icon || "•";
+  return (
+    <div className="bg-[#0f1219]/90 backdrop-blur-sm rounded-xl p-6 border border-cyan-400/30">
+      <h3 className="text-xl font-bold text-white mb-3">Active Guild Hall Effects</h3>
+      <ul className="space-y-1.5">
+        {upgrades.map((u) => (
+          <li key={u.id} className="flex items-start gap-2 text-sm text-slate-300">
+            <span className="text-base leading-5" aria-hidden="true">{iconFor(u.category)}</span>
+            <span>
+              {u.effect}
+              <span className="text-slate-500"> ({u.name})</span>
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
