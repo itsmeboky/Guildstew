@@ -1,11 +1,12 @@
 
 import React, { useState, useRef, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, User, Move, ZoomIn, ZoomOut, Save, Pencil } from "lucide-react";
+import { Upload, User, Move, ZoomIn, ZoomOut, Save, Pencil, Sparkles } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
 import {
@@ -16,8 +17,39 @@ import {
   CLASS_WEAPON_PROFICIENCIES,
   ABILITY_NAMES,
 } from '@/components/dnd5e/dnd5eRules';
+import { getModdedClasses } from '@/lib/modEngine';
 import { Slider } from "@/components/ui/slider";
 import { motion } from "framer-motion";
+
+// Normalize a brewery class (modEngine metadata shape) into the
+// same shape the SRD class list uses. Keeps provenance (_source,
+// _mod_id, _raw) so later steps can read the full class schema.
+function normalizeBreweryClass(mod) {
+  const features = Array.isArray(mod.features) ? mod.features : [];
+  const level1Features = features
+    .filter((f) => Number(f?.level) === 1 && !f?.is_asi)
+    .map((f) => f?.name)
+    .filter(Boolean);
+  const savePrimary = Array.isArray(mod.saving_throws) && mod.saving_throws.length > 0
+    ? ABILITY_NAMES[mod.saving_throws[0]?.toLowerCase?.() || ""] || mod.saving_throws[0]
+    : "";
+  return {
+    name: mod.name || mod._mod_name || "Unnamed Class",
+    description: mod.description || "",
+    playstyle: "",
+    hitDie: mod.hit_die || "d8",
+    primaryAbility: savePrimary,
+    savingThrows: Array.isArray(mod.saving_throws)
+      ? mod.saving_throws.map((s) => ABILITY_NAMES[s?.toLowerCase?.() || ""] || s)
+      : [],
+    features: level1Features,
+    icon: mod.image_url || "",
+    _source: "brewery",
+    _mod_id: mod._mod_id,
+    _mod_name: mod._mod_name || mod.name,
+    _raw: mod,
+  };
+}
 
 const classes = [
   {
@@ -201,7 +233,22 @@ const companionTypes = {
   Druid: { name: "Animal Companion", description: "A creature of nature bonded to you" }
 };
 
-export default function ClassStep({ characterData, updateCharacterData }) {
+export default function ClassStep({ characterData, updateCharacterData, campaignId }) {
+  // Modded classes only appear when the creator is opened against a
+  // campaign — library-only characters can't depend on a campaign's
+  // installed mods, so brewery classes are hidden there.
+  const { data: moddedClasses = [] } = useQuery({
+    queryKey: ["characterCreator", "moddedClasses", campaignId],
+    queryFn: () => getModdedClasses(campaignId),
+    enabled: !!campaignId,
+    initialData: [],
+  });
+
+  const combinedClasses = React.useMemo(() => {
+    if (!moddedClasses || moddedClasses.length === 0) return classes;
+    return [...classes, ...moddedClasses.map(normalizeBreweryClass)];
+  }, [moddedClasses]);
+
   const [uploading, setUploading] = useState(false);
   const [uploadingProfile, setUploadingProfile] = useState(false);
   const [uploadingCompanion, setUploadingCompanion] = useState(false);
@@ -215,7 +262,7 @@ export default function ClassStep({ characterData, updateCharacterData }) {
   const [fullBodySaved, setFullBodySaved] = useState(!!characterData.avatar_position);
   const [profileSaved, setProfileSaved] = useState(!!characterData.profile_position);
   
-  const selectedClass = classes.find(c => c.name === characterData.class);
+  const selectedClass = combinedClasses.find(c => c.name === characterData.class);
   const selectedAlignment = alignments.find(a => a.name === characterData.alignment);
   const companionInfo = companionTypes[characterData.class];
 
@@ -335,10 +382,10 @@ export default function ClassStep({ characterData, updateCharacterData }) {
           <Select
             value={characterData.class}
             onValueChange={(value) => {
-              const cls = classes.find(c => c.name === value);
-              updateCharacterData({ 
+              const cls = combinedClasses.find(c => c.name === value);
+              updateCharacterData({
                 class: value,
-                features: cls.features.map(f => ({ name: f, source: value, description: "" }))
+                features: (cls?.features || []).map(f => ({ name: f, source: value, description: "" }))
               });
             }}
           >
@@ -346,10 +393,10 @@ export default function ClassStep({ characterData, updateCharacterData }) {
               <SelectValue placeholder="Select class" />
             </SelectTrigger>
             <SelectContent className="bg-[#1E2430] border-[#2A3441]">
-              {classes.map((cls) => (
-                <SelectItem 
-                  key={cls.name} 
-                  value={cls.name} 
+              {combinedClasses.map((cls) => (
+                <SelectItem
+                  key={cls.name}
+                  value={cls.name}
                   className="text-white hover:bg-[#2A3441] focus:bg-[#2A3441]"
                 >
                   {cls.name}
