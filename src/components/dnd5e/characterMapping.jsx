@@ -80,6 +80,22 @@ export function buildStatsFromCharacterData(characterData) {
     size,
     darkvision,
     additional_speeds,
+    // Brewery class spellcasting, when set, rides along on the
+    // stats blob so combat / action bar / spells screen can read it
+    // without re-opening the mod record.
+    hit_die: characterData._brewery_class?.hit_die || undefined,
+    spellcasting_ability: characterData._brewery_class?.spellcasting?.enabled
+      ? characterData._brewery_class.spellcasting.ability
+      : undefined,
+    brewery_spellcasting: characterData._brewery_class?.spellcasting?.enabled
+      ? {
+          ability: characterData._brewery_class.spellcasting.ability,
+          type: characterData._brewery_class.spellcasting.type,
+          slot_progression: characterData._brewery_class.spellcasting.slot_progression,
+          spell_list_source: characterData._brewery_class.spellcasting.spell_list_source,
+          ritual_casting: !!characterData._brewery_class.spellcasting.ritual_casting,
+        }
+      : undefined,
     damage_resistances:
       (characterData._brewery_race_resistances?.damage_resistances) || characterData.damage_resistances || [],
     damage_immunities:
