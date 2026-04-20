@@ -17,18 +17,53 @@ export const BLANK_CONTENT_PACK = {
   name: "",
   description: "",
   image_url: "",
+  tags: [],
   contents: {
     monsters: [],
     items: [],
     spells: [],
     class_features: [],
   },
+  // Cached per-bucket counts for the marketplace card. The creator
+  // form writes this alongside contents on save so the Brewery
+  // grid doesn't have to load the full pack just to display
+  // "15 Monsters · 8 Items".
+  content_counts: {
+    monsters: 0,
+    items: 0,
+    spells: 0,
+    class_features: 0,
+  },
 };
 
 /**
+ * Compute { monsters, items, spells, class_features } counts from
+ * a pack's `contents` blob. Safe against missing arrays.
+ */
+export function computeContentCounts(contents) {
+  const c = contents || {};
+  return {
+    monsters:       Array.isArray(c.monsters)       ? c.monsters.length       : 0,
+    items:          Array.isArray(c.items)          ? c.items.length          : 0,
+    spells:         Array.isArray(c.spells)         ? c.spells.length         : 0,
+    class_features: Array.isArray(c.class_features) ? c.class_features.length : 0,
+  };
+}
+
+/**
  * Total number of entries the pack ships across all four buckets.
+ * Prefers a cached `content_counts` block (what the marketplace
+ * grid reads) but falls through to a fresh scan of `contents` when
+ * it isn't populated yet.
  */
 export function contentPackSize(metadata) {
+  const cached = metadata?.content_counts;
+  if (cached && typeof cached === "object") {
+    return (Number(cached.monsters) || 0)
+      + (Number(cached.items) || 0)
+      + (Number(cached.spells) || 0)
+      + (Number(cached.class_features) || 0);
+  }
   const c = metadata?.contents || {};
   return (
     (c.monsters?.length || 0)
@@ -38,10 +73,24 @@ export function contentPackSize(metadata) {
   );
 }
 
+/** Summary text for marketplace cards — "15 Monsters · 8 Items · 5 Spells · 3 Features".
+ *  Skips buckets with zero entries so the string stays tight on
+ *  single-content packs. */
+export function contentPackSummary(metadata) {
+  const counts = metadata?.content_counts || computeContentCounts(metadata?.contents);
+  const parts = [];
+  if (counts.monsters)       parts.push(`${counts.monsters} Monster${counts.monsters === 1 ? "" : "s"}`);
+  if (counts.items)          parts.push(`${counts.items} Item${counts.items === 1 ? "" : "s"}`);
+  if (counts.spells)         parts.push(`${counts.spells} Spell${counts.spells === 1 ? "" : "s"}`);
+  if (counts.class_features) parts.push(`${counts.class_features} Feature${counts.class_features === 1 ? "" : "s"}`);
+  return parts.join(" · ");
+}
+
 /**
  * Install a content pack into a campaign. Each entry is stamped
- * with the pack's mod_id so uninstall can target just this pack's
- * rows. is_system stays false — these are user-installed.
+ * with the pack's mod_id (in the canonical `source_mod_id` column)
+ * so uninstall can target just this pack's rows. is_system stays
+ * false — these are user-installed.
  *
  * Returns { success, counts: { monsters, items, spells, class_features } }
  * or { success: false, reason }.
@@ -63,7 +112,7 @@ export async function installContentPack(campaignId, modId, metadata) {
       image_url: m.image_url || null,
       is_system: false,
       is_active: true,
-      brewery_pack_mod_id: modId,
+      source_mod_id: modId,
     }));
     const { error } = await supabase.from("monsters").insert(rows);
     if (error) return { success: false, reason: `monsters: ${error.message}` };
@@ -81,7 +130,7 @@ export async function installContentPack(campaignId, modId, metadata) {
       properties: it,
       image_url: it.image_url || null,
       is_system: false,
-      brewery_pack_mod_id: modId,
+      source_mod_id: modId,
     }));
     const { error } = await supabase.from("campaign_items").insert(rows);
     if (error) return { success: false, reason: `items: ${error.message}` };
@@ -104,7 +153,7 @@ export async function installContentPack(campaignId, modId, metadata) {
       classes: Array.isArray(sp.classes) ? sp.classes : [],
       source: "brewery_pack",
       is_system: false,
-      brewery_pack_mod_id: modId,
+      source_mod_id: modId,
     }));
     const { error } = await supabase.from("spells").insert(rows);
     if (error) return { success: false, reason: `spells: ${error.message}` };
@@ -122,7 +171,7 @@ export async function installContentPack(campaignId, modId, metadata) {
       level: Number(cf.level) || 1,
       properties: cf,
       is_system: false,
-      brewery_pack_mod_id: modId,
+      source_mod_id: modId,
     }));
     const { error } = await supabase.from("campaign_class_features").insert(rows);
     if (error) return { success: false, reason: `class_features: ${error.message}` };
@@ -134,21 +183,31 @@ export async function installContentPack(campaignId, modId, metadata) {
 
 /**
  * Uninstall removes every row across the four campaign tables that
- * carries this pack's mod id. The GM's own homebrew (no
- * brewery_pack_mod_id set) is untouched.
+ * carries this pack's mod id on `source_mod_id`. The GM's own
+ * homebrew (no source_mod_id set) is untouched. Runs the four
+ * table deletes in parallel via Promise.all; a per-table error
+ * logs to the console but never aborts the other deletes so an
+ * uninstall finishes as much as it can rather than leaving
+ * orphaned rows.
  */
 export async function uninstallContentPack(campaignId, modId) {
   if (!campaignId || !modId) return { success: false, reason: "Missing campaign or mod id." };
   const tables = ["monsters", "campaign_items", "spells", "campaign_class_features"];
-  for (const t of tables) {
+  const results = await Promise.all(tables.map(async (t) => {
     const { error } = await supabase
       .from(t)
       .delete()
       .eq("campaign_id", campaignId)
-      .eq("brewery_pack_mod_id", modId);
+      .eq("source_mod_id", modId);
     if (error) {
       console.warn(`uninstallContentPack(${t}) failed:`, error.message);
+      return { table: t, error: error.message };
     }
-  }
-  return { success: true };
+    return { table: t };
+  }));
+  const failures = results.filter((r) => r.error);
+  return {
+    success: failures.length === 0,
+    failures,
+  };
 }

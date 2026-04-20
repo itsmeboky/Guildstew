@@ -5914,3 +5914,21 @@ function CustomClassFeatureForm({ feature, setFeature }) {
   );
 }
 
+// Exported so the Content Pack creator (Part C3) can reuse these
+// forms + their blank templates without rebuilding the monster /
+// item / spell / class-feature editors from scratch. The
+// buildItemModifications / buildMonsterModifications /
+// buildSpellModifications / buildClassFeatureModifications
+// serializers are already individually `export function` above,
+// so importers can pull them in alongside the form components.
+export {
+  CustomItemForm,
+  CustomMonsterForm,
+  CustomSpellForm,
+  CustomClassFeatureForm,
+  BLANK_ITEM,
+  BLANK_MONSTER,
+  BLANK_SPELL,
+  BLANK_CLASS_FEATURE,
+};
+
