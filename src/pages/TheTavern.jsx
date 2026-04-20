@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Flame, Search, ChefHat, Award, Store, Plus } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Flame, Search, ChefHat, Award, Store, Plus, Package } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { createPageUrl } from "@/utils";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -179,6 +181,14 @@ export default function TheTavern() {
             >
               Buy Spice
             </Button>
+            <Link to={createPageUrl("MyCollection")}>
+              <Button
+                variant="outline"
+                className="border-amber-500/40 text-amber-200"
+              >
+                <Package className="w-4 h-4 mr-1" /> My Collection
+              </Button>
+            </Link>
             <Button
               onClick={() => setUploadOpen(true)}
               variant="outline"
