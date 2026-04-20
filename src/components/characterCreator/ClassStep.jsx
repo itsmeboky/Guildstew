@@ -394,14 +394,23 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
                 class: value,
                 features: (cls?.features || []).map(f => ({ name: f, source: value, description: "" })),
               };
+              // Strip the previously-tagged class mod (if any),
+              // then re-tag when the new pick is a brewery class.
+              const priorDeps = Array.isArray(characterData.mod_dependencies) ? characterData.mod_dependencies : [];
+              const nonClassDeps = priorDeps.filter((d) => d?.mod_type !== "class");
               if (cls?._source === "brewery" && cls?._raw) {
                 Object.assign(
                   baseUpdates,
                   clearBreweryClassMarkers(),
                   applyBreweryClassBaseline(cls._raw, characterData),
                 );
+                const classDep = cls._mod_id
+                  ? [{ mod_id: cls._mod_id, mod_name: cls._mod_name || cls.name, mod_type: "class" }]
+                  : [];
+                baseUpdates.mod_dependencies = [...nonClassDeps, ...classDep];
               } else {
                 Object.assign(baseUpdates, clearBreweryClassMarkers());
+                baseUpdates.mod_dependencies = nonClassDeps;
               }
               updateCharacterData(baseUpdates);
             }}

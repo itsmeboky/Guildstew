@@ -376,6 +376,12 @@ export default function CharacterLibrary() {
                   <Sparkles className="w-3 h-3" /> Brewery Race
                 </span>
               )}
+              {Array.isArray(selectedCharacter.mod_dependencies)
+                && selectedCharacter.mod_dependencies.some((d) => d?.mod_type === "class") && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1.5 py-0.5">
+                  <Sparkles className="w-3 h-3" /> Brewery Class
+                </span>
+              )}
             </p>
             {selectedCharacter.tags && selectedCharacter.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">
