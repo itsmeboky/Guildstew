@@ -399,7 +399,14 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
                   value={cls.name}
                   className="text-white hover:bg-[#2A3441] focus:bg-[#2A3441]"
                 >
-                  {cls.name}
+                  <span className="inline-flex items-center gap-2">
+                    {cls.name}
+                    {cls._source === "brewery" && (
+                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1 py-0.5">
+                        <Sparkles className="w-2.5 h-2.5" /> Brewery
+                      </span>
+                    )}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -414,10 +421,23 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
             className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
           >
             <div className="flex items-center gap-4 mb-4">
-              <img src={selectedClass.icon} alt={selectedClass.name} className="w-20 h-20 object-contain" />
+              {selectedClass.icon ? (
+                <img src={selectedClass.icon} alt={selectedClass.name} className="w-20 h-20 object-contain" />
+              ) : (
+                <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-[#37F2D1]/30 to-[#8B5CF6]/30 flex items-center justify-center">
+                  <Sparkles className="w-10 h-10 text-[#37F2D1]" />
+                </div>
+              )}
               <div className="flex-1">
-                <h3 className="text-2xl font-bold text-white mb-1">{selectedClass.name}</h3>
-                <p className="text-sm text-white/60">Hit Die: {selectedClass.hitDie}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-2xl font-bold text-white">{selectedClass.name}</h3>
+                  {selectedClass._source === "brewery" && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1.5 py-0.5">
+                      <Sparkles className="w-3 h-3" /> Brewery
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-white/60 mt-1">Hit Die: {selectedClass.hitDie}</p>
               </div>
             </div>
             <p className="text-white/80 mb-4 text-sm leading-relaxed">{selectedClass.description}</p>
