@@ -3,6 +3,7 @@ import {
   installContentPack,
   uninstallContentPack,
 } from "@/lib/breweryContentPack";
+import { validateFormula } from "@/lib/formulaEvaluator";
 
 /**
  * Brewery mod engine — Part 1 foundation.
@@ -303,24 +304,15 @@ const VALID_OPERATIONS = ["override", "extend", "modify"];
 
 /**
  * Guard against unsafe expressions before any runtime eval of a
- * code-mod formula. We don't actually eval here — just syntactic
- * sanity checks — because the engine that runs formulas will come in
- * a later part. Catches: empty strings, disallowed tokens (import,
- * require, window, document, global, process, eval, Function,
- * constructor).
+ * code-mod formula. Delegates to the real parser in
+ * src/lib/formulaEvaluator.js so session-start validation and the
+ * creator form's on-blur check use identical rules — no
+ * double-standards, no divergence between "looks safe" and
+ * "actually runs." The parser rejects unknown identifiers, unknown
+ * functions, bad dice notation, and any token outside the
+ * whitelisted grammar.
  */
-export function validateFormula(formula) {
-  if (typeof formula !== "string" || !formula.trim()) {
-    throw new Error("formula is empty");
-  }
-  const banned = /\b(import|require|window|document|globalThis|global|process|eval|Function|constructor|__proto__)\b/;
-  if (banned.test(formula)) throw new Error("formula contains a banned identifier");
-  // Allow digits, letters, arithmetic, whitespace, parens, dots,
-  // underscores, and the math operators. Anything else is rejected.
-  const allowed = /^[a-zA-Z0-9_. \t\n\r+\-*/()?:%<>=&|!,]+$/;
-  if (!allowed.test(formula)) throw new Error("formula contains disallowed characters");
-  return true;
-}
+export { validateFormula };
 
 /**
  * Run validation over every mod installed in a campaign. Each broken
