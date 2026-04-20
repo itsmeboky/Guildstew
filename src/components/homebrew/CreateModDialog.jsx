@@ -9,6 +9,7 @@ import CreateRaceModDialog from "./CreateRaceModDialog";
 import CreateClassModDialog from "./CreateClassModDialog";
 import CreateReskinModDialog from "./CreateReskinModDialog";
 import CreateSheetModDialog from "./CreateSheetModDialog";
+import CreateContentPackDialog from "./CreateContentPackDialog";
 
 /**
  * Brewery → Create New Mod entry point.
@@ -155,15 +156,10 @@ export default function CreateModDialog({ open, onClose }) {
         onClose={closeChild}
       />
 
-      {/* Content Pack creator + Code Mod creator land in their own
-          parts. Until then the picker still closes cleanly. */}
-      {openType === "content_pack" && (
-        <ComingSoonDialog
-          title="Content Pack creator"
-          note="The bundled-monsters / items / spells / features creator lands in a follow-up part. The install + uninstall pipeline is already wired, so packs published from the API can be installed now."
-          onClose={closeChild}
-        />
-      )}
+      <CreateContentPackDialog
+        open={openType === "content_pack"}
+        onClose={closeChild}
+      />
       {openType === "code_mod" && (
         <ComingSoonDialog
           title="Code Mod creator"
