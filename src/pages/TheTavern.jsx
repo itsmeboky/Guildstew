@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Flame, Search, ChefHat, Award, Store, Plus, Package } from "lucide-react";
+import { Flame, Search, ChefHat, Award, Store, Plus, Package, TrendingUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from "@/utils";
@@ -187,6 +187,14 @@ export default function TheTavern() {
                 className="border-amber-500/40 text-amber-200"
               >
                 <Package className="w-4 h-4 mr-1" /> My Collection
+              </Button>
+            </Link>
+            <Link to={createPageUrl("CreatorDashboard")}>
+              <Button
+                variant="outline"
+                className="border-purple-400/40 text-purple-200"
+              >
+                <TrendingUp className="w-4 h-4 mr-1" /> Creator Dashboard
               </Button>
             </Link>
             <Button
