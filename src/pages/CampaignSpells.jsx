@@ -1,12 +1,24 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, Sparkles } from "lucide-react";
+import { ArrowLeft, Search, Sparkles, Plus } from "lucide-react";
+import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { createPageUrl } from "@/utils";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { supabase } from "@/api/supabaseClient";
+import { useAuth } from "@/lib/AuthContext";
 import { safeText as sharedSafeText } from "@/utils/safeRender";
 
 /**
@@ -37,12 +49,41 @@ const safeText = sharedSafeText;
 
 export default function CampaignSpells({ embedded = false, campaignId: campaignIdOverride } = {}) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
   const params = new URLSearchParams(window.location.search);
   const campaignId = campaignIdOverride ?? params.get("id");
 
   const [search, setSearch] = useState("");
   const [levelFilter, setLevelFilter] = useState("all");
   const [selected, setSelected] = useState(null);
+  const [creating, setCreating] = useState(false);
+
+  const createMutation = useMutation({
+    mutationFn: async (payload) => {
+      const { data, error } = await supabase
+        .from("spells")
+        .insert([{
+          ...payload,
+          campaign_id: campaignId,
+          is_system: false,
+          source: "homebrew",
+          created_by: user?.id || null,
+          created_at: new Date().toISOString(),
+        }])
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (row) => {
+      queryClient.invalidateQueries({ queryKey: ["homebrewSpells", campaignId] });
+      setCreating(false);
+      setSelected({ ...row, _source: "homebrew" });
+      toast.success(`${row?.name || "Spell"} saved.`);
+    },
+    onError: (err) => toast.error(err?.message || "Failed to save spell."),
+  });
 
   const { data: srd = [] } = useQuery({
     queryKey: ["srdSpells"],
@@ -103,6 +144,13 @@ export default function CampaignSpells({ embedded = false, campaignId: campaignI
               <Sparkles className="w-5 h-5 text-[#37F2D1]" /> Spells
             </h1>
           </div>
+          <Button
+            onClick={() => setCreating(true)}
+            size="sm"
+            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
+          >
+            <Plus className="w-4 h-4 mr-1" /> New Spell
+          </Button>
         </header>
       )}
 
@@ -170,6 +218,13 @@ export default function CampaignSpells({ embedded = false, campaignId: campaignI
           </div>
         </div>
       </div>
+
+      <NewSpellDialog
+        open={creating}
+        onClose={() => setCreating(false)}
+        onSave={(payload) => createMutation.mutate(payload)}
+        saving={createMutation.isPending}
+      />
     </div>
   );
 }
@@ -300,4 +355,222 @@ function componentText(spell) {
   else if (spell.components) parts.push(safeText(spell.components));
   if (spell.material) parts.push(`(${safeText(spell.material)})`);
   return parts.join(" ");
+}
+
+// ─────────────── NewSpellDialog ───────────────
+
+const SPELL_SCHOOLS = [
+  "Abjuration", "Conjuration", "Divination", "Enchantment",
+  "Evocation", "Illusion", "Necromancy", "Transmutation",
+];
+const SPELL_CLASSES = [
+  "Bard", "Cleric", "Druid", "Paladin", "Ranger",
+  "Sorcerer", "Warlock", "Wizard", "Artificer",
+];
+
+function NewSpellDialog({ open, onClose, onSave, saving }) {
+  const [name, setName] = useState("");
+  const [level, setLevel] = useState(0);
+  const [school, setSchool] = useState("Evocation");
+  const [castingTime, setCastingTime] = useState("1 action");
+  const [range, setRange] = useState("60 feet");
+  const [components, setComponents] = useState({ v: true, s: true, m: false, material: "" });
+  const [duration, setDuration] = useState("Instantaneous");
+  const [concentration, setConcentration] = useState(false);
+  const [ritual, setRitual] = useState(false);
+  const [description, setDescription] = useState("");
+  const [higherLevel, setHigherLevel] = useState("");
+  const [classes, setClasses] = useState([]);
+
+  const reset = () => {
+    setName(""); setLevel(0); setSchool("Evocation");
+    setCastingTime("1 action"); setRange("60 feet");
+    setComponents({ v: true, s: true, m: false, material: "" });
+    setDuration("Instantaneous");
+    setConcentration(false); setRitual(false);
+    setDescription(""); setHigherLevel(""); setClasses([]);
+  };
+
+  const toggleClass = (c) => {
+    setClasses((cur) => (cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c]));
+  };
+  const patchComponent = (key, value) =>
+    setComponents((c) => ({ ...c, [key]: value }));
+
+  const handleSave = () => {
+    if (!name.trim()) { toast.error("Name the spell."); return; }
+    // Format the V/S/M line the way the spells table expects:
+    // a short uppercase letter list with an optional (material) tail.
+    const letters = [];
+    if (components.v) letters.push("V");
+    if (components.s) letters.push("S");
+    if (components.m) letters.push("M");
+    const compString = letters.join(", ");
+    onSave({
+      name: name.trim(),
+      level: Number(level) || 0,
+      school,
+      casting_time: castingTime.trim() || "1 action",
+      range: range.trim() || "",
+      components: compString + (components.m && components.material.trim() ? ` (${components.material.trim()})` : ""),
+      duration: duration.trim() || "Instantaneous",
+      concentration: !!concentration,
+      ritual: !!ritual,
+      description: description.trim(),
+      higher_level: higherLevel.trim(),
+      classes,
+    });
+    reset();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="bg-[#1a1f2e] border border-slate-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>New Custom Spell</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2">
+              <Label className="text-xs text-slate-300">Name</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)}
+                className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs text-slate-300">Level</Label>
+              <Select value={String(level)} onValueChange={(v) => setLevel(Number(v))}>
+                <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[0,1,2,3,4,5,6,7,8,9].map((l) => (
+                    <SelectItem key={l} value={String(l)}>{l === 0 ? "Cantrip" : `Level ${l}`}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-slate-300">School</Label>
+              <Select value={school} onValueChange={setSchool}>
+                <SelectTrigger className="bg-[#0f1219] border-slate-600 text-white mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SPELL_SCHOOLS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-slate-300">Casting Time</Label>
+              <Input value={castingTime} onChange={(e) => setCastingTime(e.target.value)}
+                placeholder="1 action, 1 bonus action, 1 reaction"
+                className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs text-slate-300">Range</Label>
+              <Input value={range} onChange={(e) => setRange(e.target.value)}
+                placeholder="60 feet, Self, Touch, 30-ft cone"
+                className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-xs text-slate-300">Components</Label>
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              {[
+                { key: "v", label: "V" },
+                { key: "s", label: "S" },
+                { key: "m", label: "M" },
+              ].map(({ key, label }) => {
+                const active = !!components[key];
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => patchComponent(key, !active)}
+                    className={`text-xs font-black uppercase tracking-wider px-3 py-1.5 rounded border transition-colors ${
+                      active
+                        ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                        : "bg-[#0f1219] border-slate-600 text-slate-300 hover:border-[#37F2D1]/60"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+              {components.m && (
+                <Input
+                  value={components.material}
+                  onChange={(e) => patchComponent("material", e.target.value)}
+                  placeholder="Material component (e.g., a pinch of sulfur and bat guano)"
+                  className="bg-[#0f1219] border-slate-600 text-white flex-1"
+                />
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <Label className="text-xs text-slate-300">Duration</Label>
+              <Input value={duration} onChange={(e) => setDuration(e.target.value)}
+                placeholder="Instantaneous, 1 minute, 1 hour"
+                className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+            </div>
+            <label className="flex items-center gap-2 text-xs text-slate-300 bg-[#0f1219] border border-slate-600 rounded-lg p-2 cursor-pointer">
+              <Checkbox checked={concentration} onCheckedChange={(v) => setConcentration(!!v)} />
+              <span><span className="font-bold text-white">Concentration</span> — one per caster.</span>
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-300 bg-[#0f1219] border border-slate-600 rounded-lg p-2 cursor-pointer">
+              <Checkbox checked={ritual} onCheckedChange={(v) => setRitual(!!v)} />
+              <span><span className="font-bold text-white">Ritual</span> — +10 min, no slot.</span>
+            </label>
+          </div>
+
+          <div>
+            <Label className="text-xs text-slate-300">Description</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)}
+              rows={5}
+              className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+          </div>
+
+          <div>
+            <Label className="text-xs text-slate-300">At Higher Levels</Label>
+            <Textarea value={higherLevel} onChange={(e) => setHigherLevel(e.target.value)}
+              rows={3}
+              placeholder="When cast with a spell slot of higher level, …"
+              className="bg-[#0f1219] border-slate-600 text-white mt-1" />
+          </div>
+
+          <div>
+            <Label className="text-xs text-slate-300">Classes</Label>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {SPELL_CLASSES.map((c) => {
+                const active = classes.includes(c);
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => toggleClass(c)}
+                    className={`text-[10px] font-semibold px-2 py-1 rounded border transition-colors ${
+                      active
+                        ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                        : "bg-[#0f1219] border-slate-600 text-slate-300 hover:border-[#37F2D1]/60"
+                    }`}
+                  >
+                    {c}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
+          >
+            {saving ? "Saving…" : "Save Spell"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
