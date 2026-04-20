@@ -2,12 +2,13 @@ import React, { useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
-import { Sparkles, ShieldHalf, Package, Code2, Wand2 } from "lucide-react";
+import { Sparkles, ShieldHalf, Package, Code2, Wand2, LayoutDashboard } from "lucide-react";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { tierAtLeast } from "@/api/billingClient";
 import CreateRaceModDialog from "./CreateRaceModDialog";
 import CreateClassModDialog from "./CreateClassModDialog";
 import CreateReskinModDialog from "./CreateReskinModDialog";
+import CreateSheetModDialog from "./CreateSheetModDialog";
 
 /**
  * Brewery → Create New Mod entry point.
@@ -52,6 +53,13 @@ const MOD_TYPES = [
     label: "Reskin",
     icon: Wand2,
     description: "Rename game terms (HP → Wounds, STR → Might) without changing any math. Pick a genre preset to start.",
+    veteranOnly: false,
+  },
+  {
+    value: "sheet_mod",
+    label: "Sheet Modification",
+    icon: LayoutDashboard,
+    description: "Add trackers (sanity, stress, piety), new skills, or proficiency categories. Pick a pre-built template or build from scratch.",
     veteranOnly: false,
   },
   {
@@ -140,6 +148,10 @@ export default function CreateModDialog({ open, onClose }) {
       />
       <CreateReskinModDialog
         open={openType === "reskin"}
+        onClose={closeChild}
+      />
+      <CreateSheetModDialog
+        open={openType === "sheet_mod"}
         onClose={closeChild}
       />
 
