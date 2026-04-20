@@ -242,8 +242,8 @@ export default function Home() {
             <img
               src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/ladleanimation1.gif"
               alt="Ladle mascot"
-              className="hidden md:block absolute w-[240px] h-auto pointer-events-none z-0"
-              style={{ right: 'calc(25% - 40px)', top: '-140px' }}
+              className="hidden md:block absolute w-[320px] h-auto pointer-events-none z-0"
+              style={{ right: 'calc(25% - 60px)', top: '-180px' }}
             />
           </div>
 
