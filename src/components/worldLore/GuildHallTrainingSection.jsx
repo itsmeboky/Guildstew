@@ -6,7 +6,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { GraduationCap, Clock, Coins } from "lucide-react";
+import { GraduationCap, Clock, Coins, ChevronRight, X as XIcon } from "lucide-react";
 import { supabase } from "@/api/supabaseClient";
 import {
   BASE_TRAINING_WEEKS,
@@ -290,7 +290,12 @@ export default function GuildHallTrainingSection({ campaign, purchasedUpgrades =
           </h4>
           <div className="space-y-2">
             {activeTrainees.map((c) => (
-              <ActiveTrainingRow key={c.id} character={c} canEdit={canEdit} />
+              <ActiveTrainingRow
+                key={c.id}
+                character={c}
+                canEdit={canEdit}
+                onChange={() => queryClient.invalidateQueries({ queryKey: charactersQueryKey })}
+              />
             ))}
           </div>
         </div>
@@ -299,11 +304,97 @@ export default function GuildHallTrainingSection({ campaign, purchasedUpgrades =
   );
 }
 
-function ActiveTrainingRow({ character, canEdit }) {
+/**
+ * Append a freshly-learned proficiency to the right slot on the
+ * character's stats blob. SRD characters keep proficiencies under
+ * characterData.proficiencies.{armor, weapons, tools}; languages /
+ * tools / weapons / armor proficiencies from the review step can
+ * also hang on top-level fields. We update whichever shape exists
+ * and leave the other untouched — readers that fall back across
+ * both will keep working.
+ */
+function grantProficiency(character, type, target) {
+  const stats = { ...(character.stats || {}) };
+  const prof = { ...(stats.proficiencies || {}) };
+  if (type === "language") {
+    stats.languages = Array.from(new Set([...(stats.languages || []), target]));
+  } else if (type === "tool") {
+    stats.tool_proficiencies = Array.from(new Set([...(stats.tool_proficiencies || []), target]));
+    prof.tools = Array.from(new Set([...(prof.tools || []), target]));
+  } else if (type === "weapon") {
+    stats.weapon_proficiencies = Array.from(new Set([...(stats.weapon_proficiencies || []), target]));
+    prof.weapons = Array.from(new Set([...(prof.weapons || []), target]));
+  } else if (type === "armor") {
+    stats.armor_proficiencies = Array.from(new Set([...(stats.armor_proficiencies || []), target]));
+    prof.armor = Array.from(new Set([...(prof.armor || []), target]));
+  }
+  stats.proficiencies = prof;
+  return stats;
+}
+
+function ActiveTrainingRow({ character, canEdit, onChange }) {
   const progress = character.training_progress || {};
   const weeksCompleted = Number(progress.weeks_completed) || 0;
   const weeksRequired  = Number(progress.weeks_required)  || 1;
   const pct = Math.min(100, Math.round((weeksCompleted / weeksRequired) * 100));
+  const [pending, setPending] = useState(false);
+
+  const advance = async () => {
+    if (!canEdit || pending) return;
+    setPending(true);
+    try {
+      const next = weeksCompleted + 1;
+      if (next >= weeksRequired) {
+        // Complete: grant the proficiency + clear the progress row.
+        const nextStats = grantProficiency(character, progress.type, progress.current_training);
+        const { error: e1 } = await supabase
+          .from("characters")
+          .update({ stats: nextStats, training_progress: {} })
+          .eq("id", character.id);
+        if (e1) throw e1;
+        toast.success(`${character.name} learned ${progress.current_training}!`);
+      } else {
+        const updated = {
+          ...progress,
+          weeks_completed: next,
+          cost_paid: (Number(progress.cost_paid) || 0) + COST_PER_WEEK,
+        };
+        const { error: e2 } = await supabase
+          .from("characters")
+          .update({ training_progress: updated })
+          .eq("id", character.id);
+        if (e2) throw e2;
+        toast.success(`Training advanced: ${next}/${weeksRequired} weeks`);
+      }
+      onChange?.();
+    } catch (err) {
+      toast.error(err?.message || "Failed to advance training.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const cancel = async () => {
+    if (!canEdit || pending) return;
+    if (!window.confirm(`Cancel ${character.name}'s training in ${progress.current_training}? Progress will be lost.`)) {
+      return;
+    }
+    setPending(true);
+    try {
+      const { error } = await supabase
+        .from("characters")
+        .update({ training_progress: {} })
+        .eq("id", character.id);
+      if (error) throw error;
+      toast.success(`Cancelled ${character.name}'s training.`);
+      onChange?.();
+    } catch (err) {
+      toast.error(err?.message || "Failed to cancel training.");
+    } finally {
+      setPending(false);
+    }
+  };
+
   return (
     <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg p-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -324,7 +415,31 @@ function ActiveTrainingRow({ character, canEdit }) {
           style={{ width: `${pct}%` }}
         />
       </div>
-      {!canEdit && (
+      {canEdit ? (
+        <div className="flex items-center gap-2 mt-3">
+          <Button
+            type="button"
+            size="sm"
+            onClick={advance}
+            disabled={pending}
+            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
+          >
+            <ChevronRight className="w-3 h-3 mr-1" />
+            {weeksCompleted + 1 >= weeksRequired ? "Complete Training" : "Advance 1 Week"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={cancel}
+            disabled={pending}
+            className="text-red-300 border-red-400/40"
+          >
+            <XIcon className="w-3 h-3 mr-1" />
+            Cancel
+          </Button>
+        </div>
+      ) : (
         <p className="mt-2 text-[10px] text-slate-500 italic">
           GM advances training each downtime week.
         </p>
