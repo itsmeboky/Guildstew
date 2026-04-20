@@ -17,18 +17,53 @@ export const BLANK_CONTENT_PACK = {
   name: "",
   description: "",
   image_url: "",
+  tags: [],
   contents: {
     monsters: [],
     items: [],
     spells: [],
     class_features: [],
   },
+  // Cached per-bucket counts for the marketplace card. The creator
+  // form writes this alongside contents on save so the Brewery
+  // grid doesn't have to load the full pack just to display
+  // "15 Monsters · 8 Items".
+  content_counts: {
+    monsters: 0,
+    items: 0,
+    spells: 0,
+    class_features: 0,
+  },
 };
 
 /**
+ * Compute { monsters, items, spells, class_features } counts from
+ * a pack's `contents` blob. Safe against missing arrays.
+ */
+export function computeContentCounts(contents) {
+  const c = contents || {};
+  return {
+    monsters:       Array.isArray(c.monsters)       ? c.monsters.length       : 0,
+    items:          Array.isArray(c.items)          ? c.items.length          : 0,
+    spells:         Array.isArray(c.spells)         ? c.spells.length         : 0,
+    class_features: Array.isArray(c.class_features) ? c.class_features.length : 0,
+  };
+}
+
+/**
  * Total number of entries the pack ships across all four buckets.
+ * Prefers a cached `content_counts` block (what the marketplace
+ * grid reads) but falls through to a fresh scan of `contents` when
+ * it isn't populated yet.
  */
 export function contentPackSize(metadata) {
+  const cached = metadata?.content_counts;
+  if (cached && typeof cached === "object") {
+    return (Number(cached.monsters) || 0)
+      + (Number(cached.items) || 0)
+      + (Number(cached.spells) || 0)
+      + (Number(cached.class_features) || 0);
+  }
   const c = metadata?.contents || {};
   return (
     (c.monsters?.length || 0)
@@ -36,6 +71,19 @@ export function contentPackSize(metadata) {
     + (c.spells?.length || 0)
     + (c.class_features?.length || 0)
   );
+}
+
+/** Summary text for marketplace cards — "15 Monsters · 8 Items · 5 Spells · 3 Features".
+ *  Skips buckets with zero entries so the string stays tight on
+ *  single-content packs. */
+export function contentPackSummary(metadata) {
+  const counts = metadata?.content_counts || computeContentCounts(metadata?.contents);
+  const parts = [];
+  if (counts.monsters)       parts.push(`${counts.monsters} Monster${counts.monsters === 1 ? "" : "s"}`);
+  if (counts.items)          parts.push(`${counts.items} Item${counts.items === 1 ? "" : "s"}`);
+  if (counts.spells)         parts.push(`${counts.spells} Spell${counts.spells === 1 ? "" : "s"}`);
+  if (counts.class_features) parts.push(`${counts.class_features} Feature${counts.class_features === 1 ? "" : "s"}`);
+  return parts.join(" · ");
 }
 
 /**
