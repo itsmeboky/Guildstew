@@ -27,47 +27,51 @@ import CreateContentPackDialog from "./CreateContentPackDialog";
  * now (their full creators land in their own follow-up parts).
  */
 
+// The six — and only six — brewery mod types. Campaign-level
+// homebrew (custom item / monster / spell / class feature,
+// per-campaign rule toggles) lives outside this chooser in the
+// campaign's Homebrew + House Rules pages.
 const MOD_TYPES = [
   {
     value: "race",
     label: "Race",
     icon: Sparkles,
-    description: "A new playable race with abilities, traits, and subraces.",
+    description: "Create a new playable race with ability scores, traits, and subraces.",
     veteranOnly: false,
   },
   {
     value: "class",
     label: "Class",
     icon: ShieldHalf,
-    description: "A new playable class with features, subclasses, and an optional resource.",
+    description: "Create a new playable class with features, subclasses, and spellcasting.",
     veteranOnly: false,
   },
   {
     value: "content_pack",
     label: "Content Pack",
     icon: Package,
-    description: "Bundle pre-made monsters, items, spells, and class features for others to install.",
+    description: "Bundle monsters, items, spells, and features for others to download.",
     veteranOnly: false,
   },
   {
     value: "reskin",
     label: "Reskin",
     icon: Wand2,
-    description: "Rename game terms (HP → Wounds, STR → Might) without changing any math. Pick a genre preset to start.",
+    description: "Rename game terminology — abilities, HP, damage types, conditions. Start from genre presets.",
     veteranOnly: false,
   },
   {
     value: "sheet_mod",
     label: "Sheet Modification",
     icon: LayoutDashboard,
-    description: "Add trackers (sanity, stress, piety), new skills, or proficiency categories. Pick a pre-built template or build from scratch.",
+    description: "Add tracking systems to the character sheet — sanity, stress, corruption, custom skills, and more. Pre-built templates available.",
     veteranOnly: false,
   },
   {
     value: "code_mod",
     label: "Code Mod",
     icon: Code2,
-    description: "Custom triggers and formulas. Veteran tier required.",
+    description: "Custom triggers and formulas for advanced mechanics (Veteran only).",
     veteranOnly: true,
   },
 ];
