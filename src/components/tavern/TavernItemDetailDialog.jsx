@@ -12,12 +12,13 @@ import {
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import {
-  getItem, getItemRatings, purchaseItem, rateItem,
+  getItem, getItemRatings, rateItem,
 } from "@/lib/tavernClient";
 import { listEntitlements } from "@/lib/tavernEntitlements";
 import { getWalletBalance, getGuildWalletBalance } from "@/lib/spiceWallet";
 import { formatSpice, applyDiscount } from "@/config/spiceConfig";
 import { CATEGORY_LABEL, categoryIcon } from "@/config/tavernCategories";
+import PurchaseConfirmDialog from "@/components/tavern/PurchaseConfirmDialog";
 
 /**
  * Item detail + purchase + rating dialog.
@@ -42,6 +43,7 @@ export default function TavernItemDetailDialog({ item: itemProp, open, onClose, 
   const [activeImage, setActiveImage] = useState(0);
   const [ratingValue, setRatingValue] = useState(5);
   const [reviewText, setReviewText] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const { data: item } = useQuery({
     queryKey: ["tavernItem", itemProp?.id],
@@ -100,52 +102,7 @@ export default function TavernItemDetailDialog({ item: itemProp, open, onClose, 
 
   const discounted = item ? applyDiscount(item.price, sub.tier) : 0;
   const hasDiscount = item ? discounted < item.price : false;
-  const canBuyPersonal = !!wallet && wallet.balance >= discounted;
-  const guildRestricted = guildWallet?.spending_restricted && user?.id !== sub.guildOwnerId;
-  const canBuyGuild =
-    !!sub.guildOwnerId &&
-    !!guildWallet &&
-    guildWallet.balance >= discounted &&
-    !guildRestricted;
-
   const avgRating = item?.rating_count > 0 ? item.rating_sum / item.rating_count : 0;
-
-  const buyPersonal = useMutation({
-    mutationFn: async () => {
-      const r = await purchaseItem({ item, buyerUserId: user.id, buyerTier: sub.tier });
-      if (!r.success) throw new Error(r.reason || "Purchase failed");
-      return r;
-    },
-    onSuccess: () => {
-      toast.success(`Purchased ${item.name}!`);
-      queryClient.invalidateQueries({ queryKey: ["spiceWallet", user.id] });
-      queryClient.invalidateQueries({ queryKey: ["tavernEntitlements", user.id] });
-      queryClient.invalidateQueries({ queryKey: ["tavernItems"] });
-      queryClient.invalidateQueries({ queryKey: ["tavernItem", item.id] });
-    },
-    onError: (err) => toast.error(err?.message || "Purchase failed"),
-  });
-
-  const buyGuild = useMutation({
-    mutationFn: async () => {
-      const r = await purchaseItem({
-        item,
-        buyerUserId: user.id,
-        buyerTier: sub.tier,
-        guildId: sub.guildOwnerId,
-      });
-      if (!r.success) throw new Error(r.reason || "Purchase failed");
-      return r;
-    },
-    onSuccess: () => {
-      toast.success(`Guild purchased ${item.name}!`);
-      queryClient.invalidateQueries({ queryKey: ["guildSpiceWallet", sub.guildOwnerId] });
-      queryClient.invalidateQueries({ queryKey: ["tavernEntitlements", user.id] });
-      queryClient.invalidateQueries({ queryKey: ["tavernItems"] });
-      queryClient.invalidateQueries({ queryKey: ["tavernItem", item.id] });
-    },
-    onError: (err) => toast.error(err?.message || "Purchase failed"),
-  });
 
   const submitRating = useMutation({
     mutationFn: async () => {
@@ -273,40 +230,12 @@ export default function TavernItemDetailDialog({ item: itemProp, open, onClose, 
                 <Check className="w-4 h-4" /> {ownedSource === "guild" ? "Guild-Owned" : "Owned"}
               </span>
             ) : (
-              <>
-                <Button
-                  onClick={() => buyPersonal.mutate()}
-                  disabled={!canBuyPersonal || buyPersonal.isPending}
-                  className="bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold disabled:opacity-50"
-                >
-                  {buyPersonal.isPending
-                    ? "Buying…"
-                    : canBuyPersonal
-                    ? "Buy with Spice"
-                    : "Not enough Spice"}
-                </Button>
-                {sub.guildOwnerId && (
-                  <Button
-                    onClick={() => buyGuild.mutate()}
-                    disabled={!canBuyGuild || buyGuild.isPending}
-                    variant="outline"
-                    className="border-purple-400/50 text-purple-200 hover:bg-purple-500/10 disabled:opacity-50"
-                    title={
-                      guildRestricted
-                        ? "Guild spending is restricted to the guild leader"
-                        : undefined
-                    }
-                  >
-                    {buyGuild.isPending
-                      ? "Buying…"
-                      : guildRestricted
-                      ? "Restricted"
-                      : canBuyGuild
-                      ? `Buy with Guild (${formatSpice(guildWallet?.balance || 0)})`
-                      : "Guild low on Spice"}
-                  </Button>
-                )}
-              </>
+              <Button
+                onClick={() => setConfirmOpen(true)}
+                className="bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold"
+              >
+                Buy with Spice
+              </Button>
             )}
           </div>
         </div>
@@ -377,6 +306,15 @@ export default function TavernItemDetailDialog({ item: itemProp, open, onClose, 
           <Button variant="outline" onClick={onClose}>Close</Button>
         </DialogFooter>
       </DialogContent>
+
+      <PurchaseConfirmDialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        item={item}
+        buyer={user}
+        buyerTier={sub.tier}
+        guildOwnerId={sub.guildOwnerId}
+      />
     </Dialog>
   );
 }
