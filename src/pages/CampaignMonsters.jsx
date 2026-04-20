@@ -929,7 +929,7 @@ function NewMonsterDialog({ open, onClose, onSave, saving }) {
         </DialogHeader>
         <div className="space-y-4">
 
-          <Section title="Identity">
+          <DialogSection title="Identity">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs text-slate-300">Name</Label>
@@ -962,9 +962,9 @@ function NewMonsterDialog({ open, onClose, onSave, saving }) {
                 </Select>
               </div>
             </div>
-          </Section>
+          </DialogSection>
 
-          <Section title="Defense & Movement">
+          <DialogSection title="Defense & Movement">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs text-slate-300">Armor Class</Label>
@@ -981,9 +981,9 @@ function NewMonsterDialog({ open, onClose, onSave, saving }) {
                   className="bg-[#0f1219] border-slate-600 text-white mt-1" />
               </div>
             </div>
-          </Section>
+          </DialogSection>
 
-          <Section title="Ability Scores">
+          <DialogSection title="Ability Scores">
             <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
               {ABILITY_KEYS.map((k) => (
                 <div key={k}>
@@ -997,21 +997,21 @@ function NewMonsterDialog({ open, onClose, onSave, saving }) {
                 </div>
               ))}
             </div>
-          </Section>
+          </DialogSection>
 
-          <Section title="Proficiencies">
+          <DialogSection title="Proficiencies">
             <ChipGrid label="Saving Throws" options={SAVE_KEYS} values={saves} onToggle={(v) => toggleList(saves, setSaves, v)} />
             <ChipGrid label="Skills"        options={SKILL_LIST} values={skills} onToggle={(v) => toggleList(skills, setSkills, v)} />
-          </Section>
+          </DialogSection>
 
-          <Section title="Damage & Conditions">
+          <DialogSection title="Damage & Conditions">
             <ChipGrid label="Damage Resistances"     options={DAMAGE_TYPES}  values={damageResistances}     onToggle={(v) => toggleList(damageResistances, setDamageResistances, v)} />
             <ChipGrid label="Damage Immunities"      options={DAMAGE_TYPES}  values={damageImmunities}      onToggle={(v) => toggleList(damageImmunities, setDamageImmunities, v)} />
             <ChipGrid label="Damage Vulnerabilities" options={DAMAGE_TYPES}  values={damageVulnerabilities} onToggle={(v) => toggleList(damageVulnerabilities, setDamageVulnerabilities, v)} />
             <ChipGrid label="Condition Immunities"   options={CONDITION_LIST} values={conditionImmunities}  onToggle={(v) => toggleList(conditionImmunities, setConditionImmunities, v)} />
-          </Section>
+          </DialogSection>
 
-          <Section title="Senses & Languages">
+          <DialogSection title="Senses & Languages">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs text-slate-300">Senses</Label>
@@ -1026,9 +1026,9 @@ function NewMonsterDialog({ open, onClose, onSave, saving }) {
                   className="bg-[#0f1219] border-slate-600 text-white mt-1" />
               </div>
             </div>
-          </Section>
+          </DialogSection>
 
-          <Section title="Actions">
+          <DialogSection title="Actions">
             <p className="text-[11px] text-slate-500 -mt-1">
               Attacks, abilities, breath weapons. These land on the combat action bar when the monster takes a turn.
             </p>
@@ -1093,9 +1093,9 @@ function NewMonsterDialog({ open, onClose, onSave, saving }) {
             <Button type="button" variant="outline" size="sm" onClick={addAction} className="mt-2">
               <Plus className="w-3 h-3 mr-1" /> Add Action
             </Button>
-          </Section>
+          </DialogSection>
 
-          <Section title="Portrait & Description">
+          <DialogSection title="Portrait & Description">
             <div className="flex items-start gap-3">
               {imageUrl ? (
                 <img src={imageUrl} alt="" className="w-20 h-20 rounded-lg object-cover border border-slate-700" />
@@ -1116,7 +1116,7 @@ function NewMonsterDialog({ open, onClose, onSave, saving }) {
               <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3}
                 className="bg-[#0f1219] border-slate-600 text-white mt-1" />
             </div>
-          </Section>
+          </DialogSection>
         </div>
 
         <DialogFooter>
@@ -1134,7 +1134,7 @@ function NewMonsterDialog({ open, onClose, onSave, saving }) {
   );
 }
 
-function Section({ title, children }) {
+function DialogSection({ title, children }) {
   return (
     <div className="bg-[#0b1220] border border-[#1e293b] rounded-lg p-3">
       <h3 className="text-[11px] font-black uppercase tracking-widest text-[#37F2D1] mb-2">{title}</h3>
