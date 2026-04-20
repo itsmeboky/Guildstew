@@ -1,300 +1,331 @@
-import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Flame, Search, ChefHat, Award, Store, Plus, Package, TrendingUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import ProductCard from "@/components/workshop/ProductCard";
-import CreatorCard from "@/components/workshop/CreatorCard";
+import { createPageUrl } from "@/utils";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { supabase } from "@/api/supabaseClient";
+import { useAuth } from "@/lib/AuthContext";
+import { useSubscription } from "@/lib/SubscriptionContext";
+import { getWalletBalance, getGuildWalletBalance } from "@/lib/spiceWallet";
+import { listTavernItems } from "@/lib/tavernClient";
+import { listEntitlements } from "@/lib/tavernEntitlements";
+import { formatSpice } from "@/config/spiceConfig";
+import { TAVERN_CATEGORIES, SORT_OPTIONS } from "@/config/tavernCategories";
+import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
+import TavernItemCard from "@/components/tavern/TavernItemCard";
+import TavernItemDetailDialog from "@/components/tavern/TavernItemDetailDialog";
+import CreatorUploadDialog from "@/components/tavern/CreatorUploadDialog";
 
-const HERO_BANNERS = [
-  {
-    image: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/tavern/1f9516a5f_Karliah.png",
-    title: "Whip Up Something New",
-    buttonText: "BECOME A CREATOR",
-    buttonAction: "create",
-    textColor: "text-[#FF5722]",
-    alignRight: true
-  },
-  {
-    image: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/tavern/057be99da_KidsonBikes.png",
-    title: "KIDS ON BIKES",
-    buttonText: "AVAILABLE NOW",
-    buttonAction: "product",
-    textColor: "text-white",
-    alignRight: false
-  },
-  {
-    image: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/tavern/b72150a33_MorkBorg.png",
-    title: "TAKE ON THE APOCALYPSE",
-    buttonText: "CHECK OUT MORKBORG",
-    buttonAction: "product",
-    textColor: "text-white",
-    alignRight: false
-  }
-];
-
+/**
+ * The Tavern — Spice-based cosmetic marketplace.
+ *
+ * Page layout:
+ *   1. Header strip with the player's Spice wallet (and guild wallet
+ *      if subscribed as guild).
+ *   2. Two featured carousels — "House Special" (Guildstew official)
+ *      and "Chef's Choice" (featured creators).
+ *   3. Category tabs + sort + search.
+ *   4. Grid of the active listings that match the filter.
+ *
+ * Ownership badges are computed from a single getUserPurchases fetch
+ * that covers both personal and guild-wallet buys for the user.
+ */
 export default function TheTavern() {
-  const [currentBanner, setCurrentBanner] = useState(0);
-  const [activeTab, setActiveTab] = useState("categories");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  const { user } = useAuth();
+  const sub = useSubscription();
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [sort, setSort] = useState("popular");
+  const [search, setSearch] = useState("");
+  const [spiceOpen, setSpiceOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [detailItem, setDetailItem] = useState(null);
 
-  const { data: products } = useQuery({
-    queryKey: ['products'],
-    queryFn: () => base44.entities.Product.list('-created_date'),
-    initialData: []
+  const { data: wallet } = useQuery({
+    queryKey: ["spiceWallet", user?.id],
+    queryFn: () => getWalletBalance(user.id),
+    enabled: !!user?.id,
   });
 
-  const { data: users } = useQuery({
-    queryKey: ['users'],
-    queryFn: () => base44.entities.User.list(),
-    initialData: []
+  const { data: guildWallet } = useQuery({
+    queryKey: ["guildSpiceWallet", sub.guildOwnerId],
+    queryFn: () => getGuildWalletBalance(sub.guildOwnerId),
+    enabled: !!sub.guildOwnerId,
   });
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentBanner((prev) => (prev + 1) % HERO_BANNERS.length);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  const { data: items = [] } = useQuery({
+    queryKey: ["tavernItems", selectedCategory, sort, search],
+    queryFn: () => listTavernItems({ category: selectedCategory, sort, q: search }),
+  });
 
-  const nextBanner = () => {
-    setCurrentBanner((prev) => (prev + 1) % HERO_BANNERS.length);
+  const { data: featured = [] } = useQuery({
+    queryKey: ["tavernFeatured"],
+    queryFn: async () => {
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const { data } = await supabase
+        .from("tavern_items")
+        .select("*")
+        .eq("is_featured", true)
+        .eq("featured_month", currentMonth)
+        .eq("status", "active")
+        .limit(10);
+      return data || [];
+    },
+  });
+
+  const { data: official = [] } = useQuery({
+    queryKey: ["tavernOfficial"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("tavern_items")
+        .select("*")
+        .eq("is_official", true)
+        .eq("status", "active")
+        .order("purchase_count", { ascending: false })
+        .limit(10);
+      return data || [];
+    },
+  });
+
+  // Entitlements cover both personal purchases AND guild purchases
+  // made by *any* guild member — filtered by the user's current
+  // guild so leaving a guild silently strips access without touching
+  // the underlying rows.
+  const { data: entitlements = [] } = useQuery({
+    queryKey: ["tavernEntitlements", user?.id, sub.guildOwnerId],
+    queryFn: () => listEntitlements(user.id, { currentGuildId: sub.guildOwnerId }),
+    enabled: !!user?.id,
+  });
+
+  const ownedIds = useMemo(
+    () => new Set(entitlements.map((e) => e.item_id)),
+    [entitlements],
+  );
+
+  // Pull creator names in a batch so the cards don't each hit the
+  // network. auth.users isn't exposed — we read the mirrored
+  // user_profiles table instead.
+  const creatorIds = useMemo(() => {
+    const ids = new Set();
+    [...items, ...featured, ...official].forEach((i) => i?.creator_id && ids.add(i.creator_id));
+    return Array.from(ids);
+  }, [items, featured, official]);
+
+  const { data: creators = [] } = useQuery({
+    queryKey: ["tavernCreators", creatorIds.sort().join(",")],
+    queryFn: async () => {
+      if (creatorIds.length === 0) return [];
+      const { data } = await supabase
+        .from("user_profiles")
+        .select("user_id, username, full_name")
+        .in("user_id", creatorIds);
+      return data || [];
+    },
+    enabled: creatorIds.length > 0,
+  });
+
+  const creatorName = (id) => {
+    const c = creators.find((u) => u.user_id === id);
+    return c?.username || c?.full_name || "Guildstew Studios";
   };
 
-  const prevBanner = () => {
-    setCurrentBanner((prev) => (prev - 1 + HERO_BANNERS.length) % HERO_BANNERS.length);
-  };
-
-  const featuredProducts = products.filter(p => p.is_featured).slice(0, 4);
-  const whatsHot = products.filter(p => !p.is_featured).slice(0, 4);
-  
-  const topCreators = users
-    .filter(u => products.some(p => p.creator_id === u.id))
-    .slice(0, 8);
-
-  const getCreatorName = (creatorId) => {
-    if (!creatorId) return "Guildstew Studios";
-    const creator = users.find(u => u.id === creatorId);
-    return creator?.username || creator?.full_name || "Unknown Creator";
-  };
-
-  const filterProducts = () => {
-    let filtered = products;
-
-    if (categoryFilter !== "all") {
-      filtered = filtered.filter(p => p.category === categoryFilter);
-    }
-
-    if (activeTab === "merchants" && searchQuery) {
-      filtered = filtered.filter(p => 
-        getCreatorName(p.creator_id).toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    } else if (activeTab === "categories" && searchQuery) {
-      filtered = filtered.filter(p => 
-        p.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    return filtered;
-  };
-
-  const filteredProducts = filterProducts();
+  const cardProps = (item) => ({
+    item,
+    creatorName: creatorName(item.creator_id),
+    owned: ownedIds.has(item.id),
+    buyerTier: sub.tier,
+    onClick: () => setDetailItem(item),
+  });
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Hero Banner Carousel */}
-      <div className="relative h-[400px] overflow-hidden">
-        {HERO_BANNERS.map((banner, index) => (
-          <div
-            key={index}
-            className={`absolute inset-0 transition-opacity duration-1000 ${
-              index === currentBanner ? 'opacity-100' : 'opacity-0'
-            }`}
-            style={{
-              backgroundImage: `url(${banner.image})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center'
-            }}
-          >
-            <div className={`absolute inset-0 flex items-center ${banner.alignRight ? 'justify-end pr-20' : 'justify-center'} text-center`}>
-              <div className="space-y-6">
-                <h1 className={`text-6xl font-bold ${banner.textColor}`} style={{ fontFamily: 'Cream, Inter, sans-serif' }}>
-                  {banner.title}
-                </h1>
-                <Button className="bg-[#1E2430] hover:bg-[#2A3441] text-white px-8 py-6 text-lg">
-                  {banner.buttonText}
-                </Button>
-              </div>
+    <div className="min-h-screen bg-[#050816] text-white">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-8">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-black text-amber-200 flex items-center gap-3">
+              <Store className="w-8 h-8 text-amber-400" />
+              The Tavern
+            </h1>
+            <p className="text-sm text-slate-400 mt-1">
+              Cosmetic goods, priced in Spice. Brewed by our cooks and the community.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="bg-[#1E2430] border border-amber-600/30 rounded-lg px-4 py-2">
+              <p className="text-[9px] uppercase tracking-widest text-amber-400/70 font-bold">Spice</p>
+              <p className="text-lg font-black text-amber-200 flex items-center gap-1">
+                <Flame className="w-4 h-4 text-amber-400" />
+                {formatSpice(wallet?.balance || 0)}
+              </p>
             </div>
-          </div>
-        ))}
 
-        <button
-          onClick={prevBanner}
-          className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 p-3 rounded-full transition-colors"
-        >
-          <ChevronLeft className="w-6 h-6 text-white" />
-        </button>
-        <button
-          onClick={nextBanner}
-          className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 p-3 rounded-full transition-colors"
-        >
-          <ChevronRight className="w-6 h-6 text-white" />
-        </button>
+            {sub.guildOwnerId && (
+              <div className="bg-[#1E2430] border border-purple-500/30 rounded-lg px-4 py-2">
+                <p className="text-[9px] uppercase tracking-widest text-purple-400/70 font-bold">Guild Spice</p>
+                <p className="text-lg font-black text-purple-200 flex items-center gap-1">
+                  <Flame className="w-4 h-4 text-purple-400" />
+                  {formatSpice(guildWallet?.balance || 0)}
+                </p>
+              </div>
+            )}
 
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-          {HERO_BANNERS.map((_, index) => (
-            <button
-              key={index}
-              onClick={() => setCurrentBanner(index)}
-              className={`w-2 h-2 rounded-full transition-all ${
-                index === currentBanner ? 'bg-white w-8' : 'bg-white/50'
-              }`}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Tab Toggle Section */}
-      <div className="bg-[#2A3441]">
-        <div className="max-w-7xl mx-auto px-8">
-          <div className="grid grid-cols-2">
-            <button
-              onClick={() => setActiveTab("categories")}
-              className={`py-6 font-bold text-lg transition-colors ${
-                activeTab === "categories" 
-                  ? "bg-[#FF5722] text-white" 
-                  : "text-white hover:bg-[#1E2430]"
-              }`}
+            <Button
+              onClick={() => setSpiceOpen(true)}
+              className="bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold"
             >
-              Shop Categories
-            </button>
-            <button
-              onClick={() => setActiveTab("merchants")}
-              className={`py-6 font-bold text-lg transition-colors ${
-                activeTab === "merchants" 
-                  ? "bg-[#FF5722] text-white" 
-                  : "text-white hover:bg-[#1E2430]"
-              }`}
-            >
-              Search Merchants
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Search and Filter Section */}
-      <div className="bg-[#FF5722] py-6">
-        <div className="max-w-7xl mx-auto px-8">
-          <div className="flex gap-4">
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-48 bg-[#FF5722] text-white border-white">
-                <SelectValue placeholder="All Categories" />
-              </SelectTrigger>
-              <SelectContent className="bg-[#FF5722] border-white">
-                <SelectItem value="all" className="text-white">All Categories</SelectItem>
-                <SelectItem value="game_pack" className="text-white">Game Packs</SelectItem>
-                <SelectItem value="dice_pack" className="text-white">Dice Packs</SelectItem>
-                <SelectItem value="ui_pack" className="text-white">UI Packs</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="flex-1 flex gap-2">
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={activeTab === "merchants" ? "Search by creator..." : "Search products..."}
-                className="bg-[#FF5722] text-white placeholder:text-white/70 border-white"
-              />
-              <Button className="bg-[#1E2430] hover:bg-[#2A3441] text-white">
-                <Search className="w-4 h-4" />
+              Buy Spice
+            </Button>
+            <Link to={createPageUrl("MyCollection")}>
+              <Button
+                variant="outline"
+                className="border-amber-500/40 text-amber-200"
+              >
+                <Package className="w-4 h-4 mr-1" /> My Collection
               </Button>
-            </div>
+            </Link>
+            <Link to={createPageUrl("CreatorDashboard")}>
+              <Button
+                variant="outline"
+                className="border-purple-400/40 text-purple-200"
+              >
+                <TrendingUp className="w-4 h-4 mr-1" /> Creator Dashboard
+              </Button>
+            </Link>
+            <Button
+              onClick={() => setUploadOpen(true)}
+              variant="outline"
+              className="border-[#37F2D1]/50 text-[#37F2D1] hover:bg-[#37F2D1]/10"
+            >
+              <Plus className="w-4 h-4 mr-1" /> Sell on Tavern
+            </Button>
           </div>
         </div>
-      </div>
 
-      {activeTab === "categories" ? (
-        <>
-          {/* Featured Section */}
-          <div className="max-w-7xl mx-auto px-8 py-12">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="text-[#FF5722]">
-                <svg className="w-12 h-12" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/>
-                </svg>
-              </div>
-              <h2 className="text-4xl font-bold text-gray-900">FEATURED</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {featuredProducts.map(product => (
-                <ProductCard 
-                  key={product.id} 
-                  product={product}
-                  creatorName={getCreatorName(product.creator_id)}
-                />
-              ))}
-            </div>
-          </div>
+        {/* Featured carousels */}
+        {official.length > 0 && (
+          <FeaturedRow
+            title="House Special"
+            subtitle="Official Guildstew content"
+            icon={ChefHat}
+            accent="orange"
+            items={official}
+            cardProps={cardProps}
+          />
+        )}
+        {featured.length > 0 && (
+          <FeaturedRow
+            title="Chef's Choice"
+            subtitle={`Featured creators · ${new Date().toLocaleString("default", { month: "long", year: "numeric" })}`}
+            icon={Award}
+            accent="amber"
+            items={featured}
+            cardProps={cardProps}
+          />
+        )}
 
-          {/* What's Hot Section */}
-          <div className="max-w-7xl mx-auto px-8 py-12">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="text-[#FF5722]">
-                <svg className="w-12 h-12" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/>
-                </svg>
-              </div>
-              <h2 className="text-4xl font-bold text-gray-900">WHAT'S HOT</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {whatsHot.map(product => (
-                <ProductCard 
-                  key={product.id} 
-                  product={product}
-                  creatorName={getCreatorName(product.creator_id)}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Top Creators Section */}
-          <div className="max-w-7xl mx-auto px-8 py-12">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="text-[#FF5722]">
-                <svg className="w-12 h-12" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M7.5 11.5C7.5 9.01 9.51 7 12 7s4.5 2.01 4.5 4.5S14.49 16 12 16s-4.5-2.01-4.5-4.5zM0 20v-1.5C0 16.01 1.99 14 4.45 14h.3c.14 0 .28.01.42.02.43.07.84.27 1.2.59.72.64 1.67 1.03 2.71 1.03h5.84c1.04 0 1.99-.39 2.71-1.03.36-.32.77-.52 1.2-.59.14-.01.28-.02.42-.02h.3c2.46 0 4.45 2.01 4.45 4.5V20H0z"/>
-                </svg>
-              </div>
-              <h2 className="text-4xl font-bold text-gray-900">TOP CREATORS</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {topCreators.map(creator => (
-                <CreatorCard key={creator.id} creator={creator} />
-              ))}
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="max-w-7xl mx-auto px-8 py-12">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {filteredProducts.map(product => (
-              <ProductCard 
-                key={product.id} 
-                product={product}
-                creatorName={getCreatorName(product.creator_id)}
-              />
+        {/* Category + filter bar */}
+        <div className="bg-[#1E2430] border border-slate-700 rounded-lg p-4 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <CategoryTab value="all" label="All" current={selectedCategory} onClick={setSelectedCategory} />
+            {TAVERN_CATEGORIES.map((c) => (
+              <CategoryTab key={c.value} value={c.value} label={c.label} current={selectedCategory} onClick={setSelectedCategory} icon={c.icon} />
             ))}
           </div>
-          {filteredProducts.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-500">No products found</p>
+
+          <div className="flex flex-col md:flex-row gap-2">
+            <div className="flex-1 relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search items…"
+                className="pl-9 bg-[#050816] border-slate-700 text-white"
+              />
             </div>
-          )}
+            <Select value={sort} onValueChange={setSort}>
+              <SelectTrigger className="w-full md:w-64 bg-[#050816] border-slate-700 text-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-      )}
+
+        {/* Grid */}
+        {items.length === 0 ? (
+          <div className="text-center py-20 text-slate-500 bg-[#1E2430]/40 rounded-lg border border-slate-800">
+            <Store className="w-10 h-10 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No items match this filter yet.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {items.map((item) => (
+              <TavernItemCard key={item.id} {...cardProps(item)} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <BuySpiceDialog open={spiceOpen} onClose={() => setSpiceOpen(false)} />
+      <CreatorUploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} />
+      <TavernItemDetailDialog
+        item={detailItem}
+        open={!!detailItem}
+        onClose={() => setDetailItem(null)}
+        creatorName={detailItem ? creatorName(detailItem.creator_id) : ""}
+      />
     </div>
+  );
+}
+
+function CategoryTab({ value, label, current, onClick, icon: Icon }) {
+  const active = value === current;
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(value)}
+      className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border transition-colors ${
+        active
+          ? "bg-amber-500 text-amber-950 border-amber-500"
+          : "bg-[#050816] text-slate-300 border-slate-700 hover:border-slate-500"
+      }`}
+    >
+      {Icon && <Icon className="w-3.5 h-3.5" />}
+      {label}
+    </button>
+  );
+}
+
+function FeaturedRow({ title, subtitle, icon: Icon, accent, items, cardProps }) {
+  const accentClass = accent === "orange"
+    ? "text-orange-400"
+    : "text-amber-400";
+  return (
+    <section>
+      <div className="flex items-center gap-3 mb-3">
+        <Icon className={`w-6 h-6 ${accentClass}`} />
+        <div>
+          <h2 className="text-xl font-black text-white">{title}</h2>
+          <p className="text-xs text-slate-400">{subtitle}</p>
+        </div>
+      </div>
+      <div className="flex overflow-x-auto gap-4 pb-2 -mx-2 px-2 snap-x">
+        {items.map((item) => (
+          <div key={item.id} className="w-60 flex-shrink-0 snap-start">
+            <TavernItemCard {...cardProps(item)} />
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
