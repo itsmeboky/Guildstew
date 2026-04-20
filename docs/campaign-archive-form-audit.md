@@ -60,3 +60,54 @@ Plan per subsequent step
           campaign_class_features with is_system=false and
           the right campaign_id, and monster actions reach
           monsters.stats.actions so combat picks them up.
+
+Step 6 verification
+-------------------
+
+All four archive pages now save through a mutation that writes
+to the canonical campaign table with the required provenance
+stamps.
+
+  CampaignMonsters (NewMonsterDialog)
+    base44.entities.Monster.create(payload) — where payload
+    carries { name, description, image_url, stats: {…full
+    stat block…} }. The wrapping useMutation attaches
+    campaign_id, is_system=false, created_by, created_at.
+    Combat's NPC-turn loop reads monster.stats.actions and
+    lights up the action bar with each authored action's
+    name / attack_bonus / damage / damage_type / reach —
+    unchanged from how SRD monsters flow.
+
+  CampaignItems (EditItemDialog)
+    base44.entities.CampaignItem.create(data) wrapping sets
+    campaign_id + is_system=false. Full draft (including
+    type-conditional fields: weapon damage / properties,
+    armor AC / stealth flag, potion effect / healing dice,
+    wondrous attunement / charges / recharge) lands on the
+    row; downstream readers branch on the type field and
+    pick up the right sub-block.
+
+  CampaignSpells (NewSpellDialog)
+    supabase.from("spells").insert({…}) with
+    campaign_id + is_system=false + source="homebrew" +
+    concentration + ritual booleans + the canonical SRD
+    column shape (level, school, casting_time, range,
+    components string, duration, description, higher_level,
+    classes[]). Invalidates the homebrewSpells cache +
+    sets the new row as selected detail.
+
+  CampaignAbilities (NewFeatureDialog)
+    supabase.from("campaign_class_features").insert({…}) with
+    campaign_id + is_system=false + type + class_name (only
+    when type === "Class Feature") + level + properties
+    (mechanical blob: effect_type, cost, uses, recharge,
+    damage_dice+type or healing_dice). Invalidates the
+    homebrewClassFeatures cache + sets the new row as the
+    selected detail.
+
+Every create path sets is_system=false so the row is never
+confused for a seeded SRD entry. The supabase `.select()
+.single()` return on the spell + feature insert callbacks
+means the new row immediately becomes the active detail
+without a second round-trip. Nothing in the save path should
+ever see is_system=true for an in-archive authored entry.
