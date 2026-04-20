@@ -86,22 +86,35 @@ export default function Home() {
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/30 to-white" />
       </div>
 
-      <div className="relative z-10 p-8 pt-24">
+      {/* pt-44 (~176px) keeps the hero row clear of the nav and
+          gives Ladle the vertical runway she needs above the
+          hero box — the content cards below inherit that breathing
+          room for free without their own margin. */}
+      <div className="relative z-10 p-8 pt-64">
         <div className="max-w-[1600px] mx-auto">
           {/* Top Row */}
-          <div className="grid grid-cols-12 gap-6 mb-6">
-            {/* Character Space */}
+          <div className="grid grid-cols-12 gap-6 mb-6 relative">
+            {/* Character Space — Karliah, peeking in from the left.
+                Swapped from the static PNG to the animated GIF
+                (same bucket / same base filename, just .gif). Shifted
+                down slightly so the left-hand peek doesn't crowd
+                the hero row. */}
             <div className="col-span-2 relative">
-              <img 
-                src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/ffd089d34_KarliahNewArt.png"
-                alt="Character"
+              <img
+                src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/ffd089d34_KarliahNewArt.gif"
+                alt="Karliah mascot"
                 className="absolute h-[535px] w-auto object-contain z-10 pointer-events-none"
-                style={{ top: '-55px', right: '-85px' }}
+                style={{ top: '-40px', right: '-85px' }}
               />
             </div>
 
-            {/* Hero Slider */}
-            <div className="col-span-7 relative rounded-3xl overflow-hidden h-[420px]">
+            {/* Hero Slider — z-20 so the Ladle mascot (z-0 below)
+                can sit behind its top edge and look perched. Solid
+                #FF5722 base matches the orange used by the content
+                cards below; the slide images layer on top, and any
+                uncovered pixel shows the theme orange instead of
+                leaking Ladle through from behind. */}
+            <div className="col-span-7 relative rounded-3xl overflow-hidden h-[420px] z-20 bg-[#FF5722]">
               {HERO_SLIDES.map((slide, index) => (
                 <div
                   key={slide.id}
@@ -222,9 +235,26 @@ export default function Home() {
                 </div>
               </div>
             </div>
+
+            {/* Ladle mascot — perched on the hero box's top-right
+                corner. Lives at the grid row level (not inside the
+                hero box — that has overflow-hidden) with a lower
+                z-index than the box, so her bottom is visually
+                clipped by the box top edge to sell the "perched"
+                illusion. Hidden on small screens to keep the
+                mobile layout uncluttered. */}
+            <img
+              src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/ladleanimation1.gif"
+              alt="Ladle mascot"
+              className="hidden md:block absolute w-[320px] h-auto pointer-events-none z-0"
+              style={{ right: 'calc(25% + 40px)', top: '-205px' }}
+            />
           </div>
 
-          {/* Bottom Row */}
+          {/* Bottom Row — sits immediately below the hero row with
+              normal spacing; the mascots get their breathing room
+              from the hero section's top padding, not from a gap
+              between the hero and these cards. */}
           <div className="grid grid-cols-12 gap-6 mb-8">
             {/* Newest Game Pack */}
             <div className="col-span-2 rounded-3xl p-5 h-[320px] flex flex-col relative overflow-hidden">
@@ -313,16 +343,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Running Character - Centered */}
-          <div className="flex justify-center">
-            <img 
-              src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/a7206e759_LadleRunning.png"
-              alt="Running Character"
-              loading="lazy"
-              className="h-[500px] w-auto object-contain"
-              style={{ filter: 'drop-shadow(0 10px 15px rgba(0, 0, 0, 0.3))' }}
-            />
-          </div>
         </div>
       </div>
     </div>

@@ -1,4 +1,8 @@
 import { supabase } from "@/api/supabaseClient";
+import {
+  installContentPack,
+  uninstallContentPack,
+} from "@/lib/breweryContentPack";
 
 /**
  * Brewery mod engine — Part 1 foundation.
@@ -161,6 +165,24 @@ export async function installMod(campaignId, modId, userId) {
   });
   if (insErr) return { success: false, reason: insErr.message };
 
+  // Content packs ship pre-bundled monsters / items / spells /
+  // class features that get copied into the campaign's homebrew
+  // tables, tagged with the pack's mod id so uninstall can pull
+  // them cleanly.
+  if (mod.mod_type === "content_pack") {
+    const result = await installContentPack(campaignId, modId, mod.metadata);
+    if (!result.success) {
+      // Roll back the install row so the mod doesn't appear
+      // half-installed if the content copy failed.
+      await supabase
+        .from("campaign_installed_mods")
+        .delete()
+        .eq("campaign_id", campaignId)
+        .eq("mod_id", modId);
+      return { success: false, reason: `Content pack install failed: ${result.reason}` };
+    }
+  }
+
   invalidateModCache(campaignId);
   return { success: true };
 }
@@ -213,6 +235,17 @@ export async function uninstallMod(campaignId, modId) {
       message: `${affected.length} character(s) depend on this mod: ${affected.map((c) => c.name).filter(Boolean).join(", ")}. Uninstalling may break them.`,
     };
   }
+  // Pull the install row first so we can detect content packs
+  // and walk back any inserted campaign content.
+  const { data: installRow } = await supabase
+    .from("campaign_installed_mods")
+    .select("pinned_metadata")
+    .eq("campaign_id", campaignId)
+    .eq("mod_id", modId)
+    .maybeSingle();
+  if (installRow?.pinned_metadata?.mod_type === "content_pack") {
+    await uninstallContentPack(campaignId, modId);
+  }
   const { error } = await supabase
     .from("campaign_installed_mods")
     .delete()
@@ -224,6 +257,15 @@ export async function uninstallMod(campaignId, modId) {
 }
 
 export async function forceUninstallMod(campaignId, modId) {
+  const { data: installRow } = await supabase
+    .from("campaign_installed_mods")
+    .select("pinned_metadata")
+    .eq("campaign_id", campaignId)
+    .eq("mod_id", modId)
+    .maybeSingle();
+  if (installRow?.pinned_metadata?.mod_type === "content_pack") {
+    await uninstallContentPack(campaignId, modId);
+  }
   await supabase
     .from("campaign_installed_mods")
     .delete()
@@ -332,4 +374,35 @@ export async function validateInstalledMods(campaignId) {
     }
   }
   return report;
+}
+
+/**
+ * Resolve the display label for a renameable game term against the
+ * campaign's installed reskin mods. Walks every install row whose
+ * pinned_metadata.mod_type is 'reskin' in priority order; the first
+ * mod that has a rename for the requested (category, key) wins.
+ *
+ * Falls through to the source key when nothing matches, so callers
+ * can use this as a drop-in label resolver everywhere a renameable
+ * term renders.
+ *
+ * Categories:
+ *   'ability'       — abilities[key].name        (key is "str" / "dex" / …)
+ *   'abbreviation'  — abilities[key].abbreviation
+ *   'term'          — terms[key]                 (key is original label, e.g. "Hit Points")
+ *   'damage_type'   — damage_types[key]          (key is lowercase damage type)
+ *   'condition'     — conditions[key]            (key is condition name)
+ */
+export function getDisplayName(campaignMods, category, key) {
+  if (!Array.isArray(campaignMods) || campaignMods.length === 0) return key;
+  for (const mod of campaignMods) {
+    if (mod?.pinned_metadata?.mod_type !== "reskin") continue;
+    const r = mod.pinned_metadata.renames || {};
+    if (category === "ability" && r.abilities?.[key]?.name)         return r.abilities[key].name;
+    if (category === "abbreviation" && r.abilities?.[key]?.abbreviation) return r.abilities[key].abbreviation;
+    if (category === "term" && r.terms?.[key])                       return r.terms[key];
+    if (category === "damage_type" && r.damage_types?.[key])         return r.damage_types[key];
+    if (category === "condition" && r.conditions?.[key])             return r.conditions[key];
+  }
+  return key;
 }

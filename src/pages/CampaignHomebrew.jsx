@@ -58,11 +58,16 @@ export default function CampaignHomebrew() {
     saveRulesMutation.mutate(updatedRules);
   };
 
+  // Rule types are scoped to campaign-level toggles only — banning
+  // specific spells or classes from the campaign. Free-text "Custom
+  // Rule" entries and ability-score generation tweaks were removed:
+  // a free-text rule with no mechanical hook didn't pull its weight,
+  // and ability-score generation overrides belong on a brewery
+  // mod where they can be shared / version-pinned. Anything more
+  // structured (full house rules) lives on HouseRulesPanel.
   const ruleTypes = [
     { value: "spell_restriction", label: "Spell Restriction" },
-    { value: "ability_modifier", label: "Ability Score Modifier" },
     { value: "class_restriction", label: "Class Restriction" },
-    { value: "custom_rule", label: "Custom Rule" }
   ];
 
   return (
@@ -74,28 +79,6 @@ export default function CampaignHomebrew() {
             <Plus className="w-5 h-5 mr-2" />
             Add Rule
           </Button>
-        </div>
-
-        {/* Deprecation banner — custom rules are moving to The Brewery
-            so mods are portable, shareable, and version-pinned. Spell
-            and class restrictions now live in Campaign Settings →
-            House Rules. */}
-        <div className="bg-rose-500/10 border-2 border-rose-500/50 rounded-xl p-4 mb-8">
-          <div className="flex gap-3">
-            <AlertCircle className="w-5 h-5 text-rose-300 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="text-rose-100 font-black uppercase tracking-wider text-sm">
-                Deprecated — moving to The Brewery
-              </h3>
-              <p className="text-rose-100/80 text-sm mt-1 max-w-prose">
-                Custom rules are moving to <strong>The Brewery</strong>. Create your rules as
-                Brewery mods for better compatibility, versioning, and sharing. Spell and class
-                banning now lives in <strong>Campaign Settings → House Rules</strong>. Ability-
-                score modifiers should be authored as Brewery <em>variant_rule</em> mods.
-                This page will be removed in a future update.
-              </p>
-            </div>
-          </div>
         </div>
 
         <div className="bg-yellow-400/10 border border-yellow-400/30 rounded-xl p-4 mb-8">
