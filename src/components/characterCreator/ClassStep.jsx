@@ -21,6 +21,8 @@ import { getModdedClasses } from '@/lib/modEngine';
 import {
   applyBreweryClassBaseline,
   clearBreweryClassMarkers,
+  getBreweryClassFeaturesAtLevel,
+  getBreweryClassAsiLevels,
 } from '@/lib/breweryClassApply';
 import { Slider } from "@/components/ui/slider";
 import { motion } from "framer-motion";
@@ -852,6 +854,15 @@ function BreweryClassPickers({ characterData, updateCharacterData }) {
   const cls = characterData._brewery_class;
   if (!cls) return null;
 
+  const lvl = Number(characterData.level) || 1;
+  const earnedFeatures = getBreweryClassFeaturesAtLevel(
+    cls,
+    lvl,
+    characterData._brewery_class_subclass,
+  );
+  const asiLevels = getBreweryClassAsiLevels(cls);
+  const asiReached = asiLevels.filter((l) => l <= lvl);
+
   const skillCfg = cls.skill_proficiencies || { choose: 0, from: [] };
   const choose = Number(skillCfg.choose) || 0;
   const fromRaw = Array.isArray(skillCfg.from) ? skillCfg.from : [];
@@ -928,6 +939,41 @@ function BreweryClassPickers({ characterData, updateCharacterData }) {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {earnedFeatures.length > 0 && (
+        <div className="bg-[#0b1220] border border-[#37F2D1]/30 rounded-lg p-3">
+          <p className="text-xs text-white/70 font-semibold uppercase tracking-wide mb-2">
+            Features Earned by Level {lvl}
+          </p>
+          <div className="space-y-1">
+            {earnedFeatures.map((f, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <span className="text-[10px] text-[#37F2D1] font-bold w-8 shrink-0">L{f.level}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold text-white">{f.name}</span>
+                    {f.is_asi && (
+                      <span className="text-[9px] bg-amber-500 text-black rounded px-1 font-bold">ASI</span>
+                    )}
+                    {f.is_subclass_choice && (
+                      <span className="text-[9px] bg-purple-500 text-white rounded px-1 font-bold">SUBCLASS</span>
+                    )}
+                  </div>
+                  {f.description && (
+                    <p className="text-[10px] text-white/60 line-clamp-2">{f.description}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          {asiReached.length > 0 && (
+            <p className="mt-2 pt-2 border-t border-slate-700 text-[10px] text-amber-300">
+              ASI pending at level{asiReached.length > 1 ? "s" : ""}: {asiReached.join(", ")} —
+              choose +2 to one score or +1 to two scores (or a feat, DM permitting).
+            </p>
+          )}
         </div>
       )}
 

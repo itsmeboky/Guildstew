@@ -5,6 +5,7 @@ import {
   getSpeed,
   calculateAbilityModifier,
 } from "@/components/dnd5e/characterCalculations";
+import { getBreweryClassFeaturesAtLevel } from "@/lib/breweryClassApply";
 
 /**
  * Build a fully-derived "stats" object from CharacterCreator's characterData.
@@ -117,6 +118,15 @@ export function buildStatsFromCharacterData(characterData) {
     features: [
       ...((characterData.features) || []),
       ...((characterData.race_features) || []),
+      // Brewery class features for this character's current level,
+      // plus any subclass features the player picked. Origin is
+      // tagged so the character sheet can group them separately
+      // from SRD class features.
+      ...getBreweryClassFeaturesAtLevel(
+        characterData._brewery_class,
+        level,
+        characterData._brewery_class_subclass,
+      ),
     ],
     feature_choices: characterData.feature_choices || {},
     multiclasses: characterData.multiclasses || [],

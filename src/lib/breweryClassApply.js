@@ -153,6 +153,69 @@ export function getBreweryClassSpellsKnown(breweryClass, level) {
 }
 
 /**
+ * Produce the feature list a character should have from the brewery
+ * class's features[] array, filtered to features the character has
+ * already reached. Includes class-level features (base class) and
+ * any subclass features when a subclass is selected. Each result
+ * carries:
+ *   name, description, level, source, is_asi, mechanical, origin
+ *
+ * Subclass features are pulled from
+ *   breweryClass.subclass.options[].features
+ * when `selectedSubraceName` (sic — actually subclass name) matches
+ * one of the authored options. If no match, only base features come
+ * through.
+ */
+export function getBreweryClassFeaturesAtLevel(breweryClass, level, selectedSubclassName = null) {
+  if (!breweryClass) return [];
+  const lvl = Math.max(1, Math.min(20, Number(level) || 1));
+  const baseFeatures = (Array.isArray(breweryClass.features) ? breweryClass.features : [])
+    .filter((f) => Number(f?.level) <= lvl)
+    .map((f) => ({
+      name: f?.name || (f?.is_asi ? "Ability Score Improvement" : "Class Feature"),
+      description: f?.description || "",
+      level: Number(f?.level) || 1,
+      source: breweryClass.name,
+      is_asi: !!f?.is_asi,
+      is_subclass_choice: !!f?.is_subclass_choice,
+      mechanical: f?.mechanical || {},
+      origin: "class_mod",
+    }));
+
+  if (!selectedSubclassName || !breweryClass.subclass) return baseFeatures;
+  const options = Array.isArray(breweryClass.subclass.options) ? breweryClass.subclass.options : [];
+  const chosen = options.find((o) => o?.name === selectedSubclassName);
+  if (!chosen) return baseFeatures;
+  const subclassFeatures = (Array.isArray(chosen.features) ? chosen.features : [])
+    .filter((f) => Number(f?.level) <= lvl)
+    .map((f) => ({
+      name: f?.name || "Subclass Feature",
+      description: f?.description || "",
+      level: Number(f?.level) || 1,
+      source: `${breweryClass.name} — ${chosen.name}`,
+      is_asi: !!f?.is_asi,
+      mechanical: f?.mechanical || {},
+      origin: "subclass_mod",
+    }));
+  return [...baseFeatures, ...subclassFeatures];
+}
+
+/**
+ * Levels at which the class grants an ASI. Pulled from the saved
+ * feature list where any feature with is_asi=true counts. The class
+ * creator seeds these at STANDARD_ASI_LEVELS, but authors can add /
+ * move / remove them — this helper reflects whatever they wrote.
+ */
+export function getBreweryClassAsiLevels(breweryClass) {
+  if (!breweryClass) return [];
+  const levels = new Set();
+  for (const f of (breweryClass.features || [])) {
+    if (f?.is_asi && Number(f?.level) > 0) levels.add(Number(f.level));
+  }
+  return Array.from(levels).sort((a, b) => a - b);
+}
+
+/**
  * Given a class schema + the player's chosen starting_equipment
  * picks, produce a flat item list the creator/save path can push
  * onto characterData.inventory.
