@@ -88,6 +88,14 @@ export default function CampaignWorldLore({ embedded = false, campaignId: campai
     enabled: !!campaignId,
   });
 
+  // Guild Hall category is gated by a campaign-level opt-in. The
+  // column defaults to true on the DB side; we also treat undefined
+  // as enabled so older campaigns missing the column keep the tab.
+  const guildHallEnabled = campaign?.guild_hall_enabled !== false;
+  const visibleCategories = guildHallEnabled
+    ? CATEGORIES
+    : CATEGORIES.filter((c) => c.key !== "guild_hall");
+
   const isGM = !!campaign && (
     campaign.game_master_id === user?.id
     || (Array.isArray(campaign.co_dm_ids) && campaign.co_dm_ids.includes(user?.id))
@@ -192,7 +200,7 @@ export default function CampaignWorldLore({ embedded = false, campaignId: campai
           >
             <Home className="w-3.5 h-3.5" /> Overview
           </button>
-          {CATEGORIES.map((c) => {
+          {visibleCategories.map((c) => {
             const Icon = c.icon;
             const active = category === c.key;
             return (

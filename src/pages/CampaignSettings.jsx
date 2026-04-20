@@ -13,6 +13,7 @@ import BreweryModsPanel from "@/components/campaigns/BreweryModsPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import ConsentChecklist from "@/components/consent/ConsentChecklist";
 import {
@@ -859,6 +860,26 @@ export default function CampaignSettings() {
 
           {(campaign.system === 'D&D 5e' || campaign.system === 'Dungeons and Dragons 5e') && (
             <TabsContent value="houseRules" className="space-y-6">
+              {/* Guild Hall opt-in. Column `campaigns.guild_hall_enabled`
+                  defaults to true at the DB level (and undefined is
+                  treated as enabled client-side), so existing
+                  campaigns keep the tab. Turning this off hides the
+                  Guild Hall category from World Lore entirely. */}
+              <div className="flex items-center justify-between p-4 bg-[#1a1f2e] rounded-lg border border-slate-700/50">
+                <div>
+                  <h4 className="text-white font-semibold">Guild Hall &amp; Training</h4>
+                  <p className="text-sm text-slate-400">
+                    Allow players to build a Guild Hall and use downtime training mechanics.
+                  </p>
+                </div>
+                <Switch
+                  checked={campaign.guild_hall_enabled !== false}
+                  disabled={!canModifySettings(campaign, user?.id)}
+                  onCheckedChange={(checked) =>
+                    updateCampaignMutation.mutate({ guild_hall_enabled: !!checked })
+                  }
+                />
+              </div>
               <HouseRulesPanel
                 campaign={campaign}
                 campaignId={campaignId}
