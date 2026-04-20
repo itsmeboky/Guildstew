@@ -89,19 +89,24 @@ export default function Home() {
       <div className="relative z-10 p-8 pt-24">
         <div className="max-w-[1600px] mx-auto">
           {/* Top Row */}
-          <div className="grid grid-cols-12 gap-6 mb-6">
-            {/* Character Space */}
+          <div className="grid grid-cols-12 gap-6 mb-6 relative">
+            {/* Character Space — Karliah, peeking in from the left.
+                Swapped from the static PNG to the animated GIF
+                (same bucket / same base filename, just .gif). Shifted
+                down slightly so the left-hand peek doesn't crowd
+                the hero row. */}
             <div className="col-span-2 relative">
-              <img 
-                src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/ffd089d34_KarliahNewArt.png"
-                alt="Character"
+              <img
+                src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/ffd089d34_KarliahNewArt.gif"
+                alt="Karliah mascot"
                 className="absolute h-[535px] w-auto object-contain z-10 pointer-events-none"
-                style={{ top: '-55px', right: '-85px' }}
+                style={{ top: '-20px', right: '-85px' }}
               />
             </div>
 
-            {/* Hero Slider */}
-            <div className="col-span-7 relative rounded-3xl overflow-hidden h-[420px]">
+            {/* Hero Slider — z-20 so the Ladle mascot (z-0 below)
+                can sit behind its top edge and look perched. */}
+            <div className="col-span-7 relative rounded-3xl overflow-hidden h-[420px] z-20">
               {HERO_SLIDES.map((slide, index) => (
                 <div
                   key={slide.id}
@@ -222,10 +227,27 @@ export default function Home() {
                 </div>
               </div>
             </div>
+
+            {/* Ladle mascot — perched on the hero box's top-right
+                corner. Lives at the grid row level (not inside the
+                hero box — that has overflow-hidden) with a lower
+                z-index than the box, so her bottom is visually
+                clipped by the box top edge to sell the "perched"
+                illusion. Hidden on small screens to keep the
+                mobile layout uncluttered. */}
+            <img
+              src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/ladleanimation1.gif"
+              alt="Ladle mascot"
+              className="hidden md:block absolute w-[240px] h-auto pointer-events-none z-0"
+              style={{ right: 'calc(25% - 40px)', top: '-140px' }}
+            />
           </div>
 
-          {/* Bottom Row */}
-          <div className="grid grid-cols-12 gap-6 mb-8">
+          {/* Bottom Row — pushed down to give the hero area room
+              for the Karliah + Ladle mascot art to breathe. On
+              small screens where the mascots are hidden, the gap
+              shrinks to avoid a giant hole. */}
+          <div className="grid grid-cols-12 gap-6 mb-8 mt-24 md:mt-[500px]">
             {/* Newest Game Pack */}
             <div className="col-span-2 rounded-3xl p-5 h-[320px] flex flex-col relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-b from-[#FF5722]/60 to-[#FF5722]" />
@@ -313,16 +335,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Running Character - Centered */}
-          <div className="flex justify-center">
-            <img 
-              src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/a7206e759_LadleRunning.png"
-              alt="Running Character"
-              loading="lazy"
-              className="h-[500px] w-auto object-contain"
-              style={{ filter: 'drop-shadow(0 10px 15px rgba(0, 0, 0, 0.3))' }}
-            />
-          </div>
         </div>
       </div>
     </div>
