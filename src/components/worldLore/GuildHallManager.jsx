@@ -11,6 +11,7 @@ import {
   UPGRADE_CATEGORIES,
   upgradesForCategory,
   isUpgradeAvailable,
+  COMMON_ROOM_UPGRADE_ID,
 } from "@/config/guildHallUpgrades";
 
 export default function GuildHallManager({ campaign, guildHall, options, canEdit, onUpdate, onRefresh }) {
@@ -357,10 +358,26 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
     );
   }
 
-  // Step 3+: upgrades now come from the config in src/config/guildHallUpgrades.js
-  // — 8 categories × 3 tiers, each card either OWNED / available / locked
-  // by prerequisite. Purchase logic is wired in step 4.
+  // Step 3+: upgrades come from the config in
+  // src/config/guildHallUpgrades.js — 8 categories × 3 tiers, each
+  // card either OWNED / available / locked by prerequisite.
   const purchasedUpgrades = guildHall?.upgrades || [];
+  const gpAvailable = Number(guildHall?.coffers?.gp) || 0;
+
+  // Seed the free Common Room exactly once per hall so the party
+  // always starts with "long rest allowed" at their HQ. Skips when
+  // the hall's already got it or there's no coffers shape yet (still
+  // on deed-purchase step).
+  React.useEffect(() => {
+    if (!guildHall?.id) return;
+    if (purchasedUpgrades.includes(COMMON_ROOM_UPGRADE_ID)) return;
+    const seeded = [...purchasedUpgrades, COMMON_ROOM_UPGRADE_ID];
+    base44.entities.GuildHall.update(guildHall.id, {
+      upgrades: seeded,
+      upgrade_level: seeded.length,
+    }).then(() => onRefresh?.());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guildHall?.id]);
 
   const handlePurchaseUpgrade = async (upgradeId) => {
     const upgrade = GUILD_HALL_UPGRADES[upgradeId];
@@ -368,13 +385,28 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
     if (purchasedUpgrades.includes(upgradeId)) return;
     if (!isUpgradeAvailable(upgrade, purchasedUpgrades)) return;
 
+    const cost = Number(upgrade.cost) || 0;
+    if (cost > gpAvailable) {
+      toast.error("Not enough gold in guild coffers.");
+      return;
+    }
+
     const newUpgrades = [...purchasedUpgrades, upgradeId];
-    await base44.entities.GuildHall.update(guildHall.id, {
-      upgrades: newUpgrades,
-      upgrade_level: newUpgrades.length,
-    });
-    onRefresh();
-    toast.success(`Purchased ${upgrade.name}!`);
+    const newCoffers = {
+      ...(guildHall.coffers || {}),
+      gp: gpAvailable - cost,
+    };
+    try {
+      await base44.entities.GuildHall.update(guildHall.id, {
+        upgrades: newUpgrades,
+        upgrade_level: newUpgrades.length,
+        coffers: newCoffers,
+      });
+      onRefresh();
+      toast.success(`Purchased ${upgrade.name}!`);
+    } catch (err) {
+      toast.error(err?.message || "Failed to purchase upgrade.");
+    }
   };
 
   return (
