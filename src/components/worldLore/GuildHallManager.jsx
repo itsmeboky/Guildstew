@@ -2,10 +2,16 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Home, Upload, Sparkles, Loader2, ChevronRight, Check, Coins } from "lucide-react";
+import { Home, Upload, Sparkles, Loader2, ChevronRight, Check, Coins, Lock } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import {
+  GUILD_HALL_UPGRADES,
+  UPGRADE_CATEGORIES,
+  upgradesForCategory,
+  isUpgradeAvailable,
+} from "@/config/guildHallUpgrades";
 
 export default function GuildHallManager({ campaign, guildHall, options, canEdit, onUpdate, onRefresh }) {
   const [deedCost, setDeedCost] = useState(guildHall?.deed_cost || 0);
@@ -351,27 +357,24 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
     );
   }
 
-  // Step 3: Manage Upgrades
-  const availableUpgrades = [
-    { id: "finding_work", name: "Job Board", description: "Access to guild contracts and quests", cost: 500 },
-    { id: "training", name: "Training Facilities", description: "Learn new skills from guild masters", cost: 1000 },
-    { id: "resources", name: "Supply Access", description: "Discounted equipment and supplies", cost: 750 },
-    { id: "networking", name: "Common Room", description: "Network with other adventurers", cost: 300 },
-    { id: "library", name: "Guild Library", description: "Research and lore archives", cost: 1200 }
-  ];
-
+  // Step 3+: upgrades now come from the config in src/config/guildHallUpgrades.js
+  // — 8 categories × 3 tiers, each card either OWNED / available / locked
+  // by prerequisite. Purchase logic is wired in step 4.
   const purchasedUpgrades = guildHall?.upgrades || [];
 
-  const handlePurchaseUpgrade = async (upgradeId, cost) => {
+  const handlePurchaseUpgrade = async (upgradeId) => {
+    const upgrade = GUILD_HALL_UPGRADES[upgradeId];
+    if (!upgrade) return;
     if (purchasedUpgrades.includes(upgradeId)) return;
-    
+    if (!isUpgradeAvailable(upgrade, purchasedUpgrades)) return;
+
     const newUpgrades = [...purchasedUpgrades, upgradeId];
-    await base44.entities.GuildHall.update(guildHall.id, { 
+    await base44.entities.GuildHall.update(guildHall.id, {
       upgrades: newUpgrades,
-      upgrade_level: newUpgrades.length
+      upgrade_level: newUpgrades.length,
     });
     onRefresh();
-    toast.success("Upgrade purchased!");
+    toast.success(`Purchased ${upgrade.name}!`);
   };
 
   return (
@@ -450,45 +453,92 @@ export default function GuildHallManager({ campaign, guildHall, options, canEdit
         </div>
       </div>
 
-      {/* Upgrades */}
-      <div className="bg-[#0f1219]/90 backdrop-blur-sm rounded-xl p-6 border border-cyan-400/30">
-        <h3 className="text-2xl font-bold text-white mb-6">Guild Hall Upgrades</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {availableUpgrades.map(upgrade => {
-            const isPurchased = purchasedUpgrades.includes(upgrade.id);
-            return (
-              <div
-                key={upgrade.id}
-                className={`bg-[#1a1f2e] rounded-lg p-4 border ${
-                  isPurchased ? 'border-green-500' : 'border-slate-700'
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1">
-                    <h4 className="text-lg font-bold text-white">{upgrade.name}</h4>
-                    <p className="text-sm text-gray-400 mt-1">{upgrade.description}</p>
-                  </div>
-                  {isPurchased && <Check className="w-5 h-5 text-green-500" />}
+      {/* Upgrades — 8 categories × 3 tiers from the config. Each
+          category renders a labeled header row and three cards in a
+          horizontal progression. A card is:
+            - owned     → teal border + OWNED badge, no buy button
+            - available → amber border + "Buy — N gp" button
+                          (not owned, prerequisite met or none)
+            - locked    → greyed + lock icon + "Requires: X"
+          Purchase logic hangs on the Buy button; step 4 ties it to
+          the gold check in coffers. */}
+      <div className="bg-[#0f1219]/90 backdrop-blur-sm rounded-xl p-6 border border-cyan-400/30 space-y-6">
+        <h3 className="text-2xl font-bold text-white">Guild Hall Upgrades</h3>
+        {UPGRADE_CATEGORIES.map((cat) => {
+          const tiers = upgradesForCategory(cat.key);
+          return (
+            <div key={cat.key} className="space-y-3">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl" aria-hidden="true">{cat.icon}</span>
+                <div>
+                  <h4 className="text-lg font-bold text-white">{cat.label}</h4>
+                  <p className="text-xs text-slate-400">{cat.description}</p>
                 </div>
-                
-
-
-                {!isPurchased && (
-                  <div className="flex items-center justify-between mt-3">
-                    <span className="text-[#37F2D1] font-bold">{upgrade.cost} GP</span>
-                    <Button
-                      onClick={() => handlePurchaseUpgrade(upgrade.id, upgrade.cost)}
-                      size="sm"
-                      className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430]"
-                    >
-                      Purchase
-                    </Button>
-                  </div>
-                )}
               </div>
-            );
-          })}
-        </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {tiers.map((upgrade) => {
+                  const owned = purchasedUpgrades.includes(upgrade.id);
+                  const available = !owned && isUpgradeAvailable(upgrade, purchasedUpgrades);
+                  const locked = !owned && !available;
+                  const prereq = upgrade.prerequisite ? GUILD_HALL_UPGRADES[upgrade.prerequisite] : null;
+
+                  const borderClass = owned
+                    ? "border-[#37F2D1]/50"
+                    : available
+                      ? "border-amber-600/50"
+                      : "border-slate-700/50";
+                  const opacityClass = locked ? "opacity-50" : "";
+
+                  return (
+                    <div
+                      key={upgrade.id}
+                      className={`bg-[#1a1f2e] rounded-lg p-4 border flex flex-col gap-2 ${borderClass} ${opacityClass}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">
+                          Tier {upgrade.tier}
+                        </span>
+                        {owned && (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1.5 py-0.5">
+                            <Check className="w-3 h-3" /> Owned
+                          </span>
+                        )}
+                        {locked && (
+                          <Lock className="w-3.5 h-3.5 text-slate-500" />
+                        )}
+                      </div>
+                      <h5 className="text-base font-bold text-white leading-tight">{upgrade.name}</h5>
+                      <p className="text-xs text-slate-400">{upgrade.description}</p>
+                      <p className="text-xs text-[#37F2D1] italic">{upgrade.effect}</p>
+                      {locked && prereq && (
+                        <p className="text-[10px] text-amber-300 mt-auto">
+                          Requires: {prereq.name}
+                        </p>
+                      )}
+                      {available && (
+                        <div className="mt-auto pt-2">
+                          <Button
+                            onClick={() => handlePurchaseUpgrade(upgrade.id)}
+                            disabled={!canEdit}
+                            size="sm"
+                            className="w-full bg-amber-600 hover:bg-amber-500 text-black font-bold"
+                          >
+                            Buy — {upgrade.cost} gp
+                          </Button>
+                        </div>
+                      )}
+                      {owned && upgrade.cost > 0 && (
+                        <div className="mt-auto pt-2 text-[10px] text-slate-500">
+                          Built for {upgrade.cost} gp
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
