@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import CreateCharacterDialog from "@/components/characters/CreateCharacterDialog";
 import { useDisplayName } from "@/hooks/useDisplayName";
+import { useSheetModifications } from "@/hooks/useSheetModifications";
+import SheetModSections from "@/components/homebrew/SheetModSections";
+import { supabase } from "@/api/supabaseClient";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
   AlertDialog,
@@ -144,6 +147,20 @@ export default function CharacterLibrary() {
   // Wounds, STR → Might, etc.) shows the renamed labels on the
   // sheet instead of the SRD defaults.
   const display = useDisplayName({ campaignId: selectedCharacter?.campaign_id });
+  const sheetMods = useSheetModifications(selectedCharacter?.campaign_id);
+  // Persist mod_data edits directly to the character row. The
+  // stats blob keeps a mod_data slot so custom-section state
+  // doesn't collide with core stats (hit points, attributes, etc).
+  const saveModData = async (nextModData) => {
+    if (!selectedCharacter?.id) return;
+    const nextStats = { ...(selectedCharacter.stats || {}), mod_data: nextModData };
+    const { error } = await supabase
+      .from("characters")
+      .update({ stats: nextStats })
+      .eq("id", selectedCharacter.id);
+    if (error) { console.warn("mod_data save failed:", error.message); return; }
+    setSelectedCharacter((c) => (c ? { ...c, stats: nextStats } : c));
+  };
   const [hoveredItem, setHoveredItem] = useState(null);
 
   const queryClient = useQueryClient();
@@ -455,6 +472,16 @@ export default function CharacterLibrary() {
           {/* Stats Tab */}
           {activeTab === 'stats' && (
             <div className="space-y-4">
+              {/* Brewery sheet-mod sections anchored at 'sidebar'
+                  — rendered at the top of the stats tab so they
+                  sit alongside the primary readouts. */}
+              <SheetModSections
+                sections={sheetMods.add_sections}
+                position="sidebar"
+                character={selectedCharacter}
+                onChange={saveModData}
+              />
+
               {/* Combat Stats Row */}
               <div className="grid grid-cols-3 gap-3">
                 <div
@@ -618,16 +645,47 @@ export default function CharacterLibrary() {
           )}
 
           {/* Skills Tab */}
-          {activeTab === 'skills' && (
+          {activeTab === 'skills' && (() => {
+            // Effective skill list for this character = SRD skills
+            // minus anything sheet_mods strip, plus anything they add.
+            // Added skills know their governing ability so the
+            // existing modifier path works without special-casing.
+            const removeSet = new Set(sheetMods.remove_skills || []);
+            const baseSkills = allSkills.filter((s) => !removeSet.has(s));
+            const addedSkills = (sheetMods.add_skills || [])
+              .map((s) => (typeof s === "string" ? { name: s } : s))
+              .filter((s) => s?.name);
+            const effectiveSkills = [
+              ...baseSkills.map((name) => ({ name, isBase: true })),
+              ...addedSkills.map((s) => ({
+                name: s.name,
+                ability: s.ability,
+                description: s.description,
+                isBase: false,
+              })),
+            ];
+            const renameMap = sheetMods.rename_skills || {};
+            return (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-2">
-                {allSkills.map((skillName) => {
+                {effectiveSkills.map(({ name: skillName, ability, description, isBase }) => {
                   const skills = selectedCharacter.skills || {};
                   const expertise = selectedCharacter.expertise || [];
                   const isProficient = skills[skillName];
                   const hasExpertise = expertise.includes(skillName);
+                  const labelOverride = renameMap[skillName];
+                  const displayLabel = labelOverride || skillName;
 
-                  const modifier = getSkillModifier(skillName);
+                  const modifier = isBase
+                    ? getSkillModifier(skillName)
+                    : (() => {
+                        // Added skills use their declared ability
+                        // score to compute the base check modifier.
+                        const abilKey = ability || "int";
+                        const score = selectedCharacter.attributes?.[abilKey] ?? 10;
+                        const mod = Math.floor((score - 10) / 2);
+                        return mod >= 0 ? `+${mod}` : `${mod}`;
+                      })();
 
                   return (
                     <div
@@ -656,14 +714,16 @@ export default function CharacterLibrary() {
 
                       <div className="flex-1 min-w-0">
                         <div className="font-semibold text-sm truncate text-white">
-                          {skillName}
+                          {displayLabel}
                         </div>
-                        <div className="text-xs text-gray-500">({skillAbilityMap[skillName]})</div>
+                        <div className="text-xs text-gray-500">
+                          ({isBase ? skillAbilityMap[skillName] : (ability || "int").toUpperCase()})
+                        </div>
                       </div>
 
                       {hoveredItem === `skill-${skillName}` && (
                         <div className="absolute z-50 right-0 top-full mt-2 bg-[#1E2430] text-white p-3 rounded-lg text-xs w-64 shadow-xl border-2 border-[#37F2D1]">
-                          <div className="font-bold mb-2 text-[#37F2D1]">{skillName}</div>
+                          <div className="font-bold mb-2 text-[#37F2D1]">{displayLabel}</div>
                           <div className="space-y-1">
                             <div>Base Ability: {skillAbilityMap[skillName]} ({calculateModifier(selectedCharacter.attributes?.[skillAbilityKeys[skillName]] || 10)})</div>
                             {isProficient && <div className="text-white">Proficiency: +{selectedCharacter.proficiency_bonus || 2}</div>}
@@ -676,6 +736,14 @@ export default function CharacterLibrary() {
                   );
                 })}
               </div>
+
+              {/* Brewery sheet-mod sections anchored at 'after_skills'. */}
+              <SheetModSections
+                sections={sheetMods.add_sections}
+                position="after_skills"
+                character={selectedCharacter}
+                onChange={saveModData}
+              />
 
               {/* Active training — only shown when the character
                   has an in-flight training row. Progress bar +
@@ -730,8 +798,51 @@ export default function CharacterLibrary() {
                   </div>
                 </div>
               )}
+
+              {/* Brewery sheet-mod sections anchored at
+                  'after_proficiencies' — renders below the tool
+                  proficiency grid. */}
+              <SheetModSections
+                sections={sheetMods.add_sections}
+                position="after_proficiencies"
+                character={selectedCharacter}
+                onChange={saveModData}
+              />
+
+              {/* Brewery proficiency categories added by sheet
+                  mods (Vehicles / Firearms / etc). Each renders
+                  as a group with its items as read-only chips. */}
+              {sheetMods.add_proficiency_categories.map((cat, ci) => (
+                <div
+                  key={(cat.name || "cat") + "-" + ci}
+                  className="bg-[#1E2430]/50 rounded-xl p-4 border border-gray-700 mt-4"
+                >
+                  <h3 className="text-sm font-bold text-[#FFC6AA] mb-3 uppercase">
+                    {cat.name || "Extra Proficiencies"}
+                  </h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(cat.items || []).map((item, ii) => (
+                      <span
+                        key={item + "-" + ii}
+                        className="bg-[#2A3441] border border-[#37F2D1]/30 text-white text-xs font-semibold px-2 py-1 rounded"
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {/* Brewery sheet-mod sections anchored at 'after_features'. */}
+              <SheetModSections
+                sections={sheetMods.add_sections}
+                position="after_features"
+                character={selectedCharacter}
+                onChange={saveModData}
+              />
             </div>
-          )}
+            );
+          })()}
 
           {/* Spells Tab */}
           {activeTab === 'spells' && (
