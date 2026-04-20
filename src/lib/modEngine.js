@@ -375,3 +375,34 @@ export async function validateInstalledMods(campaignId) {
   }
   return report;
 }
+
+/**
+ * Resolve the display label for a renameable game term against the
+ * campaign's installed reskin mods. Walks every install row whose
+ * pinned_metadata.mod_type is 'reskin' in priority order; the first
+ * mod that has a rename for the requested (category, key) wins.
+ *
+ * Falls through to the source key when nothing matches, so callers
+ * can use this as a drop-in label resolver everywhere a renameable
+ * term renders.
+ *
+ * Categories:
+ *   'ability'       — abilities[key].name        (key is "str" / "dex" / …)
+ *   'abbreviation'  — abilities[key].abbreviation
+ *   'term'          — terms[key]                 (key is original label, e.g. "Hit Points")
+ *   'damage_type'   — damage_types[key]          (key is lowercase damage type)
+ *   'condition'     — conditions[key]            (key is condition name)
+ */
+export function getDisplayName(campaignMods, category, key) {
+  if (!Array.isArray(campaignMods) || campaignMods.length === 0) return key;
+  for (const mod of campaignMods) {
+    if (mod?.pinned_metadata?.mod_type !== "reskin") continue;
+    const r = mod.pinned_metadata.renames || {};
+    if (category === "ability" && r.abilities?.[key]?.name)         return r.abilities[key].name;
+    if (category === "abbreviation" && r.abilities?.[key]?.abbreviation) return r.abilities[key].abbreviation;
+    if (category === "term" && r.terms?.[key])                       return r.terms[key];
+    if (category === "damage_type" && r.damage_types?.[key])         return r.damage_types[key];
+    if (category === "condition" && r.conditions?.[key])             return r.conditions[key];
+  }
+  return key;
+}
