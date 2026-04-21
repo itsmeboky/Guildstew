@@ -5,6 +5,7 @@ import {
   Flame, Users, Trophy, PieChart,
   MessageSquare, Calendar, BarChart3,
   Upload, LayoutDashboard, TrendingUp,
+  HelpCircle, BookOpen, AlertTriangle,
 } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -205,6 +206,12 @@ export default function AppSidebar() {
             </button>
             <SidebarLink to={createPageUrl("CreatorDashboard")} icon={LayoutDashboard} label="Creator Dashboard" />
             <SidebarLink to={createPageUrl("CreatorAnalytics")} icon={TrendingUp}      label="Analytics" />
+          </SidebarSection>
+
+          <SidebarSection label="Support">
+            <SidebarLink to={createPageUrl("FAQ")}           icon={HelpCircle}     label="FAQ" />
+            <SidebarLink to={createPageUrl("Docs")}          icon={BookOpen}       label="Documentation" />
+            <SidebarLink to={createPageUrl("SupportTicket")} icon={AlertTriangle}  label="Report a Problem" />
           </SidebarSection>
         </nav>
 
