@@ -79,6 +79,11 @@ const AuthenticatedApp = () => {
           {Pages.BlogPost ? <Pages.BlogPost /> : <PageNotFound />}
         </LayoutWrapper>
       } />
+      <Route path="/changelog" element={
+        <LayoutWrapper currentPageName="Changelog">
+          {Pages.Changelog ? <Pages.Changelog /> : <PageNotFound />}
+        </LayoutWrapper>
+      } />
       {Object.entries(Pages).map(([path, Page]) => (
         <Route
           key={path}

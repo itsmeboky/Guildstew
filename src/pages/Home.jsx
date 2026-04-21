@@ -238,16 +238,33 @@ export default function Home() {
             {/* Right Column */}
             <div className="col-span-3 flex flex-col gap-6 h-[420px]">
               {/* Version History */}
-              <div className="rounded-3xl p-5 relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-b from-[#FF5722]/60 to-[#FF5722]" />
+              <Link
+                to="/changelog"
+                className="rounded-3xl p-5 relative overflow-hidden block hover:brightness-110 transition"
+              >
+                <div className="theme-homepage-card absolute inset-0" />
                 <div className="relative z-10">
                   <h3 className="text-xl font-bold text-white mb-2">Version History</h3>
-                  <div className="text-white">
-                    <div className="font-bold text-sm">v2.4.0 <span className="text-xs opacity-80">Nov 10</span></div>
-                    <div className="text-sm opacity-90">Live streaming integration</div>
-                  </div>
+                  {latestVersion ? (
+                    <div className="text-white">
+                      <div className="font-bold text-sm">
+                        {latestVersion.version}
+                        {latestVersion.release_date && (
+                          <span className="text-xs opacity-80 ml-2">
+                            {new Date(latestVersion.release_date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm opacity-90 line-clamp-2">
+                        {latestVersion.title}
+                        {latestVersion.description && ` — ${latestVersion.description}`}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-white/80 text-xs italic">First release coming soon.</p>
+                  )}
                 </div>
-              </div>
+              </Link>
 
               {/* Latest Updates */}
               <div className="rounded-3xl p-5 flex-1 relative overflow-hidden">
