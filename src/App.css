@@ -1,0 +1,54 @@
+/* Tavern theme layer — reads CSS vars set by applyTheme() in
+   `src/lib/tavernTheme.js`. When no theme is applied the vars are
+   unset and the fallbacks (after the comma) kick in, matching the
+   app's default Guildstew look.
+
+   v1 coverage is intentionally narrow: body background, the
+   .theme-card / .theme-nav / .theme-accent helpers, and the heading /
+   body font stacks. Components pick up the theme by either:
+     - using the helper classes, or
+     - referencing the vars directly via `var(--theme-*, fallback)`.
+   Unmigrated components keep their hard-coded colors — expanding
+   coverage is incremental. */
+
+:root {
+  --tavern-default-background: #050816;
+  --tavern-default-card: #1E2430;
+  --tavern-default-card-border: #374151;
+  --tavern-default-primary: #37F2D1;
+  --tavern-default-nav: #2A3441;
+  --tavern-default-text: #e2e8f0;
+  --tavern-default-text-muted: #94a3b8;
+}
+
+body {
+  background-color: var(--theme-background, var(--tavern-default-background));
+  color: var(--theme-text, var(--tavern-default-text));
+  font-family: var(--theme-font-body, inherit);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--theme-font-heading, inherit);
+}
+
+.theme-card {
+  background-color: var(--theme-card, var(--tavern-default-card));
+  border-color: var(--theme-cardBorder, var(--tavern-default-card-border));
+  color: var(--theme-text, var(--tavern-default-text));
+}
+
+.theme-nav {
+  background-color: var(--theme-navBackground, var(--tavern-default-nav));
+}
+
+.theme-accent {
+  color: var(--theme-primary, var(--tavern-default-primary));
+}
+
+.theme-accent-bg {
+  background-color: var(--theme-primary, var(--tavern-default-primary));
+}
+
+.theme-muted {
+  color: var(--theme-textMuted, var(--tavern-default-text-muted));
+}
