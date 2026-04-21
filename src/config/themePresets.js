@@ -132,6 +132,49 @@ export const THEME_COLOR_FIELDS = [
   { key: "success",           label: "Success" },
 ];
 
+// Optional image overrides. Each slot names a single "opt-in" surface
+// that a consuming component can pick up via `var(--theme-img-<key>)`.
+// `defaultThumb` is a best-effort preview of what the built-in asset
+// looks like today so a creator knows what they're replacing.
+export const THEME_IMAGE_SLOTS = [
+  {
+    key: "navTexture",
+    label: "Nav Bar Texture",
+    hint: "Pattern / image behind the nav bar. Blank uses the Nav Background color.",
+    defaultThumb: null,
+  },
+  {
+    key: "homepageBackground",
+    label: "Homepage Background",
+    hint: "Panoramic landscape behind the homepage hero area.",
+    defaultThumb: null,
+  },
+  {
+    key: "contentCardBackground",
+    label: "Content Card Background",
+    hint: "Texture that renders on top of the Homepage Cards color on Newest / Top Selling / Blog tiles.",
+    defaultThumb: null,
+  },
+  {
+    key: "campaignCardTexture",
+    label: "Campaign Card Texture",
+    hint: "Subtle texture behind campaign cards.",
+    defaultThumb: null,
+  },
+  {
+    key: "sidebarTexture",
+    label: "Sidebar Texture",
+    hint: "Texture for sidebar panels.",
+    defaultThumb: null,
+  },
+  {
+    key: "footerBackground",
+    label: "Footer Background",
+    hint: "Footer background image.",
+    defaultThumb: null,
+  },
+];
+
 export const DEFAULT_THEME = {
   type: "ui_theme",
   colors: { ...BLANK },

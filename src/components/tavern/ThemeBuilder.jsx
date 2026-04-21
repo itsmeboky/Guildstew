@@ -11,13 +11,17 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Palette, Flame, Store, X } from "lucide-react";
+import {
+  Palette, Flame, X, Upload, Info, Image as ImageIcon,
+} from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { getWalletBalance } from "@/lib/spiceWallet";
 import { uploadItem } from "@/lib/tavernClient";
 import { uploadFile } from "@/utils/uploadFile";
-import { THEME_PRESETS, THEME_COLOR_FIELDS, DEFAULT_THEME } from "@/config/themePresets";
+import {
+  THEME_PRESETS, THEME_COLOR_FIELDS, THEME_IMAGE_SLOTS, DEFAULT_THEME,
+} from "@/config/themePresets";
 import { MIN_ITEM_PRICE, UPLOAD_FEES, formatSpice } from "@/config/spiceConfig";
 
 /**
@@ -75,6 +79,27 @@ export default function ThemeBuilder({ open, onClose }) {
 
   const setFont = (role, value) =>
     setTheme((t) => ({ ...t, fonts: { ...t.fonts, [role]: value } }));
+
+  const setImage = (slot, value) =>
+    setTheme((t) => ({ ...t, images: { ...(t.images || {}), [slot]: value } }));
+
+  const [imageUploading, setImageUploading] = useState({});
+
+  const uploadImage = async (slot, file) => {
+    if (!file || !user?.id) return;
+    setImageUploading((m) => ({ ...m, [slot]: true }));
+    try {
+      const { file_url } = await uploadFile(file, "user-assets", "tavern/theme-images", {
+        userId: user.id,
+        uploadType: "tavern_theme_image",
+      });
+      setImage(slot, file_url);
+    } catch (err) {
+      toast.error(err?.message || "Upload failed");
+    } finally {
+      setImageUploading((m) => ({ ...m, [slot]: false }));
+    }
+  };
 
   const applyPreset = (key) => {
     const p = THEME_PRESETS[key];
@@ -211,6 +236,37 @@ export default function ThemeBuilder({ open, onClose }) {
                 Enter any Google Font name. Browse fonts at fonts.google.com.
               </p>
             </Section>
+
+            <Section title="Image Replacements">
+              <p className="text-[11px] text-slate-400 leading-snug">
+                Optional — each blank slot falls back to the color from the Colors section.
+                Uploaded images render as a background layer over their matching color.
+              </p>
+              {THEME_IMAGE_SLOTS.map((slot) => (
+                <ImageSlot
+                  key={slot.key}
+                  slot={slot}
+                  value={theme.images?.[slot.key] || null}
+                  uploading={!!imageUploading[slot.key]}
+                  onUpload={(file) => uploadImage(slot.key, file)}
+                  onClear={() => setImage(slot.key, null)}
+                />
+              ))}
+            </Section>
+
+            <div className="bg-[#050816] border border-slate-700 rounded-lg p-3 flex items-start gap-2">
+              <Info className="w-4 h-4 text-[#37F2D1] mt-0.5 shrink-0" />
+              <div>
+                <p className="text-[11px] font-bold text-[#37F2D1] uppercase tracking-widest mb-1">
+                  Themes don't touch these
+                </p>
+                <p className="text-[11px] text-slate-300 leading-snug">
+                  Themes change colors, fonts, and decorative backgrounds. They do NOT affect
+                  the hero carousel, profile banners, character portraits, World Lore template visuals,
+                  Guildstew logos or mascot images, or badge icons.
+                </p>
+              </div>
+            </div>
 
             <Section title="Save as Tavern Listing">
               <div>
@@ -415,6 +471,49 @@ function ColorRow({ label, value, onChange }) {
         onChange={(e) => onChange?.(e.target.value)}
         className="bg-[#050816] border-slate-700 text-white w-24 text-[11px] font-mono"
       />
+    </div>
+  );
+}
+
+function ImageSlot({ slot, value, uploading, onUpload, onClear }) {
+  return (
+    <div className="bg-[#050816] border border-slate-800 rounded p-2">
+      <div className="flex items-start gap-2">
+        <div className="w-14 h-14 rounded overflow-hidden bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0">
+          {value ? (
+            <img src={value} alt="" className="w-full h-full object-cover" />
+          ) : slot.defaultThumb ? (
+            <img src={slot.defaultThumb} alt="" className="w-full h-full object-cover opacity-70" />
+          ) : (
+            <ImageIcon className="w-5 h-5 text-slate-700" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold text-white truncate">{slot.label}</p>
+          <p className="text-[10px] text-slate-500 leading-snug line-clamp-2">{slot.hint}</p>
+          <div className="flex gap-1 mt-1">
+            <label className="inline-flex items-center gap-1 bg-[#1E2430] border border-slate-700 hover:border-amber-400 rounded px-2 py-1 text-[10px] cursor-pointer">
+              <Upload className="w-3 h-3" />
+              {uploading ? "Uploading…" : value ? "Replace" : "Upload"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => onUpload?.(e.target.files?.[0])}
+              />
+            </label>
+            {value && (
+              <button
+                type="button"
+                onClick={onClear}
+                className="inline-flex items-center gap-1 bg-[#1E2430] border border-rose-500/40 text-rose-300 hover:bg-rose-500/10 rounded px-2 py-1 text-[10px]"
+              >
+                <X className="w-3 h-3" /> Remove
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
