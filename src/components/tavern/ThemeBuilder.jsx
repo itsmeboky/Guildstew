@@ -348,24 +348,41 @@ export default function ThemeBuilder({ open, onClose }) {
 
 const ThemePreview = React.forwardRef(function ThemePreview({ theme }, ref) {
   const c = theme.colors;
+  const images = theme.images || {};
   const headingFont = theme.fonts?.heading ? `"${theme.fonts.heading}", serif` : "serif";
   const bodyFont = theme.fonts?.body ? `"${theme.fonts.body}", sans-serif` : "sans-serif";
 
+  // Pages with a homepage-background replacement show the image over
+  // the page color. Everything else tints against the color alone.
+  const pageStyle = {
+    backgroundColor: c.pageBackground,
+    backgroundImage: images.homepageBackground ? `url(${images.homepageBackground})` : undefined,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    borderColor: c.cardBorder,
+    color: c.textPrimary,
+    fontFamily: bodyFont,
+  };
+
+  const navStyle = {
+    backgroundColor: c.navBackground,
+    backgroundImage: images.navTexture ? `url(${images.navTexture})` : undefined,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    color: "#050816",
+  };
+
+  const contentCardStyle = {
+    backgroundColor: c.homepageCards,
+    backgroundImage: images.contentCardBackground ? `url(${images.contentCardBackground})` : undefined,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    color: "#050816",
+  };
+
   return (
-    <div
-      ref={ref}
-      className="rounded-lg border overflow-hidden"
-      style={{
-        backgroundColor: c.pageBackground,
-        borderColor: c.cardBorder,
-        color: c.textPrimary,
-        fontFamily: bodyFont,
-      }}
-    >
-      <div
-        className="px-4 py-2 flex items-center justify-between text-sm font-bold"
-        style={{ backgroundColor: c.navBackground, color: "#050816" }}
-      >
+    <div ref={ref} className="rounded-lg border overflow-hidden" style={pageStyle}>
+      <div className="px-4 py-2 flex items-center justify-between text-sm font-bold" style={navStyle}>
         <span style={{ fontFamily: headingFont }}>GUILDSTEW</span>
         <span
           className="inline-flex items-center gap-1 text-xs rounded-full px-2 py-0.5"
@@ -379,21 +396,19 @@ const ThemePreview = React.forwardRef(function ThemePreview({ theme }, ref) {
         </span>
       </div>
 
-      {/* Homepage content-card strip — previews the Homepage Cards color. */}
+      {/* Homepage content-card strip — previews the Homepage Cards color
+          and, if set, the content-card image override layered over it. */}
       <div className="p-3">
         <div
           className="rounded-lg p-3 text-[11px] font-bold uppercase tracking-widest"
-          style={{ backgroundColor: c.homepageCards, color: "#050816" }}
+          style={contentCardStyle}
         >
           Newest Game Pack
         </div>
       </div>
 
       <div className="p-4 pt-1 space-y-3">
-        <h2
-          style={{ fontFamily: headingFont, color: c.textPrimary }}
-          className="text-2xl font-bold"
-        >
+        <h2 style={{ fontFamily: headingFont, color: c.textPrimary }} className="text-2xl font-bold">
           Welcome back, adventurer.
         </h2>
         <p className="text-sm" style={{ color: c.textMuted }}>
@@ -401,7 +416,13 @@ const ThemePreview = React.forwardRef(function ThemePreview({ theme }, ref) {
         </p>
         <div
           className="rounded-lg border p-3"
-          style={{ backgroundColor: c.cardBackground, borderColor: c.cardBorder }}
+          style={{
+            backgroundColor: c.cardBackground,
+            backgroundImage: images.campaignCardTexture ? `url(${images.campaignCardTexture})` : undefined,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            borderColor: c.cardBorder,
+          }}
         >
           <p className="text-xs uppercase tracking-widest mb-1 font-bold" style={{ color: c.textMuted }}>
             Campaign · Session 14
@@ -435,14 +456,42 @@ const ThemePreview = React.forwardRef(function ThemePreview({ theme }, ref) {
           <span className="px-2 py-0.5 rounded" style={{ backgroundColor: `${c.danger}22`, color: c.danger }}>
             1 warning
           </span>
-          <span
-            className="px-2 py-0.5 rounded"
-            style={{ backgroundColor: `${c.secondaryAccent}22`, color: c.secondaryAccent }}
-          >
+          <span className="px-2 py-0.5 rounded" style={{ backgroundColor: `${c.secondaryAccent}22`, color: c.secondaryAccent }}>
             Epic loot
           </span>
         </div>
       </div>
+
+      {/* Sidebar texture and footer background ride at the bottom as
+          slim strips so creators see the override take effect even
+          though the preview is a compact mock. */}
+      {(images.sidebarTexture || images.footerBackground) && (
+        <div className="flex">
+          {images.sidebarTexture && (
+            <div
+              className="w-10"
+              style={{
+                backgroundImage: `url(${images.sidebarTexture})`,
+                backgroundSize: "cover",
+                minHeight: 32,
+              }}
+              aria-label="Sidebar texture"
+            />
+          )}
+          {images.footerBackground && (
+            <div
+              className="flex-1 text-[10px] text-white/80 font-bold px-3 py-2 uppercase tracking-widest"
+              style={{
+                backgroundImage: `url(${images.footerBackground})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }}
+            >
+              Footer
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 });
