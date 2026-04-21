@@ -57,7 +57,7 @@ export default function Home() {
   const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + HERO_SLIDES.length) % HERO_SLIDES.length);
 
   return (
-    <div className="relative min-h-screen bg-white">
+    <div className="theme-homepage-bg relative min-h-screen bg-white">
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;
@@ -258,7 +258,7 @@ export default function Home() {
           <div className="grid grid-cols-12 gap-6 mb-8">
             {/* Newest Game Pack */}
             <div className="col-span-2 rounded-3xl p-5 h-[320px] flex flex-col relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-b from-[#FF5722]/60 to-[#FF5722]" />
+              <div className="theme-homepage-card absolute inset-0" />
               <div className="relative z-10 flex flex-col h-full">
                 <h3 className="text-xl font-bold text-white mb-4 text-center">Newest Game Pack</h3>
                 {products.length > 0 && (
@@ -279,7 +279,7 @@ export default function Home() {
 
             {/* Top Selling Game Packs */}
             <div className="col-span-7 rounded-3xl p-5 h-[320px] relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-b from-[#FF5722]/60 to-[#FF5722]" />
+              <div className="theme-homepage-card absolute inset-0" />
               <div className="relative z-10 h-full flex flex-col">
                 <h3 className="text-xl font-bold text-white mb-4 text-center">Top Selling Game Packs</h3>
                 <div className="grid grid-cols-5 gap-4 flex-1">
@@ -308,7 +308,7 @@ export default function Home() {
 
             {/* Blog */}
             <div className="col-span-3 rounded-3xl p-5 h-[320px] relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-b from-[#FF5722]/60 to-[#FF5722]" />
+              <div className="theme-homepage-card absolute inset-0" />
               <div className="relative z-10 h-full flex flex-col">
                 <h3 className="text-xl font-bold text-white mb-4 text-center">Blog</h3>
                 <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">

@@ -715,7 +715,10 @@ export default function Layout({ children, currentPageName }) {
 
       <Toaster position="top-right" expand={false} richColors />
 
-      <header className={`${isDarkMode ? 'bg-[#FF5722]' : 'bg-[#FF5722]'} h-16 flex items-center justify-between px-6 relative z-20`}>
+      <header
+        className="theme-nav h-16 flex items-center justify-between px-6 relative z-20"
+        style={{ backgroundColor: 'var(--theme-navBackground, #FF5722)' }}
+      >
         <Link to={createPageUrl("Home")} className="flex items-center gap-3">
           <LazyImage 
             src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/branding/d93253ec3_image.png" 
