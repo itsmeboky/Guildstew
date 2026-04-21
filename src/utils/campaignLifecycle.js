@@ -261,3 +261,34 @@ export async function setStorageOverride(userId, bytes) {
   toast.success(bytes ? "Storage limit override set." : "Storage override cleared — using tier default.");
   return true;
 }
+
+/**
+ * Admin-only: hand-grant a subscription tier to a user. Pass `null`
+ * to clear the override and fall back to whatever tier the user's
+ * actual Stripe subscription (or lack thereof) resolves to. Valid
+ * tier values: 'free' | 'adventurer' | 'veteran' | 'guild'. The
+ * override is read by `getSubscriptionStatus` ahead of the normal
+ * tier lookup so granted tiers take effect on the user's next
+ * subscription-context refresh.
+ */
+export async function setTierOverride(userId, tier) {
+  const normalized = tier || null;
+  if (normalized && !["free", "adventurer", "veteran", "guild"].includes(normalized)) {
+    toast.error("Invalid tier");
+    return false;
+  }
+  const { error } = await supabase
+    .from("user_profiles")
+    .update({ admin_tier_override: normalized })
+    .eq("user_id", userId);
+  if (error) {
+    toast.error(`Could not set tier: ${error.message}`);
+    return false;
+  }
+  toast.success(
+    normalized
+      ? `Tier set to ${normalized}.`
+      : "Tier override cleared — reverting to actual subscription.",
+  );
+  return true;
+}

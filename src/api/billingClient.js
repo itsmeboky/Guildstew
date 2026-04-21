@@ -213,6 +213,32 @@ async function invokeEdge(name, body) {
  */
 export async function getSubscriptionStatus(userId) {
   if (!userId) return { tier: 'free', status: 'none' };
+
+  // Admin-set overrides win over every other tier source. Checked
+  // first so hand-granted tiers work even if the Edge Function /
+  // subscriptions table is unreachable. `admin_tier_override` is
+  // set from the admin Users tab.
+  try {
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('admin_tier_override')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (profile?.admin_tier_override) {
+      return {
+        tier: profile.admin_tier_override,
+        status: 'admin_override',
+        is_guild_owner: false,
+        is_guild_member: false,
+        guild_owner_id: null,
+        current_period_end: null,
+        cancel_at_period_end: false,
+        stripe_customer_id: null,
+        stripe_subscription_id: null,
+      };
+    }
+  } catch { /* non-fatal — fall through to normal lookup */ }
+
   // Try the Edge Function first so tier reflects the latest Stripe
   // webhook state. Fall back to a direct table read.
   try {
