@@ -84,6 +84,21 @@ const AuthenticatedApp = () => {
           {Pages.Changelog ? <Pages.Changelog /> : <PageNotFound />}
         </LayoutWrapper>
       } />
+      <Route path="/forums" element={
+        <LayoutWrapper currentPageName="Forums">
+          {Pages.Forums ? <Pages.Forums /> : <PageNotFound />}
+        </LayoutWrapper>
+      } />
+      <Route path="/forums/:categorySlug" element={
+        <LayoutWrapper currentPageName="ForumCategory">
+          {Pages.ForumCategory ? <Pages.ForumCategory /> : <PageNotFound />}
+        </LayoutWrapper>
+      } />
+      <Route path="/forums/:categorySlug/:threadSlug" element={
+        <LayoutWrapper currentPageName="ForumThread">
+          {Pages.ForumThread ? <Pages.ForumThread /> : <PageNotFound />}
+        </LayoutWrapper>
+      } />
       {Object.entries(Pages).map(([path, Page]) => (
         <Route
           key={path}
