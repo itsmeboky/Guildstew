@@ -18,6 +18,8 @@ import CreatorAnalytics from './pages/CreatorAnalytics';
 import FAQ from './pages/FAQ';
 import Docs from './pages/Docs';
 import SupportTicket from './pages/SupportTicket';
+import AccountBilling from './pages/AccountBilling';
+import Guild from './pages/Guild';
 import Friends from './pages/Friends';
 import PIEChart from './pages/PIEChart';
 import Settings from './pages/Settings';
@@ -86,6 +88,8 @@ export const PAGES = {
     "FAQ": FAQ,
     "Docs": Docs,
     "SupportTicket": SupportTicket,
+    "AccountBilling": AccountBilling,
+    "Guild": Guild,
     "Friends": Friends,
     "PIEChart": PIEChart,
     "Settings": Settings,
