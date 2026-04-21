@@ -22,6 +22,7 @@ import AppearanceTab from "@/components/settings/AppearanceTab";
 import AccessibilityTab from "@/components/settings/AccessibilityTab";
 import NotificationsTab from "@/components/settings/NotificationsTab";
 import PrivacyTab from "@/components/settings/PrivacyTab";
+import LegalTab from "@/components/settings/LegalTab";
 
 /**
  * /settings — tabbed preferences surface.
@@ -91,7 +92,7 @@ export default function Settings() {
             <PrivacyTab />
           </TabsContent>
           <TabsContent value="legal"         className="mt-6 space-y-4">
-            <ComingLater title="Legal" />
+            <LegalTab />
           </TabsContent>
           <TabsContent value="subscription"  className="mt-6 space-y-4">
             <SubscriptionPanel />
