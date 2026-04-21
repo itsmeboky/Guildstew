@@ -81,12 +81,15 @@ export default function FAQTab() {
       const idx = same.indexOf(target);
       const swap = same[idx + delta];
       if (!swap) return;
-      await Promise.all([
+      const [a, b] = await Promise.all([
         supabase.from("faq_entries").update({ sort_order: swap.sort_order }).eq("id", target.id),
         supabase.from("faq_entries").update({ sort_order: target.sort_order }).eq("id", swap.id),
       ]);
+      if (a?.error) throw a.error;
+      if (b?.error) throw b.error;
     },
     onSuccess: invalidate,
+    onError: (err) => { console.error("Reorder FAQ", err); toast.error(`Failed to reorder: ${err?.message || err}`); },
   });
 
   const byCategory = useMemo(() => {
