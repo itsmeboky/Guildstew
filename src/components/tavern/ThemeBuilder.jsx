@@ -143,7 +143,22 @@ export default function ThemeBuilder({ open, onClose }) {
         previewImageUrl = up.file_url;
       } catch { /* non-fatal */ }
 
-      const fileData = { type: "ui_theme", colors: theme.colors, fonts: theme.fonts };
+      // Only include image keys that actually have a URL so the
+      // saved row isn't littered with nulls. Consumers treat missing
+      // keys and nulls identically ("not set — use the color"), but
+      // the slimmer shape is nicer for the GM reading the JSON.
+      const savedImages = {};
+      for (const slot of THEME_IMAGE_SLOTS) {
+        const v = theme.images?.[slot.key];
+        if (v) savedImages[slot.key] = v;
+      }
+
+      const fileData = {
+        type: "ui_theme",
+        colors: theme.colors,
+        fonts: theme.fonts,
+        images: savedImages,
+      };
 
       const r = await uploadItem({
         creatorId: user.id,
