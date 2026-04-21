@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Flame, Upload, X, AlertTriangle } from "lucide-react";
+import { Flame, Upload, X, AlertTriangle, Dices } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { getWalletBalance } from "@/lib/spiceWallet";
@@ -20,6 +20,7 @@ import {
   MIN_ITEM_PRICE, UPLOAD_FEES, formatSpice,
 } from "@/config/spiceConfig";
 import { TAVERN_CATEGORIES } from "@/config/tavernCategories";
+import DiceSkinCreator from "@/components/tavern/DiceSkinCreator";
 
 /**
  * Creator upload form.
@@ -51,6 +52,7 @@ export default function CreatorUploadDialog({ open, onClose }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState(DEFAULTS);
   const [tagInput, setTagInput] = useState("");
+  const [diceCreatorOpen, setDiceCreatorOpen] = useState(false);
 
   const { data: wallet } = useQuery({
     queryKey: ["spiceWallet", user?.id],
@@ -167,6 +169,27 @@ export default function CreatorUploadDialog({ open, onClose }) {
             <p className="text-[11px] text-slate-500 mt-1">Expected asset: {categoryMeta.fileHint}</p>
           </Field>
 
+          {form.category === "dice_skin" && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex items-start gap-3">
+              <Dices className="w-4 h-4 text-amber-300 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-xs text-amber-100 font-bold mb-1">Use the Dice Skin Creator</p>
+                <p className="text-[11px] text-amber-100/80 mb-2">
+                  The in-app painter handles colors, material presets, lighting, and custom textures — with a live 3D preview.
+                  Skin data and the preview image are generated for you.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => { onClose?.(); setDiceCreatorOpen(true); }}
+                  className="bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold"
+                >
+                  Open Dice Skin Creator
+                </Button>
+              </div>
+            </div>
+          )}
+
           <Field label="Description">
             <Textarea
               value={form.description}
@@ -275,6 +298,7 @@ export default function CreatorUploadDialog({ open, onClose }) {
           </Button>
         </DialogFooter>
       </DialogContent>
+      <DiceSkinCreator open={diceCreatorOpen} onClose={() => setDiceCreatorOpen(false)} />
     </Dialog>
   );
 }
