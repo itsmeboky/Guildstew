@@ -713,7 +713,7 @@ export default function Layout({ children, currentPageName }) {
         }
       `}</style>
 
-      <Toaster position="top-right" expand={false} richColors />
+      <Toaster position="top-right" expand={false} richColors theme="dark" />
 
       <header
         className="theme-nav h-16 flex items-center justify-between px-6 relative z-20"
