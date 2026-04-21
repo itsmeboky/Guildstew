@@ -14,6 +14,7 @@ import ComingSoon from './pages/ComingSoon';
 import Forums from './pages/Forums';
 import Events from './pages/Events';
 import Leaderboards from './pages/Leaderboards';
+import CreatorAnalytics from './pages/CreatorAnalytics';
 import Friends from './pages/Friends';
 import PIEChart from './pages/PIEChart';
 import Settings from './pages/Settings';
@@ -78,6 +79,7 @@ export const PAGES = {
     "Forums": Forums,
     "Events": Events,
     "Leaderboards": Leaderboards,
+    "CreatorAnalytics": CreatorAnalytics,
     "Friends": Friends,
     "PIEChart": PIEChart,
     "Settings": Settings,
