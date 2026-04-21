@@ -18,6 +18,7 @@ import {
 } from "@/lib/userSettings";
 import { openBillingPortal } from "@/api/billingClient";
 import { supabase } from "@/api/supabaseClient";
+import AppearanceTab from "@/components/settings/AppearanceTab";
 
 /**
  * /settings — tabbed preferences surface.
@@ -75,7 +76,7 @@ export default function Settings() {
           </TabsList>
 
           <TabsContent value="appearance"    className="mt-6 space-y-4">
-            <ComingLater title="Appearance" />
+            <AppearanceTab />
           </TabsContent>
           <TabsContent value="accessibility" className="mt-6 space-y-4">
             <ComingLater title="Accessibility" />
