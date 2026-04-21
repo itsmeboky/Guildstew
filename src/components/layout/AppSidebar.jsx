@@ -1,13 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Flame } from "lucide-react";
+import { Flame, Users } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { getWalletBalance } from "@/lib/spiceWallet";
 import { formatSpice } from "@/config/spiceConfig";
 import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
+import { base44 } from "@/api/base44Client";
 
 /**
  * App-wide sidebar.
@@ -38,6 +39,43 @@ export default function AppSidebar() {
     queryFn: () => getWalletBalance(user.id),
     enabled: !!user?.id,
     staleTime: 30_000,
+  });
+
+  // Friendships power both the pending-requests badge and the online
+  // avatars strip. Same query is already cached by Layout.jsx's
+  // top-level badge lookup, so this is just reading the same entry.
+  const { data: friendships = [] } = useQuery({
+    queryKey: ["friendships", user?.id],
+    queryFn: async () => {
+      const rows = await base44.entities.Friendship.list();
+      return (rows || []).filter(
+        (f) => f.user_id === user?.id || f.friend_id === user?.id,
+      );
+    },
+    enabled: !!user?.id,
+  });
+
+  const pendingRequestsCount = useMemo(
+    () => friendships.filter((f) => f.friend_id === user?.id && f.status === "pending").length,
+    [friendships, user?.id],
+  );
+
+  const friendIds = useMemo(
+    () => friendships
+      .filter((f) => f.status === "accepted")
+      .map((f) => (f.user_id === user?.id ? f.friend_id : f.user_id))
+      .filter(Boolean),
+    [friendships, user?.id],
+  );
+
+  const { data: friendProfiles = [] } = useQuery({
+    queryKey: ["sidebarFriendProfiles", friendIds.sort().join(",")],
+    queryFn: async () => {
+      if (friendIds.length === 0) return [];
+      const rows = await base44.entities.UserProfile.list();
+      return (rows || []).filter((p) => friendIds.includes(p.user_id)).slice(0, 5);
+    },
+    enabled: friendIds.length > 0,
   });
 
   const tier = sub.tierData;
@@ -96,7 +134,38 @@ export default function AppSidebar() {
 
         {/* Scrollable middle section — links land here in steps 2-6 */}
         <nav className="flex-1 overflow-y-auto p-2 space-y-3 custom-scrollbar">
-          {/* Sections populated by follow-up commits. */}
+          <SidebarSection>
+            <SidebarLink
+              to={createPageUrl("Friends")}
+              icon={Users}
+              label="Friends"
+              badge={pendingRequestsCount}
+            />
+            {friendProfiles.length > 0 && (
+              <div className="flex items-center gap-1 px-3 pt-1.5">
+                {friendProfiles.map((p) => (
+                  <Link
+                    key={p.user_id}
+                    to={`${createPageUrl("UserProfile")}?id=${p.user_id}`}
+                    title={p.username || p.full_name || "Friend"}
+                    className="block"
+                  >
+                    {p.avatar_url ? (
+                      <img
+                        src={p.avatar_url}
+                        alt=""
+                        className="w-7 h-7 rounded-full object-cover object-top border border-slate-700 hover:border-[#37F2D1] transition-colors"
+                      />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-300 border border-slate-700 hover:border-[#37F2D1] transition-colors">
+                        {(p.username || p.full_name || "?")[0]?.toUpperCase()}
+                      </div>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </SidebarSection>
         </nav>
 
         {/* Pinned bottom — Account + Settings land here in step 7 */}
