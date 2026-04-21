@@ -13,7 +13,7 @@ import {
 import { base44 } from "@/api/base44Client";
 import { TIERS } from "@/api/billingClient";
 import { downloadCsv } from "@/utils/csv";
-import { setStorageOverride } from "@/utils/campaignLifecycle";
+import { setStorageOverride, setTierOverride } from "@/utils/campaignLifecycle";
 import { PanelCard, EmptyState } from "./adminShared";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -393,14 +393,7 @@ function UserDetailPanel({ user, onClose, characters, campaigns, events, onWarn,
           </div>
         </div>
 
-        <DetailSection label="Subscription">
-          <div className="flex items-center justify-between">
-            <Badge className="text-[10px]" style={{ backgroundColor: `${tier.badgeColor}33`, color: tier.badgeColor, borderColor: `${tier.badgeColor}66` }}>
-              {tier.badgeIcon} {tier.name}
-            </Badge>
-            <span className="text-[11px] text-slate-400">{tier.priceLabel}</span>
-          </div>
-        </DetailSection>
+        <TierSection user={user} tier={tier} />
 
         <StorageSection user={user} campaigns={campaigns} />
 
@@ -506,6 +499,94 @@ function formatRelative(ms) {
 }
 
 // Storage usage + per-user override. The override stored in
+// Admin tier picker. `user_profiles.admin_tier_override` wins over
+// the Stripe-derived tier, so an admin can hand-grant a tier without
+// a real subscription. Clearing the override reverts to whatever the
+// user's actual subscription (or lack thereof) resolves to.
+function TierSection({ user, tier }) {
+  const uid = user?.user_id || user?.id;
+  const queryClient = useQueryClient();
+  const override = user?.admin_tier_override || "";
+  const [pending, setPending] = React.useState(false);
+  const [choice, setChoice] = React.useState(override);
+  React.useEffect(() => { setChoice(user?.admin_tier_override || ""); }, [user?.admin_tier_override, uid]);
+
+  const apply = async (nextTier) => {
+    setPending(true);
+    try {
+      await setTierOverride(uid, nextTier || null);
+      queryClient.invalidateQueries({ queryKey: ["adminUsers"] });
+      // Also invalidate the target user's subscription cache in case
+      // they're currently browsing; the next refresh will pick it up.
+      queryClient.invalidateQueries({ queryKey: ["subscription", uid] });
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <DetailSection label="Subscription">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Badge
+            className="text-[10px]"
+            style={{
+              backgroundColor: `${tier.badgeColor}33`,
+              color: tier.badgeColor,
+              borderColor: `${tier.badgeColor}66`,
+            }}
+          >
+            {tier.badgeIcon} {tier.name}
+          </Badge>
+          <span className="text-[11px] text-slate-400">
+            {override ? "Admin override active" : tier.priceLabel}
+          </span>
+        </div>
+
+        <div className="bg-[#050816] rounded-lg p-3 border border-slate-700/30 space-y-2">
+          <label className="text-[10px] uppercase tracking-widest text-slate-400 block">
+            Admin tier override
+          </label>
+          <div className="flex items-center gap-2">
+            <select
+              value={choice}
+              onChange={(e) => setChoice(e.target.value)}
+              disabled={pending}
+              className="flex-1 bg-[#0f1219] border border-slate-700 text-white text-xs rounded h-8 px-2"
+            >
+              <option value="">— Use actual subscription —</option>
+              <option value="free">Free</option>
+              <option value="adventurer">Adventurer</option>
+              <option value="veteran">Veteran</option>
+              <option value="guild">Guild</option>
+            </select>
+            <Button
+              onClick={() => apply(choice)}
+              disabled={pending || choice === override}
+              className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold h-8"
+            >
+              Apply
+            </Button>
+            {override && (
+              <Button
+                onClick={() => apply("")}
+                disabled={pending}
+                variant="outline"
+                className="h-8"
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+          <p className="text-[10px] text-slate-500">
+            Overrides the tier resolved from Stripe / the subscriptions table. Clearing reverts to the user's actual tier.
+          </p>
+        </div>
+      </div>
+    </DetailSection>
+  );
+}
+
 // user_profiles.storage_limit_override_bytes wins over the tier
 // default when set; clearing it falls back to the tier limit.
 function StorageSection({ user, campaigns }) {
