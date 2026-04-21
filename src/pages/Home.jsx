@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Star } from "lucide-react";
+import { ChevronLeft, ChevronRight, Star, FileText, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from "@/utils";
 import { Link } from "react-router-dom";
@@ -84,6 +84,34 @@ export default function Home() {
       return data || [];
     },
   });
+
+  // Merge recent blog posts + versions into a single time-sorted
+  // feed for the Latest Updates card. Each row carries a `type` so
+  // the card can pick the right icon.
+  const latestUpdates = React.useMemo(() => {
+    const merged = [
+      ...(blogPosts || []).map((p) => ({
+        key: `blog-${p.id}`,
+        title: p.title,
+        description: p.summary || "",
+        date: p.published_at,
+        type: "blog",
+        link: `/blog/${p.slug}`,
+      })),
+      ...(recentVersions || []).map((v, i) => ({
+        key: `ver-${v.version || i}`,
+        title: `${v.version} — ${v.title}`,
+        description: v.description || "",
+        date: v.release_date,
+        type: "version",
+        link: "/changelog",
+      })),
+    ];
+    return merged
+      .filter((u) => u.date)
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 5);
+  }, [blogPosts, recentVersions]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -266,27 +294,33 @@ export default function Home() {
                 </div>
               </Link>
 
-              {/* Latest Updates */}
+              {/* Latest Updates — merged feed of recent blog posts +
+                  version releases, newest first. */}
               <div className="rounded-3xl p-5 flex-1 relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-b from-[#FF5722]/60 to-[#FF5722]" />
+                <div className="theme-homepage-card absolute inset-0" />
                 <div className="relative z-10 h-full flex flex-col">
                   <h3 className="text-xl font-bold text-white mb-4 text-center">Latest Updates</h3>
                   <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                    <div className="cursor-pointer group">
-                      <p className="text-white text-base font-semibold group-hover:text-[#37F2D1] transition-colors">New Character Creator Tools</p>
-                      <p className="text-white/70 text-sm mt-1">Enhanced customization options for your heroes</p>
-                      <p className="text-white/60 text-xs mt-1">2 days ago</p>
-                    </div>
-                    <div className="cursor-pointer group">
-                      <p className="text-white text-base font-semibold group-hover:text-[#37F2D1] transition-colors">Campaign Sharing Features</p>
-                      <p className="text-white/70 text-sm mt-1">Share your adventures with friends easily</p>
-                      <p className="text-white/60 text-xs mt-1">1 week ago</p>
-                    </div>
-                    <div className="cursor-pointer group">
-                      <p className="text-white text-base font-semibold group-hover:text-[#37F2D1] transition-colors">Enhanced Dice Roller</p>
-                      <p className="text-white/70 text-sm mt-1">New animations and sound effects</p>
-                      <p className="text-white/60 text-xs mt-1">2 weeks ago</p>
-                    </div>
+                    {latestUpdates.length === 0 ? (
+                      <p className="text-white/80 text-xs italic text-center mt-4">
+                        News lands here as new posts or releases go live.
+                      </p>
+                    ) : (
+                      latestUpdates.map((u) => (
+                        <Link key={u.key} to={u.link} className="block cursor-pointer group">
+                          <p className="text-white text-base font-semibold group-hover:text-[#37F2D1] transition-colors flex items-center gap-1.5">
+                            {u.type === "version"
+                              ? <Rocket className="w-3.5 h-3.5 opacity-90" />
+                              : <FileText className="w-3.5 h-3.5 opacity-90" />}
+                            <span className="line-clamp-1">{u.title}</span>
+                          </p>
+                          {u.description && (
+                            <p className="text-white/70 text-sm mt-1 line-clamp-2">{u.description}</p>
+                          )}
+                          <p className="text-white/60 text-xs mt-1">{relativeTime(u.date)}</p>
+                        </Link>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
@@ -411,4 +445,31 @@ export default function Home() {
       </div>
     </div>
   );
+}
+
+/**
+ * Rough "N minutes / hours / days / weeks ago" formatter for the
+ * Latest Updates feed. Keeps units coarse — exact time isn't useful
+ * on a marketing card.
+ */
+function relativeTime(input) {
+  if (!input) return "";
+  const t = new Date(input).getTime();
+  if (Number.isNaN(t)) return "";
+  const delta = Math.max(0, Date.now() - t);
+
+  const min = 60_000;
+  const hour = 60 * min;
+  const day = 24 * hour;
+  const week = 7 * day;
+  const month = 30 * day;
+  const year = 365 * day;
+
+  if (delta < min) return "just now";
+  if (delta < hour) return Math.round(delta / min) + " min ago";
+  if (delta < day) return Math.round(delta / hour) + "h ago";
+  if (delta < week) return Math.round(delta / day) + "d ago";
+  if (delta < month) return Math.round(delta / week) + "w ago";
+  if (delta < year) return Math.round(delta / month) + "mo ago";
+  return Math.round(delta / year) + "y ago";
 }
