@@ -182,7 +182,8 @@ function NewTicketForm({ user, onCreated }) {
       toast.success(`Ticket submitted — we'll get back to you soon.`);
       onCreated?.(data);
     } catch (err) {
-      toast.error(err?.message || "Submit failed");
+      console.error("Submit ticket", err);
+      toast.error(`Failed to save: ${err?.message || err}`);
     }
   };
 
@@ -309,7 +310,9 @@ function TicketDetail({ ticket, onBack }) {
       if (error) throw error;
       // Re-open the ticket if the user replies to a resolved/closed one.
       if (["resolved", "closed"].includes(ticket.status)) {
-        await supabase.from("support_tickets").update({ status: "open" }).eq("id", ticket.id);
+        const { error: reopenErr } = await supabase
+          .from("support_tickets").update({ status: "open" }).eq("id", ticket.id);
+        if (reopenErr) throw reopenErr;
       }
     },
     onSuccess: () => {

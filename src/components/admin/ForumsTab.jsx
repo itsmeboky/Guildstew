@@ -84,16 +84,20 @@ function ThreadsPanel() {
 
   const patch = useMutation({
     mutationFn: async ({ id, patch }) => {
-      await supabase.from("forum_threads").update(patch).eq("id", id);
+      const { error } = await supabase.from("forum_threads").update(patch).eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => { toast.success("Thread updated"); invalidate(); },
+    onError: (err) => { console.error("Update thread", err); toast.error(`Failed to save: ${err?.message || err}`); },
   });
 
   const deleteThread = useMutation({
     mutationFn: async (id) => {
-      await supabase.from("forum_threads").delete().eq("id", id);
+      const { error } = await supabase.from("forum_threads").delete().eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => { toast.success("Thread deleted"); invalidate(); },
+    onError: (err) => { console.error("Delete thread", err); toast.error(`Failed to delete: ${err?.message || err}`); },
   });
 
   return (
@@ -203,24 +207,28 @@ function RepliesPanel({ thread, onClose }) {
 
   const patch = useMutation({
     mutationFn: async ({ id, patch }) => {
-      await supabase.from("forum_replies").update(patch).eq("id", id);
+      const { error } = await supabase.from("forum_replies").update(patch).eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => {
       toast.success("Reply updated");
       queryClient.invalidateQueries({ queryKey: ["adminForumReplies", thread.id] });
       queryClient.invalidateQueries({ queryKey: ["forumReplies", thread.id] });
     },
+    onError: (err) => { console.error("Update reply", err); toast.error(`Failed to save: ${err?.message || err}`); },
   });
 
   const del = useMutation({
     mutationFn: async (id) => {
-      await supabase.from("forum_replies").delete().eq("id", id);
+      const { error } = await supabase.from("forum_replies").delete().eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => {
       toast.success("Reply deleted");
       queryClient.invalidateQueries({ queryKey: ["adminForumReplies", thread.id] });
       queryClient.invalidateQueries({ queryKey: ["forumReplies", thread.id] });
     },
+    onError: (err) => { console.error("Delete reply", err); toast.error(`Failed to delete: ${err?.message || err}`); },
   });
 
   return (
@@ -311,9 +319,11 @@ function CategoriesPanel() {
 
   const del = useMutation({
     mutationFn: async (id) => {
-      await supabase.from("forum_categories").delete().eq("id", id);
+      const { error } = await supabase.from("forum_categories").delete().eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => { toast.success("Deleted"); invalidate(); },
+    onError: (err) => { console.error("Delete category", err); toast.error(`Failed to delete: ${err?.message || err}`); },
   });
 
   const move = useMutation({
@@ -323,12 +333,15 @@ function CategoriesPanel() {
       const idx = categories.indexOf(target);
       const swap = categories[idx + delta];
       if (!swap) return;
-      await Promise.all([
+      const [a, b] = await Promise.all([
         supabase.from("forum_categories").update({ sort_order: swap.sort_order }).eq("id", target.id),
         supabase.from("forum_categories").update({ sort_order: target.sort_order }).eq("id", swap.id),
       ]);
+      if (a?.error) throw a.error;
+      if (b?.error) throw b.error;
     },
     onSuccess: invalidate,
+    onError: (err) => { console.error("Reorder categories", err); toast.error(`Failed to reorder: ${err?.message || err}`); },
   });
 
   return (

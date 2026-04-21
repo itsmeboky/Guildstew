@@ -115,22 +115,32 @@ export default function BlogTab() {
         : { is_published: false };
       const { error } = await supabase.from("blog_posts").update(patch).eq("id", id);
       if (error) throw error;
+      return publish;
     },
-    onSuccess: () => invalidate(),
+    onSuccess: (publish) => {
+      toast.success(publish ? "Post published" : "Post unpublished");
+      invalidate();
+    },
+    onError: (err) => { console.error("Publish blog post", err); toast.error(`Failed to save: ${err?.message || err}`); },
   });
 
   const setFeatured = useMutation({
     mutationFn: async ({ id, value }) => {
-      await supabase.from("blog_posts").update({ is_featured: value }).eq("id", id);
+      const { error } = await supabase.from("blog_posts").update({ is_featured: value }).eq("id", id);
+      if (error) throw error;
+      return value;
     },
-    onSuccess: () => invalidate(),
+    onSuccess: (value) => { toast.success(value ? "Featured" : "Unfeatured"); invalidate(); },
+    onError: (err) => { console.error("Feature blog post", err); toast.error(`Failed to save: ${err?.message || err}`); },
   });
 
   const deletePost = useMutation({
     mutationFn: async (id) => {
-      await supabase.from("blog_posts").delete().eq("id", id);
+      const { error } = await supabase.from("blog_posts").delete().eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => { toast.success("Deleted"); invalidate(); },
+    onError: (err) => { console.error("Delete blog post", err); toast.error(`Failed to delete: ${err?.message || err}`); },
   });
 
   const toggleSelected = (id) => {
@@ -145,20 +155,24 @@ export default function BlogTab() {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
     try {
+      const run = (patch) => supabase.from("blog_posts").update(patch).in("id", ids);
+      let res;
       if (action === "publish") {
-        await supabase.from("blog_posts").update({ is_published: true, published_at: new Date().toISOString() }).in("id", ids);
+        res = await run({ is_published: true, published_at: new Date().toISOString() });
       } else if (action === "unpublish") {
-        await supabase.from("blog_posts").update({ is_published: false }).in("id", ids);
+        res = await run({ is_published: false });
       } else if (action === "feature") {
-        await supabase.from("blog_posts").update({ is_featured: true }).in("id", ids);
+        res = await run({ is_featured: true });
       } else if (action === "unfeature") {
-        await supabase.from("blog_posts").update({ is_featured: false }).in("id", ids);
+        res = await run({ is_featured: false });
       }
+      if (res?.error) throw res.error;
       toast.success(`${ids.length} post${ids.length === 1 ? "" : "s"} updated`);
       setSelected(new Set());
       invalidate();
     } catch (err) {
-      toast.error(err?.message || "Bulk update failed");
+      console.error("Bulk update", err);
+      toast.error(`Failed to save: ${err?.message || err}`);
     }
   };
 
