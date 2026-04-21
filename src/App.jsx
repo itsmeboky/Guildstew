@@ -99,6 +99,11 @@ const AuthenticatedApp = () => {
           {Pages.ForumThread ? <Pages.ForumThread /> : <PageNotFound />}
         </LayoutWrapper>
       } />
+      <Route path="/support/ticket" element={
+        <LayoutWrapper currentPageName="SupportTicket">
+          {Pages.SupportTicket ? <Pages.SupportTicket /> : <PageNotFound />}
+        </LayoutWrapper>
+      } />
       {Object.entries(Pages).map(([path, Page]) => (
         <Route
           key={path}
