@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Flame, Users } from "lucide-react";
+import { Flame, Users, Trophy, PieChart } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
@@ -165,6 +165,8 @@ export default function AppSidebar() {
                 ))}
               </div>
             )}
+            <SidebarLink to={createPageUrl("Achievements")} icon={Trophy} label="Achievements" />
+            <SidebarLink to={createPageUrl("PIEChart")} icon={PieChart} label="P.I.E. Chart" />
           </SidebarSection>
         </nav>
 
