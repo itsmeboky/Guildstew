@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, Users, Sword, Trophy, ShoppingBag, DollarSign,
   LifeBuoy, Flag, ScrollText, GamepadIcon, Home, Store, Wallet, FileText, Rocket,
+  MessageSquare, HelpCircle, BookOpen,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,11 @@ import TavernAdminTab from "@/components/admin/TavernAdminTab";
 import CashoutsTab from "@/components/admin/CashoutsTab";
 import BlogTab from "@/components/admin/BlogTab";
 import VersionsTab from "@/components/admin/VersionsTab";
+import ForumsTab from "@/components/admin/ForumsTab";
+import FAQTab from "@/components/admin/FAQTab";
+import DocsTab from "@/components/admin/DocsTab";
+import { supabase as supabaseClient } from "@/api/supabaseClient";
+import { useQuery } from "@tanstack/react-query";
 
 // Hard-coded override list — anyone here is always admin regardless
 // of domain. Aetherian / Guildstew staff domains are auto-admin too
@@ -46,8 +52,11 @@ const TABS = [
   { id: "cashouts",     label: "Cashouts",            icon: Wallet },
   { id: "blog",         label: "Blog",                icon: FileText },
   { id: "versions",     label: "Versions",            icon: Rocket },
+  { id: "forums",       label: "Forums",              icon: MessageSquare },
   { id: "revenue",      label: "Revenue",             icon: DollarSign },
   { id: "tickets",      label: "Support Tickets",     icon: LifeBuoy },
+  { id: "faq",          label: "FAQ",                 icon: HelpCircle },
+  { id: "docs",         label: "Documentation",       icon: BookOpen },
   { id: "reports",      label: "Reports & Mod",       icon: Flag },
   { id: "log",          label: "Admin Log",           icon: ScrollText },
 ];
@@ -56,6 +65,21 @@ export default function Admin() {
   const { user, isLoadingAuth } = useAuth();
   const [tab, setTab] = useState("overview");
   const [dateRange, setDateRange] = useState({ from: "", to: "" });
+
+  // Open-ticket count — surfaces as a badge on the Support Tickets
+  // tab so the admin notices pending work without clicking through.
+  const { data: openTicketCount = 0 } = useQuery({
+    queryKey: ["adminOpenTicketCount"],
+    queryFn: async () => {
+      const { count } = await supabaseClient
+        .from("support_tickets")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["open", "in_progress"]);
+      return count || 0;
+    },
+    enabled: !!user?.id,
+    refetchInterval: 60_000,
+  });
 
   if (isLoadingAuth) {
     return (
@@ -102,6 +126,11 @@ export default function Admin() {
                 >
                   <Icon className="w-4 h-4" />
                   <span className="flex-1">{t.label}</span>
+                  {t.id === "tickets" && openTicketCount > 0 && (
+                    <span className="text-[9px] font-black rounded-full px-1.5 py-0.5 bg-[#37F2D1] text-[#050816] min-w-[18px] text-center">
+                      {openTicketCount > 99 ? "99+" : openTicketCount}
+                    </span>
+                  )}
                   {t.stub && <span className="text-[9px] text-slate-600 uppercase">soon</span>}
                 </button>
               );
@@ -147,6 +176,9 @@ export default function Admin() {
           {tab === "cashouts"     && <CashoutsTab />}
           {tab === "blog"         && <BlogTab />}
           {tab === "versions"     && <VersionsTab />}
+          {tab === "forums"       && <ForumsTab />}
+          {tab === "faq"          && <FAQTab />}
+          {tab === "docs"         && <DocsTab />}
           {tab === "revenue"      && <RevenueTab      dateRange={dateRange} />}
           {tab === "tickets"      && <SupportTicketsTab adminId={user.id} />}
           {tab === "reports"      && <ReportsModerationTab adminId={user.id} />}

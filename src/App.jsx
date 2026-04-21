@@ -11,6 +11,7 @@ import { SubscriptionProvider } from '@/lib/SubscriptionContext';
 import { PresenceProvider } from '@/lib/PresenceContext';
 import LegalReconsentGate from '@/components/legal/LegalReconsentGate';
 import ThemeApplier from '@/lib/ThemeApplier';
+import SettingsApplier from '@/lib/SettingsApplier';
 import { loadLanguageFonts } from '@/utils/languageFonts';
 
 // Inject the @font-face rules for every D&D language TTF once per
@@ -84,6 +85,26 @@ const AuthenticatedApp = () => {
           {Pages.Changelog ? <Pages.Changelog /> : <PageNotFound />}
         </LayoutWrapper>
       } />
+      <Route path="/forums" element={
+        <LayoutWrapper currentPageName="Forums">
+          {Pages.Forums ? <Pages.Forums /> : <PageNotFound />}
+        </LayoutWrapper>
+      } />
+      <Route path="/forums/:categorySlug" element={
+        <LayoutWrapper currentPageName="ForumCategory">
+          {Pages.ForumCategory ? <Pages.ForumCategory /> : <PageNotFound />}
+        </LayoutWrapper>
+      } />
+      <Route path="/forums/:categorySlug/:threadSlug" element={
+        <LayoutWrapper currentPageName="ForumThread">
+          {Pages.ForumThread ? <Pages.ForumThread /> : <PageNotFound />}
+        </LayoutWrapper>
+      } />
+      <Route path="/support/ticket" element={
+        <LayoutWrapper currentPageName="SupportTicket">
+          {Pages.SupportTicket ? <Pages.SupportTicket /> : <PageNotFound />}
+        </LayoutWrapper>
+      } />
       {Object.entries(Pages).map(([path, Page]) => (
         <Route
           key={path}
@@ -110,6 +131,7 @@ function App() {
             <Router>
               <NavigationTracker />
               <ThemeApplier />
+              <SettingsApplier />
               <AuthenticatedApp />
             </Router>
             <Toaster />
