@@ -388,11 +388,11 @@ export default function Friends() {
   );
 
   return (
-    <div className="min-h-screen p-8">
+    <div className="min-h-screen bg-[#050816] text-white p-8">
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-[#FF5722] to-[#37F2D1] bg-clip-text text-transparent">Friends</h1>
-          <p className="text-gray-400">Connect with other adventurers</p>
+          <p className="text-slate-400">Connect with other adventurers</p>
         </div>
 
         <Tabs defaultValue="all" className="space-y-6">
