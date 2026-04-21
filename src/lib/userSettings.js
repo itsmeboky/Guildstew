@@ -7,19 +7,49 @@ import { mergeSettings, mergeNotifications } from "@/config/settingsDefaults";
  *
  * Each patch is a shallow merge at the domain level so partial writes
  * (updating a single toggle) never clobber unrelated keys.
+ *
+ * Both columns are recent migrations — the client tolerates their
+ * absence so the rest of the app still boots when the migration
+ * hasn't been applied in the target database yet. Reads fall back
+ * to defaults; writes swallow the error.
  */
 
 export async function getUserSettings(userId) {
   if (!userId) return { settings: mergeSettings({}), notifications: mergeNotifications({}) };
-  const { data } = await supabase
-    .from("user_profiles")
-    .select("settings, notification_preferences")
-    .eq("user_id", userId)
-    .maybeSingle();
-  return {
-    settings: mergeSettings(data?.settings || {}),
-    notifications: mergeNotifications(data?.notification_preferences || {}),
-  };
+  try {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("settings, notification_preferences")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    return {
+      settings: mergeSettings(data?.settings || {}),
+      notifications: mergeNotifications(data?.notification_preferences || {}),
+    };
+  } catch {
+    return { settings: mergeSettings({}), notifications: mergeNotifications({}) };
+  }
+}
+
+async function readJson(userId, column) {
+  try {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select(column)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) return {};
+    return data?.[column] || {};
+  } catch {
+    return {};
+  }
+}
+
+async function writeJson(userId, column, value) {
+  try {
+    await supabase.from("user_profiles").update({ [column]: value }).eq("user_id", userId);
+  } catch { /* column not migrated — fail quiet */ }
 }
 
 /**
@@ -29,35 +59,22 @@ export async function getUserSettings(userId) {
  */
 export async function patchSettingsDomain(userId, domain, patch) {
   if (!userId || !domain) return null;
-  const { data: row } = await supabase
-    .from("user_profiles")
-    .select("settings")
-    .eq("user_id", userId)
-    .maybeSingle();
-  const current = row?.settings || {};
+  const current = await readJson(userId, "settings");
   const next = {
     ...current,
     [domain]: { ...(current[domain] || {}), ...patch },
   };
-  await supabase.from("user_profiles").update({ settings: next }).eq("user_id", userId);
+  await writeJson(userId, "settings", next);
   return next;
 }
 
 export async function patchNotifications(userId, bucket, patch) {
   if (!userId || !bucket) return null;
-  const { data: row } = await supabase
-    .from("user_profiles")
-    .select("notification_preferences")
-    .eq("user_id", userId)
-    .maybeSingle();
-  const current = row?.notification_preferences || {};
+  const current = await readJson(userId, "notification_preferences");
   const next = {
     ...current,
     [bucket]: { ...(current[bucket] || {}), ...patch },
   };
-  await supabase
-    .from("user_profiles")
-    .update({ notification_preferences: next })
-    .eq("user_id", userId);
+  await writeJson(userId, "notification_preferences", next);
   return next;
 }

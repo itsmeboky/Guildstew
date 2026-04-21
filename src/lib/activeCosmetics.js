@@ -29,12 +29,19 @@ export function slotForCategory(category) {
 
 export async function getActiveCosmetics(userId) {
   if (!userId) return {};
-  const { data } = await supabase
-    .from("user_profiles")
-    .select("active_cosmetics")
-    .eq("user_id", userId)
-    .maybeSingle();
-  return data?.active_cosmetics || {};
+  // `active_cosmetics` is an optional migration; tolerate its absence
+  // so the rest of the app still loads when it hasn't been applied.
+  try {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("active_cosmetics")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) return {};
+    return data?.active_cosmetics || {};
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -46,10 +53,12 @@ export async function setActiveCosmetic(userId, slotKey, itemId) {
   if (!userId || !slotKey) return null;
   const current = await getActiveCosmetics(userId);
   const next = { ...current, [slotKey]: itemId || null };
-  await supabase
-    .from("user_profiles")
-    .update({ active_cosmetics: next })
-    .eq("user_id", userId);
+  try {
+    await supabase
+      .from("user_profiles")
+      .update({ active_cosmetics: next })
+      .eq("user_id", userId);
+  } catch { /* column not migrated yet — fail quiet so callers aren't blocked */ }
   return next;
 }
 
