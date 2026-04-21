@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, Users, Sword, Trophy, ShoppingBag, DollarSign,
   LifeBuoy, Flag, ScrollText, GamepadIcon, Home, Store, Wallet, FileText, Rocket,
+  MessageSquare,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import TavernAdminTab from "@/components/admin/TavernAdminTab";
 import CashoutsTab from "@/components/admin/CashoutsTab";
 import BlogTab from "@/components/admin/BlogTab";
 import VersionsTab from "@/components/admin/VersionsTab";
+import ForumsTab from "@/components/admin/ForumsTab";
 
 // Hard-coded override list — anyone here is always admin regardless
 // of domain. Aetherian / Guildstew staff domains are auto-admin too
@@ -46,6 +48,7 @@ const TABS = [
   { id: "cashouts",     label: "Cashouts",            icon: Wallet },
   { id: "blog",         label: "Blog",                icon: FileText },
   { id: "versions",     label: "Versions",            icon: Rocket },
+  { id: "forums",       label: "Forums",              icon: MessageSquare },
   { id: "revenue",      label: "Revenue",             icon: DollarSign },
   { id: "tickets",      label: "Support Tickets",     icon: LifeBuoy },
   { id: "reports",      label: "Reports & Mod",       icon: Flag },
@@ -147,6 +150,7 @@ export default function Admin() {
           {tab === "cashouts"     && <CashoutsTab />}
           {tab === "blog"         && <BlogTab />}
           {tab === "versions"     && <VersionsTab />}
+          {tab === "forums"       && <ForumsTab />}
           {tab === "revenue"      && <RevenueTab      dateRange={dateRange} />}
           {tab === "tickets"      && <SupportTicketsTab adminId={user.id} />}
           {tab === "reports"      && <ReportsModerationTab adminId={user.id} />}
