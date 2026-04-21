@@ -12,6 +12,7 @@ import BlogPost from './pages/BlogPost';
 import Changelog from './pages/Changelog';
 import ComingSoon from './pages/ComingSoon';
 import Forums from './pages/Forums';
+import ForumCategory from './pages/ForumCategory';
 import Events from './pages/Events';
 import Leaderboards from './pages/Leaderboards';
 import CreatorAnalytics from './pages/CreatorAnalytics';
@@ -82,6 +83,7 @@ export const PAGES = {
     "Changelog": Changelog,
     "ComingSoon": ComingSoon,
     "Forums": Forums,
+    "ForumCategory": ForumCategory,
     "Events": Events,
     "Leaderboards": Leaderboards,
     "CreatorAnalytics": CreatorAnalytics,
