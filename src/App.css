@@ -118,3 +118,30 @@ select:focus {
   outline: none;
   border-color: #37F2D1;
 }
+
+/* Global dark scrollbars. Pages that use `.custom-scrollbar` (Home
+   cards, chat panel) get a narrower track; everything else gets the
+   default 8px width. Firefox is handled via scrollbar-width /
+   scrollbar-color on the html element. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #1E2430;
+}
+::-webkit-scrollbar-thumb {
+  background: #3a4451;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4a5568;
+}
+::-webkit-scrollbar-corner {
+  background: #1E2430;
+}
+
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #3a4451 #1E2430;
+}
