@@ -2,15 +2,17 @@
  * Tavern UI theme loader.
  *
  * Reads a theme's `file_data` (shape produced by ThemeBuilder —
- * `{ type: "ui_theme", colors: {…}, fonts: { heading, body } }`) and
- * writes it onto `:root` as CSS custom properties.
+ * `{ type: "ui_theme", colors: {…}, fonts: { heading, body },
+ *    images: {…} }`) and writes it onto `:root` as CSS custom
+ * properties.
  *
- *   colors → `--theme-<key>`        (e.g. `--theme-background`)
+ *   colors → `--theme-<key>`           (e.g. `--theme-pageBackground`)
+ *   images → `--theme-img-<key>`       (wrapped in `url(...)`)
  *   fonts  → `--theme-font-heading` / `--theme-font-body`
  *
  * Components opt in by referencing those vars in their styles — see
- * `src/styles/theme-layer.css` for the small global layer that wires
- * them to page background / card / accent / nav. Broader coverage is
+ * `src/App.css` for the global layer that wires them to
+ * body background / card / nav / accent / fonts. Broader coverage is
  * incremental: any component still using a hardcoded color keeps its
  * old look until it's migrated to a `var(--theme-*)`.
  *
@@ -19,30 +21,38 @@
  */
 
 const COLOR_KEYS = [
-  "background",
-  "card",
+  "pageBackground",
+  "cardBackground",
   "cardBorder",
-  "primary",
-  "secondary",
-  "text",
+  "primaryAccent",
+  "secondaryAccent",
+  "textPrimary",
   "textMuted",
   "navBackground",
+  "homepageCards",
   "danger",
   "success",
 ];
 
-// Legacy keys — kept so existing themes that were saved under the
-// Part 3 `--tavern-*` prefix (pre-builder shipping) still apply.
-const LEGACY_KEYS = [
-  "primary",
-  "background",
-  "card",
-  "cardBorder",
-  "text",
-  "textMuted",
-  "navBackground",
-  "accent2",
+const IMAGE_KEYS = [
+  "navTexture",
+  "homepageBackground",
+  "contentCardBackground",
+  "campaignCardTexture",
+  "sidebarTexture",
+  "footerBackground",
 ];
+
+// Legacy short keys from the pre-Part-B builder — keep the mirror so
+// themes saved before the rename still apply their colors when a
+// player equips them.
+const LEGACY_KEY_MAP = {
+  background:    "pageBackground",
+  card:          "cardBackground",
+  primary:       "primaryAccent",
+  secondary:     "secondaryAccent",
+  text:          "textPrimary",
+};
 
 let loadedFontIds = [];
 
@@ -60,8 +70,17 @@ export async function loadThemeItem(themeId) {
 
 export function applyTheme(themeData) {
   const root = document.documentElement;
-  const colors = themeData?.colors || {};
+  const colors = { ...(themeData?.colors || {}) };
+  const images = themeData?.images || {};
   const fonts = themeData?.fonts || {};
+
+  // Back-fill legacy color keys into the new names so old themes
+  // (that stored `background`, `primary`, etc.) still apply.
+  for (const [legacy, current] of Object.entries(LEGACY_KEY_MAP)) {
+    if (colors[legacy] && !colors[current]) {
+      colors[current] = colors[legacy];
+    }
+  }
 
   // Wipe whatever the last theme left behind so a color that the new
   // theme doesn't set falls back to stylesheet defaults, not a stale
@@ -74,11 +93,10 @@ export function applyTheme(themeData) {
     root.style.setProperty(`--theme-${key}`, String(value));
   }
 
-  // Legacy mirror for anyone still reading the `--tavern-*` vars.
-  for (const key of LEGACY_KEYS) {
-    const value = colors[key];
-    if (!value) continue;
-    root.style.setProperty(`--tavern-${key}`, String(value));
+  for (const key of IMAGE_KEYS) {
+    const url = images?.[key];
+    if (!url) continue;
+    root.style.setProperty(`--theme-img-${key}`, `url(${url})`);
   }
 
   if (fonts.heading) {
@@ -94,7 +112,7 @@ export function applyTheme(themeData) {
 export function clearTheme() {
   const root = document.documentElement;
   for (const key of COLOR_KEYS) root.style.removeProperty(`--theme-${key}`);
-  for (const key of LEGACY_KEYS) root.style.removeProperty(`--tavern-${key}`);
+  for (const key of IMAGE_KEYS) root.style.removeProperty(`--theme-img-${key}`);
   root.style.removeProperty("--theme-font-heading");
   root.style.removeProperty("--theme-font-body");
   for (const id of loadedFontIds) {

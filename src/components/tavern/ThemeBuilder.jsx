@@ -11,13 +11,17 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Palette, Flame, Store, X } from "lucide-react";
+import {
+  Palette, Flame, X, Upload, Info, Image as ImageIcon,
+} from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { getWalletBalance } from "@/lib/spiceWallet";
 import { uploadItem } from "@/lib/tavernClient";
 import { uploadFile } from "@/utils/uploadFile";
-import { THEME_PRESETS, THEME_COLOR_FIELDS, DEFAULT_THEME } from "@/config/themePresets";
+import {
+  THEME_PRESETS, THEME_COLOR_FIELDS, THEME_IMAGE_SLOTS, DEFAULT_THEME,
+} from "@/config/themePresets";
 import { MIN_ITEM_PRICE, UPLOAD_FEES, formatSpice } from "@/config/spiceConfig";
 
 /**
@@ -76,6 +80,27 @@ export default function ThemeBuilder({ open, onClose }) {
   const setFont = (role, value) =>
     setTheme((t) => ({ ...t, fonts: { ...t.fonts, [role]: value } }));
 
+  const setImage = (slot, value) =>
+    setTheme((t) => ({ ...t, images: { ...(t.images || {}), [slot]: value } }));
+
+  const [imageUploading, setImageUploading] = useState({});
+
+  const uploadImage = async (slot, file) => {
+    if (!file || !user?.id) return;
+    setImageUploading((m) => ({ ...m, [slot]: true }));
+    try {
+      const { file_url } = await uploadFile(file, "user-assets", "tavern/theme-images", {
+        userId: user.id,
+        uploadType: "tavern_theme_image",
+      });
+      setImage(slot, file_url);
+    } catch (err) {
+      toast.error(err?.message || "Upload failed");
+    } finally {
+      setImageUploading((m) => ({ ...m, [slot]: false }));
+    }
+  };
+
   const applyPreset = (key) => {
     const p = THEME_PRESETS[key];
     if (!p) return;
@@ -118,7 +143,22 @@ export default function ThemeBuilder({ open, onClose }) {
         previewImageUrl = up.file_url;
       } catch { /* non-fatal */ }
 
-      const fileData = { type: "ui_theme", colors: theme.colors, fonts: theme.fonts };
+      // Only include image keys that actually have a URL so the
+      // saved row isn't littered with nulls. Consumers treat missing
+      // keys and nulls identically ("not set — use the color"), but
+      // the slimmer shape is nicer for the GM reading the JSON.
+      const savedImages = {};
+      for (const slot of THEME_IMAGE_SLOTS) {
+        const v = theme.images?.[slot.key];
+        if (v) savedImages[slot.key] = v;
+      }
+
+      const fileData = {
+        type: "ui_theme",
+        colors: theme.colors,
+        fonts: theme.fonts,
+        images: savedImages,
+      };
 
       const r = await uploadItem({
         creatorId: user.id,
@@ -212,6 +252,37 @@ export default function ThemeBuilder({ open, onClose }) {
               </p>
             </Section>
 
+            <Section title="Image Replacements">
+              <p className="text-[11px] text-slate-400 leading-snug">
+                Optional — each blank slot falls back to the color from the Colors section.
+                Uploaded images render as a background layer over their matching color.
+              </p>
+              {THEME_IMAGE_SLOTS.map((slot) => (
+                <ImageSlot
+                  key={slot.key}
+                  slot={slot}
+                  value={theme.images?.[slot.key] || null}
+                  uploading={!!imageUploading[slot.key]}
+                  onUpload={(file) => uploadImage(slot.key, file)}
+                  onClear={() => setImage(slot.key, null)}
+                />
+              ))}
+            </Section>
+
+            <div className="bg-[#050816] border border-slate-700 rounded-lg p-3 flex items-start gap-2">
+              <Info className="w-4 h-4 text-[#37F2D1] mt-0.5 shrink-0" />
+              <div>
+                <p className="text-[11px] font-bold text-[#37F2D1] uppercase tracking-widest mb-1">
+                  Themes don't touch these
+                </p>
+                <p className="text-[11px] text-slate-300 leading-snug">
+                  Themes change colors, fonts, and decorative backgrounds. They do NOT affect
+                  the hero carousel, profile banners, character portraits, World Lore template visuals,
+                  Guildstew logos or mascot images, or badge icons.
+                </p>
+              </div>
+            </div>
+
             <Section title="Save as Tavern Listing">
               <div>
                 <Label className="text-xs text-slate-300">Name</Label>
@@ -292,29 +363,67 @@ export default function ThemeBuilder({ open, onClose }) {
 
 const ThemePreview = React.forwardRef(function ThemePreview({ theme }, ref) {
   const c = theme.colors;
+  const images = theme.images || {};
   const headingFont = theme.fonts?.heading ? `"${theme.fonts.heading}", serif` : "serif";
   const bodyFont = theme.fonts?.body ? `"${theme.fonts.body}", sans-serif` : "sans-serif";
 
+  // Pages with a homepage-background replacement show the image over
+  // the page color. Everything else tints against the color alone.
+  const pageStyle = {
+    backgroundColor: c.pageBackground,
+    backgroundImage: images.homepageBackground ? `url(${images.homepageBackground})` : undefined,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    borderColor: c.cardBorder,
+    color: c.textPrimary,
+    fontFamily: bodyFont,
+  };
+
+  const navStyle = {
+    backgroundColor: c.navBackground,
+    backgroundImage: images.navTexture ? `url(${images.navTexture})` : undefined,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    color: "#050816",
+  };
+
+  const contentCardStyle = {
+    backgroundColor: c.homepageCards,
+    backgroundImage: images.contentCardBackground ? `url(${images.contentCardBackground})` : undefined,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    color: "#050816",
+  };
+
   return (
-    <div
-      ref={ref}
-      className="rounded-lg border overflow-hidden"
-      style={{ backgroundColor: c.background, borderColor: c.cardBorder, color: c.text, fontFamily: bodyFont }}
-    >
-      <div
-        className="px-4 py-2 flex items-center justify-between text-sm font-bold"
-        style={{ backgroundColor: c.navBackground, color: "#050816" }}
-      >
+    <div ref={ref} className="rounded-lg border overflow-hidden" style={pageStyle}>
+      <div className="px-4 py-2 flex items-center justify-between text-sm font-bold" style={navStyle}>
         <span style={{ fontFamily: headingFont }}>GUILDSTEW</span>
         <span
           className="inline-flex items-center gap-1 text-xs rounded-full px-2 py-0.5"
-          style={{ backgroundColor: `${c.primary}22`, color: c.primary, border: `1px solid ${c.primary}55` }}
+          style={{
+            backgroundColor: `${c.primaryAccent}22`,
+            color: c.primaryAccent,
+            border: `1px solid ${c.primaryAccent}55`,
+          }}
         >
           <Flame className="w-3 h-3" /> 1,250
         </span>
       </div>
-      <div className="p-4 space-y-3">
-        <h2 style={{ fontFamily: headingFont, color: c.text }} className="text-2xl font-bold">
+
+      {/* Homepage content-card strip — previews the Homepage Cards color
+          and, if set, the content-card image override layered over it. */}
+      <div className="p-3">
+        <div
+          className="rounded-lg p-3 text-[11px] font-bold uppercase tracking-widest"
+          style={contentCardStyle}
+        >
+          Newest Game Pack
+        </div>
+      </div>
+
+      <div className="p-4 pt-1 space-y-3">
+        <h2 style={{ fontFamily: headingFont, color: c.textPrimary }} className="text-2xl font-bold">
           Welcome back, adventurer.
         </h2>
         <p className="text-sm" style={{ color: c.textMuted }}>
@@ -322,24 +431,34 @@ const ThemePreview = React.forwardRef(function ThemePreview({ theme }, ref) {
         </p>
         <div
           className="rounded-lg border p-3"
-          style={{ backgroundColor: c.card, borderColor: c.cardBorder }}
+          style={{
+            backgroundColor: c.cardBackground,
+            backgroundImage: images.campaignCardTexture ? `url(${images.campaignCardTexture})` : undefined,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            borderColor: c.cardBorder,
+          }}
         >
           <p className="text-xs uppercase tracking-widest mb-1 font-bold" style={{ color: c.textMuted }}>
             Campaign · Session 14
           </p>
-          <p className="text-sm" style={{ color: c.text }}>
+          <p className="text-sm" style={{ color: c.textPrimary }}>
             The tavern keeper leans in: "There's coin to be made out past the ridge."
           </p>
           <div className="flex items-center gap-2 mt-3">
             <button
               className="text-xs font-bold px-3 py-1.5 rounded"
-              style={{ backgroundColor: c.primary, color: "#050816" }}
+              style={{ backgroundColor: c.primaryAccent, color: "#050816" }}
             >
               Accept Quest
             </button>
             <button
               className="text-xs font-bold px-3 py-1.5 rounded border"
-              style={{ borderColor: c.cardBorder, color: c.text, backgroundColor: "transparent" }}
+              style={{
+                borderColor: c.cardBorder,
+                color: c.textPrimary,
+                backgroundColor: "transparent",
+              }}
             >
               Decline
             </button>
@@ -352,11 +471,42 @@ const ThemePreview = React.forwardRef(function ThemePreview({ theme }, ref) {
           <span className="px-2 py-0.5 rounded" style={{ backgroundColor: `${c.danger}22`, color: c.danger }}>
             1 warning
           </span>
-          <span className="px-2 py-0.5 rounded" style={{ backgroundColor: `${c.secondary}22`, color: c.secondary }}>
+          <span className="px-2 py-0.5 rounded" style={{ backgroundColor: `${c.secondaryAccent}22`, color: c.secondaryAccent }}>
             Epic loot
           </span>
         </div>
       </div>
+
+      {/* Sidebar texture and footer background ride at the bottom as
+          slim strips so creators see the override take effect even
+          though the preview is a compact mock. */}
+      {(images.sidebarTexture || images.footerBackground) && (
+        <div className="flex">
+          {images.sidebarTexture && (
+            <div
+              className="w-10"
+              style={{
+                backgroundImage: `url(${images.sidebarTexture})`,
+                backgroundSize: "cover",
+                minHeight: 32,
+              }}
+              aria-label="Sidebar texture"
+            />
+          )}
+          {images.footerBackground && (
+            <div
+              className="flex-1 text-[10px] text-white/80 font-bold px-3 py-2 uppercase tracking-widest"
+              style={{
+                backgroundImage: `url(${images.footerBackground})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }}
+            >
+              Footer
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 });
@@ -389,10 +539,60 @@ function ColorRow({ label, value, onChange }) {
   );
 }
 
+function ImageSlot({ slot, value, uploading, onUpload, onClear }) {
+  return (
+    <div className="bg-[#050816] border border-slate-800 rounded p-2">
+      <div className="flex items-start gap-2">
+        <div className="w-14 h-14 rounded overflow-hidden bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0">
+          {value ? (
+            <img src={value} alt="" className="w-full h-full object-cover" />
+          ) : slot.defaultThumb ? (
+            <img src={slot.defaultThumb} alt="" className="w-full h-full object-cover opacity-70" />
+          ) : (
+            <ImageIcon className="w-5 h-5 text-slate-700" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold text-white truncate">{slot.label}</p>
+          <p className="text-[10px] text-slate-500 leading-snug line-clamp-2">{slot.hint}</p>
+          <div className="flex gap-1 mt-1">
+            <label className="inline-flex items-center gap-1 bg-[#1E2430] border border-slate-700 hover:border-amber-400 rounded px-2 py-1 text-[10px] cursor-pointer">
+              <Upload className="w-3 h-3" />
+              {uploading ? "Uploading…" : value ? "Replace" : "Upload"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => onUpload?.(e.target.files?.[0])}
+              />
+            </label>
+            {value && (
+              <button
+                type="button"
+                onClick={onClear}
+                className="inline-flex items-center gap-1 bg-[#1E2430] border border-rose-500/40 text-rose-300 hover:bg-rose-500/10 rounded px-2 py-1 text-[10px]"
+              >
+                <X className="w-3 h-3" /> Remove
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FontField({ label, value, onChange, sample, stack }) {
   // Debounce font injection so the sample reflects the typed name
   // without spamming <link> tags while the user is mid-typing.
+  // `status` tracks the load outcome so we can warn on bad names:
+  //   idle    — nothing to check yet
+  //   loading — <link> is in flight
+  //   ok      — document.fonts confirmed the face is available
+  //   error   — font failed to load (bad spelling, not a Google Font)
   const [local, setLocal] = useState(value);
+  const [status, setStatus] = useState("idle");
+
   useEffect(() => { setLocal(value); }, [value]);
   useEffect(() => {
     const handle = setTimeout(() => { if (local !== value) onChange?.(local); }, 400);
@@ -400,12 +600,35 @@ function FontField({ label, value, onChange, sample, stack }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [local]);
 
+  // Kick off the Google Fonts load + verify once the value settles.
+  // `document.fonts.load()` resolves when the face is ready (or
+  // rejects on error). Non-Google names fail silently at the
+  // <link> level — that's why we prefer `document.fonts.load` +
+  // `check` over `onload` on the link tag.
+  useEffect(() => {
+    const name = (value || "").trim();
+    if (!name) { setStatus("idle"); return; }
+    setStatus("loading");
+    injectGoogleFont(name);
+    if (!document.fonts?.load) { setStatus("ok"); return; }
+    let cancelled = false;
+    document.fonts
+      .load(`16px "${name}"`)
+      .then(() => {
+        if (cancelled) return;
+        setStatus(document.fonts.check(`16px "${name}"`) ? "ok" : "error");
+      })
+      .catch(() => { if (!cancelled) setStatus("error"); });
+    return () => { cancelled = true; };
+  }, [value]);
+
   return (
     <div>
       <Label className="text-xs text-slate-300 mb-1 block">{label}</Label>
       <Input
         value={local}
         onChange={(e) => setLocal(e.target.value)}
+        onBlur={() => onChange?.(local)}
         className="bg-[#050816] border-slate-700 text-white"
         placeholder={stack === "serif" ? "Cinzel" : "Inter"}
       />
@@ -415,6 +638,11 @@ function FontField({ label, value, onChange, sample, stack }) {
           style={{ fontFamily: `"${value}", ${stack}` }}
         >
           {sample}
+        </p>
+      )}
+      {value && status === "error" && (
+        <p className="mt-1 text-[10px] text-rose-300 italic">
+          Font not found — check spelling, or browse fonts at fonts.google.com.
         </p>
       )}
     </div>
@@ -448,50 +676,54 @@ function renderThemeThumbnail(theme, label) {
   const ctx = canvas.getContext("2d");
 
   // Page background.
-  ctx.fillStyle = c.background || "#0f1219";
+  ctx.fillStyle = c.pageBackground || "#0f1219";
   ctx.fillRect(0, 0, W, H);
 
   // Nav bar.
   ctx.fillStyle = c.navBackground || "#f8a47c";
-  ctx.fillRect(0, 0, W, 56);
+  ctx.fillRect(0, 0, W, 48);
 
-  // Card.
-  ctx.fillStyle = c.card || "#1a1f2e";
-  ctx.fillRect(32, 96, W - 64, 180);
+  // Homepage content card (the salmon/orange the theme can retint).
+  ctx.fillStyle = c.homepageCards || "#f8a47c";
+  ctx.fillRect(32, 64, W - 64, 24);
+
+  // Primary card.
+  ctx.fillStyle = c.cardBackground || "#1a1f2e";
+  ctx.fillRect(32, 104, W - 64, 176);
   ctx.strokeStyle = c.cardBorder || "#2a3441";
   ctx.lineWidth = 2;
-  ctx.strokeRect(32, 96, W - 64, 180);
+  ctx.strokeRect(32, 104, W - 64, 176);
 
   // Heading.
-  ctx.fillStyle = c.text || "#e2e8f0";
+  ctx.fillStyle = c.textPrimary || "#e2e8f0";
   const head = theme.fonts?.heading || "serif";
   ctx.font = `700 22px "${head}", serif`;
-  ctx.fillText((label || "Guildstew Theme").slice(0, 32), 48, 132);
+  ctx.fillText((label || "Guildstew Theme").slice(0, 32), 48, 140);
 
   // Body text.
   const body = theme.fonts?.body || "sans-serif";
   ctx.fillStyle = c.textMuted || "#94a3b8";
   ctx.font = `400 14px "${body}", sans-serif`;
-  ctx.fillText("The quick brown fox jumps over the lazy dog.", 48, 160);
+  ctx.fillText("The quick brown fox jumps over the lazy dog.", 48, 168);
 
   // Accent button.
-  ctx.fillStyle = c.primary || "#37F2D1";
-  ctx.fillRect(48, 186, 120, 32);
+  ctx.fillStyle = c.primaryAccent || "#37F2D1";
+  ctx.fillRect(48, 194, 120, 32);
   ctx.fillStyle = "#050816";
   ctx.font = `700 13px "${body}", sans-serif`;
-  ctx.fillText("Accept Quest", 62, 207);
+  ctx.fillText("Accept Quest", 62, 215);
 
   // Status chips.
   const chip = (x, color, text) => {
     ctx.fillStyle = hexA(color, 0.18);
-    ctx.fillRect(x, 232, 88, 24);
+    ctx.fillRect(x, 240, 88, 24);
     ctx.fillStyle = color;
     ctx.font = `700 11px "${body}", sans-serif`;
-    ctx.fillText(text, x + 10, 249);
+    ctx.fillText(text, x + 10, 257);
   };
-  chip(48,  c.success   || "#22c55e", "Connected");
-  chip(148, c.danger    || "#ef4444", "Warning");
-  chip(240, c.secondary || "#a855f7", "Epic");
+  chip(48,  c.success         || "#22c55e", "Connected");
+  chip(148, c.danger          || "#ef4444", "Warning");
+  chip(240, c.secondaryAccent || "#a855f7", "Epic");
 
   return canvas.toDataURL("image/png");
 }
@@ -509,6 +741,7 @@ function cloneTheme(t) {
     type: "ui_theme",
     colors: { ...t.colors },
     fonts: { ...t.fonts },
+    images: { ...(t.images || {}) },
   };
 }
 

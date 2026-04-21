@@ -69,6 +69,21 @@ const AuthenticatedApp = () => {
           <MainPage />
         </LayoutWrapper>
       } />
+      <Route path="/blog" element={
+        <LayoutWrapper currentPageName="Blog">
+          {Pages.Blog ? <Pages.Blog /> : <PageNotFound />}
+        </LayoutWrapper>
+      } />
+      <Route path="/blog/:slug" element={
+        <LayoutWrapper currentPageName="BlogPost">
+          {Pages.BlogPost ? <Pages.BlogPost /> : <PageNotFound />}
+        </LayoutWrapper>
+      } />
+      <Route path="/changelog" element={
+        <LayoutWrapper currentPageName="Changelog">
+          {Pages.Changelog ? <Pages.Changelog /> : <PageNotFound />}
+        </LayoutWrapper>
+      } />
       {Object.entries(Pages).map(([path, Page]) => (
         <Route
           key={path}
