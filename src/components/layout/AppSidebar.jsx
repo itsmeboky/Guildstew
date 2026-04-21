@@ -6,6 +6,8 @@ import {
   MessageSquare, Calendar, BarChart3,
   Upload, LayoutDashboard, TrendingUp,
   HelpCircle, BookOpen, AlertTriangle,
+  User, Settings, CreditCard, Crown, Package, UserCircle2,
+  ChevronDown, Sparkles,
 } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -40,6 +42,7 @@ export default function AppSidebar() {
   const location = useLocation();
   const [spiceOpen, setSpiceOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   const { data: wallet } = useQuery({
     queryKey: ["spiceWallet", user?.id],
@@ -215,9 +218,30 @@ export default function AppSidebar() {
           </SidebarSection>
         </nav>
 
-        {/* Pinned bottom — Account + Settings land here in step 7 */}
+        {/* Pinned bottom — Account submenu + Settings stay anchored
+            so they're reachable regardless of scroll. */}
         <div className="border-t border-[#2a3441] p-2 space-y-1">
-          {/* Populated by step 7. */}
+          {/* Account — expandable */}
+          <button
+            type="button"
+            onClick={() => setAccountOpen((o) => !o)}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-slate-300 hover:bg-[#2a3441] hover:text-white transition-colors"
+          >
+            <User className="w-[18px] h-[18px]" />
+            <span className="flex-1 text-left">Account</span>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${accountOpen ? "rotate-180" : ""}`} />
+          </button>
+          {accountOpen && (
+            <div className="pl-3 space-y-0.5">
+              <SidebarLink to={createPageUrl("AccountBilling")} icon={CreditCard} label="Billing & Payments" />
+              {guildManagementItem(sub)}
+              <SidebarLink to={createPageUrl("MyCollection")} icon={Package}      label="My Collection" />
+              <SidebarLink to={createPageUrl("YourProfile")}  icon={UserCircle2}  label="Profile" />
+            </div>
+          )}
+
+          {/* Settings — pinned single button. */}
+          <SidebarLink to={createPageUrl("Settings")} icon={Settings} label="Settings" />
         </div>
       </aside>
 
@@ -290,6 +314,35 @@ export function SidebarLink({ to, icon: Icon, label, badge, external, className 
   return (
     <Link to={to} onClick={onClick} className={`${base} ${activeCls}`}>
       {content}
+    </Link>
+  );
+}
+
+/**
+ * Guild Management entry.
+ *
+ * In-a-guild users get a plain link to /guild. Guild-less users get
+ * a warm amber CTA — "✨ Join a Guild" — so the upsell feels
+ * inviting rather than nag-like.
+ */
+function guildManagementItem(sub) {
+  const inGuild = !!sub?.guildOwnerId || sub?.isGuildMember || sub?.isGuildOwner;
+  if (inGuild) {
+    return (
+      <SidebarLink
+        to={createPageUrl("Guild")}
+        icon={Crown}
+        label="Guild Management"
+      />
+    );
+  }
+  return (
+    <Link
+      to={createPageUrl("Guild")}
+      className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-bold bg-amber-500/10 text-amber-200 border border-amber-400/60 hover:bg-amber-500/20 hover:border-amber-300 transition-colors shadow-[0_0_12px_rgba(251,191,36,0.12)]"
+    >
+      <Sparkles className="w-[18px] h-[18px] text-amber-300" />
+      <span className="flex-1">Join a Guild</span>
     </Link>
   );
 }
