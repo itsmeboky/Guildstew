@@ -5611,11 +5611,17 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
                           <div className="text-left min-w-0 flex-1">
                             <p className="text-sm font-bold text-white truncate">{char?.name || player.username}</p>
                             {adjustingHp ? (
-                              <div className="w-full bg-[#111827] h-1.5 rounded-full mt-1 overflow-hidden">
+                              <div className="w-full bg-[#111827] h-3 rounded-full mt-1 overflow-hidden relative">
                                 <div
                                   className={`${hpBarColor(maxHp > 0 ? (currentHp / maxHp) * 100 : 0)} h-full`}
                                   style={{ width: `${maxHp > 0 ? Math.min(100, (currentHp / maxHp) * 100) : 0}%` }}
                                 />
+                                {/* Numeric HP overlay — keeps health readable for
+                                    red/green colorblind viewers who can't rely on
+                                    the bar hue alone. */}
+                                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white leading-none tracking-tight drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]">
+                                  {currentHp}/{maxHp}
+                                </span>
                               </div>
                             ) : (
                               <span className="inline-block text-[10px] font-semibold bg-[#37F2D1]/20 text-[#37F2D1] px-2 py-0.5 rounded-full">
@@ -5659,11 +5665,15 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
                             <div className="text-left min-w-0 flex-1">
                               <p className="text-sm font-bold text-white truncate">{safeText(monster.name)}</p>
                               {adjustingHp ? (
-                                <div className="w-full bg-[#111827] h-1.5 rounded-full mt-1 overflow-hidden">
+                                <div className="w-full bg-[#111827] h-3 rounded-full mt-1 overflow-hidden relative">
                                   <div
                                     className={`${hpBarColor(maxHp > 0 ? (currentHp / maxHp) * 100 : 0)} h-full`}
                                     style={{ width: `${maxHp > 0 ? Math.min(100, (currentHp / maxHp) * 100) : 0}%` }}
                                   />
+                                  {/* Numeric overlay — see matching PC bar above. */}
+                                  <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white leading-none tracking-tight drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)]">
+                                    {currentHp}/{maxHp}
+                                  </span>
                                 </div>
                               ) : (
                                 <span className="inline-block text-[10px] font-semibold bg-[#FF5722]/20 text-[#FF5722] px-2 py-0.5 rounded-full">
