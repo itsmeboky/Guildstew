@@ -299,7 +299,12 @@ const ThemePreview = React.forwardRef(function ThemePreview({ theme }, ref) {
     <div
       ref={ref}
       className="rounded-lg border overflow-hidden"
-      style={{ backgroundColor: c.background, borderColor: c.cardBorder, color: c.text, fontFamily: bodyFont }}
+      style={{
+        backgroundColor: c.pageBackground,
+        borderColor: c.cardBorder,
+        color: c.textPrimary,
+        fontFamily: bodyFont,
+      }}
     >
       <div
         className="px-4 py-2 flex items-center justify-between text-sm font-bold"
@@ -308,13 +313,31 @@ const ThemePreview = React.forwardRef(function ThemePreview({ theme }, ref) {
         <span style={{ fontFamily: headingFont }}>GUILDSTEW</span>
         <span
           className="inline-flex items-center gap-1 text-xs rounded-full px-2 py-0.5"
-          style={{ backgroundColor: `${c.primary}22`, color: c.primary, border: `1px solid ${c.primary}55` }}
+          style={{
+            backgroundColor: `${c.primaryAccent}22`,
+            color: c.primaryAccent,
+            border: `1px solid ${c.primaryAccent}55`,
+          }}
         >
           <Flame className="w-3 h-3" /> 1,250
         </span>
       </div>
-      <div className="p-4 space-y-3">
-        <h2 style={{ fontFamily: headingFont, color: c.text }} className="text-2xl font-bold">
+
+      {/* Homepage content-card strip — previews the Homepage Cards color. */}
+      <div className="p-3">
+        <div
+          className="rounded-lg p-3 text-[11px] font-bold uppercase tracking-widest"
+          style={{ backgroundColor: c.homepageCards, color: "#050816" }}
+        >
+          Newest Game Pack
+        </div>
+      </div>
+
+      <div className="p-4 pt-1 space-y-3">
+        <h2
+          style={{ fontFamily: headingFont, color: c.textPrimary }}
+          className="text-2xl font-bold"
+        >
           Welcome back, adventurer.
         </h2>
         <p className="text-sm" style={{ color: c.textMuted }}>
@@ -322,24 +345,28 @@ const ThemePreview = React.forwardRef(function ThemePreview({ theme }, ref) {
         </p>
         <div
           className="rounded-lg border p-3"
-          style={{ backgroundColor: c.card, borderColor: c.cardBorder }}
+          style={{ backgroundColor: c.cardBackground, borderColor: c.cardBorder }}
         >
           <p className="text-xs uppercase tracking-widest mb-1 font-bold" style={{ color: c.textMuted }}>
             Campaign · Session 14
           </p>
-          <p className="text-sm" style={{ color: c.text }}>
+          <p className="text-sm" style={{ color: c.textPrimary }}>
             The tavern keeper leans in: "There's coin to be made out past the ridge."
           </p>
           <div className="flex items-center gap-2 mt-3">
             <button
               className="text-xs font-bold px-3 py-1.5 rounded"
-              style={{ backgroundColor: c.primary, color: "#050816" }}
+              style={{ backgroundColor: c.primaryAccent, color: "#050816" }}
             >
               Accept Quest
             </button>
             <button
               className="text-xs font-bold px-3 py-1.5 rounded border"
-              style={{ borderColor: c.cardBorder, color: c.text, backgroundColor: "transparent" }}
+              style={{
+                borderColor: c.cardBorder,
+                color: c.textPrimary,
+                backgroundColor: "transparent",
+              }}
             >
               Decline
             </button>
@@ -352,7 +379,10 @@ const ThemePreview = React.forwardRef(function ThemePreview({ theme }, ref) {
           <span className="px-2 py-0.5 rounded" style={{ backgroundColor: `${c.danger}22`, color: c.danger }}>
             1 warning
           </span>
-          <span className="px-2 py-0.5 rounded" style={{ backgroundColor: `${c.secondary}22`, color: c.secondary }}>
+          <span
+            className="px-2 py-0.5 rounded"
+            style={{ backgroundColor: `${c.secondaryAccent}22`, color: c.secondaryAccent }}
+          >
             Epic loot
           </span>
         </div>
@@ -448,50 +478,54 @@ function renderThemeThumbnail(theme, label) {
   const ctx = canvas.getContext("2d");
 
   // Page background.
-  ctx.fillStyle = c.background || "#0f1219";
+  ctx.fillStyle = c.pageBackground || "#0f1219";
   ctx.fillRect(0, 0, W, H);
 
   // Nav bar.
   ctx.fillStyle = c.navBackground || "#f8a47c";
-  ctx.fillRect(0, 0, W, 56);
+  ctx.fillRect(0, 0, W, 48);
 
-  // Card.
-  ctx.fillStyle = c.card || "#1a1f2e";
-  ctx.fillRect(32, 96, W - 64, 180);
+  // Homepage content card (the salmon/orange the theme can retint).
+  ctx.fillStyle = c.homepageCards || "#f8a47c";
+  ctx.fillRect(32, 64, W - 64, 24);
+
+  // Primary card.
+  ctx.fillStyle = c.cardBackground || "#1a1f2e";
+  ctx.fillRect(32, 104, W - 64, 176);
   ctx.strokeStyle = c.cardBorder || "#2a3441";
   ctx.lineWidth = 2;
-  ctx.strokeRect(32, 96, W - 64, 180);
+  ctx.strokeRect(32, 104, W - 64, 176);
 
   // Heading.
-  ctx.fillStyle = c.text || "#e2e8f0";
+  ctx.fillStyle = c.textPrimary || "#e2e8f0";
   const head = theme.fonts?.heading || "serif";
   ctx.font = `700 22px "${head}", serif`;
-  ctx.fillText((label || "Guildstew Theme").slice(0, 32), 48, 132);
+  ctx.fillText((label || "Guildstew Theme").slice(0, 32), 48, 140);
 
   // Body text.
   const body = theme.fonts?.body || "sans-serif";
   ctx.fillStyle = c.textMuted || "#94a3b8";
   ctx.font = `400 14px "${body}", sans-serif`;
-  ctx.fillText("The quick brown fox jumps over the lazy dog.", 48, 160);
+  ctx.fillText("The quick brown fox jumps over the lazy dog.", 48, 168);
 
   // Accent button.
-  ctx.fillStyle = c.primary || "#37F2D1";
-  ctx.fillRect(48, 186, 120, 32);
+  ctx.fillStyle = c.primaryAccent || "#37F2D1";
+  ctx.fillRect(48, 194, 120, 32);
   ctx.fillStyle = "#050816";
   ctx.font = `700 13px "${body}", sans-serif`;
-  ctx.fillText("Accept Quest", 62, 207);
+  ctx.fillText("Accept Quest", 62, 215);
 
   // Status chips.
   const chip = (x, color, text) => {
     ctx.fillStyle = hexA(color, 0.18);
-    ctx.fillRect(x, 232, 88, 24);
+    ctx.fillRect(x, 240, 88, 24);
     ctx.fillStyle = color;
     ctx.font = `700 11px "${body}", sans-serif`;
-    ctx.fillText(text, x + 10, 249);
+    ctx.fillText(text, x + 10, 257);
   };
-  chip(48,  c.success   || "#22c55e", "Connected");
-  chip(148, c.danger    || "#ef4444", "Warning");
-  chip(240, c.secondary || "#a855f7", "Epic");
+  chip(48,  c.success         || "#22c55e", "Connected");
+  chip(148, c.danger          || "#ef4444", "Warning");
+  chip(240, c.secondaryAccent || "#a855f7", "Epic");
 
   return canvas.toDataURL("image/png");
 }
@@ -509,6 +543,7 @@ function cloneTheme(t) {
     type: "ui_theme",
     colors: { ...t.colors },
     fonts: { ...t.fonts },
+    images: { ...(t.images || {}) },
   };
 }
 
