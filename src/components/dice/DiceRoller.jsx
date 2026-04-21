@@ -4,6 +4,9 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DICE_SIDES } from "./diceConfig";
 import { FACE_ROTATIONS } from "./faceRotations";
+import { useActiveDiceSkin } from "@/lib/useActiveDiceSkin";
+import { applyDiceSkinToMesh } from "@/lib/applyDiceSkin";
+import { DEFAULT_TEXTURE_URL } from "@/config/diceAssets";
 
 /** Default GLB paths – update these to your actual uploaded .glb URLs */
 const DEFAULT_MODEL_URLS = {
@@ -226,6 +229,20 @@ function Particles({ type = "default" }) {
   );
 }
 
+// Baseline "skin" used when the player has no Tavern dice skin
+// applied. Mirrors the original hard-coded Guildstew look so the
+// apply-skin path is the single source of truth for the material
+// whether or not the player has a skin equipped.
+const STOCK_SKIN = {
+  baseColor: "#2a3441",
+  metalness: 0.3,
+  roughness: 0.4,
+  glowEnabled: false,
+  primaryLight: "#FF5722",
+  secondaryLight: "#8B5CF6",
+  customTextureUrl: null,
+};
+
 // Simple D20 fallback (for when GLB fails completely)
 function createFallbackD20() {
   const geometry = new THREE.IcosahedronGeometry(1.3);
@@ -277,6 +294,32 @@ const DiceRoller = forwardRef((props, ref) => {
   const customTransformsRef = useRef({});
   const modelsLoadedRef = useRef(false);
   const [modelsReady, setModelsReady] = useState(false);
+
+  // Active Tavern dice skin (null = use stock Guildstew material).
+  // Kept in a ref so createDice() can read it without needing the
+  // hook value captured in its closure.
+  const activeSkin = useActiveDiceSkin();
+  const activeSkinRef = useRef(null);
+  const defaultTextureRef = useRef(null);
+  const textureCacheRef = useRef(new Map());
+  useEffect(() => { activeSkinRef.current = activeSkin; }, [activeSkin]);
+
+  // Preload the shared default dice texture once.
+  useEffect(() => {
+    const loader = new THREE.TextureLoader();
+    loader.load(DEFAULT_TEXTURE_URL, (tex) => {
+      tex.flipY = false;
+      defaultTextureRef.current = tex;
+      // If the die is already on stage, re-skin it so it picks up the
+      // texture once it loads.
+      if (diceRef.current) {
+        applyDiceSkinToMesh(diceRef.current, activeSkinRef.current || STOCK_SKIN, {
+          defaultTexture: defaultTextureRef.current,
+          textureCache: textureCacheRef.current,
+        });
+      }
+    });
+  }, []);
   
   // Keep latest callback in ref to avoid re-init of scene
   const onRollCompleteRef = useRef(onRollComplete);
@@ -566,26 +609,38 @@ const DiceRoller = forwardRef((props, ref) => {
     };
   }, [isOpen, embedded, modelsReady, selectedDice, forcedResult]); // Re-add forcedResult to dependency array so force re-roll works
 
-  // Update lights when colors change
+  // Update lights when colors change. If the player has a Tavern
+  // dice skin applied, its lighting colors win over the prop-passed
+  // `primaryColor` / `secondaryColor` so the skin drives the look.
   useEffect(() => {
-    if (sceneRef.current && sceneRef.current.userData) {
-      const { ambientLight, hemiLight, keyLight, ringLights } = sceneRef.current.userData;
-      const pColor = new THREE.Color(primaryColor);
-      const sColor = new THREE.Color(secondaryColor);
-
-      if (ambientLight) ambientLight.color.set(sColor);
-      if (hemiLight) {
-        hemiLight.color.set(pColor);
-        hemiLight.groundColor.set(sColor);
-      }
-      if (keyLight) keyLight.color.set(pColor);
-      if (ringLights) {
-        ringLights.forEach((light, i) => {
-          light.color.set(i % 2 === 0 ? pColor : sColor);
-        });
-      }
+    if (!sceneRef.current?.userData) return;
+    const skin = activeSkin || null;
+    const pColor = new THREE.Color(skin?.primaryLight || primaryColor);
+    const sColor = new THREE.Color(skin?.secondaryLight || secondaryColor);
+    const { ambientLight, hemiLight, keyLight, ringLights } = sceneRef.current.userData;
+    if (ambientLight) ambientLight.color.set(sColor);
+    if (hemiLight) {
+      hemiLight.color.set(pColor);
+      hemiLight.groundColor.set(sColor);
     }
-  }, [primaryColor, secondaryColor]);
+    if (keyLight) keyLight.color.set(pColor);
+    if (ringLights) {
+      ringLights.forEach((light, i) => {
+        light.color.set(i % 2 === 0 ? pColor : sColor);
+      });
+    }
+  }, [primaryColor, secondaryColor, activeSkin]);
+
+  // Re-skin the current die whenever the active Tavern dice skin
+  // changes (e.g. player applies a new skin from My Collection
+  // without closing the roller).
+  useEffect(() => {
+    if (!diceRef.current) return;
+    applyDiceSkinToMesh(diceRef.current, activeSkin || STOCK_SKIN, {
+      defaultTexture: defaultTextureRef.current,
+      textureCache: textureCacheRef.current,
+    });
+  }, [activeSkin]);
 
   useEffect(() => {
     if ((isOpen || embedded) && sceneRef.current && isInitializedRef.current) {
@@ -693,6 +748,14 @@ const DiceRoller = forwardRef((props, ref) => {
 
     diceRef.current = mesh;
     scene.add(mesh);
+
+    // Re-skin with the active Tavern skin (or stock defaults). Must
+    // run after scene.add so the traversal hits the cloned meshes,
+    // not the original.
+    applyDiceSkinToMesh(mesh, activeSkinRef.current || STOCK_SKIN, {
+      defaultTexture: defaultTextureRef.current,
+      textureCache: textureCacheRef.current,
+    });
   };
 
   const handleRoll = () => {
