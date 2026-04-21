@@ -233,14 +233,14 @@ export default function Layout({ children, currentPageName }) {
     initialData: []
   });
 
-  const pendingRequestsCount = React.useMemo(() => 
-    friendships.filter(f => f.friend_id === user?.id && f.status === 'pending').length,
+  const pendingRequestsCount = React.useMemo(() =>
+    (friendships || []).filter(f => f?.friend_id === user?.id && f?.status === 'pending').length,
     [friendships, user?.id]
   );
   
-  const newAchievementsCount = React.useMemo(() => 
-    achievements.filter(a => {
-      const earnedDate = new Date(a.earned_at);
+  const newAchievementsCount = React.useMemo(() =>
+    (achievements || []).filter(a => {
+      const earnedDate = new Date(a?.earned_at);
       const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       return earnedDate > dayAgo;
     }).length,
