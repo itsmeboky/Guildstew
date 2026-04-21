@@ -21,6 +21,7 @@ import { supabase } from "@/api/supabaseClient";
 import AppearanceTab from "@/components/settings/AppearanceTab";
 import AccessibilityTab from "@/components/settings/AccessibilityTab";
 import NotificationsTab from "@/components/settings/NotificationsTab";
+import PrivacyTab from "@/components/settings/PrivacyTab";
 
 /**
  * /settings — tabbed preferences surface.
@@ -87,7 +88,7 @@ export default function Settings() {
             <NotificationsTab />
           </TabsContent>
           <TabsContent value="privacy"       className="mt-6 space-y-4">
-            <ComingLater title="Privacy & Security" />
+            <PrivacyTab />
           </TabsContent>
           <TabsContent value="legal"         className="mt-6 space-y-4">
             <ComingLater title="Legal" />
