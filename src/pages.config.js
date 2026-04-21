@@ -9,6 +9,7 @@ import MyCollection from './pages/MyCollection';
 import CreatorDashboard from './pages/CreatorDashboard';
 import Blog from './pages/Blog';
 import BlogPost from './pages/BlogPost';
+import Changelog from './pages/Changelog';
 import Friends from './pages/Friends';
 import PIEChart from './pages/PIEChart';
 import Settings from './pages/Settings';
@@ -68,6 +69,7 @@ export const PAGES = {
     "CreatorDashboard": CreatorDashboard,
     "Blog": Blog,
     "BlogPost": BlogPost,
+    "Changelog": Changelog,
     "Friends": Friends,
     "PIEChart": PIEChart,
     "Settings": Settings,
