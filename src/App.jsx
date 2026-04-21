@@ -105,6 +105,11 @@ const AuthenticatedApp = () => {
           {Pages.SupportTicket ? <Pages.SupportTicket /> : <PageNotFound />}
         </LayoutWrapper>
       } />
+      <Route path="/account/billing" element={
+        <LayoutWrapper currentPageName="AccountBilling">
+          {Pages.AccountBilling ? <Pages.AccountBilling /> : <PageNotFound />}
+        </LayoutWrapper>
+      } />
       {Object.entries(Pages).map(([path, Page]) => (
         <Route
           key={path}
