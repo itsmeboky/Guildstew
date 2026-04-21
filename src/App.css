@@ -145,3 +145,19 @@ html {
   scrollbar-width: thin;
   scrollbar-color: #3a4451 #1E2430;
 }
+
+/* Default dark styling for bare <input> / <textarea> that aren't
+   wrapped in the shadcn Input / Textarea component. Specific
+   components override these via Tailwind classes or inline styles,
+   which win on specificity. Color-input gets a dedicated override so
+   it doesn't try to paint a dark swatch over the swatch chip. */
+input:not([type="color"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="image"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
+textarea {
+  background-color: transparent;
+  color: inherit;
+}
+input:not([type="color"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="image"]):not([type="submit"]):not([type="button"]):not([type="reset"])::placeholder,
+textarea::placeholder {
+  color: #94a3b8;
+  opacity: 0.8;
+}
