@@ -189,14 +189,6 @@ export default function TheTavern() {
                 <Package className="w-4 h-4 mr-1" /> My Collection
               </Button>
             </Link>
-            <Link to={createPageUrl("CreatorDashboard")}>
-              <Button
-                variant="outline"
-                className="border-purple-400/40 text-purple-200"
-              >
-                <TrendingUp className="w-4 h-4 mr-1" /> Creator Dashboard
-              </Button>
-            </Link>
             <Button
               onClick={() => setUploadOpen(true)}
               variant="outline"
@@ -205,6 +197,17 @@ export default function TheTavern() {
               <Plus className="w-4 h-4 mr-1" /> Sell on Tavern
             </Button>
           </div>
+        </div>
+
+        {/* Dashboard lives in the sidebar's Creator Panel — keep a
+            subtle breadcrumb here for creators who are mid-browsing. */}
+        <div className="-mt-4 text-right">
+          <Link
+            to={createPageUrl("CreatorDashboard")}
+            className="text-[11px] text-slate-400 hover:text-[#37F2D1] transition-colors"
+          >
+            Manage your listings →
+          </Link>
         </div>
 
         {/* Featured carousels */}

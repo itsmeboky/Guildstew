@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Flame, Users, Trophy, PieChart,
   MessageSquare, Calendar, BarChart3,
+  Upload, LayoutDashboard, TrendingUp,
 } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -11,6 +12,7 @@ import { useSubscription } from "@/lib/SubscriptionContext";
 import { getWalletBalance } from "@/lib/spiceWallet";
 import { formatSpice } from "@/config/spiceConfig";
 import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
+import CreatorUploadDialog from "@/components/tavern/CreatorUploadDialog";
 import { base44 } from "@/api/base44Client";
 
 /**
@@ -36,6 +38,7 @@ export default function AppSidebar() {
   const sub = useSubscription();
   const location = useLocation();
   const [spiceOpen, setSpiceOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const { data: wallet } = useQuery({
     queryKey: ["spiceWallet", user?.id],
@@ -188,6 +191,21 @@ export default function AppSidebar() {
             <SidebarLink to={createPageUrl("Events")}       icon={Calendar}      label="Community Events" />
             <SidebarLink to={createPageUrl("Leaderboards")} icon={BarChart3}     label="Leaderboards" />
           </SidebarSection>
+
+          <SidebarSection label="Creator Panel">
+            {/* Upload opens the existing CreatorUploadDialog straight
+                from the sidebar — no intermediate page. */}
+            <button
+              type="button"
+              onClick={() => setUploadOpen(true)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-slate-300 hover:bg-[#2a3441] hover:text-white transition-colors"
+            >
+              <Upload className="w-[18px] h-[18px]" />
+              <span className="flex-1 text-left">Upload New</span>
+            </button>
+            <SidebarLink to={createPageUrl("CreatorDashboard")} icon={LayoutDashboard} label="Creator Dashboard" />
+            <SidebarLink to={createPageUrl("CreatorAnalytics")} icon={TrendingUp}      label="Analytics" />
+          </SidebarSection>
         </nav>
 
         {/* Pinned bottom — Account + Settings land here in step 7 */}
@@ -197,6 +215,7 @@ export default function AppSidebar() {
       </aside>
 
       <BuySpiceDialog open={spiceOpen} onClose={() => setSpiceOpen(false)} />
+      <CreatorUploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} />
     </>
   );
 }
