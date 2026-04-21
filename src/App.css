@@ -102,3 +102,19 @@ h1, h2, h3, h4, h5, h6 {
 .theme-success {
   color: var(--theme-success, var(--tavern-default-success));
 }
+
+/* Native <select>, <option>, <optgroup> — catches any place in the
+   app that dropped a raw HTML select rather than the shadcn Select
+   component. Keeps the dark theme consistent across both. */
+select,
+select option,
+select optgroup {
+  background-color: #1E2430;
+  color: #e2e8f0;
+  border-color: #3a4451;
+}
+
+select:focus {
+  outline: none;
+  border-color: #37F2D1;
+}
