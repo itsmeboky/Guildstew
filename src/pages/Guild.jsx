@@ -315,28 +315,142 @@ function GuildHub() {
 }
 
 function GuildJoinCTA() {
-  // Placeholder render for the non-member path — full CTA shipped in step 3.
-  return <GuildJoinCTAv2 />;
-}
-
-function GuildJoinCTAv2() {
   return (
-    <div className="min-h-screen bg-[#050816] text-white flex items-center justify-center p-6">
-      <div className="max-w-md text-center space-y-5">
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-amber-400/20 to-amber-600/10 border-2 border-amber-400/50 shadow-[0_0_30px_rgba(251,191,36,0.25)]">
-          <Sparkles className="w-10 h-10 text-amber-300" />
+    <div className="min-h-screen bg-[#050816] text-white">
+      {/* Hero */}
+      <div
+        className="w-full px-6 pt-16 pb-12 relative overflow-hidden"
+        style={{
+          background:
+            "radial-gradient(ellipse at top, rgba(251,191,36,0.25) 0%, rgba(251,191,36,0.08) 40%, rgba(5,8,22,1) 80%)",
+        }}
+      >
+        <div className="max-w-3xl mx-auto text-center relative z-10">
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-amber-300/20 to-amber-600/10 border-2 border-amber-400/60 shadow-[0_0_40px_rgba(251,191,36,0.4)] mb-5">
+            <Crown className="w-12 h-12 text-amber-300" />
+          </div>
+          <h1
+            className="text-5xl md:text-6xl font-black text-amber-100 tracking-tight"
+            style={{ fontFamily: "'Cream', 'Inter', sans-serif" }}
+          >
+            Join a Guild
+          </h1>
+          <p className="text-base md:text-lg text-amber-100/80 mt-3 max-w-xl mx-auto">
+            Pool your Spice, share cosmetics, and adventure together.
+          </p>
+          <div
+            className="inline-block mt-6 text-[11px] uppercase tracking-widest font-bold px-3 py-1 rounded-full"
+            style={{
+              backgroundColor: "rgba(251,191,36,0.2)",
+              color: "#fbbf24",
+              border: "1px solid rgba(251,191,36,0.5)",
+            }}
+          >
+            <Sparkles className="w-3 h-3 inline-block mr-1" />
+            Six tables. One subscription.
+          </div>
         </div>
-        <h1 className="text-3xl font-black">Join a Guild</h1>
-        <p className="text-sm text-slate-400">
-          Guilds share a subscription, a Spice wallet, and a dedicated home base. One membership covers up to six tables.
-        </p>
-        <Link
-          to={createPageUrl("AccountBilling")}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-400 text-amber-950 font-black rounded-lg hover:bg-amber-300 transition-colors shadow-[0_0_20px_rgba(251,191,36,0.35)]"
-        >
-          ✨ Join a Guild <ArrowRight className="w-4 h-4" />
-        </Link>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-6 py-10 space-y-12">
+        {/* Benefits */}
+        <section>
+          <p className="text-[10px] uppercase tracking-widest font-black text-amber-300/70 text-center">
+            Why guilds
+          </p>
+          <h2 className="text-2xl md:text-3xl font-black text-white text-center mt-1">
+            Everyone wins when one person subscribes.
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+            <Benefit
+              icon={Flame}
+              title="Shared Spice wallet"
+              body="Everyone contributes, everyone benefits. The guild's Spice pool funds cosmetic buys that cover the whole table."
+            />
+            <Benefit
+              icon={Package}
+              title="Group cosmetic purchases"
+              body="Buy a UI theme, dice skin, or portrait pack once. Every guild member gets access as long as they're in the guild."
+            />
+            <Benefit
+              icon={Shield}
+              title="Veteran perks for all"
+              body="One person pays $34.99/mo for Guild tier. All five invited members get Veteran-level features — AI generation, Brewery downloads, 20% Tavern discount, 80% creator split."
+            />
+            <Benefit
+              icon={Sparkles}
+              title="Guild-exclusive features"
+              body="Guild-only events, shared libraries, and Hub-locked cosmetics are on the roadmap. Guilds get them first."
+            />
+          </div>
+        </section>
+
+        {/* How it works */}
+        <section>
+          <div className="bg-[#1E2430] border border-amber-400/30 rounded-xl p-6 md:p-8">
+            <p className="text-[10px] uppercase tracking-widest font-black text-amber-300/80">
+              How it works
+            </p>
+            <ol className="mt-3 space-y-3">
+              <Step n={1}>
+                One person subscribes to the <strong className="text-amber-200">Guild tier ($34.99/month)</strong>.
+              </Step>
+              <Step n={2}>
+                They invite up to <strong className="text-amber-200">5 friends</strong> from Billing → Manage guild.
+              </Step>
+              <Step n={3}>
+                Everyone gets full Veteran access, a shared Spice wallet, and 250 Spice/month stipend — automatic.
+              </Step>
+            </ol>
+          </div>
+        </section>
+
+        {/* CTAs */}
+        <section className="text-center space-y-3">
+          <p className="text-sm text-slate-300">
+            Know someone with a Guild subscription?
+          </p>
+          <p className="text-sm text-slate-400">
+            <strong className="text-amber-300">Ask your GM for a Guild invite</strong> — they can add you from their Billing page.
+          </p>
+          <div className="pt-3">
+            <Link
+              to={createPageUrl("AccountBilling")}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-amber-400 text-amber-950 font-black rounded-lg hover:bg-amber-300 transition-colors shadow-[0_0_20px_rgba(251,191,36,0.35)]"
+            >
+              ✨ Start your own Guild <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+          <p className="text-[11px] text-slate-500 max-w-md mx-auto">
+            Guilds are private. There's no public directory — you join by invitation from an existing Guild leader.
+          </p>
+        </section>
       </div>
     </div>
+  );
+}
+
+function Benefit({ icon: Icon, title, body }) {
+  return (
+    <div className="bg-[#1E2430] border border-slate-700 hover:border-amber-400/40 transition-colors rounded-xl p-5 flex gap-4">
+      <div className="w-10 h-10 rounded-lg bg-amber-500/15 border border-amber-400/30 flex items-center justify-center flex-shrink-0">
+        <Icon className="w-5 h-5 text-amber-300" />
+      </div>
+      <div>
+        <p className="text-sm font-black text-white">{title}</p>
+        <p className="text-xs text-slate-400 mt-1 leading-relaxed">{body}</p>
+      </div>
+    </div>
+  );
+}
+
+function Step({ n, children }) {
+  return (
+    <li className="flex items-start gap-3">
+      <span className="w-7 h-7 rounded-full bg-amber-400 text-amber-950 font-black flex items-center justify-center flex-shrink-0">
+        {n}
+      </span>
+      <p className="text-sm text-slate-300 pt-0.5">{children}</p>
+    </li>
   );
 }
