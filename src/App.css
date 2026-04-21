@@ -3,27 +3,32 @@
    unset and the fallbacks (after the comma) kick in, matching the
    app's default Guildstew look.
 
-   v1 coverage is intentionally narrow: body background, the
-   .theme-card / .theme-nav / .theme-accent helpers, and the heading /
-   body font stacks. Components pick up the theme by either:
-     - using the helper classes, or
-     - referencing the vars directly via `var(--theme-*, fallback)`.
-   Unmigrated components keep their hard-coded colors — expanding
-   coverage is incremental. */
+   v1 coverage is intentionally narrow: body background, heading/body
+   fonts, and the .theme-card / .theme-nav / .theme-homepage-card /
+   .theme-accent* helpers that consuming components opt into by
+   className. Anything still hardcoded keeps its look until migrated.
+
+   Image overrides render as background-image layers on top of the
+   matching color. When no image is set the var is unset and
+   background-image falls through to `none`. */
 
 :root {
-  --tavern-default-background: #050816;
+  --tavern-default-page: #050816;
   --tavern-default-card: #1E2430;
   --tavern-default-card-border: #374151;
   --tavern-default-primary: #37F2D1;
+  --tavern-default-secondary: #a855f7;
   --tavern-default-nav: #2A3441;
+  --tavern-default-homepage-card: #f8a47c;
   --tavern-default-text: #e2e8f0;
   --tavern-default-text-muted: #94a3b8;
+  --tavern-default-danger: #ef4444;
+  --tavern-default-success: #22c55e;
 }
 
 body {
-  background-color: var(--theme-background, var(--tavern-default-background));
-  color: var(--theme-text, var(--tavern-default-text));
+  background-color: var(--theme-pageBackground, var(--tavern-default-page));
+  color: var(--theme-textPrimary, var(--tavern-default-text));
   font-family: var(--theme-font-body, inherit);
 }
 
@@ -32,23 +37,68 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .theme-card {
-  background-color: var(--theme-card, var(--tavern-default-card));
+  background-color: var(--theme-cardBackground, var(--tavern-default-card));
+  background-image: var(--theme-img-campaignCardTexture, none);
+  background-size: cover;
+  background-position: center;
   border-color: var(--theme-cardBorder, var(--tavern-default-card-border));
-  color: var(--theme-text, var(--tavern-default-text));
+  color: var(--theme-textPrimary, var(--tavern-default-text));
 }
 
+/* theme-nav: only the image layer lives here. The nav element sets
+   `background-color` inline with `var(--theme-navBackground, #FF5722)`
+   so the Guildstew orange still paints by default. */
 .theme-nav {
-  background-color: var(--theme-navBackground, var(--tavern-default-nav));
+  background-image: var(--theme-img-navTexture, none);
+  background-size: cover;
+  background-position: center;
+}
+
+.theme-homepage-card {
+  background-color: var(--theme-homepageCards, var(--tavern-default-homepage-card));
+  background-image: var(--theme-img-contentCardBackground, none);
+  background-size: cover;
+  background-position: center;
+}
+
+/* theme-homepage-bg: only the image layer. Home.jsx keeps its own
+   `bg-white` so the default homepage look doesn't change when no
+   theme is applied. */
+.theme-homepage-bg {
+  background-image: var(--theme-img-homepageBackground, none);
+  background-size: cover;
+  background-position: center;
+}
+
+.theme-sidebar {
+  background-image: var(--theme-img-sidebarTexture, none);
+  background-size: cover;
+  background-position: center;
+}
+
+.theme-footer {
+  background-color: var(--theme-pageBackground, var(--tavern-default-page));
+  background-image: var(--theme-img-footerBackground, none);
+  background-size: cover;
+  background-position: center;
 }
 
 .theme-accent {
-  color: var(--theme-primary, var(--tavern-default-primary));
+  color: var(--theme-primaryAccent, var(--tavern-default-primary));
 }
 
 .theme-accent-bg {
-  background-color: var(--theme-primary, var(--tavern-default-primary));
+  background-color: var(--theme-primaryAccent, var(--tavern-default-primary));
 }
 
 .theme-muted {
   color: var(--theme-textMuted, var(--tavern-default-text-muted));
+}
+
+.theme-danger {
+  color: var(--theme-danger, var(--tavern-default-danger));
+}
+
+.theme-success {
+  color: var(--theme-success, var(--tavern-default-success));
 }
