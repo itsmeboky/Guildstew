@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { createPageUrl } from "@/utils";
 import { Link } from "react-router-dom";
 import LazyImage from "@/components/ui/LazyImage";
+import { supabase } from "@/api/supabaseClient";
 
 const HERO_SLIDES = [
   {
@@ -44,6 +45,44 @@ export default function Home() {
     queryKey: ['topProducts'],
     queryFn: () => base44.entities.Product.filter({ category: 'game_pack' }, '-rating', 10),
     initialData: []
+  });
+
+  const { data: blogPosts = [] } = useQuery({
+    queryKey: ['homepageBlogPosts'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('blog_posts')
+        .select('id, title, slug, category, summary, cover_image_url, published_at')
+        .eq('is_published', true)
+        .order('published_at', { ascending: false })
+        .limit(5);
+      return data || [];
+    },
+  });
+
+  const { data: latestVersion } = useQuery({
+    queryKey: ['homepageLatestVersion'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('version_history')
+        .select('version, title, description, release_date')
+        .order('release_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data || null;
+    },
+  });
+
+  const { data: recentVersions = [] } = useQuery({
+    queryKey: ['homepageRecentVersions'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('version_history')
+        .select('version, title, description, release_date')
+        .order('release_date', { ascending: false })
+        .limit(5);
+      return data || [];
+    },
   });
 
   useEffect(() => {
@@ -312,32 +351,40 @@ export default function Home() {
               <div className="relative z-10 h-full flex flex-col">
                 <h3 className="text-xl font-bold text-white mb-4 text-center">Blog</h3>
                 <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                  <div className="cursor-pointer group">
-                    <div className="h-20 rounded-lg mb-2 overflow-hidden relative">
-                      <LazyImage 
-                        src="https://images.unsplash.com/photo-1516996087931-5ae405802f9f?w=400&h=200&fit=crop"
-                        alt="Blog"
-                        className="absolute inset-0 w-full h-full"
-                      />
-                    </div>
-                    <span className="text-white/70 text-xs font-semibold uppercase tracking-wider">TUTORIAL</span>
-                    <p className="text-white text-sm mt-1 font-semibold group-hover:text-[#37F2D1] transition-colors">
-                      Getting Started with GuildStew
+                  {blogPosts.length === 0 ? (
+                    <p className="text-white/70 text-xs text-center italic mt-4">
+                      New posts land here as they're published.
                     </p>
-                  </div>
-                  <div className="cursor-pointer group">
-                    <div className="h-20 rounded-lg mb-2 overflow-hidden relative">
-                      <LazyImage 
-                        src="https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?w=400&h=200&fit=crop"
-                        alt="Blog"
-                        className="absolute inset-0 w-full h-full"
-                      />
-                    </div>
-                    <span className="text-white/70 text-xs font-semibold uppercase tracking-wider">TIPS</span>
-                    <p className="text-white text-sm mt-1 font-semibold group-hover:text-[#37F2D1] transition-colors">
-                      Building Epic Campaigns
-                    </p>
-                  </div>
+                  ) : (
+                    blogPosts.slice(0, 5).map((post) => (
+                      <Link
+                        to={`/blog/${post.slug}`}
+                        key={post.id}
+                        className="block cursor-pointer group"
+                      >
+                        {post.cover_image_url && (
+                          <div className="h-20 rounded-lg mb-2 overflow-hidden relative">
+                            <LazyImage
+                              src={post.cover_image_url}
+                              alt={post.title}
+                              className="absolute inset-0 w-full h-full"
+                            />
+                          </div>
+                        )}
+                        <span className="text-white/70 text-xs font-semibold uppercase tracking-wider">
+                          {(post.category || "article").replace(/_/g, " ")}
+                        </span>
+                        <p className="text-white text-sm mt-1 font-semibold group-hover:text-[#37F2D1] transition-colors line-clamp-2">
+                          {post.title}
+                        </p>
+                        {post.summary && (
+                          <p className="text-white/70 text-[11px] mt-0.5 line-clamp-2">
+                            {post.summary}
+                          </p>
+                        )}
+                      </Link>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
