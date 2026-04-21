@@ -10,6 +10,10 @@ import CreatorDashboard from './pages/CreatorDashboard';
 import Blog from './pages/Blog';
 import BlogPost from './pages/BlogPost';
 import Changelog from './pages/Changelog';
+import ComingSoon from './pages/ComingSoon';
+import Forums from './pages/Forums';
+import Events from './pages/Events';
+import Leaderboards from './pages/Leaderboards';
 import Friends from './pages/Friends';
 import PIEChart from './pages/PIEChart';
 import Settings from './pages/Settings';
@@ -70,6 +74,10 @@ export const PAGES = {
     "Blog": Blog,
     "BlogPost": BlogPost,
     "Changelog": Changelog,
+    "ComingSoon": ComingSoon,
+    "Forums": Forums,
+    "Events": Events,
+    "Leaderboards": Leaderboards,
     "Friends": Friends,
     "PIEChart": PIEChart,
     "Settings": Settings,
