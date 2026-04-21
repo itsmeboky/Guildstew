@@ -5,6 +5,7 @@ import { Play, Users, Trophy, PieChart, Settings, Beer, LogOut, Plus, Radio, Use
 import { getWalletBalance } from "@/lib/spiceWallet";
 import { formatSpice, MONTHLY_STIPENDS } from "@/config/spiceConfig";
 import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
+import AppSidebar from "@/components/layout/AppSidebar";
 import { supabase } from "@/api/supabaseClient";
 import ChatPanel from "@/components/chat/ChatPanel";
 import SessionReminderNotification from "@/components/notifications/SessionReminderNotification";
@@ -760,7 +761,15 @@ export default function Layout({ children, currentPageName }) {
       </header>
 
       <div className="flex">
-        <aside 
+        {/* Campaign interior (GM panel, player panel, world lore,
+            lobby) keeps its in-context sidebar below. Every other
+            page gets the global AppSidebar. Gating here rather than
+            reaching into the <aside> subtree below keeps the two
+            systems cleanly separated. */}
+        {!(isCampaignGMMode || isCampaignPlayerMode || isWorldLorePage || isCampaignLobbyMode) ? (
+          <AppSidebar />
+        ) : (
+        <aside
           className={`${sidebarCollapsed && isWorldLorePage ? 'w-[70px]' : 'w-[240px]'} ${
             isWorldLorePage 
               ? 'bg-gradient-to-br from-[#1E2430]/40 via-[#2A3441]/30 to-[#1E2430]/40 backdrop-blur-md border-r border-white/10' 
@@ -997,6 +1006,7 @@ export default function Layout({ children, currentPageName }) {
             </button>
           </div>
         </aside>
+        )}
 
         <main className={`flex-1 relative transition-all duration-300 ${sidebarCollapsed && isWorldLorePage ? 'world-lore-expanded' : ''}`}>
           {children}
