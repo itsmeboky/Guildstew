@@ -92,7 +92,7 @@ export default function AppSidebar() {
 
   return (
     <>
-      <aside className="w-[260px] bg-[#1E2430] border-r border-[#2a3441] min-h-[calc(100vh-4rem)] flex flex-col">
+      <aside className="hidden md:flex w-[260px] bg-[#1E2430] border-r border-[#2a3441] min-h-[calc(100vh-4rem)] flex-col sticky top-16 self-start max-h-[calc(100vh-4rem)]">
         {/* User header */}
         <div className="p-4 border-b border-[#2a3441]">
           <div className="flex items-center gap-3">
@@ -276,7 +276,15 @@ export function SidebarSection({ label, children }) {
  */
 export function SidebarLink({ to, icon: Icon, label, badge, external, className = "", accent, onClick }) {
   const location = useLocation();
-  const active = !external && location.pathname === to;
+  const here = (location.pathname || "").toLowerCase();
+  const target = String(to || "").toLowerCase();
+  // Exact match OR nested (e.g. /blog/slug inside the /blog link).
+  // Root "/" gets exact-match only so it doesn't light up everywhere.
+  const active = !external && target && (
+    target === "/"
+      ? here === "/"
+      : here === target || here.startsWith(target + "/") || here.startsWith(target + "?")
+  );
   const base = `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors relative ${className}`;
   const activeCls = active
     ? "bg-[#2a3441] text-[#37F2D1]"
