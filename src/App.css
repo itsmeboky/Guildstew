@@ -103,6 +103,92 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--theme-success, var(--tavern-default-success));
 }
 
+/* ─────────────── User-preferences layer ───────────────
+   Driven by <html> classes set in src/lib/SettingsApplier.jsx.
+   Keeps Settings → Appearance / Accessibility out of every
+   component's stylesheet and centralized here. */
+
+/* Font scale — 0.875 (small) / 1 (medium) / 1.125 (large) / 1.25 (xl).
+   Applied to :root so `rem` units throughout the app scale together. */
+html {
+  font-size: calc(16px * var(--app-font-scale, 1));
+}
+
+/* Compact mode — modestly tighter controls globally. */
+html.compact-mode button,
+html.compact-mode .compactable {
+  padding-top: calc(var(--compact-pad, 0.5rem) * 0.75);
+  padding-bottom: calc(var(--compact-pad, 0.5rem) * 0.75);
+}
+
+/* Light display mode — experimental inversion. Intended as a
+   fallback until a dedicated light token set is introduced. */
+html.theme-light {
+  filter: invert(1) hue-rotate(180deg);
+}
+html.theme-light img,
+html.theme-light video,
+html.theme-light canvas {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Dyslexia-friendly — OpenDyslexic font + extra letter spacing +
+   looser line-height. */
+html.dyslexia,
+html.dyslexia body {
+  font-family: 'OpenDyslexic', 'Inter', sans-serif !important;
+  letter-spacing: 0.05em;
+  line-height: 1.8;
+}
+
+/* High contrast — pure white text on near-black cards, thicker
+   borders, beefier focus outlines, no decorative blur. */
+html.high-contrast body {
+  color: #ffffff;
+}
+html.high-contrast *,
+html.high-contrast *::before,
+html.high-contrast *::after {
+  border-color: #ffffff !important;
+  backdrop-filter: none !important;
+  text-shadow: none !important;
+}
+html.high-contrast :focus-visible {
+  outline: 3px solid #37F2D1 !important;
+  outline-offset: 2px !important;
+}
+
+/* Reduced motion — kill every animation / transition. Dice roller
+   reads this class and swaps to an instant-result mode. */
+html.reduced-motion *,
+html.reduced-motion *::before,
+html.reduced-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Color-blind modes — shift problematic red / green accent pairs so
+   they stay distinguishable. A real CVD filter SVG can replace this
+   later; for now we nudge the danger / success hues toward palettes
+   that remain distinct for each vision type. */
+html.color-blind-protanopia .theme-danger,
+html.color-blind-protanopia .text-red-400,
+html.color-blind-protanopia .text-red-500 {
+  color: #f59e0b !important; /* amber — stays distinct from green */
+}
+html.color-blind-deuteranopia .theme-success,
+html.color-blind-deuteranopia .text-emerald-400,
+html.color-blind-deuteranopia .text-green-400 {
+  color: #3b82f6 !important; /* blue — stays distinct from red */
+}
+html.color-blind-tritanopia .theme-danger,
+html.color-blind-tritanopia .text-blue-400,
+html.color-blind-tritanopia .text-blue-500 {
+  color: #ec4899 !important; /* pink — stays distinct from yellow */
+}
+
 /* Native <select>, <option>, <optgroup> — catches any place in the
    app that dropped a raw HTML select rather than the shadcn Select
    component. Keeps the dark theme consistent across both. */
