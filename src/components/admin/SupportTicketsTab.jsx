@@ -228,11 +228,14 @@ function TicketDetailPanel({ ticket, profile, adminId, onClose }) {
       if (ticket?.status === "open") {
         await base44.entities.SupportTicket.update(ticketId, { status: "in_progress" });
       }
+      // `ticket_messages` schema — `author_id`, `content`, `is_admin`.
+      // The entity alias still points at the old `TicketResponse` name
+      // for backward compatibility.
       return base44.entities.TicketResponse.create({
         ticket_id: ticketId,
-        sender_type: "admin",
-        sender_id: adminId,
-        body: reply.trim(),
+        author_id: adminId,
+        content: reply.trim(),
+        is_admin: true,
       });
     },
     onSuccess: () => {
@@ -312,24 +315,31 @@ function TicketDetailPanel({ ticket, profile, adminId, onClose }) {
         <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Conversation ({responses.length})</div>
           {responses.length === 0 && <p className="text-[11px] text-slate-500 italic">No replies yet.</p>}
-          {responses.map((r) => (
-            <div
-              key={r.id}
-              className={`rounded-lg p-3 border ${
-                r.sender_type === "admin"
-                  ? "bg-[#37F2D1]/10 border-[#37F2D1]/40"
-                  : "bg-[#0b1220] border-slate-700"
-              }`}
-            >
-              <div className="text-[10px] uppercase tracking-widest font-bold mb-1 flex items-center gap-2">
-                <span className={r.sender_type === "admin" ? "text-[#37F2D1]" : "text-slate-400"}>
-                  {r.sender_type === "admin" ? "Support" : profile?.username || "User"}
-                </span>
-                <span className="text-slate-500">{new Date(r.created_at).toLocaleString()}</span>
+          {responses.map((r) => {
+            // `ticket_messages` uses `is_admin` + `content`. Tolerate the
+            // legacy `sender_type` / `body` shape on any pre-migration
+            // rows that may still be sitting in the table.
+            const isAdmin = typeof r.is_admin === "boolean" ? r.is_admin : r.sender_type === "admin";
+            const body = r.content ?? r.body ?? "";
+            return (
+              <div
+                key={r.id}
+                className={`rounded-lg p-3 border ${
+                  isAdmin
+                    ? "bg-[#37F2D1]/10 border-[#37F2D1]/40"
+                    : "bg-[#0b1220] border-slate-700"
+                }`}
+              >
+                <div className="text-[10px] uppercase tracking-widest font-bold mb-1 flex items-center gap-2">
+                  <span className={isAdmin ? "text-[#37F2D1]" : "text-slate-400"}>
+                    {isAdmin ? "Guildstew Team" : profile?.username || "User"}
+                  </span>
+                  <span className="text-slate-500">{new Date(r.created_at).toLocaleString()}</span>
+                </div>
+                <p className="text-sm text-slate-200 whitespace-pre-wrap">{body}</p>
               </div>
-              <p className="text-sm text-slate-200 whitespace-pre-wrap">{r.body}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="border-t border-slate-700 pt-3">
