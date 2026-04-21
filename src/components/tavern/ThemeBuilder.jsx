@@ -422,7 +422,14 @@ function ColorRow({ label, value, onChange }) {
 function FontField({ label, value, onChange, sample, stack }) {
   // Debounce font injection so the sample reflects the typed name
   // without spamming <link> tags while the user is mid-typing.
+  // `status` tracks the load outcome so we can warn on bad names:
+  //   idle    — nothing to check yet
+  //   loading — <link> is in flight
+  //   ok      — document.fonts confirmed the face is available
+  //   error   — font failed to load (bad spelling, not a Google Font)
   const [local, setLocal] = useState(value);
+  const [status, setStatus] = useState("idle");
+
   useEffect(() => { setLocal(value); }, [value]);
   useEffect(() => {
     const handle = setTimeout(() => { if (local !== value) onChange?.(local); }, 400);
@@ -430,12 +437,35 @@ function FontField({ label, value, onChange, sample, stack }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [local]);
 
+  // Kick off the Google Fonts load + verify once the value settles.
+  // `document.fonts.load()` resolves when the face is ready (or
+  // rejects on error). Non-Google names fail silently at the
+  // <link> level — that's why we prefer `document.fonts.load` +
+  // `check` over `onload` on the link tag.
+  useEffect(() => {
+    const name = (value || "").trim();
+    if (!name) { setStatus("idle"); return; }
+    setStatus("loading");
+    injectGoogleFont(name);
+    if (!document.fonts?.load) { setStatus("ok"); return; }
+    let cancelled = false;
+    document.fonts
+      .load(`16px "${name}"`)
+      .then(() => {
+        if (cancelled) return;
+        setStatus(document.fonts.check(`16px "${name}"`) ? "ok" : "error");
+      })
+      .catch(() => { if (!cancelled) setStatus("error"); });
+    return () => { cancelled = true; };
+  }, [value]);
+
   return (
     <div>
       <Label className="text-xs text-slate-300 mb-1 block">{label}</Label>
       <Input
         value={local}
         onChange={(e) => setLocal(e.target.value)}
+        onBlur={() => onChange?.(local)}
         className="bg-[#050816] border-slate-700 text-white"
         placeholder={stack === "serif" ? "Cinzel" : "Inter"}
       />
@@ -445,6 +475,11 @@ function FontField({ label, value, onChange, sample, stack }) {
           style={{ fontFamily: `"${value}", ${stack}` }}
         >
           {sample}
+        </p>
+      )}
+      {value && status === "error" && (
+        <p className="mt-1 text-[10px] text-rose-300 italic">
+          Font not found — check spelling, or browse fonts at fonts.google.com.
         </p>
       )}
     </div>
