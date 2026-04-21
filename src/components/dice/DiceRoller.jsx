@@ -6,17 +6,12 @@ import { DICE_SIDES } from "./diceConfig";
 import { FACE_ROTATIONS } from "./faceRotations";
 import { useActiveDiceSkin } from "@/lib/useActiveDiceSkin";
 import { applyDiceSkinToMesh } from "@/lib/applyDiceSkin";
-import { DEFAULT_TEXTURE_URL } from "@/config/diceAssets";
+import { DEFAULT_MODEL_URLS, DEFAULT_TEXTURE_URL } from "@/config/diceAssets";
 
-/** Default GLB paths – update these to your actual uploaded .glb URLs */
-const DEFAULT_MODEL_URLS = {
-  d4: "https://static.wixstatic.com/3d/5cdfd8_b214bc92631744fb8844e01f137fe8f1.glb",
-  d6: "https://static.wixstatic.com/3d/5cdfd8_902061e7b0ba49de98cbcf4eee049abe.glb",
-  d8: "https://static.wixstatic.com/3d/5cdfd8_e70348801f264dd29f1a7628cee96ab7.glb",
-  d10: "https://static.wixstatic.com/3d/5cdfd8_56bfac3a10e1410ab3432753f17e298f.glb",
-  d12: "https://static.wixstatic.com/3d/5cdfd8_ffd61fa574db4f3e89b431d00113f7fc.glb",
-  d20: "https://static.wixstatic.com/3d/5cdfd8_a58fd5d20a094dd889d89ec836133320.glb",
-};
+// Default GLB paths live in `src/config/diceAssets.js` — they point
+// at the shared `campaign-assets/dice/models/*.glb` URLs on Supabase
+// so the default texture + skin preview + DiceRoller all agree on
+// the canonical model + texture URLs.
 
 // The dice types we support for 3D
 const diceTypes = [
