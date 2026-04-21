@@ -13,6 +13,7 @@ import Changelog from './pages/Changelog';
 import ComingSoon from './pages/ComingSoon';
 import Forums from './pages/Forums';
 import ForumCategory from './pages/ForumCategory';
+import ForumThread from './pages/ForumThread';
 import Events from './pages/Events';
 import Leaderboards from './pages/Leaderboards';
 import CreatorAnalytics from './pages/CreatorAnalytics';
@@ -84,6 +85,7 @@ export const PAGES = {
     "ComingSoon": ComingSoon,
     "Forums": Forums,
     "ForumCategory": ForumCategory,
+    "ForumThread": ForumThread,
     "Events": Events,
     "Leaderboards": Leaderboards,
     "CreatorAnalytics": CreatorAnalytics,
