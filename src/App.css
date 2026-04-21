@@ -104,9 +104,20 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ─────────────── User-preferences layer ───────────────
-   Driven by <html> classes set in src/lib/SettingsApplier.jsx.
-   Keeps Settings → Appearance / Accessibility out of every
-   component's stylesheet and centralized here. */
+   Accessibility + appearance toggles drive class names on <body>
+   (see src/lib/SettingsApplier.jsx). Components opt in by either
+   using the var()s below or checking the class list. */
+
+/* Shared color vars — dark defaults; overridden by `body.theme-light`. */
+:root {
+  --color-bg-primary:    #0b1220;
+  --color-bg-secondary:  #1E2430;
+  --color-bg-card:       #1E2430;
+  --color-border:        #2a3441;
+  --color-text-primary:  #e2e8f0;
+  --color-text-secondary:#94a3b8;
+  --color-text-muted:    #64748b;
+}
 
 /* Font scale — 0.875 (small) / 1 (medium) / 1.125 (large) / 1.25 (xl).
    Applied to :root so `rem` units throughout the app scale together. */
@@ -115,78 +126,110 @@ html {
 }
 
 /* Compact mode — modestly tighter controls globally. */
-html.compact-mode button,
-html.compact-mode .compactable {
+body.compact-mode button,
+body.compact-mode .compactable {
   padding-top: calc(var(--compact-pad, 0.5rem) * 0.75);
   padding-bottom: calc(var(--compact-pad, 0.5rem) * 0.75);
 }
 
-/* Light display mode — experimental inversion. Intended as a
-   fallback until a dedicated light token set is introduced. */
-html.theme-light {
-  filter: invert(1) hue-rotate(180deg);
-}
-html.theme-light img,
-html.theme-light video,
-html.theme-light canvas {
-  filter: invert(1) hue-rotate(180deg);
+/* ── Light mode ─────────────────────────────────────────
+   Swaps the shared color vars. Components that read
+   `var(--color-bg-*)` / `var(--color-text-*)` flip without any
+   further work. Components still using hardcoded dark hex codes
+   keep their dark look until migrated. */
+body.theme-light {
+  --color-bg-primary:    #FFFFFF;
+  --color-bg-secondary:  #F5F5F5;
+  --color-bg-card:       #FFFFFF;
+  --color-border:        #E0E0E0;
+  --color-text-primary:  #1A1A2E;
+  --color-text-secondary:#555555;
+  --color-text-muted:    #888888;
+  background-color: #FFFFFF;
+  color: #1A1A2E;
 }
 
-/* Dyslexia-friendly — OpenDyslexic font + extra letter spacing +
-   looser line-height. */
-html.dyslexia,
-html.dyslexia body {
+/* ── Dyslexia-friendly ──────────────────────────────────
+   OpenDyslexic (from the @font-face declaration in index.css) +
+   wider letter / word spacing + looser line-height. */
+body.dyslexia-mode,
+body.dyslexia-mode * {
   font-family: 'OpenDyslexic', 'Inter', sans-serif !important;
+}
+body.dyslexia-mode {
   letter-spacing: 0.05em;
   line-height: 1.8;
+  word-spacing: 0.1em;
 }
 
-/* High contrast — pure white text on near-black cards, thicker
-   borders, beefier focus outlines, no decorative blur. */
-html.high-contrast body {
-  color: #ffffff;
+/* ── High contrast ──────────────────────────────────────
+   Pure W/B, heavy borders, underlined links+buttons, no
+   transparency / blur / shadow. Adds +100 to nominal font weight. */
+body.high-contrast {
+  --color-text-primary:  #FFFFFF;
+  --color-bg-primary:    #000000;
+  --color-bg-secondary:  #0a0a0a;
+  --color-bg-card:       #111111;
+  --color-border:        #FFFFFF;
+  background-color: #000000;
+  color: #FFFFFF;
+  font-weight: 500;
 }
-html.high-contrast *,
-html.high-contrast *::before,
-html.high-contrast *::after {
-  border-color: #ffffff !important;
+body.high-contrast * {
+  border-color: #FFFFFF !important;
   backdrop-filter: none !important;
   text-shadow: none !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
 }
-html.high-contrast :focus-visible {
+body.high-contrast button,
+body.high-contrast a {
+  text-decoration: underline;
+  font-weight: 700;
+}
+body.high-contrast :focus-visible {
   outline: 3px solid #37F2D1 !important;
   outline-offset: 2px !important;
 }
 
-/* Reduced motion — kill every animation / transition. Dice roller
-   reads this class and swaps to an instant-result mode. */
-html.reduced-motion *,
-html.reduced-motion *::before,
-html.reduced-motion *::after {
+/* ── Reduced motion ─────────────────────────────────────
+   Kill every animation / transition. Components that want
+   reduced-motion branches can read document.body.classList. */
+body.reduced-motion *,
+body.reduced-motion *::before,
+body.reduced-motion *::after {
   animation-duration: 0.001ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.001ms !important;
   scroll-behavior: auto !important;
 }
 
-/* Color-blind modes — shift problematic red / green accent pairs so
-   they stay distinguishable. A real CVD filter SVG can replace this
-   later; for now we nudge the danger / success hues toward palettes
-   that remain distinct for each vision type. */
-html.color-blind-protanopia .theme-danger,
-html.color-blind-protanopia .text-red-400,
-html.color-blind-protanopia .text-red-500 {
-  color: #f59e0b !important; /* amber — stays distinct from green */
+/* ── Color-blind modes ──────────────────────────────────
+   SVG-filter-driven correction. The filter defs live in
+   src/components/layout/ColorBlindFilters.jsx which is mounted
+   once from App.jsx so the url(#…) references resolve. */
+body.colorblind-protanopia   { filter: url(#protanopia-filter); }
+body.colorblind-deuteranopia { filter: url(#deuteranopia-filter); }
+body.colorblind-tritanopia   { filter: url(#tritanopia-filter); }
+
+/* Colorblind accent overrides — applied ON TOP of the SVG filter
+   above for components that still use hardcoded red/green. Ensures
+   danger / success indicators stay distinguishable even without the
+   filter (e.g. when the user's browser drops SVG filters). */
+body.colorblind-protanopia .theme-danger,
+body.colorblind-protanopia .text-red-400,
+body.colorblind-protanopia .text-red-500 {
+  color: #f59e0b !important; /* amber — distinct from green */
 }
-html.color-blind-deuteranopia .theme-success,
-html.color-blind-deuteranopia .text-emerald-400,
-html.color-blind-deuteranopia .text-green-400 {
-  color: #3b82f6 !important; /* blue — stays distinct from red */
+body.colorblind-deuteranopia .theme-success,
+body.colorblind-deuteranopia .text-emerald-400,
+body.colorblind-deuteranopia .text-green-400 {
+  color: #3b82f6 !important; /* blue — distinct from red */
 }
-html.color-blind-tritanopia .theme-danger,
-html.color-blind-tritanopia .text-blue-400,
-html.color-blind-tritanopia .text-blue-500 {
-  color: #ec4899 !important; /* pink — stays distinct from yellow */
+body.colorblind-tritanopia .theme-danger,
+body.colorblind-tritanopia .text-blue-400,
+body.colorblind-tritanopia .text-blue-500 {
+  color: #ec4899 !important; /* pink — distinct from yellow */
 }
 
 /* Native <select>, <option>, <optgroup> — catches any place in the
