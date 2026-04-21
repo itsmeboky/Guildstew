@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Star } from "lucide-react";
+import { ChevronLeft, ChevronRight, Star, FileText, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from "@/utils";
 import { Link } from "react-router-dom";
 import LazyImage from "@/components/ui/LazyImage";
+import { supabase } from "@/api/supabaseClient";
 
 const HERO_SLIDES = [
   {
@@ -46,6 +47,72 @@ export default function Home() {
     initialData: []
   });
 
+  const { data: blogPosts = [] } = useQuery({
+    queryKey: ['homepageBlogPosts'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('blog_posts')
+        .select('id, title, slug, category, summary, cover_image_url, published_at')
+        .eq('is_published', true)
+        .order('published_at', { ascending: false })
+        .limit(5);
+      return data || [];
+    },
+  });
+
+  const { data: latestVersion } = useQuery({
+    queryKey: ['homepageLatestVersion'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('version_history')
+        .select('version, title, description, release_date')
+        .order('release_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data || null;
+    },
+  });
+
+  const { data: recentVersions = [] } = useQuery({
+    queryKey: ['homepageRecentVersions'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('version_history')
+        .select('version, title, description, release_date')
+        .order('release_date', { ascending: false })
+        .limit(5);
+      return data || [];
+    },
+  });
+
+  // Merge recent blog posts + versions into a single time-sorted
+  // feed for the Latest Updates card. Each row carries a `type` so
+  // the card can pick the right icon.
+  const latestUpdates = React.useMemo(() => {
+    const merged = [
+      ...(blogPosts || []).map((p) => ({
+        key: `blog-${p.id}`,
+        title: p.title,
+        description: p.summary || "",
+        date: p.published_at,
+        type: "blog",
+        link: `/blog/${p.slug}`,
+      })),
+      ...(recentVersions || []).map((v, i) => ({
+        key: `ver-${v.version || i}`,
+        title: `${v.version} — ${v.title}`,
+        description: v.description || "",
+        date: v.release_date,
+        type: "version",
+        link: "/changelog",
+      })),
+    ];
+    return merged
+      .filter((u) => u.date)
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 5);
+  }, [blogPosts, recentVersions]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
@@ -57,7 +124,7 @@ export default function Home() {
   const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + HERO_SLIDES.length) % HERO_SLIDES.length);
 
   return (
-    <div className="relative min-h-screen bg-white">
+    <div className="theme-homepage-bg relative min-h-screen bg-white">
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;
@@ -199,38 +266,61 @@ export default function Home() {
             {/* Right Column */}
             <div className="col-span-3 flex flex-col gap-6 h-[420px]">
               {/* Version History */}
-              <div className="rounded-3xl p-5 relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-b from-[#FF5722]/60 to-[#FF5722]" />
+              <Link
+                to="/changelog"
+                className="rounded-3xl p-5 relative overflow-hidden block hover:brightness-110 transition"
+              >
+                <div className="theme-homepage-card absolute inset-0" />
                 <div className="relative z-10">
                   <h3 className="text-xl font-bold text-white mb-2">Version History</h3>
-                  <div className="text-white">
-                    <div className="font-bold text-sm">v2.4.0 <span className="text-xs opacity-80">Nov 10</span></div>
-                    <div className="text-sm opacity-90">Live streaming integration</div>
-                  </div>
+                  {latestVersion ? (
+                    <div className="text-white">
+                      <div className="font-bold text-sm">
+                        {latestVersion.version}
+                        {latestVersion.release_date && (
+                          <span className="text-xs opacity-80 ml-2">
+                            {new Date(latestVersion.release_date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm opacity-90 line-clamp-2">
+                        {latestVersion.title}
+                        {latestVersion.description && ` — ${latestVersion.description}`}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-white/80 text-xs italic">First release coming soon.</p>
+                  )}
                 </div>
-              </div>
+              </Link>
 
-              {/* Latest Updates */}
+              {/* Latest Updates — merged feed of recent blog posts +
+                  version releases, newest first. */}
               <div className="rounded-3xl p-5 flex-1 relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-b from-[#FF5722]/60 to-[#FF5722]" />
+                <div className="theme-homepage-card absolute inset-0" />
                 <div className="relative z-10 h-full flex flex-col">
                   <h3 className="text-xl font-bold text-white mb-4 text-center">Latest Updates</h3>
                   <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                    <div className="cursor-pointer group">
-                      <p className="text-white text-base font-semibold group-hover:text-[#37F2D1] transition-colors">New Character Creator Tools</p>
-                      <p className="text-white/70 text-sm mt-1">Enhanced customization options for your heroes</p>
-                      <p className="text-white/60 text-xs mt-1">2 days ago</p>
-                    </div>
-                    <div className="cursor-pointer group">
-                      <p className="text-white text-base font-semibold group-hover:text-[#37F2D1] transition-colors">Campaign Sharing Features</p>
-                      <p className="text-white/70 text-sm mt-1">Share your adventures with friends easily</p>
-                      <p className="text-white/60 text-xs mt-1">1 week ago</p>
-                    </div>
-                    <div className="cursor-pointer group">
-                      <p className="text-white text-base font-semibold group-hover:text-[#37F2D1] transition-colors">Enhanced Dice Roller</p>
-                      <p className="text-white/70 text-sm mt-1">New animations and sound effects</p>
-                      <p className="text-white/60 text-xs mt-1">2 weeks ago</p>
-                    </div>
+                    {latestUpdates.length === 0 ? (
+                      <p className="text-white/80 text-xs italic text-center mt-4">
+                        News lands here as new posts or releases go live.
+                      </p>
+                    ) : (
+                      latestUpdates.map((u) => (
+                        <Link key={u.key} to={u.link} className="block cursor-pointer group">
+                          <p className="text-white text-base font-semibold group-hover:text-[#37F2D1] transition-colors flex items-center gap-1.5">
+                            {u.type === "version"
+                              ? <Rocket className="w-3.5 h-3.5 opacity-90" />
+                              : <FileText className="w-3.5 h-3.5 opacity-90" />}
+                            <span className="line-clamp-1">{u.title}</span>
+                          </p>
+                          {u.description && (
+                            <p className="text-white/70 text-sm mt-1 line-clamp-2">{u.description}</p>
+                          )}
+                          <p className="text-white/60 text-xs mt-1">{relativeTime(u.date)}</p>
+                        </Link>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
@@ -258,7 +348,7 @@ export default function Home() {
           <div className="grid grid-cols-12 gap-6 mb-8">
             {/* Newest Game Pack */}
             <div className="col-span-2 rounded-3xl p-5 h-[320px] flex flex-col relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-b from-[#FF5722]/60 to-[#FF5722]" />
+              <div className="theme-homepage-card absolute inset-0" />
               <div className="relative z-10 flex flex-col h-full">
                 <h3 className="text-xl font-bold text-white mb-4 text-center">Newest Game Pack</h3>
                 {products.length > 0 && (
@@ -279,7 +369,7 @@ export default function Home() {
 
             {/* Top Selling Game Packs */}
             <div className="col-span-7 rounded-3xl p-5 h-[320px] relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-b from-[#FF5722]/60 to-[#FF5722]" />
+              <div className="theme-homepage-card absolute inset-0" />
               <div className="relative z-10 h-full flex flex-col">
                 <h3 className="text-xl font-bold text-white mb-4 text-center">Top Selling Game Packs</h3>
                 <div className="grid grid-cols-5 gap-4 flex-1">
@@ -308,36 +398,44 @@ export default function Home() {
 
             {/* Blog */}
             <div className="col-span-3 rounded-3xl p-5 h-[320px] relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-b from-[#FF5722]/60 to-[#FF5722]" />
+              <div className="theme-homepage-card absolute inset-0" />
               <div className="relative z-10 h-full flex flex-col">
                 <h3 className="text-xl font-bold text-white mb-4 text-center">Blog</h3>
                 <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                  <div className="cursor-pointer group">
-                    <div className="h-20 rounded-lg mb-2 overflow-hidden relative">
-                      <LazyImage 
-                        src="https://images.unsplash.com/photo-1516996087931-5ae405802f9f?w=400&h=200&fit=crop"
-                        alt="Blog"
-                        className="absolute inset-0 w-full h-full"
-                      />
-                    </div>
-                    <span className="text-white/70 text-xs font-semibold uppercase tracking-wider">TUTORIAL</span>
-                    <p className="text-white text-sm mt-1 font-semibold group-hover:text-[#37F2D1] transition-colors">
-                      Getting Started with GuildStew
+                  {blogPosts.length === 0 ? (
+                    <p className="text-white/70 text-xs text-center italic mt-4">
+                      New posts land here as they're published.
                     </p>
-                  </div>
-                  <div className="cursor-pointer group">
-                    <div className="h-20 rounded-lg mb-2 overflow-hidden relative">
-                      <LazyImage 
-                        src="https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?w=400&h=200&fit=crop"
-                        alt="Blog"
-                        className="absolute inset-0 w-full h-full"
-                      />
-                    </div>
-                    <span className="text-white/70 text-xs font-semibold uppercase tracking-wider">TIPS</span>
-                    <p className="text-white text-sm mt-1 font-semibold group-hover:text-[#37F2D1] transition-colors">
-                      Building Epic Campaigns
-                    </p>
-                  </div>
+                  ) : (
+                    blogPosts.slice(0, 5).map((post) => (
+                      <Link
+                        to={`/blog/${post.slug}`}
+                        key={post.id}
+                        className="block cursor-pointer group"
+                      >
+                        {post.cover_image_url && (
+                          <div className="h-20 rounded-lg mb-2 overflow-hidden relative">
+                            <LazyImage
+                              src={post.cover_image_url}
+                              alt={post.title}
+                              className="absolute inset-0 w-full h-full"
+                            />
+                          </div>
+                        )}
+                        <span className="text-white/70 text-xs font-semibold uppercase tracking-wider">
+                          {(post.category || "article").replace(/_/g, " ")}
+                        </span>
+                        <p className="text-white text-sm mt-1 font-semibold group-hover:text-[#37F2D1] transition-colors line-clamp-2">
+                          {post.title}
+                        </p>
+                        {post.summary && (
+                          <p className="text-white/70 text-[11px] mt-0.5 line-clamp-2">
+                            {post.summary}
+                          </p>
+                        )}
+                      </Link>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -347,4 +445,31 @@ export default function Home() {
       </div>
     </div>
   );
+}
+
+/**
+ * Rough "N minutes / hours / days / weeks ago" formatter for the
+ * Latest Updates feed. Keeps units coarse — exact time isn't useful
+ * on a marketing card.
+ */
+function relativeTime(input) {
+  if (!input) return "";
+  const t = new Date(input).getTime();
+  if (Number.isNaN(t)) return "";
+  const delta = Math.max(0, Date.now() - t);
+
+  const min = 60_000;
+  const hour = 60 * min;
+  const day = 24 * hour;
+  const week = 7 * day;
+  const month = 30 * day;
+  const year = 365 * day;
+
+  if (delta < min) return "just now";
+  if (delta < hour) return Math.round(delta / min) + " min ago";
+  if (delta < day) return Math.round(delta / hour) + "h ago";
+  if (delta < week) return Math.round(delta / day) + "d ago";
+  if (delta < month) return Math.round(delta / week) + "w ago";
+  if (delta < year) return Math.round(delta / month) + "mo ago";
+  return Math.round(delta / year) + "y ago";
 }
