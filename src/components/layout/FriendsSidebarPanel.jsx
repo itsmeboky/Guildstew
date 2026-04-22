@@ -6,6 +6,7 @@ import { supabase } from "@/api/supabaseClient";
 import { listGuildMembers } from "@/api/billingClient";
 import { createPageUrl } from "@/utils";
 import StatusDot from "@/components/presence/StatusDot";
+import { displayName } from "@/utils/displayName";
 import {
   Tooltip,
   TooltipContent,
@@ -73,7 +74,7 @@ export default function FriendsSidebarPanel({ user, friendIds = [], sub }) {
 
   const guildOwner = inGuild ? ordered.find((p) => p.user_id === guildOwnerId) : null;
   const guildLabel = guildOwner
-    ? `${guildOwner.username || guildOwner.full_name || "Your"}'s Guild`
+    ? `${displayName(guildOwner, { fallback: "Your" })}'s Guild`
     : "Your Guild";
 
   return (
@@ -107,7 +108,7 @@ export default function FriendsSidebarPanel({ user, friendIds = [], sub }) {
 }
 
 function RosterAvatar({ profile, isOwner }) {
-  const name = profile.username || profile.full_name || "Unknown";
+  const name = displayName(profile, { fallback: "Friend" });
   return (
     <Tooltip>
       <TooltipTrigger asChild>

@@ -14,7 +14,7 @@ export default function CreatorCard({ creator }) {
         <div className="absolute inset-0 bg-gradient-to-t from-[#FF5722] via-[#FF5722]/80 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 p-4">
           <h3 className="text-white font-bold text-xl mb-2 uppercase">
-            {creator.username || creator.full_name}
+            {creator.username || "Creator"}
           </h3>
           <Link 
             to={createPageUrl("UserProfile") + `?id=${creator.id}`}

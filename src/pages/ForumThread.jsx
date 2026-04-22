@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { renderBlogMarkdown } from "@/lib/renderBlogMarkdown";
 import { CREAM } from "@/pages/Forums";
 import ReplyForm from "@/components/forums/ReplyForm";
+import { displayName, displayInitial } from "@/utils/displayName";
 
 /**
  * Thread detail — OP at the top, replies below, reply composer at
@@ -197,13 +198,13 @@ function Post({ author, body, date, isDev, isSolution, isOP, likes, liked, onLik
             className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
             style={{ backgroundColor: CREAM.gradEnd, color: CREAM.textPrimary }}
           >
-            {(author?.username || author?.full_name || "?")[0]?.toUpperCase()}
+            {displayInitial(author)}
           </div>
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-black" style={{ color: CREAM.textPrimary }}>
-              {author?.username || author?.full_name || "Anonymous"}
+              {displayName(author, { fallback: "Anonymous" })}
             </p>
             {isDev && (
               <span className="text-[9px] font-black uppercase tracking-widest rounded px-1.5 py-0.5"
