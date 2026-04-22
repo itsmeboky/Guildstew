@@ -73,7 +73,7 @@ export default function CampaignSettingsContent({ campaignId, campaign, allUserP
 
   const nameFor = (uid) => {
     const p = allUserProfiles.find((x) => x.user_id === uid);
-    return p?.username || p?.email || uid;
+    return p?.username || `Player ${String(uid).slice(0, 4)}`;
   };
 
   const consentRating = campaign?.consent_rating || campaign?.campaign_rating || null;

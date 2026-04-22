@@ -5,6 +5,7 @@ import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
 import { spellDetails } from "@/components/dnd5e/spellData";
 import { abilityModifier, proficiencyBonus, CLASS_HIT_DICE } from '@/components/dnd5e/dnd5eRules';
 import { safeText } from "@/utils/safeRender";
+import CompanionCard from "@/components/characters/CompanionCard";
 
 const classes = [
   { name: "Barbarian", icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/a6652f2d8_Barbarian1.png" },
@@ -337,25 +338,31 @@ export default function ReviewStep({ characterData }) {
             </div>
           </div>
 
-          {/* Companion/Familiar */}
-          {companionName && characterData.companion_image && (
-            <div className="bg-[#2A3441] rounded-xl p-6 border-2 border-[#5B4B9E]">
-              <h3 className="text-lg font-bold text-[#5B4B9E] mb-3">{companionName}</h3>
-              <div className="w-full aspect-square rounded-lg bg-[#1E2430] overflow-hidden border-2 border-[#5B4B9E] mb-3">
-                <img
-                  src={characterData.companion_image}
-                  alt={companionName}
-                  className="w-full h-full object-cover"
-                />
+          {/* Companions — renders the shared CompanionCard for every
+              entry on characterData.companions. Falls back to the
+              legacy freeform companion_* fields for characters
+              created before the picker existed. */}
+          {(() => {
+            const companions = Array.isArray(characterData.companions) ? characterData.companions : [];
+            const legacy = characterData.companion_image || characterData.companion_name
+              ? [{
+                  name: characterData.companion_name,
+                  species: companionName,
+                  image: characterData.companion_image,
+                  background: characterData.companion_background,
+                }]
+              : [];
+            const list = companions.length > 0 ? companions : legacy;
+            if (list.length === 0) return null;
+            return (
+              <div className="bg-[#2A3441] rounded-xl p-4 border-2 border-[#5B4B9E] space-y-3">
+                <h3 className="text-lg font-bold text-[#5B4B9E]">Companions</h3>
+                {list.map((comp, i) => (
+                  <CompanionCard key={comp?.id || i} companion={comp} compact />
+                ))}
               </div>
-              {characterData.companion_name && (
-                <p className="text-white font-semibold mb-2">{characterData.companion_name}</p>
-              )}
-              {characterData.companion_background && (
-                <p className="text-sm text-gray-300 leading-relaxed">{characterData.companion_background}</p>
-              )}
-            </div>
-          )}
+            );
+          })()}
         </div>
 
         {/* Middle Column - Abilities & Skills */}

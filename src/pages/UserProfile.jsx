@@ -302,7 +302,7 @@ export default function UserProfile() {
       const next = [...comments, {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         user_id: currentUser?.id,
-        username: currentUser?.username || currentUser?.full_name || 'Unknown',
+        username: currentUser?.username || 'Anonymous',
         avatar_url: currentUser?.avatar_url || null,
         content,
         created_at: new Date().toISOString(),
@@ -377,10 +377,10 @@ export default function UserProfile() {
               <div className="absolute inset-0 w-32 h-32 rounded-full blur-xl opacity-50" style={{ background: `linear-gradient(to right, ${color1}, ${color2})` }} />
               <div className="relative w-32 h-32 rounded-full border-4 overflow-hidden bg-[#1a1f2e] shadow-2xl" style={{ borderColor: color1, boxShadow: `0 20px 25px -5px ${color1}80` }}>
                 {user?.avatar_url ? (
-                  <img src={user.avatar_url} alt={user.full_name} className="w-full h-full object-cover" />
+                  <img src={user.avatar_url} alt={user?.username || ""} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-5xl font-bold text-white">
-                    {user?.full_name?.[0] || 'U'}
+                    {(user?.username || 'U').charAt(0).toUpperCase()}
                   </div>
                 )}
               </div>

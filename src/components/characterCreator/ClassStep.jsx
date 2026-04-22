@@ -27,6 +27,7 @@ import {
 } from '@/lib/breweryClassApply';
 import { Slider } from "@/components/ui/slider";
 import { motion } from "framer-motion";
+import CompanionPicker from "@/components/characterCreator/CompanionPicker";
 
 // Normalize a brewery class (modEngine metadata shape) into the
 // same shape the SRD class list uses. Keeps provenance (_source,
@@ -593,63 +594,12 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.6 }}
-            className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#5B4B9E]/30"
           >
-            <h3 className="text-base font-bold text-[#5B4B9E] mb-1">{companionInfo.name}</h3>
-            <p className="text-xs text-white/60 mb-4">{companionInfo.description}</p>
-            
-            <div className="space-y-3">
-              <div className="w-full aspect-square rounded-xl bg-[#2A3441]/50 overflow-hidden border border-[#5B4B9E]/20">
-                {characterData.companion_image ? (
-                  <img
-                    src={characterData.companion_image}
-                    alt={companionInfo.name}
-                    className="w-full h-full object-cover object-top"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <User className="w-12 h-12 text-white/20" />
-                  </div>
-                )}
-              </div>
-
-              <Button
-                onClick={() => document.getElementById('companion-upload').click()}
-                disabled={uploadingCompanion}
-                className="w-full bg-[#5B4B9E]/90 hover:bg-[#5B4B9E] text-white"
-                size="sm"
-              >
-                <Upload className="w-3 h-3 mr-2" />
-                {uploadingCompanion ? 'Uploading...' : `Upload Image`}
-              </Button>
-              <input
-                type="file"
-                id="companion-upload"
-                accept="image/*"
-                onChange={handleCompanionImageUpload}
-                className="hidden"
-              />
-
-              <div>
-                <Label className="text-white/50 mb-1 block text-xs">Name</Label>
-                <Input
-                  value={characterData.companion_name || ""}
-                  onChange={(e) => updateCharacterData({ companion_name: e.target.value })}
-                  placeholder={`${companionInfo.name} name`}
-                  className="bg-[#2A3441]/80 border-[#5B4B9E]/20 text-white text-sm h-9 focus:border-[#5B4B9E]"
-                />
-              </div>
-
-              <div>
-                <Label className="text-white/50 mb-1 block text-xs">Background</Label>
-                <Textarea
-                  value={characterData.companion_background || ""}
-                  onChange={(e) => updateCharacterData({ companion_background: e.target.value })}
-                  placeholder={`Tell the story of your ${companionInfo.name.toLowerCase()}...`}
-                  className="bg-[#2A3441]/80 border-[#5B4B9E]/20 text-white text-sm min-h-20 resize-none focus:border-[#5B4B9E]"
-                />
-              </div>
-            </div>
+            <CompanionPicker
+              characterData={characterData}
+              updateCharacterData={updateCharacterData}
+              campaignId={campaignId}
+            />
           </motion.div>
         )}
       </div>

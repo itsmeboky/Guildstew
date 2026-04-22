@@ -64,6 +64,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
+import CustomCompanionApprovalDialog from "@/components/gm/CustomCompanionApprovalDialog";
 import {
   blankDeathSaves, applyDeathSaveRoll, applyDownedDamage, isDying,
 } from "@/components/combat/deathSaves";
@@ -2858,6 +2859,7 @@ export default function GMPanel() {
             campaignId={campaignId}
             campaign={campaign}
             allUserProfiles={allUserProfiles}
+            characters={characters}
           />
         </div>
       </SessionModal>
@@ -2872,6 +2874,7 @@ export default function GMPanel() {
             campaignId={campaignId}
             campaign={campaign}
             allUserProfiles={allUserProfiles}
+            characters={characters}
             disconnectedPlayers={disconnectedPlayerSummaries}
           />
         </div>
@@ -2969,6 +2972,12 @@ export default function GMPanel() {
                 </div>
               </div>
             )}
+
+            <CustomCompanionApprovalDialog
+              characters={characters}
+              campaignId={campaignId}
+              isGM={isGM}
+            />
 
             {activeDeathSaveTarget && (
               <DeathSaveWindow

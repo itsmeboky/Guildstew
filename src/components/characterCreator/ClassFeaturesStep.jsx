@@ -7,8 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
 
 export default function ClassFeaturesStep({ characterData, updateCharacterData }) {
-  const [hoveredChoice, setHoveredChoice] = useState(null);
-  const [pinnedTooltip, setPinnedTooltip] = useState(null);
   const [multiclasses, setMulticlasses] = useState(characterData.multiclasses || []);
   const [featureChoices, setFeatureChoices] = useState(characterData.feature_choices || {});
 
@@ -139,47 +137,20 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
                       value={currentChoice || ""}
                       onValueChange={(value) => handleFeatureChoice(featureKey, value)}
                     >
-                      <SelectTrigger className="bg-[#1E2430] border-white text-white h-11">
+                      <SelectTrigger className="h-auto min-h-11 w-full">
                         <SelectValue placeholder="Select option..." />
                       </SelectTrigger>
-                      <SelectContent className="bg-[#2A3441] border-[#1E2430] max-h-[400px]">
+                      <SelectContent>
                         {feature.choices.map((choice, cIdx) => {
                           const choiceName = typeof choice === 'string' ? choice : choice.name;
                           const choiceDesc = typeof choice === 'object' ? choice.description : null;
-                          const tooltipKey = `${featureKey}-${cIdx}`;
-                          const isHovered = hoveredChoice === tooltipKey || pinnedTooltip === tooltipKey;
-                          
                           return (
-                            <SelectItem 
-                              key={cIdx} 
+                            <SelectItem
+                              key={cIdx}
                               value={choiceName}
-                              className="text-white hover:bg-[#1E2430] relative py-2"
-                              onMouseEnter={() => setHoveredChoice(tooltipKey)}
-                              onMouseLeave={() => {
-                                if (pinnedTooltip !== tooltipKey) {
-                                  setHoveredChoice(null);
-                                }
-                              }}
-                              onClick={() => {
-                                if (pinnedTooltip === tooltipKey) {
-                                  setPinnedTooltip(null);
-                                } else {
-                                  setPinnedTooltip(tooltipKey);
-                                }
-                              }}
+                              description={choiceDesc || undefined}
                             >
-                              <div className="py-1 pr-2">
-                                <div className="font-semibold mb-1">{choiceName}</div>
-                                {choiceDesc && isHovered && (
-                                  <div 
-                                    className="text-xs text-gray-500 mt-2 whitespace-pre-line leading-6 max-w-2xl max-h-64 overflow-y-auto pr-2"
-                                    onMouseEnter={() => setPinnedTooltip(tooltipKey)}
-                                    onMouseLeave={() => setPinnedTooltip(null)}
-                                  >
-                                    {choiceDesc}
-                                  </div>
-                                )}
-                              </div>
+                              {choiceName}
                             </SelectItem>
                           );
                         })}
@@ -287,49 +258,21 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
                           <Select
                             value={currentChoice || ""}
                             onValueChange={(value) => handleFeatureChoice(featureKey, value)}
-                            className="mt-4"
                           >
-                            <SelectTrigger className="bg-[#1E2430] border-white text-white text-sm h-11">
+                            <SelectTrigger className="h-auto min-h-11 w-full mt-4">
                               <SelectValue placeholder="Make a choice..." />
                             </SelectTrigger>
-                            <SelectContent className="bg-[#2A3441] border-[#1E2430] max-h-[400px]">
+                            <SelectContent>
                               {feature.choices.map((choice, cIdx) => {
                                 const choiceName = typeof choice === 'string' ? choice : choice.name;
                                 const choiceDesc = typeof choice === 'object' ? choice.description : null;
-                                const tooltipKey = `${featureKey}-mc-${cIdx}`;
-                                const isHovered = hoveredChoice === tooltipKey || pinnedTooltip === tooltipKey;
-                                
                                 return (
-                                  <SelectItem 
-                                    key={cIdx} 
+                                  <SelectItem
+                                    key={cIdx}
                                     value={choiceName}
-                                    className="text-white hover:bg-[#1E2430] relative py-2"
-                                    onMouseEnter={() => setHoveredChoice(tooltipKey)}
-                                    onMouseLeave={() => {
-                                      if (pinnedTooltip !== tooltipKey) {
-                                        setHoveredChoice(null);
-                                      }
-                                    }}
-                                    onClick={() => {
-                                      if (pinnedTooltip === tooltipKey) {
-                                        setPinnedTooltip(null);
-                                      } else {
-                                        setPinnedTooltip(tooltipKey);
-                                      }
-                                    }}
+                                    description={choiceDesc || undefined}
                                   >
-                                    <div className="py-1 pr-2">
-                                      <div className="font-semibold mb-1">{choiceName}</div>
-                                      {choiceDesc && isHovered && (
-                                        <div 
-                                          className="text-sm text-gray-500 mt-2 whitespace-pre-line leading-6 max-w-2xl max-h-64 overflow-y-auto pr-2"
-                                          onMouseEnter={() => setPinnedTooltip(tooltipKey)}
-                                          onMouseLeave={() => setPinnedTooltip(null)}
-                                        >
-                                          {choiceDesc}
-                                        </div>
-                                      )}
-                                    </div>
+                                    {choiceName}
                                   </SelectItem>
                                 );
                               })}

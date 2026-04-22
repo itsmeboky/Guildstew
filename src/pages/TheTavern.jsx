@@ -140,7 +140,7 @@ export default function TheTavern() {
 
   const creatorName = (id) => {
     const c = creators.find((u) => u.user_id === id);
-    return c?.username || c?.full_name || "Guildstew Studios";
+    return c?.username || "Guildstew Studios";
   };
 
   const cardProps = (item) => ({

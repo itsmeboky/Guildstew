@@ -81,7 +81,7 @@ export default function GMSidebarSettings({ campaignId, campaign, allUserProfile
 
   const nameFor = (uid) => {
     const p = allUserProfiles.find((x) => x.user_id === uid);
-    return p?.username || p?.email || uid;
+    return p?.username || `Player ${String(uid).slice(0, 4)}`;
   };
 
   const consentRating = campaign?.campaign_rating || campaign?.consent_rating || null;

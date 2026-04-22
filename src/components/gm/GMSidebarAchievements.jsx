@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
+import { playerDisplayName } from "@/utils/displayName";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -18,7 +19,7 @@ import {
  * not a grant button, so the GM doesn't accidentally clobber the
  * auto-earn rules.
  */
-export default function GMSidebarAchievements({ campaignId, campaign, allUserProfiles = [] }) {
+export default function GMSidebarAchievements({ campaignId, campaign, allUserProfiles = [], characters = [] }) {
   const queryClient = useQueryClient();
   const [selectedPlayer, setSelectedPlayer] = useState("");
   const playerIds = Array.isArray(campaign?.player_ids) ? campaign.player_ids : [];
@@ -77,9 +78,13 @@ export default function GMSidebarAchievements({ campaignId, campaign, allUserPro
             ) : (
               playerIds.map((uid) => {
                 const profile = allUserProfiles.find((p) => p.user_id === uid);
+                const character = (characters || []).find(
+                  (c) => c.user_id === uid || c.created_by === profile?.email,
+                );
+                const label = playerDisplayName({ character, profile, asGM: true });
                 return (
                   <SelectItem key={uid} value={uid}>
-                    {profile?.username || profile?.email || uid}
+                    {label}
                   </SelectItem>
                 );
               })
