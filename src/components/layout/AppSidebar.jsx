@@ -18,6 +18,7 @@ import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
 import CreatorUploadDialog from "@/components/tavern/CreatorUploadDialog";
 import SpiceIcon from "@/components/tavern/SpiceIcon";
 import CampaignActions from "@/components/layout/CampaignActions";
+import FriendsSidebarPanel from "@/components/layout/FriendsSidebarPanel";
 import { base44 } from "@/api/base44Client";
 
 /**
@@ -79,16 +80,6 @@ export default function AppSidebar() {
       .filter(Boolean),
     [friendships, user?.id],
   );
-
-  const { data: friendProfiles = [] } = useQuery({
-    queryKey: ["sidebarFriendProfiles", friendIds.sort().join(",")],
-    queryFn: async () => {
-      if (friendIds.length === 0) return [];
-      const rows = await base44.entities.UserProfile.list();
-      return (rows || []).filter((p) => friendIds.includes(p.user_id)).slice(0, 5);
-    },
-    enabled: friendIds.length > 0,
-  });
 
   const tier = sub.tierData;
 
@@ -160,30 +151,7 @@ export default function AppSidebar() {
               label="Friends"
               badge={pendingRequestsCount}
             />
-            {friendProfiles.length > 0 && (
-              <div className="flex items-center gap-1 px-3 pt-1.5">
-                {friendProfiles.map((p) => (
-                  <Link
-                    key={p.user_id}
-                    to={`${createPageUrl("UserProfile")}?id=${p.user_id}`}
-                    title={p.username || p.full_name || "Friend"}
-                    className="block"
-                  >
-                    {p.avatar_url ? (
-                      <img
-                        src={p.avatar_url}
-                        alt=""
-                        className="w-7 h-7 rounded-full object-cover object-top border border-slate-700 hover:border-[#37F2D1] transition-colors"
-                      />
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-300 border border-slate-700 hover:border-[#37F2D1] transition-colors">
-                        {(p.username || p.full_name || "?")[0]?.toUpperCase()}
-                      </div>
-                    )}
-                  </Link>
-                ))}
-              </div>
-            )}
+            <FriendsSidebarPanel user={user} friendIds={friendIds} sub={sub} />
             <SidebarLink to={createPageUrl("Achievements")} icon={Trophy} label="Achievements" />
             <SidebarLink to={createPageUrl("PIEChart")} icon={PieChart} label="P.I.E. Chart" />
           </SidebarSection>
