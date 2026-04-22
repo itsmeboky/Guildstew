@@ -3,8 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  CreditCard, ArrowRight, Check, X, ExternalLink, Flame, ChevronRight, Sparkles,
+  CreditCard, ArrowRight, Check, X, ExternalLink, ChevronRight, Sparkles,
 } from "lucide-react";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -209,7 +210,7 @@ export default function AccountBilling() {
                 Spice Balance
               </p>
               <p className="text-3xl font-black text-amber-200 flex items-center gap-2 mt-1">
-                <Flame className="w-6 h-6 text-amber-400" />
+                <SpiceIcon size={24} color="#fbbf24" />
                 {formatSpice(wallet?.balance || 0)}
               </p>
               <p className="text-[11px] text-slate-500 mt-1">

@@ -9,8 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  AlertTriangle, Camera, Dices, Download, Flame, Settings2, Sparkles, Upload, X,
+  AlertTriangle, Camera, Dices, Download, Settings2, Sparkles, Upload, X,
 } from "lucide-react";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { getWalletBalance } from "@/lib/spiceWallet";
@@ -384,7 +385,7 @@ export default function DiceSkinCreator({ open, onClose }) {
                 </div>
               </div>
               <div className="bg-[#050816] border border-amber-500/30 rounded p-2 text-[11px] text-amber-100 flex items-center gap-2">
-                <Flame className="w-3.5 h-3.5 text-amber-400" />
+                <SpiceIcon size={14} color="#fbbf24" />
                 Upload fee: <strong>{uploadFee === 0 ? "Waived" : `${formatSpice(uploadFee)} Spice`}</strong>
                 <span className="text-slate-400">· Wallet {formatSpice(balance)}</span>
               </div>

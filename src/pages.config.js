@@ -17,6 +17,7 @@ import ForumThread from './pages/ForumThread';
 import Events from './pages/Events';
 import Leaderboards from './pages/Leaderboards';
 import CreatorAnalytics from './pages/CreatorAnalytics';
+import CampaignsFind from './pages/CampaignsFind';
 import FAQ from './pages/FAQ';
 import Docs from './pages/Docs';
 import SupportTicket from './pages/SupportTicket';
@@ -89,6 +90,7 @@ export const PAGES = {
     "Events": Events,
     "Leaderboards": Leaderboards,
     "CreatorAnalytics": CreatorAnalytics,
+    "CampaignsFind": CampaignsFind,
     "FAQ": FAQ,
     "Docs": Docs,
     "SupportTicket": SupportTicket,
