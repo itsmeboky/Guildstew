@@ -30,6 +30,7 @@ import {
   fightingStyleDescriptions
 } from "@/components/dnd5e/featureDescriptions";
 import CompanionCard from "@/components/characters/CompanionCard";
+import SpellHoverCard from "@/components/spells/SpellHoverCard";
 import { classHitDice } from "@/components/dnd5e/characterCalculations";
 import { spellDetails, spellIcons } from "@/components/dnd5e/spellData";
 import { useNavigate } from "react-router-dom";
@@ -890,43 +891,43 @@ export default function CharacterLibrary() {
                           <div className="space-y-2">
                             {spells.map((spell, idx) => {
                               const details = spellDetails[spell];
+                              // Project the local spellDetails shape (camelCase
+                              // legacy keys) into the snake_case shape the
+                              // shared SpellHoverCard renders.
+                              const tooltipSpell = details
+                                ? {
+                                    name: spell,
+                                    level: levelKey === 'cantrips' ? 0 : Number(details.level) || Number(levelKey.replace('level','')) || 0,
+                                    school: details.school,
+                                    casting_time: details.castingTime,
+                                    range: details.range,
+                                    duration: details.duration,
+                                    components: details.components,
+                                    description: details.description,
+                                  }
+                                : { name: spell, level: levelKey === 'cantrips' ? 0 : Number(levelKey.replace('level','')) || 0 };
                               return (
-                                <div
-                                  key={idx}
-                                  className={`bg-gradient-to-r from-[#2A3441] to-[#1E2430] rounded-lg p-3 border border-gray-700 hover:${borderColor} transition-all cursor-help relative`}
-                                  onMouseEnter={() => setHoveredItem(`${levelKey}-${idx}`)}
-                                  onMouseLeave={() => setHoveredItem(null)}
-                                >
-                                  <div className="flex items-center gap-3">
-                                    {spellIcons[spell] && (
-                                      <img
-                                        src={spellIcons[spell]}
-                                        alt={spell}
-                                        className={`w-10 h-10 rounded-lg object-cover border-2 ${borderColor}/30`}
-                                      />
-                                    )}
-                                    <div className="flex-1">
-                                      <div className="font-bold text-white text-sm mb-1">{spell}</div>
-                                      <div className="text-xs text-gray-400">
-                                        {details ? `${details.school} • ${details.castingTime}` : levelLabel}
+                                <SpellHoverCard key={idx} spell={tooltipSpell}>
+                                  <div
+                                    className={`bg-gradient-to-r from-[#2A3441] to-[#1E2430] rounded-lg p-3 border border-gray-700 hover:${borderColor} transition-all cursor-help`}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      {spellIcons[spell] && (
+                                        <img
+                                          src={spellIcons[spell]}
+                                          alt={spell}
+                                          className={`w-10 h-10 rounded-lg object-cover border-2 ${borderColor}/30`}
+                                        />
+                                      )}
+                                      <div className="flex-1">
+                                        <div className="font-bold text-white text-sm mb-1">{spell}</div>
+                                        <div className="text-xs text-gray-400">
+                                          {details ? `${details.school} • ${details.castingTime}` : levelLabel}
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
-                                  {hoveredItem === `${levelKey}-${idx}` && details && (
-                                    <div className={`absolute z-50 left-0 top-full mt-2 bg-[#1E2430] text-white p-4 rounded-lg text-xs w-96 shadow-xl border-2 ${borderColor} max-h-64 overflow-y-auto`}>
-                                      <div className={`font-bold mb-2 ${titleColor}`}>{spell}</div>
-                                      <div className="text-gray-400 text-xs mb-2">
-                                        {details.school} {levelKey === 'cantrips' ? 'cantrip' : `level ${details.level}`} • {details.castingTime}
-                                      </div>
-                                      <div className="space-y-1 text-xs mb-2">
-                                        <div><span className="text-gray-400">Range:</span> {details.range}</div>
-                                        <div><span className="text-gray-400">Components:</span> {details.components}</div>
-                                        <div><span className="text-gray-400">Duration:</span> {details.duration}</div>
-                                      </div>
-                                      <div className="text-white whitespace-pre-wrap">{details.description}</div>
-                                    </div>
-                                  )}
-                                </div>
+                                </SpellHoverCard>
                               );
                             })}
                           </div>
