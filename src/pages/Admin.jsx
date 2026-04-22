@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, Users, Sword, Trophy, ShoppingBag, DollarSign,
   LifeBuoy, Flag, ScrollText, GamepadIcon, Home, Store, Wallet, FileText, Rocket,
-  MessageSquare, HelpCircle, BookOpen, Calendar,
+  MessageSquare, HelpCircle, BookOpen, Calendar, Award,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import FAQTab from "@/components/admin/FAQTab";
 import DocsTab from "@/components/admin/DocsTab";
 import EventsTab from "@/components/admin/EventsTab";
 import HomepageTab from "@/components/admin/HomepageTab";
+import TitlesTab from "@/components/admin/TitlesTab";
 import { supabase as supabaseClient } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 
@@ -49,6 +50,7 @@ const TABS = [
   { id: "gameplay",     label: "Gameplay",            icon: GamepadIcon },
   { id: "combat",       label: "Combat Stats",        icon: Sword },
   { id: "achievements", label: "Achievements",        icon: Trophy },
+  { id: "titles",       label: "Titles",              icon: Award },
   { id: "marketplace",  label: "Marketplace",         icon: ShoppingBag },
   { id: "tavern",       label: "Tavern",              icon: Store },
   { id: "cashouts",     label: "Cashouts",            icon: Wallet },
@@ -175,6 +177,7 @@ export default function Admin() {
           {tab === "gameplay"     && <GameplayTab     dateRange={dateRange} />}
           {tab === "combat"       && <CombatStatsTab />}
           {tab === "achievements" && <AchievementsTab />}
+          {tab === "titles"       && <TitlesTab        adminId={user.id} />}
           {tab === "marketplace"  && <MarketplaceTab />}
           {tab === "tavern"       && <TavernAdminTab />}
           {tab === "cashouts"     && <CashoutsTab />}
