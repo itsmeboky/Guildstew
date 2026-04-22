@@ -18,6 +18,9 @@ import { canEquipToSlot } from "@/components/gm/equipmentRules";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
+import {
+  blankDeathSaves, applyDeathSaveRoll,
+} from "@/components/combat/deathSaves";
 import { useTurnContext } from "@/components/combat/useTurnContext";
 import { hpBarColor } from "@/components/combat/hpColor";
 import { resolveAction, consumeActionCost } from "@/components/combat/actionResolver";
@@ -479,10 +482,10 @@ function CampaignPlayerPanelContent() {
     const idx = order.findIndex((c) => (c.uniqueId || c.id) === activeDeathSaveTarget.key);
     if (idx === -1) return;
     const target = order[idx];
-    const existing = target.deathSaves || { successes: 0, failures: 0, stabilized: false, dead: false };
+    const existing = target.deathSaves || blankDeathSaves();
     let next = { ...existing };
     if (d20 === 20) {
-      next = { successes: 0, failures: 0, stabilized: false, dead: false };
+      next = blankDeathSaves();
       order[idx] = { ...target, downed: false, deathSaves: next, hit_points: { ...(target.hit_points || {}), current: 1 } };
     } else if (d20 === 1) {
       next.failures = Math.min(3, existing.failures + 2);
