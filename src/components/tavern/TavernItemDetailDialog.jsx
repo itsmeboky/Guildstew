@@ -7,8 +7,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Flame, Star, ChefHat, Award, Check, MessageSquare,
+  Star, ChefHat, Award, Check, MessageSquare,
 } from "lucide-react";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import {
@@ -231,7 +232,7 @@ export default function TavernItemDetailDialog({ item: itemProp, open, onClose, 
         <div className="bg-[#050816] border border-amber-600/30 rounded-lg p-4 flex items-center justify-between flex-wrap gap-3">
           <div>
             <p className="text-2xl font-black text-amber-200 flex items-center gap-2">
-              <Flame className="w-5 h-5 text-amber-400" />
+              <SpiceIcon size={20} color="#fbbf24" />
               {formatSpice(discounted)}
               {hasDiscount && (
                 <span className="text-sm text-slate-500 line-through ml-2">

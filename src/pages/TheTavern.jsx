@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Flame, Search, ChefHat, Award, Store, Plus, Package, TrendingUp } from "lucide-react";
+import { Search, ChefHat, Award, Store, Plus, Package, TrendingUp } from "lucide-react";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from "@/utils";
@@ -177,7 +178,7 @@ export default function TheTavern() {
             >
               <p className="text-[9px] uppercase tracking-widest font-bold" style={{ color: P.accentDeep }}>Spice</p>
               <p className="text-lg font-black flex items-center gap-1" style={{ color: P.textPrimary }}>
-                <Flame className="w-4 h-4" style={{ color: P.accent }} />
+                <SpiceIcon size={18} color={P.accent} />
                 {formatSpice(wallet?.balance || 0)}
               </p>
             </div>
@@ -189,7 +190,7 @@ export default function TheTavern() {
               >
                 <p className="text-[9px] uppercase tracking-widest font-bold" style={{ color: "#7c3aed" }}>Guild Spice</p>
                 <p className="text-lg font-black flex items-center gap-1" style={{ color: P.textPrimary }}>
-                  <Flame className="w-4 h-4" style={{ color: "#a855f7" }} />
+                  <SpiceIcon size={18} color="#a855f7" />
                   {formatSpice(guildWallet?.balance || 0)}
                 </p>
               </div>

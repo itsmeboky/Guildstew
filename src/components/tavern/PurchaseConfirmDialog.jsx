@@ -5,7 +5,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Flame, AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { getWalletBalance, getGuildWalletBalance } from "@/lib/spiceWallet";
 import { purchaseItem } from "@/lib/tavernClient";
 import { formatSpice, applyDiscount } from "@/config/spiceConfig";
@@ -112,7 +113,7 @@ export default function PurchaseConfirmDialog({
             <p className="text-white font-bold text-sm">{item.name}</p>
             <p className="text-[11px] text-slate-400">{item.category?.replace(/_/g, " ")}</p>
             <p className="text-amber-200 font-black text-base flex items-center gap-1 mt-1">
-              <Flame className="w-3.5 h-3.5 text-amber-400" />
+              <SpiceIcon size={14} color="#fbbf24" />
               {formatSpice(discounted)}
               {hasDiscount && (
                 <span className="text-[10px] text-slate-500 line-through ml-1">
@@ -186,7 +187,7 @@ function WalletOption({ active, onClick, label, balance, accent, disabled, note 
   const activeCls = accent === "purple"
     ? "border-purple-400 bg-purple-500/10"
     : "border-amber-400 bg-amber-500/10";
-  const flameColor = accent === "purple" ? "text-purple-400" : "text-amber-400";
+  const iconColor = accent === "purple" ? "#a855f7" : "#fbbf24";
   const textColor = accent === "purple" ? "text-purple-200" : "text-amber-200";
   return (
     <button
@@ -203,7 +204,7 @@ function WalletOption({ active, onClick, label, balance, accent, disabled, note 
           {note && <p className="text-[10px] text-slate-400 mt-0.5">{note}</p>}
         </div>
         <p className={`text-base font-black ${textColor} flex items-center gap-1`}>
-          <Flame className={`w-3.5 h-3.5 ${flameColor}`} />
+          <SpiceIcon size={14} color={iconColor} />
           {formatSpice(balance)}
         </p>
       </div>
