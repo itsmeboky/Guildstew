@@ -135,12 +135,12 @@ export default function CampaignApplicationsPanel({ campaign, campaignId }) {
                     <img src={p.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover object-top flex-shrink-0" />
                   ) : (
                     <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-slate-200 flex-shrink-0">
-                      {(p?.username || p?.full_name || "?")[0]?.toUpperCase()}
+                      {(p?.username || "?")[0].toUpperCase()}
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-white font-bold">
-                      {p?.username || p?.full_name || "Anonymous"}
+                      {p?.username || "Anonymous"}
                     </p>
                     <p className="text-[11px] text-slate-500">
                       Applied {new Date(app.created_at).toLocaleString()}
@@ -189,7 +189,7 @@ export default function CampaignApplicationsPanel({ campaign, campaignId }) {
                 <li key={app.id} className="text-[11px] text-slate-500 flex items-center justify-between gap-2 py-1">
                   <span className="truncate">
                     <Clock className="w-3 h-3 inline-block mr-1 align-middle" />
-                    {p?.username || p?.full_name || "Anonymous"}
+                    {p?.username || "Anonymous"}
                   </span>
                   <span className={`font-bold uppercase tracking-widest ${
                     app.status === "accepted" ? "text-emerald-300" : "text-rose-300"

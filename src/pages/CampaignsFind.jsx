@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
+import { displayName } from "@/utils/displayName";
 
 /**
  * /campaigns/find
@@ -65,7 +66,7 @@ export default function CampaignsFind() {
   });
   const gmName = (id) => {
     const p = gms.find((g) => g.user_id === id);
-    return p?.username || p?.full_name || "Unknown GM";
+    return displayName(p, { fallback: "Unknown GM" });
   };
 
   // My existing applications — disables the Apply button on the
