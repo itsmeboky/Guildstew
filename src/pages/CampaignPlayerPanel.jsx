@@ -152,6 +152,12 @@ const basicActionIcons = [
   { name: "Ready Action", url: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/abilities/basic%20actions/ready%20action.png" }
 ];
 
+const DEATH_SAVE_ICONS = {
+  life: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/UI/life.png",
+  death: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/UI/death.png",
+};
+const DEATH_SAVE_ICON_STYLE = { filter: "brightness(0) invert(1)" };
+
 const CONDITIONS = {
   Blinded: { color: "#525252", label: "Blinded" },
   Charmed: { color: "#db2777", label: "Charmed" },
@@ -2701,6 +2707,46 @@ function TurnOrderDisplay({ order, currentTurnIndex, onSelectTarget, selectionMo
                          );
                       })()}
                    </div>
+                )}
+
+                {/* Death save progress — same circle treatment as the
+                    GM panel so players watching a teammate's save see
+                    the same tally at a glance. STABILIZED / DEAD
+                    status text sits in place of the circles when the
+                    save chain has resolved. */}
+                {combatant.downed && combatant.deathSaves?.stabilized && !combatant.deathSaves?.dead && (
+                  <span className="text-[9px] font-bold text-[#22c55e] uppercase tracking-widest">
+                    Stabilized
+                  </span>
+                )}
+                {combatant.downed && combatant.deathSaves?.dead && (
+                  <span className="text-[9px] font-bold text-[#ef4444] uppercase tracking-widest">
+                    Dead
+                  </span>
+                )}
+                {combatant.downed && !combatant.deathSaves?.stabilized && !combatant.deathSaves?.dead && (
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex items-center gap-0.5">
+                      <img src={DEATH_SAVE_ICONS.life} alt="Successes" className="w-3 h-3 mr-0.5" style={DEATH_SAVE_ICON_STYLE} />
+                      {[0, 1, 2].map((i) => (
+                        <span
+                          key={i}
+                          className="w-1.5 h-1.5 rounded-full inline-block"
+                          style={{ backgroundColor: (combatant.deathSaves?.successes || 0) > i ? '#22c55e' : '#1e293b' }}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-0.5">
+                      <img src={DEATH_SAVE_ICONS.death} alt="Failures" className="w-3 h-3 mr-0.5" style={DEATH_SAVE_ICON_STYLE} />
+                      {[0, 1, 2].map((i) => (
+                        <span
+                          key={i}
+                          className="w-1.5 h-1.5 rounded-full inline-block"
+                          style={{ backgroundColor: (combatant.deathSaves?.failures || 0) > i ? '#ef4444' : '#1e293b' }}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 <span className={`text-[10px] font-bold max-w-[80px] truncate px-2 py-0.5 rounded-full ${
