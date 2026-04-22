@@ -57,6 +57,20 @@ export default function TheTavern() {
     queryFn: () => listTavernItems({ category: selectedCategory, sort, q: search }),
   });
 
+  // Admin-managed hero banner. Optional — falls back to a stock
+  // gradient + tagline when no site_config row is set.
+  const { data: heroConfig } = useQuery({
+    queryKey: ["tavernHeroBanner"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("site_config")
+        .select("value")
+        .eq("key", "tavern_hero_banner")
+        .maybeSingle();
+      return data?.value || null;
+    },
+  });
+
   const { data: featured = [] } = useQuery({
     queryKey: ["tavernFeatured"],
     queryFn: async () => {
@@ -131,6 +145,11 @@ export default function TheTavern() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: P.pageBg, color: P.textPrimary }}>
+      {/* Full-bleed hero — site_config.tavern_hero_banner overrides
+          the default gradient + tagline. Shape:
+            { image_url, title, subtitle, link_url } */}
+      <TavernHero config={heroConfig} />
+
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -301,6 +320,58 @@ function CategoryTab({ value, label, current, onClick, icon: Icon }) {
       {label}
     </button>
   );
+}
+
+/**
+ * Full-width hero banner for the Tavern. Admin-managed via
+ * `site_config.tavern_hero_banner`; falls back to a gradient + stock
+ * tagline so a fresh DB still renders a hero.
+ */
+function TavernHero({ config }) {
+  const image = config?.image_url || null;
+  const title = config?.title || "The Tavern";
+  const subtitle = config?.subtitle || "Warm cosmetics, dice, themes, and game packs — brewed fresh daily.";
+  const link = config?.link_url || null;
+
+  const inner = (
+    <div
+      className="relative w-full h-[220px] md:h-[280px] overflow-hidden"
+      style={!image ? { background: TAVERN_HEADER_GRADIENT } : undefined}
+    >
+      {image && (
+        <>
+          <img src={image} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <div
+            className="absolute inset-0"
+            style={{
+              background: `linear-gradient(90deg, rgba(255,248,243,0.85) 0%, rgba(255,248,243,0.25) 45%, rgba(255,248,243,0) 70%)`,
+            }}
+          />
+        </>
+      )}
+      <div className="relative z-10 max-w-7xl mx-auto h-full px-4 md:px-8 flex flex-col justify-center">
+        <h1
+          className="text-4xl md:text-5xl font-black tracking-tight"
+          style={{ color: P.textPrimary, fontFamily: "'Cream', 'Inter', sans-serif" }}
+        >
+          {title}
+        </h1>
+        {subtitle && (
+          <p className="text-sm md:text-base mt-2 max-w-xl" style={{ color: P.textPrimary, opacity: 0.9 }}>
+            {subtitle}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+
+  if (link) {
+    const external = /^https?:\/\//.test(link);
+    return external
+      ? <a href={link} target="_blank" rel="noopener noreferrer" className="block">{inner}</a>
+      : <Link to={link} className="block">{inner}</Link>;
+  }
+  return inner;
 }
 
 function FeaturedRow({ title, subtitle, icon: Icon, items, cardProps }) {
