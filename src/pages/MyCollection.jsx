@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
-import { Store, Check, Users, Package } from "lucide-react";
+import { Store, Check, Users, Package, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
@@ -61,9 +61,11 @@ export default function MyCollection() {
 
   const personal = [];
   const guild = [];
+  const creations = [];
   for (const it of items) {
     const ent = entitlements.find((e) => e.item_id === it.id);
     if (ent?.source === "guild") guild.push(it);
+    else if (ent?.source === "creator") creations.push(it);
     else personal.push(it);
   }
 
@@ -114,6 +116,16 @@ export default function MyCollection() {
             <Pill key={c.value} label={c.label} value={c.value} current={categoryFilter} onClick={setCategoryFilter} icon={c.icon} />
           ))}
         </div>
+
+        <Section
+          title="Your Creations"
+          subtitle="Items you've listed on the Tavern. Free to apply — testing your own work never costs Spice."
+          badge="creator"
+          items={filter(creations)}
+          activeCosmetics={activeCosmetics}
+          onApply={(item) => applyMut.mutate({ item })}
+          onClear={(item) => clearMut.mutate({ item })}
+        />
 
         <Section
           title="Personal Items"
@@ -175,6 +187,11 @@ function Section({ title, subtitle, items, activeCosmetics, onApply, onClear, ba
             <Users className="w-3 h-3" /> Shared
           </span>
         )}
+        {badge === "creator" && (
+          <span className="inline-flex items-center gap-1 text-[9px] uppercase tracking-widest font-bold px-2 py-0.5 rounded bg-[#37F2D1]/15 text-[#37F2D1]">
+            <Sparkles className="w-3 h-3" /> By you
+          </span>
+        )}
       </div>
       <p className="text-xs text-slate-500 mb-3">{subtitle}</p>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -184,6 +201,7 @@ function Section({ title, subtitle, items, activeCosmetics, onApply, onClear, ba
             item={item}
             isActive={isItemActive(activeCosmetics, item.category, item.id)}
             guild={badge === "guild"}
+            creator={badge === "creator"}
             onApply={() => onApply(item)}
             onClear={() => onClear(item)}
           />
@@ -193,7 +211,7 @@ function Section({ title, subtitle, items, activeCosmetics, onApply, onClear, ba
   );
 }
 
-function CollectionCard({ item, isActive, guild, onApply, onClear }) {
+function CollectionCard({ item, isActive, guild, creator, onApply, onClear }) {
   const Icon = categoryIcon(item.category);
   const hasSlot = !!slotForCategory(item.category);
   return (
@@ -209,6 +227,11 @@ function CollectionCard({ item, isActive, guild, onApply, onClear }) {
         {guild && (
           <span className="absolute top-2 left-2 inline-flex items-center gap-1 text-[9px] uppercase tracking-widest font-bold px-2 py-0.5 rounded bg-purple-600 text-white shadow">
             <Users className="w-3 h-3" /> Guild
+          </span>
+        )}
+        {creator && (
+          <span className="absolute top-2 left-2 inline-flex items-center gap-1 text-[9px] uppercase tracking-widest font-bold px-2 py-0.5 rounded bg-[#37F2D1] text-[#050816] shadow">
+            <Sparkles className="w-3 h-3" /> By you
           </span>
         )}
         {isActive && (

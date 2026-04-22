@@ -60,6 +60,27 @@ export async function listEntitlements(userId, { currentGuildId = null } = {}) {
     }
   }
 
+  // 3) creator backstop — anything this user uploaded counts as owned
+  // even if the auto-grant purchase row never landed (legacy listings
+  // from before the self-grant write, or RLS blocked the insert).
+  const { data: mine = [] } = await supabase
+    .from("tavern_items")
+    .select("id, created_at")
+    .eq("creator_id", userId);
+
+  const seenIds = new Set(rows.map((r) => r.item_id));
+  for (const it of mine || []) {
+    if (seenIds.has(it.id)) continue;
+    rows.push({
+      item_id: it.id,
+      source: "creator",
+      guild_id: null,
+      purchased_at: it.created_at,
+      price_paid: 0,
+    });
+    seenIds.add(it.id);
+  }
+
   return rows;
 }
 
@@ -78,6 +99,15 @@ export async function hasAccess(userId, itemId, { currentGuildId = null } = {}) 
     .eq("item_id", itemId)
     .maybeSingle();
   if (personal) return true;
+
+  // Creators always own their own listings.
+  const { data: mine } = await supabase
+    .from("tavern_items")
+    .select("id")
+    .eq("id", itemId)
+    .eq("creator_id", userId)
+    .maybeSingle();
+  if (mine) return true;
 
   if (!currentGuildId) return false;
 
@@ -105,6 +135,14 @@ export async function accessSource(userId, itemId, { currentGuildId = null } = {
     .eq("item_id", itemId)
     .maybeSingle();
   if (personal) return "personal";
+
+  const { data: mine } = await supabase
+    .from("tavern_items")
+    .select("id")
+    .eq("id", itemId)
+    .eq("creator_id", userId)
+    .maybeSingle();
+  if (mine) return "creator";
 
   if (!currentGuildId) return null;
 
