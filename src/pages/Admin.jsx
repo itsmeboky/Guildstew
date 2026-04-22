@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, Users, Sword, Trophy, ShoppingBag, DollarSign,
   LifeBuoy, Flag, ScrollText, GamepadIcon, Home, Store, Wallet, FileText, Rocket,
-  MessageSquare, HelpCircle, BookOpen,
+  MessageSquare, HelpCircle, BookOpen, Calendar,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import VersionsTab from "@/components/admin/VersionsTab";
 import ForumsTab from "@/components/admin/ForumsTab";
 import FAQTab from "@/components/admin/FAQTab";
 import DocsTab from "@/components/admin/DocsTab";
+import EventsTab from "@/components/admin/EventsTab";
 import { supabase as supabaseClient } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 
@@ -57,6 +58,7 @@ const TABS = [
   { id: "tickets",      label: "Support Tickets",     icon: LifeBuoy },
   { id: "faq",          label: "FAQ",                 icon: HelpCircle },
   { id: "docs",         label: "Documentation",       icon: BookOpen },
+  { id: "events",       label: "Community Events",    icon: Calendar },
   { id: "reports",      label: "Reports & Mod",       icon: Flag },
   { id: "log",          label: "Admin Log",           icon: ScrollText },
 ];
@@ -179,6 +181,7 @@ export default function Admin() {
           {tab === "forums"       && <ForumsTab />}
           {tab === "faq"          && <FAQTab />}
           {tab === "docs"         && <DocsTab />}
+          {tab === "events"       && <EventsTab />}
           {tab === "revenue"      && <RevenueTab      dateRange={dateRange} />}
           {tab === "tickets"      && <SupportTicketsTab adminId={user.id} />}
           {tab === "reports"      && <ReportsModerationTab adminId={user.id} />}
