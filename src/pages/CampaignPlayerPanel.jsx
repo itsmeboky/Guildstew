@@ -19,7 +19,7 @@ import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
 import {
-  blankDeathSaves, applyDeathSaveRoll,
+  blankDeathSaves, applyDeathSaveRoll, applyDownedDamage,
 } from "@/components/combat/deathSaves";
 import { useTurnContext } from "@/components/combat/useTurnContext";
 import { hpBarColor } from "@/components/combat/hpColor";
@@ -1743,7 +1743,7 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
                       const player = players.find(p => p.user_id === userId);
                       return player && c.created_by === player.email;
                     });
-                    
+
                     if (char) {
                       const maxHp = char.hit_points?.max || 0;
                       const currentHp = char.hit_points?.current ?? maxHp;
@@ -1754,6 +1754,66 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
                         hit_points: { ...char.hit_points, current: newCurrent }
                       });
                       queryClient.invalidateQueries(['campaignCharacters']);
+
+                      // Keep combat_data.order in lockstep so the
+                      // downed state / death saves react to player-
+                      // initiated damage + heals (e.g. a cleric
+                      // casting Cure Wounds on a dying ally). The GM
+                      // panel owns the authoritative monster-attack
+                      // path; this mirrors it for player-sourced HP
+                      // changes so the initiative tracker + dramatic
+                      // window see consistent state either way.
+                      const combat = campaignData?.combat_data;
+                      const order = combat?.order;
+                      if (order) {
+                        const idx = order.findIndex(
+                          (c) => (c.uniqueId || c.id) === targetId,
+                        );
+                        if (idx !== -1) {
+                          const entry = order[idx];
+                          const wasDowned = !!entry.downed;
+                          const isCrit = data.detail?.isCrit === true;
+                          let nextEntry = null;
+                          if (damage < 0 && wasDowned && newCurrent > 0) {
+                            // Heal while dying → regain consciousness.
+                            nextEntry = {
+                              ...entry,
+                              downed: false,
+                              deathSaves: blankDeathSaves(),
+                              hit_points: { ...(entry.hit_points || {}), current: newCurrent, max: maxHp },
+                            };
+                            toast.success(`${entry.name} regains consciousness!`);
+                          } else if (damage > 0 && wasDowned) {
+                            // Damage while at 0 HP → death-save failures.
+                            const nextSaves = applyDownedDamage(entry.deathSaves, { critical: isCrit });
+                            nextEntry = { ...entry, deathSaves: nextSaves };
+                          } else if (damage > 0 && !wasDowned && newCurrent <= 0) {
+                            nextEntry = {
+                              ...entry,
+                              downed: true,
+                              deathSaves: blankDeathSaves(),
+                              hit_points: { ...(entry.hit_points || {}), current: 0, max: maxHp },
+                            };
+                            toast.error(`${entry.name} is down!`);
+                          } else if (newCurrent !== currentHp) {
+                            nextEntry = {
+                              ...entry,
+                              hit_points: { ...(entry.hit_points || {}), current: newCurrent, max: maxHp },
+                            };
+                          }
+                          if (nextEntry) {
+                            const newOrder = [...order];
+                            newOrder[idx] = nextEntry;
+                            const newData = { ...combat, order: newOrder };
+                            queryClient.setQueryData(['campaign', campaignId], (old) =>
+                              old ? { ...old, combat_data: newData } : old,
+                            );
+                            base44.entities.Campaign
+                              .update(campaignId, { combat_data: newData })
+                              .catch((err) => console.error('Player damage write-back failed:', err));
+                          }
+                        }
+                      }
                     }
                   }
                 }
