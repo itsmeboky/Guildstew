@@ -3,13 +3,14 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, ArrowLeft, Download, Users, Shield, FileText, Image as ImageIcon, UserPlus, Trash2, AlertCircle, Bell, Clock, Trophy, Database, RefreshCw, Dice6 } from "lucide-react";
+import { Upload, ArrowLeft, Download, Users, Shield, FileText, Image as ImageIcon, UserPlus, Trash2, AlertCircle, Bell, Clock, Trophy, Database, RefreshCw, Dice6, Compass, Copy, Check } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { canModifySettings, isMainGM } from "@/components/campaigns/permissions";
 import ImagePositionEditor from "@/components/campaigns/ImagePositionEditor";
 import HouseRulesPanel from "@/components/campaigns/HouseRulesPanel";
 import BreweryModsPanel from "@/components/campaigns/BreweryModsPanel";
+import CampaignApplicationsPanel from "@/components/campaigns/CampaignApplicationsPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -370,6 +371,10 @@ export default function CampaignSettings() {
               <AlertCircle className="w-4 h-4 mr-2" />
               Session Alerts
             </TabsTrigger>
+            <TabsTrigger value="discovery" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
+              <Compass className="w-4 h-4 mr-2" />
+              Discovery
+            </TabsTrigger>
             <TabsTrigger value="coDMs" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
               <Users className="w-4 h-4 mr-2" />
               Co-GMs & Mole
@@ -467,6 +472,20 @@ export default function CampaignSettings() {
                 )}
               </div>
             </div>
+          </TabsContent>
+
+          {/* Discovery Tab — public listing controls + applications inbox */}
+          <TabsContent value="discovery" className="space-y-6">
+            <DiscoveryPanel
+              campaign={campaign}
+              campaignId={campaignId}
+              onSave={(patch) => updateCampaignMutation.mutate(patch)}
+              saving={updateCampaignMutation.isPending}
+            />
+            <CampaignApplicationsPanel
+              campaign={campaign}
+              campaignId={campaignId}
+            />
           </TabsContent>
 
           {/* Co-GMs & Mole Tab */}
@@ -1042,6 +1061,142 @@ function SessionZeroPanel({ campaign, campaignId, onSaved }) {
         <Button onClick={save} disabled={saving} className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430]">
           {saving ? "Saving…" : "Save Session Zero"}
         </Button>
+      </div>
+    </div>
+  );
+}
+
+function DiscoveryPanel({ campaign, campaignId, onSave, saving }) {
+  const [isPublic, setIsPublic] = useState(!!campaign?.is_public);
+  const [lookingForPlayers, setLookingForPlayers] = useState(!!campaign?.looking_for_players);
+  const [maxPlayers, setMaxPlayers] = useState(campaign?.max_players || 6);
+  const [description, setDescription] = useState(campaign?.campaign_description || campaign?.description || "");
+  const [copied, setCopied] = useState(false);
+
+  React.useEffect(() => {
+    setIsPublic(!!campaign?.is_public);
+    setLookingForPlayers(!!campaign?.looking_for_players);
+    setMaxPlayers(campaign?.max_players || 6);
+    setDescription(campaign?.campaign_description || campaign?.description || "");
+  }, [campaign?.id, campaign?.is_public, campaign?.looking_for_players, campaign?.max_players, campaign?.campaign_description, campaign?.description]);
+
+  const inviteCode = campaign?.invite_code || "";
+
+  const copy = async () => {
+    if (!inviteCode) return;
+    try {
+      await navigator.clipboard.writeText(inviteCode);
+      setCopied(true);
+      toast.success("Invite code copied");
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Couldn't copy — select and copy manually");
+    }
+  };
+
+  const handleSave = () => {
+    const cap = Math.min(Math.max(parseInt(maxPlayers, 10) || 6, 1), 8);
+    onSave({
+      is_public: isPublic,
+      looking_for_players: isPublic ? lookingForPlayers : false,
+      max_players: cap,
+      campaign_description: description.trim() || null,
+    });
+  };
+
+  return (
+    <div className="bg-[#2A3441] rounded-xl p-6 space-y-5">
+      <div>
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+          <Compass className="w-6 h-6 text-[#37F2D1]" />
+          Discovery & Recruitment
+        </h2>
+        <p className="text-sm text-gray-400 mt-1">
+          List your campaign on the public Find a Campaign page and accept applications from new players.
+        </p>
+      </div>
+
+      <div className="bg-[#1E2430] rounded-lg p-4 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <Label className="text-white font-bold">Public campaign</Label>
+            <p className="text-xs text-gray-400 mt-0.5">
+              When on, anyone can find this campaign in /campaigns/find.
+            </p>
+          </div>
+          <Switch checked={isPublic} onCheckedChange={setIsPublic} />
+        </div>
+
+        {isPublic && (
+          <div className="flex items-start justify-between gap-4 pt-3 border-t border-slate-800">
+            <div className="flex-1">
+              <Label className="text-white font-bold">Looking for players</Label>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Show the Apply to Join button to potential players.
+              </p>
+            </div>
+            <Switch checked={lookingForPlayers} onCheckedChange={setLookingForPlayers} />
+          </div>
+        )}
+
+        <div className="pt-3 border-t border-slate-800">
+          <Label className="text-white font-bold mb-1 block">Max players</Label>
+          <p className="text-xs text-gray-400 mb-2">
+            Capacity for accepted applicants. Hard ceiling is 8.
+          </p>
+          <Input
+            type="number"
+            min={1}
+            max={8}
+            value={maxPlayers}
+            onChange={(e) => setMaxPlayers(e.target.value)}
+            className="bg-[#050816] border-slate-700 text-white w-32"
+          />
+        </div>
+
+        <div className="pt-3 border-t border-slate-800">
+          <Label className="text-white font-bold mb-1 block">Campaign description</Label>
+          <p className="text-xs text-gray-400 mb-2">
+            What players see on the discovery card. A few sentences about tone, schedule, and what you want.
+          </p>
+          <Textarea
+            rows={4}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Weekly Tuesday game, roleplay-heavy with combat sprinkled in. Looking for players willing to commit to a long arc."
+            className="bg-[#050816] border-slate-700 text-white"
+          />
+        </div>
+
+        <Button onClick={handleSave} disabled={saving} className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] font-bold">
+          {saving ? "Saving…" : "Save Discovery Settings"}
+        </Button>
+      </div>
+
+      <div className="bg-[#1E2430] rounded-lg p-4">
+        <Label className="text-white font-bold mb-1 block">Invite code</Label>
+        <p className="text-xs text-gray-400 mb-3">
+          Share this 6-character code with friends — they enter it from the Join Campaign button.
+        </p>
+        {inviteCode ? (
+          <div className="flex items-center gap-2">
+            <code className="flex-1 bg-[#050816] border border-slate-700 rounded px-3 py-2 font-mono text-lg tracking-[0.3em] text-[#37F2D1] text-center">
+              {inviteCode}
+            </code>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={copy}
+              className="border-slate-700 text-slate-300 hover:bg-slate-800"
+            >
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            </Button>
+          </div>
+        ) : (
+          <p className="text-xs text-amber-300 italic">
+            No invite code on this campaign yet — save any setting above to generate one, or recreate the campaign.
+          </p>
+        )}
       </div>
     </div>
   );
