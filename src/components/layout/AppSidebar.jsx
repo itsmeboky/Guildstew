@@ -17,6 +17,7 @@ import { formatSpice } from "@/config/spiceConfig";
 import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
 import CreatorUploadDialog from "@/components/tavern/CreatorUploadDialog";
 import SpiceIcon from "@/components/tavern/SpiceIcon";
+import CampaignActions from "@/components/layout/CampaignActions";
 import { base44 } from "@/api/base44Client";
 
 /**
@@ -145,6 +146,13 @@ export default function AppSidebar() {
 
         {/* Scrollable middle section — links land here in steps 2-6 */}
         <nav className="flex-1 overflow-y-auto p-2 space-y-3 custom-scrollbar">
+          {/* Campaigns-page-specific PLAY / Join / Find CTA block.
+              Shown on /campaigns, /campaigns/find, and anything else
+              under the campaigns-list umbrella (never inside a
+              specific campaign — Layout handles that routing). */}
+          {(location.pathname === "/campaigns" || location.pathname === "/Campaigns" || location.pathname.startsWith("/campaigns/")) && (
+            <CampaignActions />
+          )}
           <SidebarSection>
             <SidebarLink
               to={createPageUrl("Friends")}

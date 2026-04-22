@@ -58,6 +58,16 @@ export default function CreateCampaign() {
       // campaign row exists.
       const { initial_homebrew = [], ...payload } = data;
 
+      // Auto-generate a 6-char alphanumeric invite code if the user
+      // didn't set one explicitly. Omitting I/O/0/1 so codes read
+      // cleanly when shared verbally.
+      if (!payload.invite_code) {
+        const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        let code = "";
+        for (let i = 0; i < 6; i++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+        payload.invite_code = code;
+      }
+
       // Tier-based active-campaign cap. Archived campaigns don't
       // count; the helper queries campaigns with status != archived.
       const gmId = payload.game_master_id || user?.id;
