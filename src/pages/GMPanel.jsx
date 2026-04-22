@@ -657,11 +657,18 @@ export default function GMPanel() {
   // Used after a downed PC's death save auto-advances their turn. Mirrors
   // the END TURN button's behaviour (splice + push + currentTurnIndex=0).
   const advanceTurn = React.useCallback(async () => {
-    if (!campaign?.combat_data?.order?.length) return;
-    const currentOrder = [...campaign.combat_data.order];
+    // Read from the live React Query cache at call-time rather than
+    // the closure — a death-save write that just landed via
+    // updateOrderCombatant might be newer than `campaign` in this
+    // callback's captured scope, and splicing off a stale order would
+    // overwrite the just-persisted saves.
+    const latest = queryClient.getQueryData(['campaign', campaignId]) || campaign;
+    const latestCombat = latest?.combat_data;
+    if (!latestCombat?.order?.length) return;
+    const currentOrder = [...latestCombat.order];
     const [finished] = currentOrder.splice(0, 1);
     currentOrder.push(finished);
-    const newData = { ...campaign.combat_data, order: currentOrder, currentTurnIndex: 0 };
+    const newData = { ...latestCombat, order: currentOrder, currentTurnIndex: 0 };
     queryClient.setQueryData(['campaign', campaignId], (old) =>
       old ? { ...old, combat_data: newData } : old,
     );
@@ -671,7 +678,7 @@ export default function GMPanel() {
       console.error('advanceTurn failed:', err);
     }
     queryClient.invalidateQueries(['campaign', campaignId]);
-  }, [campaign?.combat_data, campaignId, queryClient]);
+  }, [campaign, campaignId, queryClient]);
 
   // If the selected character is no longer hidden (turn rolled over, attacked
   // while sneaking, or the GM switched to a different character) the Sneak
@@ -1196,23 +1203,27 @@ export default function GMPanel() {
   }, [campaign?.combat_data, campaignId, queryClient]);
 
   // Generic combat_data.order patcher — used by the downed / death save
-  // flow. Optimistically updates the React Query cache so the GM sees
-  // changes immediately, then persists to the DB.
+  // flow. Reads from the live cache so rapid-fire patches (two damage
+  // ticks in the same tick, or a roll + advance close together) build
+  // on each other instead of racing. Optimistically updates the cache,
+  // then persists to the DB.
   const updateOrderCombatant = React.useCallback((combatantKey, patch) => {
-    if (!combatantKey || !campaign?.combat_data?.order) return;
-    const newOrder = campaign.combat_data.order.map(c => {
+    const latest = queryClient.getQueryData(['campaign', campaignId]) || campaign;
+    const latestCombat = latest?.combat_data;
+    if (!combatantKey || !latestCombat?.order) return;
+    const newOrder = latestCombat.order.map(c => {
       const key = c.uniqueId || c.id;
       if (key !== combatantKey) return c;
       return { ...c, ...patch };
     });
-    const newData = { ...campaign.combat_data, order: newOrder };
+    const newData = { ...latestCombat, order: newOrder };
     queryClient.setQueryData(['campaign', campaignId], (old) =>
       old ? { ...old, combat_data: newData } : old
     );
     base44.entities.Campaign
       .update(campaignId, { combat_data: newData })
       .catch(err => console.error('Order update failed:', err));
-  }, [campaign?.combat_data, campaignId, queryClient]);
+  }, [campaign, campaignId, queryClient]);
 
   // Refs that hold the latest `characters` array and the derived
   // `players` list. The death-save / heal helpers below use these so
