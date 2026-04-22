@@ -12,6 +12,7 @@ import { PresenceProvider } from '@/lib/PresenceContext';
 import LegalReconsentGate from '@/components/legal/LegalReconsentGate';
 import ThemeApplier from '@/lib/ThemeApplier';
 import SettingsApplier from '@/lib/SettingsApplier';
+import ColorBlindFilters from '@/components/layout/ColorBlindFilters';
 import { loadLanguageFonts } from '@/utils/languageFonts';
 
 // Inject the @font-face rules for every D&D language TTF once per
@@ -105,6 +106,11 @@ const AuthenticatedApp = () => {
           {Pages.SupportTicket ? <Pages.SupportTicket /> : <PageNotFound />}
         </LayoutWrapper>
       } />
+      <Route path="/account/billing" element={
+        <LayoutWrapper currentPageName="AccountBilling">
+          {Pages.AccountBilling ? <Pages.AccountBilling /> : <PageNotFound />}
+        </LayoutWrapper>
+      } />
       {Object.entries(Pages).map(([path, Page]) => (
         <Route
           key={path}
@@ -132,6 +138,7 @@ function App() {
               <NavigationTracker />
               <ThemeApplier />
               <SettingsApplier />
+              <ColorBlindFilters />
               <AuthenticatedApp />
             </Router>
             <Toaster />

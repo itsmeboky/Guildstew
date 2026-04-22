@@ -92,7 +92,7 @@ export default function AppSidebar() {
 
   return (
     <>
-      <aside className="hidden md:flex w-[260px] bg-[#1E2430] border-r border-[#2a3441] min-h-[calc(100vh-4rem)] flex-col sticky top-16 self-start max-h-[calc(100vh-4rem)]">
+      <aside className="hidden md:flex w-[260px] bg-[#1E2430] border-r border-[#2a3441] min-h-[calc(100vh-4rem)] flex-col sticky top-16 self-start max-h-[calc(100vh-4rem)] z-50">
         {/* User header */}
         <div className="p-4 border-b border-[#2a3441]">
           <div className="flex items-center gap-3">
@@ -180,13 +180,21 @@ export default function AppSidebar() {
           </SidebarSection>
 
           <SidebarSection label="Community">
-            {/* Discord is a CTA, not a nav row — styled distinctly
-                from the plain links with the Discord blurple. */}
+            {/* Discord is a CTA, not a nav row. Brand gradient
+                (salmon → teal) + soft glow so it pops against the
+                plain nav rows. */}
             <a
               href="https://discord.gg/TK2s88fzSQ"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 mx-1 mb-1 px-3 py-2.5 rounded-lg bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold text-sm transition-colors shadow-[0_0_12px_rgba(88,101,242,0.25)]"
+              className="flex items-center gap-2 mx-1 mb-1 font-bold text-sm transition-all hover:brightness-110 hover:shadow-[0_0_18px_rgba(55,242,209,0.35)]"
+              style={{
+                background: "linear-gradient(135deg, #f8a47c 0%, #37F2D1 100%)",
+                color: "#1E2430",
+                padding: "10px 16px",
+                borderRadius: "12px",
+                boxShadow: "0 0 14px rgba(55, 242, 209, 0.18)",
+              }}
             >
               <DiscordIcon className="w-4 h-4" />
               Join our Discord

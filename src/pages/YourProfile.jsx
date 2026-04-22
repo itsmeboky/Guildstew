@@ -335,8 +335,10 @@ console.log('PROFILE PAGE USER:', user)
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl" />
       </div>
-      {/* Hero Banner - Fixed to take 50% of page */}
-      <div className="fixed top-0 left-0 right-0 h-[50vh] z-0">
+      {/* Hero Banner — fixed behind the sidebar (z-0 < sidebar z-50).
+          `pointer-events: none` so the banner never blocks clicks on
+          anything that overlays it (sidebar links, dropdowns). */}
+      <div className="fixed top-16 left-[260px] right-0 h-[50vh] z-0 pointer-events-none">
         <div 
           className="absolute inset-0 bg-cover bg-center"
           style={{ 
