@@ -16,6 +16,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { safeText } from "@/utils/safeRender";
+import { rarityBadgeClasses, rarityLabel } from "@/config/itemRarity";
+import ItemHoverCard from "@/components/items/ItemHoverCard";
 
 /**
  * Campaign Items tab. Split-panel layout: the selected item on the
@@ -389,28 +391,10 @@ function FilterSelect({ value, onChange, options }) {
   );
 }
 
-const RARITY_PILL = {
-  common:    "bg-slate-700 text-slate-300",
-  uncommon:  "bg-emerald-900/30 text-emerald-400",
-  rare:      "bg-blue-900/30 text-blue-400",
-  very_rare: "bg-purple-900/30 text-purple-400",
-  legendary: "bg-orange-900/30 text-orange-400",
-  artifact:  "bg-red-900/30 text-red-400",
-};
-
-function rarityPillClass(rarity) {
-  const key = safeString(rarity).toLowerCase().replace(/\s+/g, "_");
-  return RARITY_PILL[key] || "bg-slate-700 text-slate-300";
-}
-
-function rarityLabel(rarity) {
-  const str = safeString(rarity);
-  if (!str) return "Common";
-  return str
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(" ");
-}
+// Rarity styling now lives in src/config/itemRarity.js so the gradient
+// borders, badge colors, and label formatting stay consistent across
+// every item surface in the app (Archives, character sheet inventory,
+// loot manager, equipment picker).
 
 function ItemRow({ item, selected, onClick }) {
   const img = item.icon_url || item.image_url;
@@ -434,18 +418,20 @@ function ItemRow({ item, selected, onClick }) {
           selected ? "bg-[#252b3d] border-l-2 border-l-[#37F2D1]" : "hover:bg-[#252b3d]"
         }`}
       >
-        {img ? (
-          <img
-            src={img}
-            alt=""
-            className="w-8 h-8 rounded object-cover flex-shrink-0 bg-[#0f1219]"
-            onError={(e) => { e.currentTarget.style.display = "none"; }}
-          />
-        ) : (
-          <div className="w-8 h-8 rounded bg-[#0f1219] flex items-center justify-center flex-shrink-0">
-            <Package className="w-4 h-4 text-slate-600" />
-          </div>
-        )}
+        <ItemHoverCard item={item} side="right">
+          {img ? (
+            <img
+              src={img}
+              alt=""
+              className="w-8 h-8 rounded-md object-cover flex-shrink-0 bg-[#0f1219]"
+              onError={(e) => { e.currentTarget.style.display = "none"; }}
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-md bg-[#0f1219] flex items-center justify-center flex-shrink-0">
+              <Package className="w-4 h-4 text-slate-600" />
+            </div>
+          )}
+        </ItemHoverCard>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm text-white font-semibold truncate">{safeString(item.name)}</span>
@@ -455,7 +441,7 @@ function ItemRow({ item, selected, onClick }) {
           </div>
           <div className="text-xs text-slate-400 truncate">{subLine || "—"}</div>
         </div>
-        <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${rarityPillClass(item.rarity)}`}>
+        <span className={`text-[10px] font-bold uppercase tracking-widest rounded px-1.5 py-0.5 flex-shrink-0 border ${rarityBadgeClasses(item.rarity)}`}>
           {rarityLabel(item.rarity)}
         </span>
       </button>
