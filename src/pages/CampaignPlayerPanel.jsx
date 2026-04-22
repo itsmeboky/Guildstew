@@ -457,54 +457,62 @@ function CampaignPlayerPanelContent() {
   }, [campaign?.combat_data?.order, myCharacterKey]);
 
   // Rotate combat_data.order[0] to the end of the queue. Used after
-  // the player's death save auto-advances their turn.
+  // the player's death save auto-advances their turn. Reads from the
+  // live React Query cache at call-time (not the closure snapshot) so
+  // a death-save write that just landed isn't clobbered by a stale
+  // order rotation — this was the root cause of the "only first save
+  // persists" bug.
   const advanceTurn = React.useCallback(async () => {
-    if (!campaign?.combat_data?.order?.length) return;
-    const currentOrder = [...campaign.combat_data.order];
+    const latest = queryClient.getQueryData(['campaign', campaignId]) || campaign;
+    const latestCombat = latest?.combat_data;
+    if (!latestCombat?.order?.length) return;
+    const currentOrder = [...latestCombat.order];
     const [finished] = currentOrder.splice(0, 1);
     currentOrder.push(finished);
+    const newData = { ...latestCombat, order: currentOrder, currentTurnIndex: 0 };
+    queryClient.setQueryData(['campaign', campaignId], (old) =>
+      old ? { ...old, combat_data: newData } : old,
+    );
     try {
       await base44.entities.Campaign.update(campaignId, {
-        combat_data: { ...campaign.combat_data, order: currentOrder, currentTurnIndex: 0 },
+        combat_data: newData,
       });
       queryClient.invalidateQueries(['campaign', campaignId]);
     } catch (err) {
       console.error('advanceTurn failed:', err);
     }
-  }, [campaign?.combat_data, campaignId, queryClient]);
+  }, [campaign, campaignId, queryClient]);
 
   // Apply a death save roll to the player's entry on combat_data.order.
-  // Writes through to the campaign so the GM sees the result in real
-  // time. Mirrors GMPanel.rollDeathSaveForCombatant.
+  // Writes optimistically to the query cache before the DB round-trip
+  // so any subsequent callback (e.g. the dramatic-window auto-close →
+  // advanceTurn) reads the just-incremented successes/failures rather
+  // than the stale pre-roll values. Mirrors GMPanel.rollDeathSaveForCombatant.
   const applyPlayerDeathSave = React.useCallback(async (d20) => {
     if (!activeDeathSaveTarget || !campaign?.combat_data?.order) return;
     const order = [...campaign.combat_data.order];
     const idx = order.findIndex((c) => (c.uniqueId || c.id) === activeDeathSaveTarget.key);
     if (idx === -1) return;
     const target = order[idx];
-    const existing = target.deathSaves || blankDeathSaves();
-    let next = { ...existing };
-    if (d20 === 20) {
-      next = blankDeathSaves();
-      order[idx] = { ...target, downed: false, deathSaves: next, hit_points: { ...(target.hit_points || {}), current: 1 } };
-    } else if (d20 === 1) {
-      next.failures = Math.min(3, existing.failures + 2);
-      if (next.failures >= 3) next.dead = true;
-      order[idx] = { ...target, deathSaves: next };
-    } else if (d20 >= 10) {
-      next.successes = Math.min(3, existing.successes + 1);
-      if (next.successes >= 3) next.stabilized = true;
-      order[idx] = { ...target, deathSaves: next };
+    const { next, reviveToHp } = applyDeathSaveRoll(target.deathSaves, d20);
+    if (reviveToHp != null) {
+      order[idx] = {
+        ...target,
+        downed: false,
+        deathSaves: next,
+        hit_points: { ...(target.hit_points || {}), current: reviveToHp },
+      };
     } else {
-      next.failures = Math.min(3, existing.failures + 1);
-      if (next.failures >= 3) next.dead = true;
       order[idx] = { ...target, deathSaves: next };
     }
+    const newData = { ...campaign.combat_data, order };
+    // Optimistic cache write so the next render (and any
+    // already-queued advanceTurn) sees the new deathSaves.
+    queryClient.setQueryData(['campaign', campaignId], (old) =>
+      old ? { ...old, combat_data: newData } : old,
+    );
     try {
-      await base44.entities.Campaign.update(campaignId, {
-        combat_data: { ...campaign.combat_data, order },
-      });
-      queryClient.invalidateQueries(['campaign', campaignId]);
+      await base44.entities.Campaign.update(campaignId, { combat_data: newData });
     } catch (err) {
       console.error('death save write failed:', err);
     }
