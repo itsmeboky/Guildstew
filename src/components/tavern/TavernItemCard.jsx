@@ -1,5 +1,6 @@
 import React from "react";
-import { Flame, Star, ChefHat, Award } from "lucide-react";
+import { Star, ChefHat, Award } from "lucide-react";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { formatSpice, applyDiscount } from "@/config/spiceConfig";
 import { categoryIcon, CATEGORY_LABEL } from "@/config/tavernCategories";
 import { TAVERN_PALETTE as P } from "@/config/tavernPalette";
@@ -88,7 +89,7 @@ export default function TavernItemCard({ item, creatorName, owned, buyerTier = "
         <div className="mt-auto pt-3 flex items-end justify-between">
           <div>
             <p className="text-base font-black flex items-center gap-1" style={{ color: P.accentDeep }}>
-              <Flame className="w-3.5 h-3.5" style={{ color: P.accent }} />
+              <SpiceIcon size={14} color={P.accent} />
               {formatSpice(discounted)}
               {hasDiscount && (
                 <span className="text-[10px] line-through ml-1" style={{ color: P.textSecondary }}>

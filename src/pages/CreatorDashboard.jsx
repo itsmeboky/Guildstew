@@ -2,7 +2,8 @@ import React, { useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
-import { Flame, Store, Wallet, Coins, Award, TrendingUp, AlertTriangle } from "lucide-react";
+import { Store, Wallet, Coins, Award, TrendingUp, AlertTriangle } from "lucide-react";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/AuthContext";
@@ -127,7 +128,7 @@ export default function CreatorDashboard() {
           <StatCard label="Wallet"       icon={Wallet}      value={formatSpice(balance)} hint={`~$${(balance / 250).toFixed(2)} USD`} />
           <StatCard
             label="Cashout"
-            icon={Flame}
+            icon={SpiceIcon}
             value={eligible ? formatSpice(availableCashout) : `${formatSpice(MIN_CASHOUT - availableCashout)} to go`}
             hint={eligible ? "Available now" : `Need ${formatSpice(MIN_CASHOUT)} minimum`}
             warn={!eligible}
@@ -172,7 +173,7 @@ export default function CreatorDashboard() {
                       </td>
                       <td className="px-3 py-2 text-slate-400">{CATEGORY_LABEL[i.category] || i.category}</td>
                       <td className="px-3 py-2 text-amber-200">
-                        <span className="inline-flex items-center gap-1"><Flame className="w-3 h-3 text-amber-400" />{formatSpice(i.price)}</span>
+                        <span className="inline-flex items-center gap-1"><SpiceIcon size={12} color="#fbbf24" />{formatSpice(i.price)}</span>
                       </td>
                       <td className="px-3 py-2 text-slate-300">{i.purchase_count || 0}</td>
                       <td className="px-3 py-2 text-emerald-300">

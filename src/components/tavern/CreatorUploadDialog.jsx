@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Flame, Upload, X, AlertTriangle, Dices, Palette } from "lucide-react";
+import { Upload, X, AlertTriangle, Dices, Palette } from "lucide-react";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { getWalletBalance } from "@/lib/spiceWallet";
@@ -343,7 +344,7 @@ function FeeBanner({ tier, uploadFee, balance, shortfall }) {
   if (uploadFee === 0) {
     return (
       <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 flex items-center gap-2">
-        <Flame className="w-4 h-4 text-emerald-300" />
+        <SpiceIcon size={16} color="#6ee7b7" />
         <p className="text-[12px] text-emerald-100">
           Upload fee: <strong>Waived</strong> for your {tierName} tier.
         </p>
@@ -363,7 +364,7 @@ function FeeBanner({ tier, uploadFee, balance, shortfall }) {
   }
   return (
     <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex items-center gap-2">
-      <Flame className="w-4 h-4 text-amber-300" />
+      <SpiceIcon size={16} color="#fcd34d" />
       <p className="text-[12px] text-amber-100">
         Upload fee: <strong>{formatSpice(uploadFee)} Spice</strong> (${(uploadFee / 250).toFixed(2)}) for your {tierName} tier.
         Wallet balance: {formatSpice(balance)}.

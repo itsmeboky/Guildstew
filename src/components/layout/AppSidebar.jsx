@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Flame, Users, Trophy, PieChart,
+  Users, Trophy, PieChart,
   MessageSquare, Calendar, BarChart3,
   Upload, LayoutDashboard, TrendingUp,
   HelpCircle, BookOpen, AlertTriangle,
@@ -16,6 +16,7 @@ import { getWalletBalance } from "@/lib/spiceWallet";
 import { formatSpice } from "@/config/spiceConfig";
 import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
 import CreatorUploadDialog from "@/components/tavern/CreatorUploadDialog";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { base44 } from "@/api/base44Client";
 
 /**
@@ -135,7 +136,7 @@ export default function AppSidebar() {
             className="mt-3 w-full inline-flex items-center justify-between gap-2 rounded-lg px-3 py-2 bg-[#050816] border border-amber-600/30 hover:border-amber-400 transition-colors"
           >
             <span className="inline-flex items-center gap-2 text-amber-200 font-bold text-sm">
-              <Flame className="w-4 h-4 text-amber-400" />
+              <SpiceIcon size={18} color="#fbbf24" />
               {formatSpice(wallet?.balance || 0)}
             </span>
             <span className="text-[10px] uppercase tracking-widest text-amber-300/80">Buy Spice</span>
