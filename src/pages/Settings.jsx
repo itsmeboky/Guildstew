@@ -3,7 +3,7 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  Palette, Eye, Bell, Shield, Scale, CreditCard, ArrowRight,
+  Palette, Eye, Bell, Shield, Scale, CreditCard, ArrowRight, IdCard,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -23,6 +23,7 @@ import AccessibilityTab from "@/components/settings/AccessibilityTab";
 import NotificationsTab from "@/components/settings/NotificationsTab";
 import PrivacyTab from "@/components/settings/PrivacyTab";
 import LegalTab from "@/components/settings/LegalTab";
+import ProfileTab from "@/components/settings/ProfileTab";
 
 /**
  * /settings — tabbed preferences surface.
@@ -37,6 +38,7 @@ import LegalTab from "@/components/settings/LegalTab";
  * `SettingsApplier` which reads the same columns on app load.
  */
 const TABS = [
+  { id: "profile",       label: "Profile",            icon: IdCard },
   { id: "appearance",    label: "Appearance",         icon: Palette },
   { id: "accessibility", label: "Accessibility",      icon: Eye },
   { id: "notifications", label: "Notifications",      icon: Bell },
@@ -50,8 +52,8 @@ export default function Settings() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState(() => {
     try {
-      return new URLSearchParams(window.location.search).get("tab") || "appearance";
-    } catch { return "appearance"; }
+      return new URLSearchParams(window.location.search).get("tab") || "profile";
+    } catch { return "profile"; }
   });
 
   return (
@@ -79,6 +81,9 @@ export default function Settings() {
             })}
           </TabsList>
 
+          <TabsContent value="profile"       className="mt-6 space-y-4">
+            <ProfileTab />
+          </TabsContent>
           <TabsContent value="appearance"    className="mt-6 space-y-4">
             <AppearanceTab />
           </TabsContent>
