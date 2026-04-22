@@ -2859,6 +2859,7 @@ export default function GMPanel() {
             campaignId={campaignId}
             campaign={campaign}
             allUserProfiles={allUserProfiles}
+            characters={characters}
           />
         </div>
       </SessionModal>
@@ -2873,6 +2874,7 @@ export default function GMPanel() {
             campaignId={campaignId}
             campaign={campaign}
             allUserProfiles={allUserProfiles}
+            characters={characters}
             disconnectedPlayers={disconnectedPlayerSummaries}
           />
         </div>

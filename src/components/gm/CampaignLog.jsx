@@ -279,7 +279,7 @@ export default function CampaignLog({ campaignId, currentUser, currentUserProfil
                   <option value="">to...</option>
                   {whisperTargets.map((p) => (
                     <option key={p.user_id} value={p.user_id}>
-                      {p.username || p.email || p.user_id}
+                      {p.username || `Player ${String(p.user_id).slice(0, 4)}`}
                     </option>
                   ))}
                 </select>

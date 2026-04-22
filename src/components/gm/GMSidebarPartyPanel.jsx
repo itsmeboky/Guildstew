@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
+import { playerDisplayName } from "@/utils/displayName";
 
 /**
  * Adventuring Party panel inside the GM sidebar. Compact list of
@@ -26,7 +27,7 @@ export default function GMSidebarPartyPanel({ campaignId, campaign, allUserProfi
     const pct = max > 0 ? Math.max(0, Math.min(100, Math.round((current / max) * 100))) : 0;
     return {
       uid,
-      name: character?.name || profile?.username || profile?.email || "Player",
+      name: playerDisplayName({ character, profile, asGM: true }),
       avatar: character?.profile_avatar_url || character?.avatar_url || profile?.avatar_url,
       current, max, pct,
       disconnected: disconnectedIds.has(uid),
