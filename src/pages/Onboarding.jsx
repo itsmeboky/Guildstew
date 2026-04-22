@@ -136,7 +136,7 @@ export default function Onboarding() {
     <div className="min-h-screen w-full flex items-center justify-center relative p-4 sm:p-6">
       <AuthBackdrop />
 
-      <div className="w-[min(92vmin,720px)] aspect-square bg-white/95 rounded-full shadow-2xl relative z-10 flex flex-col items-center justify-center p-10 sm:p-14 overflow-hidden">
+      <div className="w-[min(92vmin,720px)] aspect-square bg-white/95 text-[#1A1A2E] rounded-full shadow-2xl relative z-10 flex flex-col items-center justify-center p-10 sm:p-14 overflow-hidden">
         <div className="text-center mb-3 flex-shrink-0">
           <img
             src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/branding/2a112bc4f_GuildStewLogoOfficialForRedditWhite1.png"

@@ -187,9 +187,10 @@ export default function AppSidebar() {
               href="https://discord.gg/TK2s88fzSQ"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 mx-1 mb-1 text-white font-bold text-sm transition-all hover:brightness-110 hover:shadow-[0_0_18px_rgba(55,242,209,0.35)]"
+              className="flex items-center gap-2 mx-1 mb-1 font-bold text-sm transition-all hover:brightness-110 hover:shadow-[0_0_18px_rgba(55,242,209,0.35)]"
               style={{
                 background: "linear-gradient(135deg, #f8a47c 0%, #37F2D1 100%)",
+                color: "#1E2430",
                 padding: "10px 16px",
                 borderRadius: "12px",
                 boxShadow: "0 0 14px rgba(55, 242, 209, 0.18)",
