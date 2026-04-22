@@ -276,17 +276,17 @@ html {
 }
 
 /* Default dark styling for bare <input> / <textarea> that aren't
-   wrapped in the shadcn Input / Textarea component. Specific
-   components override these via Tailwind classes or inline styles,
-   which win on specificity. Color-input gets a dedicated override so
-   it doesn't try to paint a dark swatch over the swatch chip. */
-input:not([type="color"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="image"]):not([type="submit"]):not([type="button"]):not([type="reset"]),
-textarea {
+   wrapped in the shadcn Input / Textarea component. `:where()`
+   keeps specificity at zero so any `text-*` / `bg-*` Tailwind class
+   on the element wins. Auth pages (white / cream backgrounds with
+   `text-gray-800` inputs) therefore render correctly. */
+:where(input:not([type="color"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="image"]):not([type="submit"]):not([type="button"]):not([type="reset"])),
+:where(textarea) {
   background-color: transparent;
   color: inherit;
 }
-input:not([type="color"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="image"]):not([type="submit"]):not([type="button"]):not([type="reset"])::placeholder,
-textarea::placeholder {
+:where(input:not([type="color"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="image"]):not([type="submit"]):not([type="button"]):not([type="reset"]))::placeholder,
+:where(textarea)::placeholder {
   color: #94a3b8;
   opacity: 0.8;
 }

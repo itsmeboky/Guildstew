@@ -70,17 +70,18 @@ export function StatusPicker({ current = 'offline', onChange }) {
 
   const meta = statusMeta(current);
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative inline-block" ref={ref}>
+      {/* Compact dot-only trigger — the text label previously here
+          cluttered the nav bar. Users click the dot to open the
+          Online / Away / DND / Invisible picker. */}
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-        className="inline-flex items-center gap-1.5 bg-[#050816]/60 hover:bg-[#050816]/90 border border-white/10 rounded-full px-2 py-1 transition-colors"
+        className="p-1 -m-1 rounded-full"
         title={`Status: ${meta.label}`}
+        aria-label={`Presence status: ${meta.label}`}
       >
-        <StatusDot status={current} size="sm" border="#050816" />
-        <span className="text-[10px] uppercase tracking-widest text-white/80 font-bold">
-          {meta.label}
-        </span>
+        <StatusDot status={current} size="md" border="#FF5722" />
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-2 z-50 min-w-[180px] bg-[#0f1219] border border-white/10 rounded-lg shadow-xl overflow-hidden">
