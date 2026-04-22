@@ -92,7 +92,7 @@ export default function AppSidebar() {
 
   return (
     <>
-      <aside className="hidden md:flex w-[260px] bg-[#1E2430] border-r border-[#2a3441] min-h-[calc(100vh-4rem)] flex-col sticky top-16 self-start max-h-[calc(100vh-4rem)]">
+      <aside className="hidden md:flex w-[260px] bg-[#1E2430] border-r border-[#2a3441] min-h-[calc(100vh-4rem)] flex-col sticky top-16 self-start max-h-[calc(100vh-4rem)] z-50">
         {/* User header */}
         <div className="p-4 border-b border-[#2a3441]">
           <div className="flex items-center gap-3">
