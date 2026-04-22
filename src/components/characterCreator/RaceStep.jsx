@@ -61,6 +61,42 @@ function getRegistryBonuses(raceName) {
     .join(', ');
 }
 
+// D&D 5e SRD language list — used to populate the bonus-language
+// picker for races that grant one extra language of the player's
+// choice (Human base, Half-Elf, High Elf's Extra Language feature).
+const SRD_LANGUAGES = [
+  "Common", "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin",
+  "Halfling", "Orc", "Abyssal", "Celestial", "Draconic",
+  "Deep Speech", "Infernal", "Primordial", "Sylvan", "Undercommon",
+];
+
+// Collapse the RACES registry + subrace override into the shape the
+// badges row renders. Returns null if the race isn't SRD-registered
+// (brewery races have their own picker block).
+function computeRacialTags(raceName, subraceName) {
+  const data = RACES[raceName];
+  if (!data) return null;
+  const sub = subraceName && data.subraces ? (data.subraces[subraceName] || {}) : {};
+  const speed = sub.speed ?? data.speed ?? 30;
+  const size = data.size || 'Medium';
+  const mergedFeatures = [...(data.features || []), ...(sub.features || [])];
+  const darkvisionFeat = mergedFeatures.find((f) => /darkvision/i.test(f));
+  const otherFeatures = mergedFeatures.filter((f) => !/darkvision/i.test(f));
+  const baseLangs = Array.isArray(data.languages) ? data.languages : [];
+  const fixedLangs = baseLangs.filter((l) => l !== '+1 choice');
+  const extraChoiceSlots = baseLangs.filter((l) => l === '+1 choice').length;
+  const bonuses = { ...(data.abilityBonuses || {}), ...(sub.abilityBonuses || {}) };
+  return {
+    speed,
+    size,
+    darkvision: darkvisionFeat || null,
+    features: otherFeatures,
+    fixedLangs,
+    extraChoiceSlots,
+    bonuses,
+  };
+}
+
 const races = [
   {
     name: "Dragonborn",
@@ -579,6 +615,15 @@ export default function RaceStep({ characterData, updateCharacterData, campaignI
             </motion.div>
           )}
 
+          {currentRace._source !== "brewery" && (
+            <SrdRacialTraitsPanel
+              raceName={currentRace.name}
+              subraceName={characterData.subrace || currentRace.subtypes[0]}
+              characterData={characterData}
+              updateCharacterData={updateCharacterData}
+            />
+          )}
+
           {currentRace._source === "brewery" && (
             <BreweryRacePickers
               characterData={characterData}
@@ -587,6 +632,135 @@ export default function RaceStep({ characterData, updateCharacterData, campaignI
           )}
         </motion.div>
       </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// Compact tag chip used by the racial traits summary below the
+// subrace description. Keeps the visual language consistent with the
+// brewery picker chips further down the page.
+function TraitTag({ children, accent = "teal" }) {
+  const accents = {
+    teal:   "bg-[#37F2D1]/10 border-[#37F2D1]/40 text-[#37F2D1]",
+    amber:  "bg-amber-500/10 border-amber-400/40 text-amber-300",
+    violet: "bg-violet-500/10 border-violet-400/40 text-violet-300",
+    slate:  "bg-slate-700/40 border-slate-600/60 text-slate-200",
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider rounded px-2 py-0.5 border ${accents[accent] || accents.slate}`}>
+      {children}
+    </span>
+  );
+}
+
+// SRD racial traits summary — ability bonuses, speed, size, features,
+// darkvision, and the base + bonus language list. If the race grants
+// an extra language ("+1 choice" on the RACES registry, e.g. Human,
+// Half-Elf), renders a picker and writes the combined set to
+// characterData.languages so downstream steps see the full list.
+function SrdRacialTraitsPanel({ raceName, subraceName, characterData, updateCharacterData }) {
+  const tags = computeRacialTags(raceName, subraceName);
+  if (!tags) return null;
+
+  const bonusLangs = Array.isArray(characterData.bonus_languages)
+    ? characterData.bonus_languages
+    : [];
+
+  // Keep characterData.languages in lockstep with fixed race langs +
+  // picked bonus langs. Runs whenever the race, subrace, or bonus
+  // list changes so a race swap doesn't leave stale languages.
+  React.useEffect(() => {
+    const merged = Array.from(new Set([...tags.fixedLangs, ...bonusLangs]));
+    const current = Array.isArray(characterData.languages) ? characterData.languages : [];
+    const same = merged.length === current.length && merged.every((l, i) => l === current[i]);
+    if (!same) updateCharacterData({ languages: merged });
+  }, [raceName, subraceName, tags.fixedLangs.join("|"), bonusLangs.join("|")]);
+
+  // If a race swap removed eligible bonus slots, drop any stale picks.
+  React.useEffect(() => {
+    if (tags.extraChoiceSlots >= bonusLangs.length) return;
+    updateCharacterData({ bonus_languages: bonusLangs.slice(0, tags.extraChoiceSlots) });
+  }, [tags.extraChoiceSlots]);
+
+  const pickLanguage = (idx, value) => {
+    const next = [...bonusLangs];
+    next[idx] = value;
+    updateCharacterData({ bonus_languages: next.filter(Boolean) });
+  };
+
+  const eligibleLanguages = SRD_LANGUAGES
+    .filter((l) => !tags.fixedLangs.includes(l))
+    .filter((l) => !bonusLangs.includes(l));
+
+  const bonusEntries = Object.entries(tags.bonuses);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mt-3 bg-[#2A3441]/50 rounded-lg p-4 border border-[#37F2D1]/20"
+    >
+      <h4 className="text-[#37F2D1] font-semibold text-sm mb-3">Racial Traits</h4>
+
+      <div className="flex flex-wrap gap-2 mb-3">
+        <TraitTag accent="teal">Speed: {tags.speed} ft.</TraitTag>
+        <TraitTag accent="slate">Size: {tags.size}</TraitTag>
+        {tags.darkvision && <TraitTag accent="violet">Darkvision 60 ft.</TraitTag>}
+        {bonusEntries.length > 0 && (
+          <TraitTag accent="amber">
+            {bonusEntries.map(([ab, val]) => `+${val} ${ab.toUpperCase()}`).join(", ")}
+          </TraitTag>
+        )}
+      </div>
+
+      {tags.features.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {tags.features.map((f) => (
+            <TraitTag key={f} accent="slate">{f}</TraitTag>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] uppercase tracking-widest text-white/60 font-bold">Languages:</span>
+        {tags.fixedLangs.map((l) => (
+          <TraitTag key={l} accent="teal">{l}</TraitTag>
+        ))}
+        {bonusLangs.map((l) => (
+          <TraitTag key={`bonus-${l}`} accent="amber">{l} (chosen)</TraitTag>
+        ))}
+      </div>
+
+      {tags.extraChoiceSlots > 0 && (
+        <div className="mt-3 pt-3 border-t border-white/5">
+          <p className="text-[11px] text-white/60 mb-2">
+            {raceName} grants {tags.extraChoiceSlots} additional language of your choice.
+          </p>
+          <div className="flex flex-col gap-2">
+            {Array.from({ length: tags.extraChoiceSlots }).map((_, idx) => (
+              <Select
+                key={idx}
+                value={bonusLangs[idx] || ""}
+                onValueChange={(v) => pickLanguage(idx, v)}
+              >
+                <SelectTrigger className="bg-[#1E2430] border-slate-700 text-white text-xs h-9">
+                  <SelectValue placeholder="Pick a language…" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#1E2430] border-slate-700 text-white">
+                  {[
+                    ...(bonusLangs[idx] ? [bonusLangs[idx]] : []),
+                    ...eligibleLanguages,
+                  ].map((l) => (
+                    <SelectItem key={l} value={l} className="text-white text-xs">
+                      {l}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ))}
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }
