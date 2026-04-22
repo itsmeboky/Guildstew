@@ -407,6 +407,11 @@ export default function CharacterLibrary() {
                   <Sparkles className="w-3 h-3" /> Brewery Class
                 </span>
               )}
+              {selectedCharacter.campaign_origin && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest rounded px-1.5 py-0.5 bg-violet-500/15 text-violet-200 border border-violet-400/40">
+                  <Sparkles className="w-3 h-3" /> Built for {selectedCharacter.campaign_origin}
+                </span>
+              )}
             </p>
             {selectedCharacter.tags && selectedCharacter.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">

@@ -119,11 +119,14 @@ export default function CampaignApplyFlow({ campaign, onClose }) {
 
   const openCreatorForCampaign = ({ editId = null } = {}) => {
     // The standard creator reads ?campaignId=… to opt into modded
-    // race/class lists + the brewery apply layer, and ?edit=… to
-    // re-enter an existing character row in edit mode.
+    // race/class lists + the brewery apply layer, ?edit=… to re-
+    // enter an existing character row, and ?forApply=1 to signal
+    // "this is a PC for the applicant, not an NPC". Without forApply,
+    // campaignId would route into the GM's NPC-create path.
     const params = new URLSearchParams();
     if (campaign?.id) params.set("campaignId", campaign.id);
     if (editId) params.set("edit", editId);
+    params.set("forApply", "1");
     params.set("returnTo", "CampaignsFind");
     onClose?.();
     navigate(createPageUrl("CharacterCreator") + "?" + params.toString());
