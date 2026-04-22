@@ -41,6 +41,33 @@ const HERO_SLIDES = [
 export default function Home() {
   const [currentSlide, setCurrentSlide] = useState(0);
 
+  // Admin-managed hero banners. Falls back to the hard-coded
+  // HERO_SLIDES above when no admin banners exist, so the homepage
+  // keeps rendering on a fresh environment.
+  const { data: adminBanners = [] } = useQuery({
+    queryKey: ['homepageBanners'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('homepage_banners')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      return data || [];
+    },
+  });
+
+  const slides = adminBanners.length > 0
+    ? adminBanners.map((b) => ({
+        id: b.id,
+        image: b.image_url,
+        title: b.title || undefined,
+        subtitle: b.subtitle || undefined,
+        buttonText: b.link_url ? (b.title ? 'Learn More' : undefined) : undefined,
+        buttonLink: b.link_url || undefined,
+        showText: !!(b.title || b.subtitle),
+      }))
+    : HERO_SLIDES;
+
   const { data: products } = useQuery({
     queryKey: ['topProducts'],
     queryFn: () => base44.entities.Product.filter({ category: 'game_pack' }, '-rating', 10),
@@ -114,14 +141,15 @@ export default function Home() {
   }, [blogPosts, recentVersions]);
 
   useEffect(() => {
+    if (slides.length <= 1) return;
     const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
+      setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 7500);
     return () => clearInterval(interval);
-  }, []);
+  }, [slides.length]);
 
-  const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
-  const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + HERO_SLIDES.length) % HERO_SLIDES.length);
+  const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % Math.max(1, slides.length));
+  const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + slides.length) % Math.max(1, slides.length));
 
   return (
     <div className="theme-homepage-bg relative min-h-screen bg-white">
@@ -182,7 +210,7 @@ export default function Home() {
                 uncovered pixel shows the theme orange instead of
                 leaking Ladle through from behind. */}
             <div className="col-span-7 relative rounded-3xl overflow-hidden h-[420px] z-20 bg-[#FF5722]">
-              {HERO_SLIDES.map((slide, index) => (
+              {slides.map((slide, index) => (
                 <div
                   key={slide.id}
                   className={`absolute inset-0 transition-opacity duration-700 ${
@@ -249,7 +277,7 @@ export default function Home() {
               </button>
 
               <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-20">
-                {HERO_SLIDES.map((_, index) => (
+                {slides.map((_, index) => (
                   <button
                     key={index}
                     onClick={() => setCurrentSlide(index)}
