@@ -29,6 +29,7 @@ import {
   pactBoonDescriptions,
   fightingStyleDescriptions
 } from "@/components/dnd5e/featureDescriptions";
+import CompanionCard from "@/components/characters/CompanionCard";
 import { classHitDice } from "@/components/dnd5e/characterCalculations";
 import { spellDetails, spellIcons } from "@/components/dnd5e/spellData";
 import { useNavigate } from "react-router-dom";
@@ -423,34 +424,34 @@ export default function CharacterLibrary() {
             </div>
           </div>
 
-          {/* Companion Section */}
-          {selectedCharacter.companion_name && (
-            <div className="mb-6 bg-[#1E2430]/70 rounded-lg p-4 border border-[#5B4B9E]/30">
-              <div className="flex gap-4">
-                <div className="w-20 h-20 rounded-lg overflow-hidden border-2 border-[#5B4B9E]/50 flex-shrink-0">
-                  {selectedCharacter.companion_image ? (
-                    <img
-                      src={selectedCharacter.companion_image}
-                      alt={selectedCharacter.companion_name}
-                      className="w-full h-full object-cover object-top"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-[#2A3441] flex items-center justify-center">
-                      <User className="w-8 h-8 text-[#5B4B9E]" />
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-bold text-[#5B4B9E] mb-1">{selectedCharacter.companion_name}</h3>
-                  <div className="max-h-16 overflow-y-auto">
-                    <p className="text-white/70 text-sm leading-relaxed">
-                      {selectedCharacter.companion_background || "No companion background available."}
-                    </p>
-                  </div>
-                </div>
+          {/* Companions Section — reads characterData.companions (the
+              shape written by CompanionPicker / the GM approval
+              editor). Falls back to the legacy companion_* fields for
+              characters created before the picker existed. Pending
+              custom companions render with an amber "Pending GM
+              Approval" badge via CompanionCard. */}
+          {(() => {
+            const companions = Array.isArray(selectedCharacter.companions)
+              ? selectedCharacter.companions
+              : [];
+            const legacy = companions.length === 0 && (selectedCharacter.companion_name || selectedCharacter.companion_image)
+              ? [{
+                  name: selectedCharacter.companion_name,
+                  image: selectedCharacter.companion_image,
+                  background: selectedCharacter.companion_background,
+                }]
+              : [];
+            const list = companions.length > 0 ? companions : legacy;
+            if (list.length === 0) return null;
+            return (
+              <div className="mb-6 bg-[#1E2430]/70 rounded-lg p-4 border border-[#5B4B9E]/30 space-y-3">
+                <h2 className="text-lg font-bold text-[#5B4B9E]">Companions</h2>
+                {list.map((comp, i) => (
+                  <CompanionCard key={comp?.id || i} companion={comp} />
+                ))}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Tabs */}
           <div className="flex gap-4 mb-6 border-b-2 border-gray-600">
