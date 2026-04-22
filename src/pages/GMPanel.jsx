@@ -64,6 +64,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
+import {
+  blankDeathSaves, applyDeathSaveRoll, applyDownedDamage, isDying,
+} from "@/components/combat/deathSaves";
 import ConditionRing from "@/components/combat/ConditionRing";
 import PortraitWithState from "@/components/combat/PortraitWithState";
 import {
@@ -1286,7 +1289,7 @@ export default function GMPanel() {
     if (!combatantKey || !campaign?.combat_data?.order) return;
     const target = campaign.combat_data.order.find(c => (c.uniqueId || c.id) === combatantKey);
     if (!target || !target.downed) return;
-    const existing = target.deathSaves || { successes: 0, failures: 0, stabilized: false, dead: false };
+    const existing = target.deathSaves || blankDeathSaves();
     const next = { ...existing };
     if (typeof change.successes === 'number') next.successes = change.successes;
     if (typeof change.failures === 'number') next.failures = change.failures;
@@ -1343,7 +1346,7 @@ export default function GMPanel() {
     if (!combatantKey || !campaign?.combat_data?.order) return;
     const target = campaign.combat_data.order.find(c => (c.uniqueId || c.id) === combatantKey);
     if (!target || !target.downed) return;
-    const existing = target.deathSaves || { successes: 0, failures: 0, stabilized: false, dead: false };
+    const existing = target.deathSaves || blankDeathSaves();
     if (existing.dead || existing.stabilized) return;
     const roll =
       Number.isFinite(providedRoll) && providedRoll >= 1 && providedRoll <= 20
@@ -1361,7 +1364,7 @@ export default function GMPanel() {
       // Back on your feet with 1 HP.
       updateOrderCombatant(combatantKey, {
         downed: false,
-        deathSaves: { successes: 0, failures: 0, stabilized: false, dead: false },
+        deathSaves: blankDeathSaves(),
         hit_points: { ...(target.hit_points || {}), current: 1 },
       });
       // Also persist the 1 HP to the underlying entity so reads are consistent.
@@ -3640,7 +3643,7 @@ export default function GMPanel() {
                       if (delta < 0 && wasDowned && newCurrent > 0) {
                         updateOrderCombatant(targetId, {
                           downed: false,
-                          deathSaves: { successes: 0, failures: 0, stabilized: false, dead: false },
+                          deathSaves: blankDeathSaves(),
                           hit_points: { ...(orderEntry.hit_points || {}), current: newCurrent, max: maxHp },
                         });
                         setActiveConditions(prev => {
@@ -3673,7 +3676,7 @@ export default function GMPanel() {
                         } else {
                           updateOrderCombatant(targetId, {
                             downed: true,
-                            deathSaves: { successes: 0, failures: 0, stabilized: false, dead: false },
+                            deathSaves: blankDeathSaves(),
                             hit_points: { ...(orderEntry.hit_points || {}), current: 0, max: maxHp },
                           });
                           toast.error(`${orderEntry.name} is down!`);
@@ -6749,7 +6752,7 @@ function FallenCard({ combatant }) {
 // Players get a single "Roll Death Save" button. The GM also gets a
 // row of manual overrides for quick NPC resolution.
 function DeathSavePanel({ combatant, isPlayer, isActiveTurn, onRoll, onAdjust, onKill, onShowDramatic }) {
-  const saves = combatant.deathSaves || { successes: 0, failures: 0, stabilized: false, dead: false };
+  const saves = combatant.deathSaves || blankDeathSaves();
   // When it's a downed player's turn, the dramatic DeathSaveWindow takes
   // over the full screen so the inline panel just shows a status line —
   // the GM shouldn't be rolling on the player's behalf from this panel.
