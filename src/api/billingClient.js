@@ -218,13 +218,17 @@ export async function getSubscriptionStatus(userId) {
   // first so hand-granted tiers work even if the Edge Function /
   // subscriptions table is unreachable. `admin_tier_override` is
   // set from the admin Users tab.
+  // Admin overrides are optional — if the `admin_tier_override`
+  // column hasn't been migrated yet, the query returns a 400 error
+  // (which Supabase surfaces in `error` rather than throwing). Either
+  // way, we skip the override and fall through to the normal path.
   try {
-    const { data: profile } = await supabase
+    const { data: profile, error: overrideErr } = await supabase
       .from('user_profiles')
       .select('admin_tier_override')
       .eq('user_id', userId)
       .maybeSingle();
-    if (profile?.admin_tier_override) {
+    if (!overrideErr && profile?.admin_tier_override) {
       return {
         tier: profile.admin_tier_override,
         status: 'admin_override',
@@ -239,32 +243,35 @@ export async function getSubscriptionStatus(userId) {
     }
   } catch { /* non-fatal — fall through to normal lookup */ }
 
-  // Try the Edge Function first so tier reflects the latest Stripe
-  // webhook state. Fall back to a direct table read.
+  // The `get-subscription-status` Edge Function isn't deployed yet;
+  // when it's missing the browser logs a CORS error and the invoke
+  // rejects. We still attempt the call (so everything lights up the
+  // moment the function exists) but fall back to the free default on
+  // any failure — subscribers will see their real tier once the
+  // webhook-backed service is live. Until then, the app defaults
+  // everyone to free rather than trying to read the potentially
+  // missing `subscriptions` table.
+  const freeDefault = {
+    tier: 'free',
+    status: 'active',
+    is_guild_owner: false,
+    is_guild_member: false,
+    guild_owner_id: null,
+    current_period_end: null,
+    cancel_at_period_end: false,
+    stripe_customer_id: null,
+    stripe_subscription_id: null,
+  };
+
   try {
     const data = await invokeEdge('get-subscription-status', { user_id: userId });
     if (data && data.tier) return data;
-  } catch { /* fall back to direct read */ }
-  const { data: rows, error } = await supabase
-    .from('subscriptions')
-    .select('*')
-    .eq('user_id', userId)
-    .order('updated_at', { ascending: false })
-    .limit(1);
-  if (error) return { tier: 'free', status: 'none' };
-  const row = rows?.[0];
-  if (!row) return { tier: 'free', status: 'none' };
-  return {
-    tier: row.tier || 'free',
-    status: row.status || 'none',
-    is_guild_owner: !!row.is_guild_owner,
-    is_guild_member: !!row.is_guild_member,
-    guild_owner_id: row.guild_owner_id || null,
-    current_period_end: row.current_period_end || null,
-    cancel_at_period_end: !!row.cancel_at_period_end,
-    stripe_customer_id: row.stripe_customer_id || null,
-    stripe_subscription_id: row.stripe_subscription_id || null,
-  };
+  } catch {
+    return freeDefault;
+  }
+
+  // Edge function responded but returned no tier — also treat as free.
+  return freeDefault;
 }
 
 export async function startCheckout({ tier, user_id, user_email }) {

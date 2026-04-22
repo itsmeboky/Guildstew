@@ -7,24 +7,37 @@ import { FONT_SIZE_PX } from "@/config/settingsDefaults";
 /**
  * App-wide settings applier.
  *
- * Reads the logged-in user's settings blob and translates it into:
- *   - a `--app-font-scale` CSS variable on :root (drives compact-mode
- *     and font-size sliders),
- *   - class toggles on `<html>` — `theme-light`, `compact-mode`,
- *     `sidebar-right`, `dyslexia`, `high-contrast`, `reduced-motion`,
- *     `color-blind-<mode>`,
- *   - a one-time Google-Fonts OpenDyslexic <link> injection when the
- *     dyslexia toggle is on.
+ * Translates the signed-in user's settings blob into:
+ *   - a `--app-font-scale` CSS variable on :root (font-size slider
+ *     + compact-mode multiplier),
+ *   - class toggles on `document.body`:
+ *       `theme-light`       light mode (swaps color vars)
+ *       `compact-mode`      denser spacing
+ *       `sidebar-right`     sidebar flipped
+ *       `dyslexia-mode`     OpenDyslexic font + wider spacing
+ *       `high-contrast`     pure W/B, heavy borders
+ *       `reduced-motion`    no animations / transitions
+ *       `colorblind-<type>` SVG filter for each vision type
  *
- * Components react by targeting these classes / variables in their
- * own stylesheets — the actual CSS rules live in App.css. Anything
- * this applier doesn't set is left untouched so another theme layer
- * (Tavern UI theme) still owns those properties.
- *
- * Rendered invisibly from App.jsx.
+ * The actual CSS lives in `App.css` — components just react to
+ * those classes / variables. Rendered invisibly from App.jsx.
  */
 
-const CLASSES = [
+const BODY_CLASSES = [
+  "theme-light",
+  "compact-mode",
+  "sidebar-right",
+  "dyslexia-mode",
+  "high-contrast",
+  "reduced-motion",
+  "colorblind-protanopia",
+  "colorblind-deuteranopia",
+  "colorblind-tritanopia",
+];
+
+// Legacy classes we previously set on <html>. Removed here so they
+// don't double-apply alongside the new <body> classes.
+const LEGACY_HTML_CLASSES = [
   "theme-light",
   "compact-mode",
   "sidebar-right",
@@ -35,8 +48,6 @@ const CLASSES = [
   "color-blind-deuteranopia",
   "color-blind-tritanopia",
 ];
-
-const OPEN_DYSLEXIC_LINK_ID = "open-dyslexic-font";
 
 export default function SettingsApplier() {
   const { user } = useAuth();
@@ -49,13 +60,12 @@ export default function SettingsApplier() {
 
   useEffect(() => {
     const root = document.documentElement;
-    // Clean slate on every run so switching preferences doesn't
-    // leave stale classes around.
-    CLASSES.forEach((c) => root.classList.remove(c));
-    root.style.removeProperty("--app-font-scale");
+    const body = document.body;
 
-    const existingDyslexic = document.getElementById(OPEN_DYSLEXIC_LINK_ID);
-    if (existingDyslexic) existingDyslexic.remove();
+    // Clean slate.
+    LEGACY_HTML_CLASSES.forEach((c) => root.classList.remove(c));
+    BODY_CLASSES.forEach((c) => body.classList.remove(c));
+    root.style.removeProperty("--app-font-scale");
 
     if (!state) return;
 
@@ -68,36 +78,17 @@ export default function SettingsApplier() {
     const compactFactor = appearance.compactMode ? 0.94 : 1;
     root.style.setProperty("--app-font-scale", String((px / 16) * compactFactor));
 
-    if (appearance.compactMode) root.classList.add("compact-mode");
-    if (appearance.sidebarPosition === "right") root.classList.add("sidebar-right");
+    if (appearance.compactMode) body.classList.add("compact-mode");
+    if (appearance.sidebarPosition === "right") body.classList.add("sidebar-right");
 
-    if (a11y.displayMode === "light") root.classList.add("theme-light");
-    if (a11y.dyslexia) {
-      root.classList.add("dyslexia");
-      injectOpenDyslexic();
-    }
-    if (a11y.highContrast) root.classList.add("high-contrast");
-    if (a11y.reducedMotion) root.classList.add("reduced-motion");
+    if (a11y.displayMode === "light") body.classList.add("theme-light");
+    if (a11y.dyslexia)                body.classList.add("dyslexia-mode");
+    if (a11y.highContrast)            body.classList.add("high-contrast");
+    if (a11y.reducedMotion)           body.classList.add("reduced-motion");
     if (a11y.colorBlindMode && a11y.colorBlindMode !== "off") {
-      root.classList.add(`color-blind-${a11y.colorBlindMode}`);
+      body.classList.add(`colorblind-${a11y.colorBlindMode}`);
     }
   }, [state]);
 
   return null;
-}
-
-function injectOpenDyslexic() {
-  if (document.getElementById(OPEN_DYSLEXIC_LINK_ID)) return;
-  const style = document.createElement("style");
-  style.id = OPEN_DYSLEXIC_LINK_ID;
-  style.textContent = `
-    @font-face {
-      font-family: 'OpenDyslexic';
-      src: url('https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/open-dyslexic-regular.otf') format('opentype');
-      font-weight: normal;
-      font-style: normal;
-      font-display: swap;
-    }
-  `;
-  document.head.appendChild(style);
 }

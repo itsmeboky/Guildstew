@@ -89,7 +89,7 @@ export default function Signup() {
       <AuthBackdrop />
 
       <div className="flex flex-col items-center gap-4 relative z-10">
-        <div className="w-[min(92vmin,600px)] aspect-square bg-white rounded-full shadow-2xl overflow-hidden flex flex-col items-center justify-center px-10">
+        <div className="w-[min(92vmin,600px)] aspect-square bg-white text-[#1A1A2E] rounded-full shadow-2xl overflow-hidden flex flex-col items-center justify-center px-10">
           <div className="w-full max-w-xs space-y-4">
             <div className="flex justify-center">
               <img

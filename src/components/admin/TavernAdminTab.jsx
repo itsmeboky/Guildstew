@@ -53,7 +53,8 @@ export default function TavernAdminTab() {
 
   const toggleOfficial = useMutation({
     mutationFn: async ({ id, value }) => {
-      await supabase.from("tavern_items").update({ is_official: value }).eq("id", id);
+      const { error } = await supabase.from("tavern_items").update({ is_official: value }).eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => {
       toast.success("House Special updated");
@@ -61,17 +62,19 @@ export default function TavernAdminTab() {
       queryClient.invalidateQueries({ queryKey: ["tavernItems"] });
       queryClient.invalidateQueries({ queryKey: ["tavernOfficial"] });
     },
+    onError: (err) => { console.error("Toggle official", err); toast.error(`Failed to save: ${err?.message || err}`); },
   });
 
   const toggleFeatured = useMutation({
     mutationFn: async ({ id, value }) => {
-      await supabase
+      const { error } = await supabase
         .from("tavern_items")
         .update({
           is_featured: value,
           featured_month: value ? currentMonth : null,
         })
         .eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => {
       toast.success("Chef's Choice updated");
@@ -79,17 +82,20 @@ export default function TavernAdminTab() {
       queryClient.invalidateQueries({ queryKey: ["tavernFeatured"] });
       queryClient.invalidateQueries({ queryKey: ["tavernItems"] });
     },
+    onError: (err) => { console.error("Toggle featured", err); toast.error(`Failed to save: ${err?.message || err}`); },
   });
 
   const removeItem = useMutation({
     mutationFn: async (id) => {
-      await supabase.from("tavern_items").update({ status: "removed" }).eq("id", id);
+      const { error } = await supabase.from("tavern_items").update({ status: "removed" }).eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => {
       toast.success("Listing removed");
       queryClient.invalidateQueries({ queryKey: ["adminTavernItems"] });
       queryClient.invalidateQueries({ queryKey: ["tavernItems"] });
     },
+    onError: (err) => { console.error("Remove listing", err); toast.error(`Failed to remove: ${err?.message || err}`); },
   });
 
   const counts = useMemo(() => ({
