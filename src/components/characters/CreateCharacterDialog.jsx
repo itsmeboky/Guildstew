@@ -13,6 +13,7 @@ import QuickCreateDialog from "@/components/characterCreator/QuickCreateDialog";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/AuthContext";
 import { 
   calculateMaxHP, 
   calculateAC, 
@@ -25,6 +26,7 @@ import {
 export default function CreateCharacterDialog({ open, onClose }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
 
   const createMutation = useMutation({
@@ -34,7 +36,11 @@ export default function CreateCharacterDialog({ open, onClose }) {
       toast.success("Character created successfully!");
       onClose();
       setQuickCreateOpen(false);
-    }
+    },
+    onError: (err) => {
+      console.error("Character save failed", err);
+      toast.error(`Couldn't save character: ${err?.message || err}`);
+    },
   });
 
   const handleFullCreator = () => {
@@ -64,8 +70,18 @@ export default function CreateCharacterDialog({ open, onClose }) {
       armor_class: ac,
       initiative: initiative,
       passive_perception: passivePerception,
-      speed: speed
+      speed: speed,
+      // Ownership — required by RLS. The save failed silently without
+      // these because the Quick Create flow skipped the ownership
+      // stamp that the full creator / edit flow sets.
+      user_id: user?.id,
+      created_by: user?.email,
     };
+
+    if (!user?.id || !user?.email) {
+      toast.error("Sign in again — your session is missing identity info.");
+      return;
+    }
 
     createMutation.mutate(finalData);
   };

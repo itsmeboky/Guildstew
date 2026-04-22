@@ -96,15 +96,18 @@ export default function CharacterCreator() {
   // creation flow (full / quick / AI). Editing or building NPCs
   // bypasses the limit.
   const { data: existingCharacterCount = 0 } = useQuery({
-    queryKey: ['characterCount', authUser?.id],
+    queryKey: ['characterCount', authUser?.email],
     queryFn: async () => {
-      if (!authUser?.id) return 0;
+      // Match the save-side convention: created_by is the email, not
+      // the UUID. Filtering by UUID would always return 0 and let the
+      // tier character-limit gate through.
+      if (!authUser?.email) return 0;
       const rows = await base44.entities.Character
-        .filter({ created_by: authUser.id })
+        .filter({ created_by: authUser.email })
         .catch(() => []);
       return rows.length;
     },
-    enabled: !!authUser?.id,
+    enabled: !!authUser?.email,
     initialData: 0,
   });
   const urlParams = new URLSearchParams(window.location.search);
@@ -308,7 +311,11 @@ export default function CharacterCreator() {
         }
         navigate(createPageUrl("CharacterLibrary"));
       }
-    }
+    },
+    onError: (err) => {
+      console.error("Character save failed", err);
+      toast.error(`Couldn't save character: ${err?.message || err}`);
+    },
   });
 
   const updateCharacterData = (updates) => {
@@ -477,6 +484,14 @@ const handleSubmit = () => {
       const maxHp = Number(generated.hit_points?.max ?? generated.max_hp ?? (hitDie + conMod));
       stats.hit_points = { current: maxHp, max: maxHp, temporary: 0 };
       stats.armor_class = Number(generated.armor_class ?? 10 + dexMod);
+
+      // Ownership fields — RLS on the characters table blocks inserts
+      // without these, which is why the AI save path used to silently
+      // fail. user_id is the canonical UUID; created_by carries the
+      // legacy email that every character-filter query across the app
+      // keys off of, so both are required.
+      stats.user_id = authUser?.id;
+      stats.created_by = authUser?.email;
 
       createMutation.mutate(stats);
     } catch (err) {
