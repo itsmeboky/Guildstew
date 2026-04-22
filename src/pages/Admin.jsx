@@ -27,6 +27,7 @@ import ForumsTab from "@/components/admin/ForumsTab";
 import FAQTab from "@/components/admin/FAQTab";
 import DocsTab from "@/components/admin/DocsTab";
 import EventsTab from "@/components/admin/EventsTab";
+import HomepageTab from "@/components/admin/HomepageTab";
 import { supabase as supabaseClient } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 
@@ -59,6 +60,7 @@ const TABS = [
   { id: "faq",          label: "FAQ",                 icon: HelpCircle },
   { id: "docs",         label: "Documentation",       icon: BookOpen },
   { id: "events",       label: "Community Events",    icon: Calendar },
+  { id: "homepage",     label: "Homepage",            icon: Home },
   { id: "reports",      label: "Reports & Mod",       icon: Flag },
   { id: "log",          label: "Admin Log",           icon: ScrollText },
 ];
@@ -182,6 +184,7 @@ export default function Admin() {
           {tab === "faq"          && <FAQTab />}
           {tab === "docs"         && <DocsTab />}
           {tab === "events"       && <EventsTab />}
+          {tab === "homepage"     && <HomepageTab />}
           {tab === "revenue"      && <RevenueTab      dateRange={dateRange} />}
           {tab === "tickets"      && <SupportTicketsTab adminId={user.id} />}
           {tab === "reports"      && <ReportsModerationTab adminId={user.id} />}
