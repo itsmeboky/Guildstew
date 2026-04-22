@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
+import { playerDisplayName } from "@/utils/displayName";
 
 /**
  * Player Management panel inside the GM sidebar. Lists every
@@ -10,7 +11,7 @@ import { toast } from "sonner";
  * they have on a character for this campaign) so the GM can boot
  * someone without ending the session.
  */
-export default function GMSidebarPlayers({ campaignId, campaign, allUserProfiles = [], disconnectedPlayers = [] }) {
+export default function GMSidebarPlayers({ campaignId, campaign, allUserProfiles = [], characters = [], disconnectedPlayers = [] }) {
   const queryClient = useQueryClient();
   const disconnectedIds = new Set(disconnectedPlayers.map((p) => p.id));
   const playerIds = Array.isArray(campaign?.player_ids) ? campaign.player_ids : [];
@@ -53,7 +54,13 @@ export default function GMSidebarPlayers({ campaignId, campaign, allUserProfiles
       <ul className="divide-y divide-slate-700/30">
         {playerIds.map((uid) => {
           const profile = allUserProfiles.find((p) => p.user_id === uid);
-          const name = profile?.username || profile?.email || uid;
+          // GM panel — show "Character (username)" so the GM can map
+          // each player to their PC at a glance. Falls back to the
+          // username when the player hasn't built a character yet.
+          const character = (characters || []).find(
+            (c) => c.user_id === uid || c.created_by === profile?.email,
+          );
+          const name = playerDisplayName({ character, profile, asGM: true });
           const disconnected = disconnectedIds.has(uid);
           return (
             <li key={uid} className="flex items-center justify-between py-2 gap-2">

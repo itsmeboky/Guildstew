@@ -20,6 +20,7 @@ import {
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { safeText as sharedSafeText } from "@/utils/safeRender";
+import SpellHoverCard from "@/components/spells/SpellHoverCard";
 
 /**
  * Campaign Spells tab. Split-panel layout: the selected spell's
@@ -241,16 +242,20 @@ function SpellRow({ spell, selected, onClick }) {
           selected ? "bg-[#252b3d]" : "hover:bg-[#252b3d]"
         }`}
       >
-        {icon ? (
-          <img
-            src={icon}
-            alt=""
-            className="w-10 h-10 rounded object-cover flex-shrink-0 bg-[#0f1219]"
-            onError={(e) => { e.currentTarget.style.display = "none"; }}
-          />
-        ) : (
-          <div className="w-10 h-10 rounded bg-[#0f1219] flex-shrink-0" />
-        )}
+        <SpellHoverCard spell={spell}>
+          {icon ? (
+            <img
+              src={icon}
+              alt=""
+              className="w-10 h-10 rounded object-cover flex-shrink-0 bg-[#0f1219]"
+              onError={(e) => { e.currentTarget.style.display = "none"; }}
+            />
+          ) : (
+            <div className="w-10 h-10 rounded bg-[#0f1219] flex-shrink-0 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-slate-600" />
+            </div>
+          )}
+        </SpellHoverCard>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-white font-semibold truncate">{safeText(spell.name)}</span>

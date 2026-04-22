@@ -11,6 +11,7 @@ import ImagePositionEditor from "@/components/campaigns/ImagePositionEditor";
 import HouseRulesPanel from "@/components/campaigns/HouseRulesPanel";
 import BreweryModsPanel from "@/components/campaigns/BreweryModsPanel";
 import CampaignApplicationsPanel from "@/components/campaigns/CampaignApplicationsPanel";
+import BanListEditor from "@/components/campaigns/BanListEditor";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -375,6 +376,10 @@ export default function CampaignSettings() {
               <Compass className="w-4 h-4 mr-2" />
               Discovery
             </TabsTrigger>
+            <TabsTrigger value="bans" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
+              <AlertCircle className="w-4 h-4 mr-2" />
+              Bans
+            </TabsTrigger>
             <TabsTrigger value="coDMs" className="data-[state=active]:bg-[#37F2D1] data-[state=active]:text-[#1E2430]">
               <Users className="w-4 h-4 mr-2" />
               Co-GMs & Mole
@@ -486,6 +491,13 @@ export default function CampaignSettings() {
               campaign={campaign}
               campaignId={campaignId}
             />
+          </TabsContent>
+
+          {/* Bans — content restriction editor. RLS on campaign_bans
+              enforces GM-only writes server-side; this tab is just
+              the UI for the helper in lib/campaignBans.js. */}
+          <TabsContent value="bans" className="space-y-6">
+            <BanListEditor campaignId={campaignId} />
           </TabsContent>
 
           {/* Co-GMs & Mole Tab */}

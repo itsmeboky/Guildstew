@@ -20,6 +20,7 @@ import SpiceIcon from "@/components/tavern/SpiceIcon";
 import CampaignActions from "@/components/layout/CampaignActions";
 import FriendsSidebarPanel from "@/components/layout/FriendsSidebarPanel";
 import { base44 } from "@/api/base44Client";
+import { displayName, displayInitial } from "@/utils/displayName";
 
 /**
  * App-wide sidebar.
@@ -97,12 +98,12 @@ export default function AppSidebar() {
               />
             ) : (
               <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-bold">
-                {(user?.username || user?.email || "?")[0]?.toUpperCase()}
+                {displayInitial(user)}
               </div>
             )}
             <div className="min-w-0 flex-1">
               <p className="text-sm font-bold text-white truncate">
-                {user?.username || user?.full_name || user?.email || "Guest"}
+                {displayName(user, { fallback: "Guest" })}
               </p>
               {tier?.badgeIcon && sub.tier !== "free" ? (
                 <span

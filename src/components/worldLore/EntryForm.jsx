@@ -613,7 +613,7 @@ export default function EntryForm({
                   ) : (
                     <div className="w-5 h-5 rounded-full bg-slate-700" />
                   )}
-                  <span>{p.username || p.email || p.user_id}</span>
+                  <span>{p.username || `Player ${String(p.user_id).slice(0, 4)}`}</span>
                 </label>
               ))
             )}

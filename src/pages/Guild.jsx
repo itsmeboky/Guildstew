@@ -15,6 +15,7 @@ import { listGuildMembers } from "@/api/billingClient";
 import { getGuildWalletBalance } from "@/lib/spiceWallet";
 import { formatSpice } from "@/config/spiceConfig";
 import { createPageUrl } from "@/utils";
+import { displayName, displayInitial } from "@/utils/displayName";
 
 /**
  * /guild
@@ -175,13 +176,13 @@ function GuildHub() {
                         <img src={p.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover object-top" />
                       ) : (
                         <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center text-lg font-bold text-slate-200">
-                          {(p.username || p.full_name || "?")[0]?.toUpperCase()}
+                          {displayInitial(p)}
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-white flex items-center gap-1.5 truncate">
                           {isLeaderRow && <Crown className="w-3.5 h-3.5 text-amber-300 flex-shrink-0" />}
-                          {p.username || p.full_name || "Adventurer"}
+                          {displayName(p)}
                         </p>
                         <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">
                           {isLeaderRow ? "Leader" : "Member"} · {p.subscription_tier || "guild"}

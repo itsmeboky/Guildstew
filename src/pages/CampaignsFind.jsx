@@ -13,6 +13,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
+import { displayName } from "@/utils/displayName";
+import CampaignApplyFlow from "@/components/campaigns/CampaignApplyFlow";
+import MyApplicationsInbox from "@/components/campaigns/MyApplicationsInbox";
 
 /**
  * /campaigns/find
@@ -65,7 +68,7 @@ export default function CampaignsFind() {
   });
   const gmName = (id) => {
     const p = gms.find((g) => g.user_id === id);
-    return p?.username || p?.full_name || "Unknown GM";
+    return displayName(p, { fallback: "Unknown GM" });
   };
 
   // My existing applications — disables the Apply button on the
@@ -95,6 +98,8 @@ export default function CampaignsFind() {
             Public campaigns with open seats. Send a pitch; the GM decides who joins.
           </p>
         </div>
+
+        <MyApplicationsInbox />
 
         <div className="relative max-w-xl">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -181,73 +186,10 @@ export default function CampaignsFind() {
         )}
       </div>
 
-      <ApplyDialog
+      <CampaignApplyFlow
         campaign={applyFor}
         onClose={() => setApplyFor(null)}
       />
     </div>
-  );
-}
-
-function ApplyDialog({ campaign, onClose }) {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  const [message, setMessage] = useState("");
-
-  React.useEffect(() => { if (campaign) setMessage(""); }, [campaign?.id]);
-
-  const submit = useMutation({
-    mutationFn: async () => {
-      if (!user?.id) throw new Error("Sign in first.");
-      if (!campaign?.id) throw new Error("No campaign selected.");
-      const { error } = await supabase.from("campaign_applications").insert({
-        campaign_id: campaign.id,
-        applicant_id: user.id,
-        message: message.trim() || null,
-        status: "pending",
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Application sent — the GM will be in touch.");
-      queryClient.invalidateQueries({ queryKey: ["myCampaignApplications", user?.id] });
-      onClose?.();
-    },
-    onError: (err) => {
-      console.error("Campaign application", err);
-      toast.error(`Failed to apply: ${err?.message || err}`);
-    },
-  });
-
-  if (!campaign) return null;
-
-  return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose?.(); }}>
-      <DialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-md">
-        <DialogHeader>
-          <DialogTitle>Apply to "{campaign.title || campaign.name}"</DialogTitle>
-          <DialogDescription className="text-slate-400">
-            Tell the GM a bit about yourself — playstyle, availability, what you want out of the campaign.
-          </DialogDescription>
-        </DialogHeader>
-        <Textarea
-          rows={6}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="I'm a new(-ish) player looking for a weekly game. I love roleplay-heavy campaigns and…"
-          className="bg-[#050816] border-slate-700 text-white"
-        />
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button
-            onClick={() => submit.mutate()}
-            disabled={submit.isPending}
-            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold"
-          >
-            <Send className="w-4 h-4 mr-1" /> {submit.isPending ? "Sending…" : "Send Application"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

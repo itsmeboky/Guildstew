@@ -29,6 +29,8 @@ import {
   pactBoonDescriptions,
   fightingStyleDescriptions
 } from "@/components/dnd5e/featureDescriptions";
+import CompanionCard from "@/components/characters/CompanionCard";
+import SpellHoverCard from "@/components/spells/SpellHoverCard";
 import { classHitDice } from "@/components/dnd5e/characterCalculations";
 import { spellDetails, spellIcons } from "@/components/dnd5e/spellData";
 import { useNavigate } from "react-router-dom";
@@ -405,6 +407,11 @@ export default function CharacterLibrary() {
                   <Sparkles className="w-3 h-3" /> Brewery Class
                 </span>
               )}
+              {selectedCharacter.campaign_origin && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest rounded px-1.5 py-0.5 bg-violet-500/15 text-violet-200 border border-violet-400/40">
+                  <Sparkles className="w-3 h-3" /> Built for {selectedCharacter.campaign_origin}
+                </span>
+              )}
             </p>
             {selectedCharacter.tags && selectedCharacter.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">
@@ -423,34 +430,34 @@ export default function CharacterLibrary() {
             </div>
           </div>
 
-          {/* Companion Section */}
-          {selectedCharacter.companion_name && (
-            <div className="mb-6 bg-[#1E2430]/70 rounded-lg p-4 border border-[#5B4B9E]/30">
-              <div className="flex gap-4">
-                <div className="w-20 h-20 rounded-lg overflow-hidden border-2 border-[#5B4B9E]/50 flex-shrink-0">
-                  {selectedCharacter.companion_image ? (
-                    <img
-                      src={selectedCharacter.companion_image}
-                      alt={selectedCharacter.companion_name}
-                      className="w-full h-full object-cover object-top"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-[#2A3441] flex items-center justify-center">
-                      <User className="w-8 h-8 text-[#5B4B9E]" />
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-bold text-[#5B4B9E] mb-1">{selectedCharacter.companion_name}</h3>
-                  <div className="max-h-16 overflow-y-auto">
-                    <p className="text-white/70 text-sm leading-relaxed">
-                      {selectedCharacter.companion_background || "No companion background available."}
-                    </p>
-                  </div>
-                </div>
+          {/* Companions Section — reads characterData.companions (the
+              shape written by CompanionPicker / the GM approval
+              editor). Falls back to the legacy companion_* fields for
+              characters created before the picker existed. Pending
+              custom companions render with an amber "Pending GM
+              Approval" badge via CompanionCard. */}
+          {(() => {
+            const companions = Array.isArray(selectedCharacter.companions)
+              ? selectedCharacter.companions
+              : [];
+            const legacy = companions.length === 0 && (selectedCharacter.companion_name || selectedCharacter.companion_image)
+              ? [{
+                  name: selectedCharacter.companion_name,
+                  image: selectedCharacter.companion_image,
+                  background: selectedCharacter.companion_background,
+                }]
+              : [];
+            const list = companions.length > 0 ? companions : legacy;
+            if (list.length === 0) return null;
+            return (
+              <div className="mb-6 bg-[#1E2430]/70 rounded-lg p-4 border border-[#5B4B9E]/30 space-y-3">
+                <h2 className="text-lg font-bold text-[#5B4B9E]">Companions</h2>
+                {list.map((comp, i) => (
+                  <CompanionCard key={comp?.id || i} companion={comp} />
+                ))}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Tabs */}
           <div className="flex gap-4 mb-6 border-b-2 border-gray-600">
@@ -889,43 +896,43 @@ export default function CharacterLibrary() {
                           <div className="space-y-2">
                             {spells.map((spell, idx) => {
                               const details = spellDetails[spell];
+                              // Project the local spellDetails shape (camelCase
+                              // legacy keys) into the snake_case shape the
+                              // shared SpellHoverCard renders.
+                              const tooltipSpell = details
+                                ? {
+                                    name: spell,
+                                    level: levelKey === 'cantrips' ? 0 : Number(details.level) || Number(levelKey.replace('level','')) || 0,
+                                    school: details.school,
+                                    casting_time: details.castingTime,
+                                    range: details.range,
+                                    duration: details.duration,
+                                    components: details.components,
+                                    description: details.description,
+                                  }
+                                : { name: spell, level: levelKey === 'cantrips' ? 0 : Number(levelKey.replace('level','')) || 0 };
                               return (
-                                <div
-                                  key={idx}
-                                  className={`bg-gradient-to-r from-[#2A3441] to-[#1E2430] rounded-lg p-3 border border-gray-700 hover:${borderColor} transition-all cursor-help relative`}
-                                  onMouseEnter={() => setHoveredItem(`${levelKey}-${idx}`)}
-                                  onMouseLeave={() => setHoveredItem(null)}
-                                >
-                                  <div className="flex items-center gap-3">
-                                    {spellIcons[spell] && (
-                                      <img
-                                        src={spellIcons[spell]}
-                                        alt={spell}
-                                        className={`w-10 h-10 rounded-lg object-cover border-2 ${borderColor}/30`}
-                                      />
-                                    )}
-                                    <div className="flex-1">
-                                      <div className="font-bold text-white text-sm mb-1">{spell}</div>
-                                      <div className="text-xs text-gray-400">
-                                        {details ? `${details.school} • ${details.castingTime}` : levelLabel}
+                                <SpellHoverCard key={idx} spell={tooltipSpell}>
+                                  <div
+                                    className={`bg-gradient-to-r from-[#2A3441] to-[#1E2430] rounded-lg p-3 border border-gray-700 hover:${borderColor} transition-all cursor-help`}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      {spellIcons[spell] && (
+                                        <img
+                                          src={spellIcons[spell]}
+                                          alt={spell}
+                                          className={`w-10 h-10 rounded-lg object-cover border-2 ${borderColor}/30`}
+                                        />
+                                      )}
+                                      <div className="flex-1">
+                                        <div className="font-bold text-white text-sm mb-1">{spell}</div>
+                                        <div className="text-xs text-gray-400">
+                                          {details ? `${details.school} • ${details.castingTime}` : levelLabel}
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
-                                  {hoveredItem === `${levelKey}-${idx}` && details && (
-                                    <div className={`absolute z-50 left-0 top-full mt-2 bg-[#1E2430] text-white p-4 rounded-lg text-xs w-96 shadow-xl border-2 ${borderColor} max-h-64 overflow-y-auto`}>
-                                      <div className={`font-bold mb-2 ${titleColor}`}>{spell}</div>
-                                      <div className="text-gray-400 text-xs mb-2">
-                                        {details.school} {levelKey === 'cantrips' ? 'cantrip' : `level ${details.level}`} • {details.castingTime}
-                                      </div>
-                                      <div className="space-y-1 text-xs mb-2">
-                                        <div><span className="text-gray-400">Range:</span> {details.range}</div>
-                                        <div><span className="text-gray-400">Components:</span> {details.components}</div>
-                                        <div><span className="text-gray-400">Duration:</span> {details.duration}</div>
-                                      </div>
-                                      <div className="text-white whitespace-pre-wrap">{details.description}</div>
-                                    </div>
-                                  )}
-                                </div>
+                                </SpellHoverCard>
                               );
                             })}
                           </div>

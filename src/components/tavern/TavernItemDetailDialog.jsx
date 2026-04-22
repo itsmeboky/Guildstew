@@ -99,7 +99,7 @@ export default function TavernItemDetailDialog({ item: itemProp, open, onClose, 
   });
   const reviewerName = (id) => {
     const r = reviewers.find((p) => p.user_id === id);
-    return r?.username || r?.full_name || "Anonymous";
+    return r?.username || "Anonymous";
   };
 
   const entitlement = useMemo(() => {

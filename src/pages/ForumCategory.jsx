@@ -10,6 +10,7 @@ import {
   getCategoryBySlug, listThreadsInCategory, isAdminEmail,
 } from "@/lib/forumsClient";
 import { useAuth } from "@/lib/AuthContext";
+import { displayName } from "@/utils/displayName";
 import { CREAM } from "@/pages/Forums";
 import NewThreadDialog from "@/components/forums/NewThreadDialog";
 
@@ -191,7 +192,7 @@ export default function ForumCategory() {
                       )}
                     </div>
                     <p className="text-[11px]" style={{ color: CREAM.textMuted }}>
-                      by <span className="font-semibold">{author?.username || author?.full_name || "Anonymous"}</span>
+                      by <span className="font-semibold">{displayName(author, { fallback: "Anonymous" })}</span>
                       {" · "}
                       {new Date(t.created_at).toLocaleDateString()}
                     </p>

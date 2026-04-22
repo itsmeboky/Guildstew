@@ -3,6 +3,7 @@ import { useSubscription } from '@/lib/SubscriptionContext';
 import { trackEvent } from '@/utils/analytics';
 import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
+import { supabase } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -114,6 +115,11 @@ export default function CharacterCreator() {
   const editCharacterId = urlParams.get('edit');
   const campaignId = urlParams.get('campaignId');
   const returnTo = urlParams.get('returnTo');
+  // When the apply flow pushes the player into the creator it tags
+  // the URL with ?forApply=1 so we save a PC (characters table) and
+  // stamp mod_dependencies + campaign_origin instead of taking the
+  // existing GM NPC-create branch below.
+  const isApplyFlow = urlParams.get('forApply') === '1';
   
   const [currentStep, setCurrentStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState([]);
@@ -263,15 +269,50 @@ export default function CharacterCreator() {
   }, [characterData.class, characterData.name, characterData.race, characterData.subrace, characterData.background, characterData.level, editCharacterId]);
 
   const createMutation = useMutation({
-    mutationFn: (stats) => {
+    mutationFn: async (stats) => {
       // Preserve any mod_dependencies the wizard state already carries
-      // — Brewery Part 2 will populate this when the race/class steps
-      // read from getModdedRaces()/getModdedClasses(). Today the field
-      // is usually empty; wiring it through now means the character
-      // row is already dependency-aware when the modded creator ships.
+      // — the race / class steps read from getModdedRaces() /
+      // getModdedClasses() when a campaignId is in scope, and the
+      // modded-campaign apply path wants the resulting PC tagged with
+      // every installed mod id so it can be filtered into the right
+      // campaigns later.
       if (Array.isArray(characterData.mod_dependencies)) {
         stats = { ...stats, mod_dependencies: characterData.mod_dependencies };
       }
+
+      // Apply-flow path: player is building a PC *for* a campaign.
+      // Save into the characters table (not campaign_npcs) and stamp
+      // mod_dependencies + campaign_origin from the campaign's
+      // installed mods. The NPC branch below keeps the legacy GM
+      // route working for /CharacterCreator?campaignId=… on its own.
+      if (isApplyFlow && campaignId) {
+        const [{ data: installed }, { data: campaignRow }] = await Promise.all([
+          supabase
+            .from('campaign_installed_mods')
+            .select('mod_id')
+            .eq('campaign_id', campaignId),
+          supabase
+            .from('campaigns')
+            .select('title, name, system')
+            .eq('id', campaignId)
+            .maybeSingle(),
+        ]);
+        const modIds = (installed || []).map((m) => m.mod_id).filter(Boolean);
+        const mergedDeps = Array.from(new Set([
+          ...(Array.isArray(stats.mod_dependencies) ? stats.mod_dependencies : []),
+          ...modIds,
+        ]));
+        const campaignName = campaignRow?.title || campaignRow?.name || null;
+        stats = {
+          ...stats,
+          mod_dependencies: mergedDeps,
+          campaign_origin: campaignName,
+        };
+        return editCharacterId
+          ? base44.entities.Character.update(editCharacterId, stats)
+          : base44.entities.Character.create(stats);
+      }
+
       if (campaignId && !editCharacterId) {
         // New NPC
         const npcPayload = npcPayloadFromStats(stats, {
