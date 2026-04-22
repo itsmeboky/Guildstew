@@ -21,6 +21,13 @@ import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
 import TavernItemCard from "@/components/tavern/TavernItemCard";
 import TavernItemDetailDialog from "@/components/tavern/TavernItemDetailDialog";
 import CreatorUploadDialog from "@/components/tavern/CreatorUploadDialog";
+import GamePacksGrid from "@/components/tavern/GamePacksGrid";
+
+// Sentinel category for the Game Packs tab — lives alongside the
+// Spice-priced categories but is rendered by a completely separate
+// component since it hits `game_packs` / `game_pack_purchases` +
+// Stripe rather than `tavern_items` + the Spice wallet.
+const GAME_PACKS_TAB = "game_packs";
 
 /**
  * The Tavern — warm cream + orange marketplace.
@@ -249,34 +256,49 @@ export default function TheTavern() {
             {TAVERN_CATEGORIES.map((c) => (
               <CategoryTab key={c.value} value={c.value} label={c.label} current={selectedCategory} onClick={setSelectedCategory} icon={c.icon} />
             ))}
+            <CategoryTab
+              value={GAME_PACKS_TAB}
+              label="Game Packs"
+              current={selectedCategory}
+              onClick={setSelectedCategory}
+              icon={Package}
+            />
           </div>
 
-          <div className="flex flex-col md:flex-row gap-2">
-            <div className="flex-1 relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: P.textSecondary }} />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search items…"
-                className="pl-9"
-                style={{ backgroundColor: P.pageBg, border: `1px solid ${P.cardBorder}`, color: P.textPrimary }}
-              />
+          {selectedCategory !== GAME_PACKS_TAB && (
+            <div className="flex flex-col md:flex-row gap-2">
+              <div className="flex-1 relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: P.textSecondary }} />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search items…"
+                  className="pl-9"
+                  style={{ backgroundColor: P.pageBg, border: `1px solid ${P.cardBorder}`, color: P.textPrimary }}
+                />
+              </div>
+              <Select value={sort} onValueChange={setSort}>
+                <SelectTrigger className="w-full md:w-64" style={{ backgroundColor: P.pageBg, border: `1px solid ${P.cardBorder}`, color: P.textPrimary }}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORT_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Select value={sort} onValueChange={setSort}>
-              <SelectTrigger className="w-full md:w-64" style={{ backgroundColor: P.pageBg, border: `1px solid ${P.cardBorder}`, color: P.textPrimary }}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SORT_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          )}
         </div>
 
-        {/* Grid */}
-        {items.length === 0 ? (
+        {/* Grid — Game Packs is its own surface (real money, Stripe,
+            no search/sort). All other tabs render the Spice-priced
+            tavern_items grid. */}
+        {selectedCategory === GAME_PACKS_TAB ? (
+          <div className="space-y-4">
+            <GamePacksGrid />
+          </div>
+        ) : items.length === 0 ? (
           <div
             className="text-center py-20 rounded-lg"
             style={{ backgroundColor: P.card, border: `1px solid ${P.cardBorder}`, color: P.textSecondary }}
