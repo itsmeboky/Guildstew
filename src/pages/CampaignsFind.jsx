@@ -15,6 +15,7 @@ import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { displayName } from "@/utils/displayName";
 import CampaignApplyFlow from "@/components/campaigns/CampaignApplyFlow";
+import MyApplicationsInbox from "@/components/campaigns/MyApplicationsInbox";
 
 /**
  * /campaigns/find
@@ -97,6 +98,8 @@ export default function CampaignsFind() {
             Public campaigns with open seats. Send a pitch; the GM decides who joins.
           </p>
         </div>
+
+        <MyApplicationsInbox />
 
         <div className="relative max-w-xl">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
