@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Crown, Sparkles, ArrowRight, Users, Ban, Settings as SettingsIcon,
-  Shield, Package, TrendingUp,
+  Shield, Package, TrendingUp, Wallet,
 } from "lucide-react";
 import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { Button } from "@/components/ui/button";
@@ -364,7 +364,7 @@ function GuildJoinCTA() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
             <Benefit
-              icon={}
+              icon={Wallet}
               title="Shared Spice wallet"
               body="Everyone contributes, everyone benefits. The guild's Spice pool funds cosmetic buys that cover the whole table."
             />
