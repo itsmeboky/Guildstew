@@ -327,9 +327,13 @@ function CampaignPlayerPanelContent() {
     });
     channel.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
+        // Presence track is broadcast to every other client in the
+        // session — never include the email here, even though we
+        // have it on the auth user. The shape carries the character
+        // name so the GM panel can map presence back to a PC.
         await channel.track({
           user_id: user.id,
-          username: user.username || user.email,
+          username: user.username || null,
           role: 'player',
           character_id: myCharacter?.id,
           character_name: myCharacter?.name,
@@ -338,7 +342,7 @@ function CampaignPlayerPanelContent() {
       }
     });
     return () => { supabase.removeChannel(channel); };
-  }, [campaignId, user?.id, campaign?.session_active, myCharacter?.id, user?.email, user?.username, myCharacter?.name]);
+  }, [campaignId, user?.id, campaign?.session_active, myCharacter?.id, user?.username, myCharacter?.name]);
 
   const handleLeaveSession = async () => {
     setShowLeaveConfirm(false);
