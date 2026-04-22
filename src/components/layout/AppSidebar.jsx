@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Flame, Users, Trophy, PieChart,
+  Users, Trophy, PieChart,
   MessageSquare, Calendar, BarChart3,
   Upload, LayoutDashboard, TrendingUp,
   HelpCircle, BookOpen, AlertTriangle,
@@ -16,6 +16,9 @@ import { getWalletBalance } from "@/lib/spiceWallet";
 import { formatSpice } from "@/config/spiceConfig";
 import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
 import CreatorUploadDialog from "@/components/tavern/CreatorUploadDialog";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
+import CampaignActions from "@/components/layout/CampaignActions";
+import FriendsSidebarPanel from "@/components/layout/FriendsSidebarPanel";
 import { base44 } from "@/api/base44Client";
 
 /**
@@ -78,16 +81,6 @@ export default function AppSidebar() {
     [friendships, user?.id],
   );
 
-  const { data: friendProfiles = [] } = useQuery({
-    queryKey: ["sidebarFriendProfiles", friendIds.sort().join(",")],
-    queryFn: async () => {
-      if (friendIds.length === 0) return [];
-      const rows = await base44.entities.UserProfile.list();
-      return (rows || []).filter((p) => friendIds.includes(p.user_id)).slice(0, 5);
-    },
-    enabled: friendIds.length > 0,
-  });
-
   const tier = sub.tierData;
 
   return (
@@ -135,7 +128,7 @@ export default function AppSidebar() {
             className="mt-3 w-full inline-flex items-center justify-between gap-2 rounded-lg px-3 py-2 bg-[#050816] border border-amber-600/30 hover:border-amber-400 transition-colors"
           >
             <span className="inline-flex items-center gap-2 text-amber-200 font-bold text-sm">
-              <Flame className="w-4 h-4 text-amber-400" />
+              <SpiceIcon size={18} color="#fbbf24" />
               {formatSpice(wallet?.balance || 0)}
             </span>
             <span className="text-[10px] uppercase tracking-widest text-amber-300/80">Buy Spice</span>
@@ -144,6 +137,13 @@ export default function AppSidebar() {
 
         {/* Scrollable middle section — links land here in steps 2-6 */}
         <nav className="flex-1 overflow-y-auto p-2 space-y-3 custom-scrollbar">
+          {/* Campaigns-page-specific PLAY / Join / Find CTA block.
+              Shown on /campaigns, /campaigns/find, and anything else
+              under the campaigns-list umbrella (never inside a
+              specific campaign — Layout handles that routing). */}
+          {(location.pathname === "/campaigns" || location.pathname === "/Campaigns" || location.pathname.startsWith("/campaigns/")) && (
+            <CampaignActions />
+          )}
           <SidebarSection>
             <SidebarLink
               to={createPageUrl("Friends")}
@@ -151,30 +151,7 @@ export default function AppSidebar() {
               label="Friends"
               badge={pendingRequestsCount}
             />
-            {friendProfiles.length > 0 && (
-              <div className="flex items-center gap-1 px-3 pt-1.5">
-                {friendProfiles.map((p) => (
-                  <Link
-                    key={p.user_id}
-                    to={`${createPageUrl("UserProfile")}?id=${p.user_id}`}
-                    title={p.username || p.full_name || "Friend"}
-                    className="block"
-                  >
-                    {p.avatar_url ? (
-                      <img
-                        src={p.avatar_url}
-                        alt=""
-                        className="w-7 h-7 rounded-full object-cover object-top border border-slate-700 hover:border-[#37F2D1] transition-colors"
-                      />
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-300 border border-slate-700 hover:border-[#37F2D1] transition-colors">
-                        {(p.username || p.full_name || "?")[0]?.toUpperCase()}
-                      </div>
-                    )}
-                  </Link>
-                ))}
-              </div>
-            )}
+            <FriendsSidebarPanel user={user} friendIds={friendIds} sub={sub} />
             <SidebarLink to={createPageUrl("Achievements")} icon={Trophy} label="Achievements" />
             <SidebarLink to={createPageUrl("PIEChart")} icon={PieChart} label="P.I.E. Chart" />
           </SidebarSection>

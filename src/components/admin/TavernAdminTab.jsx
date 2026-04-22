@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Search, ChefHat, Award, Trash2, Flame, Star } from "lucide-react";
+import { Search, ChefHat, Award, Trash2, Star } from "lucide-react";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { supabase } from "@/api/supabaseClient";
 import { formatSpice } from "@/config/spiceConfig";
 import { CATEGORY_LABEL } from "@/config/tavernCategories";
@@ -184,7 +185,7 @@ export default function TavernAdminTab() {
                     <td className="px-3 py-2 text-slate-400">{CATEGORY_LABEL[i.category] || i.category}</td>
                     <td className="px-3 py-2 text-amber-200">
                       <span className="inline-flex items-center gap-1">
-                        <Flame className="w-3 h-3 text-amber-400" /> {formatSpice(i.price)}
+                        <SpiceIcon size={12} color="#fbbf24" /> {formatSpice(i.price)}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-slate-400">

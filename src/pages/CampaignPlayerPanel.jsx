@@ -18,6 +18,9 @@ import { canEquipToSlot } from "@/components/gm/equipmentRules";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
+import {
+  blankDeathSaves, applyDeathSaveRoll, applyDownedDamage,
+} from "@/components/combat/deathSaves";
 import { useTurnContext } from "@/components/combat/useTurnContext";
 import { hpBarColor } from "@/components/combat/hpColor";
 import { resolveAction, consumeActionCost } from "@/components/combat/actionResolver";
@@ -148,6 +151,12 @@ const basicActionIcons = [
   { name: "Hide", url: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/abilities/basic%20actions/hide.png" },
   { name: "Ready Action", url: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/abilities/basic%20actions/ready%20action.png" }
 ];
+
+const DEATH_SAVE_ICONS = {
+  life: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/UI/life.png",
+  death: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/UI/death.png",
+};
+const DEATH_SAVE_ICON_STYLE = { filter: "brightness(0) invert(1)" };
 
 const CONDITIONS = {
   Blinded: { color: "#525252", label: "Blinded" },
@@ -454,54 +463,62 @@ function CampaignPlayerPanelContent() {
   }, [campaign?.combat_data?.order, myCharacterKey]);
 
   // Rotate combat_data.order[0] to the end of the queue. Used after
-  // the player's death save auto-advances their turn.
+  // the player's death save auto-advances their turn. Reads from the
+  // live React Query cache at call-time (not the closure snapshot) so
+  // a death-save write that just landed isn't clobbered by a stale
+  // order rotation — this was the root cause of the "only first save
+  // persists" bug.
   const advanceTurn = React.useCallback(async () => {
-    if (!campaign?.combat_data?.order?.length) return;
-    const currentOrder = [...campaign.combat_data.order];
+    const latest = queryClient.getQueryData(['campaign', campaignId]) || campaign;
+    const latestCombat = latest?.combat_data;
+    if (!latestCombat?.order?.length) return;
+    const currentOrder = [...latestCombat.order];
     const [finished] = currentOrder.splice(0, 1);
     currentOrder.push(finished);
+    const newData = { ...latestCombat, order: currentOrder, currentTurnIndex: 0 };
+    queryClient.setQueryData(['campaign', campaignId], (old) =>
+      old ? { ...old, combat_data: newData } : old,
+    );
     try {
       await base44.entities.Campaign.update(campaignId, {
-        combat_data: { ...campaign.combat_data, order: currentOrder, currentTurnIndex: 0 },
+        combat_data: newData,
       });
       queryClient.invalidateQueries(['campaign', campaignId]);
     } catch (err) {
       console.error('advanceTurn failed:', err);
     }
-  }, [campaign?.combat_data, campaignId, queryClient]);
+  }, [campaign, campaignId, queryClient]);
 
   // Apply a death save roll to the player's entry on combat_data.order.
-  // Writes through to the campaign so the GM sees the result in real
-  // time. Mirrors GMPanel.rollDeathSaveForCombatant.
+  // Writes optimistically to the query cache before the DB round-trip
+  // so any subsequent callback (e.g. the dramatic-window auto-close →
+  // advanceTurn) reads the just-incremented successes/failures rather
+  // than the stale pre-roll values. Mirrors GMPanel.rollDeathSaveForCombatant.
   const applyPlayerDeathSave = React.useCallback(async (d20) => {
     if (!activeDeathSaveTarget || !campaign?.combat_data?.order) return;
     const order = [...campaign.combat_data.order];
     const idx = order.findIndex((c) => (c.uniqueId || c.id) === activeDeathSaveTarget.key);
     if (idx === -1) return;
     const target = order[idx];
-    const existing = target.deathSaves || { successes: 0, failures: 0, stabilized: false, dead: false };
-    let next = { ...existing };
-    if (d20 === 20) {
-      next = { successes: 0, failures: 0, stabilized: false, dead: false };
-      order[idx] = { ...target, downed: false, deathSaves: next, hit_points: { ...(target.hit_points || {}), current: 1 } };
-    } else if (d20 === 1) {
-      next.failures = Math.min(3, existing.failures + 2);
-      if (next.failures >= 3) next.dead = true;
-      order[idx] = { ...target, deathSaves: next };
-    } else if (d20 >= 10) {
-      next.successes = Math.min(3, existing.successes + 1);
-      if (next.successes >= 3) next.stabilized = true;
-      order[idx] = { ...target, deathSaves: next };
+    const { next, reviveToHp } = applyDeathSaveRoll(target.deathSaves, d20);
+    if (reviveToHp != null) {
+      order[idx] = {
+        ...target,
+        downed: false,
+        deathSaves: next,
+        hit_points: { ...(target.hit_points || {}), current: reviveToHp },
+      };
     } else {
-      next.failures = Math.min(3, existing.failures + 1);
-      if (next.failures >= 3) next.dead = true;
       order[idx] = { ...target, deathSaves: next };
     }
+    const newData = { ...campaign.combat_data, order };
+    // Optimistic cache write so the next render (and any
+    // already-queued advanceTurn) sees the new deathSaves.
+    queryClient.setQueryData(['campaign', campaignId], (old) =>
+      old ? { ...old, combat_data: newData } : old,
+    );
     try {
-      await base44.entities.Campaign.update(campaignId, {
-        combat_data: { ...campaign.combat_data, order },
-      });
-      queryClient.invalidateQueries(['campaign', campaignId]);
+      await base44.entities.Campaign.update(campaignId, { combat_data: newData });
     } catch (err) {
       console.error('death save write failed:', err);
     }
@@ -1732,7 +1749,7 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
                       const player = players.find(p => p.user_id === userId);
                       return player && c.created_by === player.email;
                     });
-                    
+
                     if (char) {
                       const maxHp = char.hit_points?.max || 0;
                       const currentHp = char.hit_points?.current ?? maxHp;
@@ -1743,6 +1760,66 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
                         hit_points: { ...char.hit_points, current: newCurrent }
                       });
                       queryClient.invalidateQueries(['campaignCharacters']);
+
+                      // Keep combat_data.order in lockstep so the
+                      // downed state / death saves react to player-
+                      // initiated damage + heals (e.g. a cleric
+                      // casting Cure Wounds on a dying ally). The GM
+                      // panel owns the authoritative monster-attack
+                      // path; this mirrors it for player-sourced HP
+                      // changes so the initiative tracker + dramatic
+                      // window see consistent state either way.
+                      const combat = campaignData?.combat_data;
+                      const order = combat?.order;
+                      if (order) {
+                        const idx = order.findIndex(
+                          (c) => (c.uniqueId || c.id) === targetId,
+                        );
+                        if (idx !== -1) {
+                          const entry = order[idx];
+                          const wasDowned = !!entry.downed;
+                          const isCrit = data.detail?.isCrit === true;
+                          let nextEntry = null;
+                          if (damage < 0 && wasDowned && newCurrent > 0) {
+                            // Heal while dying → regain consciousness.
+                            nextEntry = {
+                              ...entry,
+                              downed: false,
+                              deathSaves: blankDeathSaves(),
+                              hit_points: { ...(entry.hit_points || {}), current: newCurrent, max: maxHp },
+                            };
+                            toast.success(`${entry.name} regains consciousness!`);
+                          } else if (damage > 0 && wasDowned) {
+                            // Damage while at 0 HP → death-save failures.
+                            const nextSaves = applyDownedDamage(entry.deathSaves, { critical: isCrit });
+                            nextEntry = { ...entry, deathSaves: nextSaves };
+                          } else if (damage > 0 && !wasDowned && newCurrent <= 0) {
+                            nextEntry = {
+                              ...entry,
+                              downed: true,
+                              deathSaves: blankDeathSaves(),
+                              hit_points: { ...(entry.hit_points || {}), current: 0, max: maxHp },
+                            };
+                            toast.error(`${entry.name} is down!`);
+                          } else if (newCurrent !== currentHp) {
+                            nextEntry = {
+                              ...entry,
+                              hit_points: { ...(entry.hit_points || {}), current: newCurrent, max: maxHp },
+                            };
+                          }
+                          if (nextEntry) {
+                            const newOrder = [...order];
+                            newOrder[idx] = nextEntry;
+                            const newData = { ...combat, order: newOrder };
+                            queryClient.setQueryData(['campaign', campaignId], (old) =>
+                              old ? { ...old, combat_data: newData } : old,
+                            );
+                            base44.entities.Campaign
+                              .update(campaignId, { combat_data: newData })
+                              .catch((err) => console.error('Player damage write-back failed:', err));
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -2630,6 +2707,46 @@ function TurnOrderDisplay({ order, currentTurnIndex, onSelectTarget, selectionMo
                          );
                       })()}
                    </div>
+                )}
+
+                {/* Death save progress — same circle treatment as the
+                    GM panel so players watching a teammate's save see
+                    the same tally at a glance. STABILIZED / DEAD
+                    status text sits in place of the circles when the
+                    save chain has resolved. */}
+                {combatant.downed && combatant.deathSaves?.stabilized && !combatant.deathSaves?.dead && (
+                  <span className="text-[9px] font-bold text-[#22c55e] uppercase tracking-widest">
+                    Stabilized
+                  </span>
+                )}
+                {combatant.downed && combatant.deathSaves?.dead && (
+                  <span className="text-[9px] font-bold text-[#ef4444] uppercase tracking-widest">
+                    Dead
+                  </span>
+                )}
+                {combatant.downed && !combatant.deathSaves?.stabilized && !combatant.deathSaves?.dead && (
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex items-center gap-0.5">
+                      <img src={DEATH_SAVE_ICONS.life} alt="Successes" className="w-3 h-3 mr-0.5" style={DEATH_SAVE_ICON_STYLE} />
+                      {[0, 1, 2].map((i) => (
+                        <span
+                          key={i}
+                          className="w-1.5 h-1.5 rounded-full inline-block"
+                          style={{ backgroundColor: (combatant.deathSaves?.successes || 0) > i ? '#22c55e' : '#1e293b' }}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-0.5">
+                      <img src={DEATH_SAVE_ICONS.death} alt="Failures" className="w-3 h-3 mr-0.5" style={DEATH_SAVE_ICON_STYLE} />
+                      {[0, 1, 2].map((i) => (
+                        <span
+                          key={i}
+                          className="w-1.5 h-1.5 rounded-full inline-block"
+                          style={{ backgroundColor: (combatant.deathSaves?.failures || 0) > i ? '#ef4444' : '#1e293b' }}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 <span className={`text-[10px] font-bold max-w-[80px] truncate px-2 py-0.5 rounded-full ${

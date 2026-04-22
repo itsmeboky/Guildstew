@@ -41,11 +41,55 @@ const HERO_SLIDES = [
 export default function Home() {
   const [currentSlide, setCurrentSlide] = useState(0);
 
+  // Admin-managed hero banners. Falls back to the hard-coded
+  // HERO_SLIDES above when no admin banners exist, so the homepage
+  // keeps rendering on a fresh environment.
+  const { data: adminBanners = [] } = useQuery({
+    queryKey: ['homepageBanners'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('homepage_banners')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      return data || [];
+    },
+  });
+
+  const slides = adminBanners.length > 0
+    ? adminBanners.map((b) => ({
+        id: b.id,
+        image: b.image_url,
+        title: b.title || undefined,
+        subtitle: b.subtitle || undefined,
+        buttonText: b.link_url ? (b.title ? 'Learn More' : undefined) : undefined,
+        buttonLink: b.link_url || undefined,
+        showText: !!(b.title || b.subtitle),
+      }))
+    : HERO_SLIDES;
+
   const { data: products } = useQuery({
     queryKey: ['topProducts'],
     queryFn: () => base44.entities.Product.filter({ category: 'game_pack' }, '-rating', 10),
     initialData: []
   });
+
+  // Admin-set overrides for the two homepage marketing tiles. When a
+  // row exists, it wins over the auto-derived `products[0]` card.
+  const { data: siteConfig = {} } = useQuery({
+    queryKey: ['siteConfig'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('site_config')
+        .select('key, value')
+        .in('key', ['homepage_newest_gamepack', 'homepage_top_selling']);
+      const out = {};
+      for (const row of data || []) out[row.key] = row.value || {};
+      return out;
+    },
+  });
+  const newestOverride = siteConfig.homepage_newest_gamepack || null;
+  const topSellingOverride = siteConfig.homepage_top_selling || null;
 
   const { data: blogPosts = [] } = useQuery({
     queryKey: ['homepageBlogPosts'],
@@ -114,14 +158,15 @@ export default function Home() {
   }, [blogPosts, recentVersions]);
 
   useEffect(() => {
+    if (slides.length <= 1) return;
     const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
+      setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 7500);
     return () => clearInterval(interval);
-  }, []);
+  }, [slides.length]);
 
-  const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
-  const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + HERO_SLIDES.length) % HERO_SLIDES.length);
+  const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % Math.max(1, slides.length));
+  const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + slides.length) % Math.max(1, slides.length));
 
   return (
     <div className="theme-homepage-bg relative min-h-screen bg-white">
@@ -182,7 +227,7 @@ export default function Home() {
                 uncovered pixel shows the theme orange instead of
                 leaking Ladle through from behind. */}
             <div className="col-span-7 relative rounded-3xl overflow-hidden h-[420px] z-20 bg-[#FF5722]">
-              {HERO_SLIDES.map((slide, index) => (
+              {slides.map((slide, index) => (
                 <div
                   key={slide.id}
                   className={`absolute inset-0 transition-opacity duration-700 ${
@@ -249,7 +294,7 @@ export default function Home() {
               </button>
 
               <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-20">
-                {HERO_SLIDES.map((_, index) => (
+                {slides.map((_, index) => (
                   <button
                     key={index}
                     onClick={() => setCurrentSlide(index)}
@@ -346,15 +391,19 @@ export default function Home() {
               from the hero section's top padding, not from a gap
               between the hero and these cards. */}
           <div className="grid grid-cols-12 gap-6 mb-8">
-            {/* Newest Game Pack */}
+            {/* Newest Game Pack — admin override wins over the
+                auto-derived products[0] card so marketing can
+                hand-pick what's featured. */}
             <div className="col-span-2 rounded-3xl p-5 h-[320px] flex flex-col relative overflow-hidden">
               <div className="theme-homepage-card absolute inset-0" />
               <div className="relative z-10 flex flex-col h-full">
                 <h3 className="text-xl font-bold text-white mb-4 text-center">Newest Game Pack</h3>
-                {products.length > 0 && (
+                {newestOverride?.name ? (
+                  <ConfigCard config={newestOverride} />
+                ) : products.length > 0 ? (
                   <div className="flex-1 flex flex-col min-h-0">
                     <div className="flex-1 rounded-2xl mb-3 min-h-0 overflow-hidden relative">
-                      <LazyImage 
+                      <LazyImage
                         src={products[0].cover_image_url}
                         alt={products[0].name}
                         className="absolute inset-0 w-full h-full"
@@ -363,15 +412,19 @@ export default function Home() {
                     <p className="text-white text-sm font-semibold text-center line-clamp-2">{products[0].name}</p>
                     <p className="text-white text-lg font-bold text-center mt-1">${products[0].price}</p>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
 
-            {/* Top Selling Game Packs */}
+            {/* Top Selling Game Packs — admin can replace the auto
+                top-5 grid with a single curated card via site_config. */}
             <div className="col-span-7 rounded-3xl p-5 h-[320px] relative overflow-hidden">
               <div className="theme-homepage-card absolute inset-0" />
               <div className="relative z-10 h-full flex flex-col">
                 <h3 className="text-xl font-bold text-white mb-4 text-center">Top Selling Game Packs</h3>
+                {topSellingOverride?.name ? (
+                  <ConfigCard config={topSellingOverride} large />
+                ) : (
                 <div className="grid grid-cols-5 gap-4 flex-1">
                   {products.slice(0, 5).map(product => (
                     <div key={product.id} className="group cursor-pointer flex flex-col">
@@ -393,6 +446,7 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
+                )}
               </div>
             </div>
 
@@ -452,6 +506,38 @@ export default function Home() {
  * Latest Updates feed. Keeps units coarse — exact time isn't useful
  * on a marketing card.
  */
+/**
+ * Render an admin-configured homepage card.
+ *
+ * Used by both "Newest Game Pack" (compact) and "Top Selling" (large)
+ * tiles when a `site_config` row overrides the auto-derived content.
+ * `config` shape: { name, image, description, link_url }.
+ */
+function ConfigCard({ config, large = false }) {
+  const { name, image, description, link_url } = config || {};
+  const body = (
+    <div className={`flex-1 flex flex-col min-h-0 ${large ? "justify-center" : ""}`}>
+      {image && (
+        <div className="flex-1 rounded-2xl mb-3 min-h-0 overflow-hidden relative">
+          <LazyImage src={image} alt={name || ""} className="absolute inset-0 w-full h-full" />
+        </div>
+      )}
+      {name && <p className={`text-white font-bold text-center ${large ? "text-2xl" : "text-sm"}`}>{name}</p>}
+      {description && (
+        <p className="text-white/80 text-xs text-center mt-1 line-clamp-2">{description}</p>
+      )}
+    </div>
+  );
+  if (link_url) {
+    const external = /^https?:\/\//.test(link_url);
+    if (external) {
+      return <a href={link_url} target="_blank" rel="noopener noreferrer" className="contents">{body}</a>;
+    }
+    return <Link to={link_url} className="contents">{body}</Link>;
+  }
+  return body;
+}
+
 function relativeTime(input) {
   if (!input) return "";
   const t = new Date(input).getTime();

@@ -8,7 +8,8 @@ import {
   estimateCashout,
 } from "@/lib/tavernCreator";
 import { formatSpice } from "@/config/spiceConfig";
-import { Flame, Check, X, Clock } from "lucide-react";
+import { Check, X, Clock } from "lucide-react";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { supabase } from "@/api/supabaseClient";
 
 /**
@@ -112,7 +113,7 @@ export default function CashoutsTab() {
                       </p>
                       <p className="mt-2 text-sm text-slate-300 flex items-center gap-2 flex-wrap">
                         <span className="inline-flex items-center gap-1 text-amber-200 font-bold">
-                          <Flame className="w-3.5 h-3.5 text-amber-400" />
+                          <SpiceIcon size={14} color="#fbbf24" />
                           {formatSpice(r.spice_amount)} Spice
                         </span>
                         <span className="text-slate-500">·</span>

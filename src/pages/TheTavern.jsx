@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Flame, Search, ChefHat, Award, Store, Plus, Package, TrendingUp } from "lucide-react";
+import { Search, ChefHat, Award, Store, Plus, Package, TrendingUp } from "lucide-react";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from "@/utils";
@@ -16,24 +17,26 @@ import { listTavernItems } from "@/lib/tavernClient";
 import { listEntitlements } from "@/lib/tavernEntitlements";
 import { formatSpice } from "@/config/spiceConfig";
 import { TAVERN_CATEGORIES, SORT_OPTIONS } from "@/config/tavernCategories";
+import { TAVERN_PALETTE as P, TAVERN_HEADER_GRADIENT } from "@/config/tavernPalette";
 import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
 import TavernItemCard from "@/components/tavern/TavernItemCard";
 import TavernItemDetailDialog from "@/components/tavern/TavernItemDetailDialog";
 import CreatorUploadDialog from "@/components/tavern/CreatorUploadDialog";
+import GamePacksGrid from "@/components/tavern/GamePacksGrid";
+
+// Sentinel category for the Game Packs tab — lives alongside the
+// Spice-priced categories but is rendered by a completely separate
+// component since it hits `game_packs` / `game_pack_purchases` +
+// Stripe rather than `tavern_items` + the Spice wallet.
+const GAME_PACKS_TAB = "game_packs";
 
 /**
- * The Tavern — Spice-based cosmetic marketplace.
+ * The Tavern — warm cream + orange marketplace.
  *
- * Page layout:
- *   1. Header strip with the player's Spice wallet (and guild wallet
- *      if subscribed as guild).
- *   2. Two featured carousels — "House Special" (Guildstew official)
- *      and "Chef's Choice" (featured creators).
- *   3. Category tabs + sort + search.
- *   4. Grid of the active listings that match the filter.
- *
- * Ownership badges are computed from a single getUserPurchases fetch
- * that covers both personal and guild-wallet buys for the user.
+ * Palette lives in `src/config/tavernPalette.js`. The page leaves
+ * the dark campaign-management theme behind and switches to a
+ * warm commerce feel — white backgrounds, peach borders, salmon
+ * CTAs — so the shopping surface is clearly differentiated.
  */
 export default function TheTavern() {
   const { user } = useAuth();
@@ -60,6 +63,20 @@ export default function TheTavern() {
   const { data: items = [] } = useQuery({
     queryKey: ["tavernItems", selectedCategory, sort, search],
     queryFn: () => listTavernItems({ category: selectedCategory, sort, q: search }),
+  });
+
+  // Admin-managed hero banner. Optional — falls back to a stock
+  // gradient + tagline when no site_config row is set.
+  const { data: heroConfig } = useQuery({
+    queryKey: ["tavernHeroBanner"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("site_config")
+        .select("value")
+        .eq("key", "tavern_hero_banner")
+        .maybeSingle();
+      return data?.value || null;
+    },
   });
 
   const { data: featured = [] } = useQuery({
@@ -91,10 +108,6 @@ export default function TheTavern() {
     },
   });
 
-  // Entitlements cover both personal purchases AND guild purchases
-  // made by *any* guild member — filtered by the user's current
-  // guild so leaving a guild silently strips access without touching
-  // the underlying rows.
   const { data: entitlements = [] } = useQuery({
     queryKey: ["tavernEntitlements", user?.id, sub.guildOwnerId],
     queryFn: () => listEntitlements(user.id, { currentGuildId: sub.guildOwnerId }),
@@ -106,9 +119,6 @@ export default function TheTavern() {
     [entitlements],
   );
 
-  // Pull creator names in a batch so the cards don't each hit the
-  // network. auth.users isn't exposed — we read the mirrored
-  // user_profiles table instead.
   const creatorIds = useMemo(() => {
     const ids = new Set();
     [...items, ...featured, ...official].forEach((i) => i?.creator_id && ids.add(i.creator_id));
@@ -142,34 +152,45 @@ export default function TheTavern() {
   });
 
   return (
-    <div className="min-h-screen bg-[#050816] text-white">
+    <div className="min-h-screen" style={{ backgroundColor: P.pageBg, color: P.textPrimary }}>
+      {/* Full-bleed hero — site_config.tavern_hero_banner overrides
+          the default gradient + tagline. Shape:
+            { image_url, title, subtitle, link_url } */}
+      <TavernHero config={heroConfig} />
+
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-black text-amber-200 flex items-center gap-3">
-              <Store className="w-8 h-8 text-amber-400" />
+            <h1 className="text-4xl font-black flex items-center gap-3" style={{ color: P.accentDeep }}>
+              <Store className="w-8 h-8" />
               The Tavern
             </h1>
-            <p className="text-sm text-slate-400 mt-1">
+            <p className="text-sm mt-1" style={{ color: P.textSecondary }}>
               Cosmetic goods, priced in Spice. Brewed by our cooks and the community.
             </p>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="bg-[#1E2430] border border-amber-600/30 rounded-lg px-4 py-2">
-              <p className="text-[9px] uppercase tracking-widest text-amber-400/70 font-bold">Spice</p>
-              <p className="text-lg font-black text-amber-200 flex items-center gap-1">
-                <Flame className="w-4 h-4 text-amber-400" />
+            <div
+              className="rounded-lg px-4 py-2"
+              style={{ backgroundColor: P.card, border: `1px solid ${P.cardBorder}` }}
+            >
+              <p className="text-[9px] uppercase tracking-widest font-bold" style={{ color: P.accentDeep }}>Spice</p>
+              <p className="text-lg font-black flex items-center gap-1" style={{ color: P.textPrimary }}>
+                <SpiceIcon size={18} color={P.accent} />
                 {formatSpice(wallet?.balance || 0)}
               </p>
             </div>
 
             {sub.guildOwnerId && (
-              <div className="bg-[#1E2430] border border-purple-500/30 rounded-lg px-4 py-2">
-                <p className="text-[9px] uppercase tracking-widest text-purple-400/70 font-bold">Guild Spice</p>
-                <p className="text-lg font-black text-purple-200 flex items-center gap-1">
-                  <Flame className="w-4 h-4 text-purple-400" />
+              <div
+                className="rounded-lg px-4 py-2"
+                style={{ backgroundColor: P.card, border: `1px solid ${P.cardBorder}` }}
+              >
+                <p className="text-[9px] uppercase tracking-widest font-bold" style={{ color: "#7c3aed" }}>Guild Spice</p>
+                <p className="text-lg font-black flex items-center gap-1" style={{ color: P.textPrimary }}>
+                  <SpiceIcon size={18} color="#a855f7" />
                   {formatSpice(guildWallet?.balance || 0)}
                 </p>
               </div>
@@ -177,46 +198,41 @@ export default function TheTavern() {
 
             <Button
               onClick={() => setSpiceOpen(true)}
-              className="bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold"
+              className="font-bold"
+              style={{ backgroundColor: P.accent, color: P.textPrimary }}
             >
               Buy Spice
             </Button>
             <Link to={createPageUrl("MyCollection")}>
-              <Button
-                variant="outline"
-                className="border-amber-500/40 text-amber-200"
-              >
+              <Button variant="outline" style={{ borderColor: P.accent, color: P.accentDeep, backgroundColor: P.card }}>
                 <Package className="w-4 h-4 mr-1" /> My Collection
               </Button>
             </Link>
             <Button
               onClick={() => setUploadOpen(true)}
               variant="outline"
-              className="border-[#37F2D1]/50 text-[#37F2D1] hover:bg-[#37F2D1]/10"
+              style={{ borderColor: P.accent, color: P.accentDeep, backgroundColor: P.card }}
             >
               <Plus className="w-4 h-4 mr-1" /> Sell on Tavern
             </Button>
           </div>
         </div>
 
-        {/* Dashboard lives in the sidebar's Creator Panel — keep a
-            subtle breadcrumb here for creators who are mid-browsing. */}
         <div className="-mt-4 text-right">
           <Link
             to={createPageUrl("CreatorDashboard")}
-            className="text-[11px] text-slate-400 hover:text-[#37F2D1] transition-colors"
+            className="text-[11px] hover:underline"
+            style={{ color: P.textSecondary }}
           >
             Manage your listings →
           </Link>
         </div>
 
-        {/* Featured carousels */}
         {official.length > 0 && (
           <FeaturedRow
             title="House Special"
             subtitle="Official Guildstew content"
             icon={ChefHat}
-            accent="orange"
             items={official}
             cardProps={cardProps}
           />
@@ -226,48 +242,69 @@ export default function TheTavern() {
             title="Chef's Choice"
             subtitle={`Featured creators · ${new Date().toLocaleString("default", { month: "long", year: "numeric" })}`}
             icon={Award}
-            accent="amber"
             items={featured}
             cardProps={cardProps}
           />
         )}
 
         {/* Category + filter bar */}
-        <div className="bg-[#1E2430] border border-slate-700 rounded-lg p-4 space-y-3">
+        <div
+          className="rounded-lg p-4 space-y-3"
+          style={{ backgroundColor: P.card, border: `1px solid ${P.cardBorder}` }}
+        >
           <div className="flex flex-wrap gap-2">
             <CategoryTab value="all" label="All" current={selectedCategory} onClick={setSelectedCategory} />
             {TAVERN_CATEGORIES.map((c) => (
               <CategoryTab key={c.value} value={c.value} label={c.label} current={selectedCategory} onClick={setSelectedCategory} icon={c.icon} />
             ))}
+            <CategoryTab
+              value={GAME_PACKS_TAB}
+              label="Game Packs"
+              current={selectedCategory}
+              onClick={setSelectedCategory}
+              icon={Package}
+            />
           </div>
 
-          <div className="flex flex-col md:flex-row gap-2">
-            <div className="flex-1 relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search items…"
-                className="pl-9 bg-[#050816] border-slate-700 text-white"
-              />
+          {selectedCategory !== GAME_PACKS_TAB && (
+            <div className="flex flex-col md:flex-row gap-2">
+              <div className="flex-1 relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: P.textSecondary }} />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search items…"
+                  className="pl-9"
+                  style={{ backgroundColor: P.pageBg, border: `1px solid ${P.cardBorder}`, color: P.textPrimary }}
+                />
+              </div>
+              <Select value={sort} onValueChange={setSort}>
+                <SelectTrigger className="w-full md:w-64" style={{ backgroundColor: P.pageBg, border: `1px solid ${P.cardBorder}`, color: P.textPrimary }}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORT_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Select value={sort} onValueChange={setSort}>
-              <SelectTrigger className="w-full md:w-64 bg-[#050816] border-slate-700 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SORT_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          )}
         </div>
 
-        {/* Grid */}
-        {items.length === 0 ? (
-          <div className="text-center py-20 text-slate-500 bg-[#1E2430]/40 rounded-lg border border-slate-800">
-            <Store className="w-10 h-10 mx-auto mb-2 opacity-50" />
+        {/* Grid — Game Packs is its own surface (real money, Stripe,
+            no search/sort). All other tabs render the Spice-priced
+            tavern_items grid. */}
+        {selectedCategory === GAME_PACKS_TAB ? (
+          <div className="space-y-4">
+            <GamePacksGrid />
+          </div>
+        ) : items.length === 0 ? (
+          <div
+            className="text-center py-20 rounded-lg"
+            style={{ backgroundColor: P.card, border: `1px solid ${P.cardBorder}`, color: P.textSecondary }}
+          >
+            <Store className="w-10 h-10 mx-auto mb-2 opacity-60" />
             <p className="text-sm">No items match this filter yet.</p>
           </div>
         ) : (
@@ -297,11 +334,10 @@ function CategoryTab({ value, label, current, onClick, icon: Icon }) {
     <button
       type="button"
       onClick={() => onClick(value)}
-      className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border transition-colors ${
-        active
-          ? "bg-amber-500 text-amber-950 border-amber-500"
-          : "bg-[#050816] text-slate-300 border-slate-700 hover:border-slate-500"
-      }`}
+      className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full transition-colors"
+      style={active
+        ? { backgroundColor: P.accent, color: P.textPrimary, border: `1px solid ${P.accent}` }
+        : { backgroundColor: P.card, color: P.textPrimary, border: `1px solid ${P.cardBorder}` }}
     >
       {Icon && <Icon className="w-3.5 h-3.5" />}
       {label}
@@ -309,17 +345,71 @@ function CategoryTab({ value, label, current, onClick, icon: Icon }) {
   );
 }
 
-function FeaturedRow({ title, subtitle, icon: Icon, accent, items, cardProps }) {
-  const accentClass = accent === "orange"
-    ? "text-orange-400"
-    : "text-amber-400";
+/**
+ * Full-width hero banner for the Tavern. Admin-managed via
+ * `site_config.tavern_hero_banner`; falls back to a gradient + stock
+ * tagline so a fresh DB still renders a hero.
+ */
+function TavernHero({ config }) {
+  const image = config?.image_url || null;
+  const title = config?.title || "The Tavern";
+  const subtitle = config?.subtitle || "Warm cosmetics, dice, themes, and game packs — brewed fresh daily.";
+  const link = config?.link_url || null;
+
+  const inner = (
+    <div
+      className="relative w-full h-[220px] md:h-[280px] overflow-hidden"
+      style={!image ? { background: TAVERN_HEADER_GRADIENT } : undefined}
+    >
+      {image && (
+        <>
+          <img src={image} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <div
+            className="absolute inset-0"
+            style={{
+              background: `linear-gradient(90deg, rgba(255,248,243,0.85) 0%, rgba(255,248,243,0.25) 45%, rgba(255,248,243,0) 70%)`,
+            }}
+          />
+        </>
+      )}
+      <div className="relative z-10 max-w-7xl mx-auto h-full px-4 md:px-8 flex flex-col justify-center">
+        <h1
+          className="text-4xl md:text-5xl font-black tracking-tight"
+          style={{ color: P.textPrimary, fontFamily: "'Cream', 'Inter', sans-serif" }}
+        >
+          {title}
+        </h1>
+        {subtitle && (
+          <p className="text-sm md:text-base mt-2 max-w-xl" style={{ color: P.textPrimary, opacity: 0.9 }}>
+            {subtitle}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+
+  if (link) {
+    const external = /^https?:\/\//.test(link);
+    return external
+      ? <a href={link} target="_blank" rel="noopener noreferrer" className="block">{inner}</a>
+      : <Link to={link} className="block">{inner}</Link>;
+  }
+  return inner;
+}
+
+function FeaturedRow({ title, subtitle, icon: Icon, items, cardProps }) {
   return (
     <section>
       <div className="flex items-center gap-3 mb-3">
-        <Icon className={`w-6 h-6 ${accentClass}`} />
+        <div
+          className="w-10 h-10 rounded-lg flex items-center justify-center"
+          style={{ background: TAVERN_HEADER_GRADIENT }}
+        >
+          <Icon className="w-5 h-5" style={{ color: P.textPrimary }} />
+        </div>
         <div>
-          <h2 className="text-xl font-black text-white">{title}</h2>
-          <p className="text-xs text-slate-400">{subtitle}</p>
+          <h2 className="text-xl font-black" style={{ color: P.textPrimary }}>{title}</h2>
+          <p className="text-xs" style={{ color: P.textSecondary }}>{subtitle}</p>
         </div>
       </div>
       <div className="flex overflow-x-auto gap-4 pb-2 -mx-2 px-2 snap-x">

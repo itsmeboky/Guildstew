@@ -3,9 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  Crown, Sparkles, ArrowRight, Users, Flame, Ban, Settings as SettingsIcon,
-  Shield, Package, TrendingUp,
+  Crown, Sparkles, ArrowRight, Users, Ban, Settings as SettingsIcon,
+  Shield, Package, TrendingUp, Wallet,
 } from "lucide-react";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
@@ -255,7 +256,7 @@ function GuildHub() {
         <aside className="space-y-5">
           <section className="bg-[#1E2430] border border-amber-600/40 rounded-lg p-5">
             <p className="text-[10px] uppercase tracking-widest text-amber-300 font-black flex items-center gap-1">
-              <Flame className="w-3 h-3" /> Guild Wallet
+              <SpiceIcon size={12} color="currentColor" /> Guild Wallet
             </p>
             <p className="text-3xl font-black text-amber-200 mt-1">
               {formatSpice(wallet?.balance || 0)}
@@ -298,7 +299,7 @@ function GuildHub() {
                 <TrendingUp className="w-3 h-3 text-emerald-300" /> Veteran-level features
               </li>
               <li className="flex items-center gap-1.5">
-                <Flame className="w-3 h-3 text-amber-300" /> 250 Spice / month guild stipend
+                <SpiceIcon size={12} color="#fcd34d" /> 250 Spice / month guild stipend
               </li>
               <li className="flex items-center gap-1.5">
                 <Package className="w-3 h-3 text-purple-300" /> Shared Tavern purchases
@@ -363,7 +364,7 @@ function GuildJoinCTA() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
             <Benefit
-              icon={Flame}
+              icon={Wallet}
               title="Shared Spice wallet"
               body="Everyone contributes, everyone benefits. The guild's Spice pool funds cosmetic buys that cover the whole table."
             />

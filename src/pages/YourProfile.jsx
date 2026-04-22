@@ -369,7 +369,7 @@ console.log('PROFILE PAGE USER:', user)
                 )}
               </div>
               <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 text-white px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap shadow-lg" style={{ background: `linear-gradient(to right, ${color1}, ${color2})`, boxShadow: `0 10px 15px -3px ${color1}80` }}>
-                {user?.role === 'admin' ? 'Admin' : 'Game Master'}
+                {user?.display_title || (user?.role === 'admin' ? 'Admin' : 'Wanderer')}
               </div>
             </div>
 

@@ -64,6 +64,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
+import {
+  blankDeathSaves, applyDeathSaveRoll, applyDownedDamage, isDying,
+} from "@/components/combat/deathSaves";
 import ConditionRing from "@/components/combat/ConditionRing";
 import PortraitWithState from "@/components/combat/PortraitWithState";
 import {
@@ -654,11 +657,18 @@ export default function GMPanel() {
   // Used after a downed PC's death save auto-advances their turn. Mirrors
   // the END TURN button's behaviour (splice + push + currentTurnIndex=0).
   const advanceTurn = React.useCallback(async () => {
-    if (!campaign?.combat_data?.order?.length) return;
-    const currentOrder = [...campaign.combat_data.order];
+    // Read from the live React Query cache at call-time rather than
+    // the closure — a death-save write that just landed via
+    // updateOrderCombatant might be newer than `campaign` in this
+    // callback's captured scope, and splicing off a stale order would
+    // overwrite the just-persisted saves.
+    const latest = queryClient.getQueryData(['campaign', campaignId]) || campaign;
+    const latestCombat = latest?.combat_data;
+    if (!latestCombat?.order?.length) return;
+    const currentOrder = [...latestCombat.order];
     const [finished] = currentOrder.splice(0, 1);
     currentOrder.push(finished);
-    const newData = { ...campaign.combat_data, order: currentOrder, currentTurnIndex: 0 };
+    const newData = { ...latestCombat, order: currentOrder, currentTurnIndex: 0 };
     queryClient.setQueryData(['campaign', campaignId], (old) =>
       old ? { ...old, combat_data: newData } : old,
     );
@@ -668,7 +678,7 @@ export default function GMPanel() {
       console.error('advanceTurn failed:', err);
     }
     queryClient.invalidateQueries(['campaign', campaignId]);
-  }, [campaign?.combat_data, campaignId, queryClient]);
+  }, [campaign, campaignId, queryClient]);
 
   // If the selected character is no longer hidden (turn rolled over, attacked
   // while sneaking, or the GM switched to a different character) the Sneak
@@ -1193,23 +1203,27 @@ export default function GMPanel() {
   }, [campaign?.combat_data, campaignId, queryClient]);
 
   // Generic combat_data.order patcher — used by the downed / death save
-  // flow. Optimistically updates the React Query cache so the GM sees
-  // changes immediately, then persists to the DB.
+  // flow. Reads from the live cache so rapid-fire patches (two damage
+  // ticks in the same tick, or a roll + advance close together) build
+  // on each other instead of racing. Optimistically updates the cache,
+  // then persists to the DB.
   const updateOrderCombatant = React.useCallback((combatantKey, patch) => {
-    if (!combatantKey || !campaign?.combat_data?.order) return;
-    const newOrder = campaign.combat_data.order.map(c => {
+    const latest = queryClient.getQueryData(['campaign', campaignId]) || campaign;
+    const latestCombat = latest?.combat_data;
+    if (!combatantKey || !latestCombat?.order) return;
+    const newOrder = latestCombat.order.map(c => {
       const key = c.uniqueId || c.id;
       if (key !== combatantKey) return c;
       return { ...c, ...patch };
     });
-    const newData = { ...campaign.combat_data, order: newOrder };
+    const newData = { ...latestCombat, order: newOrder };
     queryClient.setQueryData(['campaign', campaignId], (old) =>
       old ? { ...old, combat_data: newData } : old
     );
     base44.entities.Campaign
       .update(campaignId, { combat_data: newData })
       .catch(err => console.error('Order update failed:', err));
-  }, [campaign?.combat_data, campaignId, queryClient]);
+  }, [campaign, campaignId, queryClient]);
 
   // Refs that hold the latest `characters` array and the derived
   // `players` list. The death-save / heal helpers below use these so
@@ -1286,7 +1300,7 @@ export default function GMPanel() {
     if (!combatantKey || !campaign?.combat_data?.order) return;
     const target = campaign.combat_data.order.find(c => (c.uniqueId || c.id) === combatantKey);
     if (!target || !target.downed) return;
-    const existing = target.deathSaves || { successes: 0, failures: 0, stabilized: false, dead: false };
+    const existing = target.deathSaves || blankDeathSaves();
     const next = { ...existing };
     if (typeof change.successes === 'number') next.successes = change.successes;
     if (typeof change.failures === 'number') next.failures = change.failures;
@@ -1343,7 +1357,7 @@ export default function GMPanel() {
     if (!combatantKey || !campaign?.combat_data?.order) return;
     const target = campaign.combat_data.order.find(c => (c.uniqueId || c.id) === combatantKey);
     if (!target || !target.downed) return;
-    const existing = target.deathSaves || { successes: 0, failures: 0, stabilized: false, dead: false };
+    const existing = target.deathSaves || blankDeathSaves();
     if (existing.dead || existing.stabilized) return;
     const roll =
       Number.isFinite(providedRoll) && providedRoll >= 1 && providedRoll <= 20
@@ -1361,7 +1375,7 @@ export default function GMPanel() {
       // Back on your feet with 1 HP.
       updateOrderCombatant(combatantKey, {
         downed: false,
-        deathSaves: { successes: 0, failures: 0, stabilized: false, dead: false },
+        deathSaves: blankDeathSaves(),
         hit_points: { ...(target.hit_points || {}), current: 1 },
       });
       // Also persist the 1 HP to the underlying entity so reads are consistent.
@@ -3640,7 +3654,7 @@ export default function GMPanel() {
                       if (delta < 0 && wasDowned && newCurrent > 0) {
                         updateOrderCombatant(targetId, {
                           downed: false,
-                          deathSaves: { successes: 0, failures: 0, stabilized: false, dead: false },
+                          deathSaves: blankDeathSaves(),
                           hit_points: { ...(orderEntry.hit_points || {}), current: newCurrent, max: maxHp },
                         });
                         setActiveConditions(prev => {
@@ -3673,7 +3687,7 @@ export default function GMPanel() {
                         } else {
                           updateOrderCombatant(targetId, {
                             downed: true,
-                            deathSaves: { successes: 0, failures: 0, stabilized: false, dead: false },
+                            deathSaves: blankDeathSaves(),
                             hit_points: { ...(orderEntry.hit_points || {}), current: 0, max: maxHp },
                           });
                           toast.error(`${orderEntry.name} is down!`);
@@ -6749,7 +6763,7 @@ function FallenCard({ combatant }) {
 // Players get a single "Roll Death Save" button. The GM also gets a
 // row of manual overrides for quick NPC resolution.
 function DeathSavePanel({ combatant, isPlayer, isActiveTurn, onRoll, onAdjust, onKill, onShowDramatic }) {
-  const saves = combatant.deathSaves || { successes: 0, failures: 0, stabilized: false, dead: false };
+  const saves = combatant.deathSaves || blankDeathSaves();
   // When it's a downed player's turn, the dramatic DeathSaveWindow takes
   // over the full screen so the inline panel just shows a status line —
   // the GM shouldn't be rolling on the player's behalf from this panel.

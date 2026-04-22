@@ -5,7 +5,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Flame, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { SPICE_BUNDLES, formatSpice } from "@/config/spiceConfig";
 import { getWalletBalance, addSpice } from "@/lib/spiceWallet";
 import { useAuth } from "@/lib/AuthContext";
@@ -84,7 +85,7 @@ export default function BuySpiceDialog({ open, onClose }) {
       <DialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Flame className="w-5 h-5 text-amber-400" />
+            <SpiceIcon size={20} color="#fbbf24" />
             Buy Spice
           </DialogTitle>
           <DialogDescription className="text-slate-400">
@@ -96,7 +97,7 @@ export default function BuySpiceDialog({ open, onClose }) {
           <div>
             <p className="text-[10px] uppercase tracking-widest text-amber-400/70 font-bold">Current Balance</p>
             <p className="text-2xl font-black text-amber-200 flex items-center gap-2">
-              <Flame className="w-5 h-5 text-amber-400" />
+              <SpiceIcon size={20} color="#fbbf24" />
               {formatSpice(wallet?.balance || 0)}
             </p>
           </div>
@@ -125,7 +126,7 @@ export default function BuySpiceDialog({ open, onClose }) {
                   </span>
                 )}
                 <div className="flex items-center gap-2 mb-1">
-                  <Flame className="w-4 h-4 text-amber-400" />
+                  <SpiceIcon size={16} color="#fbbf24" />
                   <span className="text-lg font-black text-amber-200">
                     {formatSpice(bundle.spice)}
                   </span>

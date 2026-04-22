@@ -184,6 +184,24 @@ export async function uploadItem({ creatorId, creatorTier, form }) {
     return { success: false, reason: error.message };
   }
 
+  // Auto-own the listing. Creators shouldn't have to buy their own
+  // work to preview or apply it — a zero-price purchase row keeps
+  // them in the My Collection / ownership queries that are already
+  // keyed off tavern_purchases. Non-fatal: if this fails, the
+  // entitlements helper has a creator_id backstop that recovers it.
+  if (data?.id) {
+    await supabase.from("tavern_purchases").insert({
+      user_id: creatorId,
+      guild_id: null,
+      item_id: data.id,
+      price_paid: 0,
+    }).then(({ error: purchaseErr }) => {
+      if (purchaseErr && !/duplicate|unique/i.test(purchaseErr.message || "")) {
+        console.error("Creator self-grant", purchaseErr);
+      }
+    });
+  }
+
   return { success: true, item: data };
 }
 
