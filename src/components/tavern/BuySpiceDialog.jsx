@@ -59,10 +59,11 @@ export default function BuySpiceDialog({ open, onClose }) {
 
   const goGuild = () => {
     onClose?.();
-    // In-guild users get the management hub; everyone else lands on
-    // the subscription upgrade surface where they can pick the
-    // Guild tier ($34.99 / mo) that founds a new guild.
-    navigate(createPageUrl(inGuild ? "Guild" : "AccountBilling"));
+    // Both in-guild and non-member users land on /Guild — the page
+    // routes itself to GuildHub or GuildJoinCTA depending on
+    // membership, and GuildJoinCTA is the canonical guild
+    // info/benefits surface.
+    navigate(createPageUrl("Guild"));
   };
 
   const goCreator = () => {
@@ -264,11 +265,14 @@ function DomeSlot() {
 /**
  * Left / right column layout.
  *
- *   Desktop (≥ md): circular framed image with a black pill button
- *     stacked below. Matches the mockup arrangement.
- *   Mobile (< md): compact horizontal pill with a small circular
- *     thumbnail on the left and the label text on the right, so the
- *     two CTAs don't eat vertical real estate on a phone.
+ *   Desktop (≥ md): the transparent PNG art floats directly on the
+ *     popup's white surface — no card, no ring, no colored
+ *     background — with a black pill button stacked below. Matches
+ *     the mockup where the CTA visually feels like a sticker on the
+ *     paper rather than its own panel.
+ *   Mobile (< md): compact horizontal pill with a small thumbnail
+ *     on the left and the label text on the right, so the two CTAs
+ *     don't eat vertical real estate on a phone.
  *
  * Both variants share the same click handler + label / art props.
  */
@@ -281,18 +285,23 @@ function CtaColumn({ art, alt, label, onClick }) {
         onClick={onClick}
         className="md:hidden w-full flex items-center gap-3 bg-black text-white rounded-full pl-1.5 pr-5 py-1.5 hover:bg-slate-800 transition-colors"
       >
-        <span className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-amber-100 to-orange-200 flex-shrink-0">
-          <img src={art} alt={alt} className="w-full h-full object-cover" draggable={false} />
+        <span className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+          <img src={art} alt={alt} className="w-full h-full object-contain" draggable={false} />
         </span>
         <span className="font-black uppercase tracking-[0.18em] text-[11px] flex-1 text-left">
           {label}
         </span>
       </button>
 
-      {/* Desktop stacked */}
+      {/* Desktop stacked — fully transparent on the popup's white. */}
       <div className="hidden md:flex flex-col items-center text-center gap-3">
-        <div className="w-[150px] h-[150px] lg:w-[160px] lg:h-[160px] rounded-full overflow-hidden bg-gradient-to-br from-amber-100 to-orange-200 ring-4 ring-white shadow-[0_10px_25px_rgba(0,0,0,0.15)]">
-          <img src={art} alt={alt} className="w-full h-full object-cover" draggable={false} />
+        <div className="w-[150px] h-[150px] lg:w-[170px] lg:h-[170px]">
+          <img
+            src={art}
+            alt={alt}
+            className="w-full h-full object-contain"
+            draggable={false}
+          />
         </div>
         <button
           type="button"
