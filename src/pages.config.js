@@ -7,6 +7,7 @@ import Campaigns from './pages/Campaigns';
 import TheTavern from './pages/TheTavern';
 import MyCollection from './pages/MyCollection';
 import CreatorDashboard from './pages/CreatorDashboard';
+import CreatorProgram from './pages/CreatorProgram';
 import Blog from './pages/Blog';
 import BlogPost from './pages/BlogPost';
 import Changelog from './pages/Changelog';
@@ -80,6 +81,7 @@ export const PAGES = {
     "TheTavern": TheTavern,
     "MyCollection": MyCollection,
     "CreatorDashboard": CreatorDashboard,
+    "CreatorProgram": CreatorProgram,
     "Blog": Blog,
     "BlogPost": BlogPost,
     "Changelog": Changelog,
