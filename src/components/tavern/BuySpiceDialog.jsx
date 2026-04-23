@@ -139,7 +139,9 @@ export default function BuySpiceDialog({ open, onClose }) {
   // The dome's diameter controls how tall the arch is above the
   // rectangle. The rectangle's top padding matches `DOME_SIZE / 2`
   // so the content doesn't collide with the dome's lower half.
-  const DOME_SIZE = 240;
+  // Mobile shrinks the dome so Trinket doesn't eat the viewport.
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const DOME_SIZE = isMobile ? 180 : 240;
 
   // Animated balance toast lives outside the dialog so it survives
   // onClose() — which we fire before setting the toast state in the
@@ -199,32 +201,40 @@ export default function BuySpiceDialog({ open, onClose }) {
             <X className="w-5 h-5" />
           </button>
 
-          <div className="px-6 md:px-10 pb-8">
+          <div className="px-5 md:px-10 pb-6 md:pb-8">
             <DomeSlot />
 
-            {/* Body grid — left CTA, center column (balance beneath
-                Trinket), right CTA. Steps 3-5 replace the placeholders. */}
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-[1fr_1.2fr_1fr] gap-6 items-start">
-              <CtaColumn
-                art={GUILD_ART}
-                alt="Guild signup"
-                label={inGuild ? "GUILD HUB" : "CREATE A GUILD"}
-                onClick={goGuild}
-              />
-              <BalanceBlock balance={wallet?.balance || 0} />
-              <CtaColumn
-                art={CREATOR_ART}
-                alt="Creator program"
-                label={isCreator ? "CREATOR DASHBOARD" : "BECOME A CREATOR"}
-                onClick={goCreator}
-              />
-            </div>
-
-            <div className="mt-6">
-              <PricingRow
-                onPurchase={(bundle) => purchase.mutate(bundle)}
-                disabled={purchase.isPending || !user?.id}
-              />
+            {/* Desktop: three-column grid with CTAs flanking the
+                balance. Mobile: single column where the center
+                balance sits first (under Trinket), then the pricing
+                cards, then the compact CTA buttons — matches the
+                stacked mockup for < 768px. */}
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-[1fr_1.2fr_1fr] gap-4 md:gap-6 items-start">
+              <div className="order-3 md:order-1">
+                <CtaColumn
+                  art={GUILD_ART}
+                  alt="Guild signup"
+                  label={inGuild ? "GUILD HUB" : "CREATE A GUILD"}
+                  onClick={goGuild}
+                />
+              </div>
+              <div className="order-1 md:order-2">
+                <BalanceBlock balance={wallet?.balance || 0} />
+              </div>
+              <div className="order-4 md:order-3">
+                <CtaColumn
+                  art={CREATOR_ART}
+                  alt="Creator program"
+                  label={isCreator ? "CREATOR DASHBOARD" : "BECOME A CREATOR"}
+                  onClick={goCreator}
+                />
+              </div>
+              <div className="order-2 md:order-4 md:col-span-3 md:mt-4">
+                <PricingRow
+                  onPurchase={(bundle) => purchase.mutate(bundle)}
+                  disabled={purchase.isPending || !user?.id}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -242,7 +252,7 @@ export default function BuySpiceDialog({ open, onClose }) {
  */
 function DomeSlot() {
   return (
-    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-[230px] md:-top-[230px] w-[220px] md:w-[240px] h-[240px] md:h-[260px] flex items-end justify-center">
+    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-[170px] md:-top-[230px] w-[170px] md:w-[240px] h-[190px] md:h-[260px] flex items-end justify-center">
       <img
         src={TRINKET_GIF}
         alt="Trinket"
@@ -271,29 +281,47 @@ function BalanceBlock({ balance }) {
 }
 
 /**
- * Left / right column layout — circular framed image with a black
- * pill button stacked below. The CTA label and click handler are
- * supplied by the parent so the same component renders both sides.
+ * Left / right column layout.
+ *
+ *   Desktop (≥ md): circular framed image with a black pill button
+ *     stacked below. Matches the mockup arrangement.
+ *   Mobile (< md): compact horizontal pill with a small circular
+ *     thumbnail on the left and the label text on the right, so the
+ *     two CTAs don't eat vertical real estate on a phone.
+ *
+ * Both variants share the same click handler + label / art props.
  */
 function CtaColumn({ art, alt, label, onClick }) {
   return (
-    <div className="flex flex-col items-center text-center gap-3">
-      <div className="w-[150px] h-[150px] md:w-[160px] md:h-[160px] rounded-full overflow-hidden bg-gradient-to-br from-amber-100 to-orange-200 ring-4 ring-white shadow-[0_10px_25px_rgba(0,0,0,0.15)]">
-        <img
-          src={art}
-          alt={alt}
-          className="w-full h-full object-cover"
-          draggable={false}
-        />
-      </div>
+    <>
+      {/* Mobile compact */}
       <button
         type="button"
         onClick={onClick}
-        className="inline-flex items-center justify-center bg-black text-white font-black uppercase tracking-[0.2em] text-[11px] px-5 py-2.5 rounded-full hover:bg-slate-800 transition-colors"
+        className="md:hidden w-full flex items-center gap-3 bg-black text-white rounded-full pl-1.5 pr-5 py-1.5 hover:bg-slate-800 transition-colors"
       >
-        {label}
+        <span className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-amber-100 to-orange-200 flex-shrink-0">
+          <img src={art} alt={alt} className="w-full h-full object-cover" draggable={false} />
+        </span>
+        <span className="font-black uppercase tracking-[0.18em] text-[11px] flex-1 text-left">
+          {label}
+        </span>
       </button>
-    </div>
+
+      {/* Desktop stacked */}
+      <div className="hidden md:flex flex-col items-center text-center gap-3">
+        <div className="w-[150px] h-[150px] lg:w-[160px] lg:h-[160px] rounded-full overflow-hidden bg-gradient-to-br from-amber-100 to-orange-200 ring-4 ring-white shadow-[0_10px_25px_rgba(0,0,0,0.15)]">
+          <img src={art} alt={alt} className="w-full h-full object-cover" draggable={false} />
+        </div>
+        <button
+          type="button"
+          onClick={onClick}
+          className="inline-flex items-center justify-center bg-black text-white font-black uppercase tracking-[0.2em] text-[11px] px-5 py-2.5 rounded-full hover:bg-slate-800 transition-colors"
+        >
+          {label}
+        </button>
+      </div>
+    </>
   );
 }
 
