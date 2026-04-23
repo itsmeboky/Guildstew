@@ -1,12 +1,16 @@
 import React, { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
 import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { useAuth } from "@/lib/AuthContext";
+import { useSubscription } from "@/lib/SubscriptionContext";
 import { getWalletBalance } from "@/lib/spiceWallet";
 import { formatSpice } from "@/config/spiceConfig";
+import { createPageUrl } from "@/utils";
 
-const TRINKET_GIF = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/TrinketSpiceSignUp.gif";
+const TRINKET_GIF   = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/TrinketSpiceSignUp.gif";
+const GUILD_ART     = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/GuildSignup.png";
 
 /**
  * Buy Spice — custom-shaped popup.
@@ -27,12 +31,24 @@ const TRINKET_GIF = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/
  */
 export default function BuySpiceDialog({ open, onClose }) {
   const { user } = useAuth();
+  const sub = useSubscription();
+  const navigate = useNavigate();
 
   const { data: wallet } = useQuery({
     queryKey: ["spiceWallet", user?.id],
     queryFn: () => getWalletBalance(user.id),
     enabled: !!user?.id && open,
   });
+
+  const inGuild = !!sub?.isGuildMember || !!sub?.isGuildOwner || !!sub?.guildOwnerId;
+
+  const goGuild = () => {
+    onClose?.();
+    // In-guild users get the management hub; everyone else lands on
+    // the subscription upgrade surface where they can pick the
+    // Guild tier ($34.99 / mo) that founds a new guild.
+    navigate(createPageUrl(inGuild ? "Guild" : "AccountBilling"));
+  };
 
   useEffect(() => {
     if (!open) return undefined;
@@ -101,7 +117,12 @@ export default function BuySpiceDialog({ open, onClose }) {
             {/* Body grid — left CTA, center column (balance beneath
                 Trinket), right CTA. Steps 3-5 replace the placeholders. */}
             <div className="mt-6 grid grid-cols-1 md:grid-cols-[1fr_1.2fr_1fr] gap-6 items-start">
-              <LeftCtaSlot />
+              <CtaColumn
+                art={GUILD_ART}
+                alt="Guild signup"
+                label={inGuild ? "GUILD HUB" : "CREATE A GUILD"}
+                onClick={goGuild}
+              />
               <BalanceBlock balance={wallet?.balance || 0} />
               <RightCtaSlot />
             </div>
@@ -152,7 +173,33 @@ function BalanceBlock({ balance }) {
   );
 }
 
-function LeftCtaSlot() { return <div className="hidden md:block" />; }
+/**
+ * Left / right column layout — circular framed image with a black
+ * pill button stacked below. The CTA label and click handler are
+ * supplied by the parent so the same component renders both sides.
+ */
+function CtaColumn({ art, alt, label, onClick }) {
+  return (
+    <div className="flex flex-col items-center text-center gap-3">
+      <div className="w-[150px] h-[150px] md:w-[160px] md:h-[160px] rounded-full overflow-hidden bg-gradient-to-br from-amber-100 to-orange-200 ring-4 ring-white shadow-[0_10px_25px_rgba(0,0,0,0.15)]">
+        <img
+          src={art}
+          alt={alt}
+          className="w-full h-full object-cover"
+          draggable={false}
+        />
+      </div>
+      <button
+        type="button"
+        onClick={onClick}
+        className="inline-flex items-center justify-center bg-black text-white font-black uppercase tracking-[0.2em] text-[11px] px-5 py-2.5 rounded-full hover:bg-slate-800 transition-colors"
+      >
+        {label}
+      </button>
+    </div>
+  );
+}
+
 function RightCtaSlot(){ return <div className="hidden md:block" />; }
 function PricingRowSlot() {
   return (
