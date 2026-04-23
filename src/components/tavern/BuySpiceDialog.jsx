@@ -68,7 +68,12 @@ export default function BuySpiceDialog({ open, onClose }) {
 
   const goCreator = () => {
     onClose?.();
-    navigate(createPageUrl("CreatorDashboard"));
+    // Existing creators (anyone with at least one tavern_items row)
+    // skip the marketing landing page and go straight to their
+    // dashboard. Everyone else lands on /CreatorProgram which
+    // explains the program, the tier economics, and the cashout
+    // floor before sending them into the upload flow.
+    navigate(createPageUrl(isCreator ? "CreatorDashboard" : "CreatorProgram"));
   };
 
   const purchase = useMutation({
