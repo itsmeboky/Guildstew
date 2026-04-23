@@ -144,9 +144,10 @@ export default function BuySpiceDialog({ open, onClose }) {
   // The dome's diameter controls how tall the arch is above the
   // rectangle. The rectangle's top padding matches `DOME_SIZE / 2`
   // so the content doesn't collide with the dome's lower half.
-  // Mobile shrinks the dome so Trinket doesn't eat the viewport.
+  // Mobile (< 768px) shrinks the dome to ~150px so Trinket doesn't
+  // eat the phone viewport with a 5-card grid below her.
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const DOME_SIZE = isMobile ? 180 : 240;
+  const DOME_SIZE = isMobile ? 150 : 240;
 
   if (!open) return null;
 
@@ -247,7 +248,7 @@ export default function BuySpiceDialog({ open, onClose }) {
  */
 function DomeSlot() {
   return (
-    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-[160px] md:-top-[210px] w-[170px] md:w-[240px] h-[190px] md:h-[260px] flex items-end justify-center z-30">
+    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-[140px] md:-top-[210px] w-[150px] md:w-[240px] h-[170px] md:h-[260px] flex items-end justify-center z-30">
       <img
         src={TRINKET_GIF}
         alt="Trinket"
