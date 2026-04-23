@@ -624,8 +624,6 @@ export default function Layout({ children, currentPageName }) {
   return (
     <div className={`min-h-screen ${isWorldLorePage ? 'text-white' : isDarkMode ? 'bg-[#1E2430] text-white' : 'bg-gray-50 text-gray-900'}`}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
-
         .world-lore-expanded .max-w-6xl {
           max-width: 90rem !important;
         }
