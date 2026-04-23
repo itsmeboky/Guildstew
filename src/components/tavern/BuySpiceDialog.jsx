@@ -141,33 +141,37 @@ export default function BuySpiceDialog({ open, onClose }) {
     };
   }, [open, onClose]);
 
-  // The dome's diameter controls how tall the arch is above the
-  // rectangle. The rectangle's top padding matches `DOME_SIZE / 2`
-  // so the content doesn't collide with the dome's lower half.
-  // Mobile (< 768px) shrinks the dome to ~150px so Trinket doesn't
-  // eat the phone viewport with a 5-card grid below her.
+  // Dome dimensions — the white circle sitting on the top-center of
+  // the rectangle behind Trinket. Half of the circle overlaps the
+  // rectangle's top edge (that's the visible "arch"). Guild +
+  // Creator images overflow above the rectangle's flat top on their
+  // respective sides; Trinket overflows HIGHER into the dome.
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const DOME_SIZE = isMobile ? 150 : 240;
+  const DOME_SIZE  = isMobile ? 180 : 260;          // decorative arch width
+  const TOP_ROW_PT = isMobile ? 0   : 140;          // push top grid down from rectangle top
+  const TRINKET_H  = isMobile ? 200 : 280;          // inline height of the GIF
+  const SIDE_IMG   = isMobile ? 120 : 170;          // Guild / Creator image edge
 
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-[9998] flex items-start md:items-center justify-center p-4 md:p-8"
+      className="fixed inset-0 z-[9998] flex items-start md:items-center justify-center p-4 md:p-8 overflow-y-auto"
       style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-4xl"
-        style={{ marginTop: `${DOME_SIZE / 2}px` }}
+        className="relative w-full max-w-5xl"
+        style={{ marginTop: `${DOME_SIZE / 2 + 32}px` }}
       >
-        {/* Dome — the white circle anchored on the top center of the
+        {/* Arch — the white circle anchored on the top center of the
             rectangle. Half of it sits above the rectangle's edge so
-            the combined silhouette reads as an arched top. */}
+            the combined silhouette reads as an arched top; Trinket
+            stands in front of it. */}
         <div
           aria-hidden
-          className="absolute left-1/2 -translate-x-1/2 bg-white shadow-[0_-8px_30px_rgba(0,0,0,0.15)]"
+          className="absolute left-1/2 -translate-x-1/2 bg-white shadow-[0_-8px_30px_rgba(0,0,0,0.15)] z-0"
           style={{
             width: `${DOME_SIZE}px`,
             height: `${DOME_SIZE}px`,
@@ -176,55 +180,97 @@ export default function BuySpiceDialog({ open, onClose }) {
           }}
         />
 
-        {/* Main rectangle — flat bottom with rounded bottom corners,
-            white background. Top padding clears the dome. */}
+        {/* Main rectangle — flat bottom with rounded bottom corners.
+            padding-top leaves room for Guild / Trinket / Creator to
+            extend upward from the top row's baseline. */}
         <div
-          className="relative bg-white rounded-b-[16px] shadow-[0_20px_60px_rgba(0,0,0,0.35)]"
-          style={{ paddingTop: `${DOME_SIZE / 2 + 16}px` }}
+          className="relative bg-white rounded-b-[20px] shadow-[0_20px_60px_rgba(0,0,0,0.35)] z-10"
+          style={{ paddingTop: `${TOP_ROW_PT}px` }}
         >
-          {/* Close button — top-right of the white area, not inside
-              the dome (so it doesn't overlap Trinket). */}
+          {/* Close button — top-right of the rectangle, clear of the
+              dome so it doesn't overlap Trinket. */}
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/5 hover:bg-black/10 text-slate-700 flex items-center justify-center transition-colors"
+            className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/5 hover:bg-black/10 text-slate-700 flex items-center justify-center transition-colors z-40"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
 
           <div className="px-5 md:px-10 pb-6 md:pb-8">
-            <DomeSlot />
+            {/* Top row — three columns on one horizontal line.
+                items-end aligns Guild / Creator buttons to the row's
+                baseline (which is also where the pricing row starts);
+                their images overflow upward via `-mt`. Trinket owns
+                the center column, overflows HIGHER than the flanking
+                images, and the empty space below her feet is where
+                the Best Deal card lifts up to meet her. */}
+            <div className="hidden md:grid grid-cols-[1fr_1.2fr_1fr] gap-6 items-end">
+              <TopColumn
+                art={GUILD_ART}
+                alt="Guild signup"
+                label={inGuild ? "GUILD HUB" : "CREATE A GUILD"}
+                onClick={goGuild}
+                imgSize={SIDE_IMG}
+                imgLift={TOP_ROW_PT - 12}
+              />
+              <div className="flex flex-col items-center" style={{ marginTop: -(TOP_ROW_PT + 40) }}>
+                <img
+                  src={TRINKET_GIF}
+                  alt="Trinket"
+                  draggable={false}
+                  className="relative z-30 drop-shadow-[0_10px_16px_rgba(0,0,0,0.3)]"
+                  style={{ height: `${TRINKET_H}px`, width: "auto" }}
+                />
+              </div>
+              <TopColumn
+                art={CREATOR_ART}
+                alt="Creator program"
+                label={isCreator ? "CREATOR DASHBOARD" : "BECOME A CREATOR"}
+                onClick={goCreator}
+                imgSize={SIDE_IMG}
+                imgLift={TOP_ROW_PT - 12}
+              />
+            </div>
 
-            {/* Desktop: CTAs flank an empty center column so Trinket
-                in the dome reads as floating directly above the
-                pricing row's Best Deal card. Mobile: single column
-                with pricing first, then compact CTA pills. The
-                popup intentionally never shows the user's Spice
-                balance — that's the sidebar's job. */}
-            <div className="mt-6 md:mt-12 grid grid-cols-1 md:grid-cols-[1fr_1.2fr_1fr] gap-4 md:gap-6 items-start">
-              <div className="order-2 md:order-1">
-                <CtaColumn
-                  art={GUILD_ART}
-                  alt="Guild signup"
-                  label={inGuild ? "GUILD HUB" : "CREATE A GUILD"}
-                  onClick={goGuild}
-                />
-              </div>
-              <div className="order-3 md:order-3">
-                <CtaColumn
-                  art={CREATOR_ART}
-                  alt="Creator program"
-                  label={isCreator ? "CREATOR DASHBOARD" : "BECOME A CREATOR"}
-                  onClick={goCreator}
-                />
-              </div>
-              <div className="order-1 md:order-4 md:col-span-3 md:mt-4">
-                <PricingRow
-                  onPurchase={(bundle) => purchase.mutate(bundle)}
-                  disabled={purchase.isPending || !user?.id}
-                />
-              </div>
+            {/* Mobile: Trinket centered on top, CTAs as compact pills
+                below the pricing grid. */}
+            <div className="md:hidden flex flex-col items-center">
+              <img
+                src={TRINKET_GIF}
+                alt="Trinket"
+                draggable={false}
+                className="relative z-30 drop-shadow-[0_8px_12px_rgba(0,0,0,0.3)]"
+                style={{ height: `${TRINKET_H}px`, width: "auto", marginTop: `-${Math.max(DOME_SIZE * 0.45, 60)}px` }}
+              />
+            </div>
+
+            {/* Pricing row. items-end lets the Best Deal card extend
+                upward into the top row so Trinket visually perches on
+                it — cards 1, 2, 4, 5 stay baseline-aligned while
+                card 3 lifts via -mt in PricingCard. */}
+            <div className="mt-3 md:mt-4">
+              <PricingRow
+                onPurchase={(bundle) => purchase.mutate(bundle)}
+                disabled={purchase.isPending || !user?.id}
+              />
+            </div>
+
+            {/* Mobile CTAs appear below the pricing grid. */}
+            <div className="md:hidden mt-4 space-y-2">
+              <CtaColumn
+                art={GUILD_ART}
+                alt="Guild signup"
+                label={inGuild ? "GUILD HUB" : "CREATE A GUILD"}
+                onClick={goGuild}
+              />
+              <CtaColumn
+                art={CREATOR_ART}
+                alt="Creator program"
+                label={isCreator ? "CREATOR DASHBOARD" : "BECOME A CREATOR"}
+                onClick={goCreator}
+              />
             </div>
           </div>
         </div>
@@ -234,81 +280,55 @@ export default function BuySpiceDialog({ open, onClose }) {
 }
 
 /**
- * Dome content — Trinket GIF overlapping the dome silhouette.
- * The GIF is positioned absolutely relative to the main rectangle so
- * its feet rest just inside the dome's lower half; the character
- * reads as peeking out over the arch.
+ * Desktop-only top-row CTA column. The image overflows the
+ * rectangle's top edge by `imgLift` so all three images (Guild,
+ * Trinket, Creator) share one visual horizontal row. Transparent on
+ * the white — no card, no ring, no colored background.
  */
-/**
- * Trinket GIF — perched in the dome directly above the popup's
- * horizontal center, which is where the BEST DEAL card lands in the
- * 5-card row (cards 1-2-3-4-5; card 3 is dead-center). z-30 keeps
- * her above the cards and above the popup's white surface so she
- * appears to "sit" on top of the Best Deal card's raised silhouette.
- */
-function DomeSlot() {
+function TopColumn({ art, alt, label, onClick, imgSize, imgLift }) {
   return (
-    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-[140px] md:-top-[210px] w-[150px] md:w-[240px] h-[170px] md:h-[260px] flex items-end justify-center z-30">
+    <div className="flex flex-col items-center text-center gap-3">
       <img
-        src={TRINKET_GIF}
-        alt="Trinket"
-        className="w-full h-auto object-contain drop-shadow-[0_8px_12px_rgba(0,0,0,0.3)]"
+        src={art}
+        alt={alt}
         draggable={false}
+        className="object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.15)]"
+        style={{
+          width: `${imgSize}px`,
+          height: `${imgSize}px`,
+          marginTop: `-${imgLift}px`,
+        }}
       />
+      <button
+        type="button"
+        onClick={onClick}
+        className="inline-flex items-center justify-center bg-black text-white font-black uppercase tracking-[0.2em] text-[11px] px-5 py-2.5 rounded-full hover:bg-slate-800 transition-colors"
+      >
+        {label}
+      </button>
     </div>
   );
 }
 
 /**
- * Left / right column layout.
- *
- *   Desktop (≥ md): the transparent PNG art floats directly on the
- *     popup's white surface — no card, no ring, no colored
- *     background — with a black pill button stacked below. Matches
- *     the mockup where the CTA visually feels like a sticker on the
- *     paper rather than its own panel.
- *   Mobile (< md): compact horizontal pill with a small thumbnail
- *     on the left and the label text on the right, so the two CTAs
- *     don't eat vertical real estate on a phone.
- *
- * Both variants share the same click handler + label / art props.
+ * Mobile-only compact CTA. Rendered inside md:hidden wrappers; the
+ * desktop flow uses TopColumn instead so the Guild / Trinket /
+ * Creator trio shares one horizontal row.
  */
 function CtaColumn({ art, alt, label, onClick }) {
   return (
-    <>
-      {/* Mobile compact */}
-      <button
-        type="button"
-        onClick={onClick}
-        className="md:hidden w-full flex items-center gap-3 bg-black text-white rounded-full pl-1.5 pr-5 py-1.5 hover:bg-slate-800 transition-colors"
-      >
-        <span className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
-          <img src={art} alt={alt} className="w-full h-full object-contain" draggable={false} />
-        </span>
-        <span className="font-black uppercase tracking-[0.18em] text-[11px] flex-1 text-left">
-          {label}
-        </span>
-      </button>
-
-      {/* Desktop stacked — fully transparent on the popup's white. */}
-      <div className="hidden md:flex flex-col items-center text-center gap-3">
-        <div className="w-[150px] h-[150px] lg:w-[170px] lg:h-[170px]">
-          <img
-            src={art}
-            alt={alt}
-            className="w-full h-full object-contain"
-            draggable={false}
-          />
-        </div>
-        <button
-          type="button"
-          onClick={onClick}
-          className="inline-flex items-center justify-center bg-black text-white font-black uppercase tracking-[0.2em] text-[11px] px-5 py-2.5 rounded-full hover:bg-slate-800 transition-colors"
-        >
-          {label}
-        </button>
-      </div>
-    </>
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full flex items-center gap-3 bg-black text-white rounded-full pl-1.5 pr-5 py-1.5 hover:bg-slate-800 transition-colors"
+    >
+      <span className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+        <img src={art} alt={alt} className="w-full h-full object-contain" draggable={false} />
+      </span>
+      <span className="font-black uppercase tracking-[0.18em] text-[11px] flex-1 text-left">
+        {label}
+      </span>
+    </button>
   );
 }
 
@@ -350,10 +370,13 @@ function PricingCard({ bundle, onPurchase, disabled, extraClass = "" }) {
   const textColor = isBest ? "#1E2430" : "#FFFFFF";
   const buttonBg  = isBest ? "bg-[#1E2430] text-[#37F2D1]" : "bg-white text-[#7C3AED]";
 
+  // BEST DEAL reaches up into the top row so Trinket appears to
+  // stand on it. The lift is md-gated so mobile's 2x2 grid keeps
+  // a clean baseline.
   return (
     <div
-      className={`relative rounded-2xl shadow-[0_10px_24px_rgba(0,0,0,0.12)] transition-transform ${
-        isBest ? "md:-translate-y-8" : ""
+      className={`relative rounded-2xl shadow-[0_10px_24px_rgba(0,0,0,0.12)] transition-transform z-10 ${
+        isBest ? "md:-mt-24 md:pt-8" : ""
       } ${extraClass}`}
       style={{ backgroundColor: baseColor, color: textColor }}
     >
