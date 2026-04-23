@@ -11,6 +11,7 @@ import { createPageUrl } from "@/utils";
 
 const TRINKET_GIF   = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/TrinketSpiceSignUp.gif";
 const GUILD_ART     = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/GuildSignup.png";
+const CREATOR_ART   = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/CreatorProgram.png";
 
 /**
  * Buy Spice — custom-shaped popup.
@@ -40,7 +41,24 @@ export default function BuySpiceDialog({ open, onClose }) {
     enabled: !!user?.id && open,
   });
 
+  // Creator-program CTA pivots on whether the user already has any
+  // Tavern listings. The { head: true, count: 'exact' } shape keeps
+  // the round-trip cheap — we only need the count, not the rows.
+  const { data: listingCount = 0 } = useQuery({
+    queryKey: ["buySpiceListingCount", user?.id],
+    queryFn: async () => {
+      const { supabase } = await import("@/api/supabaseClient");
+      const { count } = await supabase
+        .from("tavern_items")
+        .select("id", { count: "exact", head: true })
+        .eq("creator_id", user.id);
+      return count || 0;
+    },
+    enabled: !!user?.id && open,
+  });
+
   const inGuild = !!sub?.isGuildMember || !!sub?.isGuildOwner || !!sub?.guildOwnerId;
+  const isCreator = listingCount > 0;
 
   const goGuild = () => {
     onClose?.();
@@ -48,6 +66,11 @@ export default function BuySpiceDialog({ open, onClose }) {
     // the subscription upgrade surface where they can pick the
     // Guild tier ($34.99 / mo) that founds a new guild.
     navigate(createPageUrl(inGuild ? "Guild" : "AccountBilling"));
+  };
+
+  const goCreator = () => {
+    onClose?.();
+    navigate(createPageUrl("CreatorDashboard"));
   };
 
   useEffect(() => {
@@ -124,7 +147,12 @@ export default function BuySpiceDialog({ open, onClose }) {
                 onClick={goGuild}
               />
               <BalanceBlock balance={wallet?.balance || 0} />
-              <RightCtaSlot />
+              <CtaColumn
+                art={CREATOR_ART}
+                alt="Creator program"
+                label={isCreator ? "CREATOR DASHBOARD" : "BECOME A CREATOR"}
+                onClick={goCreator}
+              />
             </div>
 
             <div className="mt-6">
@@ -200,7 +228,6 @@ function CtaColumn({ art, alt, label, onClick }) {
   );
 }
 
-function RightCtaSlot(){ return <div className="hidden md:block" />; }
 function PricingRowSlot() {
   return (
     <p className="text-center text-xs text-slate-500 italic">
