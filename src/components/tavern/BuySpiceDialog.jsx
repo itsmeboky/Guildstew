@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -7,6 +7,7 @@ import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { getWalletBalance, addSpice } from "@/lib/spiceWallet";
+import { notifySpicePurchase } from "@/lib/spiceBalanceBus";
 import { formatSpice, SPICE_BUNDLES } from "@/config/spiceConfig";
 import { createPageUrl } from "@/utils";
 
@@ -114,11 +115,16 @@ export default function BuySpiceDialog({ open, onClose }) {
     },
     onSuccess: ({ prevBalance, newBalance }) => {
       queryClient.invalidateQueries({ queryKey: ["spiceWallet", user?.id] });
-      // Close the popup first so the animated toast owns the
-      // attention slot; the counter runs on top of whatever surface
-      // the user was on when they clicked Buy Spice.
+      // Close the popup first so the count-up animation on the
+      // sidebar / Tavern balance widgets owns the attention. The
+      // tiny sonner toast just confirms the purchase succeeded —
+      // the actual balance change is shown by the animated counters
+      // wherever a balance is rendered.
       onClose?.();
-      setBalanceToast({ from: prevBalance, to: newBalance });
+      notifySpicePurchase({ from: prevBalance, to: newBalance });
+      toast.success("Purchase complete!", {
+        description: `+${formatSpice(newBalance - prevBalance)} Spice added to your wallet.`,
+      });
     },
     onError: (err) => toast.error(err?.message || "Purchase failed."),
   });
@@ -142,23 +148,9 @@ export default function BuySpiceDialog({ open, onClose }) {
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
   const DOME_SIZE = isMobile ? 180 : 240;
 
-  // Animated balance toast lives outside the dialog so it survives
-  // onClose() — which we fire before setting the toast state in the
-  // purchase success handler. Early-return below short-circuits the
-  // dialog itself but keeps the toast mounted until it self-dismisses.
-  const toastEl = balanceToast ? (
-    <SpiceBalanceToast
-      from={balanceToast.from}
-      to={balanceToast.to}
-      onDone={() => setBalanceToast(null)}
-    />
-  ) : null;
-
-  if (!open) return toastEl;
+  if (!open) return null;
 
   return (
-    <>
-      {toastEl}
     <div
       className="fixed inset-0 z-[9998] flex items-start md:items-center justify-center p-4 md:p-8"
       style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
@@ -237,7 +229,6 @@ export default function BuySpiceDialog({ open, onClose }) {
         </div>
       </div>
     </div>
-    </>
   );
 }
 
