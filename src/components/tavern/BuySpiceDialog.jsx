@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import SpiceIcon from "@/components/tavern/SpiceIcon";
-import SpiceBalanceToast from "@/components/tavern/SpiceBalanceToast";
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { getWalletBalance, addSpice } from "@/lib/spiceWallet";
@@ -37,17 +36,11 @@ export default function BuySpiceDialog({ open, onClose }) {
   const sub = useSubscription();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [balanceToast, setBalanceToast] = useState(null); // { from, to }
-
-  const { data: wallet } = useQuery({
-    queryKey: ["spiceWallet", user?.id],
-    queryFn: () => getWalletBalance(user.id),
-    enabled: !!user?.id && open,
-  });
 
   // Creator-program CTA pivots on whether the user already has any
-  // Tavern listings. The { head: true, count: 'exact' } shape keeps
-  // the round-trip cheap — we only need the count, not the rows.
+  // tavern_items rows. The popup itself does NOT show the user's
+  // current Spice balance — that lives on the sidebar / Tavern page
+  // and animates after a successful purchase (see step 8).
   const { data: listingCount = 0 } = useQuery({
     queryKey: ["buySpiceListingCount", user?.id],
     queryFn: async () => {
@@ -204,13 +197,14 @@ export default function BuySpiceDialog({ open, onClose }) {
           <div className="px-5 md:px-10 pb-6 md:pb-8">
             <DomeSlot />
 
-            {/* Desktop: three-column grid with CTAs flanking the
-                balance. Mobile: single column where the center
-                balance sits first (under Trinket), then the pricing
-                cards, then the compact CTA buttons — matches the
-                stacked mockup for < 768px. */}
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-[1fr_1.2fr_1fr] gap-4 md:gap-6 items-start">
-              <div className="order-3 md:order-1">
+            {/* Desktop: CTAs flank an empty center column so Trinket
+                in the dome reads as floating directly above the
+                pricing row's Best Deal card. Mobile: single column
+                with pricing first, then compact CTA pills. The
+                popup intentionally never shows the user's Spice
+                balance — that's the sidebar's job. */}
+            <div className="mt-6 md:mt-12 grid grid-cols-1 md:grid-cols-[1fr_1.2fr_1fr] gap-4 md:gap-6 items-start">
+              <div className="order-2 md:order-1">
                 <CtaColumn
                   art={GUILD_ART}
                   alt="Guild signup"
@@ -218,10 +212,7 @@ export default function BuySpiceDialog({ open, onClose }) {
                   onClick={goGuild}
                 />
               </div>
-              <div className="order-1 md:order-2">
-                <BalanceBlock balance={wallet?.balance || 0} />
-              </div>
-              <div className="order-4 md:order-3">
+              <div className="order-3 md:order-3">
                 <CtaColumn
                   art={CREATOR_ART}
                   alt="Creator program"
@@ -229,7 +220,7 @@ export default function BuySpiceDialog({ open, onClose }) {
                   onClick={goCreator}
                 />
               </div>
-              <div className="order-2 md:order-4 md:col-span-3 md:mt-4">
+              <div className="order-1 md:order-4 md:col-span-3 md:mt-4">
                 <PricingRow
                   onPurchase={(bundle) => purchase.mutate(bundle)}
                   disabled={purchase.isPending || !user?.id}
@@ -259,23 +250,6 @@ function DomeSlot() {
         className="w-full h-auto object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.25)]"
         draggable={false}
       />
-    </div>
-  );
-}
-
-function BalanceBlock({ balance }) {
-  return (
-    <div className="flex flex-col items-center text-center gap-1">
-      <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500 font-bold">
-        Your Spice
-      </p>
-      <p className="text-3xl font-black text-slate-900 flex items-center gap-2">
-        <SpiceIcon size={28} color="#b45309" />
-        {formatSpice(balance)}
-      </p>
-      <p className="text-[11px] text-slate-500">
-        Never expires · spend on Tavern cosmetics
-      </p>
     </div>
   );
 }
