@@ -133,11 +133,11 @@ export default function BuySpiceDialog({ open, onClose }) {
   // Creator images overflow above the rectangle's flat top on their
   // respective sides; Trinket overflows HIGHER into the dome.
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const DOME_SIZE  = isMobile ? 180 : 320;          // decorative arch, scaled with Trinket
+  const DOME_SIZE  = isMobile ? 180 : 260;          // decorative arch — reverted to pre-bump size
   const TOP_ROW_PT = isMobile ? 0   : 180;          // top row padding — images overflow above
-  const TRINKET_H  = isMobile ? 240 : 336;          // GIF height (+20%)
+  const TRINKET_H  = isMobile ? 240 : 586;          // GIF height (+250px on desktop)
   const SIDE_IMG   = isMobile ? 240 : 400;          // Guild / Creator image ~400px desktop
-  const SIDE_IMG_LIFT = isMobile ? 0 : TOP_ROW_PT + 40; // how far the image overflows rectangle top
+  const SIDE_IMG_LIFT = isMobile ? 0 : TOP_ROW_PT - 40; // CTA images sit 80px lower than before
 
   if (!open) return null;
 
@@ -202,7 +202,7 @@ export default function BuySpiceDialog({ open, onClose }) {
                 imgSize={SIDE_IMG}
                 imgLift={SIDE_IMG_LIFT}
               />
-              <div className="flex flex-col items-center" style={{ marginTop: -(TOP_ROW_PT + 280) }}>
+              <div className="flex flex-col items-center" style={{ marginTop: -(TOP_ROW_PT + 360) }}>
                 <img
                   src={TRINKET_GIF}
                   alt="Trinket"
@@ -229,7 +229,7 @@ export default function BuySpiceDialog({ open, onClose }) {
                 alt="Trinket"
                 draggable={false}
                 className="relative drop-shadow-[0_8px_12px_rgba(0,0,0,0.3)]"
-                style={{ height: `${TRINKET_H}px`, width: "auto", marginTop: `-${Math.max(DOME_SIZE * 0.45, 60) + 120}px`, zIndex: 5 }}
+                style={{ height: `${TRINKET_H}px`, width: "auto", marginTop: `-${Math.max(DOME_SIZE * 0.45, 60) + 200}px`, zIndex: 5 }}
               />
             </div>
 
