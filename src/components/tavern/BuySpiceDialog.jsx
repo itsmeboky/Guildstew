@@ -1,11 +1,13 @@
-import React, { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useEffect, useState } from "react";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { X } from "lucide-react";
 import SpiceIcon from "@/components/tavern/SpiceIcon";
+import SpiceBalanceToast from "@/components/tavern/SpiceBalanceToast";
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
-import { getWalletBalance } from "@/lib/spiceWallet";
+import { getWalletBalance, addSpice } from "@/lib/spiceWallet";
 import { formatSpice, SPICE_BUNDLES } from "@/config/spiceConfig";
 import { createPageUrl } from "@/utils";
 
@@ -34,6 +36,8 @@ export default function BuySpiceDialog({ open, onClose }) {
   const { user } = useAuth();
   const sub = useSubscription();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [balanceToast, setBalanceToast] = useState(null); // { from, to }
 
   const { data: wallet } = useQuery({
     queryKey: ["spiceWallet", user?.id],
@@ -73,6 +77,53 @@ export default function BuySpiceDialog({ open, onClose }) {
     navigate(createPageUrl("CreatorDashboard"));
   };
 
+  const purchase = useMutation({
+    mutationFn: async (bundle) => {
+      if (!user?.id) throw new Error("Sign in to purchase Spice.");
+
+      // TODO(stripe): swap this simulated credit for a real Stripe
+      // Checkout session once the billing Edge Function is live:
+      //   1. POST { bundleId } to the billing function
+      //   2. redirect to the returned checkout URL
+      //   3. webhook credits Spice + logs the purchase
+      // Until then we credit locally so the rest of the Tavern loop
+      // (spending, earning, cashouts) is exercisable end-to-end.
+      const prevBalance = Number(await getWalletBalance(user.id)) || 0;
+      const newBalance = await addSpice(
+        user.id,
+        bundle.spice,
+        "purchase",
+        `Purchased ${bundle.label} ($${bundle.price.toFixed(2)})`,
+      );
+
+      // lifetime_purchased is analytics-only — non-fatal if the
+      // column write fails.
+      try {
+        const { supabase } = await import("@/api/supabaseClient");
+        const { data: current } = await supabase
+          .from("spice_wallets")
+          .select("lifetime_purchased")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        await supabase
+          .from("spice_wallets")
+          .update({ lifetime_purchased: (current?.lifetime_purchased || 0) + bundle.spice })
+          .eq("user_id", user.id);
+      } catch { /* ignore */ }
+
+      return { prevBalance, newBalance };
+    },
+    onSuccess: ({ prevBalance, newBalance }) => {
+      queryClient.invalidateQueries({ queryKey: ["spiceWallet", user?.id] });
+      // Close the popup first so the animated toast owns the
+      // attention slot; the counter runs on top of whatever surface
+      // the user was on when they clicked Buy Spice.
+      onClose?.();
+      setBalanceToast({ from: prevBalance, to: newBalance });
+    },
+    onError: (err) => toast.error(err?.message || "Purchase failed."),
+  });
+
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
@@ -85,14 +136,28 @@ export default function BuySpiceDialog({ open, onClose }) {
     };
   }, [open, onClose]);
 
-  if (!open) return null;
-
   // The dome's diameter controls how tall the arch is above the
   // rectangle. The rectangle's top padding matches `DOME_SIZE / 2`
   // so the content doesn't collide with the dome's lower half.
   const DOME_SIZE = 240;
 
+  // Animated balance toast lives outside the dialog so it survives
+  // onClose() — which we fire before setting the toast state in the
+  // purchase success handler. Early-return below short-circuits the
+  // dialog itself but keeps the toast mounted until it self-dismisses.
+  const toastEl = balanceToast ? (
+    <SpiceBalanceToast
+      from={balanceToast.from}
+      to={balanceToast.to}
+      onDone={() => setBalanceToast(null)}
+    />
+  ) : null;
+
+  if (!open) return toastEl;
+
   return (
+    <>
+      {toastEl}
     <div
       className="fixed inset-0 z-[9998] flex items-start md:items-center justify-center p-4 md:p-8"
       style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
@@ -156,12 +221,16 @@ export default function BuySpiceDialog({ open, onClose }) {
             </div>
 
             <div className="mt-6">
-              <PricingRow onPurchase={(bundle) => { /* step 6 */ }} />
+              <PricingRow
+                onPurchase={(bundle) => purchase.mutate(bundle)}
+                disabled={purchase.isPending || !user?.id}
+              />
             </div>
           </div>
         </div>
       </div>
     </div>
+    </>
   );
 }
 
@@ -233,17 +302,22 @@ function CtaColumn({ art, alt, label, onClick }) {
  * "Best Deal" tile (which is taller) aligns to the same baseline
  * as the other three and overflows upward.
  */
-function PricingRow({ onPurchase }) {
+function PricingRow({ onPurchase, disabled }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 items-end">
       {SPICE_BUNDLES.map((b) => (
-        <PricingCard key={b.id} bundle={b} onPurchase={() => onPurchase?.(b)} />
+        <PricingCard
+          key={b.id}
+          bundle={b}
+          disabled={disabled}
+          onPurchase={() => onPurchase?.(b)}
+        />
       ))}
     </div>
   );
 }
 
-function PricingCard({ bundle, onPurchase }) {
+function PricingCard({ bundle, onPurchase, disabled }) {
   const isBest = !!bundle.best_deal;
   const baseColor = isBest ? "#37F2D1" : "#7C3AED";
   const textColor = isBest ? "#050816" : "#FFFFFF";
@@ -283,9 +357,10 @@ function PricingCard({ bundle, onPurchase }) {
         <button
           type="button"
           onClick={onPurchase}
-          className={`mt-4 w-full text-[11px] font-black uppercase tracking-[0.18em] rounded-full py-2 ${buttonBg} hover:brightness-110 transition-all`}
+          disabled={disabled}
+          className={`mt-4 w-full text-[11px] font-black uppercase tracking-[0.18em] rounded-full py-2 ${buttonBg} hover:brightness-110 transition-all disabled:opacity-60 disabled:cursor-not-allowed`}
         >
-          Purchase
+          {disabled ? "Processing…" : "Purchase"}
         </button>
       </div>
     </div>
