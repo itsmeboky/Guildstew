@@ -1,6 +1,7 @@
 import { supabase } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { addSpice, spendSpice, spendGuildSpice } from "@/lib/spiceWallet";
+import { recordCreatorSale, grantPioneerIfEligible } from "@/lib/creatorMilestones";
 import { applyDiscount, calculateCreatorEarning, UPLOAD_FEES } from "@/config/spiceConfig";
 
 /**
@@ -115,6 +116,9 @@ export async function purchaseItem({ item, buyerUserId, buyerTier, guildId = nul
         item.id,
       ).catch(() => { /* non-fatal — sale still counts */ });
     }
+    // Bump the creator's lifetime sale count + award any newly-
+    // crossed milestone badges. Non-fatal; logs on failure.
+    await recordCreatorSale(item.creator_id);
   }
 
   // Record ownership. If the DB rejects (duplicate row from a
@@ -200,6 +204,10 @@ export async function uploadItem({ creatorId, creatorTier, form }) {
         console.error("Creator self-grant", purchaseErr);
       }
     });
+    // First-listing moment: check if the creator slot under the
+    // 100-unique-creators cap is still open and flag
+    // is_pioneer_creator. Non-fatal; logs on failure.
+    await grantPioneerIfEligible(creatorId);
   }
 
   return { success: true, item: data };

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
@@ -16,6 +16,7 @@ import { CREAM } from "@/pages/Forums";
 import {
   formatSpice, UPLOAD_FEES, CREATOR_SPLITS, MIN_CASHOUT, MIN_ITEM_PRICE,
 } from "@/config/spiceConfig";
+import { ensureReferralCode } from "@/lib/creatorMilestones";
 
 /**
  * /CreatorProgram — marketing landing page for the Tavern creator
@@ -125,6 +126,16 @@ export default function CreatorProgram() {
     enabled: !!user?.id,
   });
   const isCreator = listingCount > 0;
+
+  // Any signed-in visitor to this page gets a referral code
+  // assigned if they don't already have one, so the "invite
+  // another creator" bonus in the community section has something
+  // to dangle. Non-fatal; silent on failure.
+  useEffect(() => {
+    if (user?.id) {
+      ensureReferralCode(user.id).catch(() => { /* non-fatal */ });
+    }
+  }, [user?.id]);
 
   const startCreating = () => {
     navigate(createPageUrl(isCreator ? "CreatorDashboard" : "TheTavern"));
