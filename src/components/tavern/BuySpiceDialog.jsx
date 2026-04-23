@@ -133,10 +133,11 @@ export default function BuySpiceDialog({ open, onClose }) {
   // Creator images overflow above the rectangle's flat top on their
   // respective sides; Trinket overflows HIGHER into the dome.
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const DOME_SIZE  = isMobile ? 180 : 260;          // decorative arch width
-  const TOP_ROW_PT = isMobile ? 0   : 140;          // push top grid down from rectangle top
-  const TRINKET_H  = isMobile ? 200 : 280;          // inline height of the GIF
-  const SIDE_IMG   = isMobile ? 144 : 204;          // Guild / Creator image edge (+20%)
+  const DOME_SIZE  = isMobile ? 180 : 320;          // decorative arch, scaled with Trinket
+  const TOP_ROW_PT = isMobile ? 0   : 180;          // top row padding — images overflow above
+  const TRINKET_H  = isMobile ? 240 : 336;          // GIF height (+20%)
+  const SIDE_IMG   = isMobile ? 240 : 400;          // Guild / Creator image ~400px desktop
+  const SIDE_IMG_LIFT = isMobile ? 0 : TOP_ROW_PT + 40; // how far the image overflows rectangle top
 
   if (!open) return null;
 
@@ -148,7 +149,7 @@ export default function BuySpiceDialog({ open, onClose }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-5xl"
+        className="relative w-full max-w-7xl"
         style={{ marginTop: `${DOME_SIZE / 2 + 32}px` }}
       >
         {/* Arch — the white circle anchored on the top center of the
@@ -192,16 +193,16 @@ export default function BuySpiceDialog({ open, onClose }) {
                 the center column, overflows HIGHER than the flanking
                 images, and the empty space below her feet is where
                 the Best Deal card lifts up to meet her. */}
-            <div className="hidden md:grid grid-cols-[1fr_1.2fr_1fr] gap-6 items-end">
+            <div className="hidden md:grid grid-cols-[1fr_0.55fr_1fr] gap-6 items-end">
               <TopColumn
                 art={GUILD_ART}
                 alt="Guild signup"
                 label={inGuild ? "GUILD HUB" : "CREATE A GUILD"}
                 onClick={goGuild}
                 imgSize={SIDE_IMG}
-                imgLift={TOP_ROW_PT - 12}
+                imgLift={SIDE_IMG_LIFT}
               />
-              <div className="flex flex-col items-center" style={{ marginTop: -(TOP_ROW_PT + 120) }}>
+              <div className="flex flex-col items-center" style={{ marginTop: -(TOP_ROW_PT + 280) }}>
                 <img
                   src={TRINKET_GIF}
                   alt="Trinket"
@@ -216,7 +217,7 @@ export default function BuySpiceDialog({ open, onClose }) {
                 label="BECOME A CREATOR"
                 onClick={goCreator}
                 imgSize={SIDE_IMG}
-                imgLift={TOP_ROW_PT - 12}
+                imgLift={SIDE_IMG_LIFT}
               />
             </div>
 
@@ -228,7 +229,7 @@ export default function BuySpiceDialog({ open, onClose }) {
                 alt="Trinket"
                 draggable={false}
                 className="relative drop-shadow-[0_8px_12px_rgba(0,0,0,0.3)]"
-                style={{ height: `${TRINKET_H}px`, width: "auto", marginTop: `-${Math.max(DOME_SIZE * 0.45, 60) + 80}px`, zIndex: 5 }}
+                style={{ height: `${TRINKET_H}px`, width: "auto", marginTop: `-${Math.max(DOME_SIZE * 0.45, 60) + 120}px`, zIndex: 5 }}
               />
             </div>
 
