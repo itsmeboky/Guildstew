@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { X } from "lucide-react";
@@ -39,24 +39,10 @@ export default function BuySpiceDialog({ open, onClose }) {
   const queryClient = useQueryClient();
 
   // Creator-program CTA pivots on whether the user already has any
-  // tavern_items rows. The popup itself does NOT show the user's
-  // current Spice balance — that lives on the sidebar / Tavern page
-  // and animates after a successful purchase (see step 8).
-  const { data: listingCount = 0 } = useQuery({
-    queryKey: ["buySpiceListingCount", user?.id],
-    queryFn: async () => {
-      const { supabase } = await import("@/api/supabaseClient");
-      const { count } = await supabase
-        .from("tavern_items")
-        .select("id", { count: "exact", head: true })
-        .eq("creator_id", user.id);
-      return count || 0;
-    },
-    enabled: !!user?.id && open,
-  });
-
+  // The popup itself does NOT show the user's current Spice balance
+  // — that lives on the sidebar / Tavern page and animates after a
+  // successful purchase.
   const inGuild = !!sub?.isGuildMember || !!sub?.isGuildOwner || !!sub?.guildOwnerId;
-  const isCreator = listingCount > 0;
 
   const goGuild = () => {
     onClose?.();
@@ -69,13 +55,12 @@ export default function BuySpiceDialog({ open, onClose }) {
 
   const goCreator = () => {
     onClose?.();
-    // Policy: the Creator button on the Buy Spice popup NEVER
-    // jumps straight into the upload flow. New creators see the
-    // /CreatorProgram marketing page first (benefits, tier
-    // economics, launch incentives, milestones). Existing creators
-    // — anyone with at least one tavern_items row — skip the
-    // landing and go straight to the dashboard.
-    navigate(createPageUrl(isCreator ? "CreatorDashboard" : "CreatorProgram"));
+    // Always route to /CreatorProgram — the popup button is a
+    // pure marketing funnel, not a router to the creator's own
+    // dashboard. Returning creators still see their dashboard via
+    // /CreatorProgram's hero CTA (which swaps to "Open Creator
+    // Dashboard" once listingCount > 0).
+    navigate(createPageUrl("CreatorProgram"));
   };
 
   const purchase = useMutation({
@@ -151,7 +136,7 @@ export default function BuySpiceDialog({ open, onClose }) {
   const DOME_SIZE  = isMobile ? 180 : 260;          // decorative arch width
   const TOP_ROW_PT = isMobile ? 0   : 140;          // push top grid down from rectangle top
   const TRINKET_H  = isMobile ? 200 : 280;          // inline height of the GIF
-  const SIDE_IMG   = isMobile ? 120 : 170;          // Guild / Creator image edge
+  const SIDE_IMG   = isMobile ? 144 : 204;          // Guild / Creator image edge (+20%)
 
   if (!open) return null;
 
@@ -216,19 +201,19 @@ export default function BuySpiceDialog({ open, onClose }) {
                 imgSize={SIDE_IMG}
                 imgLift={TOP_ROW_PT - 12}
               />
-              <div className="flex flex-col items-center" style={{ marginTop: -(TOP_ROW_PT + 40) }}>
+              <div className="flex flex-col items-center" style={{ marginTop: -(TOP_ROW_PT + 120) }}>
                 <img
                   src={TRINKET_GIF}
                   alt="Trinket"
                   draggable={false}
-                  className="relative z-30 drop-shadow-[0_10px_16px_rgba(0,0,0,0.3)]"
-                  style={{ height: `${TRINKET_H}px`, width: "auto" }}
+                  className="relative drop-shadow-[0_10px_16px_rgba(0,0,0,0.3)]"
+                  style={{ height: `${TRINKET_H}px`, width: "auto", zIndex: 5 }}
                 />
               </div>
               <TopColumn
                 art={CREATOR_ART}
                 alt="Creator program"
-                label={isCreator ? "CREATOR DASHBOARD" : "BECOME A CREATOR"}
+                label="BECOME A CREATOR"
                 onClick={goCreator}
                 imgSize={SIDE_IMG}
                 imgLift={TOP_ROW_PT - 12}
@@ -242,8 +227,8 @@ export default function BuySpiceDialog({ open, onClose }) {
                 src={TRINKET_GIF}
                 alt="Trinket"
                 draggable={false}
-                className="relative z-30 drop-shadow-[0_8px_12px_rgba(0,0,0,0.3)]"
-                style={{ height: `${TRINKET_H}px`, width: "auto", marginTop: `-${Math.max(DOME_SIZE * 0.45, 60)}px` }}
+                className="relative drop-shadow-[0_8px_12px_rgba(0,0,0,0.3)]"
+                style={{ height: `${TRINKET_H}px`, width: "auto", marginTop: `-${Math.max(DOME_SIZE * 0.45, 60) + 80}px`, zIndex: 5 }}
               />
             </div>
 
@@ -269,7 +254,7 @@ export default function BuySpiceDialog({ open, onClose }) {
               <CtaColumn
                 art={CREATOR_ART}
                 alt="Creator program"
-                label={isCreator ? "CREATOR DASHBOARD" : "BECOME A CREATOR"}
+                label="BECOME A CREATOR"
                 onClick={goCreator}
               />
             </div>
@@ -367,49 +352,89 @@ function PricingRow({ onPurchase, disabled }) {
 
 function PricingCard({ bundle, onPurchase, disabled, extraClass = "" }) {
   const isBest = !!bundle.best_deal;
-  const baseColor = isBest ? "#37F2D1" : "#7C3AED";
   const textColor = isBest ? "#1E2430" : "#FFFFFF";
-  const buttonBg  = isBest ? "bg-[#1E2430] text-[#37F2D1]" : "bg-white text-[#7C3AED]";
 
-  // BEST DEAL reaches up into the top row so Trinket appears to
-  // stand on it. The lift is md-gated so mobile's 2x2 grid keeps
-  // a clean baseline.
+  // Gradient + shadow palette. Purple cards use violet top →
+  // darker violet bottom; Best Deal uses the brand teal gradient.
+  // White inner border gives a subtle glow inside the rounded
+  // shape so the cards don't read as flat.
+  const background = isBest
+    ? "linear-gradient(180deg, #37F2D1, #2DD4BF)"
+    : "linear-gradient(180deg, #8B5CF6, #6D28D9)";
+
+  // Purchase button: contrast surface matching the card gradient.
+  // Hover states managed via Tailwind `group-hover:` on the parent
+  // so the button also animates when the card is hovered.
+  const btnBase  = isBest
+    ? "bg-[#1E2430] text-[#37F2D1] hover:bg-black"
+    : "bg-white text-[#6D28D9] hover:bg-slate-100";
+
+  // Best Deal reaches up into the top row so Trinket appears to
+  // stand behind it (z-10 vs Trinket's z-5). Lift is md-gated so
+  // mobile's 2x2 grid keeps a clean baseline.
   return (
     <div
-      className={`relative rounded-2xl shadow-[0_10px_24px_rgba(0,0,0,0.12)] transition-transform z-10 ${
-        isBest ? "md:-mt-24 md:pt-8" : ""
+      className={`group relative rounded-[16px] transition-all duration-200 ease-out hover:scale-105 ${
+        isBest ? "md:-mt-24 md:pt-4" : ""
       } ${extraClass}`}
-      style={{ backgroundColor: baseColor, color: textColor }}
+      style={{
+        background,
+        color: textColor,
+        border: "1px solid rgba(255,255,255,0.2)",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+        zIndex: isBest ? 10 : 1,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = "0 8px 30px rgba(0,0,0,0.25)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.15)";
+      }}
     >
       {isBest && (
-        <span className="absolute left-1/2 -translate-x-1/2 -top-3 inline-block text-[10px] font-black uppercase tracking-[0.25em] px-3 py-1 rounded-full bg-black text-[#37F2D1] shadow">
+        <span className="absolute left-1/2 -translate-x-1/2 -top-3 inline-block text-[10px] font-black uppercase tracking-[0.25em] px-3 py-1 rounded-full bg-black text-[#37F2D1] shadow-lg">
           Best Deal
         </span>
       )}
-      <div className={`px-4 pt-5 pb-4 flex flex-col items-center text-center ${isBest ? "pt-7 pb-6" : ""}`}>
+
+      <div className={`px-4 pt-5 pb-4 flex flex-col items-center text-center ${isBest ? "pt-8 pb-6" : ""}`}>
+        {/* Price headline */}
         <p className={`font-black leading-none ${isBest ? "text-4xl" : "text-3xl"}`}>
           ${bundle.price.toFixed(2)}
         </p>
-        <div className={`mt-3 inline-flex items-center gap-1.5 font-black ${isBest ? "text-2xl" : "text-xl"}`}>
-          <SpiceIcon size={isBest ? 22 : 20} color={textColor} />
-          {formatSpice(bundle.spice)}
+
+        {/* Label between price and amount — makes it obvious that
+            the number below is Spice, not currency or quantity. */}
+        <div
+          className="mt-3 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.25em]"
+          style={{ opacity: 0.8 }}
+        >
+          <SpiceIcon size={12} color={textColor} />
+          Spice
         </div>
+
+        {/* Spice amount — the big number */}
+        <p className={`font-black leading-none mt-1 ${isBest ? "text-3xl" : "text-2xl"}`}>
+          {formatSpice(bundle.spice)}
+        </p>
+
         {bundle.bonus > 0 && (
           <span
-            className="mt-2 inline-block text-[10px] font-black uppercase tracking-widest rounded-full px-2 py-0.5"
+            className="mt-3 inline-block text-[10px] font-black uppercase tracking-widest rounded-full px-2.5 py-1"
             style={{
-              backgroundColor: isBest ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.15)",
+              backgroundColor: isBest ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.2)",
               color: textColor,
             }}
           >
-            +{formatSpice(bundle.bonus)} bonus
+            +{formatSpice(bundle.bonus)} Bonus
           </span>
         )}
+
         <button
           type="button"
           onClick={onPurchase}
           disabled={disabled}
-          className={`mt-4 w-full text-[11px] font-black uppercase tracking-[0.18em] rounded-full py-2 ${buttonBg} hover:brightness-110 transition-all disabled:opacity-60 disabled:cursor-not-allowed`}
+          className={`mt-4 w-full text-[11px] font-black uppercase tracking-[0.18em] rounded-full py-2 transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed ${btnBase}`}
         >
           {disabled ? "Processing…" : "Purchase"}
         </button>
