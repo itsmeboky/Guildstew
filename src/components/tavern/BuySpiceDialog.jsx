@@ -1,60 +1,104 @@
-import React, { useState } from "react";
+import React, { useEffect } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Sparkles } from "lucide-react";
+import { X } from "lucide-react";
 import SpiceIcon from "@/components/tavern/SpiceIcon";
-import { SPICE_BUNDLES, formatSpice } from "@/config/spiceConfig";
-import { getWalletBalance, addSpice } from "@/lib/spiceWallet";
 import { useAuth } from "@/lib/AuthContext";
+import { useSubscription } from "@/lib/SubscriptionContext";
+import { getWalletBalance, addSpice } from "@/lib/spiceWallet";
+import { notifySpicePurchase } from "@/lib/spiceBalanceBus";
+import { formatSpice, SPICE_BUNDLES } from "@/config/spiceConfig";
+import { createPageUrl } from "@/utils";
+
+const TRINKET_GIF   = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/TrinketSpiceSignUp.gif";
+const GUILD_ART     = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/GuildSignup.png";
+const CREATOR_ART   = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/CreatorProgram.png";
 
 /**
- * Tavern → Buy Spice.
+ * Buy Spice — custom-shaped popup.
  *
- * Bundle picker + Stripe Checkout handoff. The real Stripe call lands
- * in the billing Edge Function (same pattern the subscription flow
- * uses); until that endpoint exists this dialog simulates the
- * purchase by crediting the wallet directly when the user hits
- * Purchase. The credit path is still the real one — `addSpice()`
- * writes to the ledger — so everything downstream of the purchase
- * works now and only the Stripe hop needs swapping in later.
+ * Replaces the shadcn Dialog with a bespoke overlay + arched container
+ * so the center dome and asymmetric layout match the mockup. The
+ * popup itself is structured as two stacked whites: a rectangle for
+ * the main body with rounded bottom corners, and a circle perched on
+ * the top edge (offset upward so it reads as a dome). Trinket's GIF
+ * will sit inside that dome in Step 2; the left / right CTAs and the
+ * pricing row land in subsequent steps.
+ *
+ * Accessibility:
+ *   - Escape closes
+ *   - click on the backdrop closes
+ *   - scroll on <body> is locked while open so the overlay can't be
+ *     scrolled past
  */
 export default function BuySpiceDialog({ open, onClose }) {
   const { user } = useAuth();
+  const sub = useSubscription();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [selectedId, setSelectedId] = useState(SPICE_BUNDLES[2].id);
 
-  const { data: wallet } = useQuery({
-    queryKey: ["spiceWallet", user?.id],
-    queryFn: () => getWalletBalance(user.id),
+  // Creator-program CTA pivots on whether the user already has any
+  // tavern_items rows. The popup itself does NOT show the user's
+  // current Spice balance — that lives on the sidebar / Tavern page
+  // and animates after a successful purchase (see step 8).
+  const { data: listingCount = 0 } = useQuery({
+    queryKey: ["buySpiceListingCount", user?.id],
+    queryFn: async () => {
+      const { supabase } = await import("@/api/supabaseClient");
+      const { count } = await supabase
+        .from("tavern_items")
+        .select("id", { count: "exact", head: true })
+        .eq("creator_id", user.id);
+      return count || 0;
+    },
     enabled: !!user?.id && open,
   });
 
-  const selected = SPICE_BUNDLES.find((b) => b.id === selectedId) || SPICE_BUNDLES[0];
+  const inGuild = !!sub?.isGuildMember || !!sub?.isGuildOwner || !!sub?.guildOwnerId;
+  const isCreator = listingCount > 0;
+
+  const goGuild = () => {
+    onClose?.();
+    // Both in-guild and non-member users land on /Guild — the page
+    // routes itself to GuildHub or GuildJoinCTA depending on
+    // membership, and GuildJoinCTA is the canonical guild
+    // info/benefits surface.
+    navigate(createPageUrl("Guild"));
+  };
+
+  const goCreator = () => {
+    onClose?.();
+    // Policy: the Creator button on the Buy Spice popup NEVER
+    // jumps straight into the upload flow. New creators see the
+    // /CreatorProgram marketing page first (benefits, tier
+    // economics, launch incentives, milestones). Existing creators
+    // — anyone with at least one tavern_items row — skip the
+    // landing and go straight to the dashboard.
+    navigate(createPageUrl(isCreator ? "CreatorDashboard" : "CreatorProgram"));
+  };
 
   const purchase = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (bundle) => {
       if (!user?.id) throw new Error("Sign in to purchase Spice.");
 
-      // TODO(stripe): replace this simulated credit with a real
-      // Stripe Checkout session. Flow once wired:
-      //   1. POST bundle.id to the billing Edge Function
-      //   2. redirect the browser to the returned checkout URL
-      //   3. on return (success), webhook credits Spice + logs txn
+      // TODO(stripe): swap this simulated credit for a real Stripe
+      // Checkout session once the billing Edge Function is live:
+      //   1. POST { bundleId } to the billing function
+      //   2. redirect to the returned checkout URL
+      //   3. webhook credits Spice + logs the purchase
       // Until then we credit locally so the rest of the Tavern loop
-      // (buying items, earning splits) is exercisable end-to-end.
+      // (spending, earning, cashouts) is exercisable end-to-end.
+      const prevBalance = Number(await getWalletBalance(user.id)) || 0;
       const newBalance = await addSpice(
         user.id,
-        selected.spice,
+        bundle.spice,
         "purchase",
-        `Purchased ${selected.label} ($${selected.price.toFixed(2)})`,
+        `Purchased ${bundle.label} ($${bundle.price.toFixed(2)})`,
       );
 
-      // Separately bump lifetime_purchased since add_spice only
-      // tracks lifetime_earned.
+      // lifetime_purchased is analytics-only — non-fatal if the
+      // column write fails.
       try {
         const { supabase } = await import("@/api/supabaseClient");
         const { data: current } = await supabase
@@ -64,104 +108,312 @@ export default function BuySpiceDialog({ open, onClose }) {
           .maybeSingle();
         await supabase
           .from("spice_wallets")
-          .update({
-            lifetime_purchased: (current?.lifetime_purchased || 0) + selected.spice,
-          })
+          .update({ lifetime_purchased: (current?.lifetime_purchased || 0) + bundle.spice })
           .eq("user_id", user.id);
-      } catch { /* non-fatal — lifetime_purchased is analytics only */ }
+      } catch { /* ignore */ }
 
-      return newBalance;
+      return { prevBalance, newBalance };
     },
-    onSuccess: (newBalance) => {
+    onSuccess: ({ prevBalance, newBalance }) => {
       queryClient.invalidateQueries({ queryKey: ["spiceWallet", user?.id] });
-      toast.success(`Purchased! New balance: ${formatSpice(newBalance)} Spice`);
+      // Close the popup first so the count-up animation on the
+      // sidebar / Tavern balance widgets owns the attention. The
+      // tiny sonner toast just confirms the purchase succeeded —
+      // the actual balance change is shown by the animated counters
+      // wherever a balance is rendered.
       onClose?.();
+      notifySpicePurchase({ from: prevBalance, to: newBalance });
+      toast.success("Purchase complete!", {
+        description: `+${formatSpice(newBalance - prevBalance)} Spice added to your wallet.`,
+      });
     },
     onError: (err) => toast.error(err?.message || "Purchase failed."),
   });
 
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
+  // Dome dimensions — the white circle sitting on the top-center of
+  // the rectangle behind Trinket. Half of the circle overlaps the
+  // rectangle's top edge (that's the visible "arch"). Guild +
+  // Creator images overflow above the rectangle's flat top on their
+  // respective sides; Trinket overflows HIGHER into the dome.
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const DOME_SIZE  = isMobile ? 180 : 260;          // decorative arch width
+  const TOP_ROW_PT = isMobile ? 0   : 140;          // push top grid down from rectangle top
+  const TRINKET_H  = isMobile ? 200 : 280;          // inline height of the GIF
+  const SIDE_IMG   = isMobile ? 120 : 170;          // Guild / Creator image edge
+
+  if (!open) return null;
+
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose?.(); }}>
-      <DialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <SpiceIcon size={20} color="#fbbf24" />
-            Buy Spice
-          </DialogTitle>
-          <DialogDescription className="text-slate-400">
-            Spice is the Tavern's cosmetic currency. Never expires. Spend it on themes, portraits, dice, and more.
-          </DialogDescription>
-        </DialogHeader>
+    <div
+      className="fixed inset-0 z-[9998] flex items-start md:items-center justify-center p-4 md:p-8 overflow-y-auto"
+      style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-5xl"
+        style={{ marginTop: `${DOME_SIZE / 2 + 32}px` }}
+      >
+        {/* Arch — the white circle anchored on the top center of the
+            rectangle. Half of it sits above the rectangle's edge so
+            the combined silhouette reads as an arched top; Trinket
+            stands in front of it. */}
+        <div
+          aria-hidden
+          className="absolute left-1/2 -translate-x-1/2 bg-white shadow-[0_-8px_30px_rgba(0,0,0,0.15)] z-0"
+          style={{
+            width: `${DOME_SIZE}px`,
+            height: `${DOME_SIZE}px`,
+            borderRadius: "50%",
+            top: `-${DOME_SIZE / 2}px`,
+          }}
+        />
 
-        <div className="flex items-center justify-between bg-[#050816] border border-amber-600/30 rounded-lg px-4 py-3">
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-amber-400/70 font-bold">Current Balance</p>
-            <p className="text-2xl font-black text-amber-200 flex items-center gap-2">
-              <SpiceIcon size={20} color="#fbbf24" />
-              {formatSpice(wallet?.balance || 0)}
-            </p>
-          </div>
-          <p className="text-[11px] text-slate-500 text-right">
-            $1 USD = 250 Spice<br />No expiry
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
-          {SPICE_BUNDLES.map((bundle) => {
-            const isSelected = bundle.id === selectedId;
-            return (
-              <button
-                key={bundle.id}
-                type="button"
-                onClick={() => setSelectedId(bundle.id)}
-                className={`text-left rounded-lg border-2 p-4 transition-colors relative ${
-                  isSelected
-                    ? "bg-[#37F2D1]/5 border-[#37F2D1]"
-                    : "bg-[#050816] border-slate-700 hover:border-slate-500"
-                }`}
-              >
-                {bundle.badge && (
-                  <span className="absolute -top-2 right-3 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-amber-500 text-amber-950">
-                    {bundle.badge}
-                  </span>
-                )}
-                <div className="flex items-center gap-2 mb-1">
-                  <SpiceIcon size={16} color="#fbbf24" />
-                  <span className="text-lg font-black text-amber-200">
-                    {formatSpice(bundle.spice)}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400">Spice</p>
-                {bundle.bonus > 0 && (
-                  <p className="text-[10px] text-emerald-400 mt-1 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> +{formatSpice(bundle.bonus)} bonus
-                  </p>
-                )}
-                <div className="mt-3 pt-3 border-t border-slate-700/50">
-                  <p className="text-sm font-bold text-white">${bundle.price.toFixed(2)}</p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        <p className="text-[11px] text-slate-500 italic text-center mt-1">
-          Unspent Spice can be refunded through Stripe. Spent Spice cannot.
-        </p>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button
-            onClick={() => purchase.mutate()}
-            disabled={purchase.isPending || !user?.id}
-            className="bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold disabled:opacity-50"
+        {/* Main rectangle — flat bottom with rounded bottom corners.
+            padding-top leaves room for Guild / Trinket / Creator to
+            extend upward from the top row's baseline. */}
+        <div
+          className="relative bg-white rounded-b-[20px] shadow-[0_20px_60px_rgba(0,0,0,0.35)] z-10"
+          style={{ paddingTop: `${TOP_ROW_PT}px` }}
+        >
+          {/* Close button — top-right of the rectangle, clear of the
+              dome so it doesn't overlap Trinket. */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/5 hover:bg-black/10 text-slate-700 flex items-center justify-center transition-colors z-40"
+            aria-label="Close"
           >
-            {purchase.isPending
-              ? "Processing…"
-              : `Purchase — $${selected.price.toFixed(2)}`}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            <X className="w-5 h-5" />
+          </button>
+
+          <div className="px-5 md:px-10 pb-6 md:pb-8">
+            {/* Top row — three columns on one horizontal line.
+                items-end aligns Guild / Creator buttons to the row's
+                baseline (which is also where the pricing row starts);
+                their images overflow upward via `-mt`. Trinket owns
+                the center column, overflows HIGHER than the flanking
+                images, and the empty space below her feet is where
+                the Best Deal card lifts up to meet her. */}
+            <div className="hidden md:grid grid-cols-[1fr_1.2fr_1fr] gap-6 items-end">
+              <TopColumn
+                art={GUILD_ART}
+                alt="Guild signup"
+                label={inGuild ? "GUILD HUB" : "CREATE A GUILD"}
+                onClick={goGuild}
+                imgSize={SIDE_IMG}
+                imgLift={TOP_ROW_PT - 12}
+              />
+              <div className="flex flex-col items-center" style={{ marginTop: -(TOP_ROW_PT + 40) }}>
+                <img
+                  src={TRINKET_GIF}
+                  alt="Trinket"
+                  draggable={false}
+                  className="relative z-30 drop-shadow-[0_10px_16px_rgba(0,0,0,0.3)]"
+                  style={{ height: `${TRINKET_H}px`, width: "auto" }}
+                />
+              </div>
+              <TopColumn
+                art={CREATOR_ART}
+                alt="Creator program"
+                label={isCreator ? "CREATOR DASHBOARD" : "BECOME A CREATOR"}
+                onClick={goCreator}
+                imgSize={SIDE_IMG}
+                imgLift={TOP_ROW_PT - 12}
+              />
+            </div>
+
+            {/* Mobile: Trinket centered on top, CTAs as compact pills
+                below the pricing grid. */}
+            <div className="md:hidden flex flex-col items-center">
+              <img
+                src={TRINKET_GIF}
+                alt="Trinket"
+                draggable={false}
+                className="relative z-30 drop-shadow-[0_8px_12px_rgba(0,0,0,0.3)]"
+                style={{ height: `${TRINKET_H}px`, width: "auto", marginTop: `-${Math.max(DOME_SIZE * 0.45, 60)}px` }}
+              />
+            </div>
+
+            {/* Pricing row. items-end lets the Best Deal card extend
+                upward into the top row so Trinket visually perches on
+                it — cards 1, 2, 4, 5 stay baseline-aligned while
+                card 3 lifts via -mt in PricingCard. */}
+            <div className="mt-3 md:mt-4">
+              <PricingRow
+                onPurchase={(bundle) => purchase.mutate(bundle)}
+                disabled={purchase.isPending || !user?.id}
+              />
+            </div>
+
+            {/* Mobile CTAs appear below the pricing grid. */}
+            <div className="md:hidden mt-4 space-y-2">
+              <CtaColumn
+                art={GUILD_ART}
+                alt="Guild signup"
+                label={inGuild ? "GUILD HUB" : "CREATE A GUILD"}
+                onClick={goGuild}
+              />
+              <CtaColumn
+                art={CREATOR_ART}
+                alt="Creator program"
+                label={isCreator ? "CREATOR DASHBOARD" : "BECOME A CREATOR"}
+                onClick={goCreator}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Desktop-only top-row CTA column. The image overflows the
+ * rectangle's top edge by `imgLift` so all three images (Guild,
+ * Trinket, Creator) share one visual horizontal row. Transparent on
+ * the white — no card, no ring, no colored background.
+ */
+function TopColumn({ art, alt, label, onClick, imgSize, imgLift }) {
+  return (
+    <div className="flex flex-col items-center text-center gap-3">
+      <img
+        src={art}
+        alt={alt}
+        draggable={false}
+        className="object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.15)]"
+        style={{
+          width: `${imgSize}px`,
+          height: `${imgSize}px`,
+          marginTop: `-${imgLift}px`,
+        }}
+      />
+      <button
+        type="button"
+        onClick={onClick}
+        className="inline-flex items-center justify-center bg-black text-white font-black uppercase tracking-[0.2em] text-[11px] px-5 py-2.5 rounded-full hover:bg-slate-800 transition-colors"
+      >
+        {label}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Mobile-only compact CTA. Rendered inside md:hidden wrappers; the
+ * desktop flow uses TopColumn instead so the Guild / Trinket /
+ * Creator trio shares one horizontal row.
+ */
+function CtaColumn({ art, alt, label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full flex items-center gap-3 bg-black text-white rounded-full pl-1.5 pr-5 py-1.5 hover:bg-slate-800 transition-colors"
+    >
+      <span className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+        <img src={art} alt={alt} className="w-full h-full object-contain" draggable={false} />
+      </span>
+      <span className="font-black uppercase tracking-[0.18em] text-[11px] flex-1 text-left">
+        {label}
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Pricing row — four bundles left to right, `items-end` so the
+ * "Best Deal" tile (which is taller) aligns to the same baseline
+ * as the other three and overflows upward.
+ */
+/**
+ * Pricing row — 2 regular cards | BEST DEAL center | 2 regular cards
+ * on desktop. Cards align to `items-end` so the taller Best Deal
+ * tile sits on the same baseline as the other four and overflows
+ * upward toward Trinket.
+ *
+ * Mobile collapses to a 2-column grid (5 entries: 2 | 2 | 1 with
+ * the last row's Best Deal centering itself).
+ */
+function PricingRow({ onPurchase, disabled }) {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 items-end">
+      {SPICE_BUNDLES.map((b, i) => (
+        <PricingCard
+          key={b.id}
+          bundle={b}
+          disabled={disabled}
+          onPurchase={() => onPurchase?.(b)}
+          // Center the lone last item on mobile when there's an
+          // odd number of bundles in a 2-column grid.
+          extraClass={i === SPICE_BUNDLES.length - 1 && SPICE_BUNDLES.length % 2 === 1 ? "col-span-2 md:col-span-1 max-w-xs mx-auto md:max-w-none" : ""}
+        />
+      ))}
+    </div>
+  );
+}
+
+function PricingCard({ bundle, onPurchase, disabled, extraClass = "" }) {
+  const isBest = !!bundle.best_deal;
+  const baseColor = isBest ? "#37F2D1" : "#7C3AED";
+  const textColor = isBest ? "#1E2430" : "#FFFFFF";
+  const buttonBg  = isBest ? "bg-[#1E2430] text-[#37F2D1]" : "bg-white text-[#7C3AED]";
+
+  // BEST DEAL reaches up into the top row so Trinket appears to
+  // stand on it. The lift is md-gated so mobile's 2x2 grid keeps
+  // a clean baseline.
+  return (
+    <div
+      className={`relative rounded-2xl shadow-[0_10px_24px_rgba(0,0,0,0.12)] transition-transform z-10 ${
+        isBest ? "md:-mt-24 md:pt-8" : ""
+      } ${extraClass}`}
+      style={{ backgroundColor: baseColor, color: textColor }}
+    >
+      {isBest && (
+        <span className="absolute left-1/2 -translate-x-1/2 -top-3 inline-block text-[10px] font-black uppercase tracking-[0.25em] px-3 py-1 rounded-full bg-black text-[#37F2D1] shadow">
+          Best Deal
+        </span>
+      )}
+      <div className={`px-4 pt-5 pb-4 flex flex-col items-center text-center ${isBest ? "pt-7 pb-6" : ""}`}>
+        <p className={`font-black leading-none ${isBest ? "text-4xl" : "text-3xl"}`}>
+          ${bundle.price.toFixed(2)}
+        </p>
+        <div className={`mt-3 inline-flex items-center gap-1.5 font-black ${isBest ? "text-2xl" : "text-xl"}`}>
+          <SpiceIcon size={isBest ? 22 : 20} color={textColor} />
+          {formatSpice(bundle.spice)}
+        </div>
+        {bundle.bonus > 0 && (
+          <span
+            className="mt-2 inline-block text-[10px] font-black uppercase tracking-widest rounded-full px-2 py-0.5"
+            style={{
+              backgroundColor: isBest ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.15)",
+              color: textColor,
+            }}
+          >
+            +{formatSpice(bundle.bonus)} bonus
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onPurchase}
+          disabled={disabled}
+          className={`mt-4 w-full text-[11px] font-black uppercase tracking-[0.18em] rounded-full py-2 ${buttonBg} hover:brightness-110 transition-all disabled:opacity-60 disabled:cursor-not-allowed`}
+        >
+          {disabled ? "Processing…" : "Purchase"}
+        </button>
+      </div>
+    </div>
   );
 }
