@@ -10,12 +10,14 @@
 
 export const SPICE_RATE = 250;
 
+// Bundles render left-to-right in the Buy Spice popup. The $25 tier
+// is flagged `best_deal: true` so the center card renders taller and
+// with the accent color; no other surface changes shape.
 export const SPICE_BUNDLES = [
-  { id: "bundle_250",   label: "625 Spice",     spice: 625,    price: 2.50,  bonus: 0,    badge: null },
-  { id: "bundle_500",   label: "1,310 Spice",   spice: 1310,   price: 5.00,  bonus: 60,   badge: null },
+  { id: "bundle_500",   label: "1,310 Spice",   spice: 1310,   price: 5.00,  bonus: 60,   badge: "5% Bonus" },
   { id: "bundle_1000",  label: "2,750 Spice",   spice: 2750,   price: 10.00, bonus: 250,  badge: "10% Bonus" },
-  { id: "bundle_2500",  label: "7,200 Spice",   spice: 7200,   price: 25.00, bonus: 950,  badge: "15% Bonus" },
-  { id: "bundle_5000",  label: "14,375 Spice",  spice: 14375,  price: 50.00, bonus: 1875, badge: "15% Bonus — Best Value" },
+  { id: "bundle_2500",  label: "7,200 Spice",   spice: 7200,   price: 25.00, bonus: 950,  badge: "15% Bonus", best_deal: true },
+  { id: "bundle_5000",  label: "14,375 Spice",  spice: 14375,  price: 50.00, bonus: 1875, badge: "15% Bonus" },
 ];
 
 // Free users get no stipend. Guild stipend lands in the shared guild
