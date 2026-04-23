@@ -6,7 +6,7 @@ import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { getWalletBalance } from "@/lib/spiceWallet";
-import { formatSpice } from "@/config/spiceConfig";
+import { formatSpice, SPICE_BUNDLES } from "@/config/spiceConfig";
 import { createPageUrl } from "@/utils";
 
 const TRINKET_GIF   = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/TrinketSpiceSignUp.gif";
@@ -156,7 +156,7 @@ export default function BuySpiceDialog({ open, onClose }) {
             </div>
 
             <div className="mt-6">
-              <PricingRowSlot />
+              <PricingRow onPurchase={(bundle) => { /* step 6 */ }} />
             </div>
           </div>
         </div>
@@ -228,10 +228,66 @@ function CtaColumn({ art, alt, label, onClick }) {
   );
 }
 
-function PricingRowSlot() {
+/**
+ * Pricing row — four bundles left to right, `items-end` so the
+ * "Best Deal" tile (which is taller) aligns to the same baseline
+ * as the other three and overflows upward.
+ */
+function PricingRow({ onPurchase }) {
   return (
-    <p className="text-center text-xs text-slate-500 italic">
-      Pricing options land in step 5.
-    </p>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 items-end">
+      {SPICE_BUNDLES.map((b) => (
+        <PricingCard key={b.id} bundle={b} onPurchase={() => onPurchase?.(b)} />
+      ))}
+    </div>
+  );
+}
+
+function PricingCard({ bundle, onPurchase }) {
+  const isBest = !!bundle.best_deal;
+  const baseColor = isBest ? "#37F2D1" : "#7C3AED";
+  const textColor = isBest ? "#050816" : "#FFFFFF";
+  const buttonBg  = isBest ? "bg-black text-[#37F2D1]" : "bg-white text-[#7C3AED]";
+
+  return (
+    <div
+      className={`relative rounded-2xl shadow-[0_10px_24px_rgba(0,0,0,0.12)] transition-transform ${
+        isBest ? "md:-translate-y-4" : ""
+      }`}
+      style={{ backgroundColor: baseColor, color: textColor }}
+    >
+      {isBest && (
+        <span className="absolute left-1/2 -translate-x-1/2 -top-3 inline-block text-[10px] font-black uppercase tracking-[0.25em] px-3 py-1 rounded-full bg-black text-[#37F2D1] shadow">
+          Best Deal
+        </span>
+      )}
+      <div className={`px-4 pt-5 pb-4 flex flex-col items-center text-center ${isBest ? "pt-7 pb-6" : ""}`}>
+        <p className={`font-black leading-none ${isBest ? "text-4xl" : "text-3xl"}`}>
+          ${bundle.price.toFixed(2)}
+        </p>
+        <div className={`mt-3 inline-flex items-center gap-1.5 font-black ${isBest ? "text-2xl" : "text-xl"}`}>
+          <SpiceIcon size={isBest ? 22 : 20} color={textColor} />
+          {formatSpice(bundle.spice)}
+        </div>
+        {bundle.bonus > 0 && (
+          <span
+            className="mt-2 inline-block text-[10px] font-black uppercase tracking-widest rounded-full px-2 py-0.5"
+            style={{
+              backgroundColor: isBest ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.15)",
+              color: textColor,
+            }}
+          >
+            +{formatSpice(bundle.bonus)} bonus
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onPurchase}
+          className={`mt-4 w-full text-[11px] font-black uppercase tracking-[0.18em] rounded-full py-2 ${buttonBg} hover:brightness-110 transition-all`}
+        >
+          Purchase
+        </button>
+      </div>
+    </div>
   );
 }
