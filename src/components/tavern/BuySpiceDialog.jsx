@@ -241,13 +241,20 @@ export default function BuySpiceDialog({ open, onClose }) {
  * its feet rest just inside the dome's lower half; the character
  * reads as peeking out over the arch.
  */
+/**
+ * Trinket GIF — perched in the dome directly above the popup's
+ * horizontal center, which is where the BEST DEAL card lands in the
+ * 5-card row (cards 1-2-3-4-5; card 3 is dead-center). z-30 keeps
+ * her above the cards and above the popup's white surface so she
+ * appears to "sit" on top of the Best Deal card's raised silhouette.
+ */
 function DomeSlot() {
   return (
-    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-[170px] md:-top-[230px] w-[170px] md:w-[240px] h-[190px] md:h-[260px] flex items-end justify-center">
+    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-[160px] md:-top-[210px] w-[170px] md:w-[240px] h-[190px] md:h-[260px] flex items-end justify-center z-30">
       <img
         src={TRINKET_GIF}
         alt="Trinket"
-        className="w-full h-auto object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.25)]"
+        className="w-full h-auto object-contain drop-shadow-[0_8px_12px_rgba(0,0,0,0.3)]"
         draggable={false}
       />
     </div>
