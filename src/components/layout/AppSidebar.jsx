@@ -56,6 +56,25 @@ export default function AppSidebar() {
     staleTime: 30_000,
   });
 
+  // Creator Panel swaps its first link between "Join the Creator
+  // Program" and "Creator Dashboard" based on whether the user has
+  // any tavern_items listings. Cheap head+count query so the
+  // sidebar doesn't pull full rows.
+  const { data: creatorListingCount = 0 } = useQuery({
+    queryKey: ["sidebarCreatorListingCount", user?.id],
+    queryFn: async () => {
+      const { supabase } = await import("@/api/supabaseClient");
+      const { count } = await supabase
+        .from("tavern_items")
+        .select("id", { count: "exact", head: true })
+        .eq("creator_id", user.id);
+      return count || 0;
+    },
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  });
+  const isCreator = creatorListingCount > 0;
+
   // Friendships power both the pending-requests badge and the online
   // avatars strip. Same query is already cached by Layout.jsx's
   // top-level badge lookup, so this is just reading the same entry.
@@ -185,7 +204,9 @@ export default function AppSidebar() {
 
           <SidebarSection label="Creator Panel">
             {/* Upload opens the existing CreatorUploadDialog straight
-                from the sidebar — no intermediate page. */}
+                from the sidebar — no intermediate page. Stays
+                regardless of creator status so experienced creators
+                can list from anywhere. */}
             <button
               type="button"
               onClick={() => setUploadOpen(true)}
@@ -194,8 +215,12 @@ export default function AppSidebar() {
               <Upload className="w-[18px] h-[18px]" />
               <span className="flex-1 text-left">Upload New</span>
             </button>
-            <SidebarLink to={createPageUrl("CreatorDashboard")} icon={LayoutDashboard} label="Creator Dashboard" />
-            <SidebarLink to={createPageUrl("CreatorAnalytics")} icon={TrendingUp}      label="Analytics" />
+            {isCreator ? (
+              <SidebarLink to={createPageUrl("CreatorDashboard")} icon={LayoutDashboard} label="Creator Dashboard" />
+            ) : (
+              <SidebarLink to={createPageUrl("CreatorProgram")}   icon={Sparkles}       label="Join the Creator Program" />
+            )}
+            <SidebarLink to={createPageUrl("CreatorAnalytics")} icon={TrendingUp} label="Analytics" />
           </SidebarSection>
 
           <SidebarSection label="Support">
