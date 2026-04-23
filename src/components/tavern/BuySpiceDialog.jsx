@@ -325,32 +325,44 @@ function CtaColumn({ art, alt, label, onClick }) {
  * "Best Deal" tile (which is taller) aligns to the same baseline
  * as the other three and overflows upward.
  */
+/**
+ * Pricing row — 2 regular cards | BEST DEAL center | 2 regular cards
+ * on desktop. Cards align to `items-end` so the taller Best Deal
+ * tile sits on the same baseline as the other four and overflows
+ * upward toward Trinket.
+ *
+ * Mobile collapses to a 2-column grid (5 entries: 2 | 2 | 1 with
+ * the last row's Best Deal centering itself).
+ */
 function PricingRow({ onPurchase, disabled }) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 items-end">
-      {SPICE_BUNDLES.map((b) => (
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 items-end">
+      {SPICE_BUNDLES.map((b, i) => (
         <PricingCard
           key={b.id}
           bundle={b}
           disabled={disabled}
           onPurchase={() => onPurchase?.(b)}
+          // Center the lone last item on mobile when there's an
+          // odd number of bundles in a 2-column grid.
+          extraClass={i === SPICE_BUNDLES.length - 1 && SPICE_BUNDLES.length % 2 === 1 ? "col-span-2 md:col-span-1 max-w-xs mx-auto md:max-w-none" : ""}
         />
       ))}
     </div>
   );
 }
 
-function PricingCard({ bundle, onPurchase, disabled }) {
+function PricingCard({ bundle, onPurchase, disabled, extraClass = "" }) {
   const isBest = !!bundle.best_deal;
   const baseColor = isBest ? "#37F2D1" : "#7C3AED";
-  const textColor = isBest ? "#050816" : "#FFFFFF";
-  const buttonBg  = isBest ? "bg-black text-[#37F2D1]" : "bg-white text-[#7C3AED]";
+  const textColor = isBest ? "#1E2430" : "#FFFFFF";
+  const buttonBg  = isBest ? "bg-[#1E2430] text-[#37F2D1]" : "bg-white text-[#7C3AED]";
 
   return (
     <div
       className={`relative rounded-2xl shadow-[0_10px_24px_rgba(0,0,0,0.12)] transition-transform ${
-        isBest ? "md:-translate-y-4" : ""
-      }`}
+        isBest ? "md:-translate-y-8" : ""
+      } ${extraClass}`}
       style={{ backgroundColor: baseColor, color: textColor }}
     >
       {isBest && (
