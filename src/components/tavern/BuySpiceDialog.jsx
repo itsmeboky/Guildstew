@@ -1,5 +1,12 @@
 import React, { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
+import { useAuth } from "@/lib/AuthContext";
+import { getWalletBalance } from "@/lib/spiceWallet";
+import { formatSpice } from "@/config/spiceConfig";
+
+const TRINKET_GIF = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/TrinketSpiceSignUp.gif";
 
 /**
  * Buy Spice — custom-shaped popup.
@@ -19,6 +26,14 @@ import { X } from "lucide-react";
  *     scrolled past
  */
 export default function BuySpiceDialog({ open, onClose }) {
+  const { user } = useAuth();
+
+  const { data: wallet } = useQuery({
+    queryKey: ["spiceWallet", user?.id],
+    queryFn: () => getWalletBalance(user.id),
+    enabled: !!user?.id && open,
+  });
+
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
@@ -83,12 +98,11 @@ export default function BuySpiceDialog({ open, onClose }) {
           <div className="px-6 md:px-10 pb-8">
             <DomeSlot />
 
-            {/* Body grid — left CTA, center column (will hold balance
-                row beneath Trinket in step 2), right CTA. Steps 3-5
-                replace the placeholders below. */}
+            {/* Body grid — left CTA, center column (balance beneath
+                Trinket), right CTA. Steps 3-5 replace the placeholders. */}
             <div className="mt-6 grid grid-cols-1 md:grid-cols-[1fr_1.2fr_1fr] gap-6 items-start">
               <LeftCtaSlot />
-              <CenterSlot />
+              <BalanceBlock balance={wallet?.balance || 0} />
               <RightCtaSlot />
             </div>
 
@@ -102,15 +116,43 @@ export default function BuySpiceDialog({ open, onClose }) {
   );
 }
 
-// Step 2 lands the Trinket GIF + balance display here.
+/**
+ * Dome content — Trinket GIF overlapping the dome silhouette.
+ * The GIF is positioned absolutely relative to the main rectangle so
+ * its feet rest just inside the dome's lower half; the character
+ * reads as peeking out over the arch.
+ */
 function DomeSlot() {
   return (
-    <div className="absolute left-1/2 -translate-x-1/2 -top-4 md:-top-6 z-10 pointer-events-none w-[220px] md:w-[240px] h-[220px] md:h-[240px]" />
+    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-[230px] md:-top-[230px] w-[220px] md:w-[240px] h-[240px] md:h-[260px] flex items-end justify-center">
+      <img
+        src={TRINKET_GIF}
+        alt="Trinket"
+        className="w-full h-auto object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.25)]"
+        draggable={false}
+      />
+    </div>
+  );
+}
+
+function BalanceBlock({ balance }) {
+  return (
+    <div className="flex flex-col items-center text-center gap-1">
+      <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500 font-bold">
+        Your Spice
+      </p>
+      <p className="text-3xl font-black text-slate-900 flex items-center gap-2">
+        <SpiceIcon size={28} color="#b45309" />
+        {formatSpice(balance)}
+      </p>
+      <p className="text-[11px] text-slate-500">
+        Never expires · spend on Tavern cosmetics
+      </p>
+    </div>
   );
 }
 
 function LeftCtaSlot() { return <div className="hidden md:block" />; }
-function CenterSlot()  { return <div />; }
 function RightCtaSlot(){ return <div className="hidden md:block" />; }
 function PricingRowSlot() {
   return (
