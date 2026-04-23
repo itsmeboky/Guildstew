@@ -17,6 +17,7 @@ import { formatSpice } from "@/config/spiceConfig";
 import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
 import CreatorUploadDialog from "@/components/tavern/CreatorUploadDialog";
 import SpiceIcon from "@/components/tavern/SpiceIcon";
+import AnimatedSpiceBalance from "@/components/tavern/AnimatedSpiceBalance";
 import CampaignActions from "@/components/layout/CampaignActions";
 import FriendsSidebarPanel from "@/components/layout/FriendsSidebarPanel";
 import { base44 } from "@/api/base44Client";
@@ -130,7 +131,7 @@ export default function AppSidebar() {
           >
             <span className="inline-flex items-center gap-2 text-amber-200 font-bold text-sm">
               <SpiceIcon size={18} color="#fbbf24" />
-              {formatSpice(wallet?.balance || 0)}
+              <AnimatedSpiceBalance balance={wallet?.balance || 0} />
             </span>
             <span className="text-[10px] uppercase tracking-widest text-amber-300/80">Buy Spice</span>
           </button>

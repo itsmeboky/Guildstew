@@ -19,6 +19,7 @@ import { formatSpice } from "@/config/spiceConfig";
 import { TAVERN_CATEGORIES, SORT_OPTIONS } from "@/config/tavernCategories";
 import { TAVERN_PALETTE as P, TAVERN_HEADER_GRADIENT } from "@/config/tavernPalette";
 import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
+import AnimatedSpiceBalance from "@/components/tavern/AnimatedSpiceBalance";
 import TavernItemCard from "@/components/tavern/TavernItemCard";
 import TavernItemDetailDialog from "@/components/tavern/TavernItemDetailDialog";
 import CreatorUploadDialog from "@/components/tavern/CreatorUploadDialog";
@@ -179,7 +180,7 @@ export default function TheTavern() {
               <p className="text-[9px] uppercase tracking-widest font-bold" style={{ color: P.accentDeep }}>Spice</p>
               <p className="text-lg font-black flex items-center gap-1" style={{ color: P.textPrimary }}>
                 <SpiceIcon size={18} color={P.accent} />
-                {formatSpice(wallet?.balance || 0)}
+                <AnimatedSpiceBalance balance={wallet?.balance || 0} />
               </p>
             </div>
 
