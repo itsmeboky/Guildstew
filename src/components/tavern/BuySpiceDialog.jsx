@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { X } from "lucide-react";
@@ -39,24 +39,10 @@ export default function BuySpiceDialog({ open, onClose }) {
   const queryClient = useQueryClient();
 
   // Creator-program CTA pivots on whether the user already has any
-  // tavern_items rows. The popup itself does NOT show the user's
-  // current Spice balance — that lives on the sidebar / Tavern page
-  // and animates after a successful purchase (see step 8).
-  const { data: listingCount = 0 } = useQuery({
-    queryKey: ["buySpiceListingCount", user?.id],
-    queryFn: async () => {
-      const { supabase } = await import("@/api/supabaseClient");
-      const { count } = await supabase
-        .from("tavern_items")
-        .select("id", { count: "exact", head: true })
-        .eq("creator_id", user.id);
-      return count || 0;
-    },
-    enabled: !!user?.id && open,
-  });
-
+  // The popup itself does NOT show the user's current Spice balance
+  // — that lives on the sidebar / Tavern page and animates after a
+  // successful purchase.
   const inGuild = !!sub?.isGuildMember || !!sub?.isGuildOwner || !!sub?.guildOwnerId;
-  const isCreator = listingCount > 0;
 
   const goGuild = () => {
     onClose?.();
@@ -69,13 +55,12 @@ export default function BuySpiceDialog({ open, onClose }) {
 
   const goCreator = () => {
     onClose?.();
-    // Policy: the Creator button on the Buy Spice popup NEVER
-    // jumps straight into the upload flow. New creators see the
-    // /CreatorProgram marketing page first (benefits, tier
-    // economics, launch incentives, milestones). Existing creators
-    // — anyone with at least one tavern_items row — skip the
-    // landing and go straight to the dashboard.
-    navigate(createPageUrl(isCreator ? "CreatorDashboard" : "CreatorProgram"));
+    // Always route to /CreatorProgram — the popup button is a
+    // pure marketing funnel, not a router to the creator's own
+    // dashboard. Returning creators still see their dashboard via
+    // /CreatorProgram's hero CTA (which swaps to "Open Creator
+    // Dashboard" once listingCount > 0).
+    navigate(createPageUrl("CreatorProgram"));
   };
 
   const purchase = useMutation({
@@ -228,7 +213,7 @@ export default function BuySpiceDialog({ open, onClose }) {
               <TopColumn
                 art={CREATOR_ART}
                 alt="Creator program"
-                label={isCreator ? "CREATOR DASHBOARD" : "BECOME A CREATOR"}
+                label="BECOME A CREATOR"
                 onClick={goCreator}
                 imgSize={SIDE_IMG}
                 imgLift={TOP_ROW_PT - 12}
@@ -269,7 +254,7 @@ export default function BuySpiceDialog({ open, onClose }) {
               <CtaColumn
                 art={CREATOR_ART}
                 alt="Creator program"
-                label={isCreator ? "CREATOR DASHBOARD" : "BECOME A CREATOR"}
+                label="BECOME A CREATOR"
                 onClick={goCreator}
               />
             </div>
