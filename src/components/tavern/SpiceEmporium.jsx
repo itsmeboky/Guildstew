@@ -234,17 +234,42 @@ export default function SpiceEmporium({ open, onClose }) {
               padding to clear the dome's lower half + the close
               button. */}
           <TrinketDome />
-          <div style={{ paddingTop: "80px" }} />
+          {/* 100px of clearance leaves room for the taller 180x180
+              dome + close button without the cards crashing into
+              her lower body. */}
+          <div style={{ paddingTop: "100px" }} />
           <PricingRow
             onPurchase={(bundle) => purchase.mutate(bundle)}
             disabled={purchase.isPending}
           />
+
+          {/* Virtual Currency Policy link sits between the card
+              row and the CTA row. It's centered horizontally in
+              the popup, which lines it up under the Best Deal
+              (middle) card of the 5-card row by construction. */}
+          <div style={{ textAlign: "center", marginTop: "8px" }}>
+            <button
+              type="button"
+              onClick={goPricing}
+              style={{
+                fontSize: "9px",
+                color: "#f8a47c",
+                fontWeight: 600,
+                cursor: "pointer",
+                background: "none",
+                border: "none",
+                padding: 0,
+              }}
+            >
+              View Virtual Currency Policy →
+            </button>
+          </div>
+
           <CtaStrip
             inGuild={inGuild}
             isCreator={isCreator}
             onGuild={goGuild}
             onCreator={goCreator}
-            onPricing={goPricing}
           />
         </div>
       </div>
@@ -265,7 +290,7 @@ function TrinketDome() {
       aria-hidden
       style={{
         position: "absolute",
-        top: "-80px",
+        top: "-110px",
         left: "50%",
         transform: "translateX(-50%)",
         zIndex: 10,
@@ -275,8 +300,8 @@ function TrinketDome() {
     >
       <div
         style={{
-          width: "140px",
-          height: "140px",
+          width: "180px",
+          height: "180px",
           borderRadius: "50%",
           overflow: "hidden",
           background: "radial-gradient(circle, rgba(245,158,11,0.1) 0%, transparent 70%)",
@@ -289,9 +314,13 @@ function TrinketDome() {
           alt="Trinket"
           draggable={false}
           style={{
-            width: "140px",
-            height: "140px",
+            width: "180px",
+            height: "180px",
             objectFit: "cover",
+            // Prioritize Trinket's head over her lower body when
+            // the circle crops — otherwise her ears / hat clip at
+            // the top edge of the frame.
+            objectPosition: "center top",
             borderRadius: "50%",
           }}
         />
@@ -603,7 +632,7 @@ function PricingCard({ bundle, hovered, onHover, onLeave, onPurchase, disabled }
  * Each CTA uses JumpCTA which overlaps the character image above
  * the button so the character appears to leap out on hover.
  */
-function CtaStrip({ inGuild, isCreator, onGuild, onCreator, onPricing }) {
+function CtaStrip({ inGuild, isCreator, onGuild, onCreator }) {
   return (
     <div
       style={{
@@ -627,28 +656,12 @@ function CtaStrip({ inGuild, isCreator, onGuild, onCreator, onPricing }) {
         onClick={onGuild}
       />
 
-      {/* Center column: just the Virtual Currency Policy link now.
-          The prior "Upgrade for better splits" copy was removed
-          because tier doesn't affect Spice-purchase value — it was
-          misleading — and the gif that previously lived here moved
-          up into the Trinket dome. */}
-      <div style={{ textAlign: "center", alignSelf: "center" }}>
-        <button
-          type="button"
-          onClick={onPricing}
-          style={{
-            fontSize: "9px",
-            color: "#f8a47c",
-            fontWeight: 600,
-            cursor: "pointer",
-            background: "none",
-            border: "none",
-            padding: 0,
-          }}
-        >
-          View Virtual Currency Policy →
-        </button>
-      </div>
+      {/* CtaStrip center column removed — the Virtual Currency
+          Policy link now sits directly below the Best Deal card
+          in the main popup body (see <PolicyLink />). Guild left,
+          Creator right, justify-content: space-between handles
+          the distribution. */}
+
 
       <JumpCTA
         image={IMAGES.creator}
@@ -669,25 +682,24 @@ function JumpCTA({ image, alt, label, sublabel, onClick }) {
       onMouseLeave={() => setHovered(false)}
       style={{ display: "flex", flexDirection: "column", alignItems: "center" }}
     >
-      {/* Character — 280px tall, width auto so each PNG keeps its
-          natural aspect. Negative margin-bottom -40 sinks the
-          character deep into the button's upper edge. Both
-          JumpCTAs bottom-align in the parent (CtaStrip's
-          alignItems: flex-end) so the character feet always share
-          a baseline even when the two images have different
-          widths. */}
+      {/* Character — 150px tall, width auto so each PNG keeps its
+          natural aspect. Negative margin-bottom -24 sinks the
+          character into the button's upper edge; both JumpCTAs
+          bottom-align in the parent (CtaStrip's alignItems:
+          flex-end) so the character feet always share a baseline
+          even when the two images have different widths. */}
       <div
         style={{
-          height: "280px",
+          height: "150px",
           width: "auto",
           position: "relative",
           zIndex: 2,
-          marginBottom: "-40px",
+          marginBottom: "-24px",
           transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
-          transform: hovered ? "translateY(-14px) scale(1.08)" : "translateY(0) scale(1)",
+          transform: hovered ? "translateY(-10px) scale(1.08)" : "translateY(0) scale(1)",
           filter: hovered
-            ? "drop-shadow(0 12px 24px rgba(248,164,124,0.35))"
-            : "drop-shadow(0 6px 12px rgba(0,0,0,0.35))",
+            ? "drop-shadow(0 10px 18px rgba(248,164,124,0.3))"
+            : "drop-shadow(0 5px 10px rgba(0,0,0,0.3))",
           pointerEvents: "none",
         }}
       >
@@ -695,7 +707,7 @@ function JumpCTA({ image, alt, label, sublabel, onClick }) {
           src={image}
           alt={alt}
           draggable={false}
-          style={{ height: "280px", width: "auto", objectFit: "contain", display: "block" }}
+          style={{ height: "150px", width: "auto", objectFit: "contain", display: "block" }}
         />
       </div>
 
@@ -708,7 +720,7 @@ function JumpCTA({ image, alt, label, sublabel, onClick }) {
           background: hovered ? "rgba(248,164,124,0.12)" : "rgba(248,164,124,0.04)",
           border: `1px solid ${hovered ? "rgba(248,164,124,0.4)" : "rgba(248,164,124,0.15)"}`,
           borderRadius: "14px",
-          padding: "50px 20px 12px",
+          padding: "32px 20px 12px",
           minWidth: "200px",
           textAlign: "center",
           cursor: "pointer",
