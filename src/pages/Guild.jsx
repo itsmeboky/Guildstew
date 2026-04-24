@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
@@ -17,6 +17,7 @@ import GuildActiveCampaigns from "@/components/guild/GuildActiveCampaigns";
 import GuildUpdatesFeed from "@/components/guild/GuildUpdatesFeed";
 import GuildAchievements from "@/components/guild/GuildAchievements";
 import GuildTreasury from "@/components/guild/GuildTreasury";
+import GuildSettingsDialog from "@/components/guild/GuildSettingsDialog";
 
 /**
  * /guild
@@ -37,6 +38,7 @@ function GuildHub() {
   const sub = useSubscription();
   const guildOwnerId = sub.guildOwnerId || (sub.isGuildOwner ? user?.id : null);
   const isLeader = sub.isGuildOwner || user?.id === guildOwnerId;
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Guild settings row. Lazily created — the leader's first edit
   // in step 6 inserts the row, so reading before that simply returns
@@ -103,12 +105,8 @@ function GuildHub() {
         leaderProfile={leaderProfile}
         memberCount={profiles.length}
         isLeader={isLeader}
-        onOpenSettings={() => {
-          /* settings dialog lands in step 6 */
-        }}
-        onCreateCrest={() => {
-          /* crest builder lands in a later task */
-        }}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onCreateCrest={() => setSettingsOpen(true)}
       />
 
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-10 space-y-10">
@@ -117,9 +115,7 @@ function GuildHub() {
           guildOwnerId={guildOwnerId}
           officerIds={officerIds}
           isLeader={isLeader}
-          onManageMembers={() => {
-            /* management lands in step 6 */
-          }}
+          onManageMembers={() => setSettingsOpen(true)}
         />
 
         <GuildActiveCampaigns memberIds={memberIds} viewerId={user?.id} />
@@ -130,6 +126,17 @@ function GuildHub() {
 
         <GuildTreasury guildOwnerId={guildOwnerId} />
       </div>
+
+      {isLeader && (
+        <GuildSettingsDialog
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          guild={guild}
+          guildOwnerId={guildOwnerId}
+          profiles={profiles}
+          inviteCode={guild?.invite_code || ""}
+        />
+      )}
     </div>
   );
 }
