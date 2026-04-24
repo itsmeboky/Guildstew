@@ -136,6 +136,7 @@ export default function BuySpiceDialog({ open, onClose }) {
   const DOME_SIZE  = isMobile ? 180 : 260;          // decorative arch — reverted to pre-bump size
   const TOP_ROW_PT = isMobile ? 0   : 180;          // top row padding — images overflow above
   const TRINKET_H  = isMobile ? 240 : 586;          // GIF height (+250px on desktop)
+  const TRINKET_W  = isMobile ? 240 : 520;          // explicit width — wider proportion than natural
   const SIDE_IMG   = isMobile ? 240 : 400;          // Guild / Creator image ~400px desktop
   const SIDE_IMG_LIFT = isMobile ? 0 : TOP_ROW_PT - 40; // CTA images sit 80px lower than before
 
@@ -150,7 +151,7 @@ export default function BuySpiceDialog({ open, onClose }) {
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-7xl"
-        style={{ marginTop: `${DOME_SIZE / 2 + 32}px` }}
+        style={{ marginTop: `${Math.max(0, DOME_SIZE / 2 + 32 - 80)}px` }}
       >
         {/* Arch — the white circle anchored on the top center of the
             rectangle. Half of it sits above the rectangle's edge so
@@ -208,7 +209,7 @@ export default function BuySpiceDialog({ open, onClose }) {
                   alt="Trinket"
                   draggable={false}
                   className="relative drop-shadow-[0_10px_16px_rgba(0,0,0,0.3)]"
-                  style={{ height: `${TRINKET_H}px`, width: "auto", zIndex: 5 }}
+                  style={{ height: `${TRINKET_H}px`, width: `${TRINKET_W}px`, objectFit: "fill", zIndex: 5 }}
                 />
               </div>
               <TopColumn
@@ -229,7 +230,7 @@ export default function BuySpiceDialog({ open, onClose }) {
                 alt="Trinket"
                 draggable={false}
                 className="relative drop-shadow-[0_8px_12px_rgba(0,0,0,0.3)]"
-                style={{ height: `${TRINKET_H}px`, width: "auto", marginTop: `-${Math.max(DOME_SIZE * 0.45, 60) + 200}px`, zIndex: 5 }}
+                style={{ height: `${TRINKET_H}px`, width: `${TRINKET_W}px`, objectFit: "fill", marginTop: `-${Math.max(DOME_SIZE * 0.45, 60) + 200}px`, zIndex: 5 }}
               />
             </div>
 
@@ -274,22 +275,28 @@ export default function BuySpiceDialog({ open, onClose }) {
  */
 function TopColumn({ art, alt, label, onClick, imgSize, imgLift }) {
   return (
-    <div className="flex flex-col items-center text-center gap-3">
+    <div className="flex flex-col items-center text-center">
       <img
         src={art}
         alt={alt}
         draggable={false}
-        className="object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.15)]"
+        className="object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.15)] relative"
         style={{
           width: `${imgSize}px`,
           height: `${imgSize}px`,
           marginTop: `-${imgLift}px`,
+          zIndex: 1,
         }}
       />
+      {/* Button nests directly under the art — negative margin-top
+          tucks it into the image's lower ~30px so it visually
+          overlaps, and a higher z-index renders it above the art
+          (spec: "above the art on the z-axis"). */}
       <button
         type="button"
         onClick={onClick}
-        className="inline-flex items-center justify-center bg-black text-white font-black uppercase tracking-[0.2em] text-[11px] px-5 py-2.5 rounded-full hover:bg-slate-800 transition-colors"
+        className="relative inline-flex items-center justify-center bg-black text-white font-black uppercase tracking-[0.2em] text-[11px] px-6 py-3 rounded-full hover:bg-slate-800 transition-colors shadow-[0_6px_12px_rgba(0,0,0,0.25)]"
+        style={{ marginTop: "-30px", zIndex: 3 }}
       >
         {label}
       </button>
