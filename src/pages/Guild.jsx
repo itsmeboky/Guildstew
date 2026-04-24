@@ -10,6 +10,7 @@ import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
+import { Band, SectionTitle, CREAM } from "@/components/marketing/MarketingBand";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { listGuildMembers } from "@/api/billingClient";
 import { getGuildWalletBalance } from "@/lib/spiceWallet";
@@ -316,54 +317,59 @@ function GuildHub() {
   );
 }
 
+// Hero illustration — matches the Creator Program asset pattern
+// under /app-assets/hero/…
+const GUILD_HERO = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/Becomeaguild.png";
+
 function GuildJoinCTA() {
   return (
-    <div className="min-h-screen bg-[#050816] text-white">
-      {/* Hero */}
-      <div
-        className="w-full px-6 pt-16 pb-12 relative overflow-hidden"
-        style={{
-          background:
-            "radial-gradient(ellipse at top, rgba(251,191,36,0.25) 0%, rgba(251,191,36,0.08) 40%, rgba(5,8,22,1) 80%)",
-        }}
-      >
-        <div className="max-w-3xl mx-auto text-center relative z-10">
-          <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-amber-300/20 to-amber-600/10 border-2 border-amber-400/60 shadow-[0_0_40px_rgba(251,191,36,0.4)] mb-5">
-            <Crown className="w-12 h-12 text-amber-300" />
+    <div className="min-h-screen" style={{ color: CREAM.textPrimary, backgroundColor: "#FFF8F3" }}>
+      {/* Hero — white background, text left, image right. Mirrors
+          the Creator Program layout exactly so the two marketing
+          entry points feel like siblings. */}
+      <header className="px-6 md:px-12 pt-12 pb-16" style={{ backgroundColor: "#FFFFFF" }}>
+        <div className="max-w-6xl mx-auto grid md:grid-cols-[1.1fr_1fr] gap-8 items-center">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.3em]" style={{ color: CREAM.accent }}>
+              Guildstew Guild
+            </p>
+            <h1 className="text-4xl md:text-6xl font-black mt-2 leading-[1.05]" style={{ color: "#1E2430" }}>
+              Join a Guild
+            </h1>
+            <p className="text-lg md:text-xl mt-4 max-w-xl" style={{ color: CREAM.textMuted }}>
+              Pool your Spice, share cosmetics, and adventure together —
+              <br />
+              six tables, one subscription.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link
+                to={createPageUrl("AccountBilling")}
+                className="inline-flex items-center gap-2 font-black uppercase tracking-[0.2em] px-6 py-4 text-sm rounded-md transition-colors"
+                style={{ backgroundColor: CREAM.accent, color: CREAM.textPrimary }}
+              >
+                Start a Guild <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
           </div>
-          <h1
-            className="text-5xl md:text-6xl font-black text-amber-100 tracking-tight"
-            style={{ fontFamily: "'Cream', 'Inter', sans-serif" }}
-          >
-            Join a Guild
-          </h1>
-          <p className="text-base md:text-lg text-amber-100/80 mt-3 max-w-xl mx-auto">
-            Pool your Spice, share cosmetics, and adventure together.
-          </p>
-          <div
-            className="inline-block mt-6 text-[11px] uppercase tracking-widest font-bold px-3 py-1 rounded-full"
-            style={{
-              backgroundColor: "rgba(251,191,36,0.2)",
-              color: "#fbbf24",
-              border: "1px solid rgba(251,191,36,0.5)",
-            }}
-          >
-            <Sparkles className="w-3 h-3 inline-block mr-1" />
-            Six tables. One subscription.
+          <div className="flex justify-center md:justify-end md:mr-20">
+            <img
+              src={GUILD_HERO}
+              alt="Become a guild"
+              className="w-full max-w-[420px] md:max-w-[480px] drop-shadow-[0_16px_30px_rgba(0,0,0,0.12)]"
+              draggable={false}
+            />
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="max-w-5xl mx-auto px-6 py-10 space-y-12">
-        {/* Benefits */}
-        <section>
-          <p className="text-[10px] uppercase tracking-widest font-black text-amber-300/70 text-center">
-            Why guilds
-          </p>
-          <h2 className="text-2xl md:text-3xl font-black text-white text-center mt-1">
-            Everyone wins when one person subscribes.
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+      {/* Benefits band */}
+      <Band bg="#FFF8F3">
+        <div className="space-y-4">
+          <SectionTitle
+            eyebrow="Why guilds"
+            title="Everyone wins when one person subscribes."
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Benefit
               icon={Wallet}
               title="Shared Spice wallet"
@@ -385,62 +391,79 @@ function GuildJoinCTA() {
               body="Guild-only events, shared libraries, and Hub-locked cosmetics are on the roadmap. Guilds get them first."
             />
           </div>
-        </section>
+        </div>
+      </Band>
 
-        {/* How it works */}
-        <section>
-          <div className="bg-[#1E2430] border border-amber-400/30 rounded-xl p-6 md:p-8">
-            <p className="text-[10px] uppercase tracking-widest font-black text-amber-300/80">
-              How it works
-            </p>
-            <ol className="mt-3 space-y-3">
-              <Step n={1}>
-                One person subscribes to the <strong className="text-amber-200">Guild tier ($34.99/month)</strong>.
-              </Step>
-              <Step n={2}>
-                They invite up to <strong className="text-amber-200">5 friends</strong> from Billing → Manage guild.
-              </Step>
-              <Step n={3}>
-                Everyone gets full Veteran access, a shared Spice wallet, and 250 Spice/month stipend — automatic.
-              </Step>
-            </ol>
-          </div>
-        </section>
+      {/* How it works band */}
+      <Band bg="#FFF0E8">
+        <div className="space-y-4">
+          <SectionTitle
+            eyebrow="How it works"
+            title="Three moves to get everyone in."
+          />
+          <ol className="space-y-3">
+            <Step n={1}>
+              One person subscribes to the <strong style={{ color: "#1E2430" }}>Guild tier ($34.99/mo)</strong>.
+            </Step>
+            <Step n={2}>
+              They invite up to <strong style={{ color: "#1E2430" }}>5 friends</strong> from Billing → Manage guild.
+            </Step>
+            <Step n={3}>
+              Everyone gets full Veteran access, a shared Spice wallet, and 250 Spice / month stipend — automatic.
+            </Step>
+          </ol>
+        </div>
+      </Band>
 
-        {/* CTAs */}
-        <section className="text-center space-y-3">
-          <p className="text-sm text-slate-300">
-            Know someone with a Guild subscription?
+      {/* Pricing callout */}
+      <Band bg="#FFF8F3">
+        <div className="rounded-2xl border p-6 md:p-8 text-center" style={{ backgroundColor: CREAM.card, borderColor: CREAM.cardBorder }}>
+          <p className="text-[11px] font-black uppercase tracking-[0.3em]" style={{ color: CREAM.accent }}>
+            Pricing
           </p>
-          <p className="text-sm text-slate-400">
-            <strong className="text-amber-300">Ask your GM for a Guild invite</strong> — they can add you from their Billing page.
+          <p className="text-3xl md:text-4xl font-black mt-2" style={{ color: "#1E2430" }}>
+            $34.99 / month
           </p>
-          <div className="pt-3">
-            <Link
-              to={createPageUrl("AccountBilling")}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-amber-400 text-amber-950 font-black rounded-lg hover:bg-amber-300 transition-colors shadow-[0_0_20px_rgba(251,191,36,0.35)]"
-            >
-              ✨ Start your own Guild <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-          <p className="text-[11px] text-slate-500 max-w-md mx-auto">
-            Guilds are private. There's no public directory — you join by invitation from an existing Guild leader.
+          <p className="text-sm mt-2" style={{ color: CREAM.textMuted }}>
+            That's <strong>$5.83 per person</strong> when all six seats are filled — full Veteran access for every member.
           </p>
-        </section>
-      </div>
+        </div>
+      </Band>
+
+      {/* Bottom CTA band */}
+      <Band bg="#FFFFFF">
+        <div className="text-center space-y-3">
+          <Link
+            to={createPageUrl("AccountBilling")}
+            className="inline-flex items-center gap-2 font-black uppercase tracking-[0.25em] px-10 py-5 text-sm rounded-md"
+            style={{ backgroundColor: "#1E2430", color: "#FFFFFF" }}
+          >
+            <Crown className="w-4 h-4" /> Start a Guild
+          </Link>
+          <p className="text-[11px] max-w-md mx-auto" style={{ color: CREAM.textMuted }}>
+            Guilds are private — there's no public directory. Your friends join by invitation from the guild leader.
+          </p>
+        </div>
+      </Band>
     </div>
   );
 }
 
 function Benefit({ icon: Icon, title, body }) {
   return (
-    <div className="bg-[#1E2430] border border-slate-700 hover:border-amber-400/40 transition-colors rounded-xl p-5 flex gap-4">
-      <div className="w-10 h-10 rounded-lg bg-amber-500/15 border border-amber-400/30 flex items-center justify-center flex-shrink-0">
-        <Icon className="w-5 h-5 text-amber-300" />
+    <div
+      className="rounded-2xl border p-5 flex gap-4 transition-colors"
+      style={{ backgroundColor: CREAM.card, borderColor: CREAM.cardBorder }}
+    >
+      <div
+        className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+        style={{ backgroundColor: "#FFF0E8", border: `1px solid ${CREAM.cardBorder}` }}
+      >
+        <Icon className="w-5 h-5" style={{ color: CREAM.accent }} />
       </div>
       <div>
-        <p className="text-sm font-black text-white">{title}</p>
-        <p className="text-xs text-slate-400 mt-1 leading-relaxed">{body}</p>
+        <p className="text-sm font-black" style={{ color: "#1E2430" }}>{title}</p>
+        <p className="text-xs mt-1 leading-relaxed" style={{ color: CREAM.textMuted }}>{body}</p>
       </div>
     </div>
   );
@@ -449,10 +472,13 @@ function Benefit({ icon: Icon, title, body }) {
 function Step({ n, children }) {
   return (
     <li className="flex items-start gap-3">
-      <span className="w-7 h-7 rounded-full bg-amber-400 text-amber-950 font-black flex items-center justify-center flex-shrink-0">
+      <span
+        className="w-7 h-7 rounded-full font-black flex items-center justify-center flex-shrink-0"
+        style={{ backgroundColor: CREAM.accent, color: CREAM.textPrimary }}
+      >
         {n}
       </span>
-      <p className="text-sm text-slate-300 pt-0.5">{children}</p>
+      <p className="text-sm pt-0.5" style={{ color: "#1E2430" }}>{children}</p>
     </li>
   );
 }

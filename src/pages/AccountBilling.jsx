@@ -16,7 +16,7 @@ import { TIERS, openBillingPortal, startCheckout } from "@/api/billingClient";
 import { getWalletBalance } from "@/lib/spiceWallet";
 import { formatSpice } from "@/config/spiceConfig";
 import { createPageUrl } from "@/utils";
-import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
+import SpiceEmporium from "@/components/tavern/SpiceEmporium";
 
 /**
  * /account/billing
@@ -234,7 +234,7 @@ export default function AccountBilling() {
         </section>
       </div>
 
-      <BuySpiceDialog open={spiceOpen} onClose={() => setSpiceOpen(false)} />
+      <SpiceEmporium open={spiceOpen} onClose={() => setSpiceOpen(false)} />
 
       <CancelSubDialog
         open={cancelOpen}
