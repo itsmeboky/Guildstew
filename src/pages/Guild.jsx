@@ -15,6 +15,8 @@ import GuildHallHeader from "@/components/guild/GuildHallHeader";
 import GuildMembersSection from "@/components/guild/GuildMembersSection";
 import GuildActiveCampaigns from "@/components/guild/GuildActiveCampaigns";
 import GuildUpdatesFeed from "@/components/guild/GuildUpdatesFeed";
+import GuildAchievements from "@/components/guild/GuildAchievements";
+import GuildTreasury from "@/components/guild/GuildTreasury";
 
 /**
  * /guild
@@ -88,6 +90,12 @@ function GuildHub() {
     [profiles, guildOwnerId],
   );
 
+  const profilesById = useMemo(() => {
+    const map = new Map();
+    for (const p of profiles) map.set(p.user_id, p);
+    return map;
+  }, [profiles]);
+
   return (
     <div className="min-h-screen bg-[#050816] text-white">
       <GuildHallHeader
@@ -117,6 +125,10 @@ function GuildHub() {
         <GuildActiveCampaigns memberIds={memberIds} viewerId={user?.id} />
 
         <GuildUpdatesFeed memberIds={memberIds} />
+
+        <GuildAchievements memberIds={memberIds} profilesById={profilesById} />
+
+        <GuildTreasury guildOwnerId={guildOwnerId} />
       </div>
     </div>
   );
