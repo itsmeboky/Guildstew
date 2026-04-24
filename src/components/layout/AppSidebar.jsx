@@ -14,7 +14,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { getWalletBalance } from "@/lib/spiceWallet";
 import { formatSpice } from "@/config/spiceConfig";
-import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
+import SpiceEmporium from "@/components/tavern/SpiceEmporium";
 import CreatorUploadDialog from "@/components/tavern/CreatorUploadDialog";
 import SpiceIcon from "@/components/tavern/SpiceIcon";
 import AnimatedSpiceBalance from "@/components/tavern/AnimatedSpiceBalance";
@@ -257,7 +257,7 @@ export default function AppSidebar() {
         </div>
       </aside>
 
-      <BuySpiceDialog open={spiceOpen} onClose={() => setSpiceOpen(false)} />
+      <SpiceEmporium open={spiceOpen} onClose={() => setSpiceOpen(false)} />
       <CreatorUploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} />
     </>
   );
