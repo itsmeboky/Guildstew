@@ -3,30 +3,31 @@ import React from "react";
 /**
  * Spice icon — inline SVG wheat-stalk glyph.
  *
- * The previous implementation pulled the icon from the Google
- * Material Symbols icon-font and emitted the ligature text `wheat`,
- * which was vulnerable to every font override we ship: dyslexia mode
- * swaps the body font, user themes load custom Google Fonts, and the
- * OpenDyslexic + several ThemeBuilder presets simply don't have the
- * Material Symbols PUA ligatures. When the font can't resolve the
- * ligature the literal word `wheat` renders instead of the glyph.
+ * Emits a Lucide-style wheat sheaf: an angled stalk with three
+ * pairs of leaves budding off it, plus a tassel at the top. Every
+ * path is stroked with currentColor so the icon inherits its
+ * surrounding text color (explicitly overridable via the `color`
+ * prop).
  *
- * Switching to an inline SVG makes the icon impervious to every font
- * mechanism — no more `WHEAT` text leaking when a theme swaps the
- * global font.
+ * Shipped as an inline SVG — NOT a font ligature — so themes,
+ * dyslexia fonts, and custom Google Fonts from ThemeBuilder can
+ * never collapse it into the literal word "WHEAT". The public API
+ * matches the old font-icon so existing call sites (nav balance,
+ * pricing cards, tavern tiles, sidebar chip, admin panels…) keep
+ * working with zero changes.
  *
- * Props are a superset of the old font-icon API so existing call
- * sites don't need to change:
- *   size      — number (px) | string — width/height
- *   color     — stroke / fill color (default `currentColor`)
- *   filled    — render the filled variant instead of outlined
+ * Props:
+ *   size      — number (px) | string — width/height (default 1em)
+ *   color     — stroke color (default currentColor via style)
+ *   filled    — accepted for back-compat; the Lucide path already
+ *               reads at all sizes so this is a no-op hint today
  *   className — extra tailwind utilities
  *   title     — accessible label (default "Spice")
  */
 export default function SpiceIcon({
   size = "1em",
   color,
-  filled = false,
+  filled = false, // eslint-disable-line no-unused-vars
   className = "",
   style = {},
   title = "Spice",
@@ -34,44 +35,17 @@ export default function SpiceIcon({
 }) {
   const dimension = typeof size === "number" ? `${size}px` : size;
 
-  // Wheat-stalk outline: one vertical stalk with three pairs of
-  // leaves arcing out diagonally. The outlined variant is a tidy
-  // polygon; the filled variant thickens the leaves and stalk.
-  const outlined = (
-    <g fill="none" stroke={color || "currentColor"} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      {/* Central stalk */}
-      <path d="M12 4v17" />
-      {/* Top pair of leaves */}
-      <path d="M12 8c-1.6-0.8-3.1-0.8-4.3 0.2 0.6 1.4 2 2.3 3.7 2.3" />
-      <path d="M12 8c1.6-0.8 3.1-0.8 4.3 0.2-0.6 1.4-2 2.3-3.7 2.3" />
-      {/* Middle pair */}
-      <path d="M12 13c-1.6-0.8-3.1-0.8-4.3 0.2 0.6 1.4 2 2.3 3.7 2.3" />
-      <path d="M12 13c1.6-0.8 3.1-0.8 4.3 0.2-0.6 1.4-2 2.3-3.7 2.3" />
-      {/* Bottom pair */}
-      <path d="M12 18c-1.6-0.8-3.1-0.8-4.3 0.2 0.6 1.4 2 2.3 3.7 2.3" />
-      <path d="M12 18c1.6-0.8 3.1-0.8 4.3 0.2-0.6 1.4-2 2.3-3.7 2.3" />
-    </g>
-  );
-
-  const filledArt = (
-    <g fill={color || "currentColor"}>
-      <rect x="11.25" y="4" width="1.5" height="17" rx="0.75" />
-      {/* Three pairs of teardrop leaves; mirror across the stalk. */}
-      {[8, 13, 18].map((cy) => (
-        <g key={cy}>
-          <path d={`M12 ${cy}c-1.7-0.9-3.3-0.8-4.6 0.3 0.6 1.5 2.2 2.4 4 2.3 0.4-0.01 0.6-0.4 0.6-0.8V${cy}z`} />
-          <path d={`M12 ${cy}c1.7-0.9 3.3-0.8 4.6 0.3-0.6 1.5-2.2 2.4-4 2.3-0.4-0.01-0.6-0.4-0.6-0.8V${cy}z`} />
-        </g>
-      ))}
-    </g>
-  );
-
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       width={dimension}
       height={dimension}
+      fill="none"
+      stroke={color || "currentColor"}
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
       aria-label={title}
       role="img"
       className={`inline-block align-middle flex-shrink-0 ${className}`}
@@ -79,7 +53,18 @@ export default function SpiceIcon({
       {...rest}
     >
       <title>{title}</title>
-      {filled ? filledArt : outlined}
+      {/* Stalk */}
+      <path d="M2 22 16 8" />
+      {/* Left-side leaves */}
+      <path d="M3.47 12.53 5 11l1.53 1.53a3.5 3.5 0 0 1 0 4.94L5 19l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z" />
+      <path d="M7.47 8.53 9 7l1.53 1.53a3.5 3.5 0 0 1 0 4.94L9 15l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z" />
+      <path d="M11.47 4.53 13 3l1.53 1.53a3.5 3.5 0 0 1 0 4.94L13 11l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z" />
+      {/* Tassel */}
+      <path d="M20 2h2v2a4 4 0 0 1-4 4h-2V6a4 4 0 0 1 4-4Z" />
+      {/* Right-side leaves */}
+      <path d="M11.47 17.47 13 19l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L5 19l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z" />
+      <path d="M15.47 13.47 17 15l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L9 15l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z" />
+      <path d="M19.47 9.47 21 11l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L13 11l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z" />
     </svg>
   );
 }
