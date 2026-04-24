@@ -1,10 +1,13 @@
-import React, { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { X } from "lucide-react";
 import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
+import { getWalletBalance, addSpice } from "@/lib/spiceWallet";
+import { notifySpicePurchase } from "@/lib/spiceBalanceBus";
 import { createPageUrl } from "@/utils";
 
 // Canonical image URLs — all served from the app-assets/hero bucket.
@@ -47,6 +50,8 @@ export default function SpiceEmporium({ open, onClose }) {
   const { user } = useAuth();
   const sub = useSubscription();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [toastPayload, setToastPayload] = useState(null); // { from, to }
   const inGuild = !!sub?.isGuildMember || !!sub?.isGuildOwner || !!sub?.guildOwnerId;
 
   // Creator CTA label pivots on whether the user already has any
@@ -80,6 +85,50 @@ export default function SpiceEmporium({ open, onClose }) {
     navigate(createPageUrl("AccountBilling"));
   };
 
+  const purchase = useMutation({
+    mutationFn: async (bundle) => {
+      if (!user?.id) throw new Error("Sign in to purchase Spice.");
+
+      // TODO(stripe): replace this simulated credit with a real
+      // Stripe Checkout session. The billing Edge Function lands
+      // elsewhere; until then we credit the wallet directly so
+      // every downstream flow (spending, earning, cashouts) is
+      // exercisable end-to-end.
+      const prevBalance = Number(await getWalletBalance(user.id)) || 0;
+      const newBalance = await addSpice(
+        user.id,
+        bundle.spice,
+        "purchase",
+        `Purchased ${bundle.label} (${bundle.spice.toLocaleString()} Spice, $${bundle.price.toFixed(2)})`,
+      );
+
+      try {
+        const { supabase } = await import("@/api/supabaseClient");
+        const { data: current } = await supabase
+          .from("spice_wallets")
+          .select("lifetime_purchased")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        await supabase
+          .from("spice_wallets")
+          .update({ lifetime_purchased: (current?.lifetime_purchased || 0) + bundle.spice })
+          .eq("user_id", user.id);
+      } catch { /* lifetime_purchased is analytics-only */ }
+
+      return { prevBalance, newBalance };
+    },
+    onSuccess: ({ prevBalance, newBalance }) => {
+      queryClient.invalidateQueries({ queryKey: ["spiceWallet", user?.id] });
+      // Close the popup so the toast owns the viewport, then emit
+      // the balance delta on the pubsub so sidebar + Tavern pill
+      // run their count-up animations in sync with the toast.
+      onClose?.();
+      notifySpicePurchase({ from: prevBalance, to: newBalance });
+      setToastPayload({ from: prevBalance, to: newBalance });
+    },
+    onError: (err) => toast.error(err?.message || "Purchase failed."),
+  });
+
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
@@ -92,11 +141,29 @@ export default function SpiceEmporium({ open, onClose }) {
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  // Toast lives outside the `!open` early-return so it survives
+  // onClose() firing on a successful purchase.
+  const toastEl = toastPayload ? (
+    <PurchaseToast
+      from={toastPayload.from}
+      to={toastPayload.to}
+      onDone={() => setToastPayload(null)}
+    />
+  ) : null;
+
+  if (!open) {
+    return (
+      <>
+        <Keyframes />
+        {toastEl}
+      </>
+    );
+  }
 
   return (
     <>
       <Keyframes />
+      {toastEl}
       <div
         className="fixed inset-0 flex items-center justify-center"
         style={{
@@ -158,11 +225,10 @@ export default function SpiceEmporium({ open, onClose }) {
 
           <TrinketDome />
           <TitleBlock />
-          <PricingRow onPurchase={(bundle) => {
-            // step 7 wires the real purchase flow; until then we
-            // just close so the button is already functional.
-            onClose?.();
-          }} />
+          <PricingRow
+            onPurchase={(bundle) => purchase.mutate(bundle)}
+            disabled={purchase.isPending}
+          />
           <CtaStrip
             inGuild={inGuild}
             isCreator={isCreator}
@@ -310,7 +376,7 @@ function TitleBlock() {
  * Pricing row — 5 cards aligned to flex-end. Best Deal floats 28px
  * above the row via translateY so it visually breaks the baseline.
  */
-function PricingRow({ onPurchase }) {
+function PricingRow({ onPurchase, disabled }) {
   const [hoveredId, setHoveredId] = React.useState(null);
   return (
     <div
@@ -329,13 +395,14 @@ function PricingRow({ onPurchase }) {
           onHover={() => setHoveredId(b.id)}
           onLeave={() => setHoveredId((h) => (h === b.id ? null : h))}
           onPurchase={() => onPurchase?.(b)}
+          disabled={disabled}
         />
       ))}
     </div>
   );
 }
 
-function PricingCard({ bundle, hovered, onHover, onLeave, onPurchase }) {
+function PricingCard({ bundle, hovered, onHover, onLeave, onPurchase, disabled }) {
   const r = RARITY[bundle.rarity];
   const isLegendary = bundle.rarity === "legendary";
   const isBest = !!bundle.best;
@@ -574,6 +641,7 @@ function PricingCard({ bundle, hovered, onHover, onLeave, onPurchase }) {
         {/* 8. Purchase button */}
         <button
           type="button"
+          disabled={disabled}
           onClick={(e) => { e.stopPropagation(); onPurchase?.(); }}
           style={{
             marginTop: "6px",
@@ -590,11 +658,12 @@ function PricingCard({ bundle, hovered, onHover, onLeave, onPurchase }) {
             letterSpacing: "0.08em",
             textTransform: "uppercase",
             fontFamily: "'Cinzel', serif",
-            cursor: "pointer",
+            cursor: disabled ? "wait" : "pointer",
+            opacity: disabled ? 0.6 : 1,
             transition: "all 0.2s ease",
           }}
         >
-          Purchase
+          {disabled ? "Processing…" : "Purchase"}
         </button>
       </div>
     </div>
@@ -737,6 +806,84 @@ function JumpCTA({ image, alt, label, sublabel, onClick }) {
   );
 }
 
+/**
+ * Post-purchase toast. Slides in from the right, runs a 1.5s
+ * ease-out-cubic count-up from prevBalance → newBalance, holds
+ * 3 seconds, fades out. Runs in parallel with the spiceBalanceBus
+ * animations on the sidebar + Tavern pill so the whole UI
+ * celebrates in sync.
+ */
+function PurchaseToast({ from, to, onDone }) {
+  const [display, setDisplay] = useState(from);
+  const [phase, setPhase] = useState("entering");
+  const rafRef = useRef(null);
+
+  useEffect(() => {
+    const start = performance.now();
+    const delta = to - from;
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / 1500);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setDisplay(Math.round(from + delta * eased));
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [from, to]);
+
+  useEffect(() => {
+    const enter = setTimeout(() => setPhase("holding"), 40);
+    const leave = setTimeout(() => setPhase("leaving"), 3000);
+    const done  = setTimeout(() => onDone?.(), 3400);
+    return () => { clearTimeout(enter); clearTimeout(leave); clearTimeout(done); };
+  }, [onDone]);
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: "24px",
+        right: "24px",
+        zIndex: 999,
+        background: "linear-gradient(135deg, #1a1730, #241f3a)",
+        border: "1px solid rgba(245,158,11,0.3)",
+        borderRadius: "16px",
+        padding: "16px 24px",
+        display: "flex",
+        alignItems: "center",
+        gap: "14px",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.4), 0 0 20px rgba(245,158,11,0.15)",
+        animation: phase === "entering"
+          ? "empSlideInRight 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards"
+          : undefined,
+        transform: phase === "leaving" ? "translateX(120px)" : "translateX(0)",
+        opacity: phase === "leaving" ? 0 : 1,
+        transition: "transform 0.35s ease, opacity 0.35s ease",
+      }}
+    >
+      <SpiceIcon size={24} color="#f59e0b" />
+      <div>
+        <p style={{ fontSize: "11px", color: "#8a84a8", margin: 0, letterSpacing: "0.06em" }}>
+          Spice Balance
+        </p>
+        <p
+          style={{
+            fontSize: "28px",
+            fontWeight: 800,
+            fontFamily: "'Cinzel', serif",
+            color: "#f59e0b",
+            margin: 0,
+            lineHeight: 1,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {display.toLocaleString()}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function Keyframes() {
   return (
     <style>{`
@@ -760,6 +907,10 @@ function Keyframes() {
       @keyframes empShimmerSlide {
         0%   { left: -100%; }
         100% { left: 200%; }
+      }
+      @keyframes empSlideInRight {
+        from { transform: translateX(120px); opacity: 0; }
+        to   { transform: translateX(0);     opacity: 1; }
       }
     `}</style>
   );
