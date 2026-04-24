@@ -1,6 +1,11 @@
 import React, { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
 import SpiceIcon from "@/components/tavern/SpiceIcon";
+import { useAuth } from "@/lib/AuthContext";
+import { useSubscription } from "@/lib/SubscriptionContext";
+import { createPageUrl } from "@/utils";
 
 // Canonical image URLs — all served from the app-assets/hero bucket.
 export const IMAGES = {
@@ -39,6 +44,42 @@ export const RARITY = {
  * title, pricing row, CTAs) come in in subsequent steps.
  */
 export default function SpiceEmporium({ open, onClose }) {
+  const { user } = useAuth();
+  const sub = useSubscription();
+  const navigate = useNavigate();
+  const inGuild = !!sub?.isGuildMember || !!sub?.isGuildOwner || !!sub?.guildOwnerId;
+
+  // Creator CTA label pivots on whether the user already has any
+  // tavern_items rows. Kept as a head+count so we don't pull rows.
+  const { data: listingCount = 0 } = useQuery({
+    queryKey: ["emporiumListingCount", user?.id],
+    queryFn: async () => {
+      const { supabase } = await import("@/api/supabaseClient");
+      const { count } = await supabase
+        .from("tavern_items")
+        .select("id", { count: "exact", head: true })
+        .eq("creator_id", user.id);
+      return count || 0;
+    },
+    enabled: !!user?.id && open,
+  });
+  const isCreator = listingCount > 0;
+
+  const goGuild = () => {
+    onClose?.();
+    navigate(createPageUrl("Guild"));
+  };
+
+  const goCreator = () => {
+    onClose?.();
+    navigate(createPageUrl(isCreator ? "CreatorDashboard" : "CreatorProgram"));
+  };
+
+  const goPricing = () => {
+    onClose?.();
+    navigate(createPageUrl("AccountBilling"));
+  };
+
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
@@ -122,7 +163,13 @@ export default function SpiceEmporium({ open, onClose }) {
             // just close so the button is already functional.
             onClose?.();
           }} />
-          <div style={{ padding: "0 0 4px" }} />
+          <CtaStrip
+            inGuild={inGuild}
+            isCreator={isCreator}
+            onGuild={goGuild}
+            onCreator={goCreator}
+            onPricing={goPricing}
+          />
         </div>
       </div>
     </>
@@ -550,6 +597,142 @@ function PricingCard({ bundle, hovered, onHover, onLeave, onPurchase }) {
           Purchase
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Bottom CTA strip — Guild left, center upsell copy, Creator right.
+ * Each CTA uses JumpCTA which overlaps the character image above
+ * the button so the character appears to leap out on hover.
+ */
+function CtaStrip({ inGuild, isCreator, onGuild, onCreator, onPricing }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-end",
+        padding: "24px 32px 20px",
+        borderTop: "1px solid rgba(255,255,255,0.03)",
+        marginTop: "4px",
+      }}
+    >
+      <JumpCTA
+        image={IMAGES.guild}
+        alt="Guild"
+        label={inGuild ? "Guild Hub" : "Create a Guild"}
+        sublabel="$5.83/person · 6 members"
+        onClick={onGuild}
+      />
+
+      {/* Center upsell — points the user at tier pricing. */}
+      <div style={{ textAlign: "center", alignSelf: "center" }}>
+        <p style={{ fontSize: "9px", color: "#4a4560", fontWeight: 500, margin: 0 }}>
+          Upgrade for better splits
+        </p>
+        <button
+          type="button"
+          onClick={onPricing}
+          style={{
+            fontSize: "9px",
+            color: "#f8a47c",
+            fontWeight: 600,
+            cursor: "pointer",
+            marginTop: "2px",
+            background: "none",
+            border: "none",
+            padding: 0,
+          }}
+        >
+          See tier benefits →
+        </button>
+      </div>
+
+      <JumpCTA
+        image={IMAGES.creator}
+        alt="Creator"
+        label={isCreator ? "Creator Dashboard" : "Become a Creator"}
+        sublabel="Earn Spice on every sale"
+        onClick={onCreator}
+      />
+    </div>
+  );
+}
+
+function JumpCTA({ image, alt, label, sublabel, onClick }) {
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{ display: "flex", flexDirection: "column", alignItems: "center" }}
+    >
+      {/* Character — sits above the button, overlaps the button's
+          top edge via a negative margin-bottom so it reads as the
+          character leaping out of the shop window. */}
+      <div
+        style={{
+          width: "90px",
+          height: "90px",
+          position: "relative",
+          zIndex: 2,
+          marginBottom: "-20px",
+          transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
+          transform: hovered ? "translateY(-8px) scale(1.1)" : "translateY(0) scale(1)",
+          filter: hovered
+            ? "drop-shadow(0 8px 16px rgba(248,164,124,0.3))"
+            : "drop-shadow(0 4px 8px rgba(0,0,0,0.3))",
+          pointerEvents: "none",
+        }}
+      >
+        <img
+          src={image}
+          alt={alt}
+          draggable={false}
+          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={onClick}
+        style={{
+          position: "relative",
+          zIndex: 1,
+          background: hovered ? "rgba(248,164,124,0.12)" : "rgba(248,164,124,0.04)",
+          border: `1px solid ${hovered ? "rgba(248,164,124,0.4)" : "rgba(248,164,124,0.15)"}`,
+          borderRadius: "14px",
+          padding: "22px 20px 12px",
+          minWidth: "160px",
+          textAlign: "center",
+          cursor: "pointer",
+          boxShadow: hovered ? "0 4px 20px rgba(248,164,124,0.1)" : "none",
+          transition: "all 0.2s ease",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "11px",
+            fontWeight: 800,
+            letterSpacing: "0.07em",
+            textTransform: "uppercase",
+            color: "#f8a47c",
+          }}
+        >
+          {label}
+        </div>
+        <div
+          style={{
+            fontSize: "9px",
+            fontWeight: 500,
+            color: "#5a5575",
+            marginTop: "2px",
+          }}
+        >
+          {sublabel}
+        </div>
+      </button>
     </div>
   );
 }
