@@ -139,8 +139,8 @@ export default function BuySpiceDialog({ open, onClose }) {
   const DOME_SIZE  = isMobile ? 130 : 187;          // was 162 / 234 (-20%)
   const TOP_ROW_PT = isMobile ? 0   : 130;          // was 0   / 162
   const TRINKET_H  = isMobile ? 173 : 422;          // was 216 / 527
-  const TRINKET_W  = isMobile ? 274 : 546;          // -20% then +50px wider per request
-  const SIDE_IMG   = isMobile ? 173 : 288;          // was 216 / 360
+  const TRINKET_W  = isMobile ? 300 : 600;          // slightly wider GIF for the roomier popup
+  const SIDE_IMG   = isMobile ? 186 : 320;          // CTA art scaled to match wider popup
   const SIDE_IMG_LIFT = isMobile ? 0 : TOP_ROW_PT - 32; // proportional to scaled TOP_ROW_PT
 
   if (!open) return null;
@@ -159,7 +159,7 @@ export default function BuySpiceDialog({ open, onClose }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-4xl"
+        className="relative w-full max-w-5xl"
         style={{ marginTop: `${Math.max(0, DOME_SIZE / 2 + 32 - 80)}px` }}
       >
         {/* Arch — the white circle anchored on the top center of the
