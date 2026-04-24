@@ -117,7 +117,12 @@ export default function SpiceEmporium({ open, onClose }) {
 
           <TrinketDome />
           <TitleBlock />
-          <div style={{ padding: "0 0 20px", minHeight: "120px" }} />
+          <PricingRow onPurchase={(bundle) => {
+            // step 7 wires the real purchase flow; until then we
+            // just close so the button is already functional.
+            onClose?.();
+          }} />
+          <div style={{ padding: "0 0 4px" }} />
         </div>
       </div>
     </>
@@ -254,6 +259,301 @@ function TitleBlock() {
   );
 }
 
+/**
+ * Pricing row — 5 cards aligned to flex-end. Best Deal floats 28px
+ * above the row via translateY so it visually breaks the baseline.
+ */
+function PricingRow({ onPurchase }) {
+  const [hoveredId, setHoveredId] = React.useState(null);
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: "10px",
+        padding: "6px 20px",
+        alignItems: "flex-end",
+      }}
+    >
+      {BUNDLES.map((b) => (
+        <PricingCard
+          key={b.id}
+          bundle={b}
+          hovered={hoveredId === b.id}
+          onHover={() => setHoveredId(b.id)}
+          onLeave={() => setHoveredId((h) => (h === b.id ? null : h))}
+          onPurchase={() => onPurchase?.(b)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function PricingCard({ bundle, hovered, onHover, onLeave, onPurchase }) {
+  const r = RARITY[bundle.rarity];
+  const isLegendary = bundle.rarity === "legendary";
+  const isBest = !!bundle.best;
+  const isActiveMotion = isBest || hovered;
+
+  // Border via layered box-shadow so the rarity border blends with
+  // the glow instead of fighting a solid 1px outline.
+  const shadow = hovered
+    ? `0 0 0 2px ${r.border[0]}, 0 20px 60px ${r.glow}, 0 0 40px ${r.glow}, inset 0 1px 0 rgba(255,255,255,0.15)`
+    : isBest
+      ? `0 0 0 2px ${r.border[1]}, 0 10px 40px ${r.glow}, 0 0 20px ${r.glow}`
+      : `0 0 0 1px ${r.border[1]}40, 0 4px 20px rgba(0,0,0,0.3)`;
+
+  const transform = hovered
+    ? "translateY(-12px) scale(1.06)"
+    : isBest
+      ? "translateY(-28px)"
+      : "translateY(0)";
+
+  const z = isBest ? 3 : hovered ? 2 : 1;
+
+  // Overlay gradient strength depends on rarity + state.
+  const shimmerBg = hovered
+    ? (isLegendary
+        ? "linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)"
+        : `linear-gradient(180deg, ${r.glow} 0%, transparent 100%)`)
+    : (isLegendary
+        ? "linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 100%)"
+        : "linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 100%)");
+
+  return (
+    <div
+      onMouseEnter={onHover}
+      onMouseLeave={onLeave}
+      style={{
+        flex: isBest ? 1.2 : 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "4px",
+        padding: isBest ? "14px 14px 18px" : "12px 12px 16px",
+        borderRadius: "16px",
+        cursor: "pointer",
+        overflow: "hidden",
+        position: "relative",
+        background: r.gradient,
+        color: r.text,
+        transform,
+        boxShadow: shadow,
+        zIndex: z,
+        transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
+      }}
+    >
+      {/* Static top-half shimmer overlay */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: "55%",
+          background: shimmerBg,
+          borderTopLeftRadius: "16px",
+          borderTopRightRadius: "16px",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Sliding shimmer ribbon — only on legendary + hovered cards. */}
+      {isActiveMotion && (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: 0,
+            left: "-100%",
+            width: "60%",
+            height: "100%",
+            background: isLegendary
+              ? "linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent)"
+              : "linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)",
+            animation: "empShimmerSlide 2.5s ease-in-out infinite",
+            pointerEvents: "none",
+          }}
+        />
+      )}
+
+      {/* Floating particles — rising from bottom on legendary + hovered. */}
+      {isActiveMotion && (
+        <div aria-hidden style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <span
+              key={i}
+              style={{
+                position: "absolute",
+                bottom: "6px",
+                left: `${15 + i * 14}%`,
+                width: "3px",
+                height: "3px",
+                borderRadius: "50%",
+                background: isLegendary ? "rgba(255,255,255,0.9)" : r.accent,
+                opacity: 0,
+                animation: `empFloatUp ${1.8 + (i % 3) * 0.4}s ease-out ${i * 0.4}s infinite`,
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* --- Content stack --- */}
+      <div style={{ position: "relative", zIndex: 1, display: "contents" }}>
+        {/* 1. Rarity label */}
+        {isBest ? (
+          <span
+            style={{
+              background: "rgba(26,15,0,0.7)",
+              color: "#fbbf24",
+              fontSize: "9px",
+              fontWeight: 800,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              padding: "3px 12px",
+              borderRadius: "20px",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+            }}
+          >
+            ★ Best Deal
+          </span>
+        ) : (
+          <span
+            style={{
+              fontSize: "8px",
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              color: r.accent,
+              opacity: 0.65,
+            }}
+          >
+            {bundle.label}
+          </span>
+        )}
+
+        {/* 2. Tier image */}
+        <div
+          style={{
+            width: isBest ? "100px" : "75px",
+            height: isBest ? "100px" : "75px",
+            transition: "filter 0.3s ease, transform 0.3s ease",
+            filter: hovered ? `drop-shadow(0 0 12px ${r.accent})` : "none",
+            transform: hovered ? "scale(1.12)" : "scale(1)",
+          }}
+        >
+          <img
+            src={IMAGES.tiers[bundle.id - 1]}
+            alt=""
+            draggable={false}
+            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          />
+        </div>
+
+        {/* 3. Spice header — wheat icon + "Spice" */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <SpiceIcon
+            size={isBest ? 20 : 16}
+            color={isLegendary ? "#1a0f00" : r.accent}
+          />
+          <span
+            style={{
+              fontSize: isBest ? "16px" : "13px",
+              fontWeight: 900,
+              fontFamily: "'Cinzel', serif",
+              color: isLegendary ? "#1a0f00" : r.accent,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+            }}
+          >
+            Spice
+          </span>
+        </div>
+
+        {/* 4. Amount */}
+        <div
+          style={{
+            fontSize: isBest ? "28px" : "22px",
+            fontWeight: 800,
+            fontFamily: "'Cinzel', serif",
+            color: r.text,
+            lineHeight: 1,
+            textShadow: hovered && !isLegendary ? `0 0 20px ${r.glow}` : "none",
+          }}
+        >
+          {bundle.spice.toLocaleString()}
+        </div>
+
+        {/* 5. Bonus badge */}
+        <span
+          style={{
+            background: isLegendary ? "rgba(26,15,0,0.15)" : `${r.accent}18`,
+            border: `1px solid ${isLegendary ? "rgba(26,15,0,0.2)" : `${r.accent}30`}`,
+            color: isLegendary ? "#1a0f00" : r.accent,
+            fontSize: "10px",
+            fontWeight: 700,
+            padding: "2px 8px",
+            borderRadius: "12px",
+          }}
+        >
+          +{bundle.bonus.toLocaleString()} bonus
+        </span>
+
+        {/* 6. Price */}
+        <div
+          style={{
+            fontSize: isBest ? "14px" : "12px",
+            fontWeight: 600,
+            color: isLegendary ? "rgba(26,15,0,0.6)" : "rgba(255,255,255,0.55)",
+          }}
+        >
+          ${bundle.price.toFixed(2)}
+        </div>
+
+        {/* 7. Bonus percent */}
+        <div
+          style={{
+            fontSize: "9px",
+            fontWeight: 600,
+            letterSpacing: "0.05em",
+            color: isLegendary ? "rgba(26,15,0,0.4)" : "rgba(255,255,255,0.3)",
+            textTransform: "uppercase",
+          }}
+        >
+          {bundle.pct} Bonus
+        </div>
+
+        {/* 8. Purchase button */}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onPurchase?.(); }}
+          style={{
+            marginTop: "6px",
+            width: "100%",
+            padding: isBest ? "9px 14px" : "7px 12px",
+            borderRadius: "10px",
+            background: isLegendary
+              ? (hovered ? "#2a1a08" : "linear-gradient(135deg, #1a0f00, #2a1a08)")
+              : (hovered ? `${r.accent}28` : `${r.accent}12`),
+            border: isLegendary ? "none" : `1px solid ${hovered ? `${r.accent}70` : `${r.accent}40`}`,
+            color: isLegendary ? "#fbbf24" : r.accent,
+            fontSize: "11px",
+            fontWeight: 800,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            fontFamily: "'Cinzel', serif",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+          }}
+        >
+          Purchase
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Keyframes() {
   return (
     <style>{`
@@ -268,6 +568,15 @@ function Keyframes() {
       @keyframes empTrinketBob {
         0%, 100% { transform: translateX(-50%) translateY(0); }
         50%      { transform: translateX(-50%) translateY(-8px); }
+      }
+      @keyframes empFloatUp {
+        0%   { opacity: 0; transform: translateY(0) scale(1); }
+        30%  { opacity: 0.8; }
+        100% { opacity: 0; transform: translateY(-60px) scale(0.3); }
+      }
+      @keyframes empShimmerSlide {
+        0%   { left: -100%; }
+        100% { left: 200%; }
       }
     `}</style>
   );
