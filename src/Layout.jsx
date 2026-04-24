@@ -11,13 +11,12 @@ import DiceRoller from "@/components/dice/DiceRoller";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
-import { useSubscription } from "@/lib/SubscriptionContext";
 import { useMyPresence } from "@/lib/PresenceContext";
 import { StatusPicker } from "@/components/presence/StatusDot";
 
 function NavStatusPicker() {
-  // Manual status picker next to the TierBadge so the user can
-  // flip online / away / DND / offline on a whim.
+  // Manual status picker in the nav so the user can flip
+  // online / away / DND / offline on a whim.
   const { status, setStatus } = useMyPresence();
   return <StatusPicker current={status} onChange={setStatus} />;
 }
@@ -50,28 +49,9 @@ function LegalFooter() {
 // sidebar's user header, and duplicating it here was noise. The
 // stipend-ready dot moved to the sidebar pill along with it.
 
-function TierBadge() {
-  // Small "⚔️ Adventurer" / "🛡️ Veteran" / "👑 Guild" badge that
-  // sits next to the nav so the user always knows their tier.
-  // Free users get nothing (no clutter).
-  const sub = useSubscription();
-  if (!sub.tierData?.badgeIcon || sub.tier === 'free') return null;
-  return (
-    <Link
-      to={createPageUrl('Settings') + '?tab=subscription'}
-      title={`${sub.tierData.name} subscription — manage billing`}
-      className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider rounded-full px-2 py-1"
-      style={{
-        backgroundColor: `${sub.tierData.badgeColor}33`,
-        color: sub.tierData.badgeColor,
-        border: `1px solid ${sub.tierData.badgeColor}66`,
-      }}
-    >
-      <span>{sub.tierData.badgeIcon}</span>
-      <span>{sub.tierData.name}</span>
-    </Link>
-  );
-}
+// TierBadge removed from the top nav — it already renders in the
+// sidebar's user header next to the username/avatar, and showing
+// it in both spots was redundant.
 import LazyImage from "@/components/ui/LazyImage";
 
 export default function Layout({ children, currentPageName }) {
@@ -688,7 +668,6 @@ export default function Layout({ children, currentPageName }) {
               </div>
             );
           })}
-          <TierBadge />
 
           <Link
             to={createPageUrl("TheTavern")}
