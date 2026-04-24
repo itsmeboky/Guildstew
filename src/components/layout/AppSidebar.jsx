@@ -7,7 +7,7 @@ import {
   Upload, LayoutDashboard, TrendingUp,
   HelpCircle, BookOpen, AlertTriangle,
   User, Settings, CreditCard, Crown, Package, UserCircle2,
-  ChevronDown, Sparkles,
+  ChevronDown, Sparkles, Shield,
 } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -339,11 +339,12 @@ export function SidebarLink({ to, icon: Icon, label, badge, external, className 
 }
 
 /**
- * Guild Management entry.
+ * Guild entry in the Account section.
  *
- * In-a-guild users get a plain link to /guild. Guild-less users get
- * a warm amber CTA — "✨ Join a Guild" — so the upsell feels
- * inviting rather than nag-like.
+ * Members see a Shield-icon "Guild Hall" link. Non-members see a
+ * shiny gold "Join a Guild" CTA with a warm amber glow so the
+ * upsell feels inviting rather than nag-like. Both destinations
+ * point at /Guild, which branches on membership internally.
  */
 function guildManagementItem(sub) {
   const inGuild = !!sub?.guildOwnerId || sub?.isGuildMember || sub?.isGuildOwner;
@@ -351,17 +352,24 @@ function guildManagementItem(sub) {
     return (
       <SidebarLink
         to={createPageUrl("Guild")}
-        icon={Crown}
-        label="Guild Management"
+        icon={Shield}
+        label="Guild Hall"
       />
     );
   }
   return (
     <Link
       to={createPageUrl("Guild")}
-      className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-bold bg-amber-500/10 text-amber-200 border border-amber-400/60 hover:bg-amber-500/20 hover:border-amber-300 transition-colors shadow-[0_0_12px_rgba(251,191,36,0.12)]"
+      className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-bold transition-colors"
+      style={{
+        color: "#fde68a",
+        backgroundColor: "rgba(245,158,11,0.10)",
+        border: "1px solid #f59e0b",
+        boxShadow:
+          "0 0 14px rgba(245,158,11,0.28), inset 0 0 10px rgba(251,191,36,0.08)",
+      }}
     >
-      <Sparkles className="w-[18px] h-[18px] text-amber-300" />
+      <Sparkles className="w-[18px] h-[18px]" style={{ color: "#fbbf24" }} />
       <span className="flex-1">Join a Guild</span>
     </Link>
   );
