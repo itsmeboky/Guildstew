@@ -229,12 +229,12 @@ export default function SpiceEmporium({ open, onClose }) {
             <X size={14} />
           </button>
 
-          {/* Cards sit at the top of the shell now — the old dome +
-              title block were removed so the popup reads as a
-              focused storefront instead of a branded header above
-              the goods. Some top padding still clears the close
+          {/* Trinket hangs above the popup in the circular dome,
+              bobbing gently. Cards follow underneath with enough
+              padding to clear the dome's lower half + the close
               button. */}
-          <div style={{ paddingTop: "32px" }} />
+          <TrinketDome />
+          <div style={{ paddingTop: "80px" }} />
           <PricingRow
             onPurchase={(bundle) => purchase.mutate(bundle)}
             disabled={purchase.isPending}
@@ -249,6 +249,54 @@ export default function SpiceEmporium({ open, onClose }) {
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * Trinket dome — circular portrait frame anchored at the top-center
+ * of the main container, offset upward so the frame overlaps the
+ * container's top edge. 140x140 circle with overflow: hidden so the
+ * GIF's smoke tail clips cleanly; 3s vertical bob keeps her alive
+ * while the popup is open.
+ */
+function TrinketDome() {
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: "absolute",
+        top: "-80px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 10,
+        pointerEvents: "none",
+        animation: "empTrinketBob 3s ease-in-out infinite",
+      }}
+    >
+      <div
+        style={{
+          width: "140px",
+          height: "140px",
+          borderRadius: "50%",
+          overflow: "hidden",
+          background: "radial-gradient(circle, rgba(245,158,11,0.1) 0%, transparent 70%)",
+          border: "2px solid rgba(245,158,11,0.15)",
+          boxShadow: "0 0 50px rgba(245,158,11,0.08)",
+        }}
+      >
+        <img
+          src={IMAGES.trinketMarket}
+          alt="Trinket"
+          draggable={false}
+          style={{
+            width: "140px",
+            height: "140px",
+            objectFit: "cover",
+            borderRadius: "50%",
+          }}
+        />
+      </div>
+    </div>
   );
 }
 
