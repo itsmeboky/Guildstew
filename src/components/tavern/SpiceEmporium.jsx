@@ -114,12 +114,63 @@ export default function SpiceEmporium({ open, onClose }) {
             <X size={14} />
           </button>
 
-          {/* Content slots below. Trinket + title + cards + CTAs land
-              in the next commits. */}
+          {/* Content slots below. Title + cards + CTAs land in the
+              next commits. */}
+          <TrinketDome />
           <div style={{ padding: "0 0 0 0", minHeight: "120px" }} />
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * Trinket in the dome — anchored at the top-center of the main
+ * container, offset upward by 80px so her silhouette overlaps the
+ * top edge like a shopkeeper leaning out of her shop window. A
+ * subtle 3s bob keeps her alive while the popup is open.
+ *
+ * 140x140 circle with object-fit: cover clips her trailing smoke
+ * tail cleanly at the frame edge.
+ */
+function TrinketDome() {
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: "absolute",
+        top: "-80px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 10,
+        pointerEvents: "none",
+        animation: "empTrinketBob 3s ease-in-out infinite",
+      }}
+    >
+      <div
+        style={{
+          width: "140px",
+          height: "140px",
+          borderRadius: "50%",
+          overflow: "hidden",
+          background: "radial-gradient(circle, rgba(245,158,11,0.1) 0%, transparent 70%)",
+          border: "2px solid rgba(245,158,11,0.15)",
+          boxShadow: "0 0 50px rgba(245,158,11,0.08)",
+        }}
+      >
+        <img
+          src={IMAGES.trinket}
+          alt="Trinket"
+          draggable={false}
+          style={{
+            width: "140px",
+            height: "140px",
+            objectFit: "cover",
+            borderRadius: "50%",
+          }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -135,6 +186,10 @@ function Keyframes() {
       @keyframes empGentlePulse {
         0%, 100% { opacity: 0.3; }
         50%      { opacity: 0.7; }
+      }
+      @keyframes empTrinketBob {
+        0%, 100% { transform: translateX(-50%) translateY(0); }
+        50%      { transform: translateX(-50%) translateY(-8px); }
       }
     `}</style>
   );
