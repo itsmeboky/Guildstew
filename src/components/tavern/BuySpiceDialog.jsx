@@ -133,14 +133,15 @@ export default function BuySpiceDialog({ open, onClose }) {
   // Creator images overflow above the rectangle's flat top on their
   // respective sides; Trinket overflows HIGHER into the dome.
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  // Every size dropped ~10% from the previous pass; Trinket is then
-  // stretched wider independently (see TRINKET_W).
-  const DOME_SIZE  = isMobile ? 162 : 234;          // was 180 / 260
-  const TOP_ROW_PT = isMobile ? 0   : 162;          // was 0 / 180
-  const TRINKET_H  = isMobile ? 216 : 527;          // was 240 / 586 (-10%)
-  const TRINKET_W  = isMobile ? 280 : 620;          // explicitly wider than natural ratio
-  const SIDE_IMG   = isMobile ? 216 : 360;          // was 240 / 400 (-10%)
-  const SIDE_IMG_LIFT = isMobile ? 0 : TOP_ROW_PT - 40; // CTA images sit 80px lower than before
+  // Another -20% pass from the previous sizes. Positional offsets
+  // that derived from these constants (Trinket lift, button tuck,
+  // CTA image lift) scale proportionally below.
+  const DOME_SIZE  = isMobile ? 130 : 187;          // was 162 / 234 (-20%)
+  const TOP_ROW_PT = isMobile ? 0   : 130;          // was 0   / 162
+  const TRINKET_H  = isMobile ? 173 : 422;          // was 216 / 527
+  const TRINKET_W  = isMobile ? 274 : 546;          // -20% then +50px wider per request
+  const SIDE_IMG   = isMobile ? 173 : 288;          // was 216 / 360
+  const SIDE_IMG_LIFT = isMobile ? 0 : TOP_ROW_PT - 32; // proportional to scaled TOP_ROW_PT
 
   if (!open) return null;
 
@@ -152,7 +153,7 @@ export default function BuySpiceDialog({ open, onClose }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-6xl"
+        className="relative w-full max-w-4xl"
         style={{ marginTop: `${Math.max(0, DOME_SIZE / 2 + 32 - 80)}px` }}
       >
         {/* Arch — the white circle anchored on the top center of the
@@ -205,7 +206,7 @@ export default function BuySpiceDialog({ open, onClose }) {
                 imgSize={SIDE_IMG}
                 imgLift={SIDE_IMG_LIFT}
               />
-              <div className="flex flex-col items-center" style={{ marginTop: -(TOP_ROW_PT + 360) }}>
+              <div className="flex flex-col items-center" style={{ marginTop: -(TOP_ROW_PT + 288) }}>
                 <img
                   src={TRINKET_GIF}
                   alt="Trinket"
@@ -232,7 +233,7 @@ export default function BuySpiceDialog({ open, onClose }) {
                 alt="Trinket"
                 draggable={false}
                 className="relative drop-shadow-[0_8px_12px_rgba(0,0,0,0.3)]"
-                style={{ height: `${TRINKET_H}px`, width: `${TRINKET_W}px`, objectFit: "fill", marginTop: `-${Math.max(DOME_SIZE * 0.45, 60) + 200}px`, zIndex: 5 }}
+                style={{ height: `${TRINKET_H}px`, width: `${TRINKET_W}px`, objectFit: "fill", marginTop: `-${Math.max(DOME_SIZE * 0.45, 48) + 160}px`, zIndex: 5 }}
               />
             </div>
 
@@ -298,7 +299,7 @@ function TopColumn({ art, alt, label, onClick, imgSize, imgLift }) {
         type="button"
         onClick={onClick}
         className="relative inline-flex items-center justify-center bg-black text-white font-black uppercase tracking-[0.2em] text-[11px] px-6 py-3 rounded-full hover:bg-slate-800 transition-colors shadow-[0_6px_12px_rgba(0,0,0,0.25)]"
-        style={{ marginTop: "-110px", zIndex: 3 }}
+        style={{ marginTop: "-88px", zIndex: 3 }}
       >
         {label}
       </button>
@@ -353,7 +354,14 @@ function PricingRow({ onPurchase, disabled }) {
           onPurchase={() => onPurchase?.(b)}
           // Center the lone last item on mobile when there's an
           // odd number of bundles in a 2-column grid.
-          extraClass={i === SPICE_BUNDLES.length - 1 && SPICE_BUNDLES.length % 2 === 1 ? "col-span-2 md:col-span-1 max-w-xs mx-auto md:max-w-none" : ""}
+          // On mobile's 2-col grid the trailing odd card spans both
+          // cells + caps its width so it centers as a single tile.
+          // `md:mx-0` is critical: without it, `mx-auto` persists on
+          // desktop and collapses the 5-col grid item to its
+          // intrinsic width (the $100 card rendered narrower than
+          // the other four), even though `md:max-w-none` removed
+          // the width cap.
+          extraClass={i === SPICE_BUNDLES.length - 1 && SPICE_BUNDLES.length % 2 === 1 ? "col-span-2 md:col-span-1 max-w-xs md:max-w-none mx-auto md:mx-0 md:w-full" : ""}
         />
       ))}
     </div>
