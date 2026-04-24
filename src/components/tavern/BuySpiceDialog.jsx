@@ -133,11 +133,13 @@ export default function BuySpiceDialog({ open, onClose }) {
   // Creator images overflow above the rectangle's flat top on their
   // respective sides; Trinket overflows HIGHER into the dome.
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const DOME_SIZE  = isMobile ? 180 : 260;          // decorative arch — reverted to pre-bump size
-  const TOP_ROW_PT = isMobile ? 0   : 180;          // top row padding — images overflow above
-  const TRINKET_H  = isMobile ? 240 : 586;          // GIF height (+250px on desktop)
-  const TRINKET_W  = isMobile ? 240 : 520;          // explicit width — wider proportion than natural
-  const SIDE_IMG   = isMobile ? 240 : 400;          // Guild / Creator image ~400px desktop
+  // Every size dropped ~10% from the previous pass; Trinket is then
+  // stretched wider independently (see TRINKET_W).
+  const DOME_SIZE  = isMobile ? 162 : 234;          // was 180 / 260
+  const TOP_ROW_PT = isMobile ? 0   : 162;          // was 0 / 180
+  const TRINKET_H  = isMobile ? 216 : 527;          // was 240 / 586 (-10%)
+  const TRINKET_W  = isMobile ? 280 : 620;          // explicitly wider than natural ratio
+  const SIDE_IMG   = isMobile ? 216 : 360;          // was 240 / 400 (-10%)
   const SIDE_IMG_LIFT = isMobile ? 0 : TOP_ROW_PT - 40; // CTA images sit 80px lower than before
 
   if (!open) return null;
@@ -150,7 +152,7 @@ export default function BuySpiceDialog({ open, onClose }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-7xl"
+        className="relative w-full max-w-6xl"
         style={{ marginTop: `${Math.max(0, DOME_SIZE / 2 + 32 - 80)}px` }}
       >
         {/* Arch — the white circle anchored on the top center of the
@@ -296,7 +298,7 @@ function TopColumn({ art, alt, label, onClick, imgSize, imgLift }) {
         type="button"
         onClick={onClick}
         className="relative inline-flex items-center justify-center bg-black text-white font-black uppercase tracking-[0.2em] text-[11px] px-6 py-3 rounded-full hover:bg-slate-800 transition-colors shadow-[0_6px_12px_rgba(0,0,0,0.25)]"
-        style={{ marginTop: "-30px", zIndex: 3 }}
+        style={{ marginTop: "-110px", zIndex: 3 }}
       >
         {label}
       </button>
@@ -365,12 +367,17 @@ function PricingCard({ bundle, onPurchase, disabled, extraClass = "" }) {
   // use the dark navy/slate gradient, Best Deal uses the teal
   // gradient. Everything (border, shadow, padding, radius, text
   // color) is applied inline so the cascade can't flatten it.
+  // Best Deal palette pivots to Guildstew's brand orange (#ff5900)
+  // while keeping the same shape language — inner-border glow,
+  // 0 8px 32px shadow, 20px radius, 28px 20px padding, #1E2430
+  // text. The shadow tint follows the gradient to a warm orange
+  // so the hover pulse reads as the same hue.
   const base = isBest ? {
-    background: "linear-gradient(145deg, #37F2D1, #2DD4BF, #14B8A6)",
+    background: "linear-gradient(145deg, #ff7a2a, #ff5900, #c43d00)",
     border: "1px solid rgba(255, 255, 255, 0.3)",
     borderRadius: "20px",
     padding: "28px 20px",
-    boxShadow: "0 8px 32px rgba(45, 212, 191, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2)",
+    boxShadow: "0 8px 32px rgba(255, 89, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2)",
     color: "#1E2430",
   } : {
     background: "linear-gradient(145deg, #1E2430, #2a3441, #1a1f2e)",
@@ -386,7 +393,7 @@ function PricingCard({ bundle, onPurchase, disabled, extraClass = "" }) {
   // exact rgba values land on the element.
   const hover = isBest ? {
     transform: "translateY(-6px) scale(1.05)",
-    boxShadow: "0 16px 48px rgba(45, 212, 191, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.25)",
+    boxShadow: "0 16px 48px rgba(255, 89, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.25)",
     borderColor: "rgba(255, 255, 255, 0.5)",
   } : {
     transform: "translateY(-4px) scale(1.03)",
@@ -401,7 +408,11 @@ function PricingCard({ bundle, onPurchase, disabled, extraClass = "" }) {
     ? "linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, transparent 100%)"
     : "linear-gradient(180deg, rgba(55, 242, 209, 0.06) 0%, transparent 100%)";
 
-  const headerColor = isBest ? "#1E2430" : "#e2e8f0";
+  // Header pair — [angled wheat icon] "Spice" — rendered in a
+  // bright mustard yellow on every card regardless of background,
+  // so the label reads as a consistent, unmissable ribbon across
+  // the row.
+  const headerColor = "#FBBF24";
 
   const bonusStyle = isBest ? {
     background: "rgba(30, 36, 48, 0.15)",
@@ -415,15 +426,19 @@ function PricingCard({ bundle, onPurchase, disabled, extraClass = "" }) {
 
   // Purchase button — Best Deal gets a solid dark button (navy on
   // teal), regular cards get the teal-tinted glass button.
+  // Regular-card buttons share identical dimensions so the 4
+  // flanking cards look homogenous; the Best Deal button is a
+  // noticeable step up in both padding and font size so it reads
+  // as the featured CTA.
   const btnBase = isBest ? {
     background: "#1E2430",
     color: "#37F2D1",
     border: "1px solid rgba(30, 36, 48, 0.3)",
-    borderRadius: "12px",
-    padding: "12px 24px",
-    fontWeight: 700,
-    fontSize: "14px",
-    letterSpacing: "0.05em",
+    borderRadius: "14px",
+    padding: "14px 28px",
+    fontWeight: 800,
+    fontSize: "15px",
+    letterSpacing: "0.06em",
     textTransform: "uppercase",
     cursor: "pointer",
     transition: "all 0.2s ease",
@@ -513,7 +528,11 @@ function PricingCard({ bundle, onPurchase, disabled, extraClass = "" }) {
             lineHeight: 1,
           }}
         >
-          <SpiceIcon size={30} color={headerColor} />
+          <SpiceIcon
+            size={30}
+            color={headerColor}
+            style={{ transform: "rotate(-18deg)", transformOrigin: "50% 60%" }}
+          />
           Spice
         </div>
 
