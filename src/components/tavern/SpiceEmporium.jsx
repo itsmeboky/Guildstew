@@ -243,7 +243,7 @@ export default function SpiceEmporium({ open, onClose }) {
               onClick={goPricing}
               style={{
                 fontSize: "9px",
-                color: "#f8a47c",
+                color: "#f59e0b",
                 fontWeight: 600,
                 cursor: "pointer",
                 background: "none",
@@ -711,14 +711,25 @@ function CtaStrip({ inGuild, onGuild, onCreator }) {
 function JumpCTA({ image, alt, label, sublabel, onClick }) {
   const [hovered, setHovered] = React.useState(false);
   return (
-    <div
+    <button
+      type="button"
+      onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ display: "flex", flexDirection: "column", alignItems: "center" }}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        background: "none",
+        border: "none",
+        padding: 0,
+        cursor: "pointer",
+        font: "inherit",
+      }}
     >
       {/* Character — 150px tall, width auto so each PNG keeps its
           natural aspect. Negative margin-bottom -24 sinks the
-          character into the button's upper edge; both JumpCTAs
+          character into the panel's upper edge; both JumpCTAs
           bottom-align in the parent (CtaStrip's alignItems:
           flex-end) so the character feet always share a baseline
           even when the two images have different widths. */}
@@ -732,7 +743,7 @@ function JumpCTA({ image, alt, label, sublabel, onClick }) {
           transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
           transform: hovered ? "translateY(-10px) scale(1.08)" : "translateY(0) scale(1)",
           filter: hovered
-            ? "drop-shadow(0 10px 18px rgba(248,164,124,0.3))"
+            ? "drop-shadow(0 10px 18px rgba(245,158,11,0.35))"
             : "drop-shadow(0 5px 10px rgba(0,0,0,0.3))",
           pointerEvents: "none",
         }}
@@ -745,20 +756,17 @@ function JumpCTA({ image, alt, label, sublabel, onClick }) {
         />
       </div>
 
-      <button
-        type="button"
-        onClick={onClick}
+      <div
         style={{
           position: "relative",
           zIndex: 1,
-          background: hovered ? "rgba(248,164,124,0.12)" : "rgba(248,164,124,0.04)",
-          border: `1px solid ${hovered ? "rgba(248,164,124,0.4)" : "rgba(248,164,124,0.15)"}`,
+          background: hovered ? "rgba(245,158,11,0.12)" : "rgba(245,158,11,0.04)",
+          border: `1px solid ${hovered ? "rgba(251,191,36,0.45)" : "rgba(245,158,11,0.2)"}`,
           borderRadius: "14px",
           padding: "32px 20px 12px",
           minWidth: "200px",
           textAlign: "center",
-          cursor: "pointer",
-          boxShadow: hovered ? "0 4px 20px rgba(248,164,124,0.1)" : "none",
+          boxShadow: hovered ? "0 4px 20px rgba(245,158,11,0.12)" : "none",
           transition: "all 0.2s ease",
         }}
       >
@@ -768,7 +776,7 @@ function JumpCTA({ image, alt, label, sublabel, onClick }) {
             fontWeight: 800,
             letterSpacing: "0.07em",
             textTransform: "uppercase",
-            color: "#f8a47c",
+            color: "#f59e0b",
           }}
         >
           {label}
@@ -777,14 +785,14 @@ function JumpCTA({ image, alt, label, sublabel, onClick }) {
           style={{
             fontSize: "9px",
             fontWeight: 500,
-            color: "#5a5575",
+            color: "#8a7a50",
             marginTop: "2px",
           }}
         >
           {sublabel}
         </div>
-      </button>
-    </div>
+      </div>
+    </button>
   );
 }
 
