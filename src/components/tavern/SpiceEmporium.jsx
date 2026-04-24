@@ -222,12 +222,12 @@ export default function SpiceEmporium({ open, onClose }) {
               padding to clear the dome's lower half + the close
               button. */}
           <TrinketDome />
-          {/* 180px of clearance — the dome now anchors 80px lower
-              than before (top: -30 vs the previous -110), so the
-              cards need more room above them to avoid colliding
-              with her lower body. Also pushes the policy link and
-              the CTA strip 80px down with the cards. */}
-          <div style={{ paddingTop: "180px" }} />
+          {/* 180px of clearance — the dome anchors 80px lower than
+              before (top: -30 vs the previous -110), so the cards
+              need room above them to avoid colliding with her lower
+              body. The gold "Trinket's Emporium" title sits inside
+              that band, directly under the portrait circle. */}
+          <TitleBlock />
           <PricingRow
             onPurchase={(bundle) => purchase.mutate(bundle)}
             disabled={purchase.isPending}
@@ -314,6 +314,47 @@ function TrinketDome() {
           }}
         />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Gold-leaf "Trinket's Emporium" title sitting in the clearance band
+ * between the portrait dome and the pricing row. Puppies Play Google
+ * Font gives a playful hand-lettered shape; a top-to-bottom gold
+ * gradient fill + dark stroke sells the stamped-metal look.
+ */
+function TitleBlock() {
+  return (
+    <div
+      style={{
+        paddingTop: "158px",
+        paddingBottom: "10px",
+        textAlign: "center",
+        position: "relative",
+        zIndex: 2,
+      }}
+    >
+      <h2
+        style={{
+          fontFamily: "'Puppies Play', cursive",
+          fontSize: "44px",
+          lineHeight: 1,
+          margin: 0,
+          letterSpacing: "0.5px",
+          background:
+            "linear-gradient(180deg, #fff4d0 0%, #f5c547 38%, #c68f1a 72%, #7a4e00 100%)",
+          WebkitBackgroundClip: "text",
+          backgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+          color: "transparent",
+          WebkitTextStroke: "1px #3d2a00",
+          textShadow:
+            "0 2px 0 rgba(0,0,0,0.35), 0 0 18px rgba(245,158,11,0.25)",
+        }}
+      >
+        Trinket's Emporium
+      </h2>
     </div>
   );
 }
@@ -828,7 +869,7 @@ function PurchaseToast({ from, to, onDone }) {
 function Keyframes() {
   return (
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Puppies+Play&display=swap');
 
       @keyframes empFadeIn {
         from { opacity: 0; transform: scale(0.96); }
