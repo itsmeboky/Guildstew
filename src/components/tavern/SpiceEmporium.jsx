@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { X } from "lucide-react";
@@ -55,22 +55,6 @@ export default function SpiceEmporium({ open, onClose }) {
   const [toastPayload, setToastPayload] = useState(null); // { from, to }
   const inGuild = !!sub?.isGuildMember || !!sub?.isGuildOwner || !!sub?.guildOwnerId;
 
-  // Creator CTA label pivots on whether the user already has any
-  // tavern_items rows. Kept as a head+count so we don't pull rows.
-  const { data: listingCount = 0 } = useQuery({
-    queryKey: ["emporiumListingCount", user?.id],
-    queryFn: async () => {
-      const { supabase } = await import("@/api/supabaseClient");
-      const { count } = await supabase
-        .from("tavern_items")
-        .select("id", { count: "exact", head: true })
-        .eq("creator_id", user.id);
-      return count || 0;
-    },
-    enabled: !!user?.id && open,
-  });
-  const isCreator = listingCount > 0;
-
   const goGuild = () => {
     onClose?.();
     navigate(createPageUrl("Guild"));
@@ -78,7 +62,11 @@ export default function SpiceEmporium({ open, onClose }) {
 
   const goCreator = () => {
     onClose?.();
-    navigate(createPageUrl(isCreator ? "CreatorDashboard" : "CreatorProgram"));
+    // Popup Creator CTA is a marketing funnel — always route to
+    // the /CreatorProgram landing page regardless of whether the
+    // user already has listings. Returning creators reach their
+    // dashboard from CreatorProgram's hero CTA or the sidebar.
+    navigate(createPageUrl("CreatorProgram"));
   };
 
   const goPricing = () => {
@@ -269,7 +257,6 @@ export default function SpiceEmporium({ open, onClose }) {
 
           <CtaStrip
             inGuild={inGuild}
-            isCreator={isCreator}
             onGuild={goGuild}
             onCreator={goCreator}
           />
@@ -634,12 +621,16 @@ function PricingCard({ bundle, hovered, onHover, onLeave, onPurchase, disabled }
  * Each CTA uses JumpCTA which overlaps the character image above
  * the button so the character appears to leap out on hover.
  */
-function CtaStrip({ inGuild, isCreator, onGuild, onCreator }) {
+function CtaStrip({ inGuild, onGuild, onCreator }) {
   return (
     <div
       style={{
         display: "flex",
-        justifyContent: "space-between",
+        // Centered pair with a tight gap so the two CTAs read as a
+        // related duo instead of stranded on opposite edges with a
+        // dead zone between them.
+        justifyContent: "center",
+        gap: "48px",
         // flex-end ensures both JumpCTA blocks bottom-align, so the
         // two character images sit on the same baseline regardless
         // of their different natural widths (the Guild / Creator
@@ -668,7 +659,7 @@ function CtaStrip({ inGuild, isCreator, onGuild, onCreator }) {
       <JumpCTA
         image={IMAGES.creator}
         alt="Creator"
-        label={isCreator ? "Creator Dashboard" : "Become a Creator"}
+        label="Become a Creator"
         sublabel="Earn Spice on every sale"
         onClick={onCreator}
       />
