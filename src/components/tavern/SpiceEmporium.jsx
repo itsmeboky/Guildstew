@@ -185,7 +185,7 @@ export default function SpiceEmporium({ open, onClose }) {
           className="relative w-full"
           style={{
             maxWidth: "920px",
-            background: "linear-gradient(180deg, #1a1730 0%, #141225 50%, #100e1f 100%)",
+            background: "linear-gradient(180deg, #100e1f 0%, #141225 50%, #1a1730 100%)",
             border: "1px solid rgba(245,158,11,0.08)",
             borderRadius: "24px",
             overflow: "visible",
