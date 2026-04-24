@@ -148,7 +148,13 @@ export default function BuySpiceDialog({ open, onClose }) {
   return (
     <div
       className="fixed inset-0 z-[9998] flex items-start md:items-center justify-center p-4 md:p-8 overflow-y-auto"
-      style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+      style={{
+        backgroundColor: "rgba(0,0,0,0.55)",
+        // Subtle blur on whatever's behind the popup — enough to
+        // dim the campaign / sidebar without erasing context.
+        backdropFilter: "blur(6px)",
+        WebkitBackdropFilter: "blur(6px)",
+      }}
       onClick={onClose}
     >
       <div
@@ -175,8 +181,14 @@ export default function BuySpiceDialog({ open, onClose }) {
             padding-top leaves room for Guild / Trinket / Creator to
             extend upward from the top row's baseline. */}
         <div
-          className="relative bg-white rounded-b-[20px] shadow-[0_20px_60px_rgba(0,0,0,0.35)] z-10"
-          style={{ paddingTop: `${TOP_ROW_PT}px` }}
+          className="relative rounded-b-[20px] shadow-[0_20px_60px_rgba(0,0,0,0.35)] z-10"
+          style={{
+            paddingTop: `${TOP_ROW_PT}px`,
+            // Gradient starts white at the top — meeting the white
+            // dome circle seamlessly — then fades into a dark
+            // purple-navy at the bottom edge.
+            background: "linear-gradient(180deg, #ffffff 0%, #f2edff 32%, #4b3d74 72%, #1E1A3A 100%)",
+          }}
         >
           {/* Close button — top-right of the rectangle, clear of the
               dome so it doesn't overlap Trinket. */}
