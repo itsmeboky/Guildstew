@@ -13,6 +13,7 @@ import { createPageUrl } from "@/utils";
 // Canonical image URLs — all served from the app-assets/hero bucket.
 export const IMAGES = {
   trinket: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/ezgif.com-reverse.gif",
+  trinketMarket: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/trinketmarket.gif",
   guild:   "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/Makeaguild.png",
   creator: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/becomeacreator1.png",
   tiers: [
@@ -82,7 +83,12 @@ export default function SpiceEmporium({ open, onClose }) {
 
   const goPricing = () => {
     onClose?.();
-    navigate(createPageUrl("AccountBilling"));
+    // The center link is now the Virtual Currency Policy — a legal
+    // disclaimer page explaining how Spice works as a virtual
+    // currency (no real-world value, non-refundable once spent,
+    // etc.). Still routed through goPricing to keep the existing
+    // prop plumbing stable.
+    navigate(createPageUrl("VirtualCurrencyPolicy"));
   };
 
   const purchase = useMutation({
@@ -223,8 +229,12 @@ export default function SpiceEmporium({ open, onClose }) {
             <X size={14} />
           </button>
 
-          <TrinketDome />
-          <TitleBlock />
+          {/* Cards sit at the top of the shell now — the old dome +
+              title block were removed so the popup reads as a
+              focused storefront instead of a branded header above
+              the goods. Some top padding still clears the close
+              button. */}
+          <div style={{ paddingTop: "32px" }} />
           <PricingRow
             onPurchase={(bundle) => purchase.mutate(bundle)}
             disabled={purchase.isPending}
@@ -239,136 +249,6 @@ export default function SpiceEmporium({ open, onClose }) {
         </div>
       </div>
     </>
-  );
-}
-
-/**
- * Trinket in the dome — anchored at the top-center of the main
- * container, offset upward by 80px so her silhouette overlaps the
- * top edge like a shopkeeper leaning out of her shop window. A
- * subtle 3s bob keeps her alive while the popup is open.
- *
- * 140x140 circle with object-fit: cover clips her trailing smoke
- * tail cleanly at the frame edge.
- */
-function TrinketDome() {
-  return (
-    <div
-      aria-hidden
-      style={{
-        position: "absolute",
-        top: "-80px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 10,
-        pointerEvents: "none",
-        animation: "empTrinketBob 3s ease-in-out infinite",
-      }}
-    >
-      <div
-        style={{
-          width: "140px",
-          height: "140px",
-          borderRadius: "50%",
-          overflow: "hidden",
-          background: "radial-gradient(circle, rgba(245,158,11,0.1) 0%, transparent 70%)",
-          border: "2px solid rgba(245,158,11,0.15)",
-          boxShadow: "0 0 50px rgba(245,158,11,0.08)",
-        }}
-      >
-        <img
-          src={IMAGES.trinket}
-          alt="Trinket"
-          draggable={false}
-          style={{
-            width: "140px",
-            height: "140px",
-            objectFit: "cover",
-            borderRadius: "50%",
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-/**
- * Title block — three lines of copy centered under the dome.
- *   1. Emporium eyebrow (salmon).
- *   2. Decorative line — wheat — "SPICE" — decorative line (orange).
- *   3. Subtitle tagline (muted).
- *
- * padding-top 76px clears the bottom half of the dome (60px below
- * the container top) plus breathing room.
- */
-function TitleBlock() {
-  return (
-    <div style={{ paddingTop: "76px", textAlign: "center" }}>
-      <p
-        style={{
-          fontSize: "9px",
-          fontWeight: 700,
-          letterSpacing: "0.22em",
-          textTransform: "uppercase",
-          color: "#f8a47c",
-          margin: 0,
-        }}
-      >
-        Trinket's Emporium
-      </p>
-
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "12px",
-          marginTop: "8px",
-        }}
-      >
-        <span
-          aria-hidden
-          style={{
-            width: "40px",
-            height: "1px",
-            background: "linear-gradient(90deg, transparent, rgba(245,158,11,0.25))",
-          }}
-        />
-        <SpiceIcon size={24} color="#f59e0b" />
-        <span
-          style={{
-            fontSize: "24px",
-            fontWeight: 900,
-            fontFamily: "'Cinzel', serif",
-            color: "#f59e0b",
-            letterSpacing: "0.08em",
-          }}
-        >
-          SPICE
-        </span>
-        <SpiceIcon size={24} color="#f59e0b" style={{ transform: "scaleX(-1)" }} />
-        <span
-          aria-hidden
-          style={{
-            width: "40px",
-            height: "1px",
-            background: "linear-gradient(90deg, rgba(245,158,11,0.25), transparent)",
-          }}
-        />
-      </div>
-
-      <p
-        style={{
-          fontSize: "10px",
-          color: "#4a4560",
-          fontWeight: 500,
-          marginTop: "6px",
-          marginBottom: 0,
-        }}
-      >
-        The currency that flavors your adventure
-      </p>
-    </div>
   );
 }
 
@@ -695,8 +575,17 @@ function CtaStrip({ inGuild, isCreator, onGuild, onCreator, onPricing }) {
         onClick={onGuild}
       />
 
-      {/* Center upsell — points the user at tier pricing. */}
-      <div style={{ textAlign: "center", alignSelf: "center" }}>
+      {/* Center column: trinketmarket.gif animation → upsell copy →
+          Virtual Currency Policy link. The gif sets the tone so the
+          legal link feels like part of the shop instead of an
+          afterthought. */}
+      <div style={{ textAlign: "center", alignSelf: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+        <img
+          src={IMAGES.trinketMarket}
+          alt=""
+          draggable={false}
+          style={{ width: "96px", height: "96px", objectFit: "contain" }}
+        />
         <p style={{ fontSize: "9px", color: "#4a4560", fontWeight: 500, margin: 0 }}>
           Upgrade for better splits
         </p>
@@ -714,7 +603,7 @@ function CtaStrip({ inGuild, isCreator, onGuild, onCreator, onPricing }) {
             padding: 0,
           }}
         >
-          See tier benefits →
+          View Virtual Currency Policy
         </button>
       </div>
 
@@ -742,11 +631,11 @@ function JumpCTA({ image, alt, label, sublabel, onClick }) {
           character leaping out of the shop window. */}
       <div
         style={{
-          width: "90px",
-          height: "90px",
+          width: "117px",
+          height: "117px",
           position: "relative",
           zIndex: 2,
-          marginBottom: "-20px",
+          marginBottom: "-26px",
           transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
           transform: hovered ? "translateY(-8px) scale(1.1)" : "translateY(0) scale(1)",
           filter: hovered
@@ -772,8 +661,8 @@ function JumpCTA({ image, alt, label, sublabel, onClick }) {
           background: hovered ? "rgba(248,164,124,0.12)" : "rgba(248,164,124,0.04)",
           border: `1px solid ${hovered ? "rgba(248,164,124,0.4)" : "rgba(248,164,124,0.15)"}`,
           borderRadius: "14px",
-          padding: "22px 20px 12px",
-          minWidth: "160px",
+          padding: "28px 20px 12px",
+          minWidth: "180px",
           textAlign: "center",
           cursor: "pointer",
           boxShadow: hovered ? "0 4px 20px rgba(248,164,124,0.1)" : "none",
