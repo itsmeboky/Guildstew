@@ -329,7 +329,7 @@ function TitleBlock() {
     <div
       style={{
         paddingTop: "158px",
-        paddingBottom: "10px",
+        paddingBottom: "60px",
         textAlign: "center",
         position: "relative",
         zIndex: 2,
@@ -338,7 +338,7 @@ function TitleBlock() {
       <h2
         style={{
           fontFamily: "'Puppies Play', cursive",
-          fontSize: "44px",
+          fontSize: "54px",
           lineHeight: 1,
           margin: 0,
           letterSpacing: "0.5px",
