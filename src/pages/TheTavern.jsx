@@ -18,7 +18,7 @@ import { listEntitlements } from "@/lib/tavernEntitlements";
 import { formatSpice } from "@/config/spiceConfig";
 import { TAVERN_CATEGORIES, SORT_OPTIONS } from "@/config/tavernCategories";
 import { TAVERN_PALETTE as P, TAVERN_HEADER_GRADIENT } from "@/config/tavernPalette";
-import BuySpiceDialog from "@/components/tavern/BuySpiceDialog";
+import SpiceEmporium from "@/components/tavern/SpiceEmporium";
 import AnimatedSpiceBalance from "@/components/tavern/AnimatedSpiceBalance";
 import TavernItemCard from "@/components/tavern/TavernItemCard";
 import TavernItemDetailDialog from "@/components/tavern/TavernItemDetailDialog";
@@ -317,7 +317,7 @@ export default function TheTavern() {
         )}
       </div>
 
-      <BuySpiceDialog open={spiceOpen} onClose={() => setSpiceOpen(false)} />
+      <SpiceEmporium open={spiceOpen} onClose={() => setSpiceOpen(false)} />
       <CreatorUploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} />
       <TavernItemDetailDialog
         item={detailItem}
