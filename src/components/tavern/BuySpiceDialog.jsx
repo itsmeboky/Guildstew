@@ -360,89 +360,204 @@ function PricingRow({ onPurchase, disabled }) {
 
 function PricingCard({ bundle, onPurchase, disabled, extraClass = "" }) {
   const isBest = !!bundle.best_deal;
-  const textColor = isBest ? "#1E2430" : "#FFFFFF";
 
-  // Gradient + shadow palette. Purple cards use violet top →
-  // darker violet bottom; Best Deal uses the brand teal gradient.
-  // White inner border gives a subtle glow inside the rounded
-  // shape so the cards don't read as flat.
-  const background = isBest
-    ? "linear-gradient(180deg, #37F2D1, #2DD4BF)"
-    : "linear-gradient(180deg, #8B5CF6, #6D28D9)";
+  // Card shell — exact values from the brand spec. Regular cards
+  // use the dark navy/slate gradient, Best Deal uses the teal
+  // gradient. Everything (border, shadow, padding, radius, text
+  // color) is applied inline so the cascade can't flatten it.
+  const base = isBest ? {
+    background: "linear-gradient(145deg, #37F2D1, #2DD4BF, #14B8A6)",
+    border: "1px solid rgba(255, 255, 255, 0.3)",
+    borderRadius: "20px",
+    padding: "28px 20px",
+    boxShadow: "0 8px 32px rgba(45, 212, 191, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2)",
+    color: "#1E2430",
+  } : {
+    background: "linear-gradient(145deg, #1E2430, #2a3441, #1a1f2e)",
+    border: "1px solid rgba(55, 242, 209, 0.25)",
+    borderRadius: "20px",
+    padding: "24px 16px",
+    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
+    color: "#e2e8f0",
+  };
 
-  // Purchase button: contrast surface matching the card gradient.
-  // Hover states managed via Tailwind `group-hover:` on the parent
-  // so the button also animates when the card is hovered.
-  const btnBase  = isBest
-    ? "bg-[#1E2430] text-[#37F2D1] hover:bg-black"
-    : "bg-white text-[#6D28D9] hover:bg-slate-100";
+  // Hover deltas — the card lifts + scales, shadow deepens,
+  // border brightens. Applied via inline onMouseEnter/Leave so the
+  // exact rgba values land on the element.
+  const hover = isBest ? {
+    transform: "translateY(-6px) scale(1.05)",
+    boxShadow: "0 16px 48px rgba(45, 212, 191, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.25)",
+    borderColor: "rgba(255, 255, 255, 0.5)",
+  } : {
+    transform: "translateY(-4px) scale(1.03)",
+    boxShadow: "0 12px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12)",
+    borderColor: "rgba(55, 242, 209, 0.5)",
+  };
 
-  // Best Deal reaches up into the top row so Trinket appears to
-  // stand behind it (z-10 vs Trinket's z-5). Lift is md-gated so
-  // mobile's 2x2 grid keeps a clean baseline.
+  // Shimmer pseudo-element — implemented as a nested absolute div
+  // since React can't attach ::before styles without a CSS-in-JS lib.
+  // Same 50% top gradient fade the spec calls for.
+  const shimmerBg = isBest
+    ? "linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, transparent 100%)"
+    : "linear-gradient(180deg, rgba(55, 242, 209, 0.06) 0%, transparent 100%)";
+
+  const headerColor = isBest ? "#1E2430" : "#e2e8f0";
+
+  const bonusStyle = isBest ? {
+    background: "rgba(30, 36, 48, 0.15)",
+    color: "#1E2430",
+    border: "1px solid rgba(30, 36, 48, 0.2)",
+  } : {
+    background: "rgba(55, 242, 209, 0.15)",
+    color: "#37F2D1",
+    border: "1px solid rgba(55, 242, 209, 0.25)",
+  };
+
+  // Purchase button — Best Deal gets a solid dark button (navy on
+  // teal), regular cards get the teal-tinted glass button.
+  const btnBase = isBest ? {
+    background: "#1E2430",
+    color: "#37F2D1",
+    border: "1px solid rgba(30, 36, 48, 0.3)",
+    borderRadius: "12px",
+    padding: "12px 24px",
+    fontWeight: 700,
+    fontSize: "14px",
+    letterSpacing: "0.05em",
+    textTransform: "uppercase",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+    width: "100%",
+  } : {
+    background: "rgba(55, 242, 209, 0.15)",
+    color: "#37F2D1",
+    border: "1px solid rgba(55, 242, 209, 0.35)",
+    borderRadius: "12px",
+    padding: "10px 24px",
+    fontWeight: 700,
+    fontSize: "13px",
+    letterSpacing: "0.05em",
+    textTransform: "uppercase",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+    width: "100%",
+  };
+  const btnHover = isBest
+    ? { background: "#2a3441", borderColor: "rgba(30, 36, 48, 0.3)" }
+    : { background: "rgba(55, 242, 209, 0.3)", borderColor: "rgba(55, 242, 209, 0.6)" };
+
+  // Best Deal still reaches up 96px into the top row so Trinket
+  // (z-5) appears to stand behind the card (z-10). Mobile's 2x2
+  // grid keeps a flat baseline.
   return (
     <div
-      className={`group relative rounded-[16px] transition-all duration-200 ease-out hover:scale-105 ${
-        isBest ? "md:-mt-24 md:pt-4" : ""
-      } ${extraClass}`}
+      className={`relative ${isBest ? "md:-mt-24" : ""} ${extraClass}`}
       style={{
-        background,
-        color: textColor,
-        border: "1px solid rgba(255,255,255,0.2)",
-        boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+        ...base,
+        position: "relative",
+        overflow: "hidden",
+        cursor: "pointer",
+        transition: "all 0.25s ease",
         zIndex: isBest ? 10 : 1,
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = "0 8px 30px rgba(0,0,0,0.25)";
+        e.currentTarget.style.transform = hover.transform;
+        e.currentTarget.style.boxShadow = hover.boxShadow;
+        e.currentTarget.style.borderColor = hover.borderColor;
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.15)";
+        e.currentTarget.style.transform = "";
+        e.currentTarget.style.boxShadow = base.boxShadow;
+        e.currentTarget.style.borderColor = isBest ? "rgba(255, 255, 255, 0.3)" : "rgba(55, 242, 209, 0.25)";
       }}
     >
-      {isBest && (
-        <span className="absolute left-1/2 -translate-x-1/2 -top-3 inline-block text-[10px] font-black uppercase tracking-[0.25em] px-3 py-1 rounded-full bg-black text-[#37F2D1] shadow-lg">
-          Best Deal
-        </span>
-      )}
+      {/* Shimmer — top-half gradient fade (::before substitute). */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: "50%",
+          background: shimmerBg,
+          borderRadius: "20px 20px 0 0",
+          pointerEvents: "none",
+        }}
+      />
 
-      <div className={`px-4 pt-5 pb-4 flex flex-col items-center text-center ${isBest ? "pt-8 pb-6" : ""}`}>
-        {/* Price headline */}
-        <p className={`font-black leading-none ${isBest ? "text-4xl" : "text-3xl"}`}>
-          ${bundle.price.toFixed(2)}
-        </p>
-
-        {/* Label between price and amount — makes it obvious that
-            the number below is Spice, not currency or quantity. */}
-        <div
-          className="mt-3 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.25em]"
-          style={{ opacity: 0.8 }}
-        >
-          <SpiceIcon size={12} color={textColor} />
-          Spice
-        </div>
-
-        {/* Spice amount — the big number */}
-        <p className={`font-black leading-none mt-1 ${isBest ? "text-3xl" : "text-2xl"}`}>
-          {formatSpice(bundle.spice)}
-        </p>
-
-        {bundle.bonus > 0 && (
-          <span
-            className="mt-3 inline-block text-[10px] font-black uppercase tracking-widest rounded-full px-2.5 py-1"
-            style={{
-              backgroundColor: isBest ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.2)",
-              color: textColor,
-            }}
-          >
-            +{formatSpice(bundle.bonus)} Bonus
+      {/* Content — relative so it layers above the shimmer. */}
+      <div className="relative flex flex-col items-center text-center gap-3">
+        {isBest && (
+          <span style={{
+            background: "#f8a47c",
+            color: "#1E2430",
+            fontSize: "11px",
+            fontWeight: 800,
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            padding: "4px 16px",
+            borderRadius: "20px",
+          }}>
+            BEST DEAL
           </span>
         )}
 
+        {/* Header — what you're buying. Biggest text on the card. */}
+        <div
+          className="inline-flex items-center gap-2"
+          style={{
+            fontSize: "32px",
+            fontWeight: 800,
+            color: headerColor,
+            lineHeight: 1,
+          }}
+        >
+          <SpiceIcon size={30} color={headerColor} />
+          Spice
+        </div>
+
+        {/* Amount — how much Spice. */}
+        <p style={{ fontSize: "28px", fontWeight: 700, lineHeight: 1, margin: 0 }}>
+          {formatSpice(bundle.spice)}
+        </p>
+
+        {/* Price — what it costs. */}
+        <p style={{ fontSize: "18px", fontWeight: 600, opacity: 0.85, lineHeight: 1, margin: 0 }}>
+          ${bundle.price.toFixed(2)}
+        </p>
+
+        {/* Bonus pill. */}
+        {bundle.bonus > 0 && (
+          <span
+            style={{
+              ...bonusStyle,
+              fontSize: "12px",
+              fontWeight: 600,
+              padding: "4px 12px",
+              borderRadius: "20px",
+            }}
+          >
+            +{formatSpice(bundle.bonus)} BONUS
+          </span>
+        )}
+
+        {/* Purchase — uppercase, tracked, full-width. */}
         <button
           type="button"
           onClick={onPurchase}
           disabled={disabled}
-          className={`mt-4 w-full text-[11px] font-black uppercase tracking-[0.18em] rounded-full py-2 transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed ${btnBase}`}
+          style={{ ...btnBase, opacity: disabled ? 0.6 : 1 }}
+          onMouseEnter={(e) => {
+            if (disabled) return;
+            e.currentTarget.style.background   = btnHover.background;
+            e.currentTarget.style.borderColor  = btnHover.borderColor;
+          }}
+          onMouseLeave={(e) => {
+            if (disabled) return;
+            e.currentTarget.style.background   = btnBase.background;
+            e.currentTarget.style.borderColor  = isBest ? "rgba(30, 36, 48, 0.3)" : "rgba(55, 242, 209, 0.35)";
+          }}
         >
           {disabled ? "Processing…" : "Purchase"}
         </button>
