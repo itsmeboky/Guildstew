@@ -887,6 +887,8 @@ function PurchaseToast({ from, to, onDone }) {
 function Keyframes() {
   return (
     <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&display=swap');
+
       @keyframes empFadeIn {
         from { opacity: 0; transform: scale(0.96); }
         to   { opacity: 1; transform: scale(1); }
