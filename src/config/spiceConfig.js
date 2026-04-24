@@ -10,12 +10,12 @@
 
 export const SPICE_RATE = 250;
 
-// Bundles render left-to-right in the Buy Spice popup. The $25 tier
-// is flagged `best_deal: true` so the center card renders taller and
-// with the accent color; no other surface changes shape. The $100
-// tier intentionally has a worse rate than the $25 best-deal so
-// players who want a big chunk pay a small premium for the
-// convenience — keeps the BEST DEAL labeling honest.
+// Bundles render left-to-right in the SpiceEmporium popup. The $25
+// tier is flagged `best_deal: true` so the legendary/orange card
+// can render taller and with the accent color. The $100 tier
+// intentionally has a worse rate than the $25 best-deal so players
+// who want a big chunk pay a small premium for the convenience —
+// keeps the BEST DEAL labeling honest.
 export const SPICE_BUNDLES = [
   { id: "bundle_500",   label: "1,310 Spice",   spice: 1310,   price: 5.00,   bonus: 60,    badge: "5% Bonus" },
   { id: "bundle_1000",  label: "2,750 Spice",   spice: 2750,   price: 10.00,  bonus: 250,   badge: "10% Bonus" },
