@@ -12,7 +12,9 @@ import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { useAuth } from "@/lib/AuthContext";
 import { supabase } from "@/api/supabaseClient";
 import { createPageUrl } from "@/utils";
-import { CREAM } from "@/pages/Forums";
+import {
+  Band, SectionTitle, MarketingCard, CREAM,
+} from "@/components/marketing/MarketingBand";
 import {
   formatSpice, UPLOAD_FEES, CREATOR_SPLITS, MIN_CASHOUT, MIN_ITEM_PRICE,
 } from "@/config/spiceConfig";
@@ -471,56 +473,16 @@ export default function CreatorProgram() {
   );
 }
 
+// Thin adapters — the real primitives live in
+// @/components/marketing/MarketingBand so /Guild and /CreatorProgram
+// render with identical DOM + styling.
 function Section({ title, subtitle, pill, children }) {
   return (
-    <section className="space-y-4">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h2 className="text-2xl md:text-3xl font-black">{title}</h2>
-          {subtitle && (
-            <p className="text-sm mt-1" style={{ color: CREAM.textMuted }}>{subtitle}</p>
-          )}
-        </div>
-        {pill && (
-          <span
-            className="text-[10px] font-black uppercase tracking-[0.22em] px-3 py-1 rounded-full"
-            style={{ backgroundColor: CREAM.accent, color: "#FFFFFF" }}
-          >
-            {pill}
-          </span>
-        )}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-/**
- * Band — full-bleed background stripe. Keeps content centered in a
- * 1152px max-width column with consistent vertical rhythm. Used to
- * alternate white / cream / peach backgrounds down the page so the
- * marketing surface reads as a stacked composition instead of a
- * single flat wall of text.
- */
-function Band({ bg, children }) {
-  return (
-    <section style={{ backgroundColor: bg }}>
-      <div className="max-w-6xl mx-auto px-6 md:px-12 py-14 md:py-16">
-        {children}
-      </div>
-    </section>
-  );
-}
-
-function Card({ children, accent = "plain", className = "" }) {
-  const borderColor = accent === "gold" ? "#D97706" : CREAM.cardBorder;
-  const background  = accent === "gold" ? "#FFF6E8" : CREAM.card;
-  return (
-    <div
-      className={`rounded-2xl border p-4 ${className}`}
-      style={{ backgroundColor: background, borderColor }}
-    >
+    <div className="space-y-4">
+      <SectionTitle title={title} subtitle={subtitle} pill={pill} />
       {children}
     </div>
   );
 }
+
+const Card = MarketingCard;

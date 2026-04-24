@@ -10,7 +10,7 @@ import SpiceIcon from "@/components/tavern/SpiceIcon";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
-import { CREAM } from "@/pages/Forums";
+import { Band, SectionTitle, CREAM } from "@/components/marketing/MarketingBand";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { listGuildMembers } from "@/api/billingClient";
 import { getGuildWalletBalance } from "@/lib/spiceWallet";
@@ -443,36 +443,6 @@ function GuildJoinCTA() {
           </p>
         </div>
       </Band>
-    </div>
-  );
-}
-
-/**
- * Full-bleed background stripe used to alternate white / cream /
- * peach surfaces down the page. Mirrors the Band helper on
- * /CreatorProgram so both marketing pages share the same rhythm.
- */
-function Band({ bg, children }) {
-  return (
-    <section style={{ backgroundColor: bg }}>
-      <div className="max-w-6xl mx-auto px-6 md:px-12 py-14 md:py-16">
-        {children}
-      </div>
-    </section>
-  );
-}
-
-function SectionTitle({ eyebrow, title }) {
-  return (
-    <div>
-      {eyebrow && (
-        <p className="text-[11px] font-black uppercase tracking-[0.3em]" style={{ color: CREAM.accent }}>
-          {eyebrow}
-        </p>
-      )}
-      <h2 className="text-2xl md:text-3xl font-black mt-1" style={{ color: "#1E2430" }}>
-        {title}
-      </h2>
     </div>
   );
 }
