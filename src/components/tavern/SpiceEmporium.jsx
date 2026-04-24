@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { X } from "lucide-react";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
 
 // Canonical image URLs — all served from the app-assets/hero bucket.
 export const IMAGES = {
@@ -114,10 +115,9 @@ export default function SpiceEmporium({ open, onClose }) {
             <X size={14} />
           </button>
 
-          {/* Content slots below. Title + cards + CTAs land in the
-              next commits. */}
           <TrinketDome />
-          <div style={{ padding: "0 0 0 0", minHeight: "120px" }} />
+          <TitleBlock />
+          <div style={{ padding: "0 0 20px", minHeight: "120px" }} />
         </div>
       </div>
     </>
@@ -174,8 +174,86 @@ function TrinketDome() {
   );
 }
 
-// Minimal keyframes used by step 2 — pulse for the accent line and
-// fade-in for the overlay. Full animation set lands in step 10.
+/**
+ * Title block — three lines of copy centered under the dome.
+ *   1. Emporium eyebrow (salmon).
+ *   2. Decorative line — wheat — "SPICE" — decorative line (orange).
+ *   3. Subtitle tagline (muted).
+ *
+ * padding-top 76px clears the bottom half of the dome (60px below
+ * the container top) plus breathing room.
+ */
+function TitleBlock() {
+  return (
+    <div style={{ paddingTop: "76px", textAlign: "center" }}>
+      <p
+        style={{
+          fontSize: "9px",
+          fontWeight: 700,
+          letterSpacing: "0.22em",
+          textTransform: "uppercase",
+          color: "#f8a47c",
+          margin: 0,
+        }}
+      >
+        Trinket's Emporium
+      </p>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "12px",
+          marginTop: "8px",
+        }}
+      >
+        <span
+          aria-hidden
+          style={{
+            width: "40px",
+            height: "1px",
+            background: "linear-gradient(90deg, transparent, rgba(245,158,11,0.25))",
+          }}
+        />
+        <SpiceIcon size={24} color="#f59e0b" />
+        <span
+          style={{
+            fontSize: "24px",
+            fontWeight: 900,
+            fontFamily: "'Cinzel', serif",
+            color: "#f59e0b",
+            letterSpacing: "0.08em",
+          }}
+        >
+          SPICE
+        </span>
+        <SpiceIcon size={24} color="#f59e0b" style={{ transform: "scaleX(-1)" }} />
+        <span
+          aria-hidden
+          style={{
+            width: "40px",
+            height: "1px",
+            background: "linear-gradient(90deg, rgba(245,158,11,0.25), transparent)",
+          }}
+        />
+      </div>
+
+      <p
+        style={{
+          fontSize: "10px",
+          color: "#4a4560",
+          fontWeight: 500,
+          marginTop: "6px",
+          marginBottom: 0,
+        }}
+      >
+        The currency that flavors your adventure
+      </p>
+    </div>
+  );
+}
+
 function Keyframes() {
   return (
     <style>{`
