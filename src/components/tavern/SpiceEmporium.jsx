@@ -609,8 +609,12 @@ function CtaStrip({ inGuild, isCreator, onGuild, onCreator, onPricing }) {
       style={{
         display: "flex",
         justifyContent: "space-between",
+        // flex-end ensures both JumpCTA blocks bottom-align, so the
+        // two character images sit on the same baseline regardless
+        // of their different natural widths (the Guild / Creator
+        // PNGs aren't identical aspect ratios).
         alignItems: "flex-end",
-        padding: "24px 32px 20px",
+        padding: "32px 32px 24px",
         borderTop: "1px solid rgba(255,255,255,0.03)",
         marginTop: "4px",
       }}
@@ -665,21 +669,25 @@ function JumpCTA({ image, alt, label, sublabel, onClick }) {
       onMouseLeave={() => setHovered(false)}
       style={{ display: "flex", flexDirection: "column", alignItems: "center" }}
     >
-      {/* Character — sits above the button, overlaps the button's
-          top edge via a negative margin-bottom so it reads as the
-          character leaping out of the shop window. */}
+      {/* Character — 280px tall, width auto so each PNG keeps its
+          natural aspect. Negative margin-bottom -40 sinks the
+          character deep into the button's upper edge. Both
+          JumpCTAs bottom-align in the parent (CtaStrip's
+          alignItems: flex-end) so the character feet always share
+          a baseline even when the two images have different
+          widths. */}
       <div
         style={{
-          width: "117px",
-          height: "117px",
+          height: "280px",
+          width: "auto",
           position: "relative",
           zIndex: 2,
-          marginBottom: "-26px",
+          marginBottom: "-40px",
           transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
-          transform: hovered ? "translateY(-8px) scale(1.1)" : "translateY(0) scale(1)",
+          transform: hovered ? "translateY(-14px) scale(1.08)" : "translateY(0) scale(1)",
           filter: hovered
-            ? "drop-shadow(0 8px 16px rgba(248,164,124,0.3))"
-            : "drop-shadow(0 4px 8px rgba(0,0,0,0.3))",
+            ? "drop-shadow(0 12px 24px rgba(248,164,124,0.35))"
+            : "drop-shadow(0 6px 12px rgba(0,0,0,0.35))",
           pointerEvents: "none",
         }}
       >
@@ -687,7 +695,7 @@ function JumpCTA({ image, alt, label, sublabel, onClick }) {
           src={image}
           alt={alt}
           draggable={false}
-          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          style={{ height: "280px", width: "auto", objectFit: "contain", display: "block" }}
         />
       </div>
 
@@ -700,8 +708,8 @@ function JumpCTA({ image, alt, label, sublabel, onClick }) {
           background: hovered ? "rgba(248,164,124,0.12)" : "rgba(248,164,124,0.04)",
           border: `1px solid ${hovered ? "rgba(248,164,124,0.4)" : "rgba(248,164,124,0.15)"}`,
           borderRadius: "14px",
-          padding: "28px 20px 12px",
-          minWidth: "180px",
+          padding: "50px 20px 12px",
+          minWidth: "200px",
           textAlign: "center",
           cursor: "pointer",
           boxShadow: hovered ? "0 4px 20px rgba(248,164,124,0.1)" : "none",
