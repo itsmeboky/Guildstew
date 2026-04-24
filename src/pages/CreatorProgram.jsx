@@ -36,7 +36,7 @@ import { ensureReferralCode } from "@/lib/creatorMilestones";
  *   9. Bottom CTA — Start Creating / Dashboard
  */
 
-const CREATOR_ART = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/CreatorProgram.png";
+const CREATOR_ART = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/joincreatorprogram.png";
 const DISCORD_URL = "https://discord.gg/TK2s88fzSQ";
 
 const HOW_IT_WORKS = [
@@ -142,28 +142,25 @@ export default function CreatorProgram() {
   };
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: CREAM.pageBg, color: CREAM.textPrimary }}>
-      {/* 1. Hero */}
-      <header
-        className="px-6 md:px-12 pt-12 pb-16"
-        style={{ background: `linear-gradient(135deg, ${CREAM.gradStart} 0%, ${CREAM.gradEnd} 100%)` }}
-      >
-        <div className="max-w-6xl mx-auto grid md:grid-cols-[1.3fr_1fr] gap-8 items-center">
+    <div className="min-h-screen" style={{ color: CREAM.textPrimary, backgroundColor: "#FFF8F3" }}>
+      {/* 1. Hero — white background, text left, image right. */}
+      <header className="px-6 md:px-12 pt-12 pb-16" style={{ backgroundColor: "#FFFFFF" }}>
+        <div className="max-w-6xl mx-auto grid md:grid-cols-[1.1fr_1fr] gap-8 items-center">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.3em]" style={{ opacity: 0.7 }}>
+            <p className="text-[11px] font-black uppercase tracking-[0.3em]" style={{ color: CREAM.accent }}>
               Guildstew Tavern
             </p>
-            <h1 className="text-4xl md:text-6xl font-black mt-2 leading-[1.05]">
+            <h1 className="text-4xl md:text-6xl font-black mt-2 leading-[1.05]" style={{ color: "#1E2430" }}>
               Become a Guildstew Creator
             </h1>
-            <p className="text-lg md:text-xl mt-4 max-w-xl" style={{ opacity: 0.88 }}>
+            <p className="text-lg md:text-xl mt-4 max-w-xl" style={{ color: CREAM.textMuted }}>
               Design cosmetics. Build a following. Earn real money.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Button
                 onClick={startCreating}
                 className="font-black uppercase tracking-[0.2em] px-6 py-5 text-sm"
-                style={{ backgroundColor: "#37F2D1", color: "#050816" }}
+                style={{ backgroundColor: CREAM.accent, color: CREAM.textPrimary }}
               >
                 {isCreator ? "Open Creator Dashboard" : "Start Creating"}
                 <ArrowRight className="w-4 h-4 ml-2" />
@@ -174,15 +171,16 @@ export default function CreatorProgram() {
             <img
               src={CREATOR_ART}
               alt="Creator program"
-              className="w-[240px] md:w-[300px] lg:w-[340px] drop-shadow-[0_16px_30px_rgba(0,0,0,0.2)]"
+              className="w-full max-w-[420px] md:max-w-[480px] drop-shadow-[0_16px_30px_rgba(0,0,0,0.12)]"
               draggable={false}
             />
           </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 md:px-12 py-14 space-y-16">
-        {/* 2. How It Works */}
+      {/* Sections alternate white / cream / peach bands for rhythm.
+          Each band is full-bleed; content is centered inside. */}
+      <Band bg="#FFF8F3">
         <Section title="How it works" subtitle="Three steps from idea to revenue.">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {HOW_IT_WORKS.map((step, i) => (
@@ -204,8 +202,9 @@ export default function CreatorProgram() {
             ))}
           </div>
         </Section>
+      </Band>
 
-        {/* 3. What You Earn */}
+      <Band bg="#FFF0E8">
         <Section title="What you earn" subtitle="Every tier unlocks a better split.">
           <div className="overflow-hidden rounded-2xl border" style={{ borderColor: CREAM.cardBorder, backgroundColor: CREAM.card }}>
             <table className="w-full text-sm">
@@ -282,8 +281,9 @@ export default function CreatorProgram() {
             </Card>
           </div>
         </Section>
+      </Band>
 
-        {/* 4. What You Can Create */}
+      <Band bg="#FFF8F3">
         <Section title="What you can create" subtitle="Every category gets a dedicated storefront picker.">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {CONTENT_TYPES.map(({ icon: Icon, label, hint }) => (
@@ -297,8 +297,9 @@ export default function CreatorProgram() {
             ))}
           </div>
         </Section>
+      </Band>
 
-        {/* 5. Early Creator Rewards */}
+      <Band bg="#FFF0E8">
         <Section
           title="Early Creator Rewards"
           subtitle="Limited-time perks for the first wave of Guildstew creators."
@@ -343,8 +344,9 @@ export default function CreatorProgram() {
             </Card>
           </div>
         </Section>
+      </Band>
 
-        {/* 6. Chef's Choice */}
+      <Band bg="#FFF8F3">
         <Section title="Chef's Choice — monthly creator spotlight">
           <div className="grid md:grid-cols-[1fr_auto] gap-6 items-center">
             <Card>
@@ -368,8 +370,9 @@ export default function CreatorProgram() {
             </div>
           </div>
         </Section>
+      </Band>
 
-        {/* 7. Creator Milestones */}
+      <Band bg="#FFF0E8">
         <Section title="Grow your reputation" subtitle="Every sale moves you up the ladder.">
           <div className="relative">
             {/* Dashed connector drawn behind the tiles on desktop. */}
@@ -395,8 +398,9 @@ export default function CreatorProgram() {
             </div>
           </div>
         </Section>
+      </Band>
 
-        {/* 8. Community */}
+      <Band bg="#FFF8F3">
         <Section title="Join the creator community">
           <div className="grid md:grid-cols-2 gap-3">
             <Card>
@@ -434,8 +438,11 @@ export default function CreatorProgram() {
             </Card>
           </div>
         </Section>
+      </Band>
 
-        {/* 9. Bottom CTA */}
+      {/* Bottom CTA — white band so the "Start Creating" teal
+          button reads as a final focal point. */}
+      <Band bg="#FFFFFF">
         <div className="text-center py-6 space-y-3">
           <Button
             onClick={startCreating}
@@ -459,7 +466,7 @@ export default function CreatorProgram() {
             </p>
           )}
         </div>
-      </main>
+      </Band>
     </div>
   );
 }
@@ -484,6 +491,23 @@ function Section({ title, subtitle, pill, children }) {
         )}
       </div>
       {children}
+    </section>
+  );
+}
+
+/**
+ * Band — full-bleed background stripe. Keeps content centered in a
+ * 1152px max-width column with consistent vertical rhythm. Used to
+ * alternate white / cream / peach backgrounds down the page so the
+ * marketing surface reads as a stacked composition instead of a
+ * single flat wall of text.
+ */
+function Band({ bg, children }) {
+  return (
+    <section style={{ backgroundColor: bg }}>
+      <div className="max-w-6xl mx-auto px-6 md:px-12 py-14 md:py-16">
+        {children}
+      </div>
     </section>
   );
 }
