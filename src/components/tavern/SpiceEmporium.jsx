@@ -575,20 +575,12 @@ function CtaStrip({ inGuild, isCreator, onGuild, onCreator, onPricing }) {
         onClick={onGuild}
       />
 
-      {/* Center column: trinketmarket.gif animation → upsell copy →
-          Virtual Currency Policy link. The gif sets the tone so the
-          legal link feels like part of the shop instead of an
-          afterthought. */}
-      <div style={{ textAlign: "center", alignSelf: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
-        <img
-          src={IMAGES.trinketMarket}
-          alt=""
-          draggable={false}
-          style={{ width: "96px", height: "96px", objectFit: "contain" }}
-        />
-        <p style={{ fontSize: "9px", color: "#4a4560", fontWeight: 500, margin: 0 }}>
-          Upgrade for better splits
-        </p>
+      {/* Center column: just the Virtual Currency Policy link now.
+          The prior "Upgrade for better splits" copy was removed
+          because tier doesn't affect Spice-purchase value — it was
+          misleading — and the gif that previously lived here moved
+          up into the Trinket dome. */}
+      <div style={{ textAlign: "center", alignSelf: "center" }}>
         <button
           type="button"
           onClick={onPricing}
@@ -597,13 +589,12 @@ function CtaStrip({ inGuild, isCreator, onGuild, onCreator, onPricing }) {
             color: "#f8a47c",
             fontWeight: 600,
             cursor: "pointer",
-            marginTop: "2px",
             background: "none",
             border: "none",
             padding: 0,
           }}
         >
-          View Virtual Currency Policy
+          View Virtual Currency Policy →
         </button>
       </div>
 
