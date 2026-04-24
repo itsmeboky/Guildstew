@@ -337,7 +337,9 @@ function GuildJoinCTA() {
               Join a Guild
             </h1>
             <p className="text-lg md:text-xl mt-4 max-w-xl" style={{ color: CREAM.textMuted }}>
-              Pool your Spice, share cosmetics, and adventure together — six tables, one subscription.
+              Pool your Spice, share cosmetics, and adventure together —
+              <br />
+              six tables, one subscription.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link
@@ -349,7 +351,7 @@ function GuildJoinCTA() {
               </Link>
             </div>
           </div>
-          <div className="flex justify-center md:justify-end">
+          <div className="flex justify-center md:justify-end md:mr-20">
             <img
               src={GUILD_HERO}
               alt="Become a guild"

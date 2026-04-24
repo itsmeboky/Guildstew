@@ -169,7 +169,7 @@ export default function CreatorProgram() {
               </Button>
             </div>
           </div>
-          <div className="flex justify-center md:justify-end">
+          <div className="flex justify-center md:justify-end md:mr-20">
             <img
               src={CREATOR_ART}
               alt="Creator program"
