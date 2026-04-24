@@ -13,6 +13,8 @@ import { listGuildMembers } from "@/api/billingClient";
 import { createPageUrl } from "@/utils";
 import GuildHallHeader from "@/components/guild/GuildHallHeader";
 import GuildMembersSection from "@/components/guild/GuildMembersSection";
+import GuildActiveCampaigns from "@/components/guild/GuildActiveCampaigns";
+import GuildUpdatesFeed from "@/components/guild/GuildUpdatesFeed";
 
 /**
  * /guild
@@ -111,6 +113,10 @@ function GuildHub() {
             /* management lands in step 6 */
           }}
         />
+
+        <GuildActiveCampaigns memberIds={memberIds} viewerId={user?.id} />
+
+        <GuildUpdatesFeed memberIds={memberIds} />
       </div>
     </div>
   );
