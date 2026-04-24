@@ -234,10 +234,12 @@ export default function SpiceEmporium({ open, onClose }) {
               padding to clear the dome's lower half + the close
               button. */}
           <TrinketDome />
-          {/* 100px of clearance leaves room for the taller 180x180
-              dome + close button without the cards crashing into
-              her lower body. */}
-          <div style={{ paddingTop: "100px" }} />
+          {/* 180px of clearance — the dome now anchors 80px lower
+              than before (top: -30 vs the previous -110), so the
+              cards need more room above them to avoid colliding
+              with her lower body. Also pushes the policy link and
+              the CTA strip 80px down with the cards. */}
+          <div style={{ paddingTop: "180px" }} />
           <PricingRow
             onPurchase={(bundle) => purchase.mutate(bundle)}
             disabled={purchase.isPending}
@@ -290,7 +292,7 @@ function TrinketDome() {
       aria-hidden
       style={{
         position: "absolute",
-        top: "-110px",
+        top: "-30px",
         left: "50%",
         transform: "translateX(-50%)",
         zIndex: 10,
