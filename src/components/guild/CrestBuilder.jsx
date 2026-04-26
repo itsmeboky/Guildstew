@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
+import { toast } from "sonner";
+import { supabase } from "@/api/supabaseClient";
 
 /**
  * Coat-of-Arms (Guild Crest) builder shell.
@@ -118,7 +120,12 @@ export const PATTERNS = {
   fess:      "Fess (Band)",
 };
 
-export default function CrestBuilder({ onSave, onRandomize }) {
+export default function CrestBuilder({
+  guildOwnerId = null,
+  initialCrestData = null,
+  onSaved,
+  onRandomize,
+}) {
   const [activeTab, setActiveTab] = useState("shield");
   const [selectedShieldId, setSelectedShieldId] = useState("heater");
   const [customShield, setCustomShield] = useState(null);
@@ -197,6 +204,11 @@ export default function CrestBuilder({ onSave, onRandomize }) {
   const [mottoColor, setMottoColor] = useState("#fbbf24");
 
   const [randomizing, setRandomizing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Ref to the main preview's <svg> element. Save serializes this
+  // node, rasterizes it through a canvas, and uploads the result.
+  const mainPreviewRef = useRef(null);
 
   // Randomize every panel — shield, fill, both patterns, 1–2
   // emblems (fetched + parsed in parallel), and reset the active
@@ -252,6 +264,96 @@ export default function CrestBuilder({ onSave, onRandomize }) {
       setRandomizing(false);
     }
   }, []);
+
+  // Build the serializable crest_data blob. svgData is intentionally
+  // dropped from emblems — it's re-fetched on load from the URL the
+  // built-in id implies (custom emblems would need a different
+  // pipeline; v1 surfaces a notice and asks for re-upload).
+  const buildCrestData = React.useCallback(() => ({
+    shield_shape: selectedShieldId,
+    custom_shield: customShield || null,
+    background_type: backgroundType,
+    background_color_1: primaryColor,
+    background_color_2: secondaryColor,
+    pattern_1: pattern1.type,
+    pattern_1_color: pattern1.color,
+    pattern_2: pattern2.type,
+    pattern_2_color: pattern2.color,
+    layer_order: layerOrder,
+    emblems: emblems.map((e) => ({
+      id: e.id,
+      color: e.color,
+      scale: e.scale,
+      x: e.x,
+      y: e.y,
+      custom_label: e.customLabel,
+    })),
+    motto_text: motto,
+    motto_color: mottoColor,
+  }), [
+    selectedShieldId, customShield,
+    backgroundType, primaryColor, secondaryColor,
+    pattern1, pattern2,
+    layerOrder, emblems,
+    motto, mottoColor,
+  ]);
+
+  const handleSave = React.useCallback(async () => {
+    if (!guildOwnerId) {
+      toast.error("No guild context — can't save crest.");
+      return;
+    }
+    if (!mainPreviewRef.current) {
+      toast.error("Preview not ready yet.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const crestData = buildCrestData();
+
+      // Rasterize the live preview SVG into a 512px PNG. Bigger so
+      // any downstream display (Hall header, profile) can downscale
+      // crisply. crestSvgToPng handles the offscreen-canvas dance.
+      const blob = await crestSvgToPng(mainPreviewRef.current, 512);
+
+      const path = `guilds/${guildOwnerId}/crest.png`;
+      const { error: upErr } = await supabase.storage
+        .from("user-assets")
+        .upload(path, blob, {
+          contentType: "image/png",
+          upsert: true,
+          cacheControl: "0",
+        });
+      if (upErr) throw upErr;
+
+      const { data: urlData } = supabase.storage
+        .from("user-assets")
+        .getPublicUrl(path);
+      // Bust whatever the browser / CDN had cached so the new image
+      // shows up immediately in the Hall after save.
+      const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+
+      const { error: dbErr } = await supabase
+        .from("guilds")
+        .upsert(
+          {
+            owner_user_id: guildOwnerId,
+            crest_data: crestData,
+            crest_image_url: publicUrl,
+          },
+          { onConflict: "owner_user_id" },
+        );
+      if (dbErr) throw dbErr;
+
+      toast.success("Guild Crest saved!");
+      if (onSaved) onSaved({ crest_data: crestData, crest_image_url: publicUrl });
+    } catch (err) {
+      console.error("Crest save failed", err);
+      toast.error(err?.message || "Failed to save crest.");
+    } finally {
+      setSaving(false);
+    }
+  }, [guildOwnerId, buildCrestData, onSaved]);
 
   // Resolve the active shield (built-in or user-uploaded) once so
   // every consumer (preview + future thumbnails) reads the same
@@ -464,7 +566,8 @@ export default function CrestBuilder({ onSave, onRandomize }) {
             </button>
             <button
               type="button"
-              onClick={onSave}
+              onClick={handleSave}
+              disabled={saving}
               style={{
                 fontFamily: FONT_STACK,
                 fontSize: "11px",
@@ -473,17 +576,18 @@ export default function CrestBuilder({ onSave, onRandomize }) {
                 letterSpacing: "0.15em",
                 padding: "10px 18px",
                 borderRadius: "8px",
-                cursor: "pointer",
+                cursor: saving ? "wait" : "pointer",
                 background: "linear-gradient(135deg, #f8a47c, #e8856a)",
                 border: "none",
                 color: "#1E2430",
                 marginLeft: "auto",
+                opacity: saving ? 0.7 : 1,
                 boxShadow:
                   "0 4px 14px rgba(248,164,124,0.35), 0 1px 2px rgba(0,0,0,0.4)",
-                transition: "transform 0.1s, box-shadow 0.15s",
+                transition: "transform 0.1s, box-shadow 0.15s, opacity 0.15s",
               }}
             >
-              Save Crest
+              {saving ? "Saving…" : "Save Crest"}
             </button>
           </div>
         </div>
@@ -518,7 +622,7 @@ export default function CrestBuilder({ onSave, onRandomize }) {
                 "drop-shadow(0 6px 20px rgba(0,0,0,0.5)) drop-shadow(0 0 8px rgba(248,164,124,0.06))",
             }}
           >
-            <CrestSvg width={240} {...crestProps} />
+            <CrestSvg width={240} svgRef={mainPreviewRef} {...crestProps} />
           </div>
 
           {/* Guild label */}
@@ -1988,6 +2092,7 @@ function CrestSvg({
   layerOrder,
   motto = "",
   mottoColor = "#fbbf24",
+  svgRef,
 }) {
   // Stable-ish ids per CrestSvg instance so multiple previews on the
   // same page don't collide. `useId` would also work — keeping a
@@ -2040,6 +2145,8 @@ function CrestSvg({
 
   return (
     <svg
+      ref={svgRef}
+      xmlns="http://www.w3.org/2000/svg"
       viewBox={shield.vb}
       width={width}
       height={width}
@@ -2200,6 +2307,54 @@ function LayerStack({ layerOrder, pattern1, pattern2, emblems = [] }) {
       </div>
     </div>
   );
+}
+
+/**
+ * Rasterize a live <svg> node to a PNG blob.
+ *
+ * Outline:
+ *  1. Serialize the DOM node (already mounted, fully styled, and
+ *     using the user's current state).
+ *  2. Wrap it in a data URL so an offscreen <img> can decode it.
+ *  3. Draw the decoded image onto an N×N canvas so the caller can
+ *     pick a stable export size independent of the on-screen
+ *     preview width.
+ *  4. canvas.toBlob() into a PNG, return as a Blob suitable for
+ *     supabase.storage.upload.
+ *
+ * Returns null if the browser can't decode the SVG (extremely rare
+ * with modern Chromium / Firefox / Safari, but the call site still
+ * checks).
+ */
+export function crestSvgToPng(svgEl, size = 512) {
+  return new Promise((resolve, reject) => {
+    try {
+      // Make sure the serialized output carries the SVG xmlns even
+      // if the live node didn't render it explicitly.
+      const clone = svgEl.cloneNode(true);
+      if (!clone.getAttribute("xmlns")) {
+        clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      }
+      const serialized = new XMLSerializer().serializeToString(clone);
+      const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(serialized)}`;
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, size, size);
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("Canvas toBlob returned null"));
+        }, "image/png");
+      };
+      img.onerror = (e) => reject(e);
+      img.src = dataUrl;
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
 /** Placeholder inserted into the fixed-height controls panel until
