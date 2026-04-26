@@ -169,23 +169,16 @@ export default function CrestBuilder({
       )));
       return;
     }
-    console.log("Selected emblem:", def.id, def.url);
     const data = await fetchSVGPaths(def.url);
-    console.log("Fetched data:", data);
     if (!data) {
       console.error("Failed to fetch/parse SVG for", def.url);
       return;
     }
-    console.log("Setting svgData with", data.elements.length, "elements");
-    setEmblems((prev) => {
-      const next = prev.map((slot, i) => (
-        i === activeEmblemIdx
-          ? { ...slot, id: def.id, svgData: data, customLabel: def.label }
-          : slot
-      ));
-      console.log("Updated emblem slot:", activeEmblemIdx, next[activeEmblemIdx]);
-      return next;
-    });
+    setEmblems((prev) => prev.map((slot, i) => (
+      i === activeEmblemIdx
+        ? { ...slot, id: def.id, svgData: data, customLabel: def.label }
+        : slot
+    )));
   }, [activeEmblemIdx]);
 
   const addEmblem = React.useCallback(() => {
