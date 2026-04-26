@@ -196,6 +196,63 @@ export default function CrestBuilder({ onSave, onRandomize }) {
   const [motto, setMotto] = useState("");
   const [mottoColor, setMottoColor] = useState("#fbbf24");
 
+  const [randomizing, setRandomizing] = useState(false);
+
+  // Randomize every panel — shield, fill, both patterns, 1–2
+  // emblems (fetched + parsed in parallel), and reset the active
+  // emblem index so the editor lands on slot 0. Marked async because
+  // the emblem fetches need to complete before the slots reflect them.
+  const handleRandomize = React.useCallback(async () => {
+    setRandomizing(true);
+    try {
+      const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+      const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+      const randFloat = (min, max) => Math.random() * (max - min) + min;
+
+      // Shield + fill
+      setCustomShield(null);
+      setSelectedShieldId(pick(Object.keys(SHIELDS)));
+      const nextBgType = Math.random() < 0.5 ? "solid" : "gradient";
+      setBackgroundType(nextBgType);
+      setPrimaryColor(pick(PRESET_COLORS));
+      setSecondaryColor(pick(PRESET_COLORS));
+
+      // Patterns
+      const patternIds = Object.keys(PATTERNS).filter((id) => id !== "none");
+      setPattern1({ type: pick(patternIds), color: pick(PRESET_COLORS) });
+      if (Math.random() < 0.5) {
+        setPattern2({ type: pick(patternIds), color: pick(PRESET_COLORS) });
+      } else {
+        setPattern2({ type: "none", color: pick(PRESET_COLORS) });
+      }
+
+      // 1–2 emblems
+      const emblemCount = randInt(1, 2);
+      const picks = [];
+      const used = new Set();
+      while (picks.length < emblemCount) {
+        const candidate = pick(EMBLEM_LIST);
+        if (used.has(candidate.id)) continue;
+        used.add(candidate.id);
+        picks.push(candidate);
+      }
+      const fetched = await Promise.all(picks.map((def) => fetchSVGPaths(def.url)));
+      const nextEmblems = picks.map((def, i) => ({
+        id: def.id,
+        color: pick(PRESET_COLORS),
+        scale: parseFloat(randFloat(0.6, 1.2).toFixed(2)),
+        x: randInt(30, 70),
+        y: randInt(30, 60),
+        svgData: fetched[i],
+        customLabel: null,
+      }));
+      setEmblems(nextEmblems.length > 0 ? nextEmblems : [defaultEmblemSlot()]);
+      setActiveEmblemIdx(0);
+    } finally {
+      setRandomizing(false);
+    }
+  }, []);
+
   // Resolve the active shield (built-in or user-uploaded) once so
   // every consumer (preview + future thumbnails) reads the same
   // path/viewBox without re-doing the lookup.
@@ -382,7 +439,11 @@ export default function CrestBuilder({ onSave, onRandomize }) {
           >
             <button
               type="button"
-              onClick={onRandomize}
+              onClick={async () => {
+                await handleRandomize();
+                if (onRandomize) onRandomize();
+              }}
+              disabled={randomizing}
               style={{
                 fontFamily: FONT_STACK,
                 fontSize: "11px",
@@ -391,14 +452,15 @@ export default function CrestBuilder({ onSave, onRandomize }) {
                 letterSpacing: "0.15em",
                 padding: "10px 16px",
                 borderRadius: "8px",
-                cursor: "pointer",
+                cursor: randomizing ? "wait" : "pointer",
                 backgroundColor: "transparent",
                 border: "1px solid #f8a47c",
                 color: "#f8a47c",
-                transition: "background 0.15s",
+                opacity: randomizing ? 0.7 : 1,
+                transition: "background 0.15s, opacity 0.15s",
               }}
             >
-              🎲 Randomize
+              {randomizing ? "🎲 Rolling…" : "🎲 Randomize"}
             </button>
             <button
               type="button"
