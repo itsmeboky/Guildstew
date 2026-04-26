@@ -2397,11 +2397,18 @@ function CrestSvg({
       return (
         <g key={id}>
           {emblems.map((slot, i) => {
-            if (!slot?.svgData || !slot.svgData.elements || slot.svgData.elements.length === 0) return null;
+            const svg = slot?.svgData;
+            if (!svg) return null;
+            // Vector emblems carry shape elements; raster emblems
+            // carry the embedded <image> data instead. Either kind
+            // is renderable.
+            const hasVector = Array.isArray(svg.elements) && svg.elements.length > 0;
+            const hasRaster = svg.isRaster === true && !!svg.rasterData?.href;
+            if (!hasVector && !hasRaster) return null;
             return (
               <EmblemOnCrest
                 key={i}
-                data={slot.svgData}
+                data={svg}
                 color={slot.color}
                 scale={slot.scale}
                 x={slot.x}
