@@ -495,7 +495,7 @@ export default function CrestBuilder({
       const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
 
       const { error: dbErr } = await supabase
-        .from("guilds")
+        .from("guild_halls")
         .upsert(
           {
             owner_user_id: guildOwnerId,

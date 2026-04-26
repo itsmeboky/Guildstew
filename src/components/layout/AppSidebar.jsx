@@ -360,7 +360,7 @@ function GuildSidebarRow({ user, sub }) {
     queryFn: async () => {
       const { supabase } = await import("@/api/supabaseClient");
       const { data } = await supabase
-        .from("guilds")
+        .from("guild_halls")
         .select("crest_image_url, crest_url")
         .eq("owner_user_id", guildOwnerId)
         .maybeSingle();

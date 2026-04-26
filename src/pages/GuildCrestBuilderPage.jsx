@@ -29,7 +29,7 @@ export default function GuildCrestBuilderPage() {
     queryKey: ["guildRow", guildOwnerId],
     queryFn: async () => {
       const { data } = await supabase
-        .from("guilds")
+        .from("guild_halls")
         .select("*")
         .eq("owner_user_id", guildOwnerId)
         .maybeSingle();

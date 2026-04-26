@@ -73,7 +73,7 @@ export default function GuildSettingsDialog({
   const saveGeneral = useMutation({
     mutationFn: async () => {
       const { error } = await supabase
-        .from("guilds")
+        .from("guild_halls")
         .upsert(
           { owner_user_id: guildOwnerId, name: name.trim() || null },
           { onConflict: "owner_user_id" },
@@ -93,7 +93,7 @@ export default function GuildSettingsDialog({
       // the Tavern checkout (which reads from the wallet) and the
       // Hall (which reads from the guild row) stay in sync.
       const { error: guildErr } = await supabase
-        .from("guilds")
+        .from("guild_halls")
         .upsert(
           { owner_user_id: guildOwnerId, spending_restricted: nextRestricted },
           { onConflict: "owner_user_id" },
@@ -119,7 +119,7 @@ export default function GuildSettingsDialog({
         ? officerIds.filter((id) => id !== userId)
         : [...officerIds, userId];
       const { error } = await supabase
-        .from("guilds")
+        .from("guild_halls")
         .upsert(
           { owner_user_id: guildOwnerId, officer_ids: nextSet },
           { onConflict: "owner_user_id" },
@@ -150,7 +150,7 @@ export default function GuildSettingsDialog({
       // removes the settings, and the leader can cancel the Guild-tier
       // subscription to clear memberships. Call out the billing step
       // in the toast so the UI doesn't pretend it's fully undone.
-      const { error } = await supabase.from("guilds").delete().eq("owner_user_id", guildOwnerId);
+      const { error } = await supabase.from("guild_halls").delete().eq("owner_user_id", guildOwnerId);
       if (error) throw error;
     },
     onSuccess: () => {
