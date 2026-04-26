@@ -159,12 +159,18 @@ export default function CrestBuilder({
   // Pick a built-in emblem into the active slot — fetch + parse
   // first so the slot lands with svgData ready to render.
   const selectEmblem = React.useCallback(async (def) => {
+    console.log("Selected emblem:", def.id, def.url);
     const data = await fetchSVGPaths(def.url);
-    setEmblems((prev) => prev.map((slot, i) => (
-      i === activeEmblemIdx
-        ? { ...slot, id: def.id, svgData: data, customLabel: null }
-        : slot
-    )));
+    console.log("Fetched data:", data);
+    setEmblems((prev) => {
+      const next = prev.map((slot, i) => (
+        i === activeEmblemIdx
+          ? { ...slot, id: def.id, svgData: data, customLabel: null }
+          : slot
+      ));
+      console.log("Updated emblem slot:", activeEmblemIdx, next[activeEmblemIdx]);
+      return next;
+    });
   }, [activeEmblemIdx]);
 
   const addEmblem = React.useCallback(() => {
@@ -1286,6 +1292,7 @@ const svgCache = {};
 
 export async function fetchSVGPaths(url) {
   if (svgCache[url]) return svgCache[url];
+  console.log("Fetching SVG:", url);
   try {
     const text = await (await fetch(url)).text();
     const doc = new DOMParser().parseFromString(text, "image/svg+xml");
@@ -1303,10 +1310,13 @@ export async function fetchSVGPaths(url) {
       }
       return { tag: el.tagName.toLowerCase(), attrs };
     });
+    console.log("Parsed elements:", elements.length, elements);
+    console.log("ViewBox:", vb);
     const result = { vb, elements };
     svgCache[url] = result;
     return result;
-  } catch {
+  } catch (error) {
+    console.error("SVG fetch failed:", url, error);
     return null;
   }
 }
@@ -1327,6 +1337,7 @@ export async function fetchSVGPaths(url) {
  * of the emblem that overhangs the silhouette is hidden cleanly.
  */
 export function EmblemOnCrest({ data, color, scale, x, y, clipId, vb }) {
+  console.log("EmblemOnCrest render:", { hasData: !!data, color, scale, x, y });
   if (!data) return null;
   const [, , cw, ch] = vb.split(" ").map(Number);
   const [, , evw, evh] = data.vb.split(" ").map(Number);
@@ -2216,6 +2227,7 @@ function CrestSvg({
       // Render every populated slot in array order so slot 0 is at
       // the bottom of the emblem stack and slot 3 at the top —
       // matches how the slot tabs read left-to-right in the editor.
+      console.log("Rendering emblems layer, slots:", emblems.map((e) => ({ id: e.id, hasSvgData: !!e.svgData })));
       return (
         <React.Fragment key={id}>
           {emblems.map((slot, i) =>
