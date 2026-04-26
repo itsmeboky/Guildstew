@@ -64,17 +64,17 @@ export default function GuildHallHeader({
                 "0 0 22px rgba(245,158,11,0.25), inset 0 0 18px rgba(251,191,36,0.08)",
             }}
           >
-            {guild?.crest_url ? (
+            {guild?.crest_image_url || guild?.crest_url ? (
               <img
-                src={guild.crest_url}
+                src={guild.crest_image_url || guild.crest_url}
                 alt={`${guildName} crest`}
-                className="w-full h-full rounded-[10px] object-cover"
+                className="w-full h-full rounded-[10px] object-contain"
               />
             ) : (
-              <Shield className="w-14 h-14 text-amber-300/80" strokeWidth={1.5} />
+              <Shield className="w-14 h-14" strokeWidth={1.5} fill="#2a3441" stroke="#4a5568" />
             )}
           </div>
-          {!guild?.crest_url && isLeader && (
+          {!(guild?.crest_image_url || guild?.crest_url) && isLeader && (
             <button
               type="button"
               onClick={onCreateCrest}

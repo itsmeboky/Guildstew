@@ -22,6 +22,7 @@ import CampaignActions from "@/components/layout/CampaignActions";
 import FriendsSidebarPanel from "@/components/layout/FriendsSidebarPanel";
 import { base44 } from "@/api/base44Client";
 import { displayName, displayInitial } from "@/utils/displayName";
+import GuildCrestImage from "@/components/guild/GuildCrestImage";
 
 /**
  * App-wide sidebar.
@@ -246,7 +247,7 @@ export default function AppSidebar() {
           {accountOpen && (
             <div className="pl-3 space-y-0.5">
               <SidebarLink to={createPageUrl("AccountBilling")} icon={CreditCard} label="Billing & Payments" />
-              {guildManagementItem(sub)}
+              <GuildSidebarRow user={user} sub={sub} />
               <SidebarLink to={createPageUrl("MyCollection")} icon={Package}      label="My Collection" />
               <SidebarLink to={createPageUrl("YourProfile")}  icon={UserCircle2}  label="Profile" />
             </div>
@@ -341,20 +342,43 @@ export function SidebarLink({ to, icon: Icon, label, badge, external, className 
 /**
  * Guild entry in the Account section.
  *
- * Members see a Shield-icon "Guild Hall" link. Non-members see a
- * shiny gold "Join a Guild" CTA with a warm amber glow so the
- * upsell feels inviting rather than nag-like. Both destinations
- * point at /Guild, which branches on membership internally.
+ * Members see a "Guild Hall" link with the guild's crest as the row
+ * icon (24px PNG when available, the muted shield placeholder when
+ * not). Non-members see a shiny gold "Join a Guild" CTA. Both
+ * destinations point at /Guild, which branches on membership
+ * internally.
  */
-function guildManagementItem(sub) {
+function GuildSidebarRow({ user, sub }) {
   const inGuild = !!sub?.guildOwnerId || sub?.isGuildMember || sub?.isGuildOwner;
+  const guildOwnerId = sub?.guildOwnerId || (sub?.isGuildOwner ? user?.id : null);
+
+  // Pulled here (not just in the Hall page) so the sidebar can show
+  // the crest without waiting for the user to click through. Same
+  // query key the Hall uses, so cache hits are free.
+  const { data: guild } = useQuery({
+    queryKey: ["guildRow", guildOwnerId],
+    queryFn: async () => {
+      const { supabase } = await import("@/api/supabaseClient");
+      const { data } = await supabase
+        .from("guilds")
+        .select("crest_image_url, crest_url")
+        .eq("owner_user_id", guildOwnerId)
+        .maybeSingle();
+      return data || null;
+    },
+    enabled: !!guildOwnerId,
+    staleTime: 60_000,
+  });
+
   if (inGuild) {
     return (
-      <SidebarLink
+      <Link
         to={createPageUrl("Guild")}
-        icon={Shield}
-        label="Guild Hall"
-      />
+        className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors text-slate-300 hover:bg-[#2a3441] hover:text-white"
+      >
+        <GuildCrestImage guild={guild} size={24} rounded={4} title="Guild Hall" />
+        <span className="flex-1 truncate">Guild Hall</span>
+      </Link>
     );
   }
   return (
