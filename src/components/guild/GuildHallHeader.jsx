@@ -22,7 +22,9 @@ export default function GuildHallHeader({
   isLeader,
   onOpenSettings,
   onCreateCrest,
+  onEditCrest,
 }) {
+  const hasCrest = !!(guild?.crest_image_url || guild?.crest_url);
   const foundedAt = guild?.founded_at ? new Date(guild.founded_at) : null;
   const foundedLabel = foundedAt
     ? foundedAt.toLocaleDateString(undefined, { month: "long", year: "numeric" })
@@ -64,23 +66,32 @@ export default function GuildHallHeader({
                 "0 0 22px rgba(245,158,11,0.25), inset 0 0 18px rgba(251,191,36,0.08)",
             }}
           >
-            {guild?.crest_url ? (
+            {guild?.crest_image_url || guild?.crest_url ? (
               <img
-                src={guild.crest_url}
+                src={guild.crest_image_url || guild.crest_url}
                 alt={`${guildName} crest`}
-                className="w-full h-full rounded-[10px] object-cover"
+                className="w-full h-full rounded-[10px] object-contain"
               />
             ) : (
-              <Shield className="w-14 h-14 text-amber-300/80" strokeWidth={1.5} />
+              <Shield className="w-14 h-14" strokeWidth={1.5} fill="#2a3441" stroke="#4a5568" />
             )}
           </div>
-          {!guild?.crest_url && isLeader && (
+          {!hasCrest && isLeader && (
             <button
               type="button"
               onClick={onCreateCrest}
               className="absolute inset-x-0 -bottom-2 mx-auto w-[108px] text-[10px] font-black uppercase tracking-widest rounded-full px-2 py-1 border border-amber-400/60 bg-[#050816] text-amber-200 hover:bg-amber-500/15 transition-colors"
             >
               Create Crest
+            </button>
+          )}
+          {hasCrest && isLeader && (
+            <button
+              type="button"
+              onClick={onEditCrest}
+              className="absolute inset-x-0 -bottom-2 mx-auto w-[96px] text-[10px] font-black uppercase tracking-widest rounded-full px-2 py-1 border border-amber-400/60 bg-[#050816] text-amber-200 hover:bg-amber-500/15 transition-colors"
+            >
+              Edit Crest
             </button>
           )}
         </div>

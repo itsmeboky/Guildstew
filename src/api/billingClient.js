@@ -229,12 +229,18 @@ export async function getSubscriptionStatus(userId) {
       .eq('user_id', userId)
       .maybeSingle();
     if (!overrideErr && profile?.admin_tier_override) {
+      // A "guild" override grants the user their own guild so the
+      // Guild Hall unlocks end-to-end — they read as the owner
+      // (is_guild_owner + guild_owner_id = self) which is exactly
+      // what a freshly-subscribed Guild-tier customer looks like.
+      // Non-guild overrides stay isolated (no guild wiring at all).
+      const isGuildOverride = profile.admin_tier_override === 'guild';
       return {
         tier: profile.admin_tier_override,
         status: 'admin_override',
-        is_guild_owner: false,
+        is_guild_owner: isGuildOverride,
         is_guild_member: false,
-        guild_owner_id: null,
+        guild_owner_id: isGuildOverride ? userId : null,
         current_period_end: null,
         cancel_at_period_end: false,
         stripe_customer_id: null,
