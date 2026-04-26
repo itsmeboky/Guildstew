@@ -190,6 +190,12 @@ export default function CrestBuilder({ onSave, onRandomize }) {
   // default; the Layers tab can rearrange.
   const [layerOrder, setLayerOrder] = useState(["pattern1", "pattern2", "emblems"]);
 
+  // Motto state. Cap at 30 chars; rendered on a ribbon at the foot
+  // of the shield in the preview (only when the rendered crest is
+  // big enough to read it).
+  const [motto, setMotto] = useState("");
+  const [mottoColor, setMottoColor] = useState("#fbbf24");
+
   // Resolve the active shield (built-in or user-uploaded) once so
   // every consumer (preview + future thumbnails) reads the same
   // path/viewBox without re-doing the lookup.
@@ -206,6 +212,8 @@ export default function CrestBuilder({ onSave, onRandomize }) {
     pattern2,
     emblems,
     layerOrder,
+    motto,
+    mottoColor,
   };
 
   return (
@@ -353,7 +361,14 @@ export default function CrestBuilder({ onSave, onRandomize }) {
                 primaryColor={primaryColor}
               />
             )}
-            {activeTab === "motto"    && <TabPlaceholder label="Motto" />}
+            {activeTab === "motto" && (
+              <MottoTab
+                motto={motto}
+                onMotto={setMotto}
+                mottoColor={mottoColor}
+                onMottoColor={setMottoColor}
+              />
+            )}
           </div>
 
           {/* Action row */}
@@ -1074,6 +1089,71 @@ export function EmblemOnCrest({ data, color, scale, x, y, clipId, vb }) {
         );
       })}
     </g>
+  );
+}
+
+/**
+ * Motto tab — picks a 30-char-or-less line that rides a black ribbon
+ * across the foot of the shield in the preview. Color picker only
+ * mounts once the user has actually typed something; an empty motto
+ * doesn't render anything on the crest.
+ */
+function MottoTab({ motto, onMotto, mottoColor, onMottoColor }) {
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: "10px" }}>
+      <div>
+        <div
+          style={{
+            fontSize: "10px",
+            color: "#f8a47c",
+            textTransform: "uppercase",
+            letterSpacing: "0.2em",
+            fontWeight: 700,
+            fontFamily: FONT_STACK,
+            marginBottom: "6px",
+          }}
+        >
+          Motto
+        </div>
+        <input
+          type="text"
+          value={motto}
+          maxLength={30}
+          placeholder="Enter motto (max 30 chars)"
+          onChange={(e) => onMotto(e.target.value)}
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            padding: "8px 10px",
+            borderRadius: "6px",
+            border: "1px solid #2a3441",
+            backgroundColor: "#1E2430",
+            color: "#e2e8f0",
+            fontSize: "13px",
+            fontFamily: FONT_STACK,
+          }}
+        />
+        <div
+          style={{
+            fontSize: "8px",
+            color: "#4a5568",
+            marginTop: "4px",
+            textAlign: "right",
+            fontFamily: FONT_STACK,
+          }}
+        >
+          {motto.length}/30
+        </div>
+      </div>
+
+      {motto.length > 0 && (
+        <ColorPicker
+          label="Motto Color"
+          value={mottoColor}
+          onChange={onMottoColor}
+        />
+      )}
+    </div>
   );
 }
 
@@ -1844,6 +1924,8 @@ function CrestSvg({
   pattern2,
   emblems = [],
   layerOrder,
+  motto = "",
+  mottoColor = "#fbbf24",
 }) {
   // Stable-ish ids per CrestSvg instance so multiple previews on the
   // same page don't collide. `useId` would also work — keeping a
@@ -1922,7 +2004,48 @@ function CrestSvg({
             that single array. */}
       {layerOrder.map(renderLayer)}
 
-      {/* 3. Shield border, painted last so patterns can't bleed
+      {/* 3. Motto ribbon — anchored at the foot of the shield's
+            viewBox. Skip on tiny renders (<= 80px) where the text
+            would be unreadable anyway. */}
+      {motto && width > 80 && (() => {
+        const [vx, vy, vw, vh] = shield.vb.split(/\s+/).map(Number);
+        const ribbonW = vw * 0.75;
+        const ribbonH = vh * 0.08;
+        const ribbonX = vx + (vw - ribbonW) / 2;
+        const ribbonY = vy + vh * 0.85 - ribbonH / 2;
+        const cx = vx + vw / 2;
+        const cy = ribbonY + ribbonH / 2;
+        const fontSize = Math.max(7, vw * 0.045);
+        return (
+          <g>
+            <rect
+              x={ribbonX}
+              y={ribbonY}
+              width={ribbonW}
+              height={ribbonH}
+              rx={4}
+              fill="rgba(0,0,0,0.65)"
+              stroke="rgba(248,164,124,0.2)"
+              strokeWidth={0.5}
+            />
+            <text
+              x={cx}
+              y={cy}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={fontSize}
+              fontFamily="'Cream', 'Cinzel', serif"
+              fontWeight={700}
+              letterSpacing="0.1em"
+              fill={mottoColor}
+            >
+              {motto.toUpperCase()}
+            </text>
+          </g>
+        );
+      })()}
+
+      {/* 4. Shield border, painted last so patterns can't bleed
             past the silhouette outline. */}
       <path
         d={shield.d}
