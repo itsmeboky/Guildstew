@@ -1985,6 +1985,10 @@ function EmblemsTab({
         .crest-emblem-grid::-webkit-scrollbar-track { background: #1E2430; }
         .crest-emblem-grid::-webkit-scrollbar-thumb { background: #3a4451; border-radius: 3px; }
         .crest-emblem-grid::-webkit-scrollbar-thumb:hover { background: #4a5568; }
+        .crest-emblem-controls::-webkit-scrollbar { width: 6px; }
+        .crest-emblem-controls::-webkit-scrollbar-track { background: transparent; }
+        .crest-emblem-controls::-webkit-scrollbar-thumb { background: #3a4451; border-radius: 3px; }
+        .crest-emblem-controls::-webkit-scrollbar-thumb:hover { background: #4a5568; }
       `}</style>
 
       <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -2067,12 +2071,16 @@ function EmblemsTab({
           <CategoryButton active={category === "general"} onClick={() => setCategory("general")} label="General" />
         </div>
 
-        {/* Emblem grid — only this scrolls */}
+        {/* Emblem grid — only this scrolls. minHeight pins ~2 rows so
+            the per-slot controls below can never crowd the picker
+            out of view; once a slot is selected the controls row
+            scrolls internally if it doesn't fit instead of pushing
+            the grid down. */}
         <div
           className="crest-emblem-grid"
           style={{
-            flex: 1,
-            minHeight: 0,
+            flex: "1 1 auto",
+            minHeight: "120px",
             overflowY: "auto",
             border: "1px solid #2a3441",
             borderRadius: "8px",
@@ -2129,6 +2137,22 @@ function EmblemsTab({
           </div>
         </div>
 
+        {/* Bottom region: upload row + (optionally) per-slot
+            controls. Capped at 55% of the panel so the grid above
+            keeps at least ~120px visible, and overflows internally
+            via the styled scrollbar if the controls don't fit. */}
+        <div
+          className="crest-emblem-controls"
+          style={{
+            flexShrink: 0,
+            maxHeight: "55%",
+            overflowY: "auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            paddingRight: "4px",
+          }}
+        >
         {/* Custom upload row */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
           <button
@@ -2251,6 +2275,7 @@ function EmblemsTab({
             </button>
           </div>
         )}
+        </div>
       </div>
     </>
   );
