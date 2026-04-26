@@ -82,6 +82,19 @@ export const buildEmblemList = () => {
 
 export const EMBLEM_LIST = buildEmblemList();
 
+// Per-slot emblem state factory. Centered (50, 45) on the field at
+// 1.0 scale. Color matches the gold default of the rest of the
+// builder so a freshly-added emblem reads on the dark fill.
+export const defaultEmblemSlot = () => ({
+  id: "none",
+  color: "#f59e0b",
+  scale: 1.0,
+  x: 50,
+  y: 45,
+  svgData: null,
+  customLabel: null,
+});
+
 // Pattern catalog — id → human label. Render geometry lives in
 // `renderPattern` below; this map drives the picker UI and lets the
 // rest of the app look up a friendly label without duplicating
@@ -124,11 +137,58 @@ export default function CrestBuilder({ onSave, onRandomize }) {
   const [pattern1, setPattern1] = useState({ type: "none", color: "#f59e0b" });
   const [pattern2, setPattern2] = useState({ type: "none", color: "#ffffff" });
 
+  // Emblems — up to 4 slots. Starts with one empty slot so the
+  // Emblems tab always has something to point at. `activeIdx`
+  // tracks which slot the picker / sliders currently mutate.
+  const [emblems, setEmblems] = useState([defaultEmblemSlot()]);
+  const [activeEmblemIdx, setActiveEmblemIdx] = useState(0);
+
+  // Mutate one slot in place. Wrapped in a stable callback so
+  // children that take it as a prop don't churn on every render.
+  const updateEmblem = React.useCallback((idx, updates) => {
+    setEmblems((prev) => prev.map((slot, i) => (i === idx ? { ...slot, ...updates } : slot)));
+  }, []);
+
+  // Pick a built-in emblem into the active slot — fetch + parse
+  // first so the slot lands with svgData ready to render.
+  const selectEmblem = React.useCallback(async (def) => {
+    const data = await fetchSVGPaths(def.url);
+    setEmblems((prev) => prev.map((slot, i) => (
+      i === activeEmblemIdx
+        ? { ...slot, id: def.id, svgData: data, customLabel: null }
+        : slot
+    )));
+  }, [activeEmblemIdx]);
+
+  const addEmblem = React.useCallback(() => {
+    setEmblems((prev) => {
+      if (prev.length >= 4) return prev;
+      const next = [...prev, defaultEmblemSlot()];
+      setActiveEmblemIdx(next.length - 1);
+      return next;
+    });
+  }, []);
+
+  const removeEmblem = React.useCallback((idx) => {
+    setEmblems((prev) => {
+      // Always keep at least one slot — removing the last just
+      // resets it to the default empty state.
+      if (prev.length <= 1) {
+        setActiveEmblemIdx(0);
+        return [defaultEmblemSlot()];
+      }
+      const next = prev.filter((_, i) => i !== idx);
+      setActiveEmblemIdx((cur) => Math.min(cur, next.length - 1));
+      return next;
+    });
+  }, []);
+
   // Layer order — drives render z-stacking. Earlier in the array =
   // rendered first = visually behind later items. Background is
   // always at the bottom and Motto always at the top, so neither
-  // appears in this list. Emblems will append to it in Task 2.
-  const [layerOrder] = useState(["pattern1", "pattern2"]);
+  // appears in this list. Emblems sit between the two patterns by
+  // default; the Layers tab can rearrange.
+  const [layerOrder] = useState(["pattern1", "pattern2", "emblems"]);
 
   // Resolve the active shield (built-in or user-uploaded) once so
   // every consumer (preview + future thumbnails) reads the same
