@@ -910,6 +910,92 @@ function PatternPicker({ label, value, onChange }) {
   );
 }
 
+// ───────────────────────────────────────────────────────────────
+//  Emblem SVG fetch + recolor pipeline
+// ───────────────────────────────────────────────────────────────
+//
+// Emblems are recolorable because we don't drop the original file
+// in via <img>. Instead we fetch the SVG text, parse out every
+// shape element (path/circle/rect/etc), strip its fill / stroke /
+// style attributes so the file's baked-in colors don't override
+// us, and re-mount each element with our own fill + stroke. The
+// original viewBox is preserved so emblems scale correctly inside
+// any shield silhouette.
+//
+// `svgCache` is a process-wide memoization; each emblem URL is
+// fetched at most once per page load.
+
+const svgCache = {};
+
+export async function fetchSVGPaths(url) {
+  if (svgCache[url]) return svgCache[url];
+  try {
+    const text = await (await fetch(url)).text();
+    const doc = new DOMParser().parseFromString(text, "image/svg+xml");
+    const svg = doc.querySelector("svg");
+    const vb = svg?.getAttribute("viewBox") || "0 0 100 100";
+    const elements = Array.from(
+      doc.querySelectorAll("path,circle,rect,polygon,polyline,ellipse,line"),
+    ).map((el) => {
+      const attrs = {};
+      for (const a of el.attributes) {
+        // Drop the source's own coloring so our dynamic fill wins.
+        if (!["fill", "stroke", "style"].includes(a.name)) {
+          attrs[a.name] = a.value;
+        }
+      }
+      return { tag: el.tagName.toLowerCase(), attrs };
+    });
+    const result = { vb, elements };
+    svgCache[url] = result;
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Render a parsed-and-cached emblem onto the crest.
+ *
+ * The transform stack (read right-to-left) is:
+ *   1. translate(-evw/2, -evh/2)  — move emblem so its own
+ *                                    viewBox center sits at origin
+ *   2. scale(s)                    — scale by user slider * 70% of
+ *                                    the field/emblem width ratio
+ *   3. translate(x%, y%)           — drop the (now centered) emblem
+ *                                    at the user-picked spot inside
+ *                                    the shield's coord space
+ *
+ * The whole group is clipped to the shield's clipPath so any part
+ * of the emblem that overhangs the silhouette is hidden cleanly.
+ */
+export function EmblemOnCrest({ data, color, scale, x, y, clipId, vb }) {
+  if (!data) return null;
+  const [, , cw, ch] = vb.split(" ").map(Number);
+  const [, , evw, evh] = data.vb.split(" ").map(Number);
+  const s = scale * (cw / evw) * 0.7;
+  return (
+    <g
+      transform={`translate(${(x / 100) * cw},${(y / 100) * ch}) scale(${s}) translate(${-evw / 2},${-evh / 2})`}
+      clipPath={`url(#${clipId})`}
+    >
+      {data.elements.map((el, i) => {
+        const Tag = el.tag;
+        return (
+          <Tag
+            key={i}
+            {...el.attrs}
+            fill={color}
+            stroke={color}
+            strokeWidth="0.5"
+            opacity="0.92"
+          />
+        );
+      })}
+    </g>
+  );
+}
+
 /**
  * Pattern → SVG geometry. Returns a JSX fragment positioned inside
  * the shield's coordinate system (the caller is responsible for
