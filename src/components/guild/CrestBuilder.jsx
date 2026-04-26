@@ -41,10 +41,26 @@ export const SHIELDS = {
   banner:  { label: "Banner",  vb: "0 0 200 240", d: "M10,10 L190,10 L190,200 L100,230 L10,200 Z" },
 };
 
+// Heraldic palette — kept in one list because Fill / Pattern1 /
+// Pattern2 / future Emblem pickers all share the same swatch row.
+export const PRESET_COLORS = [
+  "#f59e0b", "#dc2626", "#2563eb", "#16a34a", "#7c3aed",
+  "#9ca3af", "#1a1a1a", "#ffffff", "#c2410c", "#0891b2",
+  "#be185d", "#4f46e5", "#059669", "#d97706", "#64748b",
+];
+
 export default function CrestBuilder({ onSave, onRandomize }) {
   const [activeTab, setActiveTab] = useState("shield");
   const [selectedShieldId, setSelectedShieldId] = useState("heater");
   const [customShield, setCustomShield] = useState(null);
+
+  // Fill state (Step 4). Solid = single color; Gradient = top→bottom
+  // linear from primary to secondary. Defaults seed a neutral
+  // heraldic gold-on-blue feel so the preview looks intentional
+  // before the user picks anything.
+  const [backgroundType, setBackgroundType] = useState("solid");
+  const [primaryColor, setPrimaryColor] = useState("#2563eb");
+  const [secondaryColor, setSecondaryColor] = useState("#1a1a1a");
 
   return (
     <div
@@ -152,7 +168,16 @@ export default function CrestBuilder({ onSave, onRandomize }) {
                 onCustomShield={setCustomShield}
               />
             )}
-            {activeTab === "fill"     && <TabPlaceholder label="Fill" />}
+            {activeTab === "fill" && (
+              <FillTab
+                backgroundType={backgroundType}
+                onBackgroundType={setBackgroundType}
+                primaryColor={primaryColor}
+                onPrimaryColor={setPrimaryColor}
+                secondaryColor={secondaryColor}
+                onSecondaryColor={setSecondaryColor}
+              />
+            )}
             {activeTab === "patterns" && <TabPlaceholder label="Patterns" />}
             {activeTab === "emblems"  && <TabPlaceholder label="Emblems" />}
             {activeTab === "layers"   && <TabPlaceholder label="Layers" />}
@@ -453,6 +478,181 @@ function CustomUploadCard({ inputRef, onUpload }) {
         style={{ display: "none" }}
       />
     </>
+  );
+}
+
+/**
+ * Fill tab — picks the shield's base coat. Starts with a Solid /
+ * Gradient toggle that reuses the tab-bar's active styling so the
+ * affordances feel native, then drops the primary ColorPicker
+ * underneath. Secondary picker only mounts when Gradient is on
+ * (linearGradient renders top→bottom in the preview SVG).
+ */
+function FillTab({
+  backgroundType,
+  onBackgroundType,
+  primaryColor,
+  onPrimaryColor,
+  secondaryColor,
+  onSecondaryColor,
+}) {
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: "14px" }}>
+      <SegmentedToggle
+        label="Background"
+        options={[
+          { value: "solid",    label: "Solid" },
+          { value: "gradient", label: "Gradient" },
+        ]}
+        value={backgroundType}
+        onChange={onBackgroundType}
+      />
+
+      <ColorPicker
+        label={backgroundType === "gradient" ? "Primary Color" : "Color"}
+        value={primaryColor}
+        onChange={onPrimaryColor}
+      />
+
+      {backgroundType === "gradient" && (
+        <ColorPicker
+          label="Secondary Color"
+          value={secondaryColor}
+          onChange={onSecondaryColor}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Segmented two-or-more-button toggle. Re-uses the active/inactive
+ * styling from the tab bar so every "pick one of these" choice in
+ * the builder feels like the same control.
+ */
+function SegmentedToggle({ label, options, value, onChange }) {
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: "10px",
+          color: "#f8a47c",
+          textTransform: "uppercase",
+          letterSpacing: "0.2em",
+          fontWeight: 700,
+          fontFamily: FONT_STACK,
+          marginBottom: "6px",
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+        {options.map((opt) => {
+          const active = opt.value === value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange(opt.value)}
+              style={{
+                fontFamily: FONT_STACK,
+                fontSize: "9px",
+                textTransform: "uppercase",
+                letterSpacing: "0.15em",
+                fontWeight: 700,
+                padding: "8px 12px",
+                borderRadius: "8px",
+                cursor: "pointer",
+                backgroundColor: active
+                  ? "rgba(248,164,124,0.12)"
+                  : "transparent",
+                border: active
+                  ? "1px solid rgba(248,164,124,0.5)"
+                  : "1px solid rgba(255,255,255,0.06)",
+                color: active ? "#f8a47c" : "#64748b",
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Reusable color picker — a label, a 26x26 native color input, and
+ * the 15-swatch heraldic palette. Selected swatch picks up the
+ * salmon ring + soft glow. Native input is for off-palette picks;
+ * its value lives outside the swatch set, so we only highlight a
+ * swatch when it matches the current value exactly.
+ */
+function ColorPicker({ label, value, onChange }) {
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: "10px",
+          color: "#f8a47c",
+          textTransform: "uppercase",
+          letterSpacing: "0.2em",
+          fontWeight: 700,
+          fontFamily: FONT_STACK,
+          marginBottom: "6px",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          flexWrap: "wrap",
+        }}
+      >
+        <input
+          type="color"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{
+            width: "26px",
+            height: "26px",
+            border: "1px solid #2a3441",
+            borderRadius: "4px",
+            padding: 0,
+            background: "transparent",
+            cursor: "pointer",
+          }}
+        />
+        {PRESET_COLORS.map((c) => {
+          const selected = value?.toLowerCase() === c.toLowerCase();
+          return (
+            <button
+              key={c}
+              type="button"
+              title={c}
+              onClick={() => onChange(c)}
+              style={{
+                width: "16px",
+                height: "16px",
+                padding: 0,
+                cursor: "pointer",
+                backgroundColor: c,
+                border: selected
+                  ? "2px solid #f8a47c"
+                  : "1px solid rgba(255,255,255,0.08)",
+                borderRadius: "3px",
+                boxShadow: selected
+                  ? "0 0 4px rgba(248,164,124,0.4)"
+                  : "none",
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
