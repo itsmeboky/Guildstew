@@ -30,8 +30,21 @@ const TABS = [
   { id: "motto",    label: "Motto" },
 ];
 
+// Built-in shield silhouettes. Path data + viewBox stay literal so
+// downstream renderers (preview, save-to-PNG) can plug them straight
+// into an <svg> without further normalization.
+export const SHIELDS = {
+  heater:  { label: "Heater",  vb: "0 0 200 240", d: "M10,10 L190,10 L190,140 Q190,220 100,235 Q10,220 10,140 Z" },
+  kite:    { label: "Kite",    vb: "0 0 160 260", d: "M80,5 L155,60 L155,160 Q155,240 80,255 Q5,240 5,160 L5,60 Z" },
+  round:   { label: "Round",   vb: "0 0 200 200", d: "M100,5 A95,95 0 1,1 100,195 A95,95 0 1,1 100,5 Z" },
+  pointed: { label: "Pointed", vb: "0 0 200 260", d: "M100,5 L195,70 L195,170 L100,255 L5,170 L5,70 Z" },
+  banner:  { label: "Banner",  vb: "0 0 200 240", d: "M10,10 L190,10 L190,200 L100,230 L10,200 Z" },
+};
+
 export default function CrestBuilder({ onSave, onRandomize }) {
   const [activeTab, setActiveTab] = useState("shield");
+  const [selectedShieldId, setSelectedShieldId] = useState("heater");
+  const [customShield, setCustomShield] = useState(null);
 
   return (
     <div
@@ -131,7 +144,14 @@ export default function CrestBuilder({ onSave, onRandomize }) {
               overflow: "hidden",
             }}
           >
-            {activeTab === "shield"   && <TabPlaceholder label="Shield" />}
+            {activeTab === "shield" && (
+              <ShieldTab
+                selectedShieldId={selectedShieldId}
+                onSelectShield={setSelectedShieldId}
+                customShield={customShield}
+                onCustomShield={setCustomShield}
+              />
+            )}
             {activeTab === "fill"     && <TabPlaceholder label="Fill" />}
             {activeTab === "patterns" && <TabPlaceholder label="Patterns" />}
             {activeTab === "emblems"  && <TabPlaceholder label="Emblems" />}
@@ -230,6 +250,209 @@ export default function CrestBuilder({ onSave, onRandomize }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Shield tab — picks the silhouette every other layer is masked to.
+ *
+ * Renders the five built-in shapes as 60x70 thumbnail cards plus a
+ * sixth dashed "Upload SVG" card. Custom uploads are parsed in the
+ * browser via DOMParser; we yank the first <path>'s `d` and the
+ * SVG's `viewBox` (defaulting to the heater box if the file omits
+ * one). When a custom shield is active a small "Remove custom"
+ * button appears so the user can drop back to the built-ins.
+ */
+function ShieldTab({ selectedShieldId, onSelectShield, customShield, onCustomShield }) {
+  const fileInputRef = React.useRef(null);
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const doc = new DOMParser().parseFromString(text, "image/svg+xml");
+      const svgEl = doc.querySelector("svg");
+      const pathEl = doc.querySelector("path");
+      if (!pathEl) {
+        alert("SVG must contain a <path> element.");
+        e.target.value = "";
+        return;
+      }
+      const d = pathEl.getAttribute("d") || "";
+      const vb = svgEl?.getAttribute("viewBox") || "0 0 200 240";
+      const label = file.name.replace(/\.svg$/i, "") || "Custom";
+      onCustomShield({ vb, d, label });
+      onSelectShield("custom");
+    } catch {
+      alert("Couldn't read that file. Make sure it's a valid SVG.");
+    }
+    e.target.value = "";
+  };
+
+  const handleRemoveCustom = () => {
+    onCustomShield(null);
+    if (selectedShieldId === "custom") onSelectShield("heater");
+  };
+
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <div
+        style={{
+          display: "flex",
+          gap: "10px",
+          flexWrap: "wrap",
+          alignItems: "flex-start",
+        }}
+      >
+        {Object.entries(SHIELDS).map(([id, s]) => (
+          <ShieldCard
+            key={id}
+            shield={s}
+            selected={selectedShieldId === id}
+            onClick={() => onSelectShield(id)}
+          />
+        ))}
+
+        {customShield ? (
+          <ShieldCard
+            shield={customShield}
+            selected={selectedShieldId === "custom"}
+            onClick={() => onSelectShield("custom")}
+          />
+        ) : null}
+
+        <CustomUploadCard
+          inputRef={fileInputRef}
+          onUpload={handleUpload}
+        />
+      </div>
+
+      {customShield && (
+        <button
+          type="button"
+          onClick={handleRemoveCustom}
+          style={{
+            marginTop: "10px",
+            alignSelf: "flex-start",
+            fontFamily: FONT_STACK,
+            fontSize: "9px",
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: "0.15em",
+            padding: "6px 10px",
+            borderRadius: "6px",
+            cursor: "pointer",
+            backgroundColor: "transparent",
+            border: "1px solid #ef4444",
+            color: "#ef4444",
+          }}
+        >
+          ✕ Remove custom
+        </button>
+      )}
+
+      <div style={{ flex: 1 }} />
+      <p
+        style={{
+          margin: 0,
+          fontSize: "9px",
+          color: "#4a5568",
+          fontStyle: "italic",
+          fontFamily: FONT_STACK,
+        }}
+      >
+        Upload .svg with a single path for a custom shield shape.
+      </p>
+    </div>
+  );
+}
+
+function ShieldCard({ shield, selected, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={shield.label}
+      style={{
+        width: "60px",
+        height: "70px",
+        padding: "4px",
+        cursor: "pointer",
+        borderRadius: "6px",
+        backgroundColor: selected
+          ? "rgba(248,164,124,0.08)"
+          : "#1E2430",
+        border: selected
+          ? "2px solid #f8a47c"
+          : "1px solid #2a3441",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        transition: "background 0.15s, border-color 0.15s",
+        fontFamily: FONT_STACK,
+      }}
+    >
+      <svg
+        viewBox={shield.vb}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ width: "100%", height: "100%", display: "block" }}
+      >
+        <path
+          d={shield.d}
+          fill="#2a3441"
+          stroke="#f8a47c"
+          strokeWidth={4}
+          strokeOpacity={selected ? 1 : 0.4}
+        />
+      </svg>
+    </button>
+  );
+}
+
+function CustomUploadCard({ inputRef, onUpload }) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        title="Upload custom SVG shield"
+        style={{
+          width: "60px",
+          height: "70px",
+          cursor: "pointer",
+          borderRadius: "6px",
+          backgroundColor: "transparent",
+          border: "1px dashed rgba(248,164,124,0.25)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "2px",
+          color: "#f8a47c",
+          fontFamily: FONT_STACK,
+        }}
+      >
+        <span style={{ fontSize: "20px", lineHeight: 1, fontWeight: 300 }}>+</span>
+        <span
+          style={{
+            fontSize: "8px",
+            textTransform: "uppercase",
+            letterSpacing: "0.1em",
+            fontWeight: 700,
+          }}
+        >
+          Upload SVG
+        </span>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".svg,image/svg+xml"
+        onChange={onUpload}
+        style={{ display: "none" }}
+      />
+    </>
   );
 }
 
