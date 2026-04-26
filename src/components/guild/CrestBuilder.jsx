@@ -1714,6 +1714,27 @@ function MottoTab({ motto, onMotto, mottoColor, onMottoColor }) {
 }
 
 /**
+ * Build the label string used in both the LayerStack indicator
+ * (right column) and the LayersTab list. Format:
+ *   "Pattern 1: Chevron"
+ *   "Pattern 1: Chevron (45°)"        — non-zero rotation only
+ *   "Pattern 1: Chevron (80%)"        — opacity below 1.0 only
+ *   "Pattern 1: Chevron (45°, 80%)"   — both
+ */
+function patternLayerLabel(prefix, p) {
+  const baseName = PATTERNS[p?.type] || "None";
+  const base = `${prefix}: ${baseName}`;
+  if (!p || p.type === "none") return base;
+  const parts = [];
+  const rot = Math.round(p.rotation ?? 0);
+  if (rot !== 0) parts.push(`${rot}°`);
+  const op = p.opacity ?? 1;
+  if (op < 1) parts.push(`${Math.round(op * 100)}%`);
+  if (parts.length === 0) return base;
+  return `${base} (${parts.join(", ")})`;
+}
+
+/**
  * Layers tab.
  *
  * Visualizes the render stack top-to-bottom. The Motto bar pins the
@@ -1739,12 +1760,12 @@ function LayersTab({ layerOrder, onLayerOrder, pattern1, pattern2, emblems, prim
   const populatedEmblems = emblems.filter((s) => s?.svgData).length;
   const meta = {
     pattern1: {
-      label: `Pattern 1: ${PATTERNS[pattern1.type]}`,
+      label: patternLayerLabel("Pattern 1", pattern1),
       color: pattern1.color,
       active: pattern1.type !== "none",
     },
     pattern2: {
-      label: `Pattern 2: ${PATTERNS[pattern2.type]}`,
+      label: patternLayerLabel("Pattern 2", pattern2),
       color: pattern2.color,
       active: pattern2.type !== "none",
     },
@@ -2686,8 +2707,16 @@ function CrestSvg({
 function LayerStack({ layerOrder, pattern1, pattern2, emblems = [] }) {
   const populatedEmblems = emblems.filter((s) => s?.svgData).length;
   const slotMeta = {
-    pattern1: { label: `Pattern 1: ${PATTERNS[pattern1.type]}`, color: pattern1.color, active: pattern1.type !== "none" },
-    pattern2: { label: `Pattern 2: ${PATTERNS[pattern2.type]}`, color: pattern2.color, active: pattern2.type !== "none" },
+    pattern1: {
+      label: patternLayerLabel("Pattern 1", pattern1),
+      color: pattern1.color,
+      active: pattern1.type !== "none",
+    },
+    pattern2: {
+      label: patternLayerLabel("Pattern 2", pattern2),
+      color: pattern2.color,
+      active: pattern2.type !== "none",
+    },
     emblems: {
       label: populatedEmblems
         ? `Emblems (${populatedEmblems})`
