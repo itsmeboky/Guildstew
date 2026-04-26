@@ -25,10 +25,10 @@ import { displayName, displayInitial } from "@/utils/displayName";
  *   - Members: promote/demote to Officer, remove
  *   - Danger zone: disband (requires typing the exact guild name)
  *
- * Per-table routing:
- *   - guild_halls         — name, crest, disband
- *   - guild_spice_wallets — spending_restricted toggle
- *   - guild_memberships   — officer promote/demote (role column)
+ * All settings (name, crest, spending flag, officer roster, disband)
+ * write to the `guilds` row keyed on owner_user_id. The spending
+ * flag is also mirrored to guild_spice_wallets.spending_restricted
+ * so the Tavern checkout can gate purchases without an extra hop.
  * Member removal still flows through the existing guildRemove Edge
  * Function.
  */
@@ -39,14 +39,12 @@ export default function GuildSettingsDialog({
   guildOwnerId,
   profiles = [],
   inviteCode,
-  wallet,
-  officerIds = [],
 }) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState("general");
   const [name, setName] = useState(guild?.name || "");
   const [spendingRestricted, setSpendingRestricted] = useState(
-    wallet?.spending_restricted ?? false,
+    guild?.spending_restricted ?? false,
   );
   const [disbandConfirm, setDisbandConfirm] = useState("");
   const [disbandOpen, setDisbandOpen] = useState(false);
@@ -55,11 +53,13 @@ export default function GuildSettingsDialog({
   React.useEffect(() => {
     if (open) {
       setName(guild?.name || "");
-      setSpendingRestricted(wallet?.spending_restricted ?? false);
+      setSpendingRestricted(guild?.spending_restricted ?? false);
       setDisbandConfirm("");
       setDisbandOpen(false);
     }
-  }, [open, guild?.name, wallet?.spending_restricted]);
+  }, [open, guild?.name, guild?.spending_restricted]);
+
+  const officerIds = guild?.officer_ids || [];
   const memberRows = useMemo(
     () => profiles.filter((p) => p.user_id !== guildOwnerId),
     [profiles, guildOwnerId],
@@ -76,7 +76,7 @@ export default function GuildSettingsDialog({
   const saveGeneral = useMutation({
     mutationFn: async () => {
       const { error } = await supabase
-        .from("guild_halls")
+        .from("guilds")
         .upsert(
           { owner_user_id: guildOwnerId, name: name.trim() || null },
           { onConflict: "owner_user_id" },
@@ -92,9 +92,17 @@ export default function GuildSettingsDialog({
 
   const savePermissions = useMutation({
     mutationFn: async (nextRestricted) => {
-      // The spending flag is a wallet concern — guild_spice_wallets
-      // is the source of truth; the Tavern checkout already reads
-      // from there. No mirror onto guild_halls.
+      // spending_restricted lives on the guilds row (canonical) and
+      // is mirrored onto the wallet so the Tavern checkout — which
+      // already reads from the wallet — can gate purchases without
+      // a second round-trip.
+      const { error: guildErr } = await supabase
+        .from("guilds")
+        .upsert(
+          { owner_user_id: guildOwnerId, spending_restricted: nextRestricted },
+          { onConflict: "owner_user_id" },
+        );
+      if (guildErr) throw guildErr;
       const { error: walletErr } = await supabase
         .from("guild_spice_wallets")
         .update({ spending_restricted: nextRestricted })
@@ -103,6 +111,7 @@ export default function GuildSettingsDialog({
     },
     onSuccess: () => {
       toast.success("Spending permissions updated.");
+      queryClient.invalidateQueries({ queryKey: ["guildRow", guildOwnerId] });
       queryClient.invalidateQueries({ queryKey: ["guildSpiceWallet", guildOwnerId] });
     },
     onError: (err) => toast.error(err.message || "Update failed"),
@@ -110,21 +119,21 @@ export default function GuildSettingsDialog({
 
   const toggleOfficer = useMutation({
     mutationFn: async (userId) => {
-      // Officer is a per-membership role, not a guild-level array —
-      // flip the row's `role` between 'officer' and 'member' on
-      // guild_memberships. Keying join on guild_id == owner_user_id
-      // matches the guild_spice_wallets convention used elsewhere.
-      const isOfficer = officerIds.includes(userId);
-      const nextRole = isOfficer ? "member" : "officer";
+      // officer_ids is a UUID[] column on the guilds row — flip
+      // membership in/out of the array.
+      const nextSet = officerIds.includes(userId)
+        ? officerIds.filter((id) => id !== userId)
+        : [...officerIds, userId];
       const { error } = await supabase
-        .from("guild_memberships")
-        .update({ role: nextRole })
-        .eq("guild_id", guildOwnerId)
-        .eq("user_id", userId);
+        .from("guilds")
+        .upsert(
+          { owner_user_id: guildOwnerId, officer_ids: nextSet },
+          { onConflict: "owner_user_id" },
+        );
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["guildMembershipsRoles", guildOwnerId] });
+      queryClient.invalidateQueries({ queryKey: ["guildRow", guildOwnerId] });
     },
     onError: (err) => toast.error(err.message || "Failed"),
   });
@@ -148,7 +157,7 @@ export default function GuildSettingsDialog({
       // cancel the Guild-tier subscription to clear memberships.
       // Call out the billing step in the toast so the UI doesn't
       // pretend it's fully undone.
-      const { error } = await supabase.from("guild_halls").delete().eq("owner_user_id", guildOwnerId);
+      const { error } = await supabase.from("guilds").delete().eq("owner_user_id", guildOwnerId);
       if (error) throw error;
     },
     onSuccess: () => {
