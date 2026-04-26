@@ -1450,18 +1450,65 @@ export async function fetchSVGPaths(url) {
  * of the emblem that overhangs the silhouette is hidden cleanly.
  */
 export function EmblemOnCrest({ data, color, scale, x, y, clipId, vb }) {
-  console.log("EmblemOnCrest render:", { hasData: !!data, color, scale, x, y });
-  if (!data || !data.elements || data.elements.length === 0) return null;
+  // Stable filter id per instance so React reconciliation doesn't
+  // churn the <filter> definition on every render.
+  const reactId = React.useId();
+  if (!data) return null;
   const [, , cw, ch] = vb.split(" ").map(Number);
   const [, , evw, evh] = data.vb.split(" ").map(Number);
+  // x and y are 0–100 percentages of the crest dimensions.
+  const px = (x / 100) * cw;
+  const py = (y / 100) * ch;
+
+  // ── Raster branch ────────────────────────────────────────────
+  // The guild catalog ships PNGs wrapped in SVG. We render the
+  // <image> as-is and recolor via an <feColorMatrix>: pin every
+  // RGB channel to the chosen color while passing the original
+  // alpha straight through, so transparent areas stay transparent
+  // and the silhouette picks up the user's color.
+  if (data.isRaster && data.rasterData) {
+    const rd = data.rasterData;
+    // Slightly larger base scale than vector (0.8 vs 0.7) — raster
+    // glyphs in this catalog use more padding inside their viewBox.
+    const s = scale * (cw / evw) * 0.8;
+    const r = parseInt(color.slice(1, 3), 16) / 255;
+    const g = parseInt(color.slice(3, 5), 16) / 255;
+    const b = parseInt(color.slice(5, 7), 16) / 255;
+    const filterId = `recolor-${reactId.replace(/[:]/g, "")}`;
+
+    return (
+      <g clipPath={`url(#${clipId})`}>
+        <defs>
+          <filter id={filterId} colorInterpolationFilters="sRGB">
+            <feColorMatrix
+              type="matrix"
+              values={`0 0 0 0 ${r}  0 0 0 0 ${g}  0 0 0 0 ${b}  0 0 0 1 0`}
+            />
+          </filter>
+        </defs>
+        <g transform={`translate(${px}, ${py}) scale(${s}) translate(${-evw / 2}, ${-evh / 2})`}>
+          <image
+            href={rd.href}
+            xlinkHref={rd.href}
+            x={rd.x}
+            y={rd.y}
+            width={rd.width}
+            height={rd.height}
+            filter={`url(#${filterId})`}
+            opacity="0.92"
+            preserveAspectRatio="xMidYMid meet"
+          />
+        </g>
+      </g>
+    );
+  }
+
+  // ── Vector branch ────────────────────────────────────────────
+  if (!data.elements || data.elements.length === 0) return null;
 
   // Scale factor: fit emblem viewbox into crest viewbox, then apply
   // the user's slider value on top.
   const s = scale * (cw / evw) * 0.7;
-  // x and y are 0–100 percentages of the crest dimensions.
-  const px = (x / 100) * cw;
-  const py = (y / 100) * ch;
-  console.log("Emblem transform:", { px, py, s, cw, ch, evw, evh });
 
   return (
     <g
