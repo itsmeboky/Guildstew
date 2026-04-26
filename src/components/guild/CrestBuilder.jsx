@@ -49,6 +49,39 @@ export const PRESET_COLORS = [
   "#be185d", "#4f46e5", "#059669", "#d97706", "#64748b",
 ];
 
+// Public Supabase storage root. Anything we hot-link from inside
+// the builder hangs off this so url assembly stays one-line.
+export const SB = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public";
+
+// Built-in emblem catalog. Two categories of 12 each (24 total) hosted
+// in the existing app-assets bucket — file names are
+// `Arcane1.svg`..`Arcane12.svg` and `general1.svg`..`general12.svg`.
+// Adding a new category is a one-line addition here.
+export const EMBLEM_CATEGORIES = {
+  arcane:  { label: "Arcane",  count: 12, prefix: "Arcane",  path: `${SB}/app-assets/guild/guildcrest` },
+  general: { label: "General", count: 12, prefix: "general", path: `${SB}/app-assets/guild/guildcrest` },
+};
+
+// Flatten the category descriptors into a renderable list. Built
+// once at module load — the catalog is static, so there's no need
+// to recompute it per-render.
+export const buildEmblemList = () => {
+  const list = [];
+  Object.entries(EMBLEM_CATEGORIES).forEach(([catKey, cat]) => {
+    for (let i = 1; i <= cat.count; i++) {
+      list.push({
+        id: `${catKey}${i}`,
+        label: `${cat.label} ${i}`,
+        url: `${cat.path}/${cat.prefix}${i}.svg`,
+        category: catKey,
+      });
+    }
+  });
+  return list;
+};
+
+export const EMBLEM_LIST = buildEmblemList();
+
 // Pattern catalog — id → human label. Render geometry lives in
 // `renderPattern` below; this map drives the picker UI and lets the
 // rest of the app look up a friendly label without duplicating
