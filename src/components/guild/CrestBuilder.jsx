@@ -49,6 +49,29 @@ export const PRESET_COLORS = [
   "#be185d", "#4f46e5", "#059669", "#d97706", "#64748b",
 ];
 
+// Pattern catalog — id → human label. Render geometry lives in
+// `renderPattern` below; this map drives the picker UI and lets the
+// rest of the app look up a friendly label without duplicating
+// strings.
+export const PATTERNS = {
+  none:      "None",
+  chevron:   "Chevron",
+  quartered: "Quartered",
+  hsplit:    "Horizontal",
+  vsplit:    "Vertical",
+  diagonal:  "Diagonal",
+  checkered: "Checkered",
+  border:    "Border",
+  circle:    "Circle",
+  sunburst:  "Sunburst",
+  cross:     "Cross",
+  saltire:   "Saltire (X)",
+  paly:      "Paly (V-Stripes)",
+  barry:     "Barry (H-Stripes)",
+  bend:      "Bend",
+  fess:      "Fess (Band)",
+};
+
 export default function CrestBuilder({ onSave, onRandomize }) {
   const [activeTab, setActiveTab] = useState("shield");
   const [selectedShieldId, setSelectedShieldId] = useState("heater");
@@ -61,6 +84,12 @@ export default function CrestBuilder({ onSave, onRandomize }) {
   const [backgroundType, setBackgroundType] = useState("solid");
   const [primaryColor, setPrimaryColor] = useState("#2563eb");
   const [secondaryColor, setSecondaryColor] = useState("#1a1a1a");
+
+  // Patterns state (Step 5). Two stackable layers, each with type
+  // + color. Layer order is owned separately so the future Layers
+  // tab can rearrange without touching either pattern's own state.
+  const [pattern1, setPattern1] = useState({ type: "none", color: "#f59e0b" });
+  const [pattern2, setPattern2] = useState({ type: "none", color: "#ffffff" });
 
   return (
     <div
@@ -178,7 +207,14 @@ export default function CrestBuilder({ onSave, onRandomize }) {
                 onSecondaryColor={setSecondaryColor}
               />
             )}
-            {activeTab === "patterns" && <TabPlaceholder label="Patterns" />}
+            {activeTab === "patterns" && (
+              <PatternsTab
+                pattern1={pattern1}
+                onPattern1={setPattern1}
+                pattern2={pattern2}
+                onPattern2={setPattern2}
+              />
+            )}
             {activeTab === "emblems"  && <TabPlaceholder label="Emblems" />}
             {activeTab === "layers"   && <TabPlaceholder label="Layers" />}
             {activeTab === "motto"    && <TabPlaceholder label="Motto" />}
@@ -654,6 +690,308 @@ function ColorPicker({ label, value, onChange }) {
       </div>
     </div>
   );
+}
+
+/**
+ * Patterns tab — two stacked pickers separated by a divider.
+ *
+ * Each picker is a wrap-row of 16 type buttons (matching the tab
+ * bar's active/inactive style) plus a ColorPicker that hides when
+ * the type is "None". Layer ordering is the Layers tab's job; this
+ * panel only owns each layer's type + color.
+ */
+function PatternsTab({ pattern1, onPattern1, pattern2, onPattern2 }) {
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: "10px" }}>
+      <PatternPicker
+        label="Pattern 1"
+        value={pattern1}
+        onChange={onPattern1}
+      />
+      <div style={{ borderTop: "1px solid #2a3441" }} />
+      <PatternPicker
+        label="Pattern 2"
+        value={pattern2}
+        onChange={onPattern2}
+      />
+      <div style={{ flex: 1 }} />
+      <p
+        style={{
+          margin: 0,
+          fontSize: "8px",
+          color: "#4a5568",
+          fontStyle: "italic",
+          fontFamily: FONT_STACK,
+        }}
+      >
+        Use the Layers tab to control render order.
+      </p>
+    </div>
+  );
+}
+
+function PatternPicker({ label, value, onChange }) {
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: "10px",
+          color: "#f8a47c",
+          textTransform: "uppercase",
+          letterSpacing: "0.2em",
+          fontWeight: 700,
+          fontFamily: FONT_STACK,
+          marginBottom: "6px",
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginBottom: "8px" }}>
+        {Object.entries(PATTERNS).map(([id, lbl]) => {
+          const active = value.type === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onChange({ ...value, type: id })}
+              style={{
+                fontFamily: FONT_STACK,
+                fontSize: "9px",
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                fontWeight: 700,
+                padding: "5px 8px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                backgroundColor: active
+                  ? "rgba(248,164,124,0.12)"
+                  : "transparent",
+                border: active
+                  ? "1px solid rgba(248,164,124,0.5)"
+                  : "1px solid rgba(255,255,255,0.06)",
+                color: active ? "#f8a47c" : "#64748b",
+              }}
+            >
+              {lbl}
+            </button>
+          );
+        })}
+      </div>
+      {value.type !== "none" && (
+        <ColorPicker
+          label="Color"
+          value={value.color}
+          onChange={(c) => onChange({ ...value, color: c })}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Pattern → SVG geometry. Returns a JSX fragment positioned inside
+ * the shield's coordinate system (the caller is responsible for
+ * mounting it inside the right <svg viewBox=…>). Every pattern is
+ * clipped to the shield's silhouette via clipPath so off-edge
+ * geometry never leaks outside the heraldic field.
+ *
+ * Args:
+ *   type     — one of PATTERNS' keys
+ *   color    — fill color
+ *   vb       — shield viewBox string ("x y w h")
+ *   clipId   — the id of a <clipPath> wrapping the shield path
+ *   shieldD  — the shield path's `d` attribute (used by the
+ *              `border` pattern, which strokes the shield itself)
+ */
+export function renderPattern(type, color, vb, clipId, shieldD) {
+  if (!type || type === "none") return null;
+  const [vx, vy, w, h] = vb.split(/\s+/).map(Number);
+  const cx = vx + w / 2;
+  const cy = vy + h / 2;
+  const minDim = Math.min(w, h);
+  const clip = `url(#${clipId})`;
+
+  switch (type) {
+    case "chevron": {
+      // Heraldic chevron: peak at upper-center, legs sweeping down to
+      // the lower corners. Band thickness ~20% of the field height.
+      const apexY = vy + h * 0.4;
+      const upperCornerY = vy + h * 0.6;
+      const lowerCornerY = vy + h * 0.8;
+      const innerApexY = vy + h * 0.6;
+      const d = `M ${vx} ${upperCornerY} L ${cx} ${apexY} L ${vx + w} ${upperCornerY} L ${vx + w} ${lowerCornerY} L ${cx} ${innerApexY} L ${vx} ${lowerCornerY} Z`;
+      return <path d={d} fill={color} clipPath={clip} />;
+    }
+
+    case "quartered":
+      return (
+        <g clipPath={clip}>
+          <rect x={vx}         y={vy}         width={w / 2} height={h / 2} fill={color} />
+          <rect x={vx + w / 2} y={vy + h / 2} width={w / 2} height={h / 2} fill={color} />
+        </g>
+      );
+
+    case "hsplit":
+      return <rect x={vx} y={vy} width={w} height={h / 2} fill={color} clipPath={clip} />;
+
+    case "vsplit":
+      return <rect x={vx + w / 2} y={vy} width={w / 2} height={h} fill={color} clipPath={clip} />;
+
+    case "diagonal":
+      // Upper-right triangle: top-left → top-right → bottom-right.
+      return (
+        <polygon
+          points={`${vx},${vy} ${vx + w},${vy} ${vx + w},${vy + h}`}
+          fill={color}
+          clipPath={clip}
+        />
+      );
+
+    case "checkered": {
+      const cols = 5;
+      const rows = 6;
+      const cw = w / cols;
+      const ch = h / rows;
+      const cells = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if ((r + c) % 2 === 0) {
+            cells.push(
+              <rect
+                key={`${r}-${c}`}
+                x={vx + c * cw}
+                y={vy + r * ch}
+                width={cw}
+                height={ch}
+                fill={color}
+              />,
+            );
+          }
+        }
+      }
+      return <g clipPath={clip}>{cells}</g>;
+    }
+
+    case "border":
+      // Inset stroke: stroke the shield path itself with a fat width
+      // and clip to the same path so only the inner half of the
+      // stroke is visible — gives a clean inset ribbon.
+      return (
+        <path
+          d={shieldD}
+          fill="none"
+          stroke={color}
+          strokeWidth={Math.max(8, minDim * 0.08)}
+          clipPath={clip}
+        />
+      );
+
+    case "circle":
+      return <circle cx={cx} cy={cy} r={minDim * 0.28} fill={color} clipPath={clip} />;
+
+    case "sunburst": {
+      // 12 triangular rays radiating from center. Each ray spans
+      // 15° with a 15° gap, so the rays read as discrete spokes.
+      const rays = [];
+      const radius = Math.max(w, h);
+      for (let i = 0; i < 12; i++) {
+        const a1 = ((i * 30) - 7.5) * Math.PI / 180;
+        const a2 = ((i * 30) + 7.5) * Math.PI / 180;
+        const p1 = `${cx + radius * Math.cos(a1)},${cy + radius * Math.sin(a1)}`;
+        const p2 = `${cx + radius * Math.cos(a2)},${cy + radius * Math.sin(a2)}`;
+        rays.push(
+          <polygon
+            key={i}
+            points={`${cx},${cy} ${p1} ${p2}`}
+            fill={color}
+          />,
+        );
+      }
+      return <g clipPath={clip}>{rays}</g>;
+    }
+
+    case "cross": {
+      const vBarW = w * 0.2;
+      const hBarH = h * 0.2;
+      return (
+        <g clipPath={clip}>
+          <rect x={cx - vBarW / 2} y={vy}         width={vBarW} height={h}     fill={color} />
+          <rect x={vx}             y={cy - hBarH / 2} width={w}     height={hBarH} fill={color} />
+        </g>
+      );
+    }
+
+    case "saltire": {
+      // Diagonal X. Strokes 12% of the smaller dimension so the
+      // crossbars stay visually balanced regardless of shield ratio.
+      const sw = minDim * 0.12;
+      return (
+        <g clipPath={clip} stroke={color} strokeWidth={sw} strokeLinecap="butt">
+          <line x1={vx} y1={vy} x2={vx + w} y2={vy + h} />
+          <line x1={vx + w} y1={vy} x2={vx} y2={vy + h} />
+        </g>
+      );
+    }
+
+    case "paly": {
+      // 6 vertical stripes, alternating filled (3 fills + 3 gaps).
+      const sw = w / 6;
+      const stripes = [];
+      for (let i = 0; i < 6; i++) {
+        if (i % 2 === 0) {
+          stripes.push(
+            <rect key={i} x={vx + i * sw} y={vy} width={sw} height={h} fill={color} />,
+          );
+        }
+      }
+      return <g clipPath={clip}>{stripes}</g>;
+    }
+
+    case "barry": {
+      // 8 horizontal stripes, alternating filled (4 fills + 4 gaps).
+      const sh = h / 8;
+      const stripes = [];
+      for (let i = 0; i < 8; i++) {
+        if (i % 2 === 0) {
+          stripes.push(
+            <rect key={i} x={vx} y={vy + i * sh} width={w} height={sh} fill={color} />,
+          );
+        }
+      }
+      return <g clipPath={clip}>{stripes}</g>;
+    }
+
+    case "bend": {
+      // Diagonal band from upper-left to lower-right, 15% of minDim.
+      const sw = minDim * 0.15;
+      return (
+        <line
+          x1={vx}
+          y1={vy}
+          x2={vx + w}
+          y2={vy + h}
+          stroke={color}
+          strokeWidth={sw}
+          clipPath={clip}
+        />
+      );
+    }
+
+    case "fess":
+      return (
+        <rect
+          x={vx}
+          y={cy - h * 0.1}
+          width={w}
+          height={h * 0.2}
+          fill={color}
+          clipPath={clip}
+        />
+      );
+
+    default:
+      return null;
+  }
 }
 
 /** Placeholder inserted into the fixed-height controls panel until
