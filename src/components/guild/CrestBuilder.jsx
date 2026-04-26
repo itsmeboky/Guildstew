@@ -1556,7 +1556,17 @@ export async function fetchSVGPaths(url) {
  * The whole group is clipped to the shield's clipPath so any part
  * of the emblem that overhangs the silhouette is hidden cleanly.
  */
-export function EmblemOnCrest({ data, color, scale, x, y, clipId, vb }) {
+export function EmblemOnCrest({
+  data,
+  color,
+  scale,
+  x,
+  y,
+  rotation = 0,
+  opacity = 1,
+  clipId,
+  vb,
+}) {
   // Stable filter id per instance so React reconciliation doesn't
   // churn the <filter> definition on every render.
   const reactId = React.useId();
@@ -1593,7 +1603,7 @@ export function EmblemOnCrest({ data, color, scale, x, y, clipId, vb }) {
             />
           </filter>
         </defs>
-        <g transform={`translate(${px}, ${py}) scale(${s}) translate(${-evw / 2}, ${-evh / 2})`}>
+        <g transform={`translate(${px}, ${py}) rotate(${rotation}) scale(${s}) translate(${-evw / 2}, ${-evh / 2})`}>
           <image
             href={rd.href}
             xlinkHref={rd.href}
@@ -1602,7 +1612,7 @@ export function EmblemOnCrest({ data, color, scale, x, y, clipId, vb }) {
             width={rd.width}
             height={rd.height}
             filter={`url(#${filterId})`}
-            opacity="0.92"
+            opacity={opacity}
             preserveAspectRatio="xMidYMid meet"
           />
         </g>
@@ -1619,7 +1629,7 @@ export function EmblemOnCrest({ data, color, scale, x, y, clipId, vb }) {
 
   return (
     <g
-      transform={`translate(${px}, ${py}) scale(${s}) translate(${-evw / 2}, ${-evh / 2})`}
+      transform={`translate(${px}, ${py}) rotate(${rotation}) scale(${s}) translate(${-evw / 2}, ${-evh / 2})`}
       clipPath={`url(#${clipId})`}
     >
       {data.elements.map((el, i) =>
@@ -1631,7 +1641,7 @@ export function EmblemOnCrest({ data, color, scale, x, y, clipId, vb }) {
           fill: color,
           stroke: color,
           strokeWidth: "0.5",
-          opacity: "0.92",
+          opacity,
         }),
       )}
     </g>
@@ -2570,6 +2580,8 @@ function CrestSvg({
                 scale={slot.scale}
                 x={slot.x}
                 y={slot.y}
+                rotation={slot.rotation ?? 0}
+                opacity={slot.opacity ?? 1}
                 clipId={clipId}
                 vb={shield.vb}
               />
