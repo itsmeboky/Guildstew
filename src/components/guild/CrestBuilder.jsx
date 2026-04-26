@@ -1305,6 +1305,51 @@ function PatternPicker({ label, value, onChange }) {
 
 const svgCache = {};
 
+// Shape selectors used to harvest renderable elements out of a
+// parsed SVG. Kept here so each parsing pass uses the same list.
+const SHAPE_SELECTOR = "path, circle, rect, polygon, polyline, ellipse, line";
+const SHAPE_TAGS = new Set([
+  "path", "circle", "rect", "polygon", "polyline", "ellipse", "line",
+]);
+
+/**
+ * Pull shape elements out of a parsed Document, with three fallbacks
+ * so namespace quirks in the source SVG can't leave us empty-handed:
+ *
+ *   1. Plain CSS selector (works for most files).
+ *   2. Namespace-agnostic `*|tag` selectors (handles SVGs whose
+ *      shapes ended up under a non-default namespace prefix).
+ *   3. Manual depth-first walk of the tree matching by localName
+ *      (last resort — works no matter what XML weirdness is in
+ *      play).
+ */
+function collectShapes(doc, root) {
+  let nodes = Array.from((root || doc).querySelectorAll(SHAPE_SELECTOR));
+  if (nodes.length > 0) return nodes;
+
+  // Try a namespace-agnostic selector. Some SVGs created by certain
+  // editors (or hand-written with weird prefixes) put shapes in a
+  // different namespace, and the plain selector skips them.
+  try {
+    const nsSelector = [...SHAPE_TAGS].map((t) => `*|${t}`).join(",");
+    nodes = Array.from((root || doc).querySelectorAll(nsSelector));
+    if (nodes.length > 0) return nodes;
+  } catch { /* selector unsupported in this engine — fall through */ }
+
+  // Manual walk. Bulletproof.
+  const out = [];
+  const walk = (node) => {
+    if (!node) return;
+    const name = (node.localName || node.nodeName || "").toLowerCase();
+    if (SHAPE_TAGS.has(name)) out.push(node);
+    if (node.childNodes) {
+      for (const child of node.childNodes) walk(child);
+    }
+  };
+  walk(root || doc.documentElement);
+  return out;
+}
+
 export async function fetchSVGPaths(url) {
   if (svgCache[url]) return svgCache[url];
   console.log("Fetching SVG:", url);
@@ -1318,17 +1363,26 @@ export async function fetchSVGPaths(url) {
       return null;
     }
     const text = await res.text();
-    const doc = new DOMParser().parseFromString(text, "image/svg+xml");
-    const svg = doc.querySelector("svg");
+
+    // Stage 1: parse as image/svg+xml (the canonical MIME for SVG).
+    let doc = new DOMParser().parseFromString(text, "image/svg+xml");
+    let svg = doc.querySelector("svg");
+    let shapes = collectShapes(doc, svg);
+
+    // Stage 2: if nothing came back, the strict XML parser may have
+    // tripped over namespace declarations. Re-parse with the much
+    // more forgiving HTML parser, which puts SVG elements in the
+    // SVG namespace automatically and exposes them via the regular
+    // CSS selector engine.
+    if (shapes.length === 0) {
+      console.warn("SVG parser returned 0 shapes via image/svg+xml — retrying as text/html for", url);
+      doc = new DOMParser().parseFromString(text, "text/html");
+      svg = doc.querySelector("svg");
+      shapes = collectShapes(doc, svg);
+    }
+
     const vb = svg?.getAttribute("viewBox") || "0 0 100 100";
-    // Run querySelectorAll against the *document* so shapes nested
-    // inside <g> groups (with transforms, etc.) still get picked up.
-    // Source SVGs from the catalog wrap shapes in <g> sometimes —
-    // querying off the root <svg> would have skipped them.
-    const shapes = doc.querySelectorAll(
-      "path, circle, rect, polygon, polyline, ellipse, line",
-    );
-    const elements = Array.from(shapes).map((el) => {
+    const elements = shapes.map((el) => {
       const attrs = {};
       for (const a of el.attributes) {
         // Drop the source's own coloring so our dynamic fill wins.
@@ -1336,10 +1390,15 @@ export async function fetchSVGPaths(url) {
           attrs[a.name] = a.value;
         }
       }
-      return { tag: el.tagName.toLowerCase(), attrs };
+      return { tag: (el.localName || el.tagName).toLowerCase(), attrs };
     });
     console.log("Parsed elements:", elements.length, elements);
     console.log("ViewBox:", vb);
+
+    if (elements.length === 0) {
+      console.error("SVG had no recognizable shape elements:", url);
+    }
+
     const result = { vb, elements };
     svgCache[url] = result;
     return result;
@@ -2262,7 +2321,6 @@ function CrestSvg({
       // Render every populated slot in array order so slot 0 is at
       // the bottom of the emblem stack and slot 3 at the top —
       // matches how the slot tabs read left-to-right in the editor.
-      console.log("Rendering emblems layer, slots:", emblems.map((e) => ({ id: e.id, hasSvgData: !!e.svgData })));
       return (
         <g key={id}>
           {emblems.map((slot, i) => {
