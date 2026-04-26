@@ -157,15 +157,30 @@ export default function CrestBuilder({
   }, []);
 
   // Pick a built-in emblem into the active slot — fetch + parse
-  // first so the slot lands with svgData ready to render.
+  // first so the slot lands with svgData ready to render. A null
+  // `def` clears the active slot (the "None" filter row uses this
+  // path).
   const selectEmblem = React.useCallback(async (def) => {
+    if (!def) {
+      setEmblems((prev) => prev.map((slot, i) => (
+        i === activeEmblemIdx
+          ? { ...slot, id: "none", svgData: null, customLabel: null }
+          : slot
+      )));
+      return;
+    }
     console.log("Selected emblem:", def.id, def.url);
     const data = await fetchSVGPaths(def.url);
     console.log("Fetched data:", data);
+    if (!data) {
+      console.error("Failed to fetch/parse SVG for", def.url);
+      return;
+    }
+    console.log("Setting svgData with", data.elements.length, "elements");
     setEmblems((prev) => {
       const next = prev.map((slot, i) => (
         i === activeEmblemIdx
-          ? { ...slot, id: def.id, svgData: data, customLabel: null }
+          ? { ...slot, id: def.id, svgData: data, customLabel: def.label }
           : slot
       ));
       console.log("Updated emblem slot:", activeEmblemIdx, next[activeEmblemIdx]);
@@ -1294,13 +1309,26 @@ export async function fetchSVGPaths(url) {
   if (svgCache[url]) return svgCache[url];
   console.log("Fetching SVG:", url);
   try {
-    const text = await (await fetch(url)).text();
+    // mode: 'cors' is the default for cross-origin fetches but we
+    // pin it explicitly so the intent is documented for future
+    // readers (and so a future build tool can't strip it).
+    const res = await fetch(url, { mode: "cors" });
+    if (!res.ok) {
+      console.error("SVG fetch failed:", url, res.status, res.statusText);
+      return null;
+    }
+    const text = await res.text();
     const doc = new DOMParser().parseFromString(text, "image/svg+xml");
     const svg = doc.querySelector("svg");
     const vb = svg?.getAttribute("viewBox") || "0 0 100 100";
-    const elements = Array.from(
-      doc.querySelectorAll("path,circle,rect,polygon,polyline,ellipse,line"),
-    ).map((el) => {
+    // Run querySelectorAll against the *document* so shapes nested
+    // inside <g> groups (with transforms, etc.) still get picked up.
+    // Source SVGs from the catalog wrap shapes in <g> sometimes —
+    // querying off the root <svg> would have skipped them.
+    const shapes = doc.querySelectorAll(
+      "path, circle, rect, polygon, polyline, ellipse, line",
+    );
+    const elements = Array.from(shapes).map((el) => {
       const attrs = {};
       for (const a of el.attributes) {
         // Drop the source's own coloring so our dynamic fill wins.
@@ -1338,28 +1366,35 @@ export async function fetchSVGPaths(url) {
  */
 export function EmblemOnCrest({ data, color, scale, x, y, clipId, vb }) {
   console.log("EmblemOnCrest render:", { hasData: !!data, color, scale, x, y });
-  if (!data) return null;
+  if (!data || !data.elements || data.elements.length === 0) return null;
   const [, , cw, ch] = vb.split(" ").map(Number);
   const [, , evw, evh] = data.vb.split(" ").map(Number);
+
+  // Scale factor: fit emblem viewbox into crest viewbox, then apply
+  // the user's slider value on top.
   const s = scale * (cw / evw) * 0.7;
+  // x and y are 0–100 percentages of the crest dimensions.
+  const px = (x / 100) * cw;
+  const py = (y / 100) * ch;
+  console.log("Emblem transform:", { px, py, s, cw, ch, evw, evh });
+
   return (
     <g
-      transform={`translate(${(x / 100) * cw},${(y / 100) * ch}) scale(${s}) translate(${-evw / 2},${-evh / 2})`}
+      transform={`translate(${px}, ${py}) scale(${s}) translate(${-evw / 2}, ${-evh / 2})`}
       clipPath={`url(#${clipId})`}
     >
-      {data.elements.map((el, i) => {
-        const Tag = el.tag;
-        return (
-          <Tag
-            key={i}
-            {...el.attrs}
-            fill={color}
-            stroke={color}
-            strokeWidth="0.5"
-            opacity="0.92"
-          />
-        );
-      })}
+      {data.elements.map((el, i) =>
+        // React.createElement directly — bypasses any JSX
+        // capitalization quirks for lowercase string tag values.
+        React.createElement(el.tag, {
+          key: i,
+          ...el.attrs,
+          fill: color,
+          stroke: color,
+          strokeWidth: "0.5",
+          opacity: "0.92",
+        }),
+      )}
     </g>
   );
 }
@@ -2229,9 +2264,10 @@ function CrestSvg({
       // matches how the slot tabs read left-to-right in the editor.
       console.log("Rendering emblems layer, slots:", emblems.map((e) => ({ id: e.id, hasSvgData: !!e.svgData })));
       return (
-        <React.Fragment key={id}>
-          {emblems.map((slot, i) =>
-            slot?.svgData ? (
+        <g key={id}>
+          {emblems.map((slot, i) => {
+            if (!slot?.svgData || !slot.svgData.elements || slot.svgData.elements.length === 0) return null;
+            return (
               <EmblemOnCrest
                 key={i}
                 data={slot.svgData}
@@ -2242,9 +2278,9 @@ function CrestSvg({
                 clipId={clipId}
                 vb={shield.vb}
               />
-            ) : null,
-          )}
-        </React.Fragment>
+            );
+          })}
+        </g>
       );
     }
     return null;
