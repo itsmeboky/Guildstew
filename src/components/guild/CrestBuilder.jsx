@@ -2238,6 +2238,35 @@ function EmblemSlider({ label, min, max, step, value, onChange, suffix = "" }) {
 }
 
 /**
+ * Wrap a pattern's geometry in a transform group that respects the
+ * slot's per-layer scale / rotation / position / opacity sliders.
+ *
+ * Transform order (read right-to-left):
+ *   translate(cx, cy) ∘ rotate(θ) ∘ scale(s) ∘ translate(-cx, -cy)
+ * which rotates and scales around the (cx, cy) pivot rather than
+ * the SVG origin. cx / cy come from the slot's x% / y% multiplied
+ * into the shield's viewBox dimensions, so x=50 / y=50 keeps the
+ * pivot at the geometric center.
+ */
+export function renderPatternLayer(p, clipId, vb, shieldD) {
+  if (!p || p.type === "none") return null;
+  const [, , w, h] = vb.split(/\s+/).map(Number);
+  const cx = ((p.x ?? 50) / 100) * w;
+  const cy = ((p.y ?? 50) / 100) * h;
+  const scale = p.scale ?? 1;
+  const rotation = p.rotation ?? 0;
+  const opacity = p.opacity ?? 1;
+  return (
+    <g
+      transform={`translate(${cx}, ${cy}) rotate(${rotation}) scale(${scale}) translate(${-cx}, ${-cy})`}
+      opacity={opacity}
+    >
+      {renderPattern(p.type, p.color, vb, clipId, shieldD)}
+    </g>
+  );
+}
+
+/**
  * Pattern → SVG geometry. Returns a JSX fragment positioned inside
  * the shield's coordinate system (the caller is responsible for
  * mounting it inside the right <svg viewBox=…>). Every pattern is
@@ -2488,7 +2517,7 @@ function CrestSvg({
       const p = id === "pattern1" ? pattern1 : pattern2;
       return (
         <React.Fragment key={id}>
-          {renderPattern(p.type, p.color, shield.vb, clipId, shield.d)}
+          {renderPatternLayer(p, clipId, shield.vb, shield.d)}
         </React.Fragment>
       );
     }
