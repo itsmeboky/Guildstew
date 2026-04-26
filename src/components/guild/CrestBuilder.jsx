@@ -91,6 +91,29 @@ export default function CrestBuilder({ onSave, onRandomize }) {
   const [pattern1, setPattern1] = useState({ type: "none", color: "#f59e0b" });
   const [pattern2, setPattern2] = useState({ type: "none", color: "#ffffff" });
 
+  // Layer order — drives render z-stacking. Earlier in the array =
+  // rendered first = visually behind later items. Background is
+  // always at the bottom and Motto always at the top, so neither
+  // appears in this list. Emblems will append to it in Task 2.
+  const [layerOrder] = useState(["pattern1", "pattern2"]);
+
+  // Resolve the active shield (built-in or user-uploaded) once so
+  // every consumer (preview + future thumbnails) reads the same
+  // path/viewBox without re-doing the lookup.
+  const shield = selectedShieldId === "custom" && customShield
+    ? customShield
+    : SHIELDS[selectedShieldId] || SHIELDS.heater;
+
+  const crestProps = {
+    shield,
+    backgroundType,
+    primaryColor,
+    secondaryColor,
+    pattern1,
+    pattern2,
+    layerOrder,
+  };
+
   return (
     <div
       style={{
@@ -289,25 +312,91 @@ export default function CrestBuilder({ onSave, onRandomize }) {
           >
             Live Preview
           </div>
+
+          {/* Main preview frame */}
           <div
             style={{
-              width: "100%",
-              aspectRatio: "1 / 1",
-              borderRadius: "12px",
-              border: "1px solid rgba(248,164,124,0.25)",
-              backgroundColor: "rgba(30,36,48,0.5)",
+              padding: "16px",
+              background:
+                "radial-gradient(circle, rgba(248,164,124,0.03) 0%, transparent 70%)",
+              border: "1px solid #2a3441",
+              borderRadius: "16px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#64748b",
-              fontSize: "10px",
-              textTransform: "uppercase",
-              letterSpacing: "0.2em",
+              filter:
+                "drop-shadow(0 6px 20px rgba(0,0,0,0.5)) drop-shadow(0 0 8px rgba(248,164,124,0.06))",
             }}
           >
-            {/* Crest SVG renders here in a later step */}
-            Crest Preview
+            <CrestSvg width={240} {...crestProps} />
           </div>
+
+          {/* Guild label */}
+          <div style={{ marginTop: "12px", textAlign: "center" }}>
+            <div
+              style={{
+                fontSize: "15px",
+                fontWeight: 800,
+                color: "#f8a47c",
+                fontFamily: FONT_STACK,
+                lineHeight: 1.1,
+              }}
+            >
+              Your Guild Name
+            </div>
+            <div
+              style={{
+                fontSize: "9px",
+                color: "#4a5568",
+                marginTop: "2px",
+                fontFamily: FONT_STACK,
+              }}
+            >
+              Est. 2026
+            </div>
+          </div>
+
+          {/* Size previews — sidebar / profile / hall */}
+          <div
+            style={{
+              marginTop: "16px",
+              display: "flex",
+              alignItems: "flex-end",
+              justifyContent: "space-between",
+              gap: "8px",
+            }}
+          >
+            {[
+              { size: 40,  label: "Sidebar" },
+              { size: 72,  label: "Profile" },
+              { size: 105, label: "Hall" },
+            ].map(({ size, label }) => (
+              <div
+                key={label}
+                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}
+              >
+                <CrestSvg width={size} {...crestProps} />
+                <span
+                  style={{
+                    fontSize: "8px",
+                    color: "#64748b",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.15em",
+                    fontFamily: FONT_STACK,
+                  }}
+                >
+                  {label}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Layer stack */}
+          <LayerStack
+            layerOrder={layerOrder}
+            pattern1={pattern1}
+            pattern2={pattern2}
+          />
         </div>
       </div>
     </div>
@@ -992,6 +1081,164 @@ export function renderPattern(type, color, vb, clipId, shieldD) {
     default:
       return null;
   }
+}
+
+/**
+ * The crest itself. Used by the main preview, the three size
+ * thumbnails, and (eventually) the saved-to-PNG flattener — same
+ * pipeline so what the user designs is what they get.
+ *
+ * Render order, bottom → top:
+ *   1. Shield path filled with the background (solid color or
+ *      url(#linearGradient)).
+ *   2. Pattern layers in `layerOrder`, each clipped to the shield.
+ *   3. Shield border stroke (rgba(248,164,124,0.25), strokeWidth 3)
+ *      painted over the top so the silhouette stays crisp.
+ */
+function CrestSvg({
+  width,
+  shield,
+  backgroundType,
+  primaryColor,
+  secondaryColor,
+  pattern1,
+  pattern2,
+  layerOrder,
+}) {
+  // Stable-ish ids per CrestSvg instance so multiple previews on the
+  // same page don't collide. `useId` would also work — keeping a
+  // ref-counter avoids the hydration mismatch surface for now.
+  const idRef = React.useRef(null);
+  if (idRef.current === null) {
+    idRef.current = `crest-${Math.random().toString(36).slice(2, 9)}`;
+  }
+  const clipId     = `${idRef.current}-clip`;
+  const gradientId = `${idRef.current}-bg`;
+
+  const fill = backgroundType === "gradient"
+    ? `url(#${gradientId})`
+    : primaryColor;
+
+  const layerPattern = (id) => {
+    const p = id === "pattern1" ? pattern1 : id === "pattern2" ? pattern2 : null;
+    if (!p) return null;
+    return (
+      <React.Fragment key={id}>
+        {renderPattern(p.type, p.color, shield.vb, clipId, shield.d)}
+      </React.Fragment>
+    );
+  };
+
+  return (
+    <svg
+      viewBox={shield.vb}
+      width={width}
+      height={width}
+      preserveAspectRatio="xMidYMid meet"
+      style={{ display: "block" }}
+    >
+      <defs>
+        <clipPath id={clipId}>
+          <path d={shield.d} />
+        </clipPath>
+        {backgroundType === "gradient" && (
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor={primaryColor} />
+            <stop offset="100%" stopColor={secondaryColor} />
+          </linearGradient>
+        )}
+      </defs>
+
+      {/* 1. Shield base */}
+      <path d={shield.d} fill={fill} />
+
+      {/* 2. Pattern layers — render in layerOrder so the Layers tab
+            can later reorder by mutating that single array. */}
+      {layerOrder.map(layerPattern)}
+
+      {/* 3. Shield border, painted last so patterns can't bleed
+            past the silhouette outline. */}
+      <path
+        d={shield.d}
+        fill="none"
+        stroke="rgba(248,164,124,0.25)"
+        strokeWidth={3}
+      />
+    </svg>
+  );
+}
+
+/**
+ * Render-order indicator. Top of the panel is the topmost rendered
+ * layer (Motto), bottom of the panel is the back-most (Background).
+ * Pattern / Emblem layers in between come from `layerOrder` and
+ * dim to 0.4 opacity when their type is "None" so it's obvious
+ * which slots are doing nothing.
+ */
+function LayerStack({ layerOrder, pattern1, pattern2 }) {
+  const slotMeta = {
+    pattern1: { label: `Pattern 1: ${PATTERNS[pattern1.type]}`, color: pattern1.color, active: pattern1.type !== "none" },
+    pattern2: { label: `Pattern 2: ${PATTERNS[pattern2.type]}`, color: pattern2.color, active: pattern2.type !== "none" },
+  };
+
+  // Reverse so the top-of-stack (last-rendered) reads at the top of
+  // the visual list. Motto sits above all patterns; Background below.
+  const middle = [...layerOrder].reverse();
+
+  const rows = [
+    { key: "motto",      label: "Motto (top)", color: "#f8a47c", active: true },
+    ...middle.map((id) => ({
+      key: id,
+      label: slotMeta[id]?.label || id,
+      color: slotMeta[id]?.color || "#64748b",
+      active: !!slotMeta[id]?.active,
+    })),
+    { key: "background", label: "Background", color: "#f8a47c", active: true },
+  ];
+
+  return (
+    <div
+      style={{
+        marginTop: "16px",
+        padding: "10px 12px",
+        backgroundColor: "rgba(30,36,48,0.5)",
+        border: "1px solid #2a3441",
+        borderRadius: "10px",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "9px",
+          color: "#f8a47c",
+          textTransform: "uppercase",
+          letterSpacing: "0.2em",
+          fontWeight: 700,
+          fontFamily: FONT_STACK,
+          marginBottom: "8px",
+        }}
+      >
+        Layer Stack
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+        {rows.map((r) => (
+          <div
+            key={r.key}
+            style={{
+              opacity: r.active ? 1 : 0.4,
+              borderLeft: `3px solid ${r.color}`,
+              paddingLeft: "8px",
+              fontSize: "10px",
+              color: "#e2e8f0",
+              fontFamily: FONT_STACK,
+              lineHeight: 1.4,
+            }}
+          >
+            {r.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /** Placeholder inserted into the fixed-height controls panel until
