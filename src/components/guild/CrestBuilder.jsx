@@ -85,14 +85,17 @@ export const buildEmblemList = () => {
 export const EMBLEM_LIST = buildEmblemList();
 
 // Per-slot emblem state factory. Centered (50, 45) on the field at
-// 1.0 scale. Color matches the gold default of the rest of the
-// builder so a freshly-added emblem reads on the dark fill.
+// 1.0 scale, fully opaque, no rotation. Color matches the gold
+// default of the rest of the builder so a freshly-added emblem
+// reads on the dark fill.
 export const defaultEmblemSlot = () => ({
   id: "none",
   color: "#f59e0b",
   scale: 1.0,
   x: 50,
   y: 45,
+  rotation: 0,
+  opacity: 1.0,
   svgData: null,
   customLabel: null,
 });
@@ -361,6 +364,8 @@ export default function CrestBuilder({
         scale: typeof e.scale === "number" ? e.scale : 1.0,
         x: typeof e.x === "number" ? e.x : 50,
         y: typeof e.y === "number" ? e.y : 45,
+        rotation: typeof e.rotation === "number" ? e.rotation : 0,
+        opacity:  typeof e.opacity  === "number" ? e.opacity  : 1.0,
         svgData: null,
         customLabel: e.custom_label || null,
       }));
@@ -418,6 +423,8 @@ export default function CrestBuilder({
       scale: e.scale,
       x: e.x,
       y: e.y,
+      rotation: e.rotation,
+      opacity: e.opacity,
       custom_label: e.customLabel,
     })),
     motto_text: motto,
@@ -2118,15 +2125,15 @@ function EmblemsTab({
               value={slot.color}
               onChange={(c) => onUpdateEmblem(activeEmblemIdx, { color: c })}
             />
+            <EmblemSlider
+              label="Size"
+              min={0.3}
+              max={1.8}
+              step={0.05}
+              value={slot.scale}
+              onChange={(v) => onUpdateEmblem(activeEmblemIdx, { scale: v })}
+            />
             <div style={{ display: "flex", gap: "10px", alignItems: "flex-end" }}>
-              <EmblemSlider
-                label="Size"
-                min={0.3}
-                max={1.8}
-                step={0.05}
-                value={slot.scale}
-                onChange={(v) => onUpdateEmblem(activeEmblemIdx, { scale: v })}
-              />
               <EmblemSlider
                 label="X"
                 min={10}
@@ -2142,6 +2149,25 @@ function EmblemsTab({
                 step={1}
                 value={slot.y}
                 onChange={(v) => onUpdateEmblem(activeEmblemIdx, { y: v })}
+              />
+            </div>
+            <div style={{ display: "flex", gap: "10px", alignItems: "flex-end" }}>
+              <EmblemSlider
+                label="Rotation"
+                min={0}
+                max={360}
+                step={1}
+                value={slot.rotation ?? 0}
+                onChange={(v) => onUpdateEmblem(activeEmblemIdx, { rotation: v })}
+                suffix="°"
+              />
+              <EmblemSlider
+                label="Opacity"
+                min={0}
+                max={1}
+                step={0.05}
+                value={slot.opacity ?? 1}
+                onChange={(v) => onUpdateEmblem(activeEmblemIdx, { opacity: v })}
               />
             </div>
             <button
