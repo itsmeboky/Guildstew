@@ -13,8 +13,8 @@ import CrestBuilder from "@/components/guild/CrestBuilder";
  *
  * Wraps the CrestBuilder in the leader-gate + back-nav chrome. Non-
  * leaders bounce back to the Hall — only the guild owner can edit
- * the crest. Loads the saved crest_data from the `guilds` row and
- * hands it to the builder for hydration.
+ * the crest. Loads the saved crest_data from the guild_halls row
+ * and hands it to the builder for hydration.
  */
 export default function GuildCrestBuilderPage() {
   const { user } = useAuth();

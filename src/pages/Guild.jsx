@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { Band, SectionTitle, CREAM } from "@/components/marketing/MarketingBand";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { listGuildMembers } from "@/api/billingClient";
+import { getGuildWalletBalance } from "@/lib/spiceWallet";
 import { createPageUrl } from "@/utils";
 import GuildHallHeader from "@/components/guild/GuildHallHeader";
 import GuildMembersSection from "@/components/guild/GuildMembersSection";
@@ -43,8 +44,8 @@ function GuildHub() {
   const goToCrestBuilder = () => navigate("/guild/crest-builder");
 
   // Guild settings row. Lazily created — the leader's first edit
-  // in step 6 inserts the row, so reading before that simply returns
-  // null and we fall back to sensible defaults throughout the Hall.
+  // inserts the row, so reading before that simply returns null
+  // and we fall back to sensible defaults throughout the Hall.
   const { data: guild } = useQuery({
     queryKey: ["guildRow", guildOwnerId],
     queryFn: async () => {
@@ -57,7 +58,35 @@ function GuildHub() {
     },
     enabled: !!guildOwnerId,
   });
-  const officerIds = guild?.officer_ids || [];
+
+  // Membership rows live in guild_memberships and carry the role
+  // column the officer/leader badges depend on. Pulled separately
+  // so the Hall picks up role flips without re-fetching the whole
+  // guild_halls row.
+  const { data: membershipRows = [] } = useQuery({
+    queryKey: ["guildMembershipsRoles", guildOwnerId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("guild_memberships")
+        .select("user_id, role")
+        .eq("guild_id", guildOwnerId);
+      return data || [];
+    },
+    enabled: !!guildOwnerId,
+  });
+  const officerIds = useMemo(
+    () => membershipRows.filter((m) => m.role === "officer").map((m) => m.user_id),
+    [membershipRows],
+  );
+
+  // Shared wallet — drives both the Treasury panel and the
+  // settings dialog's spending-permissions toggle. Single fetch
+  // so the toggle and treasury read the same source of truth.
+  const { data: wallet } = useQuery({
+    queryKey: ["guildSpiceWallet", guildOwnerId],
+    queryFn: () => getGuildWalletBalance(guildOwnerId),
+    enabled: !!guildOwnerId,
+  });
 
   // Guild membership rows come from the `subscriptions` table via
   // the billingClient helper — it already knows which shape it needs.
@@ -138,6 +167,8 @@ function GuildHub() {
           guildOwnerId={guildOwnerId}
           profiles={profiles}
           inviteCode={guild?.invite_code || ""}
+          wallet={wallet}
+          officerIds={officerIds}
         />
       )}
     </div>
