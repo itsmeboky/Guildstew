@@ -111,6 +111,11 @@ const AuthenticatedApp = () => {
           {Pages.AccountBilling ? <Pages.AccountBilling /> : <PageNotFound />}
         </LayoutWrapper>
       } />
+      <Route path="/guild/crest-builder" element={
+        <LayoutWrapper currentPageName="GuildCrestBuilder">
+          {Pages.GuildCrestBuilder ? <Pages.GuildCrestBuilder /> : <PageNotFound />}
+        </LayoutWrapper>
+      } />
       <Route path="/campaigns/find" element={
         <LayoutWrapper currentPageName="CampaignsFind">
           {Pages.CampaignsFind ? <Pages.CampaignsFind /> : <PageNotFound />}
