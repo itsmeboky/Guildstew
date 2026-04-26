@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Crown, Sparkles, ArrowRight,
   Shield, Package, Wallet,
@@ -36,9 +36,11 @@ export default function Guild() {
 function GuildHub() {
   const { user } = useAuth();
   const sub = useSubscription();
+  const navigate = useNavigate();
   const guildOwnerId = sub.guildOwnerId || (sub.isGuildOwner ? user?.id : null);
   const isLeader = sub.isGuildOwner || user?.id === guildOwnerId;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const goToCrestBuilder = () => navigate("/guild/crest-builder");
 
   // Guild settings row. Lazily created — the leader's first edit
   // in step 6 inserts the row, so reading before that simply returns
@@ -106,7 +108,8 @@ function GuildHub() {
         memberCount={profiles.length}
         isLeader={isLeader}
         onOpenSettings={() => setSettingsOpen(true)}
-        onCreateCrest={() => setSettingsOpen(true)}
+        onCreateCrest={goToCrestBuilder}
+        onEditCrest={goToCrestBuilder}
       />
 
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-10 space-y-10">

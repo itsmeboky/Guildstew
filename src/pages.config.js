@@ -25,6 +25,7 @@ import Docs from './pages/Docs';
 import SupportTicket from './pages/SupportTicket';
 import AccountBilling from './pages/AccountBilling';
 import Guild from './pages/Guild';
+import GuildCrestBuilderPage from './pages/GuildCrestBuilderPage';
 import Friends from './pages/Friends';
 import PIEChart from './pages/PIEChart';
 import Settings from './pages/Settings';
@@ -100,6 +101,7 @@ export const PAGES = {
     "SupportTicket": SupportTicket,
     "AccountBilling": AccountBilling,
     "Guild": Guild,
+    "GuildCrestBuilder": GuildCrestBuilderPage,
     "Friends": Friends,
     "PIEChart": PIEChart,
     "Settings": Settings,
