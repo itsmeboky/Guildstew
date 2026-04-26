@@ -188,7 +188,7 @@ export default function CrestBuilder({ onSave, onRandomize }) {
   // always at the bottom and Motto always at the top, so neither
   // appears in this list. Emblems sit between the two patterns by
   // default; the Layers tab can rearrange.
-  const [layerOrder] = useState(["pattern1", "pattern2", "emblems"]);
+  const [layerOrder, setLayerOrder] = useState(["pattern1", "pattern2", "emblems"]);
 
   // Resolve the active shield (built-in or user-uploaded) once so
   // every consumer (preview + future thumbnails) reads the same
@@ -343,7 +343,16 @@ export default function CrestBuilder({ onSave, onRandomize }) {
                 onRemoveEmblem={removeEmblem}
               />
             )}
-            {activeTab === "layers"   && <TabPlaceholder label="Layers" />}
+            {activeTab === "layers" && (
+              <LayersTab
+                layerOrder={layerOrder}
+                onLayerOrder={setLayerOrder}
+                pattern1={pattern1}
+                pattern2={pattern2}
+                emblems={emblems}
+                primaryColor={primaryColor}
+              />
+            )}
             {activeTab === "motto"    && <TabPlaceholder label="Motto" />}
           </div>
 
@@ -1065,6 +1074,158 @@ export function EmblemOnCrest({ data, color, scale, x, y, clipId, vb }) {
         );
       })}
     </g>
+  );
+}
+
+/**
+ * Layers tab.
+ *
+ * Visualizes the render stack top-to-bottom. The Motto bar pins the
+ * top, the Background bar pins the bottom, and the three reorderable
+ * layers (pattern1 / pattern2 / emblems) sit in the middle. Each
+ * reorderable row carries up/down arrows that swap adjacent items
+ * in `layerOrder`; arrows at the boundaries dim and ignore clicks.
+ *
+ * Active vs inactive: a pattern row is active when its type isn't
+ * "none"; the emblems row is active when at least one slot has
+ * svgData. Inactive rows fade to 0.4 opacity so it's obvious which
+ * slots aren't doing anything.
+ */
+function LayersTab({ layerOrder, onLayerOrder, pattern1, pattern2, emblems, primaryColor }) {
+  const move = (idx, dir) => {
+    const target = idx + dir;
+    if (target < 0 || target >= layerOrder.length) return;
+    const next = [...layerOrder];
+    [next[idx], next[target]] = [next[target], next[idx]];
+    onLayerOrder(next);
+  };
+
+  const populatedEmblems = emblems.filter((s) => s?.svgData).length;
+  const meta = {
+    pattern1: {
+      label: `Pattern 1: ${PATTERNS[pattern1.type]}`,
+      color: pattern1.color,
+      active: pattern1.type !== "none",
+    },
+    pattern2: {
+      label: `Pattern 2: ${PATTERNS[pattern2.type]}`,
+      color: pattern2.color,
+      active: pattern2.type !== "none",
+    },
+    emblems: {
+      label: populatedEmblems ? `Emblems (${populatedEmblems})` : "Emblems",
+      color: emblems.find((s) => s?.svgData)?.color || "#64748b",
+      active: populatedEmblems > 0,
+    },
+  };
+
+  // Render top-of-stack first (last in layerOrder = top visually).
+  const reversed = [...layerOrder].slice().reverse();
+
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: "6px" }}>
+      <FixedLayerBar label="Motto (fixed top)" borderColor="#f8a47c" />
+
+      {reversed.map((id, ridx) => {
+        const layerIdx = layerOrder.length - 1 - ridx;
+        const m = meta[id];
+        const canUp = layerIdx < layerOrder.length - 1;
+        const canDown = layerIdx > 0;
+        return (
+          <div
+            key={id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "6px 8px",
+              borderRadius: "6px",
+              backgroundColor: m.active ? "rgba(255,255,255,0.03)" : "transparent",
+              opacity: m.active ? 1 : 0.4,
+            }}
+          >
+            <span
+              style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "2px",
+                backgroundColor: m.color,
+                flexShrink: 0,
+              }}
+            />
+            <span
+              style={{
+                fontSize: "10px",
+                color: "#e2e8f0",
+                fontFamily: FONT_STACK,
+                flex: 1,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {m.label}
+            </span>
+            <ArrowButton enabled={canUp}   onClick={() => move(layerIdx, +1)} dir="up" />
+            <ArrowButton enabled={canDown} onClick={() => move(layerIdx, -1)} dir="down" />
+          </div>
+        );
+      })}
+
+      <div style={{ flex: 1 }} />
+      <FixedLayerBar label="Background (fixed bottom)" borderColor={primaryColor} />
+    </div>
+  );
+}
+
+function FixedLayerBar({ label, borderColor }) {
+  return (
+    <div
+      style={{
+        borderLeft: `2px solid ${borderColor}`,
+        backgroundColor: "rgba(248,164,124,0.05)",
+        padding: "6px 10px",
+        borderRadius: "0 4px 4px 0",
+        fontSize: "9px",
+        color: "#94a3b8",
+        textTransform: "uppercase",
+        letterSpacing: "0.15em",
+        fontFamily: FONT_STACK,
+        fontWeight: 700,
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
+function ArrowButton({ enabled, onClick, dir }) {
+  return (
+    <button
+      type="button"
+      onClick={enabled ? onClick : undefined}
+      disabled={!enabled}
+      title={dir === "up" ? "Move up" : "Move down"}
+      style={{
+        width: "20px",
+        height: "16px",
+        padding: 0,
+        borderRadius: "4px",
+        backgroundColor: "rgba(248,164,124,0.08)",
+        border: "1px solid #2a3441",
+        color: enabled ? "#f8a47c" : "#2a3441",
+        cursor: enabled ? "pointer" : "default",
+        fontFamily: FONT_STACK,
+        fontSize: "10px",
+        lineHeight: 1,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
+    >
+      {dir === "up" ? "▲" : "▼"}
+    </button>
   );
 }
 
