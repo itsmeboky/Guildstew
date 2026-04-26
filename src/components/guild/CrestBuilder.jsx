@@ -1649,23 +1649,29 @@ export function EmblemOnCrest({
   // the user's slider value on top.
   const s = scale * (cw / evw) * 0.7;
 
+  // Same two-level wrap as the raster branch: outer <g> carries the
+  // clipPath in shield coords, inner <g> owns the transform. This
+  // ensures the clip is applied AFTER the user's scale / rotation /
+  // position, so an emblem that overshoots the silhouette gets cut
+  // off rather than bleeding past it.
   return (
-    <g
-      transform={`translate(${px}, ${py}) rotate(${rotation}) scale(${s}) translate(${-evw / 2}, ${-evh / 2})`}
-      clipPath={`url(#${clipId})`}
-    >
-      {data.elements.map((el, i) =>
-        // React.createElement directly — bypasses any JSX
-        // capitalization quirks for lowercase string tag values.
-        React.createElement(el.tag, {
-          key: i,
-          ...el.attrs,
-          fill: color,
-          stroke: color,
-          strokeWidth: "0.5",
-          opacity,
-        }),
-      )}
+    <g clipPath={`url(#${clipId})`}>
+      <g
+        transform={`translate(${px}, ${py}) rotate(${rotation}) scale(${s}) translate(${-evw / 2}, ${-evh / 2})`}
+      >
+        {data.elements.map((el, i) =>
+          // React.createElement directly — bypasses any JSX
+          // capitalization quirks for lowercase string tag values.
+          React.createElement(el.tag, {
+            key: i,
+            ...el.attrs,
+            fill: color,
+            stroke: color,
+            strokeWidth: "0.5",
+            opacity,
+          }),
+        )}
+      </g>
     </g>
   );
 }
@@ -2335,12 +2341,24 @@ export function renderPatternLayer(p, clipId, vb, shieldD) {
   const scale = p.scale ?? 1;
   const rotation = p.rotation ?? 0;
   const opacity = p.opacity ?? 1;
+  // Two-level wrap on purpose:
+  //   outer <g> owns the clipPath, no transform — its local coord
+  //     system is the SVG root, so the shield clip is interpreted
+  //     in shield-viewBox coords.
+  //   inner <g> owns the transform — children render into the
+  //     outer's coord system through it, and the outer's clip
+  //     applies to the *post-transform* result.
+  // If we put both attributes on the same element the clip would
+  // be interpreted in the post-transform local coords (and so would
+  // scale/rotate alongside the pattern), letting overflow leak past
+  // the silhouette.
   return (
-    <g
-      transform={`translate(${cx}, ${cy}) rotate(${rotation}) scale(${scale}) translate(${-cx}, ${-cy})`}
-      opacity={opacity}
-    >
-      {renderPattern(p.type, p.color, vb, clipId, shieldD)}
+    <g clipPath={`url(#${clipId})`} opacity={opacity}>
+      <g
+        transform={`translate(${cx}, ${cy}) rotate(${rotation}) scale(${scale}) translate(${-cx}, ${-cy})`}
+      >
+        {renderPattern(p.type, p.color, vb, clipId, shieldD)}
+      </g>
     </g>
   );
 }
