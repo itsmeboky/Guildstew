@@ -1352,7 +1352,6 @@ function collectShapes(doc, root) {
 
 export async function fetchSVGPaths(url) {
   if (svgCache[url]) return svgCache[url];
-  console.log("Fetching SVG:", url);
   try {
     // mode: 'cors' is the default for cross-origin fetches but we
     // pin it explicitly so the intent is documented for future
@@ -1375,33 +1374,60 @@ export async function fetchSVGPaths(url) {
     // SVG namespace automatically and exposes them via the regular
     // CSS selector engine.
     if (shapes.length === 0) {
-      console.warn("SVG parser returned 0 shapes via image/svg+xml — retrying as text/html for", url);
       doc = new DOMParser().parseFromString(text, "text/html");
       svg = doc.querySelector("svg");
       shapes = collectShapes(doc, svg);
     }
 
-    const vb = svg?.getAttribute("viewBox") || "0 0 100 100";
-    const elements = shapes.map((el) => {
-      const attrs = {};
-      for (const a of el.attributes) {
-        // Drop the source's own coloring so our dynamic fill wins.
-        if (!["fill", "stroke", "style"].includes(a.name)) {
-          attrs[a.name] = a.value;
-        }
-      }
-      return { tag: (el.localName || el.tagName).toLowerCase(), attrs };
-    });
-    console.log("Parsed elements:", elements.length, elements);
-    console.log("ViewBox:", vb);
+    const vb = svg?.getAttribute("viewBox") || "0 0 300 300";
 
-    if (elements.length === 0) {
-      console.error("SVG had no recognizable shape elements:", url);
+    if (shapes.length > 0) {
+      const elements = shapes.map((el) => {
+        const attrs = {};
+        for (const a of el.attributes) {
+          // Drop the source's own coloring so our dynamic fill wins.
+          if (!["fill", "stroke", "style"].includes(a.name)) {
+            attrs[a.name] = a.value;
+          }
+        }
+        return { tag: (el.localName || el.tagName).toLowerCase(), attrs };
+      });
+      const result = { vb, elements, isRaster: false };
+      svgCache[url] = result;
+      return result;
     }
 
-    const result = { vb, elements };
-    svgCache[url] = result;
-    return result;
+    // Raster fallback. The guild emblem catalog hosts PNGs wrapped
+    // in <svg><image href="data:image/png;base64,…"/></svg>, so
+    // when the shape harvester finds nothing we look for an <image>
+    // and capture its data URL + bounds. The renderer recolors
+    // these via an <feColorMatrix> filter rather than fill/stroke
+    // (since there's no vector geometry to color).
+    const imageEl = (svg || doc).querySelector("image") ||
+      Array.from(doc.getElementsByTagName("image"))[0] ||
+      null;
+    if (imageEl) {
+      const href = imageEl.getAttribute("xlink:href") ||
+        imageEl.getAttribute("href") ||
+        imageEl.getAttributeNS("http://www.w3.org/1999/xlink", "href");
+      if (href) {
+        const x = parseFloat(imageEl.getAttribute("x") || "0");
+        const y = parseFloat(imageEl.getAttribute("y") || "0");
+        const w = parseFloat(imageEl.getAttribute("width") || "300");
+        const h = parseFloat(imageEl.getAttribute("height") || "300");
+        const result = {
+          vb,
+          elements: [],
+          isRaster: true,
+          rasterData: { href, x, y, width: w, height: h },
+        };
+        svgCache[url] = result;
+        return result;
+      }
+    }
+
+    console.error("SVG had no recognizable elements:", url);
+    return null;
   } catch (error) {
     console.error("SVG fetch failed:", url, error);
     return null;
