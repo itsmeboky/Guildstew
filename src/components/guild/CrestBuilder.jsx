@@ -255,13 +255,30 @@ export default function CrestBuilder({
       setPrimaryColor(pick(PRESET_COLORS));
       setSecondaryColor(pick(PRESET_COLORS));
 
-      // Patterns
+      // Patterns. Each randomized slot gets a fresh transform stack
+      // so the preview reads as obviously-different on every roll —
+      // rotation 0–360, opacity 0.6–1.0, scale 0.8–1.2; x/y stay
+      // centered (50/50) by default since the transforms already do
+      // most of the visual work.
       const patternIds = Object.keys(PATTERNS).filter((id) => id !== "none");
-      setPattern1({ type: pick(patternIds), color: pick(PRESET_COLORS) });
+      const randomPattern = (color) => ({
+        type: pick(patternIds),
+        color,
+        scale:    parseFloat(randFloat(0.8, 1.2).toFixed(2)),
+        rotation: randInt(0, 360),
+        opacity:  parseFloat(randFloat(0.6, 1.0).toFixed(2)),
+        x: 50,
+        y: 50,
+      });
+      setPattern1(randomPattern(pick(PRESET_COLORS)));
       if (Math.random() < 0.5) {
-        setPattern2({ type: pick(patternIds), color: pick(PRESET_COLORS) });
+        setPattern2(randomPattern(pick(PRESET_COLORS)));
       } else {
-        setPattern2({ type: "none", color: pick(PRESET_COLORS) });
+        setPattern2({
+          type: "none",
+          color: pick(PRESET_COLORS),
+          scale: 1, rotation: 0, x: 50, y: 50, opacity: 1,
+        });
       }
 
       // 1–2 emblems
@@ -281,6 +298,11 @@ export default function CrestBuilder({
         scale: parseFloat(randFloat(0.6, 1.2).toFixed(2)),
         x: randInt(30, 70),
         y: randInt(30, 60),
+        // Rotation rolls freely; opacity stays at 1.0 even on
+        // randomize because translucent emblems look muddy by
+        // default — users opt in via the slider when they want it.
+        rotation: randInt(0, 360),
+        opacity: 1.0,
         svgData: fetched[i],
         customLabel: null,
       }));
