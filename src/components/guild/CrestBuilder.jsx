@@ -204,6 +204,7 @@ export default function CrestBuilder({ onSave, onRandomize }) {
     secondaryColor,
     pattern1,
     pattern2,
+    emblems,
     layerOrder,
   };
 
@@ -499,6 +500,7 @@ export default function CrestBuilder({ onSave, onRandomize }) {
             layerOrder={layerOrder}
             pattern1={pattern1}
             pattern2={pattern2}
+            emblems={emblems}
           />
         </div>
       </div>
@@ -1679,6 +1681,7 @@ function CrestSvg({
   secondaryColor,
   pattern1,
   pattern2,
+  emblems = [],
   layerOrder,
 }) {
   // Stable-ish ids per CrestSvg instance so multiple previews on the
@@ -1695,14 +1698,39 @@ function CrestSvg({
     ? `url(#${gradientId})`
     : primaryColor;
 
-  const layerPattern = (id) => {
-    const p = id === "pattern1" ? pattern1 : id === "pattern2" ? pattern2 : null;
-    if (!p) return null;
-    return (
-      <React.Fragment key={id}>
-        {renderPattern(p.type, p.color, shield.vb, clipId, shield.d)}
-      </React.Fragment>
-    );
+  const renderLayer = (id) => {
+    if (id === "pattern1" || id === "pattern2") {
+      const p = id === "pattern1" ? pattern1 : pattern2;
+      return (
+        <React.Fragment key={id}>
+          {renderPattern(p.type, p.color, shield.vb, clipId, shield.d)}
+        </React.Fragment>
+      );
+    }
+    if (id === "emblems") {
+      // Render every populated slot in array order so slot 0 is at
+      // the bottom of the emblem stack and slot 3 at the top —
+      // matches how the slot tabs read left-to-right in the editor.
+      return (
+        <React.Fragment key={id}>
+          {emblems.map((slot, i) =>
+            slot?.svgData ? (
+              <EmblemOnCrest
+                key={i}
+                data={slot.svgData}
+                color={slot.color}
+                scale={slot.scale}
+                x={slot.x}
+                y={slot.y}
+                clipId={clipId}
+                vb={shield.vb}
+              />
+            ) : null,
+          )}
+        </React.Fragment>
+      );
+    }
+    return null;
   };
 
   return (
@@ -1728,9 +1756,10 @@ function CrestSvg({
       {/* 1. Shield base */}
       <path d={shield.d} fill={fill} />
 
-      {/* 2. Pattern layers — render in layerOrder so the Layers tab
-            can later reorder by mutating that single array. */}
-      {layerOrder.map(layerPattern)}
+      {/* 2. Composable layers (patterns + emblems) — render in
+            layerOrder so the Layers tab can reorder by mutating
+            that single array. */}
+      {layerOrder.map(renderLayer)}
 
       {/* 3. Shield border, painted last so patterns can't bleed
             past the silhouette outline. */}
@@ -1751,10 +1780,20 @@ function CrestSvg({
  * dim to 0.4 opacity when their type is "None" so it's obvious
  * which slots are doing nothing.
  */
-function LayerStack({ layerOrder, pattern1, pattern2 }) {
+function LayerStack({ layerOrder, pattern1, pattern2, emblems = [] }) {
+  const populatedEmblems = emblems.filter((s) => s?.svgData).length;
   const slotMeta = {
     pattern1: { label: `Pattern 1: ${PATTERNS[pattern1.type]}`, color: pattern1.color, active: pattern1.type !== "none" },
     pattern2: { label: `Pattern 2: ${PATTERNS[pattern2.type]}`, color: pattern2.color, active: pattern2.type !== "none" },
+    emblems: {
+      label: populatedEmblems
+        ? `Emblems (${populatedEmblems})`
+        : "Emblems",
+      // Use the first populated slot's color as the indicator bar
+      // so the row picks up a meaningful tint when in use.
+      color: emblems.find((s) => s?.svgData)?.color || "#64748b",
+      active: populatedEmblems > 0,
+    },
   };
 
   // Reverse so the top-of-stack (last-rendered) reads at the top of
