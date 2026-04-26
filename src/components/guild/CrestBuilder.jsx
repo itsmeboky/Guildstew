@@ -331,7 +331,17 @@ export default function CrestBuilder({ onSave, onRandomize }) {
                 onPattern2={setPattern2}
               />
             )}
-            {activeTab === "emblems"  && <TabPlaceholder label="Emblems" />}
+            {activeTab === "emblems" && (
+              <EmblemsTab
+                emblems={emblems}
+                activeEmblemIdx={activeEmblemIdx}
+                onActiveEmblemIdx={setActiveEmblemIdx}
+                onSelectEmblem={selectEmblem}
+                onUpdateEmblem={updateEmblem}
+                onAddEmblem={addEmblem}
+                onRemoveEmblem={removeEmblem}
+              />
+            )}
             {activeTab === "layers"   && <TabPlaceholder label="Layers" />}
             {activeTab === "motto"    && <TabPlaceholder label="Motto" />}
           </div>
@@ -1053,6 +1063,393 @@ export function EmblemOnCrest({ data, color, scale, x, y, clipId, vb }) {
         );
       })}
     </g>
+  );
+}
+
+/**
+ * Emblems tab.
+ *
+ * Layout fits the fixed-380px panel exactly: a flex column where
+ * the slot-tabs row, category filter, custom-upload row, and
+ * controls block all flexShrink:0, and the emblem grid in the
+ * middle is the only thing that scrolls. Picker thumbnails come
+ * straight from the Supabase URLs as <img> for cheap browse —
+ * fetch+parse only happens when a thumbnail is actually clicked.
+ */
+function EmblemsTab({
+  emblems,
+  activeEmblemIdx,
+  onActiveEmblemIdx,
+  onSelectEmblem,
+  onUpdateEmblem,
+  onAddEmblem,
+  onRemoveEmblem,
+}) {
+  const [category, setCategory] = useState("all");
+  const fileInputRef = React.useRef(null);
+  const slot = emblems[activeEmblemIdx] || emblems[0];
+
+  const filtered = category === "all"
+    ? EMBLEM_LIST
+    : EMBLEM_LIST.filter((e) => e.category === category);
+
+  const handleClear = () => {
+    onUpdateEmblem(activeEmblemIdx, { id: "none", svgData: null, customLabel: null });
+  };
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const doc = new DOMParser().parseFromString(text, "image/svg+xml");
+      const svg = doc.querySelector("svg");
+      const vb = svg?.getAttribute("viewBox") || "0 0 100 100";
+      const elements = Array.from(
+        doc.querySelectorAll("path,circle,rect,polygon,polyline,ellipse,line"),
+      ).map((el) => {
+        const attrs = {};
+        for (const a of el.attributes) {
+          if (!["fill", "stroke", "style"].includes(a.name)) attrs[a.name] = a.value;
+        }
+        return { tag: el.tagName.toLowerCase(), attrs };
+      });
+      if (elements.length === 0) {
+        alert("SVG must contain at least one shape element.");
+        e.target.value = "";
+        return;
+      }
+      onUpdateEmblem(activeEmblemIdx, {
+        id: "custom",
+        svgData: { vb, elements },
+        customLabel: file.name,
+      });
+    } catch {
+      alert("Couldn't read that file. Make sure it's a valid SVG.");
+    }
+    e.target.value = "";
+  };
+
+  return (
+    <>
+      <style>{`
+        .crest-emblem-grid::-webkit-scrollbar { width: 6px; }
+        .crest-emblem-grid::-webkit-scrollbar-track { background: #1E2430; }
+        .crest-emblem-grid::-webkit-scrollbar-thumb { background: #3a4451; border-radius: 3px; }
+        .crest-emblem-grid::-webkit-scrollbar-thumb:hover { background: #4a5568; }
+      `}</style>
+
+      <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: "8px" }}>
+        {/* Slot tabs */}
+        <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", flexShrink: 0 }}>
+          {emblems.map((s, i) => {
+            const active = i === activeEmblemIdx;
+            const label = s.customLabel
+              ? s.customLabel.replace(/\.svg$/i, "")
+              : s.id === "none"
+                ? `Slot ${i + 1}: Empty`
+                : EMBLEM_LIST.find((e) => e.id === s.id)?.label || `Slot ${i + 1}`;
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={() => onActiveEmblemIdx(i)}
+                style={{
+                  fontFamily: FONT_STACK,
+                  fontSize: "9px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  fontWeight: 700,
+                  padding: "5px 9px",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  backgroundColor: active ? "rgba(248,164,124,0.12)" : "transparent",
+                  border: active
+                    ? "1px solid rgba(248,164,124,0.5)"
+                    : "1px solid rgba(255,255,255,0.06)",
+                  color: active ? "#f8a47c" : "#64748b",
+                  maxWidth: "120px",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+          {emblems.length < 4 && (
+            <button
+              type="button"
+              onClick={onAddEmblem}
+              title="Add emblem slot"
+              style={{
+                width: "26px",
+                height: "26px",
+                fontFamily: FONT_STACK,
+                fontSize: "16px",
+                lineHeight: 1,
+                fontWeight: 300,
+                padding: 0,
+                borderRadius: "6px",
+                cursor: "pointer",
+                backgroundColor: "transparent",
+                border: "1px dashed rgba(248,164,124,0.4)",
+                color: "#f8a47c",
+              }}
+            >
+              +
+            </button>
+          )}
+        </div>
+
+        {/* Category filter + None */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            flexShrink: 0,
+          }}
+        >
+          <CategoryButton active={false} onClick={handleClear} label="None" />
+          <div style={{ width: "1px", height: "16px", backgroundColor: "#2a3441" }} />
+          <CategoryButton active={category === "all"}     onClick={() => setCategory("all")}     label="All" />
+          <CategoryButton active={category === "arcane"}  onClick={() => setCategory("arcane")}  label="Arcane" />
+          <CategoryButton active={category === "general"} onClick={() => setCategory("general")} label="General" />
+        </div>
+
+        {/* Emblem grid — only this scrolls */}
+        <div
+          className="crest-emblem-grid"
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            border: "1px solid #2a3441",
+            borderRadius: "8px",
+            padding: "6px",
+            backgroundColor: "#1E2430",
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(6, 1fr)",
+              gap: "4px",
+            }}
+          >
+            {filtered.map((e) => {
+              const selected = slot.id === e.id;
+              return (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => onSelectEmblem(e)}
+                  title={e.label}
+                  style={{
+                    aspectRatio: "1",
+                    padding: 0,
+                    cursor: "pointer",
+                    borderRadius: "6px",
+                    backgroundColor: selected
+                      ? "rgba(248,164,124,0.1)"
+                      : "transparent",
+                    border: selected
+                      ? "2px solid #f8a47c"
+                      : "1px solid #2a3441",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <img
+                    src={e.url}
+                    alt={e.label}
+                    draggable={false}
+                    style={{
+                      width: "75%",
+                      height: "75%",
+                      objectFit: "contain",
+                      opacity: selected ? 1 : 0.5,
+                      filter: "brightness(0) invert(0.7)",
+                    }}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Custom upload row */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              fontFamily: FONT_STACK,
+              fontSize: "9px",
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.15em",
+              padding: "6px 10px",
+              borderRadius: "6px",
+              cursor: "pointer",
+              backgroundColor: "transparent",
+              border: "1px dashed #f8a47c",
+              color: "#f8a47c",
+            }}
+          >
+            Upload Custom SVG
+          </button>
+          {slot.id === "custom" && slot.customLabel && (
+            <span
+              style={{
+                fontSize: "10px",
+                color: "#37F2D1",
+                fontFamily: FONT_STACK,
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: "180px",
+              }}
+              title={slot.customLabel}
+            >
+              ✓ {slot.customLabel}
+            </span>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".svg,image/svg+xml"
+            onChange={handleUpload}
+            style={{ display: "none" }}
+          />
+        </div>
+
+        {/* Per-slot color + transform controls */}
+        {slot.svgData && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", flexShrink: 0 }}>
+            <ColorPicker
+              label="Emblem Color"
+              value={slot.color}
+              onChange={(c) => onUpdateEmblem(activeEmblemIdx, { color: c })}
+            />
+            <div style={{ display: "flex", gap: "10px", alignItems: "flex-end" }}>
+              <EmblemSlider
+                label="Size"
+                min={0.3}
+                max={1.8}
+                step={0.05}
+                value={slot.scale}
+                onChange={(v) => onUpdateEmblem(activeEmblemIdx, { scale: v })}
+              />
+              <EmblemSlider
+                label="X"
+                min={10}
+                max={90}
+                step={1}
+                value={slot.x}
+                onChange={(v) => onUpdateEmblem(activeEmblemIdx, { x: v })}
+              />
+              <EmblemSlider
+                label="Y"
+                min={10}
+                max={90}
+                step={1}
+                value={slot.y}
+                onChange={(v) => onUpdateEmblem(activeEmblemIdx, { y: v })}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => onRemoveEmblem(activeEmblemIdx)}
+              style={{
+                alignSelf: "flex-start",
+                fontFamily: FONT_STACK,
+                fontSize: "9px",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.15em",
+                padding: "5px 9px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                backgroundColor: "transparent",
+                border: "1px solid #ef4444",
+                color: "#ef4444",
+              }}
+            >
+              ✕ Remove emblem
+            </button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function CategoryButton({ active, onClick, label }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        fontFamily: FONT_STACK,
+        fontSize: "9px",
+        textTransform: "uppercase",
+        letterSpacing: "0.15em",
+        fontWeight: 700,
+        padding: "5px 10px",
+        borderRadius: "6px",
+        cursor: "pointer",
+        backgroundColor: active ? "rgba(248,164,124,0.12)" : "transparent",
+        border: active
+          ? "1px solid rgba(248,164,124,0.5)"
+          : "1px solid rgba(255,255,255,0.06)",
+        color: active ? "#f8a47c" : "#64748b",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function EmblemSlider({ label, min, max, step, value, onChange }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div
+        style={{
+          fontSize: "9px",
+          color: "#f8a47c",
+          textTransform: "uppercase",
+          letterSpacing: "0.2em",
+          fontWeight: 700,
+          fontFamily: FONT_STACK,
+          marginBottom: "4px",
+          display: "flex",
+          justifyContent: "space-between",
+        }}
+      >
+        <span>{label}</span>
+        <span style={{ color: "#64748b" }}>
+          {typeof value === "number" ? (Number.isInteger(value) ? value : value.toFixed(2)) : value}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        style={{
+          width: "100%",
+          accentColor: "#f8a47c",
+          cursor: "pointer",
+        }}
+      />
+    </div>
   );
 }
 
