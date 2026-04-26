@@ -205,6 +205,7 @@ export default function CrestBuilder({
 
   const [randomizing, setRandomizing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [hadCustomEmblem, setHadCustomEmblem] = useState(false);
 
   // Ref to the main preview's <svg> element. Save serializes this
   // node, rasterizes it through a canvas, and uploads the result.
@@ -264,6 +265,83 @@ export default function CrestBuilder({
       setRandomizing(false);
     }
   }, []);
+
+  // Hydrate state from a saved crest_data blob the very first time
+  // we see one. Tracks via a ref so we don't re-hydrate (and stomp
+  // user edits) if the parent re-passes the same data later.
+  const hydratedRef = useRef(false);
+  React.useEffect(() => {
+    if (!initialCrestData || hydratedRef.current) return;
+    hydratedRef.current = true;
+    const d = initialCrestData;
+
+    // Shield (custom path takes precedence over the named id).
+    if (d.custom_shield && d.custom_shield.d && d.custom_shield.vb) {
+      setCustomShield(d.custom_shield);
+      setSelectedShieldId("custom");
+    } else if (d.shield_shape && SHIELDS[d.shield_shape]) {
+      setSelectedShieldId(d.shield_shape);
+    }
+
+    // Fill
+    if (d.background_type) setBackgroundType(d.background_type);
+    if (d.background_color_1) setPrimaryColor(d.background_color_1);
+    if (d.background_color_2) setSecondaryColor(d.background_color_2);
+
+    // Patterns
+    if (d.pattern_1) setPattern1({ type: d.pattern_1, color: d.pattern_1_color || "#f59e0b" });
+    if (d.pattern_2) setPattern2({ type: d.pattern_2, color: d.pattern_2_color || "#ffffff" });
+
+    // Layer order
+    if (Array.isArray(d.layer_order) && d.layer_order.length > 0) {
+      setLayerOrder(d.layer_order);
+    }
+
+    // Motto
+    if (typeof d.motto_text === "string") setMotto(d.motto_text);
+    if (d.motto_color) setMottoColor(d.motto_color);
+
+    // Emblems — re-hydrate. Built-in ids re-fetch from the catalog
+    // url; "custom" rows can't restore svgData (we don't persist
+    // the parsed shapes), so they slot in as empty + we surface a
+    // notice the leader can re-upload from.
+    const savedEmblems = Array.isArray(d.emblems) ? d.emblems : [];
+    if (savedEmblems.length === 0) {
+      setEmblems([defaultEmblemSlot()]);
+    } else {
+      // Seed with placeholders so the slot tabs render immediately
+      // while the SVG fetches resolve in the background.
+      const initial = savedEmblems.map((e) => ({
+        id: e.id || "none",
+        color: e.color || "#f59e0b",
+        scale: typeof e.scale === "number" ? e.scale : 1.0,
+        x: typeof e.x === "number" ? e.x : 50,
+        y: typeof e.y === "number" ? e.y : 45,
+        svgData: null,
+        customLabel: e.custom_label || null,
+      }));
+      setEmblems(initial);
+      setActiveEmblemIdx(0);
+
+      let restoredCustom = false;
+      Promise.all(initial.map(async (slot) => {
+        if (!slot.id || slot.id === "none") return null;
+        if (slot.id === "custom") {
+          restoredCustom = true;
+          return null;
+        }
+        const def = EMBLEM_LIST.find((x) => x.id === slot.id);
+        if (!def) return null;
+        return fetchSVGPaths(def.url);
+      })).then((dataList) => {
+        setEmblems((prev) => prev.map((slot, i) => ({
+          ...slot,
+          svgData: dataList[i] || slot.svgData,
+        })));
+        if (restoredCustom) setHadCustomEmblem(true);
+      });
+    }
+  }, [initialCrestData]);
 
   // Build the serializable crest_data blob. svgData is intentionally
   // dropped from emblems — it's re-fetched on load from the URL the
@@ -417,6 +495,23 @@ export default function CrestBuilder({
               Coat of Arms Builder
             </h2>
           </div>
+
+          {hadCustomEmblem && (
+            <div
+              style={{
+                marginBottom: "10px",
+                padding: "8px 10px",
+                borderRadius: "6px",
+                fontSize: "10px",
+                fontFamily: FONT_STACK,
+                color: "#fbbf24",
+                backgroundColor: "rgba(245,158,11,0.10)",
+                border: "1px solid rgba(245,158,11,0.35)",
+              }}
+            >
+              Custom emblems need to be re-uploaded when editing.
+            </div>
+          )}
 
           {/* Tab bar */}
           <div
