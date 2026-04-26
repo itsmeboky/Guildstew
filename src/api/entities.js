@@ -124,7 +124,6 @@ export const entities = {
   Deity:                createEntity('deities'),
   Faction:              createEntity('factions'),
   Friend:               createEntity('friends'),
-  Guild:                createEntity('guilds'),
   GuildHall:            createEntity('guild_halls'),
   GuildHallOption:      createEntity('guild_hall_options'),
   MapEntry:             createEntity('map_entries'),
