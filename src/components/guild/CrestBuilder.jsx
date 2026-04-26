@@ -138,11 +138,19 @@ export default function CrestBuilder({
   const [primaryColor, setPrimaryColor] = useState("#2563eb");
   const [secondaryColor, setSecondaryColor] = useState("#1a1a1a");
 
-  // Patterns state (Step 5). Two stackable layers, each with type
-  // + color. Layer order is owned separately so the future Layers
-  // tab can rearrange without touching either pattern's own state.
-  const [pattern1, setPattern1] = useState({ type: "none", color: "#f59e0b" });
-  const [pattern2, setPattern2] = useState({ type: "none", color: "#ffffff" });
+  // Patterns state. Each layer carries its own transform stack
+  // (scale / rotation / position / opacity) plus the type + color
+  // it was already tracking. Layer order is owned separately so
+  // the Layers tab can rearrange without touching either pattern's
+  // own state.
+  const [pattern1, setPattern1] = useState({
+    type: "none", color: "#ffffff",
+    scale: 1.0, rotation: 0, x: 50, y: 50, opacity: 1.0,
+  });
+  const [pattern2, setPattern2] = useState({
+    type: "none", color: "#dc2626",
+    scale: 1.0, rotation: 0, x: 50, y: 50, opacity: 1.0,
+  });
 
   // Emblems — up to 4 slots. Starts with one empty slot so the
   // Emblems tab always has something to point at. `activeIdx`
@@ -303,8 +311,30 @@ export default function CrestBuilder({
     if (d.background_color_2) setSecondaryColor(d.background_color_2);
 
     // Patterns
-    if (d.pattern_1) setPattern1({ type: d.pattern_1, color: d.pattern_1_color || "#f59e0b" });
-    if (d.pattern_2) setPattern2({ type: d.pattern_2, color: d.pattern_2_color || "#ffffff" });
+    if (d.pattern_1) {
+      setPattern1((prev) => ({
+        ...prev,
+        type: d.pattern_1,
+        color: d.pattern_1_color || prev.color,
+        scale:    d.pattern_1_scale    ?? prev.scale,
+        rotation: d.pattern_1_rotation ?? prev.rotation,
+        x:        d.pattern_1_x        ?? prev.x,
+        y:        d.pattern_1_y        ?? prev.y,
+        opacity:  d.pattern_1_opacity  ?? prev.opacity,
+      }));
+    }
+    if (d.pattern_2) {
+      setPattern2((prev) => ({
+        ...prev,
+        type: d.pattern_2,
+        color: d.pattern_2_color || prev.color,
+        scale:    d.pattern_2_scale    ?? prev.scale,
+        rotation: d.pattern_2_rotation ?? prev.rotation,
+        x:        d.pattern_2_x        ?? prev.x,
+        y:        d.pattern_2_y        ?? prev.y,
+        opacity:  d.pattern_2_opacity  ?? prev.opacity,
+      }));
+    }
 
     // Layer order
     if (Array.isArray(d.layer_order) && d.layer_order.length > 0) {
@@ -369,8 +399,18 @@ export default function CrestBuilder({
     background_color_2: secondaryColor,
     pattern_1: pattern1.type,
     pattern_1_color: pattern1.color,
+    pattern_1_scale: pattern1.scale,
+    pattern_1_rotation: pattern1.rotation,
+    pattern_1_x: pattern1.x,
+    pattern_1_y: pattern1.y,
+    pattern_1_opacity: pattern1.opacity,
     pattern_2: pattern2.type,
     pattern_2_color: pattern2.color,
+    pattern_2_scale: pattern2.scale,
+    pattern_2_rotation: pattern2.rotation,
+    pattern_2_x: pattern2.x,
+    pattern_2_y: pattern2.y,
+    pattern_2_opacity: pattern2.opacity,
     layer_order: layerOrder,
     emblems: emblems.map((e) => ({
       id: e.id,
@@ -1195,26 +1235,45 @@ function ColorPicker({ label, value, onChange }) {
  */
 function PatternsTab({ pattern1, onPattern1, pattern2, onPattern2 }) {
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: "10px" }}>
-      <PatternPicker
-        label="Pattern 1"
-        value={pattern1}
-        onChange={onPattern1}
-      />
-      <div style={{ borderTop: "1px solid #2a3441" }} />
-      <PatternPicker
-        label="Pattern 2"
-        value={pattern2}
-        onChange={onPattern2}
-      />
-      <div style={{ flex: 1 }} />
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <style>{`
+        .crest-patterns-body::-webkit-scrollbar { width: 6px; }
+        .crest-patterns-body::-webkit-scrollbar-track { background: transparent; }
+        .crest-patterns-body::-webkit-scrollbar-thumb { background: #3a4451; border-radius: 3px; }
+        .crest-patterns-body::-webkit-scrollbar-thumb:hover { background: #4a5568; }
+      `}</style>
+      <div
+        className="crest-patterns-body"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          paddingRight: "4px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+        }}
+      >
+        <PatternPicker
+          label="Pattern 1"
+          value={pattern1}
+          onChange={onPattern1}
+        />
+        <div style={{ borderTop: "1px solid #2a3441" }} />
+        <PatternPicker
+          label="Pattern 2"
+          value={pattern2}
+          onChange={onPattern2}
+        />
+      </div>
       <p
         style={{
-          margin: 0,
+          margin: "8px 0 0 0",
           fontSize: "8px",
           color: "#4a5568",
           fontStyle: "italic",
           fontFamily: FONT_STACK,
+          flexShrink: 0,
         }}
       >
         Use the Layers tab to control render order.
@@ -1224,6 +1283,7 @@ function PatternsTab({ pattern1, onPattern1, pattern2, onPattern2 }) {
 }
 
 function PatternPicker({ label, value, onChange }) {
+  const patch = (updates) => onChange({ ...value, ...updates });
   return (
     <div>
       <div
@@ -1246,7 +1306,7 @@ function PatternPicker({ label, value, onChange }) {
             <button
               key={id}
               type="button"
-              onClick={() => onChange({ ...value, type: id })}
+              onClick={() => patch({ type: id })}
               style={{
                 fontFamily: FONT_STACK,
                 fontSize: "9px",
@@ -1271,11 +1331,58 @@ function PatternPicker({ label, value, onChange }) {
         })}
       </div>
       {value.type !== "none" && (
-        <ColorPicker
-          label="Color"
-          value={value.color}
-          onChange={(c) => onChange({ ...value, color: c })}
-        />
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <ColorPicker
+            label="Color"
+            value={value.color}
+            onChange={(c) => patch({ color: c })}
+          />
+          <EmblemSlider
+            label="Opacity"
+            min={0}
+            max={1}
+            step={0.05}
+            value={value.opacity ?? 1}
+            onChange={(v) => patch({ opacity: v })}
+          />
+          <div style={{ display: "flex", gap: "10px" }}>
+            <EmblemSlider
+              label="Scale"
+              min={0.3}
+              max={2}
+              step={0.05}
+              value={value.scale ?? 1}
+              onChange={(v) => patch({ scale: v })}
+            />
+            <EmblemSlider
+              label="Rotation"
+              min={0}
+              max={360}
+              step={1}
+              value={value.rotation ?? 0}
+              onChange={(v) => patch({ rotation: v })}
+              suffix="°"
+            />
+          </div>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <EmblemSlider
+              label="X"
+              min={0}
+              max={100}
+              step={1}
+              value={value.x ?? 50}
+              onChange={(v) => patch({ x: v })}
+            />
+            <EmblemSlider
+              label="Y"
+              min={0}
+              max={100}
+              step={1}
+              value={value.y ?? 50}
+              onChange={(v) => patch({ y: v })}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
@@ -2090,7 +2197,7 @@ function CategoryButton({ active, onClick, label }) {
   );
 }
 
-function EmblemSlider({ label, min, max, step, value, onChange }) {
+function EmblemSlider({ label, min, max, step, value, onChange, suffix = "" }) {
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
       <div
@@ -2108,7 +2215,9 @@ function EmblemSlider({ label, min, max, step, value, onChange }) {
       >
         <span>{label}</span>
         <span style={{ color: "#64748b" }}>
-          {typeof value === "number" ? (Number.isInteger(value) ? value : value.toFixed(2)) : value}
+          {typeof value === "number"
+            ? `${Number.isInteger(value) ? value : value.toFixed(2)}${suffix}`
+            : value}
         </span>
       </div>
       <input
