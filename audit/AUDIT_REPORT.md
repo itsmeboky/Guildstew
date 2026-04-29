@@ -1538,3 +1538,1057 @@ Splits (Free 50/50, Adventurer 30/70, Veteran/Guild 20/80) match the brief.
 5. **Privacy leak via Guild invite-by-email.** `inviteByEmail` lets a Guild owner probe the `user_profiles.email` column with arbitrary strings and learn whether each address is registered. Move to a server-side resolver.
 6. **Form-association accessibility gaps.** Three different consent / deletion dialogs wrap `<Checkbox>` (Radix button) inside a bare `<label>` without `htmlFor` — the legally-meaningful "I accept" toggle is not programmatically labelled for screen-reader users.
 7. **Mutations missing `onError` handlers** in 4 of the 6 Settings tabs and the appearance / accessibility / legal / notifications tabs in particular — silent save failures.
+
+### Batch 1A-iii-a: campaigns folder
+
+**Scope:** `/src/components/campaigns/` (14 top-level files + 6 in `create/`).
+
+#### /src/components/campaigns/
+
+##### BanListEditor.jsx
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/BanListEditor.jsx
+- **Line:** 104, 169
+- **Category:** Accessibility
+- **Issue:** Uses native `window.confirm()` for destructive ban-removal and bulk-preset apply. Native confirms are not styled, focus-trap is OS-default, and they break the rest of the app's `AlertDialog` pattern.
+- **Suggested approach:** Replace with the project's `AlertDialog` component (already used in BreweryModsPanel).
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/BanListEditor.jsx
+- **Line:** 29-37, 49-74
+- **Category:** Permission gating
+- **Issue:** Component is documented as "GM-only" but does not check `canEdit` / GM ownership locally. It relies entirely on RLS, so a non-GM viewing the settings UI would see Add/Remove/Preset controls before the server denies them.
+- **Suggested approach:** Accept a `canEdit` prop (matching BreweryModsPanel) and disable mutating controls when false.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/BanListEditor.jsx
+- **Line:** 79, 94, 128, 154, 200, 209, 216
+- **Category:** Brand color mismatches
+- **Issue:** 7 hard-coded hex surfaces (`#2A3441`, `#050816`, `#1E2430`) plus rose/amber accent classes — no use of brand tokens.
+- **Suggested approach:** Track for the global brand-token migration.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/BanListEditor.jsx
+- **Line:** 55, 64, 73
+- **Category:** console.log / .error / .warn left in
+- **Issue:** Three `console.error(err)` calls in mutation onError handlers in production code.
+- **Suggested approach:** Route through a logger util or drop once Sentry/equivalent is wired.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/BanListEditor.jsx
+- **Line:** 81-84, 137
+- **Category:** Semantic HTML / heading hierarchy
+- **Issue:** Uses `<h2>` inside what is rendered as a tab/panel within a larger Settings page; depending on parent there may be an h1→h2 jump or two h2s siblings.
+- **Suggested approach:** Verify against parent route structure.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/BanListEditor.jsx
+- **Line:** 119-134
+- **Category:** Accessibility
+- **Issue:** Ban-type tabs are plain `<button>`s without `role="tab"`, `aria-selected`, or a `role="tablist"` wrapper. Keyboard-arrow navigation between tabs is also absent.
+- **Suggested approach:** Use the existing shadcn `Tabs` primitive (already shipped) for proper a11y semantics.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/BanListEditor.jsx
+- **Line:** 137-142, 184-229
+- **Category:** Prop validation / inconsistent prop usage
+- **Issue:** `AddBanForm` accepts `campaignId` prop but never uses it (only `activeType`, `onAdd`, `submitting` are read).
+- **Suggested approach:** Drop the unused prop.
+
+##### BreweryModsPanel.jsx
+
+- **Severity:** High
+- **File:** src/components/campaigns/BreweryModsPanel.jsx
+- **Line:** 15
+- **Category:** Base44 leftovers
+- **Issue:** `import { base44 } from "@/api/base44Client"` is imported but never referenced inside the file. Dead Base44 import.
+- **Suggested approach:** Remove the import.
+
+- **Severity:** High
+- **File:** src/components/campaigns/BreweryModsPanel.jsx
+- **Line:** 113-132
+- **Category:** Real-time/state sync issues
+- **Issue:** `updateMod` mutation writes directly to `campaign_installed_mods` from the client (bypasses `lib/modEngine`). Other writes in this file go through the engine; mixing direct table writes risks divergence (e.g. patch reapplication, audit log, validation hooks).
+- **Suggested approach:** Add an `updateMod` helper to `lib/modEngine` and call it instead.
+
+- **Severity:** High
+- **File:** src/components/campaigns/BreweryModsPanel.jsx
+- **Line:** 73-77, 215-243
+- **Category:** Real-time/state sync issues
+- **Issue:** Priority up/down buttons mutate priority by ±1 with no atomic swap and no optimistic update — concurrent reorders can produce duplicate priorities; the UI also flashes back to the server value while invalidating.
+- **Suggested approach:** Either implement an atomic swap RPC or perform an optimistic mutation that reorders the local list and rolls back on error.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/BreweryModsPanel.jsx
+- **Line:** 79-102
+- **Category:** Bug / race condition
+- **Issue:** `uninstall` and `forceUninstall` mutations have no `onError` handler — a network or RLS failure surfaces nothing to the user, and the Trash2 button stays usable.
+- **Suggested approach:** Add `onError` toasts mirroring `toggleStatus`.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/BreweryModsPanel.jsx
+- **Line:** 51-60
+- **Category:** Performance
+- **Issue:** Catalog query key is `modIds.sort().join(",")` — calling `.sort()` mutates the array in place, and the cache key changes any time the install list reorders even when the underlying ids are the same set. Also, sorting on each render forces re-keying when results haven't changed.
+- **Suggested approach:** `[...modIds].sort()` (or `Array.from`) and memoize the key, or use a stable shape (`{ ids: modIds }`) — react-query handles deep equality.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/BreweryModsPanel.jsx
+- **Line:** 141, 160-163, 202-204
+- **Category:** Brand color mismatches
+- **Issue:** ~6 occurrences of `#37F2D1` / `#2A3441` / `#1E2430` / `#050816` / `#111827`.
+- **Suggested approach:** Track for brand-token migration.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/BreweryModsPanel.jsx
+- **Line:** 195, 198
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Fallback strings "Unknown mod" and badge `"mod"` are hardcoded — duplicated in modEngine elsewhere.
+- **Suggested approach:** Centralize copy.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/BreweryModsPanel.jsx
+- **Line:** 118
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Default version `"1.0.0"` hardcoded — should match the catalog's source-of-truth or refuse to update without a version.
+- **Suggested approach:** Refuse update if `catalog.version` is absent rather than silently writing 1.0.0.
+
+##### CampaignApplicationsPanel.jsx
+
+- **Severity:** High
+- **File:** src/components/campaigns/CampaignApplicationsPanel.jsx
+- **Line:** 33-103
+- **Category:** Permission gating
+- **Issue:** No campaign-membership / GM ownership check before rendering or before mutations. Component trusts `campaignId` prop and RLS — but the component is named "GM application review" and exposes accept/reject buttons. A non-GM user passed `campaignId` would see Accept/Reject buttons that fail at the server.
+- **Suggested approach:** Compare `campaign.game_master_id` to current `auth.user.id` (via `useAuth`), or accept an `isGM` prop and short-circuit-render an empty fragment if false.
+
+- **Severity:** High
+- **File:** src/components/campaigns/CampaignApplicationsPanel.jsx
+- **Line:** 90-94, 98-99
+- **Category:** Real-time/state sync issues
+- **Issue:** Reject mutations are owned by the dialog (line 262), but `accept` mutation is owned here. After accept the panel invalidates `["userCampaigns"]` — but never invalidates the player-side `["myCampaignApplications"]` cache that `MyApplicationsInbox` reads, so the player won't see the accepted/rejected state until refresh.
+- **Suggested approach:** Add `queryClient.invalidateQueries({ queryKey: ["myCampaignApplications"] })` to `invalidate()`.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignApplicationsPanel.jsx
+- **Line:** 47, 124
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Reads `app.user_id || app.applicant_id` in two places — column ambiguity (which column is canonical for applicant?). This bleeds an unresolved schema decision into UI code.
+- **Suggested approach:** Settle the column name in the DB layer and pick one here.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignApplicationsPanel.jsx
+- **Line:** 57, 70
+- **Category:** Performance
+- **Issue:** Same `.sort()` mutating-key anti-pattern as BreweryModsPanel — `applicantIds.sort().join(",")` and `characterIds.sort().join(",")` mutate the memoized arrays.
+- **Suggested approach:** Spread before sorting; consider using the array directly as react-query handles equality.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignApplicationsPanel.jsx
+- **Line:** 156, 220
+- **Category:** Accessibility
+- **Issue:** Avatar `<img alt="" />` is correct for purely decorative use, but no programmatic association with the applicant name; screen readers will read just the name. Acceptable but verify via heading/list semantics. Also: expand button is `<button>` without `aria-expanded` / `aria-controls`.
+- **Suggested approach:** Add `aria-expanded={expanded}` to the disclosure button.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignApplicationsPanel.jsx
+- **Line:** 220
+- **Category:** Performance
+- **Issue:** `FullCharacterSheetPreview` renders inside an expandable section, but is mounted regardless when expanded — and on a list of 20 pending apps each expansion re-renders the entire sheet. Component appears expensive (read next file). Also, expanding multiple sheets at once mounts each.
+- **Suggested approach:** Lazy-load the preview component (`React.lazy`) so first-paint on the list isn't taxed.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignApplicationsPanel.jsx
+- **Line:** 93, 281
+- **Category:** console.log / .error / .warn left in
+- **Issue:** `console.error(err)` and `console.error("reject", err)` left in production paths.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignApplicationsPanel.jsx
+- **Line:** 106, 153, 189, 220, 291, 310
+- **Category:** Brand color mismatches
+- **Issue:** ~6 hex constants (`#1E2430`, `#37F2D1`, `#050816`, `#0b1220`).
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignApplicationsPanel.jsx
+- **Line:** 200
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `slice(0, 4)` truncates ban-violation list with no "+N more" affordance — the GM doesn't know there are additional violations.
+- **Suggested approach:** Render a "+N more" tail when the list exceeds the limit.
+
+##### CampaignApplyFlow.jsx
+
+- **Severity:** Critical
+- **File:** src/components/campaigns/CampaignApplyFlow.jsx
+- **Line:** 13, 50-60
+- **Category:** Base44 leftovers
+- **Issue:** Character library is fetched via `base44.entities.Character.filter({ created_by: user.email })` — Base44 dependency in the apply flow, AND filtering by `email` (PII) instead of `user.id`. This is on the migration-out list and currently couples the entire apply UX to the legacy backend.
+- **Suggested approach:** Replace with a Supabase query against the `characters` table filtered by `user_id`.
+
+- **Severity:** High
+- **File:** src/components/campaigns/CampaignApplyFlow.jsx
+- **Line:** 51
+- **Category:** Bug / race condition
+- **Issue:** Query key `["applyFlowCharacters", user?.email]` keys the cache by **email**, not user id. If a user changes their email, characters appear to vanish until cache invalidation. Also leaks PII into devtools/cache snapshots.
+- **Suggested approach:** Key by `user.id`.
+
+- **Severity:** High
+- **File:** src/components/campaigns/CampaignApplyFlow.jsx
+- **Line:** 14
+- **Category:** Broken or unused imports
+- **Issue:** `import { supabase } from "@/api/supabaseClient"` is imported but never used in this file.
+- **Suggested approach:** Remove (or wire into the Base44 replacement above).
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignApplyFlow.jsx
+- **Line:** 110-117
+- **Category:** Real-time/state sync issues
+- **Issue:** `onSuccess` invalidates `["myCampaignApplications"]` but not the GM-side `["campaignApplications", id]` cache — the GM seeing the campaign in another tab won't refresh until manual reload. Real-time channel may help but isn't referenced here.
+- **Suggested approach:** Either invalidate both, or rely on a Supabase realtime channel and document it.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignApplyFlow.jsx
+- **Line:** 112
+- **Category:** State management smells
+- **Issue:** `setTimeout(() => onClose?.(), 1800)` auto-dismisses the success modal — if the parent unmounts before that timeout fires, you get a "set state on unmounted component" warning + a stale onClose call.
+- **Suggested approach:** Track timeout in a ref and clear in cleanup.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignApplyFlow.jsx
+- **Line:** 34
+- **Category:** Dead code (unreferenced components/functions/files)
+- **Issue:** `STEPS` constant is declared but never read — steps are referenced as string literals throughout.
+- **Suggested approach:** Delete or wire into a step indicator.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignApplyFlow.jsx
+- **Line:** 70-89
+- **Category:** State management smells
+- **Issue:** `characterCompat` is recreated every render (closure over `modInfo`/`installedModIds`) but is passed through three props deep and used inside `.map`. Causes child re-renders.
+- **Suggested approach:** Wrap in `useCallback`.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignApplyFlow.jsx
+- **Line:** 115
+- **Category:** console.log / .error / .warn left in
+- **Issue:** `console.error("Application submit", err)` in production.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignApplyFlow.jsx
+- **Line:** 139, 153, 157, 245, 267, 294, 416, 451
+- **Category:** Brand color mismatches
+- **Issue:** ~12 hex hardcodes (`#050816`, `#37F2D1`, `#2dd9bd`, `#1E2430`, `#0b1220`).
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignApplyFlow.jsx
+- **Line:** 264-274
+- **Category:** Accessibility
+- **Issue:** "Create New" tile is a `<button>` styled like a card — fine — but uses border-dashed + dashed text only with no programmatic name beyond label. Acceptable, but check focus-visible.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignApplyFlow.jsx
+- **Line:** 296
+- **Category:** Accessibility
+- **Issue:** `CharacterTile` has `onClick` on the outer `<div>` — not a button, no `role="button"`, no `tabIndex`, no `onKeyDown`. Keyboard users can't pick a character; only the inline Edit child button is reachable.
+- **Suggested approach:** Make the outer element a `<button>` (or a Radix `RadioGroup.Item` if treating as selection), preserving the inner Edit button via `event.stopPropagation`.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignApplyFlow.jsx
+- **Line:** 432-441
+- **Category:** Accessibility
+- **Issue:** `<label>` has no `htmlFor`/`id` connection to the textarea.
+- **Suggested approach:** Add `id` + `htmlFor`, or use shadcn `Label`.
+
+##### CampaignCarousel.jsx
+
+- **Severity:** High
+- **File:** src/components/campaigns/CampaignCarousel.jsx
+- **Line:** 6
+- **Category:** Broken or unused imports
+- **Issue:** `import { base44 } from "@/api/base44Client"` imported but never used.
+- **Suggested approach:** Remove.
+
+- **Severity:** High
+- **File:** src/components/campaigns/CampaignCarousel.jsx
+- **Line:** 117-118
+- **Category:** Brand color mismatches / Inline styles that should be Tailwind/CSS
+- **Issue:** Section title hardcoded with inline `style={{ color: "#FF5722" }}` (orange — close to brand `#FF5300` but not identical) and `bg-[#FF5722]` divider. Mixing brand-adjacent oranges with the cyan `#37F2D1` palette used elsewhere in the file.
+- **Suggested approach:** Replace inline style with a Tailwind class on a brand token; consolidate orange/cyan choice with design.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignCarousel.jsx
+- **Line:** 120-122
+- **Category:** Accessibility / Dead code
+- **Issue:** Trailing `<button>` with `<ChevronRight>` — no onClick, no `aria-label`, no functionality. Looks interactive but does nothing.
+- **Suggested approach:** Either wire it (carousel scroll-right) or remove.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignCarousel.jsx
+- **Line:** 130-194
+- **Category:** Accessibility
+- **Issue:** Outer card `<div>` has `onClick` but is not a button — no role, tabIndex, keyboard handler. Hover-revealed action buttons (lines 154-191) are completely keyboard-inaccessible (only visible via `group-hover:opacity-100`). On a tab visit, focus jumps to invisible buttons.
+- **Suggested approach:** Replace outer click with `<Link>`/`<button>`; show controls on focus-within as well as group-hover.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignCarousel.jsx
+- **Line:** 155-191
+- **Category:** Accessibility
+- **Issue:** Action buttons use `title` attribute only — no `aria-label`. Title attributes are unreliable for screen readers.
+- **Suggested approach:** Add `aria-label` to each action button.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignCarousel.jsx
+- **Line:** 47-63
+- **Category:** Real-time/state sync issues
+- **Issue:** `archiveMutation` has no `onError` — server errors swallowed silently when not surfaced via `res.ok`.
+- **Suggested approach:** Add `onError` toast.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignCarousel.jsx
+- **Line:** 65-79
+- **Category:** Real-time/state sync issues
+- **Issue:** Same: `unarchiveMutation` lacks `onError`.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignCarousel.jsx
+- **Line:** 138-140
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Unsplash placeholder URL hardcoded — duplicated in `CampaignGrid.jsx`. Should be a shared constant or local asset.
+- **Suggested approach:** Centralize into `@/utils/placeholders` (or move to `/public/`).
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignCarousel.jsx
+- **Line:** 117, 118, 157, 160, 167, 177, 180, 105 (DeleteDialog)
+- **Category:** Brand color mismatches
+- **Issue:** ~7 hex hardcodes (`#FF5722`, `#37F2D1`, `#1E2430`).
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignCarousel.jsx
+- **Line:** 22-23
+- **Category:** Prop validation / inconsistent prop usage
+- **Issue:** Five boolean toggles (`showPlayButton`, `showArchiveButton`, `showUnarchiveButton`, `grayscale`, `currentUserId`) make the call sites brittle. There's also an inferred mode from these flags (active vs. archived listing) — could be a single `mode` prop.
+- **Suggested approach:** Replace with a single `mode: "active" | "archived"` prop and derive the buttons from it.
+
+##### CampaignGrid.jsx
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignGrid.jsx
+- **Line:** 1-51
+- **Category:** Duplicate components or near-duplicates
+- **Issue:** Near-duplicate of the card render block in `CampaignCarousel.jsx` (cover image + title + description + meta), but using `<Link to={createPageUrl("CampaignView")…}>` while the carousel routes to `CampaignGMPanel`/`CampaignPanel` based on GM status. Inconsistent routing for the same card.
+- **Suggested approach:** Extract a shared `CampaignCard` component with mode-aware navigation.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignGrid.jsx
+- **Line:** 20
+- **Category:** Bug / race condition
+- **Issue:** Routes to `CampaignView` page — but the carousel routes to `CampaignGMPanel`/`CampaignPanel`. If `CampaignView` is the legacy route, callers of `CampaignGrid` may be sending users to a stale page. Verify route still exists.
+- **Suggested approach:** Confirm `CampaignView` is the intended landing; otherwise unify with carousel routing.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignGrid.jsx
+- **Line:** 26
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Same hardcoded Unsplash placeholder as CampaignCarousel.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignGrid.jsx
+- **Line:** 38
+- **Category:** Bug / race condition
+- **Issue:** Reads `campaign.player_ids?.length`. The campaigns table has a separate `campaign_members` table; `player_ids` may be a denormalized cache that drifts.
+- **Suggested approach:** Verify whether `player_ids` is the source of truth or denormalized; in the latter case query `campaign_members` count.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignGrid.jsx
+- **Line:** 23
+- **Category:** Brand color mismatches
+- **Issue:** `bg-[#2A3441]`, `ring-[#37F2D1]`.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignGrid.jsx
+- **Line:** 6-13
+- **Category:** Accessibility
+- **Issue:** Empty state is plain text — no heading; screen-reader users tabbing the page won't easily detect the section.
+- **Suggested approach:** Add an `<h3>` or `role="status"`.
+
+##### CampaignPreviewPanel.jsx
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignPreviewPanel.jsx
+- **Line:** 50
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `Math.min(Number(campaign?.max_players) || 6, 8)` — magic numbers (6 default, 8 cap). Cap should be a constant; defaulting to 6 silently overrides invalid data.
+- **Suggested approach:** Hoist to `MIN_DEFAULT_PARTY = 6` / `MAX_PARTY_HARD_CAP = 8` (or pull from a campaign-config module).
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/CampaignPreviewPanel.jsx
+- **Line:** 51, 158-175
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `extractHouseRulesSummary` hard-codes baseline values (DC 10, short rest 60 min, long rest 8 hr). If `HouseRulesPanel` defaults change, this silently desyncs.
+- **Suggested approach:** Import baseline rule values from a single source shared with `HouseRulesPanel`.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignPreviewPanel.jsx
+- **Line:** 71-74
+- **Category:** Bug / race condition
+- **Issue:** Reads either `campaign_description` or `description` columns — schema ambiguity. Same on `title || name` (line 59).
+- **Suggested approach:** Pick one column and migrate.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/CampaignPreviewPanel.jsx
+- **Line:** 55, 66, 85, 95-97, 119
+- **Category:** Brand color mismatches
+- **Issue:** ~5 hex hardcodes.
+
+##### DeleteCampaignDialog.jsx
+
+- **Severity:** High
+- **File:** src/components/campaigns/DeleteCampaignDialog.jsx
+- **Line:** 51-83
+- **Category:** Permission gating
+- **Issue:** No verification that `gmUserId === auth.user.id` before calling `deleteCampaign`/`archiveCampaign`. If a non-GM somehow gets the dialog open with a different `gmUserId`, the mutation will fire and rely on RLS for the rejection. Defensive UI check missing.
+- **Suggested approach:** Pull the current user from `useAuth` and short-circuit if mismatch.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/DeleteCampaignDialog.jsx
+- **Line:** 51-83
+- **Category:** Real-time/state sync issues
+- **Issue:** Both `archiveMutation` and `deleteMutation` lack `onError` handlers — server / network failure produces no toast.
+- **Suggested approach:** Add `onError` mirroring the application-rejection mutations.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/DeleteCampaignDialog.jsx
+- **Line:** 80
+- **Category:** Real-time/state sync issues
+- **Issue:** After delete, only `["userCampaigns"]` invalidated — but `["currentUserSubscription", currentUserId]` (used by `CampaignCarousel` for archive count) and `["myCampaignApplications"]` (player-side) are not refreshed.
+- **Suggested approach:** Invalidate the broader cache set or use a dedicated lifecycle helper that owns the invalidation list.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/DeleteCampaignDialog.jsx
+- **Line:** 105, 167
+- **Category:** Brand color mismatches
+- **Issue:** `#1E2430`, `#37F2D1`, `#2dd9bd`, `#050816`.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/DeleteCampaignDialog.jsx
+- **Line:** 110-119
+- **Category:** Accessibility
+- **Issue:** Uses nested `<span>` blocks inside `AlertDialogDescription`. Radix renders the description as a `<p>`, so nesting `<span class="block">` blocks is valid — but the text is dense; consider explicit list semantics for the bullet-style content.
+
+##### FullCharacterSheetPreview.jsx
+
+- **Severity:** High
+- **File:** src/components/campaigns/FullCharacterSheetPreview.jsx
+- **Line:** 18-67, 88-132
+- **Category:** Duplicate components or near-duplicates
+- **Issue:** Re-implements ability/skill/saving-throw math that almost certainly already exists in `src/components/characters/` (canonical character sheet). Duplicating skill-list, modifier formula, proficiency-bonus formula creates two sources of truth for crit/proficiency rules. Risk: campaign-level rule overrides (e.g. flat-DC death save 12) won't apply here.
+- **Suggested approach:** Reuse the character-domain helpers (`getRule(campaign.homebrew_rules, …)`-aware) rather than reimplementing baseline 5e math.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/FullCharacterSheetPreview.jsx
+- **Line:** 35
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Proficiency-bonus formula `Math.ceil(l / 4) + 1` hardcoded — and ignores campaign overrides like flat-PB or epic-tier scales.
+- **Suggested approach:** Pull from a shared rules helper.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/FullCharacterSheetPreview.jsx
+- **Line:** 53-55
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Reads either `equipment` OR `inventory` array — column ambiguity without resolution.
+
+- **Suggested approach:** Pick one column.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/FullCharacterSheetPreview.jsx
+- **Line:** 100-103, 120-121
+- **Category:** Performance
+- **Issue:** Computes ability mod inside a `.map` that runs 6× (saves) and 18× (skills) on every parent re-render. Cheap individually but `useMemo` over `abilities`/`pb` would avoid the `Math.floor` recomputation.
+- **Suggested approach:** Memoize precomputed mod object once.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/FullCharacterSheetPreview.jsx
+- **Line:** 89, 105, 123, 138, 158, 177, 193, 206, 235, 240, 262
+- **Category:** Brand color mismatches
+- **Issue:** ~14 hex hardcodes (`#0b1220`, `#37F2D1`, `#050816`).
+
+- **Severity:** Low
+- **File:** src/components/campaigns/FullCharacterSheetPreview.jsx
+- **Line:** 137, 192, 205, 223
+- **Category:** Accessibility
+- **Issue:** Lists keyed on `i` (array index) for features/equipment/languages/companions — fine for static lists, but breaks reorder-stability if features are draggable (companions especially).
+
+- **Severity:** Low
+- **File:** src/components/campaigns/FullCharacterSheetPreview.jsx
+- **Line:** 280-285
+- **Category:** Semantic HTML / heading hierarchy
+- **Issue:** Renders `<h4>` directly inside a section that's already nested under another `<h2>`/`<h3>` ancestor (the dialog title). Hierarchy could skip levels depending on parent.
+- **Suggested approach:** Use `aria-label` on `<section>` or pass a heading-level prop.
+
+##### HouseRulesPanel.jsx
+
+- **Severity:** Critical
+- **File:** src/components/campaigns/HouseRulesPanel.jsx
+- **Line:** 12, 227, 246, 259, 301, 306, 582, 594
+- **Category:** Base44 leftovers
+- **Issue:** Eight Base44 calls drive the entire panel:
+  - `base44.entities.CampaignHomebrew.filter` (read installed homebrew)
+  - `base44.entities.HomebrewRule.filter` (read pack metadata)
+  - `base44.entities.Campaign.update` (write `homebrew_rules` + `settings`)
+  - `base44.entities.CampaignHomebrew.update` (toggle installed homebrew)
+  - `base44.entities.CampaignHomebrew.delete` (uninstall)
+  - `base44.entities.Dnd5eSpell.list` (ban-list spell catalog)
+  This is the largest concentration of legacy Base44 dependence in the campaigns folder. Every house-rule change still flows through Base44.
+- **Suggested approach:** Replace each with the matching Supabase table call; coordinate with campaign / homebrew domain modules.
+
+- **Severity:** High
+- **File:** src/components/campaigns/HouseRulesPanel.jsx
+- **Line:** 228-232, 248-251
+- **Category:** Bug / race condition
+- **Issue:** `try / catch` blocks swallow errors silently with `return []` — so a real Base44 outage looks identical to "no homebrew installed", and the UI shows the empty state. Hides outages from users.
+- **Suggested approach:** Surface errors in a banner or distinguish "loading", "empty", "error" states.
+
+- **Severity:** High
+- **File:** src/components/campaigns/HouseRulesPanel.jsx
+- **Line:** 240
+- **Category:** Performance / Bug
+- **Issue:** Same `.sort().join(",")` mutating-array antipattern; here it sorts `installedHomebrew.map((h) => h.homebrew_id)` without spreading. Any other consumer of that array sees its order mutated.
+- **Suggested approach:** Spread before sort.
+
+- **Severity:** High
+- **File:** src/components/campaigns/HouseRulesPanel.jsx
+- **Line:** 244-247
+- **Category:** Performance
+- **Issue:** N+1 query — one `base44.entities.HomebrewRule.filter({ id })` call per installed homebrew row, kicked off via `Promise.all`. For a campaign with 20 homebrew packs that's 20 round trips.
+- **Suggested approach:** Single `.in("id", ids)` Supabase query.
+
+- **Severity:** High
+- **File:** src/components/campaigns/HouseRulesPanel.jsx
+- **Line:** 564-568
+- **Category:** Hardcoded values that should be constants / Domain
+- **Issue:** `CLASSES_FOR_BAN` hard-codes the 14 PHB+TCE classes including the third-party "Blood Hunter". Diverges from the `BanListEditor` flow (the canonical content-restriction store: `campaign_bans` table) — same campaign now has TWO ban systems: `settings.banned_classes` JSONB AND `campaign_bans` rows.
+- **Suggested approach:** Pick one. The `BanListEditor`/`campaign_bans` system is the newer one with applicant-side validation; this BanListsSection is a legacy duplicate.
+
+- **Severity:** High
+- **File:** src/components/campaigns/HouseRulesPanel.jsx
+- **Line:** 570-688
+- **Category:** Duplicate components or near-duplicates
+- **Issue:** `BanListsSection` overlaps in scope with `BanListEditor.jsx` (same folder). They write to **different** tables/columns (`settings.banned_*` JSONB vs `campaign_bans` table) so picks made in one don't sync to the other. Applicant-side validation only checks one source.
+- **Suggested approach:** Decide canonical store, migrate, delete the duplicate. Likely: keep `campaign_bans` (richer schema), remove `BanListsSection`.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/HouseRulesPanel.jsx
+- **Line:** 583
+- **Category:** Performance
+- **Issue:** Loads the **entire** SRD spell list to render a flat ban-toggle grid. ~500 spells with no virtualization, no search field, no level filter — UI freezes on slow devices and creates a long Tab cycle for keyboard users.
+- **Suggested approach:** Add a search input + virtualization, or surface only top-N + a "more" affordance.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/HouseRulesPanel.jsx
+- **Line:** 300-311
+- **Category:** Real-time/state sync issues
+- **Issue:** `toggleInstalled` and `removeInstalled` mutations have no `onError` handlers — silent failures.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/HouseRulesPanel.jsx
+- **Line:** 50, 65, 117
+- **Category:** Performance
+- **Issue:** `clone(obj)` uses `JSON.parse(JSON.stringify(...))` — slow for large `homebrew_rules` JSONB and unsafe for non-JSON-serializable fields (Date, undefined, etc.). Called on every keystroke through `setPath`/`clearPath`.
+- **Suggested approach:** Use `structuredClone()` (native, faster, handles more types) or a shallow per-path clone.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/HouseRulesPanel.jsx
+- **Line:** 257-282
+- **Category:** Bug / race condition
+- **Issue:** Optimistic update is good, but it cancels and writes via the `["campaign", campaignId]` query key — yet other parts of the codebase (e.g. CampaignPreviewPanel) use `["campaignPreviewBans", campaignId]` etc. Any cache that mirrors `homebrew_rules` won't reflect the optimistic write.
+- **Suggested approach:** Either consolidate into a single `["campaign", id]` cache or duplicate the optimistic update.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/HouseRulesPanel.jsx
+- **Line:** 270
+- **Category:** console.log / .error / .warn left in
+- **Issue:** `console.error(err)` retained.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/HouseRulesPanel.jsx
+- **Line:** 367-374
+- **Category:** Accessibility
+- **Issue:** `<label>` wrapping `<span>{enabled ? "Enabled" : "Disabled"}</span>` + `<Switch>` lacks `htmlFor` / Switch `id`. Screen readers will read the visible text but not associate it with the switch state.
+- **Suggested approach:** Use shadcn `Label htmlFor=` pattern.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/HouseRulesPanel.jsx
+- **Line:** 124
+- **Category:** Bug / race condition
+- **Issue:** `additional_effects: MODIFIABLE_RULES.combat.critical_hits.additional_effects` — if `MODIFIABLE_RULES` returns an object, multiple campaigns share the same array reference. A push into one campaign's effects mutates the catalog default.
+- **Suggested approach:** Spread / clone the default before assigning.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/HouseRulesPanel.jsx
+- **Line:** 318, 320, 344, 356, 394, 396, 409, 415, 507, 617, 637, 671
+- **Category:** Brand color mismatches
+- **Issue:** ~12 hex hardcodes.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/HouseRulesPanel.jsx
+- **Line:** 219-220
+- **Category:** TODO / FIXME / HACK / XXX comments
+- **Issue:** `// eslint-disable-next-line react-hooks/exhaustive-deps` — silent rule disable. The intent is documented immediately above, but worth flagging.
+
+##### ImagePositionEditor.jsx
+
+- **Severity:** High
+- **File:** src/components/campaigns/ImagePositionEditor.jsx
+- **Line:** 1-106
+- **Category:** Accessibility
+- **Issue:** Mouse-only interaction model — no touch handlers, no keyboard handlers, and no `role`/`aria-label` for the drag canvas. Mobile users (the majority of guildstew traffic per CLAUDE.md tier mix) can't reposition images, and keyboard users can't either.
+- **Suggested approach:** Add touch (pointer events), arrow-key handlers, and ARIA roles. Replace bespoke drag with pointer events.
+
+- **Severity:** High
+- **File:** src/components/campaigns/ImagePositionEditor.jsx
+- **Line:** 12-30
+- **Category:** Bug / race condition
+- **Issue:** Drag handlers attached to the inner container only. If the user drags fast enough to leave the container `onMouseLeave` fires and stops dragging mid-motion. Also no global mousemove listener — drag freezes when the cursor exits.
+- **Suggested approach:** Use `onPointerDown` + `setPointerCapture` for robust drag handling.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/ImagePositionEditor.jsx
+- **Line:** 33, 37
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Zoom limits 3.0 and 0.5 + step 0.1 hardcoded inline.
+
+- **Suggested approach:** Hoist as constants.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/ImagePositionEditor.jsx
+- **Line:** 5-10
+- **Category:** State management smells
+- **Issue:** Component initializes state from props but never syncs back when `position`/`zoom` props change. If parent re-uses the editor for a different image (say switching campaigns), local state remains stuck on the prior values until unmount.
+- **Suggested approach:** `useEffect` syncing local state on prop change, OR key the editor on `imageUrl` so React remounts it.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/ImagePositionEditor.jsx
+- **Line:** 5-106
+- **Category:** Dead code (unreferenced components/functions/files)
+- **Issue:** Unclear if this component is currently referenced anywhere. `Save Position` button calls `onSave(position, zoom)` but nothing constrains where the values are persisted (storage path is the parent's concern).
+- **Suggested approach:** Verify usage; if orphaned, delete.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/ImagePositionEditor.jsx
+- **Line:** 48, 99
+- **Category:** Brand color mismatches
+- **Issue:** `#1E2430`, `#37F2D1`, `#2dd9bd`.
+
+##### MyApplicationsInbox.jsx
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/MyApplicationsInbox.jsx
+- **Line:** 41
+- **Category:** Bug / race condition
+- **Issue:** Filters by `user_id.eq.${user.id},applicant_id.eq.${user.id}` — the same dual-column ambiguity flagged in CampaignApplicationsPanel. PostgREST `.or()` with raw user input is risky if `user.id` ever contains commas/quotes (UUIDs don't, but the pattern is fragile).
+- **Suggested approach:** Settle on one column DB-side; if both must be supported, use a SECURITY DEFINER RPC.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/MyApplicationsInbox.jsx
+- **Line:** 54, 71
+- **Category:** Performance
+- **Issue:** Same `.sort()` mutating-array antipattern in two query keys.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/MyApplicationsInbox.jsx
+- **Line:** 34-46, 53-64, 70-81
+- **Category:** Performance
+- **Issue:** Three sequential queries (apps → campaigns → GMs) — could be one RPC or `select` with foreign-table joins.
+- **Suggested approach:** Use a single `.select("*, campaign:campaigns(*, gm:user_profiles!game_master_id(*))")` if RLS allows.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/MyApplicationsInbox.jsx
+- **Line:** 134-149
+- **Category:** Accessibility
+- **Issue:** Native `<details>/<summary>` is fine semantically, but the summary text is `[10px] uppercase tracking-widest text-slate-500` — fails contrast at that size against `#1E2430`.
+- **Suggested approach:** Bump contrast/size.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/MyApplicationsInbox.jsx
+- **Line:** 59
+- **Category:** Bug / race condition
+- **Issue:** Selects `image_url` from campaigns — but other components in this folder read `cover_image_url` (CampaignCarousel:138, CampaignGrid:26). Likely column drift.
+- **Suggested approach:** Settle on one column.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/MyApplicationsInbox.jsx
+- **Line:** 95, 142, 166, 176, 201, 211
+- **Category:** Brand color mismatches
+- **Issue:** ~7 hex hardcodes.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/MyApplicationsInbox.jsx
+- **Line:** 224-247
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Status string set scattered across the file (`pending`, `rejected_character`, `rejected_player`, `accepted`, `auto_closed`); referenced as strings in 5 places.
+- **Suggested approach:** Centralize as a `STATUS` enum / constant.
+
+##### RecentCampaigns.jsx
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/RecentCampaigns.jsx
+- **Line:** 17
+- **Category:** Bug / race condition
+- **Issue:** Routes to `ActiveCampaign` page — but CampaignCarousel routes to `CampaignGMPanel`/`CampaignPanel` and CampaignGrid to `CampaignView`. Three different destination routes for the same campaign card across this folder.
+- **Suggested approach:** Pick one canonical destination; very likely `ActiveCampaign` is legacy.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/RecentCampaigns.jsx
+- **Line:** 1-37
+- **Category:** Duplicate components or near-duplicates
+- **Issue:** Card render block duplicates CampaignCarousel + CampaignGrid yet again — fourth campaign-card variant in this folder.
+- **Suggested approach:** Extract shared `CampaignCard` component.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/RecentCampaigns.jsx
+- **Line:** 22
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Same hardcoded Unsplash placeholder URL.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/RecentCampaigns.jsx
+- **Line:** 8
+- **Category:** Brand color mismatches
+- **Issue:** `#2A3441`.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/RecentCampaigns.jsx
+- **Line:** 32-34
+- **Category:** Bug / race condition
+- **Issue:** Empty-state rendered AFTER the grid wrapper — when `campaigns` is empty, the `<div className="grid">` still renders (empty), and the empty-state appears below it. Minor visual oddity.
+
+##### permissions.jsx
+
+- **Severity:** High
+- **File:** src/components/campaigns/permissions.jsx
+- **Line:** 1-132
+- **Category:** Inconsistent file naming / Dead code
+- **Issue:** File is `.jsx` but exports zero JSX — pure helpers. Should be `.js` (or `.ts` post-migration). Also: this file lives under `components/` but contains domain logic that belongs in `lib/` or `domain/`.
+- **Suggested approach:** Rename to `permissions.js` and consider moving to `src/lib/campaignPermissions.js` so non-component callers don't pull a `.jsx` file.
+
+- **Severity:** High
+- **File:** src/components/campaigns/permissions.jsx
+- **Line:** 24
+- **Category:** Inconsistent file naming
+- **Issue:** Reads `campaign.co_dm_ids` (uses "DM") but exports `CO_GM` role constants and uses "GM" everywhere else. Project documents the term as "GM" — yet the database column appears to be `co_dm_ids`. Either rename the column or document the discrepancy.
+- **Suggested approach:** Settle on GM / DM nomenclature project-wide.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/permissions.jsx
+- **Line:** 17-37, 87-96, 101-131
+- **Category:** Permission gating
+- **Issue:** All checks are client-side; nothing here gates the SERVER side. RLS policies must mirror these rules — and any drift means a player can call the API directly with a forged role. No reference to RLS guards elsewhere.
+- **Suggested approach:** Add a comment pointing at the RLS policies; verify policies cover each `canX` here.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/permissions.jsx
+- **Line:** 112, 118
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Section-name string lists `['settings', 'player_management', 'gm_notes']` are duplicated in both branches with subtle differences (mole list excludes `gm_notes`).
+- **Suggested approach:** Hoist to module-level `const` arrays and document the difference.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/permissions.jsx
+- **Line:** 9, 28-30
+- **Category:** Domain
+- **Issue:** "MOLE" role concept exists in code but isn't documented in CLAUDE.md / domain rules block. If this is the spy-PC mechanic, callers might forget moles bypass normal player gates.
+- **Suggested approach:** Document the mole role in domain notes.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/permissions.jsx
+- **Line:** 1-132
+- **Category:** Dead code (unreferenced components/functions/files)
+- **Issue:** Need to verify whether all 6 exported `canX` helpers are actually called. `canArchiveOrDelete`/`canManagePlayers` may be unused given the existing components do their own checks (or skip them entirely — see DeleteCampaignDialog flag above).
+
+#### /src/components/campaigns/create/
+
+##### CampaignBasicInfo.jsx
+
+- **Severity:** Critical
+- **File:** src/components/campaigns/create/CampaignBasicInfo.jsx
+- **Line:** 2, 26
+- **Category:** Base44 leftovers / DOMAIN: Storage path violations
+- **Issue:** Cover image upload uses `base44.integrations.Core.UploadFile({ file })` — Base44 storage path. Not only is this a Base44 dependency, it bypasses the documented Supabase storage convention `users/{user_id}/campaigns/{campaign_id}/`. The `file_url` returned is whatever Base44 produces — not under user-scoped storage.
+- **Suggested approach:** Replace with Supabase storage upload to `users/{user_id}/campaigns/{campaign_id}/cover-{ts}.ext`.
+
+- **Severity:** High
+- **File:** src/components/campaigns/create/CampaignBasicInfo.jsx
+- **Line:** 28-30
+- **Category:** Bug / race condition
+- **Issue:** Upload error swallowed: `console.error("Failed to upload image:", error)` with no toast/UI feedback. User sees the upload spinner stop but no "image" appears, leaving them unsure if it worked.
+- **Suggested approach:** Add a toast.error and surface a retry.
+
+- **Severity:** High
+- **File:** src/components/campaigns/create/CampaignBasicInfo.jsx
+- **Line:** 87-105
+- **Category:** Accessibility
+- **Issue:** Hidden file input is triggered by clicking a `<Button>` inside a `<label>`. Clicking the button fires `document.getElementById('cover-upload').click()` AND the browser's native label-click; depending on event order this can double-trigger the picker. Plus: nesting `<button>` inside `<label>` is invalid HTML.
+- **Suggested approach:** Use either a label-with-htmlFor pattern OR an onClick handler — not both. Move the button outside the label.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/create/CampaignBasicInfo.jsx
+- **Line:** 9-15
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `AVAILABLE_TAGS` (20 strings) and the 3-tag cap inline (`>= 3` repeated 3×) hardcoded. Tag list should live with the campaign domain (probably already does in CLAUDE.md or a constants file).
+- **Suggested approach:** Move to `@/utils/campaignTags.js` + `MAX_CAMPAIGN_TAGS = 3`.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/create/CampaignBasicInfo.jsx
+- **Line:** 67-77
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Game system list ("Dungeons and Dragons 5e", "Aetheneum", "Pathfinder 2nd Edition") hardcoded. CLAUDE.md mentions D&D 5e migration plus Aetheneum — these should be a constant exported alongside system-routing logic.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/create/CampaignBasicInfo.jsx
+- **Line:** 92, 127
+- **Category:** Brand color mismatches
+- **Issue:** `text-[#2A3441]` on a Button with no contrasting bg means the upload button reads as gray-on-dark. Likely a leftover from a flipped color scheme.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/create/CampaignBasicInfo.jsx
+- **Line:** 29
+- **Category:** console.log / .error / .warn left in
+
+##### CampaignConsent.jsx
+
+- **Severity:** High
+- **File:** src/components/campaigns/create/CampaignConsent.jsx
+- **Line:** 57-66
+- **Category:** Bug / race condition
+- **Issue:** `useEffect` watches `data.consent_checklist` only. If `data.consent_rating` updates from elsewhere (parent) but checklist hasn't, the auto-bump won't re-run. Also: missing `onChange`/`data.consent_rating` from deps — eslint-react-hooks would flag.
+- **Suggested approach:** Add `data.consent_rating` to dep list (or move logic to a derived value, not effect).
+
+- **Severity:** High
+- **File:** src/components/campaigns/create/CampaignConsent.jsx
+- **Line:** 45-55
+- **Category:** Bug / race condition
+- **Issue:** `calculateMinimumRating` only inspects items where `rating === "green"` — but the comment "Click each item to set its rating. Green = Allowed, Yellow = Handle with care, Red = Not allowed" implies green = allowed at the table. The calc reads as "if user marked an explicit-content item GREEN, force minimum rating up". That's correct intent, but the loop returns at the first hit — it doesn't escalate to RED if a later item triggers it.
+- **Suggested approach:** Trace through: if first matched item is in `RATING_TRIGGERS.orange` it returns "orange" even when a later item is in `RATING_TRIGGERS.red`. Should iterate all items, track highest, and return.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/create/CampaignConsent.jsx
+- **Line:** 7-15
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `RATING_TRIGGERS` content list is hardcoded HERE — but the actual `ConsentChecklist` component renders its own list of items (not visible). Drift: a checklist item not present here gets no rating bump even if it should.
+- **Suggested approach:** Co-locate trigger metadata with the canonical checklist source.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/create/CampaignConsent.jsx
+- **Line:** 81-85, 99
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Hardcoded `⚠️` emojis in user-facing copy. With `Only use emojis if the user explicitly requests it` rule on this codebase, these should be lucide icons (already imported at top of other files).
+
+- **Severity:** Low
+- **File:** src/components/campaigns/create/CampaignConsent.jsx
+- **Line:** 86, 98, 127
+- **Category:** Brand color mismatches
+- **Issue:** `#1E2430`, `#FF5722`, `#2A3441`.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/create/CampaignConsent.jsx
+- **Line:** 126
+- **Category:** Accessibility
+- **Issue:** Rating selection buttons rely on bg color + ring for selected-state. No `aria-pressed`/`aria-selected`. Color-blind/keyboard users can't tell which is selected.
+- **Suggested approach:** Use `<RadioGroup>` (already in the codebase) or add `aria-pressed`.
+
+##### CampaignDetails.jsx
+
+- **Severity:** Critical
+- **File:** src/components/campaigns/create/CampaignDetails.jsx
+- **Line:** 2, 21
+- **Category:** Base44 leftovers / DOMAIN: Storage path violations
+- **Issue:** Same `base44.integrations.Core.UploadFile` pattern. Same storage-path violation. Plus: uploaded URLs are stored only in local state (`uploadedImages`) — they're never sent up to the parent via `onChange`, so the images **vanish on next step**.
+- **Suggested approach:** Replace with Supabase upload + persist URLs onto `data.gallery_image_urls` via `onChange`.
+
+- **Severity:** High
+- **File:** src/components/campaigns/create/CampaignDetails.jsx
+- **Line:** 13, 22
+- **Category:** State management smells
+- **Issue:** Local `uploadedImages` state is component-private — any user navigation back to this step (or page refresh) loses the upload list. The parent wizard (`CreateCampaign`?) cannot persist this data.
+- **Suggested approach:** Lift state to the wizard via `onChange({ gallery_images: ... })`.
+
+- **Severity:** High
+- **File:** src/components/campaigns/create/CampaignDetails.jsx
+- **Line:** 1-191
+- **Category:** Duplicate components or near-duplicates
+- **Issue:** This step duplicates `description`, `world_lore`, `homebrew_rules`, `notes`, and image gallery — but `CampaignInformationStep.jsx` (Step 1) ALSO renders a `description` Textarea. So the same field is editable in two places, with the wizard likely overwriting one with the other. Also `homebrew_rules` here is a Quill HTML string while `HouseRulesPanel` writes a JSONB rules object — same column, two incompatible shapes.
+- **Suggested approach:** Critical schema/UX decision. Pick one canonical home for each field. The Quill homebrew flow appears to be legacy.
+
+- **Severity:** High
+- **File:** src/components/campaigns/create/CampaignDetails.jsx
+- **Line:** 159-188
+- **Category:** Inline styles that should be Tailwind/CSS
+- **Issue:** `<style jsx global>` block — but this is a Vite + React project (not Next.js). Without `styled-jsx` configured, this will render as raw `<style>` in the DOM with `jsx`/`global` as unknown attributes. The CSS may still apply (browsers render unknown-attr `<style>`), but the React warnings/no-op behavior is undefined.
+- **Suggested approach:** Move the Quill overrides to `src/index.css` or a per-component `.module.css`.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/create/CampaignDetails.jsx
+- **Line:** 8-9
+- **Category:** Performance
+- **Issue:** Eagerly imports `react-quill` + its CSS at the top of the wizard step. This pulls in a large dependency on initial wizard render even before the user navigates here.
+- **Suggested approach:** Dynamic import (`React.lazy` + `Suspense`) for the Quill editor.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/create/CampaignDetails.jsx
+- **Line:** 23, 24
+- **Category:** Bug / race condition
+- **Issue:** Same swallowed-error + no-toast pattern as CampaignBasicInfo.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/create/CampaignDetails.jsx
+- **Line:** 24
+- **Category:** console.log / .error / .warn left in
+
+- **Severity:** Low
+- **File:** src/components/campaigns/create/CampaignDetails.jsx
+- **Line:** 52, 67, 75, 90, 105, 126
+- **Category:** Brand color mismatches
+
+##### CampaignHomebrewStep.jsx
+
+- **Severity:** Critical
+- **File:** src/components/campaigns/create/CampaignHomebrewStep.jsx
+- **Line:** 7, 22-24
+- **Category:** Base44 leftovers
+- **Issue:** Brewery list fetched via `base44.entities.HomebrewRule.filter`. Combined with the catalog read in HouseRulesPanel and the Brewery folder elsewhere, this constitutes a substantial migration debt.
+- **Suggested approach:** Replace with Supabase `homebrew_rules` query.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/create/CampaignHomebrewStep.jsx
+- **Line:** 23, 30, 37
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Three hardcoded magic numbers: 100 (catalog page size), 30 (filter result cap). These cap the visible catalog at 100 brews and silently truncates filter results to 30 — probably surprising behavior.
+- **Suggested approach:** Use server-side search + pagination, or hoist the constants.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/create/CampaignHomebrewStep.jsx
+- **Line:** 28-38
+- **Category:** Performance
+- **Issue:** Filtering happens client-side on a 100-row dataset. For larger libraries this becomes expensive; but more importantly, the catalog is effectively limited to the most-recent 100 by the server cap. Search misses anything older.
+- **Suggested approach:** Server-side search (PostgREST `ilike`).
+
+- **Severity:** Low
+- **File:** src/components/campaigns/create/CampaignHomebrewStep.jsx
+- **Line:** 53, 73, 93, 95, 109
+- **Category:** Brand color mismatches
+- **Issue:** ~8 hex hardcodes.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/create/CampaignHomebrewStep.jsx
+- **Line:** 90-114
+- **Category:** Accessibility
+- **Issue:** Selection toggle button has no `aria-pressed`. Selected state only signaled by ring + Check icon.
+
+##### CampaignInformationStep.jsx
+
+- **Severity:** High
+- **File:** src/components/campaigns/create/CampaignInformationStep.jsx
+- **Line:** 18-32
+- **Category:** Duplicate components or near-duplicates
+- **Issue:** Renders a Description textarea AND mounts `CampaignBasicInfo` (which doesn't have description) AND mounts `CampaignConsent` — but `CampaignDetails.jsx` (Step 3 of the wizard?) also renders a description editor on its Description tab. Two separate textareas writing to `data.description`. Whichever step is visited last wins.
+- **Suggested approach:** Keep description in exactly one step.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/create/CampaignInformationStep.jsx
+- **Line:** 30
+- **Category:** Brand color mismatches
+
+##### CampaignSettingsStep.jsx
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/create/CampaignSettingsStep.jsx
+- **Line:** 79, 86, 92
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Default max_players (6), the player range `[2..8]`, and the "+ 1 GM per campaign" text duplicate the cap logic in `CampaignPreviewPanel:50`. Centralize.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/create/CampaignSettingsStep.jsx
+- **Line:** 38-46
+- **Category:** Inconsistent file naming / Tailwind issues
+- **Issue:** Uses a native `<select>` for session day but a Radix `<Select>` for time. Same form, two different control libraries — visual + a11y mismatch.
+- **Suggested approach:** Use the Radix Select for both.
+
+- **Severity:** Medium
+- **File:** src/components/campaigns/create/CampaignSettingsStep.jsx
+- **Line:** 102-105
+- **Category:** Accessibility
+- **Issue:** "Open recruitment" Switch has no `id` / `htmlFor` association with its Label. Same Label-Switch pairing problem flagged repeatedly.
+
+- **Severity:** Low
+- **File:** src/components/campaigns/create/CampaignSettingsStep.jsx
+- **Line:** 30, 41, 53, 56, 70, 82
+- **Category:** Brand color mismatches
+- **Issue:** ~7 hex hardcodes (`#1E2430`, `#2A3441`, `#0b1220`, `#37F2D1`, `#1a1f2e`).
+
+- **Severity:** Low
+- **File:** src/components/campaigns/create/CampaignSettingsStep.jsx
+- **Line:** 50, 51
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Sentinel string `"__none"` in two places to encode "no value" because Radix Select can't hold an empty string. Project-wide pattern? Hoist to a constant.
+
+
+##### Batch 1A-iii-a Summary
+
+**Files audited:** 20 (14 in `/src/components/campaigns/`, 6 in `/src/components/campaigns/create/`).
+
+**Findings by severity:**
+
+| Severity | Count |
+|----------|-------|
+| Critical | 5 |
+| High     | 36 |
+| Medium   | 51 |
+| Low      | 39 |
+| Cosmetic | 0 |
+
+**Findings by category (top buckets):**
+
+| Category | Count |
+|----------|-------|
+| Brand color mismatches | 21 |
+| Base44 leftovers | 7 |
+| Hardcoded values that should be constants | 17 |
+| Bug / race condition | 12 |
+| Real-time/state sync issues | 9 |
+| Accessibility | 14 |
+| Performance | 9 |
+| Duplicate components or near-duplicates | 6 |
+| State management smells | 3 |
+| console.log / .error / .warn left in | 8 |
+| Permission gating | 4 |
+| Broken or unused imports | 2 |
+| Dead code | 4 |
+| Inconsistent file naming | 3 |
+| Inline styles that should be Tailwind/CSS | 2 |
+| Domain (storage path / column drift / guild conflation) | 5 |
+| Semantic HTML / heading hierarchy | 2 |
+| Tailwind issues | 1 |
+| TODO/FIXME/HACK | 1 |
+| Prop validation / inconsistent prop usage | 2 |
+
+(Some findings cross-categorize — categories chosen by primary impact.)
+
+**Top systemic issues for THIS batch:**
+
+1. **The campaign-create wizard and HouseRulesPanel are still Base44-bound.** All four upload flows + the brewery catalog read + the homebrew_rules write path go through `base44.integrations.Core.UploadFile` and `base44.entities.*`. If Base44 is decommissioned, campaign creation, image upload, and house-rule editing all break in the same window. Storage uploads also bypass the documented `users/{user_id}/campaigns/{campaign_id}/` Supabase convention.
+
+2. **Two parallel ban systems and two parallel homebrew-rules shapes.** `BanListEditor.jsx` writes to `campaign_bans`; `HouseRulesPanel.BanListsSection` writes to `campaigns.settings.banned_*` JSONB. `HouseRulesPanel` writes structured JSONB to `campaigns.homebrew_rules` while `CampaignDetails.jsx` (create wizard) writes Quill HTML to the same column. Applicant-side validation only checks one source — so picks made in the legacy panels silently don't enforce.
+
+3. **Four near-duplicate campaign-card render blocks** (CampaignCarousel, CampaignGrid, RecentCampaigns, plus the apply-flow tile) with three different destination routes (`CampaignGMPanel`/`CampaignPanel`, `CampaignView`, `ActiveCampaign`). Same card, three pages. Worth a single `CampaignCard` component before another card variant lands.
+
+4. **Mutation `onError` handlers missing in 11 locations** across BreweryModsPanel, CampaignCarousel, DeleteCampaignDialog, HouseRulesPanel, CampaignBasicInfo, CampaignDetails. Server / RLS rejection produces no user feedback — users believe their action succeeded.
+
+5. **Schema column ambiguity bleeds into UI code.** `user_id || applicant_id`, `title || name`, `image_url` vs `cover_image_url`, `equipment` vs `inventory`, `description` vs `campaign_description`, `co_dm_ids` (DM) vs `CO_GM` (GM constants). Six unresolved column drifts being papered over with `||` fallbacks. Each is a future bug magnet.
+
+6. **Permission gating skipped client-side in three places** (BanListEditor, CampaignApplicationsPanel, DeleteCampaignDialog). Components rely on RLS for authorization and don't short-circuit-render for non-GMs — buttons are visible and fire mutations that fail at the server.
+
+7. **Race conditions in client-driven priority/optimistic flows.** BreweryModsPanel reorder is non-atomic; HouseRulesPanel's optimistic update keys on `["campaign", id]` while its sibling components use different cache keys; CampaignApplyFlow's `setTimeout` fires after unmount.
+
+8. **Accessibility gaps repeated across the folder:** Switch/Label disconnect (no `htmlFor`), tabs that aren't `role="tablist"` (BanListEditor), card-as-div with `onClick` and no keyboard fallback (CampaignCarousel, CampaignApplyFlow tiles), drag canvas with no touch/keyboard support (ImagePositionEditor), missing `aria-pressed`/`aria-selected` on toggle buttons (CampaignConsent rating cards, CampaignHomebrewStep selection).
+
