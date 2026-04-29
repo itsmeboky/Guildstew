@@ -2592,3 +2592,1290 @@ Splits (Free 50/50, Adventurer 30/70, Veteran/Guild 20/80) match the brief.
 
 8. **Accessibility gaps repeated across the folder:** Switch/Label disconnect (no `htmlFor`), tabs that aren't `role="tablist"` (BanListEditor), card-as-div with `onClick` and no keyboard fallback (CampaignCarousel, CampaignApplyFlow tiles), drag canvas with no touch/keyboard support (ImagePositionEditor), missing `aria-pressed`/`aria-selected` on toggle buttons (CampaignConsent rating cards, CampaignHomebrewStep selection).
 
+
+### Batch 1A-iii-b: session + GM + player views
+
+#### /src/components/session/
+
+##### `SessionModal.jsx`
+
+- **Severity:** High
+- **File:** src/components/session/SessionModal.jsx
+- **Line:** 30-48
+- **Category:** Accessibility
+- **Issue:** Modal renders as a plain `<div>` — no `role="dialog"`, no `aria-modal="true"`, no `aria-labelledby` pointing at the `<h2>`, and no focus trap. Initial focus also is not moved into the modal, so keyboard users stay on the page underneath. The Escape handler exists but the rest of the dialog accessibility contract is missing.
+- **Suggested approach:** Replace with the existing shadcn `Dialog` primitive (Radix) which provides aria attributes, focus trap, focus return, and Escape handling out of the box; or wrap the existing markup with the same primitives manually.
+
+- **Severity:** Medium
+- **File:** src/components/session/SessionModal.jsx
+- **Line:** 32
+- **Category:** Accessibility
+- **Issue:** Backdrop `<div>` with `onClick={onClose}` is not keyboard-reachable and has no `role="button"` / `aria-label`. The Escape handler covers keyboard users but assistive tech reading the backdrop sees nothing.
+- **Suggested approach:** Either keep the backdrop as a presentational click target while documenting Escape as the keyboard equivalent, or use the Radix Dialog overlay which handles this.
+
+- **Severity:** Medium
+- **File:** src/components/session/SessionModal.jsx
+- **Line:** 33
+- **Category:** Tailwind issues / Hardcoded values
+- **Issue:** Arbitrary Tailwind values `w-[80vw] h-[80vh]` plus hardcoded color `bg-[#0f1219]`. Comment above the component says "90vw × 85vh" but the JSX is "80vw × 80vh" — comment and code drifted.
+- **Suggested approach:** Move panel sizing into theme/utility classes (or a Dialog variant) and lift the surface color into the design-token layer; update the docblock to match the actual sizes.
+
+- **Severity:** Low
+- **File:** src/components/session/SessionModal.jsx
+- **Line:** 33-35
+- **Category:** Brand color mismatches
+- **Issue:** `#0f1219` and `border-slate-700` instead of documented `#1B2535` / brand surface. (Counted: 2 brand-color hits in this file.)
+- **Suggested approach:** Replace with brand surface tokens once the design decision lands.
+
+##### `content/AdventuringPartyContent.jsx`
+
+- **Severity:** High
+- **File:** src/components/session/content/AdventuringPartyContent.jsx
+- **Line:** 4, 33, 40, 46
+- **Category:** Base44 leftovers
+- **Issue:** Reads characters, NPCs, and (notably) the entire UserProfile list through `base44.entities.*`. The Supabase migration target replaces these calls; leaving the modal on Base44 means it will dark when the legacy adapter is decommissioned.
+- **Suggested approach:** Migrate to Supabase queries via the canonical client; scope profile fetches to participants of this campaign.
+
+- **Severity:** High
+- **File:** src/components/session/content/AdventuringPartyContent.jsx
+- **Line:** 38-42
+- **Category:** Performance
+- **Issue:** `useQuery({ queryKey: ["allUserProfiles"], queryFn: () => base44.entities.UserProfile.list() })` pulls *every* user profile in the system to resolve at most a handful of party members. Scales linearly with site users.
+- **Suggested approach:** Filter by the campaign's player_ids (or join through participants) and key the query on campaignId; never list-all profiles client-side.
+
+- **Severity:** High
+- **File:** src/components/session/content/AdventuringPartyContent.jsx
+- **Line:** 53-56
+- **Category:** Bug / Domain — column drift
+- **Issue:** `playerCharacters = characters.filter((c) => c.name)` silently swallows characters whose name lives on `c?.stats?.name` — inconsistent with `PartyRow` which already accepts `c.race || c?.stats?.race`. Members who only have a stats-level name are dropped from the party list.
+- **Suggested approach:** Pick one canonical column (most likely top-level `name`) and write a one-shot migration; until then mirror the same fallback used in PartyRow.
+
+- **Severity:** Medium
+- **File:** src/components/session/content/AdventuringPartyContent.jsx
+- **Line:** 51
+- **Category:** Permission gating
+- **Issue:** GM detection runs through `isUserGM(campaign, user?.id)` but there's no early-return when `user` or `campaign` is undefined; a brief un-authed render shows the panel as not-GM, which then flickers to GM once auth resolves. There's also no check that the viewer is a member of the campaign at all — anyone with the modal mounted sees every character + relationships graph for non-owned chars when `isGM` resolves true via stale data.
+- **Suggested approach:** Render a loading state until `user` and `campaign` are both ready; gate the entire pane on `isMember(campaign, user)` first, then differentiate GM vs player capabilities.
+
+- **Severity:** Medium
+- **File:** src/components/session/content/AdventuringPartyContent.jsx
+- **Line:** 99-119
+- **Category:** Accessibility
+- **Issue:** TabsList uses shadcn primitives (good), but icons inside each TabsTrigger have no `aria-hidden` and the trigger label is plain text — screen readers will read both the icon glyph (lucide adds an `aria-hidden` by default — good) and the text. More importantly, `flex-wrap h-auto` produces a multi-row tab list with no visual indicator of grouping; consider also that the "Relationships" tab disappears for non-GM/non-owners which can shift focus mid-session.
+- **Suggested approach:** Verify lucide icons receive `aria-hidden`; keep relationships tab rendered but `disabled` (with title) so the tab order doesn't shift between viewers.
+
+- **Severity:** Medium
+- **File:** src/components/session/content/AdventuringPartyContent.jsx
+- **Line:** 100, 103, 106, 110, 114, 117, 176, 184, 192, 195
+- **Category:** Brand color mismatches
+- **Issue:** 10 inline `#37F2D1` references plus dark surfaces (`#050816`, `#0b1220`, `#1e293b`). (Counted: 13 brand-color hits in this file.)
+- **Suggested approach:** Migrate to brand tokens.
+
+- **Severity:** Low
+- **File:** src/components/session/content/AdventuringPartyContent.jsx
+- **Line:** 183
+- **Category:** Accessibility
+- **Issue:** `<img alt="">` on character portrait. Decorative-empty alt is defensible because the character name is rendered next to it, but the `<img>` has no `loading="lazy"` either; for a long roster on a slow connection this matters.
+- **Suggested approach:** Add `loading="lazy"` and a width/height to prevent CLS.
+
+##### `content/CampaignArchivesContent.jsx`
+
+- **Severity:** High
+- **File:** src/components/session/content/CampaignArchivesContent.jsx
+- **Line:** 5-10
+- **Category:** Performance
+- **Issue:** Six full Page components are imported eagerly at module load (`CampaignNPCs`, `CampaignItems`, `CampaignMonsters`, `CampaignSpells`, `CampaignAbilities`, `CampaignWorldLore`). Whenever the session modal mounts, every compendium page (and its dependency tree — Quill, dice, etc.) is in the bundle even though the modal might never open Archives.
+- **Suggested approach:** Convert each `Component` reference to `React.lazy(() => import(...))` and wrap the rendered `<Page />` in `<Suspense>`.
+
+- **Severity:** High
+- **File:** src/components/session/content/CampaignArchivesContent.jsx
+- **Line:** 5-10, 77
+- **Category:** State management smells / Architectural concern
+- **Issue:** Importing route-level pages from `src/pages/*` into a component is a circular-architecture smell — pages are normally consumers of components, not the other way around. Also, the pages must accept an `embedded` prop and switch their layout — that prop wires modal-specific concerns into routes.
+- **Suggested approach:** Extract the actual content panes from each page into shared sub-components under `src/components/compendium/*` and have both the routes and this modal consume them, instead of routing the modal through page-level shells.
+
+- **Severity:** Medium
+- **File:** src/components/session/content/CampaignArchivesContent.jsx
+- **Line:** 39-55
+- **Category:** Accessibility
+- **Issue:** Section landing card `<button>`s have correct `type="button"` but no `aria-label`; the description text is small and provides context but is not associated via `aria-describedby`. Grid is `grid-cols-3` with no responsive fallback for narrow modals.
+- **Suggested approach:** Add `aria-label` per section button (or rely on `<h3>` if associated via `aria-labelledby`); use `grid-cols-1 md:grid-cols-2 lg:grid-cols-3`.
+
+- **Severity:** Low
+- **File:** src/components/session/content/CampaignArchivesContent.jsx
+- **Line:** 47-49
+- **Category:** Brand color mismatches
+- **Issue:** `bg-[#1a1f2e]` surface and `text-[#37F2D1]` icon. (Counted: 2 brand-color hits.)
+- **Suggested approach:** Migrate to brand tokens.
+
+##### `content/CampaignSettingsContent.jsx`
+
+- **Severity:** High
+- **File:** src/components/session/content/CampaignSettingsContent.jsx
+- **Line:** 5, 46
+- **Category:** Base44 leftovers
+- **Issue:** Every save goes through `base44.entities.Campaign.update`. This panel is the live in-session settings editor and will brown out when Base44 is decommissioned.
+- **Suggested approach:** Migrate to a Supabase mutation against `campaigns` keyed on `game_master_id`.
+
+- **Severity:** High
+- **File:** src/components/session/content/CampaignSettingsContent.jsx
+- **Line:** entire file
+- **Category:** Permission gating / GM-only leak
+- **Issue:** The component performs no client-side check that the viewer is the campaign owner or a co-DM before exposing the mutate-everything UI. A non-GM with this modal route open (e.g. dev-tool tinkering, a leaked link, or a routing bug) sees all settings switches and fires update mutations that rely entirely on RLS to reject. The mole picker even leaks the player_ids list.
+- **Suggested approach:** Short-circuit render with a "GM only" placeholder when `campaign.game_master_id !== user.id && !campaign.co_dm_ids?.includes(user.id)`; the parent modal also should not open this content for non-GM viewers.
+
+- **Severity:** High
+- **File:** src/components/session/content/CampaignSettingsContent.jsx
+- **Line:** 55, 59, 64, 213
+- **Category:** Domain — column drift / Co-DM vs Co-GM nomenclature
+- **Issue:** Field is `co_dm_ids` everywhere here, but the wider codebase has been mixing `co_dm_ids` with a `CO_GM` constant (flagged in the previous batch summary). UI label literally reads "Co-DM / Co-GM" — confirming the naming is unresolved.
+- **Suggested approach:** Pick one (`co_gm_ids` to match the GM terminology used everywhere else) and migrate; update the UI label to match.
+
+- **Severity:** Medium
+- **File:** src/components/session/content/CampaignSettingsContent.jsx
+- **Line:** 28, 38, 138-145
+- **Category:** Domain — guild systems
+- **Issue:** Toggle is named `guild_hall_enabled` and labeled "Guild Hall & Training" — this is the in-campaign minigame `guild_halls` (correct) but no comment makes that clear; future code-readers may conflate with the subscription `guilds` table. Worth a domain comment given the active conflation risk flagged for this batch.
+- **Suggested approach:** Add a single-line comment documenting that this controls the in-campaign `guild_halls` minigame, not the subscription `guilds` table.
+
+- **Severity:** Medium
+- **File:** src/components/session/content/CampaignSettingsContent.jsx
+- **Line:** 79
+- **Category:** Domain — column drift
+- **Issue:** `consent_rating || campaign_rating` fallback — same pattern called out in the Batch 1A-iii-a summary. Two columns persist in production data.
+- **Suggested approach:** Migrate the legacy `campaign_rating` column into `consent_rating` and drop the `||`.
+
+- **Severity:** Medium
+- **File:** src/components/session/content/CampaignSettingsContent.jsx
+- **Line:** 35-43
+- **Category:** Bug / state sync
+- **Issue:** `useEffect` resets local state only on `campaign?.id` change. If the GM switches a setting in another tab/window, the live realtime payload updates `campaign.session_day` but the local state in this component does not re-sync because the id is identical, leaving stale toggles visible.
+- **Suggested approach:** Either drive the controls directly off `campaign.*` (no local state) since every onChange immediately mutates server-side anyway, or include the relevant fields in the dependency array.
+
+- **Severity:** Medium
+- **File:** src/components/session/content/CampaignSettingsContent.jsx
+- **Line:** 50-52, 58-72
+- **Category:** Real-time / state sync
+- **Issue:** All four mutations only invalidate `["campaign", campaignId]`. The campaign object also feeds queries keyed on `["campaigns", "byUser", ...]`, `["campaign", "session", id]`, etc. (per the patterns elsewhere in the codebase) — those will not refresh.
+- **Suggested approach:** Either invalidate by predicate (`predicate: (q) => q.queryKey[0] === "campaign"`) or list every key explicitly.
+
+- **Severity:** Low
+- **File:** src/components/session/content/CampaignSettingsContent.jsx
+- **Line:** 74-77
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Fallback display `Player ${String(uid).slice(0, 4)}` is a UX shrug — silently truncated UUIDs surface to GMs. Also an i18n risk.
+- **Suggested approach:** Either ensure profiles list is always present (parent should pass `allUserProfiles` non-empty) or render "Unknown player" with a warn-once console call gated behind dev mode.
+
+- **Severity:** Low
+- **File:** src/components/session/content/CampaignSettingsContent.jsx
+- **Line:** 21
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Local `DAYS` array re-declared in many places across the codebase (also in QuickNotes-adjacent and scheduling code).
+- **Suggested approach:** Lift to a shared constant alongside `TIME_OPTIONS` in `src/utils/sessionTime`.
+
+- **Severity:** Low
+- **File:** src/components/session/content/CampaignSettingsContent.jsx
+- **Line:** various
+- **Category:** Brand color mismatches
+- **Issue:** `#37F2D1`, `#050816`, `#0f1219`, `#1a1f2e`. (Counted: ~12 brand-color hits.)
+- **Suggested approach:** Migrate to brand tokens.
+
+- **Severity:** Low
+- **File:** src/components/session/content/CampaignSettingsContent.jsx
+- **Line:** 86
+- **Category:** Tailwind issues
+- **Issue:** `grid-cols-2` with no responsive breakpoints inside an 80vw modal means on narrow screens the day/time selects squeeze.
+- **Suggested approach:** `grid-cols-1 sm:grid-cols-2`.
+
+##### `content/QuickNotesContent.jsx`
+
+- **Severity:** High
+- **File:** src/components/session/content/QuickNotesContent.jsx
+- **Line:** 5, 88, 94, 103, 129
+- **Category:** Base44 leftovers
+- **Issue:** Both `Campaign.update` and `WorldLoreEntry.create` go through `base44.entities.*`. Worse, the WorldLoreEntry creation path will not respect Supabase RLS once migrated unless the call signature is preserved.
+- **Suggested approach:** Rewrite as Supabase mutations; pre-validate visibility / category on the server.
+
+- **Severity:** High
+- **File:** src/components/session/content/QuickNotesContent.jsx
+- **Line:** entire file
+- **Category:** Permission gating / GM-only leak
+- **Issue:** No GM check anywhere. Notes are stored under `campaigns.settings.quick_notes` — meaning a non-GM with this content mounted can write GM-private notes into the campaign's settings JSONB and create world-lore entries on behalf of the campaign. There is also no membership check.
+- **Suggested approach:** Gate the panel render on GM/co-GM; the parent SessionModal opener should also refuse to open it for non-GMs.
+
+- **Severity:** High
+- **File:** src/components/session/content/QuickNotesContent.jsx
+- **Line:** 69-91
+- **Category:** Bug / race condition
+- **Issue:** Save mutation does an unconditional read-modify-write of the entire `quick_notes` array on `campaigns.settings`. If two tabs (or the GM and a co-GM) save concurrently, the later write wipes the earlier one — no `updated_at` check, no PATCH semantics, no array-merge on the server.
+- **Suggested approach:** Move quick notes to their own table with row-level keys, OR write a Supabase RPC that merges into the JSONB array atomically using `jsonb_set` / `jsonb_array_append`.
+
+- **Severity:** High
+- **File:** src/components/session/content/QuickNotesContent.jsx
+- **Line:** 50-55
+- **Category:** Domain — column drift
+- **Issue:** Reads from `campaign?.settings?.quick_notes` then falls back to `campaign?.gm_quick_notes`. Same dual-shape problem flagged for HouseRulesPanel in the prior batch — JSONB-in-settings vs top-level column.
+- **Suggested approach:** One-shot migration that copies legacy `gm_quick_notes` into `settings.quick_notes` and drop the column; remove the fallback.
+
+- **Severity:** Medium
+- **File:** src/components/session/content/QuickNotesContent.jsx
+- **Line:** 100, 109
+- **Category:** Domain — column drift
+- **Issue:** Sets `created_by: user?.id`, but the canonical campaign-owner column is `game_master_id`. WorldLoreEntry's `created_by` may be correct for that table, but the mix is worth verifying — there's no consistent author column across entities.
+- **Suggested approach:** Verify the WorldLoreEntry schema; if its author column has been renamed, update accordingly.
+
+- **Severity:** Medium
+- **File:** src/components/session/content/QuickNotesContent.jsx
+- **Line:** 248
+- **Category:** Accessibility
+- **Issue:** `confirm("Delete this note?")` uses `window.confirm` — not screen-reader-friendly, not stylable, blocks the entire window.
+- **Suggested approach:** Use the project's existing AlertDialog primitive.
+
+- **Severity:** Medium
+- **File:** src/components/session/content/QuickNotesContent.jsx
+- **Line:** 220-222
+- **Category:** Accessibility
+- **Issue:** Visibility option labels include leading emoji (`🔒 GM Only`, `🌍 Public`, `👁️ Selected`) as the only way to communicate state. Screen readers read the emoji name (which can be inconsistent across platforms) and there is no textual prefix for SR users.
+- **Suggested approach:** Pair the emoji with `aria-hidden` icons + plain text, or use lucide icons with explicit labels.
+
+- **Severity:** Low
+- **File:** src/components/session/content/QuickNotesContent.jsx
+- **Line:** 39-41
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `makeId` reinvents an id-generator. Codebase elsewhere uses `crypto.randomUUID()` and/or `nanoid`.
+- **Suggested approach:** Replace with `crypto.randomUUID()`.
+
+- **Severity:** Low
+- **File:** src/components/session/content/QuickNotesContent.jsx
+- **Line:** various
+- **Category:** Brand color mismatches
+- **Issue:** 8 inline `#0f1219`, `#1a1f2e`, `#37F2D1` references. (Counted: 8.)
+- **Suggested approach:** Migrate to brand tokens.
+
+- **Severity:** Low
+- **File:** src/components/session/content/QuickNotesContent.jsx
+- **Line:** 173-181
+- **Category:** Performance
+- **Issue:** `note.content?.slice(0, 120)` runs every render of the list; for many notes it's negligible but combined with `divide-y` and per-row state highlighting, the list rerenders on every keystroke in the editor (because draft state lives in the same component).
+- **Suggested approach:** Memoize the note list (`useMemo`) keyed on `savedNotes` and `draft.id`, or split the editor into a child component to localize re-renders.
+
+#### /src/components/gm/
+
+##### `ActionBar.jsx`
+
+- **Severity:** High
+- **File:** src/components/gm/ActionBar.jsx
+- **Line:** 8-14
+- **Category:** Dead code / unfinished feature
+- **Issue:** Hard-coded fallback HP (34/52), AC (13), initiative (+2), speed (30) shipped as "demo defaults" if `character` is missing fields. `spellIcons = Array(12).fill(null)` is explicitly labeled "Mock spell icons - replace with actual character spells". This component looks like a designer-prototype that was wired up without finishing the data plumbing.
+- **Suggested approach:** Either (a) gate the component behind a "character is fully loaded" precondition and render skeleton on missing data, or (b) remove the hardcoded defaults so missing data renders blanks; in both cases wire the spell row to the character's actual spell list.
+
+- **Severity:** High
+- **File:** src/components/gm/ActionBar.jsx
+- **Line:** 4
+- **Category:** Domain — GM/Player permission leak (HIGH priority)
+- **Issue:** This file lives under `/components/gm/` but renders an action bar that visually mirrors a *player* character sheet (HP, spell slots, action buttons). There's no GM-only/Player-only branching; the file's location implies GM but the contents are player-controls. If the player view also imports this, a non-owner GM can inadvertently fire actions on a player's character; if it's only for GM, the component is in the wrong folder.
+- **Suggested approach:** Confirm consumer (GM page or player page); move into `/components/character/` if shared, or `/components/player/` if player-only. Add an `isOwner` / `canEdit` prop and gate the buttons.
+
+- **Severity:** High
+- **File:** src/components/gm/ActionBar.jsx
+- **Line:** 83-104, 110-125
+- **Category:** Accessibility
+- **Issue:** Every action button is an icon-only `<button>` with a glyph (`♪`, `▶`, etc.) and **no `aria-label`, no `type="button"`, no tooltip text, no keyboard hint**. Spell slot buttons use literal Unicode glyphs as content. None of these buttons have `onClick` handlers either, so they're decorative-but-focusable.
+- **Suggested approach:** Add `type="button"`, `aria-label`, and either wire up real handlers or remove the buttons until the feature is implemented; convert the glyphs to lucide icons with `aria-hidden`.
+
+- **Severity:** Medium
+- **File:** src/components/gm/ActionBar.jsx
+- **Line:** 11
+- **Category:** Bug / division by zero
+- **Issue:** `(currentHp / maxHp) * 100` — if `maxHp === 0` (edge case, unconscious creature, dehydrated NPC), this divides by zero and sends `Infinity` / `NaN` into `style.width` and the `hpBarColor` threshold function.
+- **Suggested approach:** Guard with `maxHp > 0 ? ... : 0`.
+
+- **Severity:** Low
+- **File:** src/components/gm/ActionBar.jsx
+- **Line:** various
+- **Category:** Brand color mismatches
+- **Issue:** Inline hex colors `#050b18`, `#141b30`, `#252b3d`, `#343a4f`, `#1c2340`, `#0ea5e9`, `#020617`, `#38bdf8`, `#111827`, `#1f2937`. (Counted: ~15 brand-color hits.)
+- **Suggested approach:** Migrate to brand tokens.
+
+- **Severity:** Cosmetic
+- **File:** src/components/gm/ActionBar.jsx
+- **Line:** 13
+- **Category:** TODO/FIXME/HACK
+- **Issue:** `// Mock spell icons - replace with actual character spells` — explicit unfinished-work marker.
+- **Suggested approach:** Tracked in the dead-code finding above.
+
+##### `CampaignLog.jsx`
+
+- **Severity:** High
+- **File:** src/components/gm/CampaignLog.jsx
+- **Line:** 2, 30, 36, 78
+- **Category:** Base44 leftovers
+- **Issue:** Polled live chat reads/writes go through `base44.entities.CampaignLogEntry`. Live chat is the highest-traffic component in a session — if Base44 sunsets, every active table breaks at once.
+- **Suggested approach:** Migrate to Supabase realtime channels; replace 5s polling with a `postgres_changes` subscription.
+
+- **Severity:** High
+- **File:** src/components/gm/CampaignLog.jsx
+- **Line:** 26-47
+- **Category:** Bug / Domain — column drift
+- **Issue:** Defensive try/catch falls back from `created_date` to `created_at`, swallowing errors silently if both fail. Code in the file then sorts/orders by `entry.created_date` (lines 353, 387, 459) — if the schema is on `created_at`, the timestamps will render as "Invalid date" via moment but no error fires. Inline comment at lines 22-25 admits this is a known issue.
+- **Suggested approach:** Pick the canonical column (`created_at` matches Postgres/Supabase convention), do a one-shot rename if needed, remove the fallback. Same drift was flagged in earlier batches.
+
+- **Severity:** High
+- **File:** src/components/gm/CampaignLog.jsx
+- **Line:** 54
+- **Category:** Domain — column drift / wrong join key
+- **Issue:** `characters?.find(c => c.created_by === currentUser?.email)` — joins characters to the user via `email`. Email is mutable, can be re-used after deletion, and is not the canonical user FK. The character should be located by `user_id` against `currentUser.id`.
+- **Suggested approach:** Match on `c.user_id === currentUser.id`; if `created_by` is the only field that exists, migrate it to a UUID FK.
+
+- **Severity:** High
+- **File:** src/components/gm/CampaignLog.jsx
+- **Line:** 63
+- **Category:** Domain — column drift
+- **Issue:** `characters?.find(c => c.created_by === userProfile?.email || entry.character_id === c.id)` — same email-join hazard PLUS using `||` in find means a stale email match can shadow the explicit `character_id` correlation.
+- **Suggested approach:** Match strictly on `entry.character_id === c.id` first, then fall back to user FK; never fall back to email.
+
+- **Severity:** High
+- **File:** src/components/gm/CampaignLog.jsx
+- **Line:** 134-147
+- **Category:** Domain — GM/Player permission leak (HIGH priority)
+- **Issue:** Visibility filter is **purely client-side**. `is_gm_only` and `is_whisper` rows are still fetched from the server and only hidden in JS — anyone with React DevTools or a network tap reads the full feed. Whisper privacy is broken.
+- **Suggested approach:** Filter on the server (RLS policy that checks the requesting user's id against `whisper_target_ids`/`is_gm_only` + GM membership). The client filter should be a defense-in-depth layer, not the only layer.
+
+- **Severity:** High
+- **File:** src/components/gm/CampaignLog.jsx
+- **Line:** 49-51
+- **Category:** Domain — Co-DM nomenclature
+- **Issue:** `isGM` evaluates true for either GM or co-DM, then `isCoGM` is computed but never used. Worse, `isGM` becomes a boolean that conflates two distinct roles — breaks any future "true GM only" gate that needs to differentiate.
+- **Suggested approach:** Rename: `isOwner` for game_master_id match, `isCoGM` for co-DM, `isGMOrCoGM` for either. Drop the unused `isCoGM` until needed.
+
+- **Severity:** High
+- **File:** src/components/gm/CampaignLog.jsx
+- **Line:** 26-47
+- **Category:** Performance / Real-time/state sync issues
+- **Issue:** Polls every 5s, retries 2× with 5s delay on failure. The query also fetches the entire log every poll — for an active campaign with thousands of entries, this is hundreds of KB/poll/user.
+- **Suggested approach:** Switch to Supabase realtime subscription on inserts; paginate initial load to last N entries.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CampaignLog.jsx
+- **Line:** 38, 87
+- **Category:** console.log / .error / .warn left in
+- **Issue:** Two `console.error` calls in production paths.
+- **Suggested approach:** Pipe through the project's logger or remove; toast already covers UX-level reporting.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CampaignLog.jsx
+- **Line:** 99-117
+- **Category:** Bug / race condition
+- **Issue:** `handleSendMessage` clears `setMessage("")` only in `onSuccess`, but the input is not disabled while pending — typing during a slow request can race with the `setMessage("")` clear and silently drop characters.
+- **Suggested approach:** Disable the input while `createEntryMutation.isPending`, or clear optimistically before the network round trip.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CampaignLog.jsx
+- **Line:** 215-249
+- **Category:** Bug / layout
+- **Issue:** The "scroll to bottom" floating button uses `absolute bottom-16 right-4` but the parent has no `relative` positioning context — it positions against the nearest ancestor with `position: relative`, which may be the modal root. Probably renders in the wrong corner.
+- **Suggested approach:** Add `relative` to the outer flex column.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CampaignLog.jsx
+- **Line:** 5
+- **Category:** Performance
+- **Issue:** Imports the full `moment` library (~290KB unminified). Date format is trivial ("h:mm A" / "MM/DD/YYYY h:mm A").
+- **Suggested approach:** Replace with `date-fns` (already a tree-shakable dep elsewhere) or native `Intl.DateTimeFormat`.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CampaignLog.jsx
+- **Line:** 220
+- **Category:** Bug
+- **Issue:** `onScroll` reads `e.target` — in React, this is the DOM element; works, but `setAutoScroll` fires on every scroll event without throttling, causing a re-render per scroll-pixel.
+- **Suggested approach:** Throttle, or use `requestAnimationFrame` with a memoized callback.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CampaignLog.jsx
+- **Line:** 192-212, 256-303
+- **Category:** Accessibility
+- **Issue:** Filter pills and whisper/GM-only toggles are `<button>`s with no `aria-pressed` for their on/off state. Whisper recipient picker uses a native `<select>` with `text-purple-200` on `bg-[#111827]` — color contrast risk. The whisper indicator marker `(whisper)` and `(GM only)` rely on color (purple/amber) only.
+- **Suggested approach:** Add `aria-pressed`, ensure WCAG AA contrast on the select, add a non-color glyph for the whisper/GM marker.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CampaignLog.jsx
+- **Line:** 343, 378
+- **Category:** Accessibility
+- **Issue:** Avatar `<img alt="">` plus `?` placeholder character — for users without an avatar, screen readers announce nothing and sighted readers see `?`.
+- **Suggested approach:** Use `alt={displayName}` or a textual fallback; `?` should be `aria-hidden` with a `sr-only` "no avatar" label.
+
+- **Severity:** Low
+- **File:** src/components/gm/CampaignLog.jsx
+- **Line:** various
+- **Category:** Brand color mismatches
+- **Issue:** ~22 inline brand-mismatch hex colors (`#22c5f5` cyan variant, `#0a1628`, `#111827`, `#1e293b`, `#1a1f2e`, `#38bdf8`).
+- **Suggested approach:** Migrate to brand tokens.
+
+- **Severity:** Low
+- **File:** src/components/gm/CampaignLog.jsx
+- **Line:** 282
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Same `Player ${String(p.user_id).slice(0, 4)}` UUID-truncation fallback as CampaignSettingsContent — duplicate logic.
+- **Suggested approach:** Extract a shared `displayPlayerName(profile, uid)` helper.
+
+##### `CharacterSelector.jsx`
+
+- **Severity:** High
+- **File:** src/components/gm/CharacterSelector.jsx
+- **Line:** 130-309
+- **Category:** Duplicate components or near-duplicates
+- **Issue:** This component is a self-built modal with its own backdrop, focus rules, and embedded `<style>` block — duplicates the existing `SessionModal.jsx` and the shadcn Dialog primitive. Three different modal implementations now ship.
+- **Suggested approach:** Reuse the shadcn Dialog or SessionModal; lift the search/filter UI into the body.
+
+- **Severity:** High
+- **File:** src/components/gm/CharacterSelector.jsx
+- **Line:** entire file
+- **Category:** Accessibility
+- **Issue:** Custom modal has no `role="dialog"`/`aria-modal`/focus trap; close button (line 136-141) has no `aria-label`; the X icon is unnamed; backdrop click closes via `onClick` on the parent without ESC handler at all. Filter pill button (180) doesn't expose `aria-pressed` for its toggle state. Empty-state graphics use literal emoji `👹` / `👤` (line 340-341).
+- **Suggested approach:** Switch to the shadcn Dialog (free a11y), label icon-only buttons, replace emoji with lucide icons.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CharacterSelector.jsx
+- **Line:** 7-42
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `CR_OPTIONS`, `SIZE_OPTIONS`, `TYPE_OPTIONS` are duplicates of similar arrays in the bestiary/compendium code (CampaignMonsters page).
+- **Suggested approach:** Hoist into `src/constants/dnd.js` (or wherever the dnd5e static lives) and import.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CharacterSelector.jsx
+- **Line:** 50, 52
+- **Category:** Bug
+- **Issue:** `parseInt(num) / parseInt(denom)` — no radix arg (lint warning), and no zero-denominator check; a malformed CR like `"1/0"` would yield Infinity.
+- **Suggested approach:** `parseInt(num, 10)` and guard `denom > 0`.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CharacterSelector.jsx
+- **Line:** 291-306
+- **Category:** Inline styles that should be Tailwind/CSS / Duplicate components
+- **Issue:** Inline `<style>{...}` block re-declares `.custom-scrollbar` rules that are already declared in `index.css`/global stylesheet (the same class is used in CombatQueue.jsx without a local declaration, confirming a global already exists). Duplicate scoped styles.
+- **Suggested approach:** Remove the local `<style>` block; rely on the global definition.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CharacterSelector.jsx
+- **Line:** 311-374
+- **Category:** Domain — column drift
+- **Issue:** `CharacterCard` reads `character.image_url || character.avatar_url`, `character.challenge_rating ?? character.cr`, `stats.hit_points` which can be a number OR object. The component is papering over four different schemas in one render path.
+- **Suggested approach:** Normalize at the data-loader edge so every monster/NPC has a consistent `imageUrl`, `cr`, `hp` shape.
+
+- **Severity:** Low
+- **File:** src/components/gm/CharacterSelector.jsx
+- **Line:** various
+- **Category:** Brand color mismatches
+- **Issue:** ~15 inline `#22c5f5`, `#37F2D1`, `#050816`, `#1a1f2e`, `#111827`, `#0b1220`, `#38bdf8`.
+- **Suggested approach:** Migrate to brand tokens.
+
+##### `CombatQueue.jsx`
+
+- **Severity:** Critical
+- **File:** src/components/gm/CombatQueue.jsx
+- **Line:** 20-33, 81
+- **Category:** Bug / race condition
+- **Issue:** `markMonsterEncountered` does a read-modify-write on `campaigns.encountered_monsters` with no concurrency control. Two players in two tabs adding two different monsters simultaneously will silently lose one of the entries (last write wins). The fire-and-forget `.catch(() => {})` swallows even the lost write.
+- **Suggested approach:** Use a Supabase RPC or `array_append` with a single SQL update; never read-modify-write JSONB/array columns from the client.
+
+- **Severity:** High
+- **File:** src/components/gm/CombatQueue.jsx
+- **Line:** 8, 23, 30
+- **Category:** Base44 leftovers
+- **Issue:** Reads/writes `campaigns.encountered_monsters` through `base44.entities.Campaign`. Combat queue is the highest-traffic GM surface — a Base44 outage breaks combat.
+- **Suggested approach:** Migrate to Supabase.
+
+- **Severity:** High
+- **File:** src/components/gm/CombatQueue.jsx
+- **Line:** 44, 58-61
+- **Category:** Real-time/state sync issues
+- **Issue:** Combat queue lives in `localStorage` only. If the GM has the campaign open on two devices (laptop + tablet at the table), the queues diverge. There is also no realtime broadcast to players — they cannot see what's queued without server state.
+- **Suggested approach:** Move combat queue to a server table (`combat_state`) with Supabase realtime; the localStorage fallback is acceptable as offline cache only.
+
+- **Severity:** High
+- **File:** src/components/gm/CombatQueue.jsx
+- **Line:** 35-296
+- **Category:** Permission gating / Domain — GM-only leak
+- **Issue:** No GM check anywhere. Component receives `campaignId` and mutates campaign state. Same defense-only-via-RLS posture flagged across this batch.
+- **Suggested approach:** Gate render on `campaign.game_master_id === user.id || co_dm_ids.includes(user.id)`.
+
+- **Severity:** High
+- **File:** src/components/gm/CombatQueue.jsx
+- **Line:** 103
+- **Category:** Bug / id collision
+- **Issue:** `queueId: Date.now() + i` — when adding a quantity of monsters in a tight loop, `Date.now()` returns the same millisecond for adjacent iterations and only `i` distinguishes them. If a second batch is added the same millisecond from a different click, ids can collide.
+- **Suggested approach:** `crypto.randomUUID()`.
+
+- **Severity:** High
+- **File:** src/components/gm/CombatQueue.jsx
+- **Line:** entire file
+- **Category:** Accessibility (HIGH for combat/initiative interactions)
+- **Issue:** Combat is the most keyboard-frequented UI in the app; here:
+  - The combatant tile (lines 191-252) is a `<div>` with hover-only edit/remove buttons — invisible & unreachable via keyboard.
+  - The hover tooltip (lines 246-251) shows the combatant's name; without hover, screen-reader/keyboard users have no name affordance.
+  - Faction badge color (lines 235-243) is the only signal of friend/foe — color-only encoding.
+  - All custom dialogs lack focus trap, role=dialog, aria-modal, aria-labelledby.
+  - Many icon-only buttons (X, ChevronLeft/Right, Package, Trash2) lack `aria-label`.
+- **Suggested approach:** Convert combatant tile to `<button>`, expose name as visible label or `aria-label`, add a non-color glyph for faction, switch dialogs to shadcn Dialog.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CombatQueue.jsx
+- **Line:** 47-55
+- **Category:** console.log / .error / .warn left in
+- **Issue:** `console.error("Failed to parse saved loadouts", e)` runs at module-init for any user with a corrupt localStorage entry — noisy in production.
+- **Suggested approach:** Pipe through logger; fall back silently.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CombatQueue.jsx
+- **Line:** 5
+- **Category:** Inconsistent file naming
+- **Issue:** Imports `./monsterEnrichment` (lowercase) but the file is `monsterEnrichment.jsx` while sibling React component files use PascalCase. Non-component utility file with a `.jsx` extension is misleading.
+- **Suggested approach:** Rename to `.js`; or move the helper out of `/components/gm/` into `/utils/`.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CombatQueue.jsx
+- **Line:** 67, 359-361
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `12` (max queue size) and `visibleCount = 6` are duplicated in three places (cap, scroll math, UI label). Quantity max also pinned at 12 in the input.
+- **Suggested approach:** Lift to `MAX_QUEUE_SIZE` constant.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CombatQueue.jsx
+- **Line:** 297-528, 530-777
+- **Category:** State management smells / Component size
+- **Issue:** `AddMonsterDialog` and `EditLoadoutDialog` are 230 + 250 lines and live inline. Each owns its own state and search logic. The file is 778 lines in total.
+- **Suggested approach:** Split into separate files; consider extracting common dialog frame.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CombatQueue.jsx
+- **Line:** 549-555
+- **Category:** Bug
+- **Issue:** `monster.inventory.find(i => i.name === item.name)` — name-as-key collides for items with duplicate names but different magic properties (e.g. two "Longsword" entries with different enchantments). Stacks unrelated items.
+- **Suggested approach:** Compare on `id` (or `id || name`).
+
+- **Severity:** Low
+- **File:** src/components/gm/CombatQueue.jsx
+- **Line:** 544-547
+- **Category:** Performance
+- **Issue:** `Object.keys(spellDetails)` and `.filter().slice(0,30)` reruns each render — full keys array build on every keystroke.
+- **Suggested approach:** Wrap in `useMemo` keyed on `spellSearch`.
+
+- **Severity:** Low
+- **File:** src/components/gm/CombatQueue.jsx
+- **Line:** various
+- **Category:** Brand color mismatches
+- **Issue:** ~30 inline brand-mismatch hex colors (`#050816`, `#22c5f5`, `#37F2D1`, `#0b1220`, `#111827`, `#1a1f2e`, `#22c55e`, `#38bdf8`).
+- **Suggested approach:** Migrate to brand tokens.
+
+##### `CustomCompanionApprovalDialog.jsx`
+
+- **Severity:** High
+- **File:** src/components/gm/CustomCompanionApprovalDialog.jsx
+- **Line:** 15, 129
+- **Category:** Base44 leftovers
+- **Issue:** Writes companion data through `base44.entities.Character.update`. Critical session path (gates combat participation).
+- **Suggested approach:** Migrate to Supabase.
+
+- **Severity:** High
+- **File:** src/components/gm/CustomCompanionApprovalDialog.jsx
+- **Line:** 104-141
+- **Category:** Bug / race condition
+- **Issue:** Read-modify-write on `character.companions` JSONB array — same anti-pattern as CombatQueue and QuickNotes. If the player edits the companion (e.g. renames it) while the GM approves stats in another tab, one write wipes the other.
+- **Suggested approach:** Use a Supabase RPC that updates a single companion entry atomically (`jsonb_set` keyed by index/uuid).
+
+- **Severity:** Medium
+- **File:** src/components/gm/CustomCompanionApprovalDialog.jsx
+- **Line:** 68
+- **Category:** Domain — column drift
+- **Issue:** `playerName: char.created_by || ""` — same email-as-FK pattern flagged for CampaignLog. `created_by` here is the character creator's email, not their user id; the field shouldn't be repurposed as `playerName`.
+- **Suggested approach:** Resolve through `userProfile.user_id === char.user_id` and read the username.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CustomCompanionApprovalDialog.jsx
+- **Line:** 127-128
+- **Category:** Domain — index-based JSONB key fragility
+- **Issue:** `companionIndex` is captured when the dialog opens, then used to write back to `newCompanions[editing.companionIndex]`. If the player deletes / reorders companions on their side while the dialog is open, the index points at the wrong companion (overwriting an unrelated one).
+- **Suggested approach:** Match by `companion.id` (UUID added at creation) rather than array index.
+
+- **Severity:** Medium
+- **File:** src/components/gm/CustomCompanionApprovalDialog.jsx
+- **Line:** 138
+- **Category:** console.log / .error / .warn left in
+- **Issue:** `console.error("Custom companion save", err);` — production log noise.
+
+- **Severity:** Low
+- **File:** src/components/gm/CustomCompanionApprovalDialog.jsx
+- **Line:** various
+- **Category:** Brand color mismatches
+- **Issue:** ~6 inline `#1E2430`, `#050816` references and amber-hardcoded buttons.
+- **Suggested approach:** Use brand tokens.
+
+##### `GMSessionSidebar.jsx`
+
+- **Severity:** Medium
+- **File:** src/components/gm/GMSessionSidebar.jsx
+- **Line:** 32-79
+- **Category:** Accessibility
+- **Issue:** Sidebar uses `<aside>` (good) but the section list is plain `<button>`s with no `aria-current="page"` on the active item. `nav` (line 58) wraps the buttons but has no `aria-label` differentiating it from other nav landmarks. `End Session` button has a destructive action with `title=` only — no confirmation prompt either, accidentally clickable.
+- **Suggested approach:** Add `aria-current="true"` on active button, `aria-label="Session tools"` on `<nav>`, and require a confirm/AlertDialog on End Session.
+
+- **Severity:** Low
+- **File:** src/components/gm/GMSessionSidebar.jsx
+- **Line:** 32, 69
+- **Category:** Brand color mismatches
+- **Issue:** `bg-[#1a1f2e]`, `bg-[#37F2D1]/10 text-[#37F2D1]`. Counted: 3.
+- **Suggested approach:** Brand tokens.
+
+##### `GMSidebarAchievements.jsx`
+
+- **Severity:** High
+- **File:** src/components/gm/GMSidebarAchievements.jsx
+- **Line:** 5, 34, 45
+- **Category:** Base44 leftovers
+- **Issue:** Reads achievement catalog and writes new Achievement rows via `base44.entities.Achievement`.
+- **Suggested approach:** Migrate to Supabase.
+
+- **Severity:** High
+- **File:** src/components/gm/GMSidebarAchievements.jsx
+- **Line:** 30-40
+- **Category:** Bug / silent failure
+- **Issue:** `try { … } catch { return []; }` swallows all errors with no log. If the table doesn't exist or RLS rejects the request, the component silently uses `DEFAULT_ACHIEVEMENTS` and the GM thinks the catalog is empty.
+- **Suggested approach:** Surface errors via toast or a banner; only fall back to defaults when the result is genuinely empty.
+
+- **Severity:** High
+- **File:** src/components/gm/GMSidebarAchievements.jsx
+- **Line:** 82
+- **Category:** Domain — column drift
+- **Issue:** Same `c.user_id === uid || c.created_by === profile?.email` email-as-FK fallback flagged across the batch.
+- **Suggested approach:** Centralize "find character for player" in a helper that uses user_id only.
+
+- **Severity:** Medium
+- **File:** src/components/gm/GMSidebarAchievements.jsx
+- **Line:** entire file
+- **Category:** Permission gating
+- **Issue:** No GM check — relies on the parent rendering only for GMs. The grant mutation has no client-side ownership assertion.
+- **Suggested approach:** Add an explicit early-return for non-GM viewers.
+
+- **Severity:** Medium
+- **File:** src/components/gm/GMSidebarAchievements.jsx
+- **Line:** 44-58
+- **Category:** Real-time/state sync
+- **Issue:** `onSuccess` invalidates the achievement catalog, but the player's *earned* achievements live elsewhere (probably keyed differently). Players will not see the grant until their feed re-polls — and the comment at line 14 says "next poll", confirming a polling model.
+- **Suggested approach:** Switch to Supabase realtime, or invalidate the player-side query key as well.
+
+- **Severity:** Low
+- **File:** src/components/gm/GMSidebarAchievements.jsx
+- **Line:** 135-141
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `DEFAULT_ACHIEVEMENTS` is scaffolding ("until the achievement store lands" per the inline comment) — should be tracked or removed.
+- **Suggested approach:** File a follow-up; consider sourcing from an SRD-style catalog file.
+
+##### `GMSidebarPartyPanel.jsx`
+
+- **Severity:** High
+- **File:** src/components/gm/GMSidebarPartyPanel.jsx
+- **Line:** 2, 13
+- **Category:** Base44 leftovers
+- **Issue:** `Character.filter` via base44.
+
+- **Severity:** Medium
+- **File:** src/components/gm/GMSidebarPartyPanel.jsx
+- **Line:** 23
+- **Category:** Domain — column drift
+- **Issue:** Same email-as-FK fallback `c.user_id === uid || c.created_by === profile?.email`.
+
+- **Severity:** Medium
+- **File:** src/components/gm/GMSidebarPartyPanel.jsx
+- **Line:** 25-27
+- **Category:** Bug
+- **Issue:** `current = Number(hp.current ?? hp.max ?? 0)` — when `hp.current` is missing, falls back to `hp.max`, displaying a full HP bar for characters with no recorded current HP. That misleads the GM at the table.
+- **Suggested approach:** Explicit "no HP recorded" state when `current` is undefined; don't fall back to max.
+
+- **Severity:** Low
+- **File:** src/components/gm/GMSidebarPartyPanel.jsx
+- **Line:** 47
+- **Category:** Accessibility
+- **Issue:** Avatar `<img alt="">` is acceptable since the name is rendered next to it, but the connection-status dot at line 53-58 uses color + `title=` only — color-blind users have no other signal.
+- **Suggested approach:** Add a small icon (Wifi/WifiOff) or text suffix.
+
+##### `GMSidebarPlayers.jsx`
+
+- **Severity:** High
+- **File:** src/components/gm/GMSidebarPlayers.jsx
+- **Line:** 2, 23, 29, 35
+- **Category:** Base44 leftovers
+- **Issue:** Two-step Base44 mutation: campaign `player_ids` update + best-effort character `active_session_id` clear. Critical session-lifecycle path.
+- **Suggested approach:** Wrap into a single Supabase RPC that atomically kicks the player and releases their character lock.
+
+- **Severity:** High
+- **File:** src/components/gm/GMSidebarPlayers.jsx
+- **Line:** 19-45
+- **Category:** Bug / race condition
+- **Issue:** Read-modify-write of `player_ids` and `disconnected_players` arrays; concurrent kicks (e.g. GM and co-GM both kicking different players) will overwrite each other.
+- **Suggested approach:** Server-side RPC with array operations.
+
+- **Severity:** High
+- **File:** src/components/gm/GMSidebarPlayers.jsx
+- **Line:** 28-38
+- **Category:** Bug / silent failure / Domain — session lifecycle
+- **Issue:** Empty `try { /* ignore */ } catch { /* ignore */ }` plus `.catch(() => {})` per character lock release means kicked players may retain stale session locks. The session-lifecycle migration (20261022_session_lifecycle.sql) presumably depends on accurate `active_session_id`; silent failure here violates that contract.
+- **Suggested approach:** Surface errors; treat lock-release failure as a partial failure with a toast warning.
+
+- **Severity:** Medium
+- **File:** src/components/gm/GMSidebarPlayers.jsx
+- **Line:** 77
+- **Category:** Accessibility
+- **Issue:** `confirm()` window prompt — same a11y issue as QuickNotesContent. Destructive "Kick" action should use AlertDialog.
+
+- **Severity:** Medium
+- **File:** src/components/gm/GMSidebarPlayers.jsx
+- **Line:** 61
+- **Category:** Domain — column drift
+- **Issue:** Email-as-FK fallback again.
+
+##### `GMSidebarQuickNotes.jsx`
+
+- **Severity:** Critical
+- **File:** src/components/gm/GMSidebarQuickNotes.jsx
+- **Line:** 8, 14, 20, 27
+- **Category:** Domain — column drift / Duplicate components
+- **Issue:** This file persists notes to `campaigns.gm_quick_notes` (top-level column, single string textarea). The session modal `QuickNotesContent.jsx` persists to `campaigns.settings.quick_notes` (JSONB array of structured notes). These are TWO completely different data shapes both labeled "Quick Notes" in the GM UI. Whichever one the GM types into doesn't appear in the other. The QuickNotesContent file actually reads `gm_quick_notes` as a legacy fallback (lines 50-55 of that file) but only tolerates it as an Array — a sidebar-saved string would fail the `Array.isArray` check and silently disappear.
+- **Suggested approach:** Pick one model. The structured JSONB array is richer; the sidebar's free-text textarea should be deleted or migrated to render the same array (read-only summary?).
+
+- **Severity:** High
+- **File:** src/components/gm/GMSidebarQuickNotes.jsx
+- **Line:** 2, 27
+- **Category:** Base44 leftovers
+- **Issue:** Direct base44 update of campaign.
+
+- **Severity:** Medium
+- **File:** src/components/gm/GMSidebarQuickNotes.jsx
+- **Line:** 8-10, 22-35
+- **Category:** Bug
+- **Issue:** Comment at line 8 says "debounced save so the GM can jot without thinking about a save button" — but there's no debounced save in the code; only a manual button. Comment misrepresents behavior.
+- **Suggested approach:** Either implement the debounce (preferred for the UX described) or fix the comment.
+
+- **Severity:** Medium
+- **File:** src/components/gm/GMSidebarQuickNotes.jsx
+- **Line:** 19-21
+- **Category:** Bug / state sync
+- **Issue:** `useEffect` only re-seeds when `campaign?.id` changes — same stale-state bug as CampaignSettingsContent. If a co-GM saves notes, the local state here won't update.
+- **Suggested approach:** Watch `campaign?.gm_quick_notes`; or render directly off the prop.
+
+- **Severity:** Medium
+- **File:** src/components/gm/GMSidebarQuickNotes.jsx
+- **Line:** entire file
+- **Category:** Permission gating
+- **Issue:** No GM gate.
+
+##### `GMSidebarSettings.jsx`
+
+- **Severity:** Critical
+- **File:** src/components/gm/GMSidebarSettings.jsx
+- **Line:** 30, 48-54
+- **Category:** Domain — column drift / Duplicate components
+- **Issue:** Persists house rules to `campaign.settings.house_rules` (free text). The full Campaign Settings page wires HouseRulesPanel to `campaigns.homebrew_rules` (structured JSONB) per the prior batch summary, AND `CampaignDetails.jsx` writes Quill HTML to that same column. This file adds a THIRD location/shape: `settings.house_rules`. Three separate places for "house rules" data.
+- **Suggested approach:** Pick one column + shape. Probably collapse `settings.house_rules` into `homebrew_rules` and migrate.
+
+- **Severity:** Critical
+- **File:** src/components/gm/GMSidebarSettings.jsx
+- **Line:** 87
+- **Category:** Domain — column drift
+- **Issue:** `consentRating = campaign?.campaign_rating || campaign?.consent_rating` — same column drift as CampaignSettingsContent BUT the order is reversed (`campaign_rating` is preferred here, `consent_rating` there). Two GM-facing settings panels disagree on which is the primary source.
+- **Suggested approach:** Pick one canonical column, migrate, drop the fallback.
+
+- **Severity:** Critical
+- **File:** src/components/gm/GMSidebarSettings.jsx
+- **Line:** entire file
+- **Category:** Duplicate components or near-duplicates
+- **Issue:** This file and `content/CampaignSettingsContent.jsx` are 75%+ overlapping — same Co-DM, Mole, Day/Time controls, with slightly different layout, slightly different field set, and disagreeing column choices. Keeping both invites bug drift.
+- **Suggested approach:** Consolidate into one component; the sidebar can render a compact variant via a `density` prop.
+
+- **Severity:** High
+- **File:** src/components/gm/GMSidebarSettings.jsx
+- **Line:** 5, 44
+- **Category:** Base44 leftovers
+- **Issue:** `base44.entities.Campaign.update` for every save.
+
+- **Severity:** High
+- **File:** src/components/gm/GMSidebarSettings.jsx
+- **Line:** 48-54
+- **Category:** Bug / race condition
+- **Issue:** House-rules save spreads `...(campaign?.settings || {})` with the *current* `houseRules` state. If a co-GM edits a different settings field concurrently, that change is overwritten by this save's stale settings spread.
+- **Suggested approach:** Either move house_rules to its own column (cleanest) or use a Supabase RPC that merges into `settings` server-side.
+
+- **Severity:** Medium
+- **File:** src/components/gm/GMSidebarSettings.jsx
+- **Line:** 36-41
+- **Category:** Bug / state sync
+- **Issue:** Same `campaign?.id`-keyed effect — won't re-seed on field-level realtime updates.
+
+- **Severity:** Medium
+- **File:** src/components/gm/GMSidebarSettings.jsx
+- **Line:** 26
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `DAYS` array re-declared (third occurrence in this batch).
+
+##### `GMSidebarUpdates.jsx`
+
+- **Severity:** High
+- **File:** src/components/gm/GMSidebarUpdates.jsx
+- **Line:** 3, 29, 37
+- **Category:** Base44 leftovers
+- **Issue:** `CampaignUpdate` reads/writes through base44.
+
+- **Severity:** Medium
+- **File:** src/components/gm/GMSidebarUpdates.jsx
+- **Line:** 7
+- **Category:** Domain — column drift
+- **Issue:** `update?.created_at || update?.created_date` — same `created_at`/`created_date` drift seen across this batch.
+
+- **Severity:** Medium
+- **File:** src/components/gm/GMSidebarUpdates.jsx
+- **Line:** 27-34
+- **Category:** Bug / silent failure
+- **Issue:** `.catch(() => [])` swallows all errors. RLS rejection or schema problems silently render an empty "Recent" list.
+- **Suggested approach:** Surface a tiny error banner; toast on failure.
+
+- **Severity:** Medium
+- **File:** src/components/gm/GMSidebarUpdates.jsx
+- **Line:** entire file
+- **Category:** Permission gating
+- **Issue:** No GM check.
+
+- **Severity:** Low
+- **File:** src/components/gm/GMSidebarUpdates.jsx
+- **Line:** 71
+- **Category:** Bug
+- **Issue:** Validation runs only after the click handler — no `aria-invalid` or visible field-level validation on title/content inputs.
+- **Suggested approach:** Disable submit until both fields have content; mark required.
+
+##### `equipmentRules.jsx`
+
+- **Severity:** Medium
+- **File:** src/components/gm/equipmentRules.jsx
+- **Line:** 1
+- **Category:** Inconsistent file naming / dead extension
+- **Issue:** File is named `.jsx` but contains zero JSX. Sibling utility `monsterEnrichment.jsx` has the same problem.
+- **Suggested approach:** Rename to `equipmentRules.js`; or, since these are utilities, move out of `/components/gm/` into `/utils/` or `/components/dnd5e/`.
+
+- **Severity:** Medium
+- **File:** src/components/gm/equipmentRules.jsx
+- **Line:** 1-15
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Big keyword arrays (sword/axe/dagger/etc.) duplicate dnd5e item taxonomy that should live alongside the SRD item data.
+- **Suggested approach:** Move to `src/components/dnd5e/equipmentTaxonomy.js`.
+
+- **Severity:** Low
+- **File:** src/components/gm/equipmentRules.jsx
+- **Line:** 17-37
+- **Category:** Performance
+- **Issue:** Matching uses `.some(kw => itemName.includes(kw))` per slot per item — fine for small calls, but `monsterEnrichment` calls it inside a `.forEach` per item per monster. Loadout dialog can call it 50+ times per render.
+- **Suggested approach:** Pre-compile a `Set` for category/type lookups; keyword fuzzy matching is unavoidable.
+
+##### `monsterEnrichment.jsx`
+
+- **Severity:** Critical
+- **File:** src/components/gm/monsterEnrichment.jsx
+- **Line:** 50
+- **Category:** Base44 leftovers / Storage path violation
+- **Issue:** Hardcoded fallback URL `https://base44.app/api/apps/6917dd35b600199681c5b960/files/public/.../2bbbf582f_2.png` — this is a base44.app CDN URL that **will 404 once Base44 is decommissioned**. Used as the default item icon when itemIcons lookup misses.
+- **Suggested approach:** Self-host the fallback icon under `/public/` or `/src/assets/`; never link to a third-party CDN that's mid-decommission.
+
+- **Severity:** High
+- **File:** src/components/gm/monsterEnrichment.jsx
+- **Line:** 1-220
+- **Category:** Inconsistent file naming
+- **Issue:** `.jsx` extension on a pure-JS file (no JSX); also duplicated above.
+
+- **Severity:** Medium
+- **File:** src/components/gm/monsterEnrichment.jsx
+- **Line:** 105-110
+- **Category:** Bug
+- **Issue:** Two `parseInt(levelMatch[1])` calls without a radix — minor lint/correctness warning.
+
+- **Severity:** Medium
+- **File:** src/components/gm/monsterEnrichment.jsx
+- **Line:** 178-200
+- **Category:** Bug
+- **Issue:** Auto-equip logic for melee weapons sets `equipped = true` even when both `weapon1` and `weapon2` slots are full and `tryEquip` returned false (line 198). The boolean is overwritten unconditionally, so the item ends up in equipped-flag-true state but never actually equipped.
+- **Suggested approach:** Mirror the ranged branch: `equipped = tryEquip('weapon1') || tryEquip('weapon2');`.
+
+- **Severity:** Low
+- **File:** src/components/gm/monsterEnrichment.jsx
+- **Line:** 205, 209
+- **Category:** Bug
+- **Issue:** `Object.values(newEquipped).some(eq => eq.name === item.name)` — same name-as-key collision noted in CombatQueue (different items with the same name dedupe each other).
+
+##### `LootManager.jsx`
+
+- **Severity:** Critical
+- **File:** src/components/gm/LootManager.jsx
+- **Line:** 134-294
+- **Category:** Bug / race condition
+- **Issue:** `executeDistribution` runs N parallel `base44.entities.Character.update` calls (one per recipient). If any one fails partway through, partial loot has already landed on some characters and there's no rollback — only a toast. The "audit" lives client-side and only persists when `handleSave` writes to the campaign. So the GM can crash mid-distribution and end up with a half-distributed pool plus no audit to retract.
+- **Suggested approach:** Wrap the entire distribution in a Supabase RPC / transaction that updates every character + the campaign in a single atomic operation; the audit then becomes a server-side log.
+
+- **Severity:** Critical
+- **File:** src/components/gm/LootManager.jsx
+- **Line:** 165-181, 195-197, 215-222
+- **Category:** Bug / race condition
+- **Issue:** Read-modify-write pattern on `char.currency` and `char.inventory` JSONB — using the *cached* `char.currency` and `char.inventory` from the prop. If the player's character has been edited since the panel last loaded, this update silently overwrites those edits.
+- **Suggested approach:** Server-side RPC that does `currency = currency + delta` rather than client-side `+`.
+
+- **Severity:** High
+- **File:** src/components/gm/LootManager.jsx
+- **Line:** 5, 166, 181, 197, 222, 321, 332
+- **Category:** Base44 leftovers
+- **Issue:** Heavy Character.update usage through Base44.
+
+- **Severity:** High
+- **File:** src/components/gm/LootManager.jsx
+- **Line:** 299-348
+- **Category:** Bug
+- **Issue:** `retractDistribution` `Promise.all(promises).catch(...)` runs the database-roll-back after `handleSave(false, ...)` updates local state. If the rollback fails, the UI says "loot retracted" while the players' characters still have the loot. State and server diverge.
+- **Suggested approach:** Await the promises before flipping the local distributed flag; show the failure to the GM if any character.update rejects.
+
+- **Severity:** High
+- **File:** src/components/gm/LootManager.jsx
+- **Line:** 173-184
+- **Category:** Bug
+- **Issue:** Random distribution picks the same player for every iteration when `Math.random()` produces close values — but more importantly, when `random_items` runs without `split_gold_evenly`, gold piles up in `finalCurrency` and never gets distributed to anyone. The branching logic combines toggles in confusing ways; commented "manual distribution" path is the catch-all but is only triggered when `!split_gold_evenly OR (!random_items && items.length>0)`.
+- **Suggested approach:** Spell out a state machine for the four toggle combinations and add tests.
+
+- **Severity:** High
+- **File:** src/components/gm/LootManager.jsx
+- **Line:** 374
+- **Category:** Bug / id collision
+- **Issue:** `Math.random().toString(36).substr(2, 9)` for item ids — `.substr` is deprecated, and 9-char base36 ids collide on a few-thousand-entry pool (birthday paradox). Items with colliding ids confuse the manual-distribution `itemDist` map (line 631).
+- **Suggested approach:** `crypto.randomUUID()`.
+
+- **Severity:** High
+- **File:** src/components/gm/LootManager.jsx
+- **Line:** entire file
+- **Category:** Permission gating
+- **Issue:** No GM gate. A non-GM with this component mounted can fire Character.updates against every player's currency and inventory.
+
+- **Severity:** High
+- **File:** src/components/gm/LootManager.jsx
+- **Line:** entire file
+- **Category:** Accessibility
+- **Issue:** Custom modals (CRTreasurePicker, ManualDistributionModal, ItemSelectorModal) — no `role="dialog"`, no focus trap, X button without aria-label, color-only currency styling (orange-700 for cp, slate-200 for pp), TogglePill doesn't expose `aria-pressed`.
+- **Suggested approach:** Switch dialogs to shadcn Dialog primitive.
+
+- **Severity:** Medium
+- **File:** src/components/gm/LootManager.jsx
+- **Line:** 236, 338
+- **Category:** console.log / .error / .warn left in
+- **Issue:** Two `console.error` calls.
+
+- **Severity:** Medium
+- **File:** src/components/gm/LootManager.jsx
+- **Line:** 32-42
+- **Category:** Bug
+- **Issue:** `rollTreasureExpr` regex `^(\d+)d(\d+)(?:\*(\d+))?$` doesn't support modifiers (`+2`, `-1`) — fine for the current treasure tables but brittle as a "tiny dice parser".
+
+- **Severity:** Medium
+- **File:** src/components/gm/LootManager.jsx
+- **Line:** 16-21
+- **Category:** Hardcoded values that should be constants
+- **Issue:** DMG treasure table baked into the component; `INDIVIDUAL_TREASURE` and `GEM_NAMES` belong in `/utils/dnd/`.
+
+- **Severity:** Medium
+- **File:** src/components/gm/LootManager.jsx
+- **Line:** 106-113
+- **Category:** Bug / state sync
+- **Issue:** `useEffect([lootData])` re-syncs local state — which discards in-progress edits if `lootData` updates from elsewhere (e.g. realtime subscription).
+- **Suggested approach:** Use a "dirty" flag or only re-sync on `lootData?.id` change (or remove local state entirely).
+
+- **Severity:** Medium
+- **File:** src/components/gm/LootManager.jsx
+- **Line:** 96-99
+- **Category:** State management smells
+- **Issue:** Four pieces of `useState` mirror the same `lootData` prop, plus the parent owns the persistence callback. Bidirectional state sync between props and local state is fragile; this is what the lootData re-sync effect is patching.
+- **Suggested approach:** Either make this a controlled component (no local state) or fully uncontrolled (no re-sync).
+
+- **Severity:** Low
+- **File:** src/components/gm/LootManager.jsx
+- **Line:** 477, 644, 645, 690
+- **Category:** Bug
+- **Issue:** `parseInt(...)` with no radix in five places (a recurring pattern across this batch).
+
+- **Severity:** Low
+- **File:** src/components/gm/LootManager.jsx
+- **Line:** various
+- **Category:** Brand color mismatches
+- **Issue:** 28 inline `#37F2D1`, `#1E2430`, `#0b1220`, `#111827`, `#1a1f2e`, `#2A3441`, `#050816`.
+- **Suggested approach:** Brand tokens.
+
+#### /src/components/player/
+
+##### `LootBox.jsx`
+
+- **Severity:** High
+- **File:** src/components/player/LootBox.jsx
+- **Line:** 5
+- **Category:** Broken or unused imports
+- **Issue:** `import { base44 } from "@/api/base44Client"` — never referenced in this file.
+- **Suggested approach:** Remove.
+
+- **Severity:** High
+- **File:** src/components/player/LootBox.jsx
+- **Line:** 47, 77
+- **Category:** Domain — GM/Player permission leak (HIGH priority)
+- **Issue:** Component exposes "Take My Share" / "Take All Currency" buttons whose mutation handlers (`onTakeCurrency`, `onTakeItem`) live in the parent. There is no client-side check that the loot was actually allocated to *this* player vs all-or-nothing. Combined with the GM-side LootManager's race conditions, two players can both "Take All Currency" before the GM's distribution write commits, double-spending the pool.
+- **Suggested approach:** Server-side mutation that atomically debits the campaign loot pool and credits the player's character; clients should never own the source of truth.
+
+- **Severity:** Medium
+- **File:** src/components/player/LootBox.jsx
+- **Line:** 64-94
+- **Category:** Accessibility
+- **Issue:** Item tiles are `<div draggable onClick>` with no `role="button"`, `tabIndex`, or keyboard handler. `title=` provides hover help only, no on-screen label. Drag is not keyboard-accessible.
+- **Suggested approach:** Convert to `<button>` for click; pair drag with a keyboard fallback (e.g. an explicit "Take" action menu).
+
+- **Severity:** Medium
+- **File:** src/components/player/LootBox.jsx
+- **Line:** 64-94
+- **Category:** Performance
+- **Issue:** AnimatePresence + per-tile motion.div for every loot item. With a large pool this re-runs animations on every parent re-render.
+- **Suggested approach:** Memoize tile component, use `layoutId` only when needed.
+
+- **Severity:** Low
+- **File:** src/components/player/LootBox.jsx
+- **Line:** 16, 26, 56, 78
+- **Category:** Brand color mismatches
+- **Issue:** ~8 inline `#050816`, `#0b1220`, `#111827`, `#1a1f2e`, `#37F2D1`, `#2A3441`.
+
+##### `PlayerCenterPanel.jsx`
+
+- **Severity:** Critical
+- **File:** src/components/player/PlayerCenterPanel.jsx
+- **Line:** 8-13
+- **Category:** Storage path violation / Hardcoded values
+- **Issue:** `basicActionIcons` URLs split across **two** problem CDNs:
+  1. `static.wixstatic.com` — third-party Wix CDN, will go away when the Wix project is decommissioned (lines 8-11).
+  2. `ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/abilities/...` (lines 12-13) — **uses the forbidden `campaign-assets` bucket per the batch's storage path domain rules** (must use `users/{user_id}/campaigns/{campaign_id}/`, never `campaign-assets`).
+- **Suggested approach:** Self-host the icons in `/public/dnd5e/` (these are SRD-shipped reference images, not user uploads), or move to a dedicated `dnd5e-assets` bucket that is *not* a per-campaign user bucket.
+
+- **Severity:** High
+- **File:** src/components/player/PlayerCenterPanel.jsx
+- **Line:** 18, 65-103, 199-213
+- **Category:** Dead code / unfinished feature
+- **Issue:** `quickItems` state is declared with four `null` slots and rendered as empty hover-able boxes — comment at line 208 admits "Placeholder logic for quick items - would need drag/drop". Same scaffolding seen in ActionBar.jsx. This is a non-functional feature shipped to production.
+- **Suggested approach:** Either implement the feature or remove the placeholder; do not ship empty quick-slot UI.
+
+- **Severity:** High
+- **File:** src/components/player/PlayerCenterPanel.jsx
+- **Line:** 38
+- **Category:** Bug
+- **Issue:** `((current || 0) / (max || 1)) * 100` — when `max` is `0` and `current` is `0`, formula yields 0. But when `max` is `null` and `current` is `5`, max defaults to 1 → percent = 500%, then `Math.min(..., 100)` clamps. Better to guard explicitly (no display) when max is missing.
+
+- **Severity:** High
+- **File:** src/components/player/PlayerCenterPanel.jsx
+- **Line:** 30-36
+- **Category:** Bug / unused variable
+- **Issue:** `const spells = character.spells?.known_spells || [];` is declared on line 30 then never used. The actually-used variable is `spellsList` on line 31. Dead code.
+
+- **Severity:** High
+- **File:** src/components/player/PlayerCenterPanel.jsx
+- **Line:** 65-69, 76-81, 99-102, 207-211
+- **Category:** Accessibility
+- **Issue:** Action toggle icons (`ToggleIcon`) and basic-action tile, plus quick-item slots, are interactive `<div>`s without keyboard handling or `role`/`aria-label`. The "Add Spell Slot" `+` icon (line 99) is also a non-button div.
+- **Suggested approach:** Convert to `<button>`; add labels.
+
+- **Severity:** Medium
+- **File:** src/components/player/PlayerCenterPanel.jsx
+- **Line:** 17
+- **Category:** TODO/FIXME/HACK
+- **Issue:** `// stats, skills, background` and `// 4 slots` and `// ... add more if needed` (line 35) and `// Limit to 8 for display` — multiple in-line scaffolding comments.
+- **Suggested approach:** Implement properly or delete.
+
+- **Severity:** Medium
+- **File:** src/components/player/PlayerCenterPanel.jsx
+- **Line:** 23
+- **Category:** Domain — column drift
+- **Issue:** `character.attributes || { str: 10, ... }` — silent fallback to all-10s for a missing character object. Players with no recorded attributes will see fake placeholder stats and a misleading character sheet.
+- **Suggested approach:** Render a "no stats" state instead of synthesizing.
+
+- **Severity:** Medium
+- **File:** src/components/player/PlayerCenterPanel.jsx
+- **Line:** 31-36
+- **Category:** Bug
+- **Issue:** Spells split into `cantrips`, `level1`, `level2` only — comment says "add more if needed". A character with level-3+ spells will silently lose them.
+
+- **Severity:** Low
+- **File:** src/components/player/PlayerCenterPanel.jsx
+- **Line:** various
+- **Category:** Brand color mismatches
+- **Issue:** ~12 inline `#050816`, `#1e293b`, `#111827`, `#1E2430`, `#37F2D1`.
+
+##### `PlayerLeftPanel.jsx`
+
+- **Severity:** Critical
+- **File:** src/components/player/PlayerLeftPanel.jsx
+- **Line:** 9-22
+- **Category:** Storage path violation
+- **Issue:** Twelve hardcoded class-portrait URLs all under `ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/...` — same forbidden `campaign-assets` bucket pattern as PlayerCenterPanel. Plus the silhouette image at line 163 is on `static.wixstatic.com`.
+- **Suggested approach:** Move to a dedicated SRD-asset bucket (or `/public/dnd5e/`); class portraits are static SRD content, not per-campaign uploads.
+
+- **Severity:** Critical
+- **File:** src/components/player/PlayerLeftPanel.jsx
+- **Line:** 121-132
+- **Category:** Dead code / Unfinished feature / Bug
+- **Issue:** "Roll Initiative" button declares `const roll = Math.floor(Math.random() * 20) + 1;` and **then does nothing with it**. The comment explicitly admits "In a real app, we'd mutate the campaign log here". Click does nothing visible. Unused variable warning + non-functional shipped UI.
+- **Suggested approach:** Wire to `logCombatEvent` (the helper used by the GM panel), or remove the button.
+
+- **Severity:** High
+- **File:** src/components/player/PlayerLeftPanel.jsx
+- **Line:** 1-7
+- **Category:** Broken or unused imports
+- **Issue:** `Input` (line 3), `Search`, `Shield`, `Skull` (line 4), `spellIcons` (line 6) all imported but never used.
+- **Suggested approach:** Remove.
+
+- **Severity:** High
+- **File:** src/components/player/PlayerLeftPanel.jsx
+- **Line:** 29-41
+- **Category:** Domain — column drift
+- **Issue:** `character.equipment.armor.head` etc — a flat `armor` map with `head`/`armor`/`hands`/`feet`/`ring1`/`ring2`/`neck`/`back` keys. But `equipmentRules.jsx` SLOT_RESTRICTIONS uses different slot names (`gauntlets`, `belt`, `boots`, `cloak`, `necklace`, `implement`, `weapon1`, `weapon2`, `ranged`). The two slot taxonomies don't match — equipment auto-equipped via `monsterEnrichment` won't render in the player panel and vice versa.
+- **Suggested approach:** Pick one slot taxonomy; align CharacterCreator, equipmentRules, PlayerLeftPanel, and the schema.
+
+- **Severity:** High
+- **File:** src/components/player/PlayerLeftPanel.jsx
+- **Line:** 162-164
+- **Category:** Hardcoded values that should be constants / Brand
+- **Issue:** Silhouette PNG hosted on `static.wixstatic.com` — third-party CDN.
+
+- **Severity:** Medium
+- **File:** src/components/player/PlayerLeftPanel.jsx
+- **Line:** 27
+- **Category:** Bug
+- **Issue:** Returns `<div className="text-white">Loading character...</div>` for missing character. No skeleton, no error state — looks identical to "loaded but empty".
+
+- **Severity:** Medium
+- **File:** src/components/player/PlayerLeftPanel.jsx
+- **Line:** 87-185
+- **Category:** Accessibility
+- **Issue:** Tab buttons for melee/spells (138-150) lack `role="tab"`/`aria-selected`. EquipSlot tooltips use hover-only `display:none` → `display:block`, no keyboard focus equivalent. Avatar fallback `?` is a literal character with no SR text. SVG decorative element at 116-118 has no `aria-hidden`.
+- **Suggested approach:** Use shadcn Tabs, attach focus-visible state to EquipSlot, mark decorative SVG `aria-hidden`.
+
+- **Severity:** Medium
+- **File:** src/components/player/PlayerLeftPanel.jsx
+- **Line:** 196
+- **Category:** Performance
+- **Issue:** Inventory grid hardcoded to 18 slots regardless of inventory size. Both wastes cells when player has fewer items and silently truncates when they have more (`character.inventory?.[i]` returns undefined past 17).
+- **Suggested approach:** Render `character.inventory?.length` slots, with a "max capacity" indicator if relevant.
+
+- **Severity:** Low
+- **File:** src/components/player/PlayerLeftPanel.jsx
+- **Line:** 122
+- **Category:** Brand color mismatches / GOOD HIT
+- **Issue:** `#FF5722` and `#FF6B3D` — these are *closer* to the documented brand `#FF5300` orange than the cyan/teal used elsewhere. Inconsistent: this file half-respects the brand palette, the rest of the codebase uses #37F2D1.
+
+##### `PlayerRightPanel.jsx`
+
+- **Severity:** Critical
+- **File:** src/components/player/PlayerRightPanel.jsx
+- **Line:** 2
+- **Category:** Domain — GM/Player permission leak (HIGH priority)
+- **Issue:** Imports `CampaignLog from "@/components/gm/CampaignLog"` — the GM chat log component. CampaignLog renders the `isGM` UI branch (whisper-to picker, GM-only toggle) gated on a runtime computation of `isGM`, but it does so based on `currentUser?.id` against `campaign.game_master_id`. Importing a `gm/`-pathed component from `player/` is the file-system smell, but more importantly: the GM-only filter is **purely client-side** (flagged earlier in this batch) — meaning a player viewing this panel still receives every gm_only and whisper-target-other entry over the wire. Also: PlayerRightPanel passes only `campaignId` and `currentUser` to CampaignLog without the `campaign`, `characters`, `currentUserProfile`, or `allUserProfiles` props CampaignLog requires (lines 9, 49-51) — so `isGM` resolves false, role lookup is broken, and the chat will render with `displayName: undefined` and crash on `whisperTargets` (which calls `.forEach` on `campaign.player_ids`).
+- **Suggested approach:** Either lift CampaignLog into a neutral folder (`/components/session/CampaignLog.jsx`) and pass the full prop set, OR build a `PlayerCampaignLog` view that's read-only by design. Server-side gate gm_only/whisper rows.
+
+- **Severity:** Critical
+- **File:** src/components/player/PlayerRightPanel.jsx
+- **Line:** 84-88
+- **Category:** Bug / Prop validation
+- **Issue:** Renders `<CampaignLog campaignId={campaignId} currentUser={currentUser} height="100%" />` with **no** `campaign`, `currentUserProfile`, `characters`, or `allUserProfiles`. CampaignLog accepts a `height` prop that isn't actually consumed (search the file — it's not in the destructured props list at line 9). Component will crash or render broken (line 152 of CampaignLog: `if (!campaign?.player_ids || !allUserProfiles) return [];` saves it from crashing but every name resolution is broken; `getDisplayInfo` accesses `campaign?.game_master_id` on `undefined`).
+- **Suggested approach:** Either thread the full prop set or refactor CampaignLog to load its own data.
+
+- **Severity:** High
+- **File:** src/components/player/PlayerRightPanel.jsx
+- **Line:** 13-24
+- **Category:** Domain — Session lifecycle / Bug
+- **Issue:** "Leave Session" handler reads-modify-writes `ready_player_ids` array — same race condition family as the GM-side panels. Worse, the handler uses `window.confirm`, then if the campaign fetch fails or returns 0 rows the navigate still fires, leaving session-state in an inconsistent place. Per the session-lifecycle migration rules called out for this batch, leaving a session should also release any character lock the player holds (`active_session_id = null`) — that's not done here, contrast with GMSidebarPlayers.kickMutation which does it.
+- **Suggested approach:** Wrap in a Supabase RPC `leave_session(campaign_id, user_id)` that does both atomically.
+
+- **Severity:** High
+- **File:** src/components/player/PlayerRightPanel.jsx
+- **Line:** 5, 16, 20
+- **Category:** Base44 leftovers
+- **Issue:** Direct `Campaign.filter` and `Campaign.update`.
+
+- **Severity:** Medium
+- **File:** src/components/player/PlayerRightPanel.jsx
+- **Line:** 14
+- **Category:** Accessibility
+- **Issue:** `window.confirm` for the destructive Leave Session action. AlertDialog is the project standard.
+
+- **Severity:** Medium
+- **File:** src/components/player/PlayerRightPanel.jsx
+- **Line:** 36
+- **Category:** State management smells
+- **Issue:** Filtering self out (`if (player.user_id === currentUser.id) return null`) inside the map — fine, but yields a render with `null` items in the JSX list that React still has to reconcile. Pre-filter the array.
+
+- **Severity:** Medium
+- **File:** src/components/player/PlayerRightPanel.jsx
+- **Line:** 39, 80
+- **Category:** Brand color mismatches
+- **Issue:** ~6 inline brand-mismatch hex.
+
+##### Batch 1A-iii-b Summary
+
+**Files audited:** 25 (5 session, 16 gm, 4 player).
+
+**Findings by severity:**
+
+| Severity | Count |
+|----------|-------|
+| Critical | 13 |
+| High     | 67 |
+| Medium   | 51 |
+| Low      | 22 |
+| Cosmetic | 1 |
+
+**Findings by category:**
+
+| Category | Count |
+|----------|-------|
+| Base44 leftovers | 19 |
+| Brand color mismatches | 18 |
+| Domain — GM/Player permission leak (HIGH priority) | 6 |
+| Domain — column drift / schema ambiguity | 18 |
+| Domain — guild systems (correct usage flagged) | 1 |
+| Domain — storage path violations (campaign-assets bucket / 3rd-party CDN) | 4 |
+| Domain — session lifecycle gaps | 3 |
+| Permission gating | 8 |
+| Bug / race condition (read-modify-write JSONB) | 11 |
+| Real-time / state sync issues | 6 |
+| Accessibility (combat / initiative / modal) | 14 |
+| Performance | 7 |
+| Hardcoded values that should be constants | 10 |
+| Dead code / unfinished features (placeholders, mock loops, no-op handlers) | 6 |
+| Duplicate components or near-duplicates | 5 |
+| State management smells | 4 |
+| Inconsistent file naming (.jsx for non-JSX util files) | 3 |
+| Inline styles / scoped style blocks | 1 |
+| TODO / FIXME / HACK | 2 |
+| Broken or unused imports | 4 |
+| Prop validation / inconsistent prop usage | 1 |
+| console.log / .error / .warn left in | 9 |
+| Tailwind issues | 2 |
+
+(Some findings cross-categorize — categories chosen by primary impact.)
+
+**Top systemic issues for THIS batch:**
+
+1. **GM/Player visibility is enforced client-side only.** CampaignLog filters `is_gm_only` and `is_whisper` rows in JSX, but every entry is fetched. Whispers and GM-private rows leak to all clients. PlayerRightPanel imports the GM-pathed CampaignLog component and passes a partial prop set, so a player view of the chat both crashes on lookups and (if it didn't) would still trust the same client-side filter. This is the most consequential leak in the batch — fix server-side first.
+
+2. **Read-modify-write of JSONB arrays is ubiquitous.** `campaigns.encountered_monsters` (CombatQueue), `campaigns.settings.quick_notes` (QuickNotesContent), `campaigns.player_ids`/`disconnected_players` (GMSidebarPlayers), `character.companions` (CustomCompanionApprovalDialog), `character.currency`/`inventory` (LootManager × N), `campaigns.ready_player_ids` (PlayerRightPanel) — every one of these is a last-write-wins race condition. With a session-driven UI that has GMs, co-GMs, and players all mutating the same documents, this is going to corrupt state in production. Several can be fixed by atomic Supabase RPCs.
+
+3. **Three places store "house rules" / "quick notes" with three different shapes.** GMSidebarSettings writes a free-text string to `campaign.settings.house_rules`. The full HouseRulesPanel writes structured JSONB to `campaigns.homebrew_rules`. CampaignDetails (creation wizard) writes Quill HTML to `homebrew_rules`. Quick notes have a similar split: GMSidebarQuickNotes writes a string to top-level `gm_quick_notes`, QuickNotesContent writes a JSONB array to `settings.quick_notes`. Neither pair migrates the legacy column. Whichever surface the GM types into may not appear in the others.
+
+4. **Storage path / asset hosting violations.** PlayerCenterPanel and PlayerLeftPanel reference 12+ class portrait / basic-action icons via `campaign-assets/dnd5e/...` (forbidden bucket per domain rules) and `static.wixstatic.com` (third-party CDN). monsterEnrichment.jsx hard-codes a `base44.app/.../2bbbf582f_2.png` fallback that will 404 once Base44 sunsets. SRD reference assets need their own bucket or `/public/`.
+
+5. **Multiple half-built features shipped to production.** ActionBar (mock spell icons, hardcoded HP/AC fallbacks, no-op buttons), PlayerCenterPanel (4 quick-item slots with no drag/drop), PlayerLeftPanel ("Roll Initiative" computes a roll and discards it). Either implement or delete; do not ship dead-end UI.
+
+6. **`co_dm_ids` vs `CO_GM` nomenclature still unresolved.** UI in CampaignSettingsContent and GMSidebarSettings literally reads "Co-DM / Co-GM" — confirming the schema/term mismatch the codebase has been papering over. Pick one.
+
+7. **Combat UI is the most keyboard-hostile surface in the app.** CombatQueue tiles are non-button divs with hover-only edit/remove; faction is encoded only by border color; custom dialogs lack focus traps; CharacterSelector ships its own modal + scrollbar style block instead of the shadcn Dialog. The combat/initiative UX needs a deliberate a11y pass before any general accessibility work.
+
