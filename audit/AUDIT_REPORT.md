@@ -3879,3 +3879,1104 @@ Splits (Free 50/50, Adventurer 30/70, Veteran/Guild 20/80) match the brief.
 
 7. **Combat UI is the most keyboard-hostile surface in the app.** CombatQueue tiles are non-button divs with hover-only edit/remove; faction is encoded only by border color; custom dialogs lack focus traps; CharacterSelector ships its own modal + scrollbar style block instead of the shadcn Dialog. The combat/initiative UX needs a deliberate a11y pass before any general accessibility work.
 
+
+---
+
+### Batch 1A-iv: character creator + characters + dnd5e + spells
+
+Folders covered (in order): `/src/components/characterCreator/`, `/src/components/characters/`, `/src/components/dnd5e/`, `/src/components/spells/`.
+
+#### /src/components/characterCreator/
+
+##### AIGenerateFlow.jsx
+
+- **Severity:** High
+- **File:** src/components/characterCreator/AIGenerateFlow.jsx
+- **Line:** 71-82
+- **Category:** Portrait upload validation gaps
+- **Issue:** `replacePortrait(file)` accepts any file, no MIME type or size validation before calling `uploadFile`. The `<input>` only relies on `accept="image/*"` which is a UX hint, not a security check. No 400-error feedback, no file size cap.
+- **Suggested approach:** Validate `file.type.startsWith("image/")` and `file.size < MAX_BYTES` (e.g. 5MB) before upload; surface a toast on rejection.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/AIGenerateFlow.jsx
+- **Line:** 28-69
+- **Category:** AI feature tier gate gaps
+- **Issue:** `aiGenerate` and `generatePortrait` are called with no tier check. Per domain rules, AI generation/portraits are Adventurer+ only. The component reads `useAuth()` but never inspects `user.tier`/`subscription_tier`.
+- **Suggested approach:** Gate `run()` behind a tier guard (Adventurer+) and show an upsell when a Free user reaches this flow.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/AIGenerateFlow.jsx
+- **Line:** 8
+- **Category:** Multi-game abstraction breakage
+- **Issue:** `aiClient.aiGenerate` is presumably system-agnostic, but the consumed shape (str/dex/con/int/wis/cha, race, subrace, class, subclass, alignment, spells_known) is hardcoded D&D 5e. This component should live under `/dnd5e/` or be parameterized by system.
+- **Suggested approach:** Parameterize the summary by system schema, or move the summary panel into a dnd5e subfolder.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/AIGenerateFlow.jsx
+- **Line:** 102, 117, 137, 143, 146, 183, 218
+- **Category:** Brand color mismatches
+- **Issue:** Hardcoded `#a855f7`, `#37F2D1`, `#1E2430`, `#0b1220`, `#050816`, `#2A3441` instead of brand palette. ~10 occurrences in this file.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/AIGenerateFlow.jsx
+- **Line:** 142
+- **Category:** Accessibility
+- **Issue:** Portrait `<img alt="Portrait" />` is a generic alt that doesn't describe the character; bloodied portrait fetch has no alt at all (it isn't rendered, but still). No `aria-live` on the loading text. Loading spinner has no `role="status"`/screen-reader label.
+- **Suggested approach:** Use `alt={character?.name ? \`Portrait of ${character.name}\` : ""}` and add `role="status"` + visually-hidden label to spinner.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/AIGenerateFlow.jsx
+- **Line:** 153-159
+- **Category:** Accessibility / Form labels
+- **Issue:** File `<input type="file">` lacks an explicit label/aria-label. The visible label-wrapper text changes ("Uploading…" / "Upload your own portrait instead") but is not associated as the input's accessible name.
+- **Suggested approach:** Add `aria-label="Upload portrait"` on the input.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/AIGenerateFlow.jsx
+- **Line:** 56-63
+- **Category:** Race condition risks in character save/update
+- **Issue:** The bloodied-portrait promise is fired-and-forgotten with `.then(setBloodiedPortrait)`. If `confirm()` runs before this promise resolves, `bloodied_avatar_url` is null and the variant is silently lost. No way to retry; the file in storage becomes orphaned.
+- **Suggested approach:** Either await the bloodied generation (with a short timeout), persist the in-flight promise so confirm() can wait on it, or have the server enqueue the variant after save.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/AIGenerateFlow.jsx
+- **Line:** 277, 287
+- **Category:** React keys
+- **Issue:** Spell/equipment lists use array index as key — fine for read-only lists but breaks if the source mutates.
+
+##### AbilityScoresStep.jsx
+
+- **Severity:** High
+- **File:** src/components/characterCreator/AbilityScoresStep.jsx
+- **Line:** 100
+- **Category:** Math errors in character calculations
+- **Issue:** Manual entry clamps base score to `Math.max(3, Math.min(18, ...))`. RAW point-buy/manual entry caps starting score at 15 before racial bonuses; 18 is theoretically reachable only after racial. Also, the upper cap of 18 is wrong if a homebrew/brewery race adds bonuses past 20 — but conversely, ASIs and feats post-creation can push to 20. The hard 18 ceiling on the *base* is plausible, but the lower bound of 3 silently coerces invalid inputs (e.g. blank field becomes 8 via the `|| 8`, while 0 becomes 3 via the clamp). Inconsistent and not documented.
+- **Suggested approach:** Decide on a single rule (point-buy 8-15, standard array, or roll). Use validation + error state instead of silent clamping; preserve user's typed value while showing inline error.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/AbilityScoresStep.jsx
+- **Line:** 38-43
+- **Category:** State management smells
+- **Issue:** Three parallel sources of truth for ability scores: `baseScores` local state, `assignedScores` local state, and `characterData.attributes` from parent. Every handler must remember to update both local + parent. Initial sync of `baseScores` ignores parent updates after mount.
+- **Suggested approach:** Lift `baseScores` to the parent or derive locally with `useMemo` from `characterData`; eliminate duplicate state.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/AbilityScoresStep.jsx
+- **Line:** 1-448 (entire file)
+- **Category:** Multi-game abstraction breakage
+- **Issue:** Component is hardcoded D&D 5e: six abilities (str/dex/con/int/wis/cha), `classRecommendations` hash for 12 classes, `getRacialAbilityBonuses` from dnd5e. Lives in supposedly system-agnostic `/characterCreator/`. Should be under `/dnd5e/` or driven by a system descriptor.
+- **Suggested approach:** Move to `/dnd5e/AbilityScoresStep.jsx` and drive system-agnostic shell from a registry.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/AbilityScoresStep.jsx
+- **Line:** 23-36
+- **Category:** Hardcoded values
+- **Issue:** `classRecommendations` literal embedded in the step component instead of living next to the rest of the class data in `dnd5e/`.
+- **Suggested approach:** Move to `dnd5e/classData` or similar.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/AbilityScoresStep.jsx
+- **Line:** 113-118
+- **Category:** Math errors in character calculations
+- **Issue:** `rollDice` uses `Math.random()` for 4d6-drop-lowest. Acceptable for client UX but non-deterministic & cannot be replayed/audited. Worse: there is no display of the actual dice rolls, breaking the social ritual of rolled stats.
+- **Suggested approach:** Either (a) call a server-side dice roller for parity with combat rolls, or (b) at minimum render the four individual rolls so the player sees the drop.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/AbilityScoresStep.jsx
+- **Line:** 192-228, 322-340
+- **Category:** Brand color mismatches
+- **Issue:** ~12 occurrences of `#37F2D1`, `#FFC6AA`, `#FF5722`, `#1E2430`, `#2A3441`, `#0b1220`, `#050816` mixed in. Note `#FF5722` is close to `#FF5300` brand orange but not identical.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/AbilityScoresStep.jsx
+- **Line:** 268-273
+- **Category:** Accessibility
+- **Issue:** Help-modal is a non-semantic div: no `role="dialog"`, no focus trap, no `aria-modal`, no Escape handler. The close `<button>` has no `aria-label` (only an X icon).
+- **Suggested approach:** Use the shadcn Dialog primitive or add full ARIA + focus trap + Escape.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/AbilityScoresStep.jsx
+- **Line:** 405-420, 422-429
+- **Category:** Accessibility / Form labels
+- **Issue:** `<select>` and `<Input type="number">` have no `<label>` or `aria-label`. The ability name in an adjacent `<h3>` is not associated. Screen readers announce "Strength 14" without context if the select is focused.
+- **Suggested approach:** Wrap each ability block in a `<fieldset>` with `<legend>`, or add `aria-labelledby={abilityHeadingId}` on each control.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/AbilityScoresStep.jsx
+- **Line:** 296-309
+- **Category:** Accessibility / keyboard
+- **Issue:** "Available Scores" tiles claim `cursor-pointer` but have no click handler — they're decorative-only despite the affordance. The actual assignment happens via `<select>`. Misleading UI for keyboard / screen-reader users.
+- **Suggested approach:** Remove the cursor/hover state, or wire them to actual click-to-assign.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/AbilityScoresStep.jsx
+- **Line:** 41
+- **Category:** Hardcoded values
+- **Issue:** `[15, 14, 13, 12, 10, 8]` standard array literal in component state. Should be a named constant.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/AbilityScoresStep.jsx
+- **Line:** 184-186
+- **Category:** Dead code
+- **Issue:** `availableScores` is computed but never rendered; the available-tiles UI just iterates `standardArray` directly with an `isAssigned` check.
+
+##### BasicInfoStep.jsx
+
+- **Severity:** High
+- **File:** src/components/characterCreator/BasicInfoStep.jsx
+- **Line:** 13-17
+- **Category:** Multi-game abstraction breakage
+- **Issue:** Hardcoded D&D 5e PHB backgrounds list and D&D-style 9-square alignment grid embedded in supposedly system-agnostic basic-info step. Other systems (Mörk Borg, BitD, CY_BORG) lack the alignment construct entirely.
+- **Suggested approach:** Move both lists into `dnd5e/backgroundData` / `dnd5e/alignmentData`; render fields conditionally on system descriptor.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/BasicInfoStep.jsx
+- **Line:** 29-35
+- **Category:** Form validation gaps
+- **Issue:** Required field marked with `*` but no validation, no error state, no minLength/maxLength. Empty string is silently accepted; whitespace-only names will pass.
+- **Suggested approach:** Trim + length-check on blur and on step navigation; show inline error.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/BasicInfoStep.jsx
+- **Line:** 88-92
+- **Category:** Form validation gaps / Math errors
+- **Issue:** Age input uses `parseInt(e.target.value)` with no NaN guard; clearing the field stores `NaN` into state. No min/max; negative or absurd ages allowed.
+- **Suggested approach:** Coerce empty → null, enforce `min={0}`, validate.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/BasicInfoStep.jsx
+- **Line:** 23, 34, 47
+- **Category:** Brand color mismatches
+- **Issue:** ~6 hardcoded color hexes (`#FF5722`, `#1E2430`, `#2A3441`).
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/BasicInfoStep.jsx
+- **Line:** 27
+- **Category:** Tailwind / responsive
+- **Issue:** `grid-cols-2` and `grid-cols-3` used without `md:` breakpoints; on narrow screens fields will be cramped.
+
+##### ClassFeaturesStep.jsx
+
+- **Severity:** High
+- **File:** src/components/characterCreator/ClassFeaturesStep.jsx
+- **Line:** 13
+- **Category:** Multi-game abstraction breakage
+- **Issue:** Hardcoded list of 12 D&D classes inline in a system-agnostic-named folder. Should pull from a system descriptor.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/ClassFeaturesStep.jsx
+- **Line:** 16-17, 44-47
+- **Category:** Math errors in character calculations
+- **Issue:** `primaryClassLevel = level - sum(multiclassLevels)` does not account for the case where the user lowers `level` after adding multiclasses, allowing `primaryClassLevel` to go ≤ 0. The `canMulticlass` check requires `primaryClassLevel >= 1` but doesn't re-validate when level is reduced. The `handleMulticlassChange` clamp logic is also bug-prone — it references `multiclasses[index].level` (stale state) while writing into `newMulticlasses[index].level` (already mutated).
+- **Suggested approach:** Refactor to compute remaining class levels reactively (useMemo); clamp at change time using the *previous* level value before mutation.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/ClassFeaturesStep.jsx
+- **Line:** 10-11, 49-50, 53-56
+- **Category:** State management smells
+- **Issue:** `multiclasses` and `featureChoices` duplicated between local state and parent (`characterData`). Initial sync from parent on mount means parent updates from siblings won't propagate. Both setters always update parent — can deduplicate.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/ClassFeaturesStep.jsx
+- **Line:** 41-42
+- **Category:** State management smells (mutation)
+- **Issue:** `newMulticlasses[index][field] = value` mutates the spread copy's nested object — the array is new but the referenced `mc` objects are shared with the prior state. Same shape later spread fine, but `multiclasses[index].level` on line 46 references original. Risky pattern.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/ClassFeaturesStep.jsx
+- **Line:** 211
+- **Category:** Math errors
+- **Issue:** `Math.min(19, characterData.level - 1)` allows multiclass to reach level 19, but D&D character cap is 20 and multiclass total can equal `characterData.level`, not `level - 1`. The off-by-one excludes the legitimate case where a character is full-multiclass at level N (e.g. Fighter 1 / Wizard N-1).
+- **Suggested approach:** Use `characterData.level - sumOtherMulticlasses` as the per-row maximum.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/ClassFeaturesStep.jsx
+- **Line:** 67-78, 83-92, 102-159, 183-287
+- **Category:** Brand color mismatches
+- **Issue:** ~20 hardcoded color hexes (`#FFC6AA`, `#FF5722`, `#37F2D1`, `#1E2430`, `#2A3441`, `#5B4B9E`).
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/ClassFeaturesStep.jsx
+- **Line:** 96, 144, 182, 231
+- **Category:** React keys
+- **Issue:** Index-based keys on stably-positioned items would be fine, but feature lists are derived from class+level lookup that may reorder if data changes; index keys risk stale UI when removing multiclass rows.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/ClassFeaturesStep.jsx
+- **Line:** 126, 253
+- **Category:** Performance
+- **Issue:** No memoization of `getClassFeaturesForLevel` calls inside render — runs on every keystroke / state change. For 12+ feature rows with potential nested evaluations this can be costly.
+
+##### ClassStep.jsx (1062 lines)
+
+- **Severity:** Critical
+- **File:** src/components/characterCreator/ClassStep.jsx
+- **Line:** 71-181
+- **Category:** Storage path violations / SRD vs user data bucket
+- **Issue:** Twelve hardcoded image URLs to `campaign-assets/dnd5e/classes/...`. Per domain rules these are SRD reference assets (legitimate use of campaign-assets) — but the file is shipped via `https://ktdxhsstrgwciqkvprph.supabase.co/...` instead of being routed through the documented `campaign-assets` configurable bucket helper. If the SRD bucket is renamed, all 12 break silently.
+- **Suggested approach:** Centralize SRD image URL building (e.g. `srdAssetUrl("classes/Barbarian1.png")`) so swaps are one-line.
+
+- **Severity:** Critical
+- **File:** src/components/characterCreator/ClassStep.jsx
+- **Line:** 10, 283, 302, 321
+- **Category:** Base44 leftovers
+- **Issue:** Direct calls to `base44.integrations.Core.UploadFile({ file })` on three distinct upload paths (avatar, profile, companion). Per domain rules portrait uploads must go through user-assets storage helper, and Base44 is being sunset. Other components in this batch (e.g. AIGenerateFlow) already use `uploadFile(file, "user-assets", ...)`.
+- **Suggested approach:** Replace all three with `uploadFile(file, "user-assets", "characters", { uploadType: "avatar" | "profile" | "companion" })`.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/ClassStep.jsx
+- **Line:** 277-329
+- **Category:** Portrait upload validation gaps
+- **Issue:** All three upload handlers accept any file with no MIME / size validation. `accept="image/*"` is the only check.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/ClassStep.jsx
+- **Line:** 62-183, 197-234, 236-242
+- **Category:** Multi-game abstraction breakage
+- **Issue:** ~120 lines of D&D class metadata (descriptions, hit dice, primary abilities, saves, features) plus alignment/companion-types embedded in supposedly system-agnostic step. The brewery integration only further entrenches D&D 5e-specific shape. Should live in `/dnd5e/`.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/ClassStep.jsx
+- **Line:** 188-195
+- **Category:** State management smells
+- **Issue:** Top-level `classes.forEach(...)` mutates the module-scoped `classes` array on every import — if `CLASS_*` registries are loaded asynchronously or vary per system, the mutation persists across mounts/HMR and contaminates other consumers. Side effects in module bodies are a code smell.
+- **Suggested approach:** Compute a derived array via `useMemo` or `const enrichedClasses = classes.map(...)`.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/ClassStep.jsx
+- **Line:** 263-271
+- **Category:** State management smells (dual state)
+- **Issue:** `fullBodyPosition`, `fullBodyZoom`, `profilePosition`, `profileZoom`, `fullBodySaved`, `profileSaved` are seeded once from `characterData.*` on mount. If parent updates these props later (e.g. AI auto-fill), local state silently desyncs.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/ClassStep.jsx
+- **Line:** 361-370
+- **Category:** Performance / leak
+- **Issue:** Window-level mousemove/mouseup listeners are recreated on every `dragStart` change — handlers are inline and not stable references; the dependency array of `dragStart` causes constant add/remove. Cheap, but unnecessary churn during drag.
+- **Suggested approach:** Use `useRef` for `dragStart`, useCallback for handlers, or attach listeners once on isDragging-true.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/ClassStep.jsx
+- **Line:** 688, 781
+- **Category:** Accessibility / anti-pattern
+- **Issue:** `document.getElementById('avatar-upload').click()` and `'profile-upload'` — DOM lookup by id from a React component. Two potential bugs if multiple ClassStep instances ever mount (id collision). Also no keyboard activation since the visible Button forwards click but the file input has no aria.
+- **Suggested approach:** Use `useRef()` on the file input.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/ClassStep.jsx
+- **Line:** 615-700, 711-744
+- **Category:** Accessibility / keyboard
+- **Issue:** Drag/zoom of avatar is mouse-only — `onMouseDown` with no touch support, no keyboard repositioning. Slider is keyboard-accessible only because it's a Radix Slider; the drag interaction is not keyboard- or touch-reachable.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/ClassStep.jsx
+- **Line:** 622-635, 715-729
+- **Category:** Accessibility
+- **Issue:** Portrait `<img alt="Character" />` and `<img alt="Profile" />` are generic. Use character name when available.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/ClassStep.jsx
+- **Line:** 542, 546
+- **Category:** Form validation gaps
+- **Issue:** Same `parseInt(e.target.value)` NaN bug as BasicInfoStep — duplicated.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/ClassStep.jsx
+- **Line:** 387-799
+- **Category:** Brand color mismatches
+- **Issue:** ~50+ hardcoded `#37F2D1`, `#FF5722`, `#1E2430`, `#2A3441`, `#050816`, `#0b1220`, `#8B5CF6` instances. Highest concentration in this batch.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/ClassStep.jsx
+- **Line:** 911, 1027, 1031, 1036
+- **Category:** React keys
+- **Issue:** Index-based keys in feature/equipment lists.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/ClassStep.jsx
+- **Line:** 940-961, 963-1018
+- **Category:** Code quality
+- **Issue:** Two IIFE patterns inline in JSX (`{(() => { ... })()}`). Hard to read and re-render. Extract as small components.
+
+- **Severity:** Cosmetic
+- **File:** src/components/characterCreator/ClassStep.jsx
+- **Line:** 161
+- **Category:** Typo
+- **Issue:** Asset URL `Sorceror1.png` (misspelled). Other classes use the correct spelling `Sorcerer`. The image still loads only because it's the actual filename uploaded.
+
+##### CompanionPicker.jsx
+
+- **Severity:** Critical
+- **File:** src/components/characterCreator/CompanionPicker.jsx
+- **Line:** 8, 149
+- **Category:** Base44 leftovers / Portrait upload validation
+- **Issue:** `base44.integrations.Core.UploadFile({ file })` for both companion editor variants. No MIME / size validation. Bypasses storage path rules.
+- **Suggested approach:** Switch to `uploadFile(file, "user-assets", "companions", { uploadType: "companion" })` and add validation.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/CompanionPicker.jsx
+- **Line:** 43-60
+- **Category:** Multi-game abstraction breakage
+- **Issue:** Hardcoded query against `dnd5e_monsters` table inline; component lives in `/characterCreator/`. Should be in `/dnd5e/` or fed via prop.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/CompanionPicker.jsx
+- **Line:** 54
+- **Category:** console.log / .error
+- **Issue:** `console.error("Beast companion fetch failed", error)` left in.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/CompanionPicker.jsx
+- **Line:** 280, 362
+- **Category:** Accessibility / anti-pattern
+- **Issue:** `e.currentTarget.parentElement.querySelector('input').click()` — DOM-walk to trigger hidden file input. Brittle and not focus-accessible.
+- **Suggested approach:** `useRef`.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/CompanionPicker.jsx
+- **Line:** 158-242
+- **Category:** Brand color mismatches
+- **Issue:** ~15 hex literals (`#37F2D1`, `#5B4B9E`, `#1E2430`, `#0b1220`, `#050816`).
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/CompanionPicker.jsx
+- **Line:** 122, 165
+- **Category:** React keys
+- **Issue:** Index keys for fixedItems / inventory list.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/CompanionPicker.jsx
+- **Line:** 285, 367
+- **Category:** Accessibility / form labels
+- **Issue:** Hidden file inputs lack `aria-label`; their visible "Portrait" / "Upload Portrait" Button is a sibling, not a `<label htmlFor>`.
+
+##### EquipmentStep.jsx
+
+- **Severity:** Critical
+- **File:** src/components/characterCreator/EquipmentStep.jsx
+- **Line:** 11, 46-53
+- **Category:** Base44 leftovers
+- **Issue:** `base44.entities.Dnd5eItem.list("name")` — should be Supabase query against `dnd5e_items`. Failing path silently returns `[]` (empty browse).
+- **Suggested approach:** Replace with `supabase.from('dnd5e_items').select(...)`.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/EquipmentStep.jsx
+- **Line:** 12, 38-90
+- **Category:** Multi-game abstraction breakage
+- **Issue:** Pulls `STARTING_EQUIPMENT` from `dnd5e/dnd5eRules`. Component is hardcoded to D&D 5e starting-equipment shape (fixed/choices/startingGold) and currency types (cp/sp/ep/gp/pp). Should live in `/dnd5e/`.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/EquipmentStep.jsx
+- **Line:** 287-298, 336-340
+- **Category:** Form validation gaps
+- **Issue:** `parseInt(e.target.value) || 1` and `parseFloat ... || 0` mask invalid input — typing "abc" silently coerces to 1/0 with no user feedback.
+- **Suggested approach:** Surface validation; allow blank-during-typing UX.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/EquipmentStep.jsx
+- **Line:** 84-90
+- **Category:** Race condition / dedup
+- **Issue:** `applyStartingEquipment` can be invoked multiple times — each click appends another full set. No guard / no toggle.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/EquipmentStep.jsx
+- **Line:** 274
+- **Category:** React keys
+- **Issue:** `key={index}` on inventory rows — sorting/removing causes inputs to retain wrong DOM state.
+- **Suggested approach:** Use a stable id; generate one in `addInventoryItem`.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/EquipmentStep.jsx
+- **Line:** 235
+- **Category:** Accessibility
+- **Issue:** Item icon `alt=""` is correct only if the name beside it is the accessible label — fine here, noted as intentional.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/EquipmentStep.jsx
+- **Line:** 107-348
+- **Category:** Brand color mismatches
+- **Issue:** ~25 hardcoded hex values.
+
+##### ModeSelector.jsx
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/ModeSelector.jsx
+- **Line:** 53-55
+- **Category:** AI feature tier gate gaps
+- **Issue:** Quick Pick is gated behind `aiGeneration` permission alongside AI Generate. Quick Pick is described in MODES as "we'll find you six adventurers to choose from" — implying it actually uses AI under the hood, which is appropriate. But this contradicts the QuickPickFlow file (separate component) — verify Quick Pick really does call AI before locking it.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/ModeSelector.jsx
+- **Line:** 21, 28, 35, 86, 100
+- **Category:** Brand color mismatches
+- **Issue:** `#37F2D1`, `#fbbf24`, `#a855f7`, `#1E2430`, `#2A3441` literals.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/ModeSelector.jsx
+- **Line:** 100-101
+- **Category:** Tailwind issues / arbitrary values
+- **Issue:** `border-[--accent]` and `style={{ ['--accent']: accent }}` — Tailwind arbitrary class with CSS variable. Works but unusual; readability cost.
+
+##### QuickCreateDialog.jsx (781 lines)
+
+- **Severity:** Critical
+- **File:** src/components/characterCreator/QuickCreateDialog.jsx
+- **Line:** 9, 87, 115, 250
+- **Category:** Base44 leftovers
+- **Issue:** Three base44 calls: `base44.integrations.Core.InvokeLLM` (×2 for character generation, AI generate) and `base44.integrations.Core.GenerateImage` (per-character portrait gen). All must be migrated to the documented `aiClient` API.
+
+- **Severity:** Critical
+- **File:** src/components/characterCreator/QuickCreateDialog.jsx
+- **Line:** 1-781 (entire file)
+- **Category:** Duplicate components
+- **Issue:** This component overlaps massively with QuickPickFlow.jsx and AIGenerateFlow.jsx in the same folder. Same Quick Pick concept, separate AI generate flow, separate "dating profile" picker. Two parallel implementations of the same UX with diverging Base44 vs aiClient backends.
+- **Suggested approach:** Delete this file or QuickPickFlow+AIGenerateFlow — pick one path.
+
+- **Severity:** Critical
+- **File:** src/components/characterCreator/QuickCreateDialog.jsx
+- **Line:** 87-108, 250-276
+- **Category:** AI feature tier gate gaps
+- **Issue:** No tier gate on either AI flow. Anyone with the dialog open can spend AI credits.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/QuickCreateDialog.jsx
+- **Line:** 22-24, 27-43, 296-309, 316-329, 341-354
+- **Category:** Multi-game abstraction breakage / Hardcoded values
+- **Issue:** Five separate hardcoded D&D 5e dictionaries embedded in this dialog (races list, classes list, backgrounds list, optimal stats per class, class skills, class equipment, class features). All belong in `dnd5e/` data files. Several are duplicates of data already in `dnd5e/` (e.g. starting equipment).
+
+- **Severity:** High
+- **File:** src/components/characterCreator/QuickCreateDialog.jsx
+- **Line:** 161-162
+- **Category:** Form validation / UX
+- **Issue:** `handleRejectCharacter` resets `currentCharIndex` to 0 with toast, but only generates 9 characters. After 9 rejections it boots back to `quick` mode but the 9 expensive AI portrait generations are wasted.
+- **Suggested approach:** Cache by quick-pick parameters; allow regenerate with delta.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/QuickCreateDialog.jsx
+- **Line:** 89-107
+- **Category:** Math errors / response validation
+- **Issue:** AI response `result.characters` is used without checking length / minimum count. If LLM returns 4 characters instead of 9, the loop completes but the gender-balance promise (3F/3M/3NB) is silently violated.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/QuickCreateDialog.jsx
+- **Line:** 186, 393
+- **Category:** Math errors in character calculations
+- **Issue:** `passive_perception: 10` (line 186, in `handleLetAIPick`) hardcodes passive perception to 10 — ignores wisdom modifier and Perception proficiency. The `handleAIGenerate` path computes it correctly (line 358-364). Inconsistent.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/QuickCreateDialog.jsx
+- **Line:** 124, 141, 403
+- **Category:** console.error left in
+- **Issue:** Three `console.error` calls left in production paths.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/QuickCreateDialog.jsx
+- **Line:** 425, 443, 452, 488, 504, 520
+- **Category:** Brand color mismatches
+- **Issue:** ~25 hex literals.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/QuickCreateDialog.jsx
+- **Line:** 318-319, 321, 323
+- **Category:** Math errors / data shape
+- **Issue:** Hardcoded `ac_bonus: 11/14/16` for Leather/Scale/Chain Mail — these are the *total AC* of the armor, not a "bonus". A consumer applying it as a +N modifier will produce nonsense. (Also leather's listed AC includes Dex modifier, so even "total" is wrong.)
+- **Suggested approach:** Pull from `dnd5e/itemData` armor table instead of inlining.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/QuickCreateDialog.jsx
+- **Line:** 22
+- **Category:** Multi-game abstraction
+- **Issue:** Races list is missing Dragonborn from QuickPickFlow's own race list — diverging "supported races" between Quick paths.
+
+##### QuickPickFlow.jsx (446 lines)
+
+- **Severity:** High
+- **File:** src/components/characterCreator/QuickPickFlow.jsx
+- **Line:** 33-44
+- **Category:** AI feature tier gate gaps
+- **Issue:** No tier-gate inside the component (relies on ModeSelector). If anything else instantiates this directly (e.g. deep link), Free tier is unprotected.
+- **Suggested approach:** Mirror ModeSelector check, or move guard to a wrapper.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/QuickPickFlow.jsx
+- **Line:** 20-24
+- **Category:** Multi-game abstraction breakage / Duplicate constants
+- **Issue:** `BACKGROUNDS` array duplicated identically in BasicInfoStep, ReviewStep, QuickCreateDialog, and `dnd5e/backgroundData`. Should consume a single source.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/QuickPickFlow.jsx
+- **Line:** 17-18, 144, 160
+- **Category:** Architecture / coupling
+- **Issue:** Imports and renders `RaceStep` and `ClassStep` inside Quick Pick. These full-creator components carry their own unrelated UI (avatar uploads, drag-zoom for portrait). Quick Pick using them as race/class pickers means the user sees the whole step apparatus inside what's billed as a "3-step quick" flow.
+- **Suggested approach:** Extract a slim race/class picker component that both flows can consume.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/QuickPickFlow.jsx
+- **Line:** 75-81, 79
+- **Category:** State management smells
+- **Issue:** `pass()` sets `setCursor(candidates.length)` to indicate exhaustion via out-of-range cursor. Rendering then has to compare `cursor >= candidates.length`. Fragile; better to track an explicit `exhausted` state or use null.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/QuickPickFlow.jsx
+- **Line:** 286-306
+- **Category:** Portrait upload validation gaps
+- **Issue:** `replacePortrait` accepts any file with no MIME / size check.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/QuickPickFlow.jsx
+- **Line:** 218, 287, 391, 412
+- **Category:** Brand color mismatches
+- **Issue:** ~12 hex literals (`#fbbf24`, `#37F2D1`, `#1E2430`, `#0b1220`, `#050816`, `#22c55e`).
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/QuickPickFlow.jsx
+- **Line:** 412, 420
+- **Category:** React keys
+- **Issue:** Index keys for likes/dislikes lists.
+
+##### RaceStep.jsx (921 lines)
+
+- **Severity:** Critical
+- **File:** src/components/characterCreator/RaceStep.jsx
+- **Line:** 100-262, 263-316
+- **Category:** Multi-game abstraction breakage / Hardcoded data
+- **Issue:** Massive D&D 5e `races` array (~160 lines) and full `backgrounds` array (~50 lines) hardcoded inline. Same backgrounds list duplicated at least four other places in this batch alone (BasicInfoStep, QuickPickFlow, QuickCreateDialog, ReviewStep). Race data partially duplicates `dnd5e/raceData` and conflicts with `RACES` registry from `dnd5e/dnd5eRules`.
+- **Suggested approach:** Consume from `dnd5e/raceData` and `dnd5e/backgroundData`; move to /dnd5e/.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/RaceStep.jsx
+- **Line:** 391-400
+- **Category:** State management smells / infinite loop risk
+- **Issue:** `useEffect` depends on `currentRace.name`, `currentRace.subtypes`, `combinedRaces`, `updateCharacterData` and writes back via `updateCharacterData(buildRaceUpdates(currentRace))`. `combinedRaces` is rebuilt as a new array reference whenever `moddedRaces` changes; `currentRace` references change too. Dep `updateCharacterData` is provided by parent — if the parent doesn't memoize it, this effect re-runs on every render and triggers another updateCharacterData → render loop.
+- **Suggested approach:** Use a ref to track whether init has run; remove function dep from array.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/RaceStep.jsx
+- **Line:** 67-71
+- **Category:** Hardcoded values / Multi-game abstraction
+- **Issue:** SRD language list inlined here while a parallel set lives in `dnd5e/`. Should be one source.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/RaceStep.jsx
+- **Line:** 502, 567-593
+- **Category:** Accessibility / keyboard
+- **Issue:** Trait reveal is hover-only via `onMouseEnter` / `onMouseLeave`. Touch and keyboard users cannot read trait descriptions. The trait container has `cursor-pointer` but no `onClick` and no `tabIndex`.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/RaceStep.jsx
+- **Line:** 494-499, 519-524
+- **Category:** Accessibility
+- **Issue:** Race carousel arrow buttons are bare `<button>`s with only icon children — no `aria-label`, no role hint. Screen readers announce just "button".
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/RaceStep.jsx
+- **Line:** 410
+- **Category:** Tailwind / responsive
+- **Issue:** `grid-cols-[1fr_1.2fr]` arbitrary value with no responsive break-down — the carousel is cramped on mobile.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/RaceStep.jsx
+- **Line:** 418-633
+- **Category:** Brand color mismatches
+- **Issue:** ~50+ hex literals (`#37F2D1`, `#FF5722`, `#1E2430`, `#2A3441`, `#5B4B9E`, `#8B5CF6`, `#050816`).
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/RaceStep.jsx
+- **Line:** 566
+- **Category:** React keys
+- **Issue:** Index keys for traits.
+
+##### ReviewStep.jsx (~700 lines based on imports)
+
+- **Severity:** Critical
+- **File:** src/components/characterCreator/ReviewStep.jsx
+- **Line:** 10-23
+- **Category:** Storage path violations / Duplicate data
+- **Issue:** A *third* copy of class icon URLs (also in ClassStep.jsx and likely Quick paths). All hardcoded supabase URLs that bypass any SRD-asset helper.
+
+- **Severity:** Critical
+- **File:** src/components/characterCreator/ReviewStep.jsx
+- **Line:** 25-70, 72-91, 93-99
+- **Category:** Multi-game abstraction breakage / Duplicate data
+- **Issue:** D&D race traits, skill descriptions, and companion-types-by-class all duplicated inline (also exist in RaceStep, SkillsStep, ClassStep). Diverging copies will silently drift.
+
+- **Severity:** Critical
+- **File:** src/components/characterCreator/ReviewStep.jsx
+- **Line:** 116-119
+- **Category:** Math errors in character calculations
+- **Issue:** HP and AC formulas are wrong for level >1 and for any armor.
+  - `maxHP = hitDie + conMod` ignores level — a level-10 fighter shows max HP = 10 + Con mod, not 10d10 + 10×con.
+  - `ac = 10 + abilityModifier(dex)` ignores armor entirely — unarmored only. Many classes wear armor.
+  This is the *review* screen, the user's last sanity check before saving. Wrong numbers persist into combat.
+- **Suggested approach:** Use `calculateMaxHP(class, level, con)` / `calculateAC(...)` from `dnd5e/characterCalculations` (which QuickCreateDialog already does correctly).
+
+- **Severity:** High
+- **File:** src/components/characterCreator/ReviewStep.jsx
+- **Line:** 222-238, 246-296, 387-432, 444-471, 519-548
+- **Category:** Accessibility
+- **Issue:** Hover-only tooltips throughout — for racial traits, ability scores, combat stats, skills, class features, spells. None keyboard-reachable. `cursor-help` decoration is the only affordance.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/ReviewStep.jsx
+- **Line:** 119, 290
+- **Category:** Math errors
+- **Issue:** Speed `characterData.speed || 30` falls back to 30 even for races with different base speeds (Halfling 25, Dwarf 25). The default should be derived from race, not 30.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/ReviewStep.jsx
+- **Line:** 142, 149, 171, 219, 230, 243
+- **Category:** Brand color mismatches
+- **Issue:** Heavy hex usage (`#FF5722`, `#FFC6AA`, `#37F2D1`, `#1E2430`, `#2A3441`, `#5B4B9E`, `#F23737`).
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/ReviewStep.jsx
+- **Line:** 179, 204, 221, 443, 479
+- **Category:** React keys
+- **Issue:** Index keys throughout.
+
+##### SkillsStep.jsx
+
+- **Severity:** High
+- **File:** src/components/characterCreator/SkillsStep.jsx
+- **Line:** 52-60
+- **Category:** State management smells / infinite loop risk
+- **Issue:** `useEffect` dep `[characterData.background]` only — but mutates `selectedSkills` from a stale closure (`const updatedSkills = { ...selectedSkills }`). Eslint exhaustive-deps would flag. Switching background back-and-forth re-applies skills but never removes the previous background's skills → orphaned proficiencies.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/SkillsStep.jsx
+- **Line:** 86-96
+- **Category:** State management smells
+- **Issue:** Sync-to-parent `useEffect` runs on every selectedSkills/expertise change but parent's `updateCharacterData` is in the dep array implicitly through closure. If parent re-renders and provides a new `updateCharacterData` reference, this effect will fire continuously.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/SkillsStep.jsx
+- **Line:** 26-29
+- **Category:** Hardcoded values / Multi-game abstraction
+- **Issue:** `classExpertiseCount = { Rogue: 2, Bard: 2 }` — D&D-specific, hardcoded inline. Also miss Ranger Expertise from Tasha's optional rule and class-feature-derived expertise (Rogue Expertise gains *another* 2 at level 6).
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/SkillsStep.jsx
+- **Line:** 163
+- **Category:** Math errors / Duplication
+- **Issue:** `proficiencyBonus = Math.floor((level - 1) / 4) + 2` re-implemented inline instead of using `proficiencyBonus()` from `dnd5e/dnd5eRules` (which other steps import).
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/SkillsStep.jsx
+- **Line:** 286-298
+- **Category:** Accessibility
+- **Issue:** Skill cards are `<motion.div>` with `onClick` — not buttons, no role, no keyboard binding, no aria-pressed.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/SkillsStep.jsx
+- **Line:** 289, 305, 327, 343
+- **Category:** Brand color mismatches
+- **Issue:** ~20 hex literals.
+
+##### SpellsStep.jsx
+
+- **Severity:** High
+- **File:** src/components/characterCreator/SpellsStep.jsx
+- **Line:** 1-368
+- **Category:** Multi-game abstraction breakage
+- **Issue:** Entire component is D&D-specific (spell slots, cantrips, Pact Magic, half-casters list). Reasonable to live in /dnd5e/ — flagged for design readiness.
+
+- **Severity:** High
+- **File:** src/components/characterCreator/SpellsStep.jsx
+- **Line:** 99-123
+- **Category:** Math errors
+- **Issue:** `getSpellcastingClass()` returns the first match. If a character is Fighter 5 / Wizard 3, it returns Fighter (primary, not a caster) — wait no, it skips non-casters → returns Wizard 3 ✓. But it still uses `level: characterData.level` (line 105) for the *primary* class, which means a Cleric 5 / Fighter 3 reports as Cleric level 8 — wrong for spell slot calc. The full-character `level` instead of the cleric level.
+- **Suggested approach:** When primary is the caster, use class-specific level (which equals total level for single-class only).
+
+- **Severity:** High
+- **File:** src/components/characterCreator/SpellsStep.jsx
+- **Line:** 100, 108
+- **Category:** Hardcoded values
+- **Issue:** `spellcastingClasses` and `halfCasters` arrays inline. Missing Artificer (TCoE). Missing Eldritch Knight / Arcane Trickster (third-caster subclasses), since this list assumes pure caster status.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/SpellsStep.jsx
+- **Line:** 281-289
+- **Category:** Accessibility
+- **Issue:** Spell card is a `<div onClick>` with `<Checkbox pointer-events-none>`. Click hits the div, not the checkbox. Keyboard users can't focus the spell card, and the visible checkbox is decorative-only.
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/SpellsStep.jsx
+- **Line:** 297-302
+- **Category:** SRD vs user data buckets
+- **Issue:** `spellIcons[spell]` reads from `dnd5e/spellData`. Need to verify icons themselves don't reside in `user-assets`. (Verify in spellData audit.)
+
+- **Severity:** Medium
+- **File:** src/components/characterCreator/SpellsStep.jsx
+- **Line:** 312-329
+- **Category:** Performance
+- **Issue:** Each spell card creates a hover state per effect. A Wizard with 12+ spells × 3 effects = 36+ `onMouseEnter` listeners. Acceptable, but flagged for memoization if perf becomes an issue.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/SpellsStep.jsx
+- **Line:** 254
+- **Category:** Math errors / cosmetic
+- **Issue:** `["st","nd","rd"][parseInt(...) - 1] || "th"` — works for 1/2/3 but produces "21st" → "21th". Edge case not reachable in 5e (max spell level 9), so cosmetic.
+
+- **Severity:** Low
+- **File:** src/components/characterCreator/SpellsStep.jsx
+- **Line:** 129, 197, 215, 230, 286
+- **Category:** Brand color mismatches
+- **Issue:** ~15 hex literals.
+
+
+#### /src/components/characters/
+
+##### CharacterGrid.jsx
+
+- **Severity:** High
+- **File:** src/components/characters/CharacterGrid.jsx
+- **Line:** 24
+- **Category:** Hardcoded values / Storage
+- **Issue:** Fallback character avatar URL points at `images.unsplash.com/photo-1589254065878-...` — third-party CDN with no caching guarantees, no licensing record. Should be a local placeholder asset.
+- **Suggested approach:** Move placeholder to `/public/images/character-placeholder.png` (or src bucket) and reference from there.
+
+- **Severity:** High
+- **File:** src/components/characters/CharacterGrid.jsx
+- **Line:** 17-22
+- **Category:** Accessibility
+- **Issue:** Card-as-clickable-div: `<div role>` missing, no `onClick`/`onKeyDown` handler in the file (probably handled by a parent), but the `cursor-pointer` styling implies click. If clickable, must be a `<button>` or anchor.
+
+- **Severity:** Medium
+- **File:** src/components/characters/CharacterGrid.jsx
+- **Line:** 50, 54, 58
+- **Category:** Math errors / data shape
+- **Issue:** `character.stats?.dps`, `defense`, `healing` — these aren't D&D 5e fields. They look like generic RPG metrics (DPS = damage-per-second). For a 5e character there is no canonical "DPS"; this UI may be displaying zero for everyone.
+- **Suggested approach:** Either derive proxies (e.g. damage-per-round) or remove these icons.
+
+- **Severity:** Medium
+- **File:** src/components/characters/CharacterGrid.jsx
+- **Line:** 32
+- **Category:** Multi-game abstraction
+- **Issue:** "Level {level} {class}" hardcodes D&D phrasing — Mörk Borg, BitD have no levels.
+
+- **Severity:** Low
+- **File:** src/components/characters/CharacterGrid.jsx
+- **Line:** 36-43
+- **Category:** React keys
+- **Issue:** Tag index keys.
+
+- **Severity:** Low
+- **File:** src/components/characters/CharacterGrid.jsx
+- **Line:** 20, 22
+- **Category:** Brand color mismatches
+- **Issue:** `#2A3441`, `#37F2D1`, `from-purple-600 to-blue-600`.
+
+##### CompanionCard.jsx
+
+- **Severity:** Medium
+- **File:** src/components/characters/CompanionCard.jsx
+- **Line:** 70-76
+- **Category:** Multi-game abstraction
+- **Issue:** Fixed six D&D abilities (str/dex/con/int/wis/cha). For other game systems this won't apply.
+
+- **Severity:** Low
+- **File:** src/components/characters/CompanionCard.jsx
+- **Line:** 24, 26, 71
+- **Category:** Brand color mismatches
+- **Issue:** `#1E2430`, `#050816` literals.
+
+##### CreateCharacterDialog.jsx
+
+- **Severity:** Critical
+- **File:** src/components/characters/CreateCharacterDialog.jsx
+- **Line:** 14, 33
+- **Category:** Base44 leftovers
+- **Issue:** `base44.entities.Character.create(data)` is the actual character save call. Must be migrated to Supabase. This is the central insertion point — failing this means all Quick Create characters never persist.
+
+- **Critical**
+- **File:** src/components/characters/CreateCharacterDialog.jsx
+- **Line:** 32-44, 86
+- **Category:** Tier-gated character limit gaps
+- **Issue:** No character-limit check before `createMutation.mutate(finalData)`. Domain rules require Free=4, Adventurer=12, Veteran/Guild unlimited. Free users can spam create with no enforcement.
+- **Suggested approach:** Query existing character count for `user_id`; reject (or redirect to upgrade) if at tier cap.
+
+- **Severity:** High
+- **File:** src/components/characters/CreateCharacterDialog.jsx
+- **Line:** 56-87
+- **Category:** Math errors / Storage paths
+- **Issue:** `handleQuickCreateComplete` writes character but does not specify storage bucket / path. The character record itself is fine in DB, but the `avatar_url` from QuickCreate could be a base44 generated URL or unsplash fallback — neither is in `users/{user_id}/character-library/`.
+
+- **Severity:** High
+- **File:** src/components/characters/CreateCharacterDialog.jsx
+- **Line:** 33
+- **Category:** Storage path violations
+- **Issue:** No `library_id` / campaign assignment; the create call doesn't specify whether this is library or campaign-scoped. Per domain rules, library characters live at `users/{user_id}/character-library/` and campaign chars at `users/{user_id}/campaigns/{campaign_id}/`. The save here should target the library by default.
+
+- **Severity:** Medium
+- **File:** src/components/characters/CreateCharacterDialog.jsx
+- **Line:** 41
+- **Category:** console.error left in
+- **Issue:** `console.error("Character save failed", err)`.
+
+- **Severity:** Medium
+- **File:** src/components/characters/CreateCharacterDialog.jsx
+- **Line:** 12, 144-148
+- **Category:** Duplicate components
+- **Issue:** Bridges to `QuickCreateDialog` (a Base44-flagged component already slated for removal). With QuickPickFlow / AIGenerateFlow as the modern path, this dialog is the last place keeping the legacy QuickCreateDialog alive.
+
+- **Severity:** Low
+- **File:** src/components/characters/CreateCharacterDialog.jsx
+- **Line:** 92, 101, 122
+- **Category:** Brand color mismatches
+- **Issue:** `#2A3441`, `#37F2D1`, `#1E2430`, `#FF5722`.
+
+##### RecentCharacters.jsx
+
+- **Severity:** Medium
+- **File:** src/components/characters/RecentCharacters.jsx
+- **Line:** 13-20
+- **Category:** Accessibility
+- **Issue:** Card-as-div with `cursor-pointer` but no `onClick`, no role, no semantic anchor — looks clickable but isn't.
+- **Suggested approach:** Decide: make navigable via `<Link>` or remove the cursor styling.
+
+- **Severity:** Low
+- **File:** src/components/characters/RecentCharacters.jsx
+- **Line:** 6, 15, 17
+- **Category:** Brand color mismatches
+- **Issue:** `#2A3441`, `#1E2430`, `#37F2D1`.
+
+
+#### /src/components/dnd5e/
+
+##### armorClass.js
+
+- **Severity:** Low
+- **File:** src/components/dnd5e/armorClass.js
+- **Line:** 24-29
+- **Category:** Code quality
+- **Issue:** Imports `unarmoredDefense as registryUnarmoredDefense` but never uses it. Dead import.
+
+- **Severity:** Low
+- **File:** src/components/dnd5e/armorClass.js
+- **Line:** 107
+- **Category:** Math errors / data shape
+- **Issue:** `if (kind === "shield") { shield = shield || item; }` keeps the *first* shield; `else if (!bodyArmor) { bodyArmor = item; }` keeps the *first* armor. If a character has two armor items equipped (data inconsistency), the second is silently ignored without a warning.
+
+##### characterCalculations.jsx
+
+- **Severity:** Critical
+- **File:** src/components/dnd5e/characterCalculations.jsx
+- **Line:** 33-37
+- **Category:** Math errors in character calculations
+- **Issue:** `calculateAC(dexScore, armor = null)` *takes* an `armor` argument but ignores it — both branches return `10 + dexMod`. Effectively unarmored only. ReviewStep / QuickCreate consume this and display wrong AC. Should call `computeArmorClass()` from `armorClass.js`.
+- **Suggested approach:** Implement properly using ARMOR_TABLE or delegate to `computeArmorClass`.
+
+- **Severity:** High
+- **File:** src/components/dnd5e/characterCalculations.jsx
+- **Line:** 16-19
+- **Category:** Hardcoded values / Duplication
+- **Issue:** `raceSpeed` map duplicates `RACES` registry data (`getSpeed` already falls back to it). Two sources to maintain.
+
+- **Severity:** Medium
+- **File:** src/components/dnd5e/characterCalculations.jsx
+- **Line:** 25-31
+- **Category:** Math errors
+- **Issue:** `calculateMaxHP` uses *average rounded down + 1* per level (`Math.floor(hitDie/2) + 1`). For a d10 hitDie = 6 — that matches RAW (`(d10/2)+1 = 6`). Correct, but only for averaging — does not support rolled HP per level. Per-level Con is also stacked, which is correct. Flagged for completeness — verify against dnd5eRules canonical formula.
+
+##### backgroundData.jsx
+
+- **Severity:** High
+- **File:** src/components/dnd5e/backgroundData.jsx
+- **Line:** 95-107
+- **Category:** Math errors / hardcoded fallback
+- **Issue:** `getLanguagesForCharacter` hardcodes "Dwarvish" as the first bonus and "Elvish" as the second background language regardless of actual character. Acolyte and Sage get 2 languages: this returns ["Common","Dwarvish","Elvish"] for *every* such character, with no player choice. Should be a placeholder slot the player fills.
+
+- **Severity:** Medium
+- **File:** src/components/dnd5e/backgroundData.jsx
+- **Line:** 71-81
+- **Category:** Duplicate data
+- **Issue:** `raceLanguages` map duplicates the `RACES.languages` data in dnd5eRules.
+
+##### raceData.jsx
+
+- **Severity:** High
+- **File:** src/components/dnd5e/raceData.jsx
+- **Line:** 3-54
+- **Category:** Duplicate data
+- **Issue:** `racialBonuses` overlaps RACES registry in dnd5eRules.js (which has its own `abilityBonuses` shape). Two race-bonus tables with subtly different schemas — drift risk.
+
+- **Severity:** Medium
+- **File:** src/components/dnd5e/raceData.jsx
+- **Line:** 73-95
+- **Category:** Hardcoded values / Multi-game abstraction
+- **Issue:** `RACE_SKILL_PROFICIENCIES` mixes race + subrace keys with no parent linkage. "Elf" and "High Elf" both have `Perception` fixed — duplicated, not merged.
+
+##### schemas.jsx
+
+- **Severity:** Medium
+- **File:** src/components/dnd5e/schemas.jsx
+- **Line:** 145-156
+- **Category:** Form validation gaps
+- **Issue:** `validateCharacter` is shallow — only checks 4 fields with non-meaningful error strings. Doesn't actually run the JSON Schema. The schemas above are decorative (no AJV / Zod).
+
+- **Severity:** Low
+- **File:** src/components/dnd5e/schemas.jsx
+- **Line:** 134
+- **Category:** Math errors
+- **Issue:** `hit_die enum: [1, 2, 4, 6, 8, 10, 12, 20]` — D&D classes use d6/d8/d10/d12. The 1 / 2 / 4 / 20 entries are nonsensical.
+
+##### characterMapping.jsx + characterMapping.ts.jsx
+
+- **Severity:** Critical
+- **File:** src/components/dnd5e/characterMapping.ts.jsx
+- **Line:** 1-204
+- **Category:** Duplicate components / Inconsistent file naming
+- **Issue:** TWO copies of the same module. `characterMapping.jsx` (273 lines, brewery-aware) and `characterMapping.ts.jsx` (204 lines, no brewery support, missing damage_resistances / brewery_class fields). The `.ts.jsx` extension is unusual — not a `.ts` file, not a `.tsx` file. Likely a stale rename mid-refactor. Importers binding to one or the other will silently diverge.
+- **Suggested approach:** Delete `characterMapping.ts.jsx`; it's the older variant.
+
+##### featureDescriptions.jsx
+
+- **Severity:** Medium
+- **File:** src/components/dnd5e/featureDescriptions.jsx
+- **Line:** 1-71
+- **Category:** Duplicate data
+- **Issue:** Class feature blurbs partially duplicate `classFeatures.jsx` descriptions. Two sources for the same content.
+
+##### classFeatures.jsx (~89k bytes)
+
+- **Severity:** High
+- **File:** src/components/dnd5e/classFeatures.jsx
+- **Line:** entire file
+- **Category:** Hardcoded values
+- **Issue:** Massive 90k JSON of class features as JS literal. Should arguably live in DB (`dnd5e_class_features`) the same way spells/items moved to Supabase tables. Bundle-size impact: every page that imports `getClassFeaturesForLevel` ships this whole tree.
+- **Suggested approach:** Migrate to a Supabase reference table; lazy-load per class.
+
+##### spellData.jsx (1054 lines)
+
+- **Severity:** Critical
+- **File:** src/components/dnd5e/spellData.jsx
+- **Line:** 1-339 (337 entries)
+- **Category:** Base44 leftovers / Storage path violations
+- **Issue:** **337 spell icon URLs all point at `https://base44.app/...`**. Once Base44 is sunset, every spell icon in the app 404s. This is the single largest concentration of Base44 dependence in this batch.
+- **Suggested approach:** Bulk-migrate all spell PNGs into `campaign-assets/dnd5e/spells/` (legitimate SRD-asset bucket) and rewrite URLs.
+
+- **Severity:** Critical
+- **File:** src/components/dnd5e/spellData.jsx
+- **Line:** 357-364
+- **Category:** Base44 leftovers
+- **Issue:** `fetchAllSpells` falls through to `base44.entities.Spell.filter({ campaign_id })` for homebrew spells. Once Base44 sunsets, homebrew spells don't load. Also: dynamic `await import("@/api/base44Client")` in a hot path — bundle doesn't tree-shake this.
+
+- **Severity:** High
+- **File:** src/components/dnd5e/spellData.jsx
+- **Line:** 353, 366
+- **Category:** console.error
+- **Issue:** Two `console.error` calls.
+
+- **Severity:** High
+- **File:** src/components/dnd5e/spellData.jsx
+- **Line:** 371-404
+- **Category:** Hardcoded values
+- **Issue:** `spellsByClass` only covers cantrips + level1 explicitly per class. The function `getAllAvailableSpells` then queries the DB for level 2+ — meaning a fresh DB / Supabase outage results in spells beyond level 1 silently disappearing.
+
+- **Severity:** Medium
+- **File:** src/components/dnd5e/spellData.jsx
+- **Line:** 891
+- **Category:** Hardcoded values
+- **Issue:** `["Bard", "Cleric", "Druid", "Sorcerer", "Wizard"]` full-caster list duplicated here. Same list (in different forms) in SpellsStep.jsx.
+
+##### itemData.jsx (66k bytes)
+
+- **Severity:** Critical
+- **File:** src/components/dnd5e/itemData.jsx
+- **Line:** 2-80+ (80 entries)
+- **Category:** Base44 leftovers / Storage path violations
+- **Issue:** 80 `itemIcons` URLs all on base44.app. Same problem as spell icons.
+
+##### abilityData.jsx (46k bytes)
+
+- **Severity:** Medium
+- **File:** src/components/dnd5e/abilityData.jsx
+- **Line:** 3-200+
+- **Category:** Dead code
+- **Issue:** `abilityIcons` map has dozens of class abilities all set to empty string "". The lookup serves no purpose currently — every ability returns "" so nothing renders an icon.
+- **Suggested approach:** Either populate icons or remove the map entirely; consumers should fall back gracefully.
+
+##### dnd5eRules.js (191k bytes)
+
+- **Severity:** Low
+- **File:** src/components/dnd5e/dnd5eRules.js
+- **Line:** 1-3976
+- **Category:** Architecture
+- **Issue:** 3976-line single source of truth file. Reasonable as a registry; flagged because importing any single export loads the entire 191k file. Tree-shaking helps for constants, but functions referencing nested constants may carry the full module.
+- **Suggested approach:** Consider module splits by section (combat / classes / spellcasting / death), even if just for build chunking.
+
+
+#### /src/components/spells/
+
+##### SpellHoverCard.jsx
+
+- **Severity:** Low
+- **File:** src/components/spells/SpellHoverCard.jsx
+- **Line:** 36-40
+- **Category:** Math errors / data shape
+- **Issue:** `Number(spell.level)` on a string like "Cantrip" returns NaN; the conditional collapses to "—". Fine, but if upstream sends `"1st-level"` (textual), level chip says "—" instead of "Level 1".
+
+- **Severity:** Low
+- **File:** src/components/spells/SpellHoverCard.jsx
+- **Line:** 27
+- **Category:** Brand color mismatches
+- **Issue:** Single hardcoded `#0b1220`.
+
+- **Severity:** Low
+- **File:** src/components/spells/SpellHoverCard.jsx
+- **Line:** 22
+- **Category:** Accessibility
+- **Issue:** HoverCard trigger wraps children in an `<span>` — fine for inline content, but if `children` is itself a button, this nests interactive elements (or, more often, makes the tooltip purely hover-only and unreachable by keyboard unless the wrapped element is focusable).
+- **Suggested approach:** Document/enforce that `children` must be focusable, or fall back to a tap-to-show variant on touch.
+
+
+##### Batch 1A-iv Summary
+
+**Findings by severity (approximate, this batch):**
+
+| Severity | Count |
+|---|---|
+| Critical | ~17 |
+| High | ~38 |
+| Medium | ~55 |
+| Low | ~55 |
+| Cosmetic | ~3 |
+
+**Findings by primary category:**
+
+| Category | Count |
+|---|---|
+| Brand color mismatches | ~25 (~300+ literal hex occurrences) |
+| Multi-game abstraction breakage | ~17 |
+| Hardcoded values / duplicate constants | ~20 |
+| Math errors in character calculations | ~14 |
+| Base44 leftovers | ~12 (incl. ~417 base44.app URLs across spell+item icons) |
+| Accessibility | ~22 |
+| State management smells | ~10 |
+| Form validation gaps | ~9 |
+| Storage path violations | ~7 |
+| Portrait upload validation gaps | ~6 |
+| AI feature tier gate gaps | ~5 |
+| Tier-gated character limit gaps | 1 |
+| Duplicate components | ~6 |
+| React keys (index keys) | ~12 |
+| console.log/.error left in | ~7 |
+| Performance | ~3 |
+
+**Top systemic issues for THIS batch:**
+
+1. **The character creator does not respect multi-game architecture.** Every step in `/characterCreator/` (BasicInfo, AbilityScores, Class, ClassFeatures, Race, Skills, Spells, Equipment, Review, plus the Quick paths) hardcodes D&D 5e concepts — six abilities, twelve classes, PHB races, PHB backgrounds, alignment grid, spell slots, hit dice. Worse, multiple D&D constants are duplicated 3-5 times across files (backgrounds list in five places, class list in three, optimal-stats hash in two, race traits in two). When PF2e/WoD/Mörk Borg game packs ship, almost the entire creator folder becomes /dnd5e/ subfolder material — but only after reconciling the duplicates.
+
+2. **Base44 has not been removed; it is the dominant icon hosting strategy.** `spellData.jsx` ships **337** spell icons via `base44.app/api/...` and `itemData.jsx` ships **80** item icons the same way. `ClassStep`, `CompanionPicker`, `QuickCreateDialog`, `CreateCharacterDialog` still call `base44.entities` / `base44.integrations.Core.UploadFile|InvokeLLM|GenerateImage` directly. `fetchAllSpells` uses base44 for homebrew. When Base44 is sunset, every spell and item in the app loses its image, every avatar/companion upload breaks, and every Quick-Create AI flow stops. This is the single largest pre-launch cleanup item across the entire frontend.
+
+3. **Math is inconsistent and frequently wrong.** `characterCalculations.calculateAC` ignores its `armor` parameter and always returns unarmored AC. `ReviewStep.maxHP = hitDie + conMod` ignores level entirely, so the *final review screen* shows a level-10 fighter with HP=10+conMod. `QuickCreateDialog.handleLetAIPick` hardcodes passive_perception=10. `BasicInfo`/`ClassStep` use `parseInt(...)` for age with no NaN guard. `getLanguagesForCharacter` hardcodes "Dwarvish/Elvish" as bonus languages for any background that grants them. Any character built through Quick Create or saved through Review starts with broken combat-relevant numbers.
+
+4. **Tier gating is missing in three places that must enforce it.** `CreateCharacterDialog.createMutation` does not check the Free/Adventurer/Veteran character cap before saving — Free users can create unlimited characters. `AIGenerateFlow` and `QuickCreateDialog` do not gate AI calls behind Adventurer+ at the component level (they rely on the Mode Selector). And the `CompanionPicker` query against `dnd5e_monsters` runs unconditionally. The tier check should be enforced at the mutation, not the entry point.
+
+5. **Storage is shared across SRD and user assets in inconsistent ways.** Class portrait URLs (Barbarian1.png, etc.) are routed through `campaign-assets/dnd5e/classes/` (acceptable per domain rules) but hardcoded as full Supabase URLs in three different files — there is no SRD-asset URL helper. User uploads from `ClassStep` and `CompanionPicker` go through `base44.integrations.Core.UploadFile` which doesn't enforce the `users/{user_id}/character-library/` path. `CharacterGrid` falls back to a third-party `images.unsplash.com` URL for missing avatars. None of these violations leak data, but every one is a long-term liability.
+
+6. **The Quick Create UX is shipped twice.** `QuickCreateDialog` (Base44, dating-card UI inside a modal) and `QuickPickFlow` (aiClient, swipe-card UI as a full-page flow) are both wired into routes. They diverge on race list, generation prompt, post-pick edit affordance, and tier-gating. Pick one and delete the other before launch.
+
+**Multi-game abstraction readiness:** **NOT READY.**
+The current `/characterCreator/` is effectively the `/dnd5e/characterCreator/` — D&D-specific data lives in every step, often hardcoded inline rather than imported from `/dnd5e/`. To support PF2e / WoD / Mörk Borg / CY_BORG / KoB / BitD as game packs, the steps must be split into a system-agnostic shell (mode selector, step navigation, basic identity) plus per-system step modules driven by a registry. As of this batch, that split does not exist; even `/characterCreator/AbilityScoresStep.jsx` hardcodes the six D&D abilities in 24 distinct lines. Plan on a substantial refactor before enabling a second game pack.
+
