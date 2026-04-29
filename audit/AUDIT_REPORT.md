@@ -688,3 +688,853 @@
 6. **Base44 leftovers persist** in `AppSidebar.jsx` (Friendship.list). Check whether other components still import `@/api/base44Client` (out of scope for this batch — flag for next batch).
 7. **No error boundaries anywhere** in the audited folders. Project-wide missing safety net.
 
+
+### Batch 1A-ii: auth & account
+
+#### /src/components/auth/
+
+Folder contains a single component (`AuthBackdrop.jsx`). It is referenced by `pages/Landing.jsx`, `pages/Signup.jsx`, and `pages/Onboarding.jsx` — not dead code.
+
+- **Severity:** Medium
+- **File:** src/components/auth/AuthBackdrop.jsx
+- **Line:** 21
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Supabase storage URL for the looping background video is hardcoded inline. The bucket host (`ktdxhsstrgwciqkvprph.supabase.co`) and asset path will need to change between dev/staging/prod or if the bucket is renamed; right now any move requires editing source.
+- **Suggested approach:** Move to a constant in `src/config/assets.js` (or similar) keyed off `import.meta.env.VITE_SUPABASE_URL` so the asset path automatically follows whichever Supabase project the build is targeted at.
+
+- **Severity:** Medium
+- **File:** src/components/auth/AuthBackdrop.jsx
+- **Line:** 13-24
+- **Category:** Accessibility
+- **Issue:** `<video>` element lacks `aria-hidden="true"` despite being purely decorative. Screen readers may attempt to announce the embedded media element. There is also no fallback poster image, so users with autoplay disabled or slow connections see a blank dark area.
+- **Suggested approach:** Add `aria-hidden="true"` and a `poster` attribute pointing to a static fallback image, plus inner fallback text inside the `<video>` element for browsers that cannot play webm.
+
+- **Severity:** Low
+- **File:** src/components/auth/AuthBackdrop.jsx
+- **Line:** 21
+- **Category:** Performance
+- **Issue:** Video is loaded eagerly with no `preload="metadata"` hint. On slow connections this blocks rendering of the auth form (Landing/Signup/Onboarding). Three pages all mount this component, but each navigation re-fetches the asset because it's a remote URL with no service-worker caching.
+- **Suggested approach:** Add `preload="metadata"` (or `preload="auto"` if autoplay is critical) and consider lifting the `<video>` element to an app-shell-level mount so it persists across the auth flow without re-buffering.
+
+- **Severity:** Low
+- **File:** src/components/auth/AuthBackdrop.jsx
+- **Line:** 25
+- **Category:** Brand inconsistency
+- **Issue:** Overlay is `bg-black/20`. No brand-tinted overlay; if the brand sweep adopts `#1B2535` as the dark surface, this hard black should align.
+- **Suggested approach:** Replace with a brand-token tint once palette decision is made (deferred per scope context).
+
+- **Severity:** Low
+- **File:** src/components/auth/AuthBackdrop.jsx
+- **Line:** 10
+- **Category:** Auth-specific concerns
+- **Issue:** Folder is named `auth/` but contains only a decorative backdrop. Actual auth UI lives in `pages/Landing.jsx`, `pages/Signup.jsx`, `pages/Onboarding.jsx`. The folder name implies auth forms / flows live here, which they don't. New contributors will look here for auth state, password handling, redirect-after-login logic, etc., and find nothing.
+- **Suggested approach:** Either rename folder to `auth-backdrop/` (silly) or move auth form components from `pages/` into `components/auth/` and keep `pages/` thin route wrappers — preferred. At minimum add a README to set expectations.
+
+- **Severity:** Cosmetic
+- **File:** src/components/auth/AuthBackdrop.jsx
+- **Line:** 12
+- **Category:** Tailwind issues
+- **Issue:** `pointer-events-none` is correct, but `-z-10` is an arbitrary stacking choice with no documented z-index scale. Other components likely use bare numbers, named tokens, or CSS variables — verify against project z-index strategy.
+- **Suggested approach:** If a z-index scale exists in `tailwind.config.js`, use a named token; otherwise leave and accept the inconsistency.
+
+#### /src/components/consent/
+
+Three files: `CampaignConsentDialog.jsx` (~339 LOC, used by `CampaignPlayerPanel`), `ConsentChecklist.jsx` (used by `PlayerConsentForm`, `campaigns/create/CampaignConsent.jsx`, `pages/CampaignSettings.jsx`), `PlayerConsentForm.jsx` (used only by `pages/SettingsLegacy.jsx`).
+
+##### CampaignConsentDialog.jsx
+
+- **Severity:** Critical
+- **File:** src/components/consent/CampaignConsentDialog.jsx
+- **Line:** 11, 44, 210
+- **Category:** Base44 leftovers
+- **Issue:** Imports and uses `base44` (`base44.entities.UserProfile.filter(...)`, `base44.entities.Campaign.update(...)`). This is a consent gate — silently failing here will bypass the consent flow during the Supabase migration.
+- **Suggested approach:** Replace `base44.entities.UserProfile.filter` with a Supabase select on `user_profiles`, and `base44.entities.Campaign.update` with a Supabase `update` on `campaigns`. Wire through the typed query layer the rest of the migration is using.
+
+- **Severity:** High
+- **File:** src/components/consent/CampaignConsentDialog.jsx
+- **Line:** 200-217
+- **Category:** State management smells
+- **Issue:** `accept()` reads `campaign.player_consents` from the prop, mutates a local copy, and writes back. There is no optimistic concurrency check — two players accepting near-simultaneously can race and lose one another's consent record. This is a correctness bug for consent records.
+- **Suggested approach:** Move the mutation server-side (RPC / Postgres function that does an atomic JSONB merge) or use a normalized `campaign_consents` row-per-player table. Don't merge JSONB client-side.
+
+- **Severity:** High
+- **File:** src/components/consent/CampaignConsentDialog.jsx
+- **Line:** 196
+- **Category:** Bug / race condition
+- **Issue:** `const rating = campaign?.campaign_rating || campaign?.consent_rating;` — comment says "fall back to legacy". This is migration tech debt. If a campaign has both fields set to different values during the migration window, the new value silently shadows. Also `consent_rating` may be needed in `isBlockedFromCampaign()` (utils) — confirm both code paths use the same source.
+- **Suggested approach:** Run a one-time backfill migrating `consent_rating` into `campaign_rating`, then drop the fallback. Until then, log when the two disagree.
+
+- **Severity:** High
+- **File:** src/components/consent/CampaignConsentDialog.jsx
+- **Line:** 213
+- **Category:** Form validation gaps
+- **Issue:** `toast.error(err?.message || "Failed to record consent")` exposes raw server error messages to end users (potential PII / DB error leaks) and may surface "permission denied for table campaigns" style messages.
+- **Suggested approach:** Map known error codes to user-friendly strings; log the raw error for diagnostics.
+
+- **Severity:** Medium
+- **File:** src/components/consent/CampaignConsentDialog.jsx
+- **Line:** 4
+- **Category:** Duplicate components or near-duplicates
+- **Issue:** Imports `sonner` while the rest of the app also wires `radix-toast`. Confirms the pre-flagged "two toast systems" systemic issue is present in this batch.
+- **Suggested approach:** (See systemic-issues note from Batch 1A-i.)
+
+- **Severity:** Medium
+- **File:** src/components/consent/CampaignConsentDialog.jsx
+- **Line:** 108, 133, 221, 285, 308, 320, 321, 286
+- **Category:** Brand inconsistency
+- **Issue:** Multiple instances of off-brand hex literals: `#1E2430`, `#37F2D1`, `#0b1220`, `#1e293b`, `#050816`, `#2dd9bd`. ~9 occurrences in this file.
+- **Suggested approach:** Replace with brand-token CSS vars once palette decision is finalised (deferred per scope context).
+
+- **Severity:** Medium
+- **File:** src/components/consent/CampaignConsentDialog.jsx
+- **Line:** 35-50
+- **Category:** Performance
+- **Issue:** `useQuery` runs every time the dialog opens with `enabled: open && !!userId`. Cache key is just `["consentProfile", userId]` — fine — but the `.catch(() => [])` swallows errors silently. A network blip leaves `profile` null, which feeds `isBlockedFromCampaign({ campaign, profile: null })` — minors might be allowed through if profile fetch fails.
+- **Suggested approach:** On query error, render a loading/error state — do NOT default to "not a minor". Fail closed for a consent gate.
+
+- **Severity:** Medium
+- **File:** src/components/consent/CampaignConsentDialog.jsx
+- **Line:** 35
+- **Category:** Prop validation / inconsistent prop usage
+- **Issue:** No PropTypes / TS / Zod validation. `campaign` and `userId` are critical and silently no-op (line 201 `if (!agreed || !userId || !campaign?.id) return;`) instead of failing loud.
+- **Suggested approach:** Add prop validation; throw / log when `campaign?.id` missing — don't silently return.
+
+- **Severity:** Medium
+- **File:** src/components/consent/CampaignConsentDialog.jsx
+- **Line:** 107, 132, 220
+- **Category:** Accessibility
+- **Issue:** Three `<Dialog>` instances rely on `onOpenChange` to call `onGoBack`/`onCancel`, but none have `aria-describedby` pointing at the explanatory paragraph. Users on screen readers hear the title but the descriptive body must be discovered manually.
+- **Suggested approach:** Add `aria-describedby` to `DialogContent` referencing the explanatory paragraph's id.
+
+- **Severity:** Medium
+- **File:** src/components/consent/CampaignConsentDialog.jsx
+- **Line:** 110-111, 145, 155, 235, 244, 250, 258, 263, 268, 273, 278, 281, 286, 294
+- **Category:** Accessibility
+- **Issue:** Heavy reliance on emoji glyphs (`🚫`, `🔴`, `🟡`, `📋`, `🛡️`, `📊`, `👥`, `💬`, `🏠`, `⚠️`, `📜`, `📝`) as semantic indicators with no `aria-label` or text equivalent. Screen readers may read or skip these inconsistently. Particularly problematic for the Stage A "Age Restriction" hard-stop where the stop sign carries semantic weight.
+- **Suggested approach:** Wrap emojis in `<span aria-hidden="true">` and surface the meaning via accompanying text or an `aria-label` on the parent.
+
+- **Severity:** Medium
+- **File:** src/components/consent/CampaignConsentDialog.jsx
+- **Line:** 298-301
+- **Category:** Accessibility
+- **Issue:** Bare `<label>` wrapping `<Checkbox>` and a `<span>` — the Checkbox is a Radix primitive which renders as a button, not a real input. The `<label>` won't actually associate via implicit `for/id` linking, so screen readers may not pair the consent text with the checkbox. Critical for the consent acknowledgement.
+- **Suggested approach:** Use `htmlFor` + `id` explicitly (`<Checkbox id="consent-ack" />` and `<Label htmlFor="consent-ack">`).
+
+- **Severity:** Medium
+- **File:** src/components/consent/CampaignConsentDialog.jsx
+- **Line:** 75
+- **Category:** State management smells
+- **Issue:** `cancel` always navigates to `Campaigns` regardless of where the user came from. If they were deep-linking to a specific campaign or arrived from an invite, they lose context.
+- **Suggested approach:** Accept `onCancel` from parent or use `navigate(-1)` as a fallback.
+
+- **Severity:** Low
+- **File:** src/components/consent/CampaignConsentDialog.jsx
+- **Line:** 197-198
+- **Category:** Performance
+- **Issue:** `hasExpectations`/`hasResponsibilities` computed inline on every render with `.trim?.()`. Trivial cost but pattern repeats across the codebase.
+- **Suggested approach:** Inline; only useMemo when expensive.
+
+- **Severity:** Low
+- **File:** src/components/consent/CampaignConsentDialog.jsx
+- **Line:** 309
+- **Category:** Tailwind issues
+- **Issue:** `bg-[#37F2D1] hover:bg-[#2dd9bd]` — arbitrary value pairs both for default and hover. If brand tokens land, only base color will move; the hover-darker variant is hand-tuned per file.
+- **Suggested approach:** Define `--brand-accent` and `--brand-accent-hover` tokens in Tailwind config.
+
+- **Severity:** Low
+- **File:** src/components/consent/CampaignConsentDialog.jsx
+- **Line:** 329
+- **Category:** Inconsistent file naming
+- **Issue:** `needsCampaignConsent` exported from a `.jsx` file that is otherwise a component module. Pure helpers should live in `utils/consent.js`.
+- **Suggested approach:** Move to `src/utils/consent.js` with the other consent helpers (`findConsentConflicts` etc. already live in `utils/contentConflicts`).
+
+- **Severity:** Low
+- **File:** src/components/consent/CampaignConsentDialog.jsx
+- **Line:** 219
+- **Category:** Missing error boundaries
+- **Issue:** Long-running form, network call on accept, no boundary above. Crash bricks the campaign join.
+- **Suggested approach:** Project-wide systemic — see Batch 1A-i.
+
+##### ConsentChecklist.jsx
+
+- **Severity:** High
+- **File:** src/components/consent/ConsentChecklist.jsx
+- **Line:** 4-24
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `CONSENT_CATEGORIES` is a 4-section, 41-item list defined locally. It is duplicated semantically with the consent topics surfaced by `findConsentConflicts` (in `utils/contentConflicts`) and any GM-side category list. Out-of-sync lists will cause silent gaps in the conflict-detection pipeline (player flags topic X with this list; GM list omits X; `findConsentConflicts` never matches).
+- **Suggested approach:** Single source of truth in `src/constants/consent.js` (or DB-driven), imported by player + GM + utility code.
+
+- **Severity:** Medium
+- **File:** src/components/consent/ConsentChecklist.jsx
+- **Line:** 88-97
+- **Category:** Accessibility
+- **Issue:** Each checklist item is a `<button>` cycling through 4 states (unset → green → yellow → red → unset). No `aria-pressed`, no announcement of the new state, no keyboard hint. Screen-reader users have no way to know what state an item is in.
+- **Suggested approach:** Use `role="radiogroup"` + 3 visible state buttons, OR a `<select>` per row, OR keep the cycle but add `aria-label={\`${item}: ${ratingText(state)}\`}` and announce state changes via `aria-live`.
+
+- **Severity:** Medium
+- **File:** src/components/consent/ConsentChecklist.jsx
+- **Line:** 26
+- **Category:** Form validation gaps
+- **Issue:** `checklist` prop is required but defaulted to `{}` only at the call site (`PlayerConsentForm` line 37). Direct importers from `CampaignConsentDialog` / `CampaignSettings` may pass `null` and crash on `checklist[item]` access.
+- **Suggested approach:** `function ConsentChecklist({ checklist = {}, onChange }) {`.
+
+- **Severity:** Medium
+- **File:** src/components/consent/ConsentChecklist.jsx
+- **Line:** 47, 58, 78, 91
+- **Category:** Brand inconsistency
+- **Issue:** Hardcoded `#1E2430`, `#37F2D1`. Same systemic pattern.
+- **Suggested approach:** (deferred — palette decision pending.)
+
+- **Severity:** Medium
+- **File:** src/components/consent/ConsentChecklist.jsx
+- **Line:** 45-54
+- **Category:** Prop validation / inconsistent prop usage
+- **Issue:** `getCheckboxStyle` returns either a class string OR (for the unset case) a class string with no `Check` icon — but the consumer renders `<Check>` only when `checklist[item]` is truthy. The unset-style branch returns the same shape as the rated branches but it's used only when no rating exists. Slightly confusing — the function name suggests it's responsible for icon visibility too.
+- **Suggested approach:** Rename / split: `getCheckboxColors(rating)` returning class string, with an explicit `if (!rating) return DEFAULT_CLASSES`.
+
+- **Severity:** Low
+- **File:** src/components/consent/ConsentChecklist.jsx
+- **Line:** 88
+- **Category:** Accessibility
+- **Issue:** No `type="button"` on the cycling button — inside a `<form>` (which `PlayerConsentForm` arguably is — see SettingsLegacy.jsx) this would default to type=submit and accidentally submit the parent form on Enter.
+- **Suggested approach:** Add `type="button"`.
+
+- **Severity:** Low
+- **File:** src/components/consent/ConsentChecklist.jsx
+- **Line:** 26
+- **Category:** Performance
+- **Issue:** `CONSENT_CATEGORIES` is recreated on every module load (fine), but `Object.entries(...)` runs on every render. Negligible at 41 items but consistent with other patterns flagged.
+- **Suggested approach:** Hoist `Object.entries(CONSENT_CATEGORIES)` to module scope.
+
+##### PlayerConsentForm.jsx
+
+- **Severity:** Medium
+- **File:** src/components/consent/PlayerConsentForm.jsx
+- **Line:** 8-17
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `characterConsentOptions` declared inside the component — recreated each render, and decoupled from the categories in `ConsentChecklist`. Same single-source-of-truth issue as the checklist.
+- **Suggested approach:** Hoist to module scope or `src/constants/consent.js`.
+
+- **Severity:** Medium
+- **File:** src/components/consent/PlayerConsentForm.jsx
+- **Line:** 1-105
+- **Category:** Dead code (unreferenced components/functions/files)
+- **Issue:** Only consumer is `pages/SettingsLegacy.jsx`. If `SettingsLegacy.jsx` is in fact deprecated (named "Legacy"), this entire file may be orphaned.
+- **Suggested approach:** Verify `SettingsLegacy.jsx` is still routed; if not, delete `PlayerConsentForm.jsx` together with `SettingsLegacy.jsx`.
+
+- **Severity:** Medium
+- **File:** src/components/consent/PlayerConsentForm.jsx
+- **Line:** 7
+- **Category:** Form validation gaps
+- **Issue:** `data` prop undefined-safe via `data.consent_checklist || {}` etc., but if parent passes `data={undefined}` directly, `data.character_consent` access on line 79 throws.
+- **Suggested approach:** Default `data = {}`.
+
+- **Severity:** Medium
+- **File:** src/components/consent/PlayerConsentForm.jsx
+- **Line:** 53, 65, 76, 100
+- **Category:** Brand inconsistency
+- **Issue:** Hardcoded `#1E2430` four times.
+- **Suggested approach:** (deferred.)
+
+- **Severity:** Low
+- **File:** src/components/consent/PlayerConsentForm.jsx
+- **Line:** 47, 57
+- **Category:** Accessibility
+- **Issue:** `<Label>` with no `htmlFor` paired with `<Textarea>` with no `id`. Lines & Veils inputs are not programmatically associated with their labels.
+- **Suggested approach:** Add matching `id` / `htmlFor` pairs.
+
+- **Severity:** Low
+- **File:** src/components/consent/PlayerConsentForm.jsx
+- **Line:** 32, 43, 71, 91
+- **Category:** Semantic HTML / heading hierarchy
+- **Issue:** `<h3>` then `<h4>` x3, with no surrounding `<h2>` in the form (parent SettingsLegacy may or may not). Heading hierarchy will likely jump from page-level h1/h2 to h3 then h4 inconsistently.
+- **Suggested approach:** Promote/demote levels to match parent page hierarchy.
+
+#### /src/components/legal/
+
+##### LegalPage.jsx
+
+- **Severity:** High
+- **File:** src/components/legal/LegalPage.jsx
+- **Line:** 42
+- **Category:** Broken or unused imports / DOM bug
+- **Issue:** `<div name="termly-embed" data-id={uuid} />` — `name` is not a valid attribute on `<div>` and React will warn about it. Termly's docs typically expect `<div className="termly-embed" ... />` or `<div data-name="termly-embed" ... />`. This may also cause Termly's hydration script to fail to find the container.
+- **Suggested approach:** Verify Termly's current embed contract; replace with the documented attribute. If Termly truly expects `name=`, suppress the React warning explicitly via a custom DOM-safe attr set.
+
+- **Severity:** Medium
+- **File:** src/components/legal/LegalPage.jsx
+- **Line:** 17-26
+- **Category:** State management smells
+- **Issue:** Cleanup removes the Termly script on unmount, but the script likely hydrated other DOM (event listeners, mutation observers) that survive removal. Also, the `existing` early-return branch returns `undefined` (so the cleanup is skipped on second mount) — meaning second mount installs no script but ALSO does not clean up — but if the user navigates Privacy → Terms, the script remains and Termly may not re-run for the new uuid.
+- **Suggested approach:** Either keep the script alive globally (e.g., load once at app mount) and rely on Termly's `data-id` mutation handling, or fully unload + re-load the script per page transition.
+
+- **Severity:** Medium
+- **File:** src/components/legal/LegalPage.jsx
+- **Line:** 17, 20
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Termly script URL appears twice in the same effect — drift risk if one is updated and not the other.
+- **Suggested approach:** Hoist `const TERMLY_EMBED_URL = '...'` to module scope and use both places.
+
+- **Severity:** Medium
+- **File:** src/components/legal/LegalPage.jsx
+- **Line:** 24
+- **Category:** Form validation gaps / silent failure
+- **Issue:** `try { document.body.removeChild(script); } catch { /* ignore */ }` — silent swallow. If the script ever fails to remove, no logging.
+- **Suggested approach:** Log the error in dev only.
+
+- **Severity:** Medium
+- **File:** src/components/legal/LegalPage.jsx
+- **Line:** 32, 36
+- **Category:** Brand inconsistency
+- **Issue:** Hardcoded `#0f1219`, `#37F2D1`.
+- **Suggested approach:** (deferred.)
+
+- **Severity:** Low
+- **File:** src/components/legal/LegalPage.jsx
+- **Line:** 32
+- **Category:** Accessibility
+- **Issue:** "Back to app" link uses an icon next to text; fine — but the same link is the only navigation control on the page. Consider adding a skip link or making the heading focusable for keyboard users landing here directly.
+- **Suggested approach:** Add `tabIndex={-1}` to the `<h1>` for programmatic focus on route entry.
+
+- **Severity:** Low
+- **File:** src/components/legal/LegalPage.jsx
+- **Line:** 41
+- **Category:** Accessibility
+- **Issue:** White card hosting Termly content with no `lang` / region container; if Termly content uses different language than the rest of the app, screen readers may announce in the wrong locale.
+- **Suggested approach:** Add `lang` attribute to the embed container if Termly returns a known locale.
+
+##### LegalReconsentGate.jsx
+
+- **Severity:** High
+- **File:** src/components/legal/LegalReconsentGate.jsx
+- **Line:** 8
+- **Category:** Inconsistent file naming / coupling
+- **Issue:** Imports `CURRENT_TOS_VERSION` from `@/pages/Landing`. A constant that gates the entire app's reconsent flow lives inside an unrelated marketing page and is also re-imported in `pages/Signup.jsx`. Tightly couples the gate to a UI page that could be deleted.
+- **Suggested approach:** Move `CURRENT_TOS_VERSION` to `src/constants/legal.js` and update all three import sites.
+
+- **Severity:** High
+- **File:** src/components/legal/LegalReconsentGate.jsx
+- **Line:** 30, 32
+- **Category:** Auth-specific concerns
+- **Issue:** Gate logic: `needsConsent = !!user?.id && !!profileId && storedVersion !== CURRENT_TOS_VERSION`. If `user.id` exists but `profile_id` is still loading (profile not yet fetched by AuthContext), the gate silently lets the user through (`return children`). A user with stale TOS version sees a brief flash of unrestricted app while their profile loads, defeating the gate.
+- **Suggested approach:** Differentiate "loading" from "no consent needed" — render a loading skeleton until profile is known to be present-or-absent.
+
+- **Severity:** High
+- **File:** src/components/legal/LegalReconsentGate.jsx
+- **Line:** 34-47
+- **Category:** Form validation gaps
+- **Issue:** `accept()` does not check the supabase response for an error. If `update` fails (RLS denial, network), `setDismissed(true)` runs and the page reloads. After reload, AuthContext re-fetches profile, sees old `tos_version`, and the gate re-mounts — so the user is blocked again with no explanation. Worse: if a transient error wipes the catch path, `setSubmitting(false)` runs but UX never tells the user what happened.
+- **Suggested approach:** Inspect `{ error }` returned by supabase; surface the error to the user via toast / inline message; do NOT call `setDismissed(true)` unless the update succeeded.
+
+- **Severity:** Medium
+- **File:** src/components/legal/LegalReconsentGate.jsx
+- **Line:** 43
+- **Category:** Performance / state management smells
+- **Issue:** `window.location.reload()` after accept — full reload throws away in-memory state, query cache, etc. Heavy hammer for a profile change.
+- **Suggested approach:** Invalidate AuthContext / profile query manually.
+
+- **Severity:** Medium
+- **File:** src/components/legal/LegalReconsentGate.jsx
+- **Line:** 50
+- **Category:** Tailwind issues / Inline styles
+- **Issue:** `z-[10000]` arbitrary value with no documented z-index scale; same issue flagged in auth backdrop. If another modal lands above 10000, it'll cover this gate, which is a security/compliance issue (gate must be the topmost layer).
+- **Suggested approach:** Define a `z-legal-gate` token at the top of the scale and use it.
+
+- **Severity:** Medium
+- **File:** src/components/legal/LegalReconsentGate.jsx
+- **Line:** 49-99
+- **Category:** Accessibility
+- **Issue:** Full-screen modal-ish blocker but built with a plain `<div>` — no `role="dialog"`, `aria-modal="true"`, no focus trap, no `aria-labelledby` pointing at the heading. The whole app is gated, so keyboard users can tab out of the modal back into the (frozen) underlying app — disorienting.
+- **Suggested approach:** Use the existing Radix Dialog (already used in CampaignConsentDialog) or add the ARIA attributes + focus management manually.
+
+- **Severity:** Medium
+- **File:** src/components/legal/LegalReconsentGate.jsx
+- **Line:** 84-87
+- **Category:** Accessibility
+- **Issue:** Same `<label>`-wrapping-`<Checkbox>` issue as `CampaignConsentDialog`. Radix Checkbox is a button — implicit label association doesn't work. Critical for a consent gate that legally requires affirmative action.
+- **Suggested approach:** Use `htmlFor` + `id` on Checkbox.
+
+- **Severity:** Medium
+- **File:** src/components/legal/LegalReconsentGate.jsx
+- **Line:** 50, 51, 53, 64, 71, 78, 92
+- **Category:** Brand inconsistency
+- **Issue:** Hardcoded `#0f1219`, `#1a1f2e`, `#37F2D1`, `#0b1220`, `#050816`, `#2dd9bd`. ~8 occurrences.
+- **Suggested approach:** (deferred.)
+
+- **Severity:** Low
+- **File:** src/components/legal/LegalReconsentGate.jsx
+- **Line:** 60-82
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Three `<Link>`s to `/Privacy`, `/Terms`, `/EULA` — paths hardcoded, with capital first letter. Other places use `createPageUrl(...)` (e.g., CampaignConsentDialog line 75). Inconsistent route-helper usage.
+- **Suggested approach:** Use `createPageUrl("Privacy")` etc. for consistency.
+
+- **Severity:** Low
+- **File:** src/components/legal/LegalReconsentGate.jsx
+- **Line:** 44
+- **Category:** console.log / .error / .warn left in
+- **Issue:** Empty `catch {}` swallows errors with no log. Silent failure.
+- **Suggested approach:** Add `console.error` (dev) or telemetry call.
+
+#### /src/components/settings/
+
+Seven tab components, all imported by `pages/Settings.jsx` except `DeleteAccountDialog.jsx` which is only used by `pages/SettingsLegacy.jsx`. Note that `PrivacyTab.jsx` defines its OWN inline `DeleteAccountDialog` component at lines 126-206 — entirely separate from the standalone file. **Two competing delete-account dialogs.**
+
+##### Cross-cutting (all tabs)
+
+- **Severity:** High
+- **File:** All settings tabs (AccessibilityTab, AppearanceTab, LegalTab, NotificationsTab, PrivacyTab) lines 10/16
+- **Category:** State management smells / coupling
+- **Issue:** All tabs `import { Row, SectionHeader } from "@/pages/Settings"`. Layout primitives reused across the settings tabs live inside the `pages/Settings.jsx` route module — backwards dependency: components depend on a page. Renaming or refactoring `Settings.jsx` will break six files; circular-import risk if `Settings.jsx` ever imports back.
+- **Suggested approach:** Extract `Row` and `SectionHeader` into `src/components/settings/_layout.jsx` (or similar) and re-export from there.
+
+- **Severity:** Medium
+- **File:** All tabs
+- **Category:** Performance / state management smells
+- **Issue:** Every tab independently calls `useQuery({ queryKey: ["userSettings", user?.id], ... })`. When the user navigates between tabs, each tab triggers its own initial fetch (cache hit but still wasteful re-render churn). More importantly, the cache key has no scope — a stale `getUserSettings` shape change drops every tab's data on the floor at once.
+- **Suggested approach:** Hoist the `userSettings` query to `pages/Settings.jsx` (or a `SettingsLayout` wrapper) and pass slices via props or context. Reduces fetch fan-out and keeps the query key in one place.
+
+- **Severity:** Medium
+- **File:** All tabs (5 of 6) lines 3
+- **Category:** Duplicate components or near-duplicates
+- **Issue:** All tabs `import { toast } from "sonner"`, while the rest of the app wires radix-toast. Same systemic issue.
+- **Suggested approach:** (See Batch 1A-i.)
+
+- **Severity:** Medium
+- **File:** All tabs with `<SelectTrigger>` (AccessibilityTab line 58, 96; AppearanceTab line 168, 188; PrivacyTab line 61, 176, 187)
+- **Category:** Brand inconsistency
+- **Issue:** Repeated `bg-[#050816] border-slate-700 text-white` on Select triggers and inputs.
+- **Suggested approach:** (deferred.)
+
+##### AccessibilityTab.jsx
+
+- **Severity:** Medium
+- **File:** src/components/settings/AccessibilityTab.jsx
+- **Line:** 119-126
+- **Category:** Accessibility
+- **Issue:** Ironic: the **Accessibility** tab itself has accessibility issues. Switches and Selects have no `id`, no `htmlFor` on labels, no aria-describedby pointing at the description text. Sighted users see "Dyslexia-friendly mode / description / toggle" — screen readers may hear the toggle without the description. Verify `Row` provides this.
+- **Suggested approach:** Audit `Row` (in pages/Settings.jsx) — ensure it generates an id and links it via `aria-describedby` to the description.
+
+- **Severity:** Medium
+- **File:** src/components/settings/AccessibilityTab.jsx
+- **Line:** 35
+- **Category:** Form validation gaps
+- **Issue:** `useMutation` has no `onError` — failed save shows nothing. Combined with `onSuccess` toast, users assume success.
+- **Suggested approach:** Add `onError: (e) => toast.error(...)`.
+
+##### AppearanceTab.jsx
+
+- **Severity:** Medium
+- **File:** src/components/settings/AppearanceTab.jsx
+- **Line:** 51-62
+- **Category:** Performance
+- **Issue:** `useQuery` keyed by `slotIds.sort().join(",")` — `Array.prototype.sort` MUTATES the original. `slotIds` is a fresh array each render so this is fine in practice, but the pattern is a footgun. If anyone refactors to `useMemo` the array, the mutation will resurface as a state-corruption bug.
+- **Suggested approach:** Use `[...slotIds].sort().join(",")` to be explicit.
+
+- **Severity:** Medium
+- **File:** src/components/settings/AppearanceTab.jsx
+- **Line:** 90-127
+- **Category:** Performance
+- **Issue:** `CosmeticRow` is defined inside the component body. New function reference every render → child memo invalidations → and its inline `<Row>` rerenders.
+- **Suggested approach:** Move `CosmeticRow` outside the component and pass `cosmetics`, `itemBySlot`, `clearMut` via props.
+
+- **Severity:** Medium
+- **File:** src/components/settings/AppearanceTab.jsx
+- **Line:** 65, 73
+- **Category:** Form validation gaps
+- **Issue:** Both mutations missing `onError` handlers. Same pattern across tabs.
+- **Suggested approach:** Add `onError`.
+
+- **Severity:** Low
+- **File:** src/components/settings/AppearanceTab.jsx
+- **Line:** 99-104
+- **Category:** Accessibility
+- **Issue:** `<img alt="" />` for cosmetic preview is appropriate (decorative — name is read aloud beside it), but `truncate` on the name span (line 105) means screen-reader text remains intact while sighted users see ellipsis — that's actually good. No fix; flag as confirming-correct.
+- **Suggested approach:** No change.
+
+##### DeleteAccountDialog.jsx (standalone)
+
+- **Severity:** Critical
+- **File:** src/components/settings/DeleteAccountDialog.jsx
+- **Line:** 10, 33, 41, 49, 57, 68
+- **Category:** Base44 leftovers
+- **Issue:** Account deletion still routes through `base44.entities` for Character / Post / HomebrewRule / Friend / UserProfile. Also uses email-or-userId author lookup inconsistency (line 31 comment). During the Supabase migration this is the worst place to have stale Base44 paths — a half-migrated user will not have their data deleted from Supabase.
+- **Suggested approach:** Replace with Supabase `delete()` calls per table; ideally consolidate into a server-side RPC that runs the full deletion atomically.
+
+- **Severity:** Critical
+- **File:** src/components/settings/DeleteAccountDialog.jsx
+- **Line:** 1-129
+- **Category:** Duplicate components or near-duplicates
+- **Issue:** This file claims to "delete the account" via a 5-step Base44 walk. `PrivacyTab.jsx` defines a SEPARATE inline `DeleteAccountDialog` (lines 126-206) that just opens a support ticket with `category: 'account'`. Same name, same UX shell, completely different behaviour. The current Settings page (`pages/Settings.jsx`) uses the support-ticket version; the legacy page (`pages/SettingsLegacy.jsx`) uses the destructive version. A user landing on the wrong route gets wildly different consequences.
+- **Suggested approach:** Pick one model (support-ticket-then-server-side-delete is the safer default) and delete the other. If both are needed (self-serve vs. moderated), name them distinctly: `SelfServeDeleteAccountDialog` vs. `RequestDeletionDialog`.
+
+- **Severity:** High
+- **File:** src/components/settings/DeleteAccountDialog.jsx
+- **Line:** 32-72
+- **Category:** Form validation gaps / silent failure
+- **Issue:** Each phase wrapped in `try { ... } catch {}` swallowing every failure. If characters fail to delete, posts try anyway. If profile flag fails, supabase signOut still runs. User sees a success toast even if half their data remains.
+- **Suggested approach:** Track per-step failures, abort on first hard failure, surface partial-failure message. Better: server-side transactional delete.
+
+- **Severity:** High
+- **File:** src/components/settings/DeleteAccountDialog.jsx
+- **Line:** 31, 33
+- **Category:** TODO / FIXME / HACK / XXX comments
+- **Issue:** Comment "Hit both to be safe" implies known data-model inconsistency between `created_by` (email) and `user_id`. The code only filters by `user_id` though — it does NOT actually hit `created_by`. So legacy email-keyed Character rows are NEVER deleted.
+- **Suggested approach:** Either remove the misleading comment or actually do the second filter pass on `created_by: user.email`.
+
+- **Severity:** Medium
+- **File:** src/components/settings/DeleteAccountDialog.jsx
+- **Line:** 20
+- **Category:** Prop validation / inconsistent prop usage
+- **Issue:** Dialog is exported with `userId, profileId` props, but `pages/SettingsLegacy.jsx` line 589 must pass them. No defaults, no validation — if either is undefined the deletion silently no-ops on profile flag (line 67 guard) but still signs the user out (line 74).
+- **Suggested approach:** Validate and bail before signOut if profileId missing.
+
+- **Severity:** Medium
+- **File:** src/components/settings/DeleteAccountDialog.jsx
+- **Line:** 86, 109
+- **Category:** Brand inconsistency
+- **Issue:** Hardcoded `#1E2430`, `#0b1220`.
+- **Suggested approach:** (deferred.)
+
+- **Severity:** Medium
+- **File:** src/components/settings/DeleteAccountDialog.jsx
+- **Line:** 111
+- **Category:** Accessibility
+- **Issue:** `autoFocus` on the confirmation input — fine in a dialog, but combined with no proper `aria-describedby` linking the warning copy + the input, screen readers may not associate "type DELETE" with the focused field.
+- **Suggested approach:** Wire `aria-describedby` on the Input pointing at the helper paragraph id.
+
+##### LegalTab.jsx
+
+- **Severity:** Medium
+- **File:** src/components/settings/LegalTab.jsx
+- **Line:** 21-25
+- **Category:** Hardcoded values that should be constants
+- **Issue:** Hardcoded route paths instead of `createPageUrl(...)` (which the app uses elsewhere). Also paths capitalised — easy to drift if the router config changes case.
+- **Suggested approach:** Use `createPageUrl("Terms")` etc.
+
+- **Severity:** Low
+- **File:** src/components/settings/LegalTab.jsx
+- **Line:** 23
+- **Category:** Dead code / route validity
+- **Issue:** Links to `/PrivacySummary` — confirm that route exists in the router. (Out-of-scope for this batch but flag.)
+- **Suggested approach:** Verify route is registered; if not, remove the link.
+
+- **Severity:** Low
+- **File:** src/components/settings/LegalTab.jsx
+- **Line:** 39
+- **Category:** Form validation gaps
+- **Issue:** Mutation has no `onError`.
+- **Suggested approach:** Add `onError`.
+
+- **Severity:** Low
+- **File:** src/components/settings/LegalTab.jsx
+- **Line:** 55
+- **Category:** Brand inconsistency
+- **Issue:** `text-[#37F2D1]`.
+- **Suggested approach:** (deferred.)
+
+##### NotificationsTab.jsx
+
+- **Severity:** Medium
+- **File:** src/components/settings/NotificationsTab.jsx
+- **Line:** 13-17
+- **Category:** TODO / FIXME / HACK / XXX comments
+- **Issue:** Doc comment admits "The email delivery path isn't fully wired yet — these toggles are intentionally persisted early so the email service can key its send/suppress decisions off them the moment it goes live." This is a stub-but-shipping pattern. Users will toggle and assume it works.
+- **Suggested approach:** Add visible "Coming soon" badge next to the email section header, OR delay shipping the email toggles until the service exists.
+
+- **Severity:** Medium
+- **File:** src/components/settings/NotificationsTab.jsx
+- **Line:** 31
+- **Category:** Form validation gaps
+- **Issue:** Mutation has no `onError`. If save fails users see nothing.
+- **Suggested approach:** Add `onError`.
+
+- **Severity:** Low
+- **File:** src/components/settings/NotificationsTab.jsx
+- **Line:** 39-55
+- **Category:** Performance
+- **Issue:** `emailToggle` / `inAppToggle` are functions defined inside the component body — recreated each render.
+- **Suggested approach:** Hoist or memoize. Trivial cost in practice; flag for consistency with codebase patterns.
+
+##### PrivacyTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/settings/PrivacyTab.jsx
+- **Line:** 126-206
+- **Category:** Duplicate components or near-duplicates
+- **Issue:** This file defines its own `DeleteAccountDialog` shadowing the standalone file at `src/components/settings/DeleteAccountDialog.jsx`. Importing the wrong one anywhere produces drastically different behaviour (support ticket vs. immediate destructive deletion).
+- **Suggested approach:** See cross-cutting note above. Rename or unify.
+
+- **Severity:** High
+- **File:** src/components/settings/PrivacyTab.jsx
+- **Line:** 184-189
+- **Category:** Duplicate components or near-duplicates
+- **Issue:** Inline `<input>` instead of the project's `<Input>` component (which is imported elsewhere in the codebase). Inconsistent styling and behaviour.
+- **Suggested approach:** Use `@/components/ui/input`.
+
+- **Severity:** Medium
+- **File:** src/components/settings/PrivacyTab.jsx
+- **Line:** 41, 131
+- **Category:** Form validation gaps
+- **Issue:** `save` mutation has no `onError`. Submit mutation has `onError` (good). Inconsistent.
+- **Suggested approach:** Standardise.
+
+- **Severity:** Medium
+- **File:** src/components/settings/PrivacyTab.jsx
+- **Line:** 121, 158
+- **Category:** Accessibility
+- **Issue:** `DeleteAccountDialog` is rendered with `open={deleteOpen}` — when closed it still mounts (renders an internal `<Dialog open={false}>`). Radix handles this fine, but the inline dialog also re-mounts state on each open (good).
+- **Suggested approach:** No-op; flagging for awareness.
+
+- **Severity:** Low
+- **File:** src/components/settings/PrivacyTab.jsx
+- **Line:** 98-105
+- **Category:** Dead code (unreferenced components/functions/files)
+- **Issue:** "Download my data" is hardcoded `disabled` with `Coming soon` label and `title` attribute. Stub UI shipped to production.
+- **Suggested approach:** Remove until implemented OR add a backlog ticket id in the title attribute for traceability.
+
+- **Severity:** Low
+- **File:** src/components/settings/PrivacyTab.jsx
+- **Line:** 160, 176, 187
+- **Category:** Brand inconsistency
+- **Issue:** `#1E2430`, `#050816` hardcoded.
+- **Suggested approach:** (deferred.)
+
+##### ProfileTab.jsx
+
+- **Severity:** High
+- **File:** src/components/settings/ProfileTab.jsx
+- **Line:** 8, 53
+- **Category:** Base44 leftovers
+- **Issue:** `await base44.entities.UserProfile.update(user.profile_id, { display_title: label })`. The same operation should be done via Supabase.
+- **Suggested approach:** Replace with `supabase.from("user_profiles").update({display_title: label}).eq("id", user.profile_id)`.
+
+- **Severity:** Medium
+- **File:** src/components/settings/ProfileTab.jsx
+- **Line:** 60
+- **Category:** console.log / .error / .warn left in
+- **Issue:** `console.error("Set title", err)` left in. The toast already surfaces the error to the user.
+- **Suggested approach:** Replace with telemetry/Sentry call or remove.
+
+- **Severity:** Medium
+- **File:** src/components/settings/ProfileTab.jsx
+- **Line:** 48
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `const current = user?.display_title || "Wanderer";` — "Wanderer" is the canonical default title hardcoded inline. Same string is presumably used in `TITLE_CATALOG`. Drift risk.
+- **Suggested approach:** Export `DEFAULT_TITLE` from `@/config/titleCatalog`.
+
+- **Severity:** Medium
+- **File:** src/components/settings/ProfileTab.jsx
+- **Line:** 80-92
+- **Category:** Accessibility
+- **Issue:** Title cards are `<button>`s with disabled state but lack `aria-pressed` to communicate the currently selected title. Lock icon on locked items has no `aria-label`.
+- **Suggested approach:** Add `aria-pressed={isCurrent}` and an `sr-only` "Locked" span next to the icon.
+
+- **Severity:** Medium
+- **File:** src/components/settings/ProfileTab.jsx
+- **Line:** 87
+- **Category:** Tailwind issues
+- **Issue:** Arbitrary value `shadow-[0_0_10px_rgba(55,242,209,0.2)]` — long inline shadow. No design-token. Repeated elsewhere?
+- **Suggested approach:** Extract to a tailwind plugin or CSS variable for the brand-glow effect.
+
+- **Severity:** Low
+- **File:** src/components/settings/ProfileTab.jsx
+- **Line:** 71, 73, 87, 89, 90, 98
+- **Category:** Brand inconsistency
+- **Issue:** Multiple `#37F2D1`, `#1E2430`, `#0b1220` instances.
+- **Suggested approach:** (deferred.)
+
+#### /src/components/subscription/
+
+Single file `SubscriptionTab.jsx` (~499 LOC) imported only by `pages/SettingsLegacy.jsx`. The current `pages/Settings.jsx` does NOT include a subscription tab — billing is presumably linked elsewhere. Worth verifying the routing.
+
+**Tier source-of-truth check vs. audit brief:**
+
+The brief specifies tavern upload fees in **Spice currency** (Free 1,250 Spice, Adventurer 250 Spice, Veteran/Guild waived). The TIERS table in `src/api/billingClient.js` (lines 45, 83, 121, 159) and the feature copy in this file (via `tier.features`) describe upload fees in **dollars** ($5, $1, waived). This is real drift.
+
+Splits (Free 50/50, Adventurer 30/70, Veteran/Guild 20/80) match the brief.
+
+##### SubscriptionTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/subscription/SubscriptionTab.jsx (and src/api/billingClient.js)
+- **Line:** SubscriptionTab.jsx 209-216 (renders `tier.features`); billingClient.js lines 26, 45, 63, 83, 100, 121
+- **Category:** Tier/subscription drift
+- **Issue:** Tavern upload fees rendered to users are dollar amounts ("$5 fee, 50/50 split", "$1 fee, 30/70 split"). Audit brief states the model is **Spice**: 1,250 Spice (Free), 250 Spice (Adventurer), waived for Veteran/Guild. This file consumes `TIERS.features` so it inherits the drift. Either the source-of-truth has not been updated or the brief is stale — flag for product owner.
+- **Suggested approach:** Confirm with product whether fees are Spice or USD; update `TIERS[*].features` strings and `TIERS[*].limits.tavernUploadFee` field name (e.g., add `tavernUploadFeeSpice`).
+
+- **Severity:** High
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 1-499
+- **Category:** Dead code (unreferenced components/functions/files) / inconsistent file naming
+- **Issue:** Only consumer is `pages/SettingsLegacy.jsx`. The current `pages/Settings.jsx` (used by `Settings` route) does NOT mount this tab. Either the user-visible Settings route is missing the Subscription tab entirely, or this file is dead. Either is a substantive shipping bug.
+- **Suggested approach:** Confirm whether subscription management is reachable from `pages/Settings.jsx`; if not, either re-mount this tab there or delete the file once SettingsLegacy is retired.
+
+- **Severity:** High
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 401-425
+- **Category:** Auth-specific concerns / Privacy
+- **Issue:** `inviteByEmail` does `supabase.from('user_profiles').select('user_id, username').ilike('email', email).limit(1)`. This **leaks user existence** by email — anyone on the Guild tier can probe the database with a series of emails to learn whether each account exists, given the differentiated error message ("No user with that email yet" vs success). It also relies on RLS being correctly configured to permit `email` reads — if RLS allows this for any authenticated user, that's a privacy leak by design.
+- **Suggested approach:** Move invite resolution server-side via Edge Function with a uniform success/queued response. Never let the client read `email` on `user_profiles`.
+
+- **Severity:** High
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 252
+- **Category:** Prop validation / inconsistent prop usage
+- **Issue:** `function GuildPanel({ sub, user, queryClient, setConfirmLeave, setConfirmRemove })` — `confirmLeave` / `confirmRemove` props are passed in (lines 111, 113) but not destructured or used inside `GuildPanel`. Dead props.
+- **Suggested approach:** Remove `confirmLeave`/`confirmRemove` from the call site or destructure them and use them.
+
+- **Severity:** High
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 274-302
+- **Category:** Performance
+- **Issue:** `members` query enabled only for `isGuildOwner`. Inside the queryFn, the OR filter `guild_owner_id.eq.${userId},user_id.eq.${userId}` interpolates `userId` into a Postgres OR string. If `userId` came from an attacker-controlled source it could be SQL-injection-adjacent — Supabase's `.or()` is documented to be safe-ish for UUIDs, but it accepts raw strings. Defence-in-depth: validate userId is a UUID before interpolation.
+- **Suggested approach:** Validate `userId` matches UUID regex; ideally restructure as two queries combined client-side.
+
+- **Severity:** High
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 38-55
+- **Category:** State management smells
+- **Issue:** `useEffect` runs on mount, reading `window.location.search`, calling `sub.refresh()`, then mutating history. The eslint-disable hides the dependency-array gap. If `user?.id` is null at mount (auth still loading) the analytics call fires with `undefined` user. If the URL contains `subscription=success` after redirect from Stripe, the success toast fires but `sub.refresh()` may run before the user is fully authenticated.
+- **Suggested approach:** Guard the success branch with `if (!user?.id) return;` and add `user?.id` to deps + a ref-based once-only flag.
+
+- **Severity:** Medium
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 365
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `maxSeats={TIERS.guild.limits.guildSeats}` — Brief says "Guild $34.99 per month for 6 members"; TIERS.guild.limits.guildSeats is `6`. Aligns with brief. But the brief value isn't co-located so seats hardcoded into TIERS table rather than into a `GUILD_SEAT_COUNT` constant. If pricing model evolves (e.g., 8 seats), at least one feature-list string ("$5.83 per person") and the seat count must update together.
+- **Suggested approach:** Compute the per-person price string from `price / guildSeats` so it stays in sync.
+
+- **Severity:** Medium
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 132, 161, 316
+- **Category:** Form validation gaps
+- **Issue:** Three places call bare `toast(...)` (no level) for non-error events. Mixed with `toast.success` and `toast.error`. Inconsistent — `toast()` may render with a different default style.
+- **Suggested approach:** Use `toast.success` / `toast.info` consistently.
+
+- **Severity:** Medium
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 401-403
+- **Category:** Form validation gaps
+- **Issue:** `inviteByEmail` accepts an email but doesn't validate format. Empty / malformed strings produce an unhelpful "No user with that email yet" toast.
+- **Suggested approach:** Use the `<Input type="email">` HTML5 validation OR add a regex check before the supabase query.
+
+- **Severity:** Medium
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 478-484
+- **Category:** Duplicate components or near-duplicates
+- **Issue:** Inline `<input type="email">` instead of `<Input>` from `@/components/ui/input`. Same anti-pattern flagged in `PrivacyTab`. Suggests a wider codebase pattern.
+- **Suggested approach:** Use the `<Input>` component.
+
+- **Severity:** Medium
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 119, 148, 183, 374, 429, 446, 450, 483, 485
+- **Category:** Brand inconsistency
+- **Issue:** Hardcoded `#1E2430`, `#2A3441`, `#111827`, `#0b1220`, `#37F2D1`, `#fbbf24`, `#22c55e`, `#16a34a`, `#fde68a`, `#050816`. ~12 hex values across the file.
+- **Suggested approach:** (deferred.)
+
+- **Severity:** Medium
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 184, 186, 199, 212, 241
+- **Category:** Inline styles that should be Tailwind/CSS
+- **Issue:** Multiple `style={{ ... }}` (CSS variable injection for accent color) and `style={{ background: accent }}`. The CSS var trick (lines 184, 186, 199) is sensible because tier color is dynamic — but mixing inline-style accent with Tailwind classes for everything else makes scanning harder. Also `shadow-[0_0_25px_rgba(0,0,0,0.4)]` is a long arbitrary value.
+- **Suggested approach:** Either commit to inline-style for tier accent or move into a `data-tier` attribute and use Tailwind's `data-[tier=guild]:bg-amber-400` pattern.
+
+- **Severity:** Medium
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 427
+- **Category:** Bug
+- **Issue:** `const memberCount = (members || []).length || 1;` — falls back to 1 when there are 0 members. UI then renders "1/6 members" even when nobody is in the guild. Misleading.
+- **Suggested approach:** Use `members?.length ?? 0`. Owner should count toward the seats anyway, but encode that explicitly.
+
+- **Severity:** Medium
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 264
+- **Category:** Performance
+- **Issue:** `refetchInterval: 30000` polls invite list every 30s while the user sits on the tab. If many users leave the tab open (it's a settings route), this is unnecessary load.
+- **Suggested approach:** Use Supabase realtime subscription OR only refetch on window focus.
+
+- **Severity:** Medium
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 117, 145, 147, 173
+- **Category:** Accessibility
+- **Issue:** AlertDialog rendered with no `aria-describedby` on the body content; cancel button has heavy custom hover classes (`hover:bg-gray-800 hover:text-white`) — verify focus visible state still works.
+- **Suggested approach:** Confirm Radix alert-dialog handles focus management; spot-check focus ring visibility on the cancel button.
+
+- **Severity:** Medium
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 184, 199
+- **Category:** Tailwind issues
+- **Issue:** `border-[--accent]` and `bg-[--accent]` rely on the CSS-var being defined inline. If a parent ever overrides `--accent`, the tier card will inherit the wrong color silently.
+- **Suggested approach:** Use a more specific custom property name like `--gs-tier-accent`.
+
+- **Severity:** Low
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 35
+- **Category:** Performance
+- **Issue:** Three pieces of local state (`busyTier`, `confirmLeave`, `confirmRemove`) — fine, but `confirmRemove` holds the member id while `confirmLeave` is a boolean. Inconsistent shape.
+- **Suggested approach:** No fix needed; flag for awareness.
+
+- **Severity:** Low
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 43
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `🎉` emoji in toast string; consistent with codebase pattern but flagged for accessibility (screen readers may speak "party popper").
+- **Suggested approach:** Remove or replace with text.
+
+- **Severity:** Low
+- **File:** src/components/subscription/SubscriptionTab.jsx
+- **Line:** 1-499
+- **Category:** Missing error boundaries
+- **Issue:** No boundary around the panel — a malformed TIERS feature list could crash the route.
+- **Suggested approach:** Project-wide systemic.
+
+##### Batch 1A-ii Summary
+
+**Totals by severity (this batch only):**
+
+| Severity  | Count |
+|-----------|-------|
+| Critical  | 5     |
+| High      | 18    |
+| Medium    | 53    |
+| Low       | 19    |
+| Cosmetic  | 1     |
+| **Total** | **96** |
+
+**Totals by category (this batch only):**
+
+| Category | Count |
+|---|---|
+| Brand inconsistency | 13 |
+| Accessibility | 13 |
+| Form validation gaps | 10 |
+| Hardcoded values that should be constants | 9 |
+| Performance | 9 |
+| State management smells | 6 |
+| Duplicate components or near-duplicates | 5 |
+| Base44 leftovers | 4 |
+| Tailwind issues | 4 |
+| Prop validation / inconsistent prop usage | 3 |
+| Inconsistent file naming | 3 |
+| Inline styles that should be Tailwind/CSS | 2 |
+| Missing error boundaries | 2 |
+| Dead code (unreferenced components/functions/files) | 3 |
+| TODO / FIXME / HACK / XXX comments | 2 |
+| console.log / .error / .warn left in | 2 |
+| Auth-specific concerns | 2 |
+| Bug / race condition | 2 |
+| Tier/subscription drift | 1 |
+| Semantic HTML / heading hierarchy | 1 |
+| Broken or unused imports / DOM bug | 1 |
+
+(Some findings cross-categorize — categories chosen by primary impact.)
+
+**Top systemic issues for THIS batch:**
+
+1. **Base44 still gates consent and account-deletion flows.** `CampaignConsentDialog`, `DeleteAccountDialog`, and `ProfileTab` all read/write through `base44.entities`. If the Base44 backend is decommissioned mid-migration, consent records and account purges silently break — these are exactly the operations that must NOT silently break (legal / compliance posture).
+2. **Two `DeleteAccountDialog` components.** A standalone destructive `base44`-walking variant under `settings/` and an inline support-ticket variant inside `PrivacyTab.jsx`. They share a name, share a UX shell, do completely different things. Importing the wrong one is a critical user-data risk.
+3. **Settings tabs depend on `pages/Settings`** for the `Row` / `SectionHeader` primitives — backwards layering that will bite any refactor of the Settings route.
+4. **Tavern upload-fee unit drift.** Brief documents fees in Spice (1,250 / 250 / waived); `billingClient.TIERS.features` strings render dollars ($5 / $1 / waived). Pricing copy users see in `SubscriptionTab` therefore disagrees with the canonical model.
+5. **Privacy leak via Guild invite-by-email.** `inviteByEmail` lets a Guild owner probe the `user_profiles.email` column with arbitrary strings and learn whether each address is registered. Move to a server-side resolver.
+6. **Form-association accessibility gaps.** Three different consent / deletion dialogs wrap `<Checkbox>` (Radix button) inside a bare `<label>` without `htmlFor` — the legally-meaningful "I accept" toggle is not programmatically labelled for screen-reader users.
+7. **Mutations missing `onError` handlers** in 4 of the 6 Settings tabs and the appearance / accessibility / legal / notifications tabs in particular — silent save failures.
