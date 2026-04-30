@@ -17,7 +17,7 @@ import { uploadFile } from "@/utils/uploadFile";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import StatusDot from "@/components/presence/StatusDot";
 import { statusMeta } from "@/lib/PresenceContext";
-import { Skeleton, CardSkeleton } from "@/components/ui/Skeleton";
+import { Skeleton, CardSkeleton } from "@/components/ui/skeleton";
 import SocialHandlesDisplay from "@/components/profile/SocialHandlesDisplay";
 
 export default function YourProfile() {
