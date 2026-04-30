@@ -7763,3 +7763,791 @@ No instances of paid-system text (Pathfinder, World of Darkness, Star Wars 5e, e
 - **tavern/** — generally ship-ready except for: (a) the `SpiceEmporium` wallet-credit-without-payment exploit (gate behind `import.meta.env.DEV` immediately), (b) URL-as-asset inputs in `CreatorUploadDialog`, (c) `SPICE_PER_USD` extraction.
 - **worldLore/** — **must not advance to public-launch state** until visibility leaks move server-side and the eight `dangerouslySetInnerHTML` sites pass through DOMPurify. Internal/closed-beta usage is acceptable but the trust model is incomplete.
 
+
+---
+
+### Batch 1A-vii: guild + party
+
+#### /src/components/guild/
+
+##### GuildCrestImage.jsx
+
+- **Severity:** High
+- **File:** src/components/guild/GuildCrestImage.jsx
+- **Line:** 25
+- **Category:** Domain (raster vs path crest handling)
+- **Issue:** Component renders the saved guild crest as a flat `<img>` and assumes the crest is already a baked PNG/raster. Per spec, official emblems are raster PNGs wrapped in SVG (`<image xlink:href="data:img/png;base64,…">`) that need an `feColorMatrix` recolor filter at render time; this component never inspects `isRaster`/emblem metadata and never applies any recolor filter, so any guild whose `crest_image_url` is a raw SVG with raster image children will display in its baked palette and never reflect the guild's chosen recolor.
+- **Suggested approach:** Either guarantee that the saved crest is always a server-side flattened PNG of the recolored composition (and document that), or branch on the source type and render the recolor filter when the SVG is raster-based.
+
+- **Severity:** Medium
+- **File:** src/components/guild/GuildCrestImage.jsx
+- **Line:** 14-16
+- **Category:** Tech debt / column drift
+- **Issue:** Reads both `crest_image_url` (new column) and `crest_url` (legacy 20261123 column) with a `||` fallback. Comment says "older guild rows keep working without a backfill" — long-term debt that should not stay forever; risks the two columns drifting out of sync (one updated, the other stale).
+- **Suggested approach:** Schedule a backfill migration from `crest_url` → `crest_image_url`, drop the legacy column, then remove the fallback.
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildCrestImage.jsx
+- **Line:** 27-35, 44, 52-55, 58
+- **Category:** Inline styles that should be Tailwind/CSS
+- **Issue:** Width/height/border-radius/flex-shrink/inline-flex/object-fit all set via inline `style` rather than Tailwind. Mostly justified (size is a prop), but the static parts (`flexShrink`, `display`, `alignItems`, `justifyContent`, `objectFit`) could use Tailwind classes for consistency.
+- **Suggested approach:** Move static positioning/layout to Tailwind, leave the dynamic `width`/`height`/`borderRadius` as inline.
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildCrestImage.jsx
+- **Line:** 60-61
+- **Category:** Brand color mismatch
+- **Issue:** Hardcoded `#2a3441` fill / `#4a5568` stroke for the empty-state shield. Not from documented brand palette (`#FF5300`, `#f8a47c`, `#1B2535`, `#04685A`). Two color instances.
+- **Suggested approach:** Move into theme tokens / Tailwind colors once the palette decision lands.
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildCrestImage.jsx
+- **Line:** 41
+- **Category:** Accessibility
+- **Issue:** Default `alt={title || "Guild crest"}` is acceptable, but when title is empty (the common 24px sidebar case) the user gets the same generic alt for every guild's crest — no guild identity in the accessibility tree. Also `<img>` is rendered without `loading="lazy"`, which matters for the sidebar/small slots.
+- **Suggested approach:** Pass `guild.name` down so the alt becomes `"{Guild name} crest"`; add `loading="lazy"`.
+
+##### GuildHallHeader.jsx
+
+- **Severity:** Critical
+- **File:** src/components/guild/GuildHallHeader.jsx
+- **Line:** 1-128 (whole file)
+- **Category:** Domain — Guild system conflation (HIGHEST PRIORITY)
+- **Issue:** **Component is named `GuildHallHeader` but operates on the System B subscription `guilds` row** — it reads `guild.crest_image_url`, `guild.crest_url`, `guild.founded_at`, `guild.name`, plus an `isLeader` flag and a `memberCount` against a hardcoded `SEATS = 6` (the System B max-member cap). "Guild Hall" per spec is the campaign minigame (System A `guild_halls` table); this component is rendering the subscription guild header. Anyone reading the file name will assume System A and may wire it to the wrong table.
+- **Suggested approach:** Rename to `SubscriptionGuildHeader` (or `GuildHubHeader`), or split into two clearly-named components (`GuildHallHeader` for `guild_halls`, `GuildHeader` for `guilds`). At minimum document at the top of the file which system this targets.
+
+- **Severity:** High
+- **File:** src/components/guild/GuildHallHeader.jsx
+- **Line:** 5, 117
+- **Category:** Hardcoded values that should be constants / 6-member cap enforcement
+- **Issue:** `SEATS = 6` is hardcoded inside the file, but `guilds.max_members` is a real column on System B (per spec, "$34.99/mo covering up to 6 members" — implying max_members = 6 today but not necessarily forever). The header always shows `N/6` even if a guild has a different `max_members`.
+- **Suggested approach:** Read `guild.max_members ?? 6` and surface that. Move the constant to a single domain config (`@/config/guild`).
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildHallHeader.jsx
+- **Line:** 38-42, 60-67, 102-107
+- **Category:** Inline styles / brand color mismatch
+- **Issue:** Heavy inline-styled gradients/borders/shadows. Five amber/gold raw rgba colors (`245,158,11`, `217,119,6`, `251,191,36`) hardcoded — none of these are documented brand colors. Fonts use `'Cinzel', 'Cream', Georgia, serif` inline; should be a Tailwind font-family token.
+- **Suggested approach:** Extract a `theme.guild` style block (or Tailwind token set) for the shared gold gradient + Cinzel heading style; this pattern repeats verbatim in `GuildAchievements`, `GuildActiveCampaigns`, `GuildMembersSection`, `GuildTreasury`, `GuildUpdatesFeed`.
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildHallHeader.jsx
+- **Line:** 47, 82, 91
+- **Category:** Accessibility
+- **Issue:** Three icon-only / very-small buttons (settings gear, "Create Crest", "Edit Crest") rely on `title=` for affordance and have no `aria-label`. Settings button gets a `title` but no aria-label; Create/Edit Crest buttons have visible text but no `aria-label` to disambiguate when multiple "Create Crest" actions exist on a page. Focus styles also missing — only hover styles are provided.
+- **Suggested approach:** Add `aria-label` and a visible focus ring for keyboard users.
+
+##### GuildAchievements.jsx
+
+- **Severity:** High
+- **File:** src/components/guild/GuildAchievements.jsx
+- **Line:** 33-47
+- **Category:** Domain — Party/member visibility leak (potential)
+- **Issue:** Query selects all rows from the `achievements` table where `user_id IN memberIds`, with no privacy gate. If individual achievements are intended to be opt-in for guild visibility (some users may not want to publicly broadcast every personal feat), this query exposes every achievement row indiscriminately. Also, "achievements" probably has campaign-private rows (e.g. "discovered villain") that should not leak across guild members who aren't in that campaign.
+- **Suggested approach:** Confirm the privacy model on the achievements table; if achievements are scoped to a campaign or carry a `visibility` field, filter accordingly. Move enforcement to RLS/RPC so the client cannot bypass it.
+
+- **Severity:** Medium
+- **File:** src/components/guild/GuildAchievements.jsx
+- **Line:** 35
+- **Category:** Performance / cache key correctness
+- **Issue:** `queryKey: ["guildAchievements", memberIds.sort().join(",")]` mutates the parent's `memberIds` array (`.sort()` is in-place). This both (a) leaks a side effect into the parent and (b) the array reference flips order every re-render, defeating React Query cache stability when callers don't already sort.
+- **Suggested approach:** Use `[...memberIds].sort().join(",")`. Same bug repeats on line 27 in `GuildActiveCampaigns` and elsewhere.
+
+- **Severity:** Medium
+- **File:** src/components/guild/GuildAchievements.jsx
+- **Line:** 16-22
+- **Category:** Brand color mismatch
+- **Issue:** Five-tier RARITY palette (slate / emerald / blue / violet / amber) — none of them match the documented brand palette. Ten color values total in this single file.
+- **Suggested approach:** Pull rarity colors into a shared `@/config/rarity` module so the same palette is used across achievement, item, and gear UI; align with brand if the design lands on it.
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildAchievements.jsx
+- **Line:** 79
+- **Category:** Performance / re-render
+- **Issue:** `enriched.map((a) => { const profile = profilesById.get(a.user_id); ... })` looks up profile inline. Fine for small lists but the `useMemo` on enriched re-runs whenever `earned` changes, even though `profilesById` lookups are stable. Minor.
+- **Suggested approach:** Either include `profile` resolution in the same `useMemo`, or accept as-is for a 30-item cap.
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildAchievements.jsx
+- **Line:** 92-99, 133-153
+- **Category:** Inline styles
+- **Issue:** Card backgrounds, borders, and box-shadows all inlined. Same `#0b1324` background appears in every guild section file — should be a Tailwind token.
+
+##### GuildActiveCampaigns.jsx
+
+- **Severity:** High
+- **File:** src/components/guild/GuildActiveCampaigns.jsx
+- **Line:** 32-44
+- **Category:** Domain — Party member visibility leak (HIGH)
+- **Issue:** Query lists every active campaign whose GM or players intersect the guild's member set, returning the full campaign row including names. A guild member who is **not** in a given campaign learns the existence + GM + system + player count of a campaign that another guildmate is in. This may be intended (Guild Hall is by design "what your guildmates are up to"), but it leaks campaign membership and titles to non-participants. If a guildmate runs a private campaign with players outside the guild, those players' presence is implicitly disclosed via `playerCount`. Combined with the `viewerIsMember` check happening client-side (`game_master_id === viewerId || co_dm_ids.includes(viewerId) || player_ids.includes(viewerId)`), nothing on the server prevents a non-member from reading the row.
+- **Suggested approach:** Server-side: an RPC `list_guild_visible_campaigns(guild_id, viewer_id)` that respects each campaign's privacy setting. Confirm with the spec whether private campaigns should hide from the guild stripe entirely.
+
+- **Severity:** High
+- **File:** src/components/guild/GuildActiveCampaigns.jsx
+- **Line:** 33-34
+- **Category:** SQL injection / query safety
+- **Issue:** `or` filter is built by string-interpolating `id` values directly into the PostgREST `or=` expression. `memberIds` are user-controlled ids (`auth.user.id`); if any value contained a comma or `)` or a quote, the OR filter would be malformed at best, injectable at worst. PostgREST does evaluate the `.or()` string. Even if uuids are safe today, the pattern is fragile.
+- **Suggested approach:** Use Supabase's `.in()` for `game_master_id`, then a separate `.cs()` for `player_ids` containing each id (or a server RPC). Never string-build PostgREST filters from variables.
+
+- **Severity:** Medium
+- **File:** src/components/guild/GuildActiveCampaigns.jsx
+- **Line:** 27, 57
+- **Category:** Performance / cache key correctness
+- **Issue:** Same `memberIds.sort()` and `gmIds.sort()` in-place mutation pattern as GuildAchievements.
+
+- **Severity:** Medium
+- **File:** src/components/guild/GuildActiveCampaigns.jsx
+- **Line:** 9-16
+- **Category:** Multi-game abstraction
+- **Issue:** `SYSTEM_LABELS` is hardcoded with five game systems; new systems require a code change. Also the `dnd5e`/`dnd` aliasing suggests historical inconsistency in how game system is stored.
+- **Suggested approach:** Pull system labels from the game-system registry (the same one used by `GameSystemBadge`) and normalize storage on the server.
+
+- **Severity:** Medium
+- **File:** src/components/guild/GuildActiveCampaigns.jsx
+- **Line:** 144
+- **Category:** Brand color mismatch
+- **Issue:** `text-[#37F2D1]` cyan — matches the documented mismatch palette flagged for the codebase. One instance.
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildActiveCampaigns.jsx
+- **Line:** 156
+- **Category:** Tech debt
+- **Issue:** Constructs URL via `createPageUrl("CampaignPanel") + \`?id=${campaign.id}\``. Brittle string concat for query params; the helper should accept params.
+- **Suggested approach:** `createPageUrl("CampaignPanel", { id: campaign.id })` or a typed route helper.
+
+##### GuildMembersSection.jsx
+
+- **Severity:** Medium
+- **File:** src/components/guild/GuildMembersSection.jsx
+- **Line:** 22-31
+- **Category:** Domain — Officer/owner permission rendering
+- **Issue:** `isOfficer` is computed by a client-side `officerIds.includes(p.user_id)` check; same for the "Manage Members" CTA gated on `isLeader`. There's no actual server-side enforcement here, but the component never rechecks identity against the *signed-in viewer*, only against the prop chain. If a parent passes the wrong `isLeader` prop (or a developer wires `isLeader = true` for everyone), the manage UI surfaces. This makes it easy to drift the gate.
+- **Suggested approach:** Read the viewer id from the auth provider inside the component, derive `isLeader = viewerId === guildOwnerId`, and don't accept `isLeader` as a parent-controlled prop.
+
+- **Severity:** Medium
+- **File:** src/components/guild/GuildMembersSection.jsx
+- **Line:** 87-90
+- **Category:** Accessibility
+- **Issue:** Member avatar `<img alt="">` is intentionally decorative, but the surrounding card lacks any region label. Screen readers iterate "Member, …, …" without any name announcement until the `<p>` text is read; ok but the empty alt should be paired with `aria-hidden="true"` for the avatar wrapper. Also `favorite_class_icon` `<img>` uses `alt={profile.favorite_class || ""}` — when class is empty, the alt is empty (good) but it's still in the tab/reading order.
+- **Suggested approach:** Wrap each member card in `<article aria-label={name}>`; add `aria-hidden="true"` to the avatar div when alt is empty.
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildMembersSection.jsx
+- **Line:** 73-83
+- **Category:** Inline styles / brand color mismatch
+- **Issue:** Same `#0b1324` background and amber/slate raw rgba border colors as the other guild sections.
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildMembersSection.jsx
+- **Line:** 121
+- **Category:** Brand color mismatch
+- **Issue:** `text-[#37F2D1]` cyan for `display_title`. One occurrence.
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildMembersSection.jsx
+- **Line:** 32-42
+- **Category:** Domain — 6-cap not enforced here
+- **Issue:** Section displays whatever `profiles` is passed; no defense-in-depth check that `profiles.length <= 6` (or `guild.max_members`). If a backend bug or migration accident allowed 7+ members, the UI silently draws them.
+- **Suggested approach:** Slice/cap the rendered list to `guild.max_members`, or surface a warning when the set exceeds the cap.
+
+##### GuildTreasury.jsx
+
+- **Severity:** Critical
+- **File:** src/components/guild/GuildTreasury.jsx
+- **Line:** 17-59
+- **Category:** Domain — Guild system conflation (HIGHEST PRIORITY)
+- **Issue:** **`guildOwnerId` is used as the `guild_id` in three different table queries** (`spice_transactions.eq("guild_id", guildOwnerId)`, `tavern_purchases.eq("guild_id", guildOwnerId)`, and presumably inside `getGuildWalletBalance(guildOwnerId)`). This is wrong on its face: `guild_id` is the guild's primary key (a uuid on `guilds.id`), and `guildOwnerId` is `guilds.owner_user_id` (a user uuid). The two are different columns. Either (a) the parent component is mis-passing the guild's id under the wrong prop name, hiding the bug, or (b) the queries actually return zero rows and the UI silently shows the empty state forever.
+- **Suggested approach:** Rename the prop to `guildId` and confirm the parent passes `guild.id`, not `guild.owner_user_id`. Adjust `getGuildWalletBalance` accordingly. Add a TypeScript boundary or runtime assertion. This is a direct echo of the systemic guild-conflation pattern called out for this batch.
+
+- **Severity:** High
+- **File:** src/components/guild/GuildTreasury.jsx
+- **Line:** 1-175 (whole file)
+- **Category:** Domain — Shared Spice wallet race condition surface
+- **Issue:** Treasury reads the wallet balance via a single point-in-time query and never subscribes to changes. If two members spend concurrently, the displayed balance stays stale until a refetch — and there's no invalidation hook from the spend mutation visible. Worse, this view is read-only but the mutation paths (Tavern + spending toggle) are elsewhere; nothing here verifies the ledger sums to `wallet.balance` (a math sanity check that would catch missed atomic-decrement bugs).
+- **Suggested approach:** Subscribe to the wallet row via Supabase realtime (`channel('public:spice_wallets')`); refetch ledger + purchases on `INVALIDATE_GUILD_WALLET` events; add a dev-only assertion that `sum(ledger.amount) == balance - opening` to surface arithmetic drift.
+
+- **Severity:** High
+- **File:** src/components/guild/GuildTreasury.jsx
+- **Line:** 17-59
+- **Category:** Domain — Officer/member permission gate gap
+- **Issue:** Spec says `spending_restricted` controls "whether non-officers can spend from shared Spice wallet" and that officers may have spending limits/approval flow. This panel renders `spending_restricted` text saying "only the Guild Leader can spend" — but officers (per `officer_ids`) are explicitly supposed to spend too when restricted. Copy is wrong, and the actual enforcement of officer-vs-leader spending lives where? (likely the tavern checkout). Server-side enforcement gap is implied.
+- **Suggested approach:** Update copy to "only the Guild Leader and Officers" when restricted; verify the spend mutation enforces `viewer_id IN (owner_user_id, officer_ids)` server-side, not just in the Tavern UI.
+
+- **Severity:** Medium
+- **File:** src/components/guild/GuildTreasury.jsx
+- **Line:** 38-59
+- **Category:** Performance / N+1
+- **Issue:** `purchases` query first selects from `tavern_purchases` then makes a second roundtrip to `tavern_items`. Could be a single PostgREST nested select (`tavern_items(id, name, preview_image_url, category)`).
+- **Suggested approach:** Use `.select("..., tavern_items(id, name, preview_image_url, category)")` with a foreign-key relationship or a server view.
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildTreasury.jsx
+- **Line:** 152-156
+- **Category:** Accessibility
+- **Issue:** Tavern-purchase preview `<img alt="">` decorative — fine, but the title below is the only text label for the item; ensure focus order is sensible. Card itself is a `div`, not a button, so it's not interactive — acceptable.
+
+##### GuildUpdatesFeed.jsx
+
+- **Severity:** High
+- **File:** src/components/guild/GuildUpdatesFeed.jsx
+- **Line:** 21-35
+- **Category:** Domain — Party visibility leak (HIGH) / SQL safety
+- **Issue:** Same string-built `or` filter as GuildActiveCampaigns (line 25-27), same campaign-roster-leak surface. Updates feed pulls every `campaign_updates` row whose campaign has *any* guild member as GM/player. A non-participant guild member learns the existence and content excerpt of campaigns they're not in. Updates may contain spoilers, GM notes intended only for players in that campaign, or character secrets posted by GM. Massive leak surface.
+- **Suggested approach:** Server-side RPC `list_visible_guild_updates(guild_id, viewer_id)` filtered by viewer's own campaign membership; never expose update content from campaigns the viewer is not in.
+
+- **Severity:** High
+- **File:** src/components/guild/GuildUpdatesFeed.jsx
+- **Line:** 102, 117
+- **Category:** XSS / content trust
+- **Issue:** `update.content` is rendered as plain text via React (good), but the excerpt logic `(update.content || "").replace(/\s+/g, " ").trim().slice(0, 180)` would happily render raw HTML if `dangerouslySetInnerHTML` were ever swapped in (easy regression). More urgent: if `campaign_updates.content` is meant to be markdown/HTML in other surfaces (e.g. the full CampaignUpdates page), a future "render rich excerpt" tweak would expose XSS to every guild member. Flag to ensure the content sanitization story is documented.
+- **Suggested approach:** Add a comment on line 117 documenting that text-only rendering is intentional; if rich text is needed, route through a `<SafeHtml>` (per cross-cutting recommendation) with DOMPurify.
+
+- **Severity:** Medium
+- **File:** src/components/guild/GuildUpdatesFeed.jsx
+- **Line:** 22, 45
+- **Category:** Performance / cache key
+- **Issue:** `memberIds.sort()` and `campaignIds.sort()` in-place mutation — same defect as GuildAchievements/ActiveCampaigns.
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildUpdatesFeed.jsx
+- **Line:** 78
+- **Category:** Tailwind issues
+- **Issue:** `custom-scrollbar` class — not visible in this file, must be a global CSS class. Hard to discover; verify it's still defined in the global stylesheet and not orphaned.
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildUpdatesFeed.jsx
+- **Line:** 17, 18-20
+- **Category:** Duplicate logic
+- **Issue:** Comment notes "Re-uses the same rows the Active Campaigns section pulls but at a different query key to avoid fighting its cache shape." This is duplicated work — both components fire the same `campaigns where member_ids overlap` query. Should be a shared hook (`useGuildCampaigns`) so the cache is shared and the leak fix happens in one place.
+
+##### CrestBuilder.jsx (~2,925 lines)
+
+- **Severity:** Critical
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 480, 497-506
+- **Category:** Domain — Storage path violation / Guild system conflation
+- **Issue:** Save flow writes the rasterized crest to `guilds/${guildOwnerId}/crest.png` and upserts the `guilds` row with `onConflict: "owner_user_id"`. Per spec, custom guild storage paths should be `guilds/{guild_id}/...` and the conflict key should be the table's primary key, not `owner_user_id`. Using `owner_user_id` as both the path segment and the conflict key (a) ties the crest blob to a user identity (so transferring guild ownership orphans the file or collides), (b) breaks the contract for any consumer expecting `guild_id`-keyed storage paths, and (c) only works because the spec implies one-guild-per-owner today — if that constraint ever loosens (officers run guilds, owner has multiple guilds, etc.), data corruption follows.
+- **Suggested approach:** Take `guildId` (not `guildOwnerId`) as the prop, use `guilds/${guildId}/crest.png`, and `onConflict: "id"` on the upsert.
+
+- **Severity:** Critical
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 462-517
+- **Category:** Domain — Owner permission gate gap (client-side authority)
+- **Issue:** `handleSave` performs the storage upload and `guilds` upsert with no client-side check that the viewer is in fact the guild owner. If RLS isn't airtight on `user-assets` storage and on the `guilds` table for non-owner users, any signed-in user who can render the CrestBuilder can write to `guilds/{any_user_id}/crest.png` and stomp another guild's crest column. Defense in depth requires both the client gate and the server policy.
+- **Suggested approach:** Read the viewer id from auth and `if (viewerId !== guildOwnerId) return toast.error("Only the guild leader can save this crest");`. Confirm RLS policy on the `guilds` table and on the `user-assets/guilds/*` storage prefix server-side.
+
+- **Severity:** High
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 56
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `export const SB = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public"` — hardcoded Supabase project subdomain in a source file. Breaks any environment switch (preview, staging) and exposes the project ref in shipped JS bundle (which is already public, but still: there should be one source of truth via `import.meta.env.VITE_SUPABASE_URL`).
+- **Suggested approach:** Derive from `supabaseClient`'s configured URL or `import.meta.env.VITE_SUPABASE_URL`.
+
+- **Severity:** High
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 889-914, 1948-1979
+- **Category:** XSS surface / user-supplied SVG trust
+- **Issue:** Both the custom-shield uploader (line 889) and the custom-emblem uploader (line 1948) parse user-supplied SVG via DOMParser and re-render harvested elements via `React.createElement(el.tag, {...el.attrs, ...})`. The attribute strip-list only removes `fill`/`stroke`/`style` (line 1518, 1961). Anything else passes through into JSX props — including `href`/`xlink:href` (which can fetch remote resources, exposing the user's IP and opening an SSRF surface for the rasterized PNG fetch), `onload` would be filtered by React, but ID collisions (`id="..."`) and malicious viewBox values can break the page. Worse, the saved crest is later raster-flattened on a `<canvas>` — a malicious SVG with external `<image href="https://attacker/">` will leak the user's IP at every render and the PNG itself encodes whatever the attacker served.
+- **Suggested approach:** Whitelist a strict set of attributes per shape tag (geometric attrs only: `d`, `cx`, `cy`, `r`, `points`, `x`, `y`, `width`, `height`, `transform`); reject any element with `href`, `xlink:href`, or external resource references; cap upload size; consider running the SVG through DOMPurify with the SVG profile.
+
+- **Severity:** High
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 901, 911, 966, 1976
+- **Category:** Accessibility / native dialogs
+- **Issue:** Four `alert()` calls used for error reporting on SVG upload — modal browser-native dialogs without focus management and inaccessible to assistive tech as part of the dialog UI.
+- **Suggested approach:** Replace with `toast.error(...)` (sonner is already imported on line 2).
+
+- **Severity:** Medium
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 185, 512, 1490, 1558, 1561
+- **Category:** console.log/error left in
+- **Issue:** Five `console.error` sites in the SVG fetch + save pipeline. Acceptable as last-ditch error logging but should route to a real logger that can be silenced/sampled in prod.
+
+- **Severity:** Medium
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 462-517
+- **Category:** Race condition / missing debounce
+- **Issue:** `handleSave` is wrapped in `useCallback` but the button isn't debounced beyond `disabled={saving}`. Rapid double-click before `setSaving(true)` paints can fire two uploads + two upserts in a row, producing duplicate writes and racing the `?t=${Date.now()}` cache-bust suffixes between calls.
+- **Suggested approach:** Use a ref guard (`if (savingRef.current) return; savingRef.current = true;`) at the top of the handler in addition to the React state.
+
+- **Severity:** Medium
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 899-908
+- **Category:** Custom shield parsing
+- **Issue:** Custom-shield SVG uploader takes only the first `<path>` element and discards the rest. Real heraldic shield SVGs frequently have multiple paths (silhouette + decorative inner). The user gets a silently-truncated shape with no warning.
+- **Suggested approach:** Walk all `<path>` elements and concatenate `d` attributes (or composite into a clipPath); warn the user when path count > 1.
+
+- **Severity:** Medium
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 1613-1615, 1228
+- **Category:** Math errors / hex parsing fragility
+- **Issue:** `parseInt(color.slice(1, 3), 16) / 255` assumes the color is exactly 7 chars (`#RRGGBB`). The native `<input type="color">` always emits `#RRGGBB`, but `value?.toLowerCase()` on line 1228 hints elsewhere a non-string could come through (the `?.` is unnecessary if it's always a string, suspicious if it's not). 3-digit hex (`#abc`), `rgb(...)`, or named colors silently produce `NaN/255`, which makes the feColorMatrix matrix output `NaN`, which yields a transparent emblem.
+- **Suggested approach:** Validate/normalize input to `#RRGGBB` at the entry point; fall back to a known-good color on parse failure.
+
+- **Severity:** Low
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 2904-2925
+- **Category:** Dead code
+- **Issue:** `TabPlaceholder` defined but no longer referenced (the tab bodies all have real components now). Leftover from the scaffolding commit.
+- **Suggested approach:** Delete.
+
+- **Severity:** Low
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 38, 48, 56, 62, 70, 85, 91, 107, 1482, 1581, 1581, 2361, 2406, 2873
+- **Category:** Public exports — verify usage / dead exports
+- **Issue:** Many top-level constants are `export`ed (`SHIELDS`, `PRESET_COLORS`, `SB`, `EMBLEM_CATEGORIES`, `buildEmblemList`, `EMBLEM_LIST`, `defaultEmblemSlot`, `PATTERNS`, `fetchSVGPaths`, `EmblemOnCrest`, `renderPatternLayer`, `renderPattern`, `crestSvgToPng`). If only `CrestBuilder` (default) is consumed elsewhere, these widen the API surface for no reason. If they ARE consumed by other files (e.g. by `GuildCrestImage`), the modules duplicate logic that should live in `@/lib/crest`.
+- **Suggested approach:** Audit consumers; either move shared helpers into `@/lib/crest` and re-export there, or drop the exports.
+
+- **Severity:** Low
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 26-44
+- **Category:** Multi-game abstraction / heraldry baking
+- **Issue:** Shield silhouettes are heraldic-Western-European (heater, kite, round, pointed, banner). Multi-game support (Cairn pamphlet, Cyberpunk, Star Wars, Monster of the Week, etc.) implies different visual languages for guilds — a circular sigil for Cyberpunk corp logos, etc. Today this hardcodes a fantasy aesthetic.
+- **Suggested approach:** Park as a multi-game readiness item; not a launch blocker.
+
+- **Severity:** Low
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 1593-1594, 2626-2629
+- **Category:** Idiom inconsistency
+- **Issue:** Two parallel id-generation strategies in the same file: `EmblemOnCrest` uses `React.useId()` (correct), `CrestSvg` uses a `Math.random()` ref (with a comment dismissing useId because of "hydration mismatch surface"). The component doesn't SSR (hooks all use refs/effects), so useId is fine and would unify the pattern.
+
+- **Severity:** Low
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 539-870 + many internal components
+- **Category:** Inline styles that should be Tailwind/CSS / file size
+- **Issue:** Entire 2,900-line component renders via JS inline `style={...}` with zero Tailwind classes. Maintainability nightmare; means designer changes to spacing/colors require code edits and lose bundler dead-code shaking on unused classes. Also embeds three `<style>{...}` raw CSS blocks (lines 1268, 1983) for scrollbar styling — these inject global rules that leak across mounts.
+- **Suggested approach:** Convert the chrome to Tailwind classes; lift the shared scrollbar CSS into the global stylesheet; consider splitting the file into `CrestBuilder/{Tabs,Patterns,Emblems,Shields,Render}.jsx`.
+
+- **Severity:** Low
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 608-637, 1995-2055, 2069-2071
+- **Category:** Accessibility
+- **Issue:** Six tabs (`TABS` array on line 26) render as `<button>`s without ARIA `role="tab"`, no `aria-selected`, no surrounding `role="tablist"`, and no `aria-controls` linking to the panel. EmblemSlider (line 2310) renders raw `<input type="range">` with no `aria-label` (only a visual label via a sibling div). Color picker swatches (line 1230) have only `title=` for the screen-reader name. Keyboard navigation between tabs and between emblem slots requires arrow-key handling.
+- **Suggested approach:** Adopt the WAI-ARIA tabs pattern; add `aria-label` to ranges and swatches.
+
+- **Severity:** Low
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 1531
+- **Category:** Tech debt / xlink:href deprecated
+- **Issue:** Reads `xlink:href` and `href` from the source SVG (correct, raster catalog uses xlink), but on line 1631 the renderer outputs both `href={rd.href}` AND `xlinkHref={rd.href}` to render the raster. `xlinkHref` is deprecated in SVG2 and triggers a console warning in Chrome dev mode.
+- **Suggested approach:** Drop the `xlinkHref` prop; modern Chromium/Firefox/Safari all read `href` for `<image>`.
+
+- **Severity:** Low
+- **File:** src/components/guild/CrestBuilder.jsx
+- **Line:** 56, 63, 64
+- **Category:** Storage path / asset bucket consistency
+- **Issue:** Official emblems are referenced via the `app-assets/guild/guildcrest` bucket (correct per spec), but the URL is composed by hand rather than via `supabase.storage.from("app-assets").getPublicUrl(...)`, missing the bucket abstraction (and any future signed-URL switch).
+
+##### GuildSettingsDialog.jsx
+
+- **Severity:** Critical
+- **File:** src/components/guild/GuildSettingsDialog.jsx
+- **Line:** 78-83, 99-104, 109, 127-132, 160
+- **Category:** Domain — Guild system conflation (HIGHEST PRIORITY)
+- **Issue:** Every database write keys on `owner_user_id`, never on `guilds.id`. Five mutations (`saveGeneral`, `savePermissions` × 2 statements, `toggleOfficer`, `disbandGuild`) all upsert/update with `onConflict: "owner_user_id"` or `.eq("owner_user_id", guildOwnerId)`. Most damning: `guild_spice_wallets.update(...).eq("guild_id", guildOwnerId)` (line 109) — passes the OWNER USER ID into a query filter literally named `guild_id`. Either (a) the schema actually stores wallets keyed on owner_user_id under a misnamed `guild_id` column, in which case the database is itself confused, or (b) the wallet update silently matches zero rows and the spending-restricted mirror is broken in production. Combined with the same pattern in `GuildTreasury` and `CrestBuilder`, this is the single largest systemic bug in the batch.
+- **Suggested approach:** Settle on `guilds.id` as the canonical key. Update every mutation to use it; fix `guild_spice_wallets.guild_id` to actually be a foreign key to `guilds.id`. Add a typed wrapper (`@/lib/guildClient`) so callers can't pass the wrong key.
+
+- **Severity:** Critical
+- **File:** src/components/guild/GuildSettingsDialog.jsx
+- **Line:** 154-161
+- **Category:** Domain — Guild system conflation in comments AND in disband flow
+- **Issue:** Comment says "deleting the **guild_halls** row removes the settings" (line 156) — but the code deletes from the **guilds** table on line 160. The comment confuses System A (`guild_halls`, the campaign minigame) with System B (`guilds`, the subscription). Worse, the disband flow only deletes the `guilds` row — leaves orphaned: `guild_spice_wallets`, `spice_transactions`, `tavern_purchases`, `user-assets/guilds/{owner_id}/crest.png`, and any `guild_halls` rows that the actual campaign hall feature might create. There is no `guildDisband` Edge Function call — disband is half-implemented.
+- **Suggested approach:** Replace with a server-side `guildDisband` RPC/Edge Function that atomically removes guild row, wallet, ledger archive, storage assets, and revokes officer permissions. Also fix the comment.
+
+- **Severity:** High
+- **File:** src/components/guild/GuildSettingsDialog.jsx
+- **Line:** 99-110
+- **Category:** Race condition / atomicity
+- **Issue:** `savePermissions` does two sequential writes (guilds row, then wallet). If the second fails the UI toasts an error but the first has already committed — wallet and guild row drift apart. Tavern checkout reads from wallet, so the user thinks restriction is on while the wallet says off (or vice versa).
+- **Suggested approach:** Single Edge Function / RPC that updates both rows in a transaction. Or a database trigger that mirrors guilds.spending_restricted → wallet on update.
+
+- **Severity:** High
+- **File:** src/components/guild/GuildSettingsDialog.jsx
+- **Line:** 120-134
+- **Category:** Race condition / officer toggle atomicity
+- **Issue:** `toggleOfficer` does a read-modify-write on `officer_ids` UUID array. Two leaders editing in two tabs (or two officers if officers ever get this dialog) can race; the latter overwrite wipes the other's change. Same risk if the leader rapidly clicks Promote/Demote on different rows — each mutation reads `officerIds` from props (stale closure on `officerIds` when the second mutation fires).
+- **Suggested approach:** Server RPC `set_officer(guild_id, user_id, on/off)` that reads + writes atomically. Or `array_append`/`array_remove` SQL.
+
+- **Severity:** High
+- **File:** src/components/guild/GuildSettingsDialog.jsx
+- **Line:** 35-456 (whole file)
+- **Category:** Domain — Owner permission gate / client-side authority
+- **Issue:** Component is supposed to be leader-only, but nothing in this file verifies that the viewer is the guild leader. The protection is purely "the parent only opens this dialog when `isLeader === true`". A user with devtools can mount this dialog directly, change the `guildOwnerId` prop in React DevTools, and execute promotions, removals, name changes, and full disband against a guild they don't own — assuming the underlying RLS policies don't catch each mutation. This component should not be the security boundary, but it should at minimum re-check the viewer's identity.
+- **Suggested approach:** Compare auth viewer id against `guildOwnerId`; bail with toast if mismatched. Confirm RLS on `guilds`, `guild_spice_wallets`, and the `guildRemove` Edge Function check the caller is the owner.
+
+- **Severity:** High
+- **File:** src/components/guild/GuildSettingsDialog.jsx
+- **Line:** 120-134, 337-393
+- **Category:** Domain — 6-member cap not enforced; no officer cap
+- **Issue:** Promotion to Officer is unbounded (every member can be promoted). If officer count is meant to be a subset (e.g. "leader + 2 officers" out of 6), this UI never enforces it. Member roster is also displayed without a 6-cap consistency check.
+- **Suggested approach:** Confirm officer cap with spec; if any cap exists, enforce in the toggle handler and show count.
+
+- **Severity:** High
+- **File:** src/components/guild/GuildSettingsDialog.jsx
+- **Line:** 379-388
+- **Category:** Destructive action lacks confirmation
+- **Issue:** Member removal fires immediately on click — no `Are you sure?` confirm modal. Disband, by contrast, has a multi-step confirmation. Inconsistent: removing a member from a 6-person guild is also destructive (loses chat history attribution, etc.) and easy to misclick.
+- **Suggested approach:** Add a confirm step (small inline confirm, not `window.confirm`).
+
+- **Severity:** Medium
+- **File:** src/components/guild/GuildSettingsDialog.jsx
+- **Line:** 156, 244, 250-258
+- **Category:** Dead/stale code
+- **Issue:** The General tab shows an "Edit Crest" button that is `disabled` with `title="Crest builder lands in a later task"` and helper text "Full crest builder lands in a later task." But `CrestBuilder.jsx` is fully implemented in the same folder. Stale scaffolding.
+- **Suggested approach:** Wire the Edit Crest button into a CrestBuilder modal; remove the stale copy.
+
+- **Severity:** Medium
+- **File:** src/components/guild/GuildSettingsDialog.jsx
+- **Line:** 244
+- **Category:** Column drift
+- **Issue:** General tab reads `guild?.crest_url` (legacy column) but the rest of the codebase has migrated to `crest_image_url`. The avatar in this dialog will be empty if only the new column is populated.
+- **Suggested approach:** Fall back to `crest_image_url || crest_url`.
+
+- **Severity:** Medium
+- **File:** src/components/guild/GuildSettingsDialog.jsx
+- **Line:** 71
+- **Category:** Multi-game / route correctness
+- **Issue:** Invite link hardcodes `/guild/join?code=...` — the route may not exist (the dialog also notes "shareable code is coming"). Also the hardcoded path is the only place this URL is constructed; should be centralized via `createPageUrl` like every other route.
+- **Suggested approach:** Centralize, and gate the visible invite link UI behind whether the route is actually implemented.
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildSettingsDialog.jsx
+- **Line:** 188-219, 207-219
+- **Category:** Accessibility
+- **Issue:** Tabs (`general`, `permissions`, `invites`, `members`, `danger`) render as `<button>`s without ARIA tab roles. Same a11y gap as CrestBuilder. The whole dialog uses Radix Dialog (good — focus trap is built-in) but the tabs inside it should also use `Tabs` from `@/components/ui/tabs` for ARIA correctness.
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildSettingsDialog.jsx
+- **Line:** 426-430
+- **Category:** Disband confirmation fragility
+- **Issue:** Disband requires typing the exact guild name; comparison is `.trim()` vs `.trim()` but case-sensitive. A user who Title-Cases their guild name in the input loses the confirm. Either way, fine — but consider a case-insensitive compare for usability.
+
+- **Severity:** Low
+- **File:** src/components/guild/GuildSettingsDialog.jsx
+- **Line:** 53-60
+- **Category:** State management
+- **Issue:** Reset effect re-syncs name/spending only on `[open, guild?.name, guild?.spending_restricted]` — if `guild` changes other fields (e.g. crest), they're not picked up here. Minor since the dialog only owns name + spending, but flag.
+
+
+#### /src/components/party/
+
+##### partyPermissions.js
+
+- **Severity:** High
+- **File:** src/components/party/partyPermissions.js
+- **Line:** 28-33
+- **Category:** Domain — Client-side authority for permission/visibility
+- **Issue:** Whole file is a client-side permission helper layer. It is the only mechanism that filters per-character / per-note visibility to the viewer, so the "I'm not the GM and don't own this character" gate is enforced exclusively in JavaScript. A determined player can mutate React state in devtools, set `isGM=true`, and unlock relationships, GM-only notes, and any other gate that calls `canSeeNote`/`canSeeRelationships`. The underlying queries (in the tab files below) presumably fetch the unredacted rows and this file simply hides them. This matches and extends the cross-cutting `secret_plant`/`villain_flag`/world-lore visibility leak pattern.
+- **Suggested approach:** Move to RLS / RPCs that strip GM-only fields server-side (`canSeeNote` becomes a defense-in-depth UI nicety, not a security boundary). Per-character relationships queries should run as `SECURITY DEFINER` with the same gate.
+
+- **Severity:** Medium
+- **File:** src/components/party/partyPermissions.js
+- **Line:** 28-33
+- **Category:** Tech debt / column drift
+- **Issue:** `ownsCharacter` matches both `user_id` (new) and `created_by` (legacy email-based). Comment says "Legacy character rows use `created_by` with an email; newer rows use `user_id`. Match either so we don't lose the owner check when schemas drift." This is permanent until a backfill migration runs — and the email-as-key fallback is fragile (email change → ownership lost). Flag for backfill scheduling.
+- **Suggested approach:** Backfill `user_id` from `created_by` join on `auth.users.email`; drop the email branch.
+
+- **Severity:** Medium
+- **File:** src/components/party/partyPermissions.js
+- **Line:** 46-55
+- **Category:** Domain — Note visibility logic
+- **Issue:** Visibility map handles `gm_only`, `public`, `selected`, falling through to "private" default. But comment lists `private` and `party` as legacy values; the code doesn't have an explicit `gm_only` branch — the default-fallback (`return false`) is the GM-only path. Implicit defaults are easy to break: a future migration that introduces a new visibility value (`co_dm_only`, `players_only`) will silently default to GM-only, hiding previously-visible notes. Add an explicit branch.
+- **Suggested approach:** Use a switch with explicit cases per visibility; throw or warn on unrecognized values.
+
+- **Severity:** Low
+- **File:** src/components/party/partyPermissions.js
+- **Line:** 15-20
+- **Category:** Domain — GM definition completeness
+- **Issue:** `isUserGM` checks `game_master_id` and `co_dm_ids`. If a future "guest GM" or "narrator" role exists (often added later for one-shot subbing in), this helper won't recognize them. Park as a forward-compat note.
+
+##### CharacterTab.jsx
+
+- **Severity:** High
+- **File:** src/components/party/CharacterTab.jsx
+- **Line:** 20-104
+- **Category:** Domain — Party privacy leak
+- **Issue:** `CharacterTab` renders the FULL character — biography, ability scores, AC, HP — with no viewer-vs-owner check. The protection is whatever the parent passes for `character`, but everything in `character` is rendered (`backstory` is plaintext on screen for any party member who clicks the character). Per spec, "private character notes/sheets/inventories should NOT leak". A GM may be fine with this for "shared sheets" but a player's *own* private notes are at risk. There's no `visibility` filter on `backstory`/`alignment`/etc.
+- **Suggested approach:** Either: (a) confirm character sheets are public-by-design for the campaign and drop this concern, or (b) introduce a per-field visibility map and filter via `partyPermissions`.
+
+- **Severity:** Medium
+- **File:** src/components/party/CharacterTab.jsx
+- **Line:** 6-13, 23-26
+- **Category:** Multi-game abstraction (D&D 5e baked in)
+- **Issue:** Six abilities (`str`/`dex`/`con`/`int`/`wis`/`cha`), AC, initiative, speed in feet, hit points, level, race/class/subclass — every concept is D&D 5e. Multi-game abstraction is missing: Cairn doesn't have ability scores in the 6-stat sense, Cyberpunk uses `body`/`int`/`reflexes`/`tech`, etc. The component will silently render `10` defaults for any non-D&D character (line 12 `return Number(v) || 10;`).
+- **Suggested approach:** Pull the stat block render through a per-system component picker; hide D&D-only sections when `campaign.game_system !== "dnd5e"`.
+
+- **Severity:** Medium
+- **File:** src/components/party/CharacterTab.jsx
+- **Line:** 9-13, 25
+- **Category:** Multiple-shape data shape / brittle defaults
+- **Issue:** Reads ability scores from three possible locations (`character.attributes`, `character.stats.abilities`, `character.ability_scores`) and falls back to `10`. Initiative reads `initiative ?? initiative_modifier ?? floor((dex-10)/2)`. The triple-fallback indicates a data model that's never been normalized; eventually one of these spellings will be deprecated and silent breakage follows.
+- **Suggested approach:** Normalize on the way in (server-side or in a `@/utils/character` adapter); component reads one canonical shape.
+
+- **Severity:** Low
+- **File:** src/components/party/CharacterTab.jsx
+- **Line:** 39
+- **Category:** Brand color mismatch
+- **Issue:** `border-2 border-[#37F2D1]/60`, `text-[#37F2D1]`, etc. — three `#37F2D1` instances in this single file (lines 39, 48, 96).
+
+- **Severity:** Low
+- **File:** src/components/party/CharacterTab.jsx
+- **Line:** 35-43
+- **Category:** Accessibility
+- **Issue:** Avatar `<img alt={character.name}>` is OK, but the empty-state placeholder `<div>` has no fallback content / sr-only label. Heading `<h2>` placement is fine.
+
+##### InventoryTab.jsx
+
+- **Severity:** Medium
+- **File:** src/components/party/InventoryTab.jsx
+- **Line:** 5-11, 56-71
+- **Category:** Multi-game abstraction (hardcoded D&D coin types)
+- **Issue:** Currency block is hardcoded to D&D 5e coin types (PP/GP/EP/SP/CP). Pathfinder 2e uses cp/sp/gp/pp (similar), but Cairn uses just gold pieces, Cyberpunk uses Eurodollars, Star Wars 5e uses credits, etc. Hardcoding here means the inventory tab silently misrepresents currency for any non-D&D campaign.
+- **Suggested approach:** Pull currency definition from a per-system registry; render only the systems' coins.
+
+- **Severity:** Medium
+- **File:** src/components/party/InventoryTab.jsx
+- **Line:** 13-26
+- **Category:** Domain — Party inventory privacy
+- **Issue:** Same shape as CharacterTab — full inventory rendered for any viewer with this character object in hand. Per spec, "private … inventories should NOT leak". Equipment may include cursed items, secret items the GM placed, items the player hasn't yet identified. This view shows all of them with descriptions in tooltips.
+- **Suggested approach:** Filter via `partyPermissions.canSeeNote`-equivalent for items, or move to GM-controlled `is_visible_to_player` per item.
+
+- **Severity:** Low
+- **File:** src/components/party/InventoryTab.jsx
+- **Line:** 79-99
+- **Category:** Performance — index in key
+- **Issue:** Item key is `\`${name}-${idx}\`` — index in key means reorders/inserts re-render every item below the change. Acceptable for small lists.
+
+- **Severity:** Low
+- **File:** src/components/party/InventoryTab.jsx
+- **Line:** 86
+- **Category:** Accessibility
+- **Issue:** `<img alt="">` for item icons — fine when the item name is shown next to it, but the `title=` tooltip carrying the description is desktop-only (no touch/keyboard). Long item descriptions are not surfaced anywhere reachable by keyboard or screen reader. Consider an expanded view on focus.
+
+##### SpellsTab.jsx
+
+- **Severity:** High
+- **File:** src/components/party/SpellsTab.jsx
+- **Line:** 3
+- **Category:** Multi-game abstraction (D&D 5e baked in) / dead UI for non-D&D
+- **Issue:** Hard imports `spellDetails` from `@/components/dnd5e/spellData` — couples this party tab tightly to D&D 5e. Cairn has rituals, Pathfinder has its own spell taxonomy, Cyberpunk has cybertech. For non-D&D campaigns, this tab is meaningless but still rendered. Also: the entire `LEVEL_LABELS` map (Cantrips through 9th Level) is D&D's progression.
+- **Suggested approach:** Hide this tab entirely when `campaign.game_system !== "dnd5e"` (and 5e variants); per-system spell tabs in registries.
+
+- **Severity:** Medium
+- **File:** src/components/party/SpellsTab.jsx
+- **Line:** 53-57
+- **Category:** State / data shape sprawl
+- **Issue:** Reads spells from FOUR possible field names (`spells_known`, `spellsKnown`, `spells_prepared`, `spells`) and accepts both array and object-of-arrays shapes. Same root cause as CharacterTab: data model not normalized. Mixing prepared and known spells silently flattens them into one list — a player who has 12 known but only 4 prepared will see all 12 with no distinction.
+- **Suggested approach:** Distinguish known vs prepared in the UI; normalize the data shape upstream.
+
+- **Severity:** Low
+- **File:** src/components/party/SpellsTab.jsx
+- **Line:** 60-65
+- **Category:** Domain — homebrew spells fall through silently
+- **Issue:** Spell metadata lookup falls back to `null` for unrecognized names; metadata fields (`level`, `school`, `castingTime`) end up `null` and the spell groups under the "?" bucket. Player can't tell whether the metadata is missing for a known spell or whether their homebrew spell has no recorded level. Surface a "metadata unavailable" badge.
+
+##### CompanionTab.jsx
+
+- **Severity:** High
+- **File:** src/components/party/CompanionTab.jsx
+- **Line:** 4, 40-44, 54-65, 70-73, 76-79
+- **Category:** Base44 leftover / Domain — Party privacy + write authorization
+- **Issue:** Entire file uses `base44.entities.Companion.{filter,create,update,delete}` rather than the supabase client used elsewhere. Base44 is the legacy ORM the codebase is migrating away from. Worse, none of these mutations check that `viewer` (or auth user) owns the character — they take `canEdit` as a prop and trust it. Per `partyPermissions.ownsCharacter`, ownership is computed elsewhere; if the parent passes `canEdit=true` for any signed-in user (or a buggy parent forgets to derive it), companions can be created/updated/deleted on someone else's character.
+- **Suggested approach:** Migrate to supabase queries; enforce ownership server-side via RLS on the `companions` table (`auth.uid() == characters.user_id` for the parent character).
+
+- **Severity:** High
+- **File:** src/components/party/CompanionTab.jsx
+- **Line:** 38-45
+- **Category:** Domain — Party privacy leak
+- **Issue:** `companions` query fetches every companion for `character.id` regardless of viewer. This view is rendered inside the same character tab as CharacterTab — so any party member who can view a character's tab also sees their full companion roster. If a player has a "secret animal companion" or a familiar storing campaign-secret info, it leaks. No viewer filter, no per-row visibility column.
+- **Suggested approach:** Add `is_visible_to_party` column on companions; filter via `partyPermissions.canSeeNote`-equivalent; enforce via RLS.
+
+- **Severity:** Medium
+- **File:** src/components/party/CompanionTab.jsx
+- **Line:** 18-24
+- **Category:** Multi-game abstraction (D&D-flavored types)
+- **Issue:** Companion types are hardcoded to D&D 5e: `Beast`, `Familiar`, `Mount`, `Summon`. Pathfinder uses "Animal Companion"/"Eidolon"; Cyberpunk uses cyberpets/drones; etc. New types require code edits.
+
+- **Severity:** Medium
+- **File:** src/components/party/CompanionTab.jsx
+- **Line:** 125
+- **Category:** Accessibility / native dialogs
+- **Issue:** `confirm("Remove this companion?")` — native browser confirm. No focus management, no styling, blocks the thread. Already cross-cutting in this folder (PlayerNotesTab line 141, RelationshipsTab line 146).
+- **Suggested approach:** Use a styled AlertDialog from `@/components/ui/alert-dialog`.
+
+- **Severity:** Medium
+- **File:** src/components/party/CompanionTab.jsx
+- **Line:** 233-244
+- **Category:** Domain — Storage path
+- **Issue:** Image upload uses `uploadFile(file, "user-assets", "companions", { uploadType: "avatar" })`. Path becomes `companions/...` — does NOT scope by character/campaign/user. So `companions/abc.png` can collide across users; and there's no per-character cleanup path. Per spec, user-uploaded content should live under user-or-resource-scoped prefixes.
+- **Suggested approach:** Use `companions/${character.id}/avatar.png` or scope by `user_id`; ensure RLS on the bucket prefix matches.
+
+- **Severity:** Low
+- **File:** src/components/party/CompanionTab.jsx
+- **Line:** 89, 102, 271, 279, 352
+- **Category:** Brand color mismatch
+- **Issue:** Multiple `#37F2D1` cyan instances (5+) in this file alone.
+
+- **Severity:** Low
+- **File:** src/components/party/CompanionTab.jsx
+- **Line:** 184-189, 323-340
+- **Category:** Performance — index in key
+- **Issue:** Abilities iterate with `key={idx}` — reorder/insert mid-list re-renders all subsequent items.
+
+##### PlayerNotesTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/party/PlayerNotesTab.jsx
+- **Line:** 39-46, 48-53
+- **Category:** Domain — Client-side authority for visibility (HIGHEST)
+- **Issue:** Query loads **ALL** `player_notes` for `character.id` regardless of viewer (`base44.entities.PlayerNote.filter({ character_id })` returns everything). The viewer-vs-visibility filter is then applied client-side via `canSeeNote(n, viewer)`. This is the textbook cross-cutting pattern called out for this audit batch: GM-only notes for character A, "selected players" notes intended only for chosen players, and the entire GM commentary surface — all of it ships to every viewer in the JSON response. A player on the campaign opens devtools and reads every GM-only note for every character.
+- **Suggested approach:** Server-side enforcement via RLS or RPC. The `player_notes` table needs policies that: (a) GM/co-GM see all; (b) owner sees their own; (c) others see only `visibility='public'` OR (`visibility='selected'` AND `auth.uid() = ANY(visible_to_players)`).
+
+- **Severity:** High
+- **File:** src/components/party/PlayerNotesTab.jsx
+- **Line:** 4, 41, 63, 78, 84, 217
+- **Category:** Base44 leftover
+- **Issue:** All four CRUD operations on `player_notes` go through `base44.entities.PlayerNote.*` rather than supabase. Same pattern in `CompanionTab`, `RelationshipsTab` (clearMutation only). This is part of the migration debt; it specifically prevents the RLS fix above (Base44 entity layer may bypass RLS).
+
+- **Severity:** High
+- **File:** src/components/party/PlayerNotesTab.jsx
+- **Line:** 62-75
+- **Category:** Domain — Authorship trust
+- **Issue:** `addMutation` sets `author_id: viewer?.viewerUserId || null`. The author is taken from a client-side prop — no server-side enforcement that the row is created by the actual auth user. A user can spoof `author_id` to impersonate another player when filing notes that look like they came from someone else (if visibility is `public`, the spoofed author shows up in headers).
+- **Suggested approach:** Server-side default `author_id = auth.uid()` via the row's INSERT policy; reject client-supplied author_id.
+
+- **Severity:** High
+- **File:** src/components/party/PlayerNotesTab.jsx
+- **Line:** 214-225
+- **Category:** Domain — Party visibility leak (selected-players picker)
+- **Issue:** "Selected players" picker pulls every `Character` row in the campaign with `user_id` (a base44 query). For a private 1:1 note, the picker reveals the user_ids of every other player to the note author — fine if the author is a player or GM, but if the picker is ever surfaced for non-owners (and the gate above is skipped) it leaks user identities. Also, this performs a per-form fetch of all characters every time the form mounts.
+- **Suggested approach:** Cache the player list at the parent (`AdventuringParty`) and pass down. Don't expose user_ids as raw values in the picker — use opaque per-campaign player references.
+
+- **Severity:** Medium
+- **File:** src/components/party/PlayerNotesTab.jsx
+- **Line:** 141
+- **Category:** Accessibility / native dialogs
+- **Issue:** `confirm("Delete this note?")` — see CompanionTab.
+
+- **Severity:** Medium
+- **File:** src/components/party/PlayerNotesTab.jsx
+- **Line:** 227-238
+- **Category:** Domain — Storage path
+- **Issue:** Note image upload goes to `user-assets/notes/...` — same scoping problem as companion uploads. Notes should be scoped by `note.id` or `character.id`/`campaign.id` so cleanup is feasible and cross-campaign contamination is impossible.
+
+- **Severity:** Medium
+- **File:** src/components/party/PlayerNotesTab.jsx
+- **Line:** 174, 177
+- **Category:** XSS surface (potential)
+- **Issue:** Note content rendered via React text node (`<p>{note.content}</p>`) — safe today. But the hint copy on line 174 is "whitespace-pre-wrap" — if a future change swaps in `dangerouslySetInnerHTML` to support markdown/HTML notes, every viewer becomes a target. Image_url is rendered as `<img src={note.image_url}>` with no validation that the URL is from a trusted bucket — a player who can write to `player_notes` could set `image_url` to an arbitrary attacker URL. Privacy leak: every render of that note pings the attacker server, leaking IP/user-agent/referrer of every viewer.
+- **Suggested approach:** Validate that `image_url` matches a trusted prefix (the user-assets bucket) before render; for content, document the text-only invariant.
+
+##### RelationshipsTab.jsx
+
+- **Severity:** High
+- **File:** src/components/party/RelationshipsTab.jsx
+- **Line:** 47-54
+- **Category:** Domain — Affinity/trust column handling, party privacy leak
+- **Issue:** Query loads `character_relationships` filtered by `from_character_id = character.id`. Per partyPermissions, only the owning player or GM is supposed to see this tab — but the underlying query returns the full row regardless of viewer (the parent is supposed to hide the tab via `canSeeRelationships`). If the tab is rendered (parent bug, devtools mount), the rows are already loaded. Worse: the row contains the affinity/trust meters and the description, all of which are private "what does my character think of yours" data. RLS must enforce "viewer owns the from_character or is GM" — affinity drama leaking to the targeted character would be a serious in-character spoiler.
+- **Suggested approach:** RLS on `character_relationships`: `select` policy `auth.uid() = (SELECT user_id FROM characters WHERE id = from_character_id) OR is_gm(campaign_id)`.
+
+- **Severity:** High
+- **File:** src/components/party/RelationshipsTab.jsx
+- **Line:** 75-99
+- **Category:** Domain — Affinity/trust write authorization
+- **Issue:** `saveMutation` upserts `character_relationships` straight from the client — server-side authorization on the INSERT/UPDATE side must independently verify the writer owns `from_character_id`. The RPC/RLS for the write path needs to match the read path. The `clearMutation` goes through Base44 (`base44.entities.CharacterRelationship.delete(id)`), bypassing supabase RLS entirely if the Base44 layer doesn't enforce the same gate.
+- **Suggested approach:** Migrate clear to supabase; ensure RLS on `character_relationships` for INSERT/UPDATE/DELETE.
+
+- **Severity:** Medium
+- **File:** src/components/party/RelationshipsTab.jsx
+- **Line:** 75-99
+- **Category:** Domain — Affinity/trust validation
+- **Issue:** `affinity` and `trust` are taken from the form as numbers and passed straight to upsert. `Number.isFinite(patch.affinity) ? patch.affinity : 50` defends against `NaN` but not against out-of-range values (>100 or <0). The slider is constrained client-side but the mutation accepts arbitrary values from a malicious caller. Per the migration `20261023_character_relationship_affinity_trust.sql`, there should be a CHECK constraint server-side; if not, an attacker can set affinity=9999.
+- **Suggested approach:** Confirm a CHECK constraint `affinity BETWEEN 0 AND 100`; clamp in the mutation as defense in depth.
+
+- **Severity:** Medium
+- **File:** src/components/party/RelationshipsTab.jsx
+- **Line:** 29-40
+- **Category:** Multi-game abstraction
+- **Issue:** Ten relationship types are hardcoded (ally, friend, rival, enemy, romantic, family, mentor, student, neutral, unknown). Mostly system-agnostic — fine. But the picker excludes "unknown" from the editor (line 278), which means users can't intentionally re-set a relationship to unknown after picking another type. Surface "unknown" as a clear-the-relationship operation distinct from the trash button.
+
+- **Severity:** Medium
+- **File:** src/components/party/RelationshipsTab.jsx
+- **Line:** 146
+- **Category:** Accessibility / native dialogs
+- **Issue:** `confirm("Clear this relationship?")` — see CompanionTab/PlayerNotesTab.
+
+- **Severity:** Low
+- **File:** src/components/party/RelationshipsTab.jsx
+- **Line:** 162-185, 162-218
+- **Category:** Brand color mismatch
+- **Issue:** Multiple `#37F2D1` cyan instances (~5).
+
+- **Severity:** Low
+- **File:** src/components/party/RelationshipsTab.jsx
+- **Line:** 4-5
+- **Category:** Mixed import sources
+- **Issue:** Imports both `supabase` (for save) and `base44` (for clear). Inconsistent — same table, two clients.
+
+- **Severity:** Low
+- **File:** src/components/party/RelationshipsTab.jsx
+- **Line:** 30, 35
+- **Category:** Duplicate styling
+- **Issue:** "ally" and "family" both use the same blue palette (`bg-blue-900/30 text-blue-400 border-blue-800/40`) — visually indistinguishable. Pick a different color for one.
+
+
+##### Batch 1A-vii Summary
+
+**File coverage:** 9 files in `src/components/guild/` + 7 files in `src/components/party/` = 16 files audited end-to-end.
+
+**Findings by severity:**
+- Critical: 7 (guild_halls vs guilds conflation × 3, storage path violation, owner permission gate gap, all-notes leak, disband half-implementation)
+- High: 26 (party visibility leaks × 6, write-authorization gaps × 4, race conditions × 3, Base44 leftovers × 2, XSS surface, multi-game baking, SQL safety, hardcoded supabase URL, native dialogs × 4, member cap, GuildTreasury wallet identity, etc.)
+- Medium: 24 (atomicity, multi-game abstraction, dead/stale code, column drift, performance N+1, accessibility patterns, validation gaps, etc.)
+- Low: 19 (brand colors, idiom inconsistencies, inline styles, key-on-index, dead exports, etc.)
+- Cosmetic: 0
+
+**Findings by category (top buckets):**
+- Domain — Guild system conflation (#17): 5+ critical/high
+- Domain — Party visibility / client-side authority (#22, #27): 8 findings
+- Domain — Owner/officer permission gate (#21): 5 findings
+- Domain — Storage path violations (#25): 3 findings
+- Domain — Race conditions (#30): 4 findings
+- Multi-game abstraction (#9): 6 findings (CharacterTab, InventoryTab, SpellsTab, CompanionTab, RelationshipsTab, CrestBuilder)
+- Brand color mismatches (#11): 25+ instances of #37F2D1 cyan + amber/slate raw rgba
+- Inline styles (#16): pervasive across both folders, worst in CrestBuilder
+- Accessibility (#12): tab patterns, native dialogs, keyboard nav, alt text
+- Base44 leftovers (#4): CompanionTab fully, PlayerNotesTab fully, RelationshipsTab partially
+- console.error left in (#5): 5 sites in CrestBuilder
+- XSS / user-supplied SVG trust (#28): CrestBuilder shield + emblem uploaders, PlayerNotes image_url
+
+**Top systemic issues:**
+
+1. **Guild system conflation is the #1 bug class in this batch and is concrete, not theoretical.** Five files (`GuildHallHeader`, `GuildTreasury`, `CrestBuilder`, `GuildSettingsDialog`, plus comment-level confusion in the disband flow) all key on `owner_user_id` rather than `guilds.id`. The most damning instance is `GuildSettingsDialog.jsx:109` — `guild_spice_wallets.update(...).eq("guild_id", guildOwnerId)` literally passes the owner's user id into a column called `guild_id`. Either the wallet schema is itself misnamed (in which case the database needs renaming) or every spending-restriction toggle silently affects zero rows in production. The recent "Re-separate guilds (subscription) from guild_halls (campaign hall)" refactor cleaned up the table layer but left the component layer half-converted.
+
+2. **Party visibility is enforced exclusively client-side.** `partyPermissions.js` is a pure-JS filter; the underlying queries (`PlayerNotesTab`, `RelationshipsTab`, `CompanionTab`, `CharacterTab`) all fetch unredacted rows. Devtools-level inspection of any campaign reveals every GM-only note, every "selected players" note, every character relationship description and affinity/trust meter, and every companion roster — for every character on the campaign. This perfectly mirrors and extends the cross-cutting `secret_plant`/`villain_flag`/world-lore visibility leak pattern.
+
+3. **Multi-game readiness is missing in /party/.** Five of the six tabs hardcode D&D 5e: ability scores (`str/dex/con/int/wis/cha`), AC + initiative + speed-in-feet, PP/GP/EP/SP/CP currency, level 0–9 spell progression, "Beast/Familiar/Mount/Summon" companion types. The Adventuring Party panel will silently misrepresent every non-D&D character.
+
+4. **Base44 ORM is still load-bearing for /party/ writes.** Three out of six party files run all CRUD through `base44.entities.*`; this both (a) blocks the migration to RLS-enforced supabase and (b) means the visibility/authorization fixes recommended above can't land without a parallel ORM migration.
+
+**Specific note on guild_halls vs guilds conflation findings:**
+
+- **Count:** 5 critical/high findings + 3 supporting medium-severity instances = 8 total occurrences across 4 files.
+- **Severity:** 4× Critical, 1× High, 3× Medium.
+- **Files affected:**
+  - `src/components/guild/GuildHallHeader.jsx` — file name implies System A, data model and behavior is System B; `SEATS=6` hardcoded instead of reading `guild.max_members`.
+  - `src/components/guild/GuildTreasury.jsx` — uses `guildOwnerId` as the value of `guild_id` for three queries (`spice_transactions`, `tavern_purchases`, `getGuildWalletBalance`).
+  - `src/components/guild/CrestBuilder.jsx` — saves to `guilds/${guildOwnerId}/crest.png` (storage path violation) and upserts on `owner_user_id` instead of `guilds.id`.
+  - `src/components/guild/GuildSettingsDialog.jsx` — every mutation upserts/updates by `owner_user_id`; `guild_spice_wallets.update(...).eq("guild_id", guildOwnerId)` is the smoking-gun cross-key bug; the disband-flow comment names the wrong table (`guild_halls` vs `guilds`).
+- **Severity to ship:** Critical. The recent re-separation of `guilds` (subscription) from `guild_halls` (campaign hall) addressed schema; the component layer needs a parallel pass to introduce `guildId` as the canonical prop, route through a typed `@/lib/guildClient`, and key all storage paths and conflict columns on `guilds.id`. Until that happens, the spending-restricted toggle and crest save are likely silent no-ops or are operating on wrong rows in production.
+
+**Specific note on party-visibility leaks:**
+
+- Pattern is identical to the cross-cutting world-lore leak: full row fetch + JS filter. Five of six party tabs are affected (`PlayerNotesTab` is worst, `RelationshipsTab` next, `CompanionTab` and `CharacterTab` and `InventoryTab` follow).
+- **Recommendation:** Track as one cross-cutting backend ticket — "Adventuring Party visibility must move to RLS/RPC" — alongside the world-lore equivalent. Should also block public-launch state.
+
+**Shippability per folder:**
+
+- **/components/guild/** — should NOT advance to public-launch state until the guild-system conflation is resolved (the spending-restricted toggle may already be broken in production), the `CrestBuilder` storage path uses `guilds.id`, and the SVG-upload XSS surface is locked down. The Crest Builder itself is otherwise feature-complete and visually polished, but the save flow trusts the wrong identity column. `GuildSettingsDialog`'s disband flow is half-implemented (no Edge Function) and leaves orphans across wallet/ledger/storage.
+- **/components/party/** — should NOT advance to public-launch state until party visibility moves server-side (RLS on `player_notes`, `character_relationships`, `companions`, plus per-field gates on `characters`) and the Base44 → supabase migration completes for `Companion`, `PlayerNote`, and `CharacterRelationship`. Multi-game abstraction is a longer-term item but blocks any non-D&D campaign from feeling first-class. Affinity/trust validation needs server-side CHECK constraints. Native confirm() dialogs should be replaced with AlertDialog before user testing.
+
