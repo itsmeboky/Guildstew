@@ -8551,3 +8551,1101 @@ No instances of paid-system text (Pathfinder, World of Darkness, Star Wars 5e, e
 - **/components/guild/** — should NOT advance to public-launch state until the guild-system conflation is resolved (the spending-restricted toggle may already be broken in production), the `CrestBuilder` storage path uses `guilds.id`, and the SVG-upload XSS surface is locked down. The Crest Builder itself is otherwise feature-complete and visually polished, but the save flow trusts the wrong identity column. `GuildSettingsDialog`'s disband flow is half-implemented (no Edge Function) and leaves orphans across wallet/ledger/storage.
 - **/components/party/** — should NOT advance to public-launch state until party visibility moves server-side (RLS on `player_notes`, `character_relationships`, `companions`, plus per-field gates on `characters`) and the Base44 → supabase migration completes for `Companion`, `PlayerNote`, and `CharacterRelationship`. Multi-game abstraction is a longer-term item but blocks any non-D&D campaign from feeling first-class. Affinity/trust validation needs server-side CHECK constraints. Native confirm() dialogs should be replaced with AlertDialog before user testing.
 
+
+### Batch 1A-viii: friends + chat + notifications + presence + profile
+
+#### /src/components/friends/
+
+##### FriendsCarousel.jsx
+
+- **Severity:** High
+- **File:** src/components/friends/FriendsCarousel.jsx
+- **Line:** 1–48 (file-level)
+- **Category:** Dead code (unreferenced component)
+- **Issue:** `FriendsCarousel` is defined and exported but `grep -rn "FriendsCarousel"` finds zero importers anywhere in `src/`. The folder contains exactly one file, and that file is unused. Either ship it (wire into the dashboard/profile/friends-list page) or delete it; right now it is a 48-line orphan that still ships in the bundle if anyone imports the folder index.
+- **Suggested approach:** Decide whether the friends carousel is part of the intended dashboard surface. If yes, wire it up (likely to `Pages/Dashboard.jsx` or a new `Pages/Friends.jsx`) and pass real friend data. If no, delete the file.
+
+- **Severity:** High
+- **File:** src/components/friends/FriendsCarousel.jsx
+- **Line:** 31
+- **Category:** Hardcoded values / privacy / external dependency
+- **Issue:** Default avatar fallback hardcodes a remote Unsplash URL (`https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?...`). Three problems: (1) every friend without an avatar leaks a Referer header to images.unsplash.com when their avatar renders, exposing that the user is on Guildstew and which page; (2) the fallback is not a Guildstew-controlled asset, so the visual identity for unset avatars is not under our control and the image can disappear at any time; (3) hardcoded magic URL not abstracted to a constant.
+- **Suggested approach:** Replace with a local default avatar served from Guildstew's CDN (e.g., `/assets/default-avatar.svg`) and reference it from a `DEFAULT_AVATAR_URL` constant in `@/lib/constants` so all avatar fallbacks across the app share one source.
+
+- **Severity:** High
+- **File:** src/components/friends/FriendsCarousel.jsx
+- **Line:** 17–22
+- **Category:** Accessibility / non-functional UI
+- **Issue:** Two `<Button variant="ghost" size="icon">` elements with `ChevronLeft`/`ChevronRight` icons have **no `onClick` handler and no `aria-label`**. They render as buttons with no accessible name (icon-only) and clicking them does nothing. Screen readers will announce "button" with no purpose; the carousel itself uses `overflow-x-auto`, so the arrows are presumably meant to scroll, but no logic exists.
+- **Suggested approach:** Either implement scroll-by-card-width handlers and add `aria-label="Previous friends"`/`"Next friends"`, or remove the arrows entirely and rely on the native overflow scroll.
+
+- **Severity:** Medium
+- **File:** src/components/friends/FriendsCarousel.jsx
+- **Line:** 28
+- **Category:** Accessibility (keyboard)
+- **Issue:** Friend avatar wrapper is a `<div>` with `cursor-pointer` and no `role="button"`, no `tabIndex`, no keyboard handler, and **no `onClick` either** — so the cursor is a lie. If/when click is wired up, the card needs to be a `<button>` (or have `role="button" tabIndex={0}` with Enter/Space handlers) for keyboard users.
+- **Suggested approach:** When wiring click navigation, replace the wrapper `<div>` with `<button type="button">` so it gets keyboard + screen reader semantics for free; remove `cursor-pointer` until the click is implemented.
+
+- **Severity:** Medium
+- **File:** src/components/friends/FriendsCarousel.jsx
+- **Line:** 7–10, 13, 29, 37
+- **Category:** Brand color mismatch
+- **Issue:** Five non-palette hex literals in 48 lines: `#37F2D1` (cyan, twice — status dot + ring), `#FF00FF` (raw magenta for "streaming" status), `#2A3441` (panel bg + status-dot border, twice), and `bg-gray-400` (tailwind grey for offline). None of these are in the documented brand palette (`#FF5300`, `#f8a47c`, `#1B2535`, `#04685A`). The "streaming" `#FF00FF` is particularly egregious — a fully-saturated magenta nowhere else in the app.
+- **Suggested approach:** Roll into the cross-cutting brand-palette pass; introduce semantic tokens `bg-status-online`, `bg-status-streaming`, `bg-status-offline`, `bg-surface-panel` in `tailwind.config.js` and replace the literals.
+
+- **Severity:** Medium
+- **File:** src/components/friends/FriendsCarousel.jsx
+- **Line:** 27, 36
+- **Category:** DOMAIN — Block list enforcement gap (client-side authority)
+- **Issue:** Component renders `friends.map(...)` with zero filtering — whatever the parent passes, every entry renders, including any user the current user has blocked or any user who has blocked the current user. Blocking enforcement here is implicitly delegated to whatever fetcher populates `friends`. If that fetcher is a client-side Base44/Supabase query without RLS-enforced block filtering, the entire blocked-user-invisibility guarantee is honor-based. Note also that `friend.online_status` is rendered unconditionally — if a blocked user appears in `friends`, even their presence leaks.
+- **Suggested approach:** Block-list enforcement must live in RLS / RPC on the backend so `friends` queries cannot return blocked relationships in either direction. Document the contract on this component (JSDoc) that the caller must pre-filter, and add a defensive client-side filter as defense-in-depth (`friends.filter(f => !f.is_blocked && !f.has_blocked_me)`) — but the source of truth must be server-side.
+
+- **Severity:** Medium
+- **File:** src/components/friends/FriendsCarousel.jsx
+- **Line:** 6–10, 36–38
+- **Category:** State management smells / spec mismatch
+- **Issue:** `statusColors` map only knows three states — `online`, `streaming`, `offline`. The product spec (per the batch instructions and per `StatusDot.jsx` in this same batch) explicitly includes **Away**. An "away" friend would render `${statusColors[friend.online_status]}` as `bg-undefined`, which silently produces no class at all (Tailwind drops the class), so the dot would render with no background — invisible. Also, no missing-status fallback.
+- **Suggested approach:** Centralize the status enum and color map (e.g., `@/lib/presence.js` exporting `STATUS`, `STATUS_COLORS`) so `StatusDot`, `FriendsCarousel`, and any future presence UI share one source. Add `away` and a fallback for unknown values.
+
+- **Severity:** Low
+- **File:** src/components/friends/FriendsCarousel.jsx
+- **Line:** 5, 27
+- **Category:** Prop validation / runtime safety
+- **Issue:** `friends` prop has no default and no guard. `friends.map(...)` and `friends.length === 0` will both throw `TypeError: Cannot read properties of undefined` if the parent ever renders before its data load resolves. The empty-state branch (line 43) presumes `friends` is always an array.
+- **Suggested approach:** Default the prop (`function FriendsCarousel({ friends = [] })`) or short-circuit on null/undefined. Long term, add a `PropTypes`/TypeScript signature.
+
+- **Severity:** Low
+- **File:** src/components/friends/FriendsCarousel.jsx
+- **Line:** 30–34
+- **Category:** Accessibility / performance
+- **Issue:** `<img>` lacks `loading="lazy"` and `decoding="async"`. With long friends lists this scales poorly. Also `alt={friend.username}` is fine, but should fall back to a non-empty string if `username` is absent (otherwise screen readers announce empty alt).
+- **Suggested approach:** Add `loading="lazy" decoding="async"` and `alt={friend.username || "Friend avatar"}`.
+
+
+#### /src/components/chat/
+
+##### ChatPanel.jsx
+
+- **Severity:** Critical
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 58–68
+- **Category:** DOMAIN — Client-side authority / message visibility / Base44 RLS leftover
+- **Issue:** Conversation list query does `base44.entities.ChatConversation.list("-last_message_at")` (fetches **all** conversations system-wide) and then `filter((c) => c.participant_ids?.includes(user?.id))` purely in JS. Without RLS this means the API returns every user's conversation row to every user; devtools-level network inspection reveals every DM and group chat in the system — participants, last_message preview, last_message_at — to any signed-in account. The client filter is honor-based. This is identical to the cross-cutting world-lore / party-notes leak class flagged in earlier batches and is the worst single bug in this batch.
+- **Suggested approach:** Replace with a server-side query that scopes to the caller (`supabase.from('chat_conversations').select(...)` under RLS where `auth.uid() = ANY(participant_ids)`), or an RPC. Same fix needed everywhere `Conversation.list()` appears. Do not ship the chat panel publicly until this is server-enforced.
+
+- **Severity:** Critical
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 50–54
+- **Category:** DOMAIN — Privacy leak (all user profiles) + performance
+- **Issue:** `base44.entities.UserProfile.list()` pulls **every UserProfile in the database** into the browser on chat panel mount, just to look up usernames/avatars by `user_id`. Two consequences: (1) every signed-in user receives the full profile catalogue (usernames, avatars, possibly private fields) — a public-vs-private profile data leak (one of the explicitly-flagged categories); (2) the payload grows linearly with user base — at 10k users this is a multi-MB fetch on every chat open, then again every 60s as `staleTime` expires.
+- **Suggested approach:** Replace with a scoped lookup — fetch profiles only for `user_id IN (collected from conversations.participant_ids ∪ messages.sender_id)`, ideally by joining server-side or via an RPC `get_chat_profiles(conversation_ids[])`. Make sure the returned shape excludes private fields (email, real name, payment fields).
+
+- **Severity:** Critical
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 138–143
+- **Category:** DOMAIN — Client-side authority (sender spoofing) / Base44 RLS leftover
+- **Issue:** `Message.create({ conversation_id, sender_id: user.id, content, read_by: [user.id] })` — client supplies its own `sender_id`. Without RLS / server-side enforcement of `sender_id = auth.uid()`, a tampering client can post messages **as any other user**, including impersonating GMs, friends, or system. Also no server-side check that `user.id ∈ participant_ids` of the target conversation, so any user can post into any conversation. Both fall into the canonical "trade trusts client-supplied owner" class flagged across the audit.
+- **Suggested approach:** RLS policy on `messages` insert: `WITH CHECK (sender_id = auth.uid() AND auth.uid() = ANY(SELECT unnest(participant_ids) FROM chat_conversations WHERE id = conversation_id))`. Stop sending `sender_id` from the client (let the DB default fill from `auth.uid()`).
+
+- **Severity:** Critical
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 1–406 (file-level)
+- **Category:** Base44 leftover (blocks RLS migration)
+- **Issue:** Entire chat data layer runs through `base44.entities.{ChatConversation, Message, UserProfile}` and `base44.auth.me()` — five distinct call sites. Until these move to the typed Supabase client, none of the RLS guarantees the cross-cutting migration is supposed to land can apply to chat. Chat is the highest-leverage social surface and must be on RLS first.
+- **Suggested approach:** Build `@/lib/chatClient.js` that wraps the supabase chat queries (list-my-conversations RPC, message stream, send, mark-read), drop Base44 entirely from this file. Do this as part of the chat RLS migration, not as a separate cleanup pass.
+
+- **Severity:** High
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 67, 93
+- **Category:** Real-time delivery / spec mismatch
+- **Issue:** Component uses **3-second polling for messages and 5/15s polling for conversations** (`refetchInterval`) — there is **no Supabase Realtime channel, no websocket subscription, nothing**. Spec for this batch explicitly calls out "Real-time delivery: presence/websocket/Supabase Realtime". Polling at 3s is detectable lag during back-and-forth chat, costs ~20 requests/minute per open panel, and scales linearly with concurrent users.
+- **Suggested approach:** Subscribe to `supabase.channel('chat:'+conversation_id).on('postgres_changes', {event:'INSERT', schema:'public', table:'messages', filter:'conversation_id=eq.'+id}, ...)`. Drop the `refetchInterval` once realtime is in.
+
+- **Severity:** High
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 142, 117–125
+- **Category:** State management / spec mismatch (read receipts)
+- **Issue:** `read_by: [user.id]` is set once at message creation (sender marks themselves read) but **never updated** when other participants view the message. There is no mark-as-read mutation anywhere; `lastSeenRef` is purely client-side state in a `useRef` that resets on remount. Spec calls for read receipts state. Closing the panel and reopening will not preserve read state — every conversation will appear unread again because `lastSeenRef.current` starts empty (line 40).
+- **Suggested approach:** Add `markConversationRead(conversationId)` RPC that updates per-user-per-conversation read state in a `chat_read_state` table (or appends to `messages.read_by` array atomically). Call it when a conversation is opened. Persist `lastSeen` server-side, not in a ref.
+
+- **Severity:** High
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 82–94
+- **Category:** Performance / spec mismatch (50-message cap, no pagination)
+- **Issue:** `(msgs || []).slice(-50)` silently truncates conversation history to the last 50 messages — there is no "load earlier" pagination, no cursor, no count of total messages. Plus the `Message.filter` call fetches **all** messages for the conversation each time before slicing client-side (so the client downloads the whole history every 3 seconds and throws away all but 50). For a long conversation this is multi-MB per poll cycle. Also blocks any audit/legal/compliance read of full history.
+- **Suggested approach:** Server-side `LIMIT 50` with `ORDER BY created_at DESC` and a "load earlier" cursor (`created_at < oldest_loaded`). Document the 50-message cap if it's a product decision; otherwise remove it. Combine with realtime subscription so polling goes away.
+
+- **Severity:** High
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 105–116, 14–21
+- **Category:** Notification gap (DMs in non-active conversations)
+- **Issue:** Notification sound only fires when `messages.length > prev` for the **currently selected** conversation. Incoming messages on any other conversation produce no notification — the user sees nothing until they manually open the conversation list and notice the timestamp changed. Per spec, DMs are a notification type; this flow doesn't deliver them. Also: `prev > 0` guard on line 109 means the **first** new message after a conversation is opened never sounds (the test for "different than initial load" suppresses message 1).
+- **Suggested approach:** Move new-message detection to the conversations query (notice when `last_message_at` advances on any conversation in the list), not just the active one. Tie into the global notifications system (see notifications folder findings) so the badge + sound + push all share one trigger.
+
+- **Severity:** High
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 133–157
+- **Category:** Concurrency / race conditions
+- **Issue:** `handleSend` does two sequential awaits (`Message.create` then `ChatConversation.update(last_message, last_message_at)`). Three race conditions: (1) if create succeeds and update fails, conversation `last_message` lags real DB state until next poll; (2) if two participants send within milliseconds of each other, whoever's `update` runs second wins the `last_message` field even if their `Message.create` resolved first — last-write-wins on a denormalized field; (3) if the user spam-clicks send while text is in flight, `messageText` is cleared optimistically but no ID-deduping prevents double-sends on a slow connection.
+- **Suggested approach:** Move `last_message`/`last_message_at` updates server-side as a trigger or RPC that wraps both writes in one transaction. Add a client-side in-flight flag on the send button (already disabled via `!messageText.trim()`, but doesn't account for in-flight). Consider client-generated UUIDs for idempotency.
+
+- **Severity:** High
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 7–12
+- **Category:** Hardcoded values / external resource paths
+- **Issue:** Four notification sound URLs hardcoded with full Supabase project URL `ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/notification/chatnotifN.mp3`. Hardcoding the project subdomain in a component file means moving environments (dev → staging → prod) requires editing components, and the Supabase project ID is exposed in source. Also: these are MP3 files served from a public bucket — fine for non-sensitive assets, but the path discovery surface (chatnotif1.mp3 ... chatnotif4.mp3) reveals the naming convention.
+- **Suggested approach:** Move to `@/lib/constants/notificationSounds.js`, derive the base URL from `import.meta.env.VITE_SUPABASE_URL`, and reference assets relative to that. Same pattern should apply to all `app-assets` references throughout the codebase.
+
+- **Severity:** High
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 380–401
+- **Category:** Accessibility
+- **Issue:** Multiple A11y gaps in the chat input region: (1) `<input type="text">` has no `<label>` and no `aria-label` (only a placeholder, which is not an accessible name); (2) the send button has no `aria-label` — icon-only with no text; (3) the messages scroll region (line 334) has no `role="log"` and no `aria-live="polite"`, so screen readers will not announce incoming messages; (4) the conversation list (line 270) has no `role="list"`; (5) the back-arrow button at line 213 has no `aria-label` ("Back to conversations"); (6) the close button at 238 has no `aria-label`; (7) the mute toggle at 227 uses `title=` only, no `aria-pressed` to convey toggle state.
+- **Suggested approach:** Pass: add `aria-label` to every icon-only button (Back, Close, Mute, Send), add `<label className="sr-only">` for the text input, add `role="log" aria-live="polite" aria-relevant="additions"` to the messages scroll region, add `aria-pressed={muted}` to the mute toggle.
+
+- **Severity:** High
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 96–101
+- **Category:** UX bug / state management
+- **Issue:** Auto-scroll-to-bottom fires on every `messages` change, including polling refetches that didn't add any new messages, and including the case where the user has scrolled up to read history. The user gets yanked back to the bottom every 3 seconds even when reading older messages — making history unreadable while the panel is open.
+- **Suggested approach:** Track whether the user is "near the bottom" (e.g., within 50px of `scrollHeight`); only auto-scroll if they were near-bottom **and** message count grew. Otherwise show a "new message ↓" pill.
+
+- **Severity:** High
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 348–375 (entire message render block)
+- **Category:** DOMAIN — Missing message edit/delete / ownership checks
+- **Issue:** Spec calls for "only sender can edit/delete their own messages — flag missing ownership checks". This component **renders no edit or delete affordances at all**. Sent messages are immutable from the UI. Either (a) the feature is unimplemented and should be flagged on the roadmap, or (b) it's intentional and should be documented. Either way, no ownership check is exercised.
+- **Suggested approach:** If edit/delete is in-scope, add hover-action buttons gated on `msg.sender_id === user.id`, and corresponding RLS policies (`UPDATE/DELETE WITH CHECK (sender_id = auth.uid())`).
+
+- **Severity:** High
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 50–54, 159–162
+- **Category:** Performance (O(N×M) profile lookup)
+- **Issue:** `profileOf(uid)` does `allProfiles.find(...)` linearly on every call — and it's called once per message render and once per conversation render. With 50 messages × N profiles in `allProfiles` (which is the **entire user table**), each render is O(messages × profiles). Re-render frequency is every 3 seconds (poll cycle).
+- **Suggested approach:** Memoize `useMemo(() => new Map(allProfiles.map(p => [p.user_id, p])), [allProfiles])` and key into the map. Better: stop fetching all profiles entirely (see the privacy-leak finding above).
+
+- **Severity:** High
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 154–156
+- **Category:** PII leak in console / error reporting
+- **Issue:** `console.error("Chat send failed:", err)` — `err` from a Base44 entity create may include the full request body including `content` (the message text the user just tried to send), `sender_id`, `conversation_id`. Browser devtools and any error-reporting (Sentry-like) hook into console will receive plaintext message content.
+- **Suggested approach:** Strip request body from the logged error: `console.error("Chat send failed:", { code: err.code, status: err.status, conversationId: selectedConversationId })`. Show a user-visible toast instead of console-only failure.
+
+- **Severity:** Medium
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 36–38, 127–131
+- **Category:** State management / cross-tab sync
+- **Issue:** Mute setting is read once from `localStorage` on mount and written via `localStorage.setItem`. There is no `storage` event listener, so muting in one tab does not propagate to another tab (e.g., open chat in two tabs, mute in one, the other will still play sounds). Multi-tab is part of this batch's risk surface ("presence flapping if user has multiple tabs open" — same class of problem here).
+- **Suggested approach:** Add `window.addEventListener('storage', e => { if (e.key === 'gs-chat-muted') setMuted(e.newValue === 'true'); })`. Or migrate to a server-stored user preference so it follows the user across devices.
+
+- **Severity:** Medium
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 186–189, 290
+- **Category:** Schema inconsistency / dead branches
+- **Issue:** Conversation type is checked as `c.type === "dm" || c.type === "direct"` and `c.type === "group" || c.type === "campaign_group"`. Two synonym pairs suggest the schema is not normalized — historically the codebase used both names. One of each pair is likely dead.
+- **Suggested approach:** Pick canonical names (`dm` | `group` | `campaign_group`?) and migrate the database. Drop the synonym fallbacks.
+
+- **Severity:** Medium
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 138–143
+- **Category:** DOMAIN — Block list enforcement gap
+- **Issue:** `Message.create` does not check whether `sender_id` and the other participants have a block relationship. Combined with the "client filter for participation" issue above, a blocked user can still post into a conversation that contains the blocker (assuming RLS is also missing). On the read side, the conversation list and messages render without filtering blocked users — a blocked user's message appears in the conversation history with their username/avatar.
+- **Suggested approach:** RLS check on `messages` insert: `EXISTS (SELECT 1 FROM blocks WHERE (blocker_id, blocked_id) IN ((sender_id, other_participant), (other_participant, sender_id)))` should reject. On read, RLS should hide messages from blocked users.
+
+- **Severity:** Medium
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 138–143
+- **Category:** DOMAIN — XSS sanitization on user content
+- **Issue:** Messages are persisted to the database as-is and rendered via JSX text interpolation `{msg.content}` (line 370), which auto-escapes HTML — so it is **not** XSS today. However: (1) no length limit is enforced client-side (and presumably none server-side either) — a 10MB message can be stored; (2) no normalization of zero-width / RTL-override characters that can spoof usernames; (3) if anyone changes the render to `dangerouslySetInnerHTML` (likely candidate when adding markdown / link auto-formatting), this becomes immediate XSS. Flagging proactively because the spec calls out chat as a known XSS surface.
+- **Suggested approach:** Server-side max length validation (e.g., 4000 chars), strip control characters, store unmodified UTF-8. If markdown is ever added, use a vetted parser (`marked` + DOMPurify) — never `dangerouslySetInnerHTML` without sanitization.
+
+- **Severity:** Medium
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 178–183
+- **Category:** State management (unread count drifts)
+- **Issue:** `unreadCount` reads `lastSeenRef.current[c.id]` to decide unread state. `lastSeenRef` is a `useRef`, never persisted. Refresh the page → unread count = `conversations.filter(c => !!c.last_message).length`, i.e., every conversation appears unread until the user clicks each one. Conversely, while the panel is open, opening a conversation sets `lastSeen = last.created_date`, so the badge updates **only** when a conversation is actively viewed. New messages arriving while the user is viewing a different conversation don't bump the count until the user clicks back.
+- **Suggested approach:** Persist last-seen state server-side per (user_id, conversation_id). Compute unread count from `messages.created_at > last_seen_at` server-side, return as part of conversations query.
+
+- **Severity:** Medium
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 194–202
+- **Category:** Hardcoded values / Brand color mismatch
+- **Issue:** `NAME_COLORS` array hardcodes 7 colors inside the component body (re-allocated on every render — line 194 is unconditional). Two of the seven (`#37F2D1`, `#FF5722`) appear elsewhere in the file; the rest (`#a855f7`, `#f59e0b`, `#3b82f6`, `#ec4899`, `#22c55e`) are Tailwind defaults bypassing the brand palette. Hashing scheme `uid.split('').reduce(...) % 7` is fine but trivially collidable.
+- **Suggested approach:** Extract `NAME_COLORS` to module scope (avoid per-render reallocation), pull from the brand palette + a small accent palette, document in `theme.config.js`. Better: store a per-user color preference in profiles instead of hashing.
+
+- **Severity:** Medium
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 206, 210, 250, 274, 299, 301, 314, 360–368, 391, 396
+- **Category:** Brand color mismatch / Tailwind arbitrary values
+- **Issue:** Heavy reliance on arbitrary hex values via Tailwind brackets — `#0b1220`, `#1e2636`, `#0f1729`, `#FF5722` (×6+), `#37F2D1` (×3+), `#1a1f2e`, `#111827`, `#1e293b`, `#FF6B3D`. Exact count: I count ~20 brand-mismatched `bg-[…]`/`border-[…]`/`text-[…]` literals in this single file. None match the documented brand palette (`#FF5300`/`#f8a47c`/`#1B2535`/`#04685A`). `#FF5722` is a near-miss for `#FF5300` (likely intended) but is consistently slightly off-hue across the codebase.
+- **Suggested approach:** Roll into the cross-cutting brand palette pass. `#FF5722` → token `bg-brand-orange` (and decide the canonical hex). Replace dark-blue-ish hexes with `bg-surface-1` / `bg-surface-2` / `border-surface-3` tokens.
+
+- **Severity:** Medium
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 206, 259, 274, 299, 320, 338, 339, 353
+- **Category:** Tailwind arbitrary values (sizing/typography)
+- **Issue:** Arbitrary sizing via brackets — `w-[350px]`, `h-[450px]`, `z-[60]`, `text-[10px]`, `text-[8px]`, `max-w-[85%]`, `w-[36]`. None map to design tokens. Particularly `text-[8px]` (the "Group" badge) is below the WCAG 1.4.4 threshold for resizing without horizontal scroll.
+- **Suggested approach:** Add tokens to `tailwind.config.js`: `chat-panel: '350px'`, `chat-panel-h: '450px'`, `xxs: '10px'`. Replace `text-[8px]` with a 10–11px badge style.
+
+- **Severity:** Medium
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 355, 365–369
+- **Category:** Inline styles that should be Tailwind/CSS
+- **Issue:** Inline `style={{ color: nameColor(...) }}` is unavoidable for dynamic per-user color (fine as-is). But `style={{ marginLeft: isMe ? "auto" : undefined, textAlign: isMe ? "right" : "left" }}` is **redundant** with `ml-auto` already in the `className` (line 362) and `text-right`/`text-left` would be the Tailwind equivalent.
+- **Suggested approach:** Drop the inline style on the message bubble; rely on the conditional className.
+
+- **Severity:** Medium
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 14–21
+- **Category:** UX / autoplay policy
+- **Issue:** `audio.play().catch(() => {})` swallows browser autoplay-blocked errors. Most browsers block `Audio.play()` until the user has interacted with the page; on a fresh page load, the first incoming message will silently fail to play. No fallback (e.g., visual badge bump only).
+- **Suggested approach:** Show a one-time toast like "Click to enable chat sounds" the first time `audio.play()` rejects with `NotAllowedError`. After user toggles mute on/off (a click), autoplay is allowed.
+
+- **Severity:** Medium
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 105–116
+- **Category:** Multi-tab notification spam
+- **Issue:** With chat panel open in two tabs and a new message arrives, both tabs detect `messages.length > prev` independently and both call `playNotificationSound()`. Result: stereo notification ping. No `BroadcastChannel` or leader-election to pick one tab.
+- **Suggested approach:** Use a `BroadcastChannel('chat-notifications')` lock, or use the visibility API to only ping in the foreground tab.
+
+- **Severity:** Medium
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 119–125
+- **Category:** Code smell (mixing created_date and created_at)
+- **Issue:** `last.created_date || last.created_at || Date.now()` — the message object is checked for **both** `created_date` and `created_at`. Indicates schema/ORM inconsistency: Base44 uses `created_date`, Supabase uses `created_at`. Same pattern likely throughout the codebase. Falling back to `Date.now()` is a final dishonest fallback that papers over missing data.
+- **Suggested approach:** Pick one canonical field at the data layer (`created_at`), normalize on read. Remove `Date.now()` fallback — if a message has no timestamp, that's a bug to surface, not silently mask.
+
+- **Severity:** Medium
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 23–28 (JSDoc comment)
+- **Category:** Spec mismatch (JSDoc claims a 3s poll; reality is mixed)
+- **Issue:** JSDoc says "3s poll" but only the messages query is at 3s. Conversation list polls at 5s/15s. Drift between docs and code.
+- **Suggested approach:** Update the JSDoc, or unify the polling interval (better: drop polling entirely once realtime is in).
+
+- **Severity:** Low
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 4
+- **Category:** Unused imports
+- **Issue:** No unused imports identified — `X`, `ArrowLeft`, `Send`, `Volume2`, `VolumeX` all used. (Documented for completeness.)
+- **Suggested approach:** N/A.
+
+- **Severity:** Low
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 271–282
+- **Category:** Skeleton import case sensitivity (cross-cutting)
+- **Issue:** `import { Skeleton, AvatarSkeleton } from "@/components/ui/Skeleton"` — capital-S `Skeleton`. Per the cross-cutting "two Skeleton files with case-sensitivity issues" already flagged, this is one of the duplicate-Skeleton consumers. Will break under case-sensitive filesystems if the alternate `skeleton` casing is the actual file shipped.
+- **Suggested approach:** Resolve via the cross-cutting Skeleton dedup pass.
+
+- **Severity:** Low
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 350–351
+- **Category:** Unsanitized fallback name
+- **Issue:** `const senderName = sender?.username || "User"` — if `allProfiles` doesn't yet include the sender (race condition where a new user's profile hasn't replicated to the all-profiles snapshot), every unknown sender is just labeled "User". Confusing in a group chat.
+- **Suggested approach:** Either lazy-fetch the missing profile by `sender_id`, or fall back to a partial of the user_id (`sender_id.slice(0,8)`).
+
+- **Severity:** Low
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 290–308
+- **Category:** Accessibility (group chat icon is just "G")
+- **Issue:** Group chats default to a "G" letter avatar, which is useless and indistinguishable across all groups. Direct messages also fall back to first-letter-of-username.
+- **Suggested approach:** Generate a group-chat color/icon based on conversation_id hash, or use participant avatars stacked.
+
+- **Severity:** Low
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** 303
+- **Category:** Avatar lazy/decoding
+- **Issue:** `<img src={otherProfile.avatar_url} alt="" />` — empty alt is correct (image is decorative since name is shown next to it), but missing `loading="lazy" decoding="async"`.
+- **Suggested approach:** Add lazy/async attributes.
+
+- **Severity:** Low
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** N/A (file-level)
+- **Category:** P.I.E. event emission gap
+- **Issue:** Sending a chat message, opening a conversation, and muting are user-engagement signals. None are emitted to P.I.E. Per spec ("Social actions ... should fire P.I.E. events").
+- **Suggested approach:** After successful `Message.create`, fire `pie.event('chat.message_sent', { conversation_type })` — coarse signal only, no message content. Same for `chat.opened`, `chat.muted`.
+
+- **Severity:** Low
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** N/A (file-level)
+- **Category:** Rate limiting / spam prevention
+- **Issue:** No client-side rate limit or send debouncing; no server-side mention. A scripted client could flood `Message.create` at maximum throughput.
+- **Suggested approach:** Server-side rate limit (e.g., Postgres function with token bucket per `auth.uid()`); client-side debounce as defense-in-depth (e.g., 200ms minimum between sends).
+
+- **Severity:** Low
+- **File:** src/components/chat/ChatPanel.jsx
+- **Line:** N/A (file-level)
+- **Category:** Missing error boundary (cross-cutting)
+- **Issue:** No error boundary around ChatPanel — a render-time exception in `messages.map(...)` (e.g., bad timestamp) crashes the entire Layout.
+- **Suggested approach:** Wrap `<ChatPanel />` in `Layout.jsx` with the cross-cutting error boundary planned in the platform pass.
+
+
+##### GiphyPicker.jsx
+
+- **Severity:** Critical
+- **File:** src/components/chat/GiphyPicker.jsx
+- **Line:** 21
+- **Category:** Hardcoded secret / token leak in source
+- **Issue:** **Giphy API key `sXpGFDGZs0Dv1mmNFvYaGUvYwKX0PWIh` is hardcoded in component source.** It's also confusingly accompanied by a misleading comment on line 19 (`const apiKey = 'your_giphy_api_key'; // This is a placeholder ...`) that never actually uses the `apiKey` variable in the request URL. The real key is on line 21. Bundled into every client build, visible in devtools network/source. Even if the file is "dead code" (see next finding), if it's still in the bundle it's still leaked. Anyone can lift the key and burn the rate limit / get the project banned by Giphy.
+- **Suggested approach:** **Rotate the Giphy API key immediately** (treat as compromised). Move the integration to a server-side proxy endpoint (`/api/giphy/search?q=...`) so the key never reaches the client. Delete the component if Giphy isn't a planned feature.
+
+- **Severity:** High
+- **File:** src/components/chat/GiphyPicker.jsx
+- **Line:** 1–81 (file-level)
+- **Category:** Dead code (unreferenced component)
+- **Issue:** `grep -rn "GiphyPicker"` finds only the file itself — never imported anywhere. The chat panel does not integrate it. Either an abandoned WIP or a feature that was descoped. Carrying the file in the repo also means the leaked Giphy API key sits in source control history.
+- **Suggested approach:** Delete the file. Rotate the key (per finding above) regardless of whether the file stays.
+
+- **Severity:** Medium
+- **File:** src/components/chat/GiphyPicker.jsx
+- **Line:** 11–34
+- **Category:** Performance / rate-limiting
+- **Issue:** `handleSearch` fires `searchGifs` on every keystroke with no debounce. Typing a 10-character search triggers 10 Giphy API hits, burning the key's quota.
+- **Suggested approach:** Debounce by ~300ms. Cancel in-flight requests on superseded queries.
+
+- **Severity:** Medium
+- **File:** src/components/chat/GiphyPicker.jsx
+- **Line:** 25–27
+- **Category:** Error handling / silent failure
+- **Issue:** `console.error('Error fetching GIFs:', error)` is the only failure handling. User sees an empty grid with no indication that the search failed (vs. genuinely no results).
+- **Suggested approach:** Surface error state in UI; render "Could not load GIFs, retry" if `error` was set.
+
+- **Severity:** Medium
+- **File:** src/components/chat/GiphyPicker.jsx
+- **Line:** 56–67
+- **Category:** Accessibility / external content
+- **Issue:** GIF tile is a `<button>` (good), but `alt={gif.title}` uses Giphy-supplied user-generated text directly. Combined with rendering of an arbitrary remote URL, this creates: (1) potential XSS-via-alt-attribute (mitigated since React escapes), (2) no content moderation — Giphy returns NSFW results when `rating` is unset (default), (3) external image hotlinking sends Referer to Giphy.
+- **Suggested approach:** Add `rating=g` to the Giphy URL. Strip control chars from `gif.title`. Ideally proxy gif images through Guildstew's CDN.
+
+- **Severity:** Low
+- **File:** src/components/chat/GiphyPicker.jsx
+- **Line:** 19
+- **Category:** TODO / placeholder leftover
+- **Issue:** Variable `apiKey = 'your_giphy_api_key'` is declared and never used. The misleading comment ("placeholder — Giphy has a public API key") is wrong — Giphy keys are not public; the real key is hardcoded one line down.
+- **Suggested approach:** Delete the dead variable and the misleading comment (or delete the whole file).
+
+- **Severity:** Low
+- **File:** src/components/chat/GiphyPicker.jsx
+- **Line:** 26
+- **Category:** Brand color / inconsistency
+- **Issue:** `bg-white p-4 h-64` — this picker uses a light-mode panel inside a dark-mode app. Visual inconsistency.
+- **Suggested approach:** N/A if the file is being deleted.
+
+
+#### /src/components/notifications/
+
+##### SessionReminderNotification.jsx
+
+- **Severity:** High
+- **File:** src/components/notifications/SessionReminderNotification.jsx
+- **Line:** 1–58 (file-level)
+- **Category:** DOMAIN — Spec mismatch (notifications system vastly underbuilt)
+- **Issue:** This entire folder contains exactly **one** notification component, and it covers exactly one event type (session reminder). Per spec the notifications system must cover: friend requests, campaign invites, DMs, guild invites, system notifications. None of those have a UI here. There is no notifications inbox, no notification list, no preferences (mute / DND / channel filter), no rate limiting, no notification ownership enforcement, no Supabase Realtime subscription. The folder name "notifications" suggests a system; what's shipped is a single toast.
+- **Suggested approach:** Treat the notification system as a major missing build. Plan: (a) `notifications` table with RLS `auth.uid() = recipient_id`; (b) Realtime subscription per-user; (c) inbox UI with mark-read / mark-all-read; (d) preferences UI (mute, channel filters, DND schedule); (e) toast layer for new arrivals (this file + a generic NotificationToast component); (f) rate limit on the writer side. None of this exists yet.
+
+- **Severity:** High
+- **File:** src/components/notifications/SessionReminderNotification.jsx
+- **Line:** 8–15
+- **Category:** Accessibility / state management
+- **Issue:** Notification auto-dismisses after 10 seconds with no way for the user to extend (e.g., on hover). Screen reader users may miss it entirely — it's not announced via `role="status"`, `role="alert"`, or `aria-live`. Keyboard users have no way to focus the close button without tabbing into a portal-rendered DOM element with no focus management.
+- **Suggested approach:** Add `role="status"` (or `role="alert"` for a starting-now reminder), `aria-live="polite"`. Pause the auto-dismiss timer on `mouseenter`/`focusin`. Trap focus on initial render (or at minimum auto-focus the close button so Esc/Enter dismiss work).
+
+- **Severity:** Medium
+- **File:** src/components/notifications/SessionReminderNotification.jsx
+- **Line:** 6, 17–20
+- **Category:** State management smell (double-timeout dismiss)
+- **Issue:** The `setIsVisible(false); setTimeout(() => onDismiss(), 300)` pattern duplicates Framer Motion's `AnimatePresence` exit animation manually. Framer's `onExitComplete` should drive the unmount. The 300ms hardcoded magic number must match the (unspecified) exit transition duration; if either drifts, the unmount fires while the animation is still running or after a visible flash. Also, both `useEffect` timer and the click handler do this dance — duplication.
+- **Suggested approach:** Use `<AnimatePresence onExitComplete={onDismiss}>` and just toggle `isVisible`. Drop the manual setTimeout and the magic 300.
+
+- **Severity:** Medium
+- **File:** src/components/notifications/SessionReminderNotification.jsx
+- **Line:** 31–36
+- **Category:** Accessibility (icon-only button)
+- **Issue:** Close button is icon-only, no `aria-label`, no `title`. Screen readers announce "button" with no purpose.
+- **Suggested approach:** Add `aria-label="Dismiss reminder"`.
+
+- **Severity:** Medium
+- **File:** src/components/notifications/SessionReminderNotification.jsx
+- **Line:** 29
+- **Category:** Brand color mismatch / hardcoded values
+- **Issue:** `bg-[#FF5722]` (one occurrence in this file) and arbitrary sizing `min-w-[400px] max-w-[500px]` and `z-50`. Same near-miss orange as ChatPanel.
+- **Suggested approach:** Roll into cross-cutting brand-palette pass.
+
+- **Severity:** Medium
+- **File:** src/components/notifications/SessionReminderNotification.jsx
+- **Line:** 5, 48–52
+- **Category:** Prop validation / runtime safety
+- **Issue:** `reminder` prop is destructured without default; `reminder.session_time` is the only field accessed but `reminder` itself can be undefined and crash. `onDismiss` is also called without checking it's a function.
+- **Suggested approach:** Default props (`reminder = {}`, `onDismiss = () => {}`) or PropTypes.
+
+- **Severity:** Medium
+- **File:** src/components/notifications/SessionReminderNotification.jsx
+- **Line:** 50
+- **Category:** Localization / timezone display
+- **Issue:** `new Date(reminder.session_time).toLocaleString()` formats with the browser locale and timezone but no locale negotiation. If `session_time` lacks a timezone designator (e.g., `2026-01-01T20:00:00` without `Z`), it's interpreted as local time — silently wrong for users in different timezones than the campaign owner.
+- **Suggested approach:** Always store ISO-8601 UTC (with `Z` suffix). Format with `Intl.DateTimeFormat` and explicit locale + timeZoneName.
+
+- **Severity:** Low
+- **File:** src/components/notifications/SessionReminderNotification.jsx
+- **Line:** 8–15
+- **Category:** DOMAIN — Notification ownership / reliability
+- **Issue:** This component is purely a renderer — it presumes the parent (`Layout.jsx`) decides which reminder to show and to whom. There is no in-component check that `reminder.recipient_id === user.id`. If the upstream feed leaks (server-side authority gap), this renderer happily shows reminders intended for any user.
+- **Suggested approach:** N/A in this component (it's a leaf renderer); flag the upstream `Layout.jsx` reminder-fetching logic as the actual checkpoint.
+
+- **Severity:** Low
+- **File:** src/components/notifications/SessionReminderNotification.jsx
+- **Line:** N/A
+- **Category:** Missing error boundary
+- **Issue:** Same cross-cutting issue — no boundary.
+- **Suggested approach:** Cross-cutting fix.
+
+
+#### /src/components/presence/
+
+##### StatusDot.jsx
+
+- **Severity:** High
+- **File:** src/components/presence/StatusDot.jsx
+- **Line:** 53–109 (StatusPicker), and PresenceContext STATUS_OPTIONS at lib/PresenceContext.jsx:25–30
+- **Category:** DOMAIN — Presence privacy (no "invisible" / appear-offline option)
+- **Issue:** The picker offers Online / Away / Do Not Disturb / Offline. Spec for this batch says "user can hide presence (appear offline) — flag missing toggle, flag presence leaking despite hidden setting." The current "Offline" option is ambiguous — does picking it stop heartbeats so the user is *actually* offline (in which case unsetting it requires manually flipping back, fragile), or does it just label them offline while still updating `last_seen_at` (in which case anyone reading `last_seen_at` can tell they're not actually offline)? Comment on line 76 references "Invisible" but the option labelled "Invisible" does not exist. Either the comment lies or the option was removed. The "Streaming" status from the spec/feature list is also missing.
+- **Suggested approach:** Add a true `invisible` status that (a) shows as "Online" only to the user themselves, (b) reports "offline" to all other readers, (c) continues to update `last_seen_at` privately. Add `streaming` status with provider-integration plumbing. Update the picker labels to match.
+
+- **Severity:** High
+- **File:** src/components/presence/StatusDot.jsx
+- **Line:** 17, 18, 34, 39
+- **Category:** DOMAIN — Presence privacy / last-seen exposure
+- **Issue:** `StatusDot` accepts a `profile` row and calls `resolveStatus(profile)`, which (per `lib/PresenceContext.jsx:38–47`) reads `profile.last_seen_at`. This means **every** caller that passes a profile (`FriendsSidebarPanel`, `GuildMembersSection`, `Friends`, `UserProfile`, `YourProfile`) ships `last_seen_at` to the client. Any user can inspect the network response and read precise last-seen timestamps for **anyone whose profile they can read** — including users who have set themselves to "offline" but are actually active 30 seconds ago. This violates the spec's "Last-seen timestamps: privacy concern, flag if exposed without user consent."
+- **Suggested approach:** Last-seen should be aggregated server-side into the resolved status, never returned raw to the client. Either: (a) include only the resolved status string in profile reads, computed server-side; (b) only expose `last_seen_at` to the user themselves and to friends who have explicitly opted in; (c) bucketize ("online", "active recently", "active today", "active this week") instead of exact ISO timestamp.
+
+- **Severity:** Medium
+- **File:** src/components/presence/StatusDot.jsx
+- **Line:** 17, 84, 87, 99
+- **Category:** Brand color / hardcoded values
+- **Issue:** Multiple hardcoded hex defaults — `border = '#0f1219'` (default in two places), `border="#FF5722"` (line 84, near-miss orange), `bg-[#0f1219]` (line 87), `text-[#37F2D1]` (line 101). Plus callers across the codebase pass arbitrary border hexes inline (`#1E2430`, `#0b1324`, `#2A3441`, `#1a1f2e` per the grep above) — no shared `border={surface}` token. The dot's job is to ring against the avatar's surface; that surface is one of ~5 panel colors; those should be tokens.
+- **Suggested approach:** Define `border` prop as a token name (`surface-1`, `surface-panel`, etc.) instead of arbitrary hex. Replace the inline-hex callsites with the token.
+
+- **Severity:** Medium
+- **File:** src/components/presence/StatusDot.jsx
+- **Line:** 24
+- **Category:** Inline styles that should be Tailwind/CSS
+- **Issue:** `style={{ boxShadow: \`0 0 0 2px ${border}\` }}` — string-interpolated style. The 2px ring is fixed; the only variable is the color. This should be a CSS variable on a parent (`--avatar-bg: #0f1219`) and a Tailwind `ring-2 ring-[var(--avatar-bg)]` utility.
+- **Suggested approach:** Switch to CSS custom property + `ring-2`.
+
+- **Severity:** Medium
+- **File:** src/components/presence/StatusDot.jsx
+- **Line:** 25
+- **Category:** Accessibility
+- **Issue:** `<span title={meta.label} />` — the dot has no accessible name. `title` is a tooltip, not announced by most screen readers, and disappears on touch devices. Convey status via `<span aria-label={meta.label} role="img">` or hidden `<span className="sr-only">{meta.label}</span>`.
+- **Suggested approach:** Replace `title` with `role="img" aria-label={\`Status: ${meta.label}\`}`. Status conveyed via color alone fails WCAG 1.4.1.
+
+- **Severity:** Medium
+- **File:** src/components/presence/StatusDot.jsx
+- **Line:** 57–69
+- **Category:** Accessibility (no focus management on dropdown)
+- **Issue:** `StatusPicker` opens a custom dropdown with no ARIA role on the popup, no `role="menu"` on the list, no `role="menuitem"` on each option, no `aria-expanded` on the trigger button, and no focus-management (focus does not move into the menu on open, doesn't return to trigger on close). Keyboard arrow-key navigation between options is not implemented — Tab works only because each `<button>` is naturally focusable. Esc closes the menu (good).
+- **Suggested approach:** Use Radix `DropdownMenu` (already in the design system) instead of hand-rolling. Or add proper roles + focus management. Add `aria-expanded={open}` and `aria-haspopup="menu"` to the trigger.
+
+- **Severity:** Medium
+- **File:** src/components/presence/StatusDot.jsx
+- **Line:** 53, 79, 94
+- **Category:** State management (no in-flight / disabled state on status change)
+- **Issue:** `onChange?.(opt.value); setOpen(false)` immediately closes the menu without waiting for the network update. If the upstream `setStatus` (PresenceContext) call fails, the user sees the menu close as if successful but the persisted state didn't change. Compare to PresenceContext line 84–88 which "silently swallow" errors — combined, status changes can fail without any user-visible signal.
+- **Suggested approach:** Either show a brief in-flight indicator (e.g., dot opacity dip until the write resolves) and revert on failure, or surface a toast on failure. Optimistic UI is fine; silent failure is not.
+
+- **Severity:** Low
+- **File:** src/components/presence/StatusDot.jsx
+- **Line:** 1
+- **Category:** Unused imports
+- **Issue:** All imports used (`useEffect`, `useRef`, `useState`, `resolveStatus`, `statusMeta`, `STATUS_OPTIONS`).
+- **Suggested approach:** N/A.
+
+- **Severity:** Low
+- **File:** src/components/presence/StatusDot.jsx
+- **Line:** 76
+- **Category:** TODO / stale comment
+- **Issue:** Comment claims "Online / Away / DND / Invisible picker" but the picker has Online / Away / DND / **Offline** (no "Invisible"). Comment drift from code.
+- **Suggested approach:** Either implement Invisible (see High finding above) or fix the comment to say "Offline".
+
+- **Severity:** Low
+- **File:** src/components/presence/StatusDot.jsx
+- **Line:** 87, 101
+- **Category:** Tailwind arbitrary values
+- **Issue:** `min-w-[180px]`, `text-[10px]`, `bg-[#0f1219]` — three arbitrary values in the picker.
+- **Suggested approach:** Add `xxs` text token, `panel` width token, `surface-1` color token.
+
+- **Severity:** Low
+- **File:** src/components/presence/StatusDot.jsx
+- **Line:** N/A (file-level)
+- **Category:** DOMAIN — Multi-tab presence flapping
+- **Issue:** This component is a renderer; the actual flapping risk is in `PresenceContext` (out-of-scope for this batch but flagged as cross-cutting). With multiple tabs open, each tab independently writes `status: 'online'` and runs an idle detector. If one tab is in the foreground (active mouse moves) and another is hidden (idle 5min → away write), the two tabs will fight: the idle tab writes `away`, then the active tab's heartbeat writes `online`, etc. UI flickers.
+- **Suggested approach:** PresenceContext should leader-elect via `BroadcastChannel('presence')` or use the visibility API to suspend the idle detector in hidden tabs. Out-of-scope for this file.
+
+- **Severity:** Low
+- **File:** src/components/presence/StatusDot.jsx
+- **Line:** N/A
+- **Category:** P.I.E. event emission gap
+- **Issue:** Manual status changes (Online → DND) are user-engagement signals; no telemetry hook.
+- **Suggested approach:** `pie.event('presence.status_changed', { from, to })` after a successful write.
+
+
+#### /src/components/profile/
+
+##### AverageStatistics.jsx
+
+- **Severity:** High
+- **File:** src/components/profile/AverageStatistics.jsx
+- **Line:** 20–47
+- **Category:** DOMAIN — Multi-game readiness / D&D-only stat schema
+- **Issue:** The 8 averaged stats — DPS, Healing, Nat 20s, Nat 1s, Accuracy, Defense, Critical Hits, Downed — are all D&D 5e / combat-game specific. "Nat 20s" / "Nat 1s" only make sense with a d20 system. Per the cross-cutting "Multi-game readiness" finding from earlier batches, this hardcodes one game system into every player's profile. Also: `char.stats || {}` makes a silent no-op for any character without `stats`, so non-D&D characters (or characters never in combat) all read zero.
+- **Suggested approach:** Either gate this component to only render for d20-system campaigns, or generalize to per-system stat sets (`STATS_BY_SYSTEM[campaign.system]`) so a Pathfinder/Cyberpunk/etc. profile gets relevant statistics.
+
+- **Severity:** High
+- **File:** src/components/profile/AverageStatistics.jsx
+- **Line:** 1–82 (file-level)
+- **Category:** DOMAIN — Privacy controls on P.I.E. statistics
+- **Issue:** Per spec ("Profile statistics (P.I.E. data) — privacy controls per migration mentions"), the user should be able to control whether their combat statistics are shown publicly. This component renders unconditionally on whatever `characters` it's given. No `if (user.show_statistics)` gate, no respect for any privacy preference flag. If `characters` is the viewing user's data and the component is rendered in a public profile context, every nat-1 they ever rolled is now public.
+- **Suggested approach:** Add a `show_statistics` profile preference. Have the parent component (e.g., `UserProfile.jsx`) gate rendering, or have this component return `null` when the preference is off and the viewer is not the owner. Verify the upstream characters fetch is also filtered server-side.
+
+- **Severity:** Medium
+- **File:** src/components/profile/AverageStatistics.jsx
+- **Line:** 53, 56, 64–65
+- **Category:** Brand color mismatch / inline styles
+- **Issue:** Hardcoded hex `#37F2D1` (cyan, twice — Radar fill + stroke), `bg-[#2A3441]` (panel bg). Hardcoded inline gradient `from-slate-100 to-blue-50` (light-mode panel inside dark app — visual inconsistency). Recharts axis tick fill `#475569` and `#94a3b8` grid stroke also hardcoded.
+- **Suggested approach:** Pull chart colors from theme tokens.
+
+- **Severity:** Low
+- **File:** src/components/profile/AverageStatistics.jsx
+- **Line:** 73
+- **Category:** Dead code / redundant slice
+- **Issue:** `data.slice(0, 8)` — but `data` already always has exactly 8 entries (built that way in `calculateAverages`). The slice is a no-op.
+- **Suggested approach:** Remove the slice.
+
+
+##### EditProfileDialog.jsx
+
+- **Severity:** Critical
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 222–245
+- **Category:** DOMAIN — Public vs private profile data leak
+- **Issue:** The save flow does `base44.auth.updateMe(updates)` (private auth row) then **also** writes to `UserProfile` (the public-readable table) with this payload: `{ username, email: user.email, avatar_url, age: user.age, tagline, country, pronouns, bio, social_handles, favorite_genres, profile_color_1, profile_color_2, banner_url, role: user.role }`. **`email`, `age`, and `role` are explicitly written into the public profile**. The spec for this batch lists "real name, email, payment info should NEVER appear in public profile" as a flag-worthy class. This is the canonical violation. Combined with `ChatPanel.jsx`'s `UserProfile.list()` (which fetches the entire public profile table for everyone), every signed-in user gets every other user's email + age + role in their browser cache.
+- **Suggested approach:** Strip `email`, `age`, `role` from the UserProfile sync. UserProfile should contain *only* fields the user has consented to make public — `display_age` should gate `age`. Audit the `user_profiles` schema for any other private-by-default columns. The `email` write is the worst: it never belongs in a public-readable table.
+
+- **Severity:** Critical
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 194–202
+- **Category:** DOMAIN — Storage path violation / avatar+banner upload validation
+- **Issue:** Two upload calls — `base44.integrations.Core.UploadFile({ file: bannerFile })` and `{ file: avatarFile }` — invoke the legacy Base44 generic uploader. There is **no path scoping** (spec requires `user-assets/users/{user_id}/avatar.{ext}` and `.../banner.{ext}`), **no MIME validation** (the `accept="image/*"` HTML attribute is hint-only and trivially bypassed), **no size limit**, **no SVG-XSS guard** (a user uploading a `<script>`-bearing SVG that's served as `image/svg+xml` becomes stored XSS — exactly the surface flagged in the cross-cutting "SVG XSS in crest builder" finding from earlier batches), **no image dimension check** (a 100MB 30000×30000 banner is accepted). The returned `file_url` is then trusted as the canonical asset URL.
+- **Suggested approach:** Use a typed `@/lib/userAssets.js` upload that (a) routes to `user-assets/users/{user_id}/avatar.{ext}` enforcing the user_id at the storage policy layer, (b) validates MIME against `[image/png, image/jpeg, image/webp, image/gif]` (no SVG), (c) caps file size (e.g., 5MB avatar, 10MB banner), (d) validates dimensions, (e) re-encodes via a Sharp-on-server step to scrub metadata + neutralize any payload. Ensure RLS storage policies prevent cross-user writes.
+
+- **Severity:** Critical
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 9, 36, 195, 200, 220, 223, 242, 244
+- **Category:** Base44 leftover (blocks RLS migration)
+- **Issue:** Five distinct Base44 entry points: `base44.entities.Achievement.filter`, `base44.integrations.Core.UploadFile` (×2), `base44.auth.updateMe`, `base44.entities.UserProfile.filter/update/create`. Profile editing is the highest-trust write surface (auth + storage + public profile sync) and is fully on Base44.
+- **Suggested approach:** Migrate as part of the RLS pass — `@/lib/profileClient.js` wrapping `supabase.auth.updateUser`, profile upserts, and Achievement reads.
+
+- **Severity:** Critical
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 222–245
+- **Category:** DOMAIN — Concurrency / duplicate profile rows
+- **Issue:** `const profiles = await base44.entities.UserProfile.filter({ user_id: user.id }); if (profiles.length > 0) update; else create;` is a TOCTOU race. Two concurrent saves (e.g., user clicks Save twice quickly, or the user has two tabs open) can both observe `profiles.length === 0` and both call `create`, resulting in duplicate UserProfile rows for one `user_id`. Once duplicated, every downstream `filter({ user_id })` lookup picks one arbitrarily.
+- **Suggested approach:** Use a single `upsert` keyed on `user_id` with a unique constraint on the column. Move the whole save into one server-side RPC so the transaction is atomic.
+
+- **Severity:** High
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 17–30, 173–187, 258–292
+- **Category:** XSS surface / input validation gaps
+- **Issue:** User-supplied free-text fields — `tagline`, `bio`, `country`, `pronouns`, `social_handles` — are stored as-is. No client-side length cap (multi-MB bio possible), no normalization of zero-width / RTL-override characters that can spoof usernames in chat, no profanity/abuse pre-filter, no link extraction policy. The spec calls these out as the public-profile XSS surface; rendering escape happens elsewhere (in the display components), but if any of those use `dangerouslySetInnerHTML` the chain breaks. Today's editor accepts any input.
+- **Suggested approach:** Server-side validation (e.g., zod schema): `bio` ≤ 500 chars, `tagline` ≤ 80, `country` ≤ 56 (longest country name), `pronouns` ≤ 30. Strip control characters. Document that consumers must use plain-text rendering only — no markdown, no HTML.
+
+- **Severity:** High
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 41–171
+- **Category:** Dead code / hardcoded values / data outside component
+- **Issue:** Two large literals embedded in the component body: `availableGenres` (95 strings, line 41–56) and `genreGradients` (95 key→class mappings, line 58–171). Both are reallocated on every render. They should live in a module-scope constant (or, since the same list almost certainly appears elsewhere — campaign creation, search filters — in `@/lib/genres.js`). At ~130 lines, they dominate the component file and obscure the actual logic.
+- **Suggested approach:** Extract to `src/lib/genres.js` exporting `GENRES` and `GENRE_GRADIENTS`. Same module should be used by any other place that lists genres.
+
+- **Severity:** High
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 348, 400
+- **Category:** Memory leak (URL.createObjectURL never revoked)
+- **Issue:** `<img src={URL.createObjectURL(bannerFile)} />` and the same for avatar. `createObjectURL` allocates a blob URL that the browser keeps alive until the document is unloaded **or** `URL.revokeObjectURL` is called. Every render re-creates the URL (the function call is in JSX, not memoized), so picking a banner once leaks one URL per render of the dialog while open. Multiply by every time the user opens the edit dialog.
+- **Suggested approach:** `useMemo(() => bannerFile ? URL.createObjectURL(bannerFile) : null, [bannerFile])` plus a `useEffect` cleanup that calls `URL.revokeObjectURL(prev)`.
+
+- **Severity:** High
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 320–336
+- **Category:** Inline `<style>` injection
+- **Issue:** A `<style>{...}</style>` block is rendered inside the DialogContent on every render, defining `.custom-scrollbar` styles. Three problems: (1) the same `.custom-scrollbar` class is referenced from at least one other component (`ChatPanel.jsx`) — duplicating the rule across files; (2) injecting `<style>` from JSX adds parsing cost on every render and produces duplicate rules in the document head; (3) the rule's specificity affects every `.custom-scrollbar` element on the page, not just children of this dialog.
+- **Suggested approach:** Move `.custom-scrollbar` rules to a global stylesheet (or a Tailwind plugin) once. Drop the inline `<style>` block.
+
+- **Severity:** High
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 519–531, 536–547
+- **Category:** Validation / CSS injection adjacent
+- **Issue:** Color picker has both `<input type="color">` and a free-text `<Input>` for the same value. The free-text input lets the user type **any string** (e.g., `red; }; body { background:…`), no validation that the value is `#RRGGBB`. Downstream consumers presumably interpolate this into CSS or `style={{ background: color1 }}`. While React `style` JSX coerces strings safely, anywhere this color is concatenated into a `<style>` tag or template literal becomes CSS injection (and on a profile page, that's drive-by trolling at minimum).
+- **Suggested approach:** Validate against `/^#[0-9a-fA-F]{6}$/` before accepting. Reject or clamp invalid hex. Long term: limit to a curated palette anyway.
+
+- **Severity:** High
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 575–587, 605–633
+- **Category:** Accessibility
+- **Issue:** Genre `<Badge>` and Achievement selector `<div>` are click targets with no keyboard support, no `role="button"`, no `aria-pressed` to convey selection state. A keyboard-only user can save 0 genres / 0 achievements because no element is focusable. Also the achievement icon `<img>` has `alt={achievement.title}` but achievements with no `icon_url` render `<span>🏆</span>` — the emoji has no accessible name.
+- **Suggested approach:** Replace clickable `<div>`s with `<button type="button">`, add `aria-pressed={isSelected}`. Wrap the trophy emoji in `<span role="img" aria-label="Trophy">`.
+
+- **Severity:** Medium
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 359–365, 411–417
+- **Category:** File input accessibility
+- **Issue:** Hidden `<input type="file">` triggered by a `<label>`. Pattern works for sighted users but the label-as-button pattern has no `role="button"`. Screen readers announce "label" not a button. Also, no error reporting if `e.target.files[0]` is undefined (user opens the picker, cancels — `setBannerFile(undefined)` clears state).
+- **Suggested approach:** Use `<label htmlFor=…>` with an explicit accessible button styling, or programmatically open the file picker via a button with `ref.current.click()`. Guard the onChange: `if (file) setBannerFile(file)`.
+
+- **Severity:** Medium
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 22, 178, 484
+- **Category:** State sync / disabled birthday field
+- **Issue:** `Birthday / Age` field is disabled (line 485 `disabled`) — user can never change birthday after signup. If a user enters a wrong birthday at signup, they can't fix it from this UI. The `display_age` toggle exists, but the age itself is immutable. Probably intentional (anti-fraud) but worth a comment, otherwise it looks like a bug to engineers.
+- **Suggested approach:** If intentional, add a comment explaining (e.g., "Age changes go through support to prevent spoofing"). If not, expose an editable date picker with a confirmation step.
+
+- **Severity:** Medium
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 24–25, 180–181
+- **Category:** Brand color defaults
+- **Issue:** Default colors `#FF5722` (orange near-miss) and `#37F2D1` (cyan) are used as fallbacks for `profile_color_1`/`profile_color_2`. These don't match documented brand. New users with no chosen color get the off-palette defaults baked into their saved profile.
+- **Suggested approach:** Default to brand `#FF5300` and a brand-secondary, or to `null` and let the renderer apply the brand.
+
+- **Severity:** Medium
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 8
+- **Category:** Unused imports
+- **Issue:** `Plus` icon is imported but never used in JSX. (`Upload` and `X` are used.)
+- **Suggested approach:** Drop the import.
+
+- **Severity:** Medium
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 320, 345, 397, 453, 465, 477, 486, 508, 529, 545, 562, 574, 582, 596, 611, 612, 615, 659
+- **Category:** Brand color mismatch (count)
+- **Issue:** ~20 occurrences of off-palette hex literals in this single file: `#1a1f2e` (DialogContent bg), `#2A3441` (×7+), `#37F2D1` (×3+ as ring/border/scrollbar/save button), `#1E2430` (×4+), `#FF5722` (Save button hover, plus `from-pink-500`/etc gradients via `genreGradients`).
+- **Suggested approach:** Cross-cutting brand-palette pass.
+
+- **Severity:** Medium
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 311
+- **Category:** Silent failure (achievement cap)
+- **Issue:** `if (prev.length < 3) … else return prev;` — silently drops the click when 3 are already selected, with no toast (compare to genres on line 301 which does toast). Inconsistent UX.
+- **Suggested approach:** Add `toast.error('You can only feature up to 3 achievements')` to match the genres path.
+
+- **Severity:** Medium
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 619
+- **Category:** Localization (emoji as content)
+- **Issue:** `🏆` hardcoded — no i18n consideration, no fallback for systems without color emoji support, accessibility issue (already flagged).
+- **Suggested approach:** Replace with a proper SVG icon from `lucide-react` (`Award`, `Trophy`).
+
+- **Severity:** Low
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** 1–667 (file-level)
+- **Category:** Component size / single responsibility
+- **Issue:** 667-line component covers banner upload, avatar upload, tagline, bio, country, age toggle, pronouns, color pickers, username, social handles, genres (95 options), achievements (variable). Hard to test, hard to refactor.
+- **Suggested approach:** Split into `BannerUpload`, `AvatarUpload`, `BasicProfileFields`, `ProfileColors`, `GenreSelector`, `FeaturedAchievementsSelector` — each ~50–100 lines.
+
+- **Severity:** Low
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** N/A (file-level)
+- **Category:** P.I.E. event emission gap
+- **Issue:** Saving the profile, picking genres, featuring achievements are all engagement signals. None emitted to P.I.E.
+- **Suggested approach:** `pie.event('profile.updated', { changedFields: [...] })`.
+
+- **Severity:** Low
+- **File:** src/components/profile/EditProfileDialog.jsx
+- **Line:** N/A (file-level)
+- **Category:** Rate limiting (profile spam)
+- **Issue:** No throttle on profile updates; a user could flip their `username` 100×/sec. Combined with username-uniqueness checks, this is also an enumeration vector (probe usernames by attempting to claim them).
+- **Suggested approach:** Server-side rate limit (e.g., max 5 username changes/day; max 60 profile updates/hour).
+
+
+##### FavoriteClass.jsx
+
+- **Severity:** High
+- **File:** src/components/profile/FavoriteClass.jsx
+- **Line:** 1–21 (file-level)
+- **Category:** Dead code (unreferenced component)
+- **Issue:** `grep -rn "FavoriteClass"` returns only the file itself — no callers anywhere. Combined with `FriendsCarousel` and `GiphyPicker`, this is the third orphaned feature component in this batch.
+- **Suggested approach:** Decide whether the profile is supposed to surface a "favorite class" widget — the spec mentions multi-game readiness, and "favorite class" is a D&D-specific concept anyway. Either delete or wire into the profile pages.
+
+- **Severity:** Medium
+- **File:** src/components/profile/FavoriteClass.jsx
+- **Line:** 5, 8
+- **Category:** Brand color mismatch
+- **Issue:** `bg-[#2A3441]` and `text-[#ffc6aa]` — neither in palette. `#ffc6aa` is a peach close to brand `#f8a47c` but not equal.
+- **Suggested approach:** Fold into brand-palette pass.
+
+- **Severity:** Medium
+- **File:** src/components/profile/FavoriteClass.jsx
+- **Line:** 1–21 (file-level)
+- **Category:** DOMAIN — D&D-specific
+- **Issue:** "Favorite Class" presumes class-based RPG systems. Cyberpunk 2020, Call of Cthulhu, Fate, etc. don't have classes. If the file is kept, the field should generalize (e.g., "Most-played role" or per-system).
+- **Suggested approach:** Rename + abstract per-system, or scope to D&D-style systems only.
+
+- **Severity:** Low
+- **File:** src/components/profile/FavoriteClass.jsx
+- **Line:** 12, 15
+- **Category:** Accessibility (emoji as content)
+- **Issue:** `<div className="text-6xl">⚔️</div>` is decorative but has no `role="img" aria-label`; `<img alt={favoriteClass}>` is fine when set, but if `favoriteClass` is null, the alt is empty (acceptable for decorative).
+- **Suggested approach:** Wrap the emoji in `<span role="img" aria-label="Crossed swords">⚔️</span>` or replace with a Lucide icon.
+
+##### FeaturedAchievements.jsx
+
+- **Severity:** High
+- **File:** src/components/profile/FeaturedAchievements.jsx
+- **Line:** 1–41 (file-level)
+- **Category:** Duplicate component (near-duplicate of EditProfileDialog inline + ProfileCard)
+- **Issue:** This component is **also unreferenced** (`grep` finds no importers). The achievement-tile rendering logic is duplicated in three places: `EditProfileDialog.jsx` (line 597–632, the editor's selection grid), `ProfileCard.jsx` (line 67–99, the public profile card), and here (`FeaturedAchievements.jsx`). All three define the same `rarityColors` object and the same icon/Trophy fallback, with subtle differences.
+- **Suggested approach:** Extract `<AchievementTile>` and `<AchievementGrid>` into a single shared component; have all three callers consume it. Decide if `FeaturedAchievements` is superseded by `ProfileCard`'s inline rendering — if so, delete.
+
+- **Severity:** Medium
+- **File:** src/components/profile/FeaturedAchievements.jsx
+- **Line:** 6–11, 18, 22
+- **Category:** Brand color mismatch
+- **Issue:** `bg-[#2A3441]`, `bg-[#1E2430]`. Same off-palette set.
+- **Suggested approach:** Brand-palette pass.
+
+- **Severity:** Low
+- **File:** src/components/profile/FeaturedAchievements.jsx
+- **Line:** 21
+- **Category:** Hardcoded cap
+- **Issue:** `achievements.slice(0, 3)` — magic number 3 (the spec cap), but ditto in EditProfileDialog (line 311), in ProfileCard (line 67). Three sites with the same `3`.
+- **Suggested approach:** `import { FEATURED_ACHIEVEMENT_CAP } from '@/lib/constants/profile'`.
+
+
+##### PostComments.jsx
+
+- **Severity:** Critical
+- **File:** src/components/profile/PostComments.jsx
+- **Line:** 5–34 (JSDoc + canDelete)
+- **Category:** DOMAIN — Client-side authority (comment delete + ownership)
+- **Issue:** JSDoc explicitly describes the model: "comments live on `post.comments` as a JSONB array of { id, user_id, username, avatar_url, content, created_at }". Two cascading bugs: (1) **denormalized usernames + avatars stored inside the JSONB blob** — when a user changes their username or avatar, every comment they ever posted still shows their old name/avatar; (2) `canDelete = c.user_id === currentUser.id || post.profile_user_id === currentUser.id` is a **client-side gate** that only hides the delete button. The actual delete (`onDeleteComment(c.id)`) is performed by the parent's mutation, which presumably writes to the JSONB array — there is no way to enforce "only comment author or post owner can delete" in a JSONB array via Postgres RLS without an Edge Function. A tampering client can call the parent's delete handler from devtools and wipe any comment.
+- **Suggested approach:** **Restructure the schema**: comments should be a separate `post_comments` table with `id`, `post_id`, `user_id`, `content`, `created_at` — joined to `user_profiles` for username/avatar at read time. Add RLS: `DELETE WITH CHECK (user_id = auth.uid() OR EXISTS (SELECT 1 FROM posts WHERE id = post_id AND profile_user_id = auth.uid()))`. Drop the JSONB approach; it's fundamentally unauditable.
+
+- **Severity:** High
+- **File:** src/components/profile/PostComments.jsx
+- **Line:** 78
+- **Category:** XSS surface / user content
+- **Issue:** `<p className="text-sm text-gray-300 whitespace-pre-wrap mt-0.5">{c.content}</p>` — JSX escapes by default so this is currently safe. But the spec explicitly flags chat/profile-bio/comments as **the** XSS surface to watch. With `whitespace-pre-wrap` (line 78), if anyone changes the renderer to `dangerouslySetInnerHTML` to support links/markdown, this becomes immediate stored XSS — comment author posts `<script>...</script>`, every visitor to the profile runs it. No sanitization, no length cap, no URL extraction policy.
+- **Suggested approach:** Document the contract — comment rendering must remain plain-text. If markdown/links are ever wanted, run through a sanitizer (DOMPurify + a vetted markdown parser). Server-side enforce a max length (e.g., 1000 chars).
+
+- **Severity:** High
+- **File:** src/components/profile/PostComments.jsx
+- **Line:** 53
+- **Category:** Stale/tampered avatar URL display
+- **Issue:** Comment renders `c.avatar_url` directly from the JSONB blob. Two issues: (1) since the avatar URL is denormalized at write time, a deleted user / abusive avatar lives forever in old comments; (2) the blob is whatever the writer sent — if `Post.update` doesn't sanitize the comments array, a malicious client can supply any `avatar_url` (including external URLs that leak referer, or `data:` URIs that run JS in some contexts).
+- **Suggested approach:** Don't store avatar_url in the comment row. Look it up via `user_id` join at read time. Also: the schema-restructure above subsumes this.
+
+- **Severity:** High
+- **File:** src/components/profile/PostComments.jsx
+- **Line:** 25–31, 84–103
+- **Category:** Spam / rate limit
+- **Issue:** No client-side throttle on `submit`. No max-length on draft. No max-comments-per-post. A scripted client can flood comments. Each comment is added to a JSONB array which has no Postgres-level dedup. Comment spam is one of the easier abuse vectors on profile pages.
+- **Suggested approach:** Server-side rate limit per user (e.g., 30 comments / 5 min). Cap `content` length (e.g., 500 chars). Cap comments-per-post (e.g., 200) and offer pagination after that.
+
+- **Severity:** Medium
+- **File:** src/components/profile/PostComments.jsx
+- **Line:** 67–76
+- **Category:** Accessibility (icon-only delete)
+- **Issue:** Trash icon button uses `title="Delete comment"` only; no `aria-label`. Same anti-pattern flagged on multiple buttons across this batch.
+- **Suggested approach:** `aria-label="Delete comment"`.
+
+- **Severity:** Medium
+- **File:** src/components/profile/PostComments.jsx
+- **Line:** 68–75
+- **Category:** UX — destructive action with no confirmation
+- **Issue:** Clicking the trash icon immediately invokes `onDeleteComment(c.id)` — no AlertDialog, no undo. A misclick is permanent (or as permanent as the JSONB blob persistence).
+- **Suggested approach:** Wrap delete in a Radix `AlertDialog` confirm; or add a 5-second undo toast (Sonner has the affordance).
+
+- **Severity:** Medium
+- **File:** src/components/profile/PostComments.jsx
+- **Line:** 21, 53
+- **Category:** Resilience
+- **Issue:** `key={c.id || c.created_at}` — if neither is set, every comment shares the same React key, breaking re-renders. Also `c.id` may be undefined for optimistically-added comments, in which case the parent must regenerate keys.
+- **Suggested approach:** Generate a client-side UUID at submit time; require the parent to assign one before adding to the array.
+
+- **Severity:** Medium
+- **File:** src/components/profile/PostComments.jsx
+- **Line:** 53, 57, 91, 97
+- **Category:** Brand color mismatch
+- **Issue:** `bg-[#0f1419]`, `bg-[#37F2D1]/20`, `bg-[#2A3441]`, `bg-[#37F2D1]`, `text-[#050816]`, `bg-[#2dd9bd]` — six off-palette literals.
+- **Suggested approach:** Brand-palette pass.
+
+- **Severity:** Low
+- **File:** src/components/profile/PostComments.jsx
+- **Line:** 86–92
+- **Category:** Accessibility
+- **Issue:** Comment input has no `<label>` (only placeholder). No `aria-label` on Send button. Comments list has no `role="list"`.
+- **Suggested approach:** Add labels.
+
+- **Severity:** Low
+- **File:** src/components/profile/PostComments.jsx
+- **Line:** N/A
+- **Category:** P.I.E. event emission
+- **Issue:** Comment posts and deletes are engagement signals; not emitted.
+- **Suggested approach:** `pie.event('post.comment_added')`, `'post.comment_deleted'`.
+
+
+##### ProfileCard.jsx
+
+- **Severity:** High
+- **File:** src/components/profile/ProfileCard.jsx
+- **Line:** 1–138 (file-level)
+- **Category:** Dead code (unreferenced component)
+- **Issue:** No importers. Public profile rendering happens in `pages/UserProfile.jsx` and `pages/YourProfile.jsx` directly. This component is the third consecutive profile-folder file with no callers (FavoriteClass, FeaturedAchievements, ProfileCard).
+- **Suggested approach:** Either consolidate the public-profile card into this single component and have both pages consume it (DRY win), or delete.
+
+- **Severity:** High
+- **File:** src/components/profile/ProfileCard.jsx
+- **Line:** 33
+- **Category:** External resource / privacy / hardcoded URL
+- **Issue:** Default avatar fallback hardcodes a remote Unsplash URL — same anti-pattern as `FriendsCarousel.jsx` (different URL: `photo-1534528741775-53994a69daeb`). Same three problems: leaked Referer to images.unsplash.com, asset not under our control, magic URL.
+- **Suggested approach:** Cross-cutting: every avatar fallback must be a Guildstew-controlled local asset.
+
+- **Severity:** High
+- **File:** src/components/profile/ProfileCard.jsx
+- **Line:** 9–13, 40, 47–49, 52–61
+- **Category:** DOMAIN — Spec mismatch (statuses, streaming integration)
+- **Issue:** `statusColors` only knows `online` / `streaming` / `offline` — same as `FriendsCarousel`. **No `away`, no `dnd`** (the actual schema per `PresenceContext.STATUS_OPTIONS`). An `away` user renders as `bg-undefined` (invisible dot). Separately, line 52–61 renders a "Now Live On Twitch" link only if `online_status === 'streaming'` and `stream_url` is set. **Twitch is hardcoded** ("Now Live On Twitch") regardless of which platform the URL points at — a YouTube stream link reads as "Now Live On Twitch". The spec asks "Streaming status: integration with what? Twitch? Discord? — flag prototype/leftover code"; this is the prototype.
+- **Suggested approach:** Use a shared `STATUS_COLORS` map (per StatusDot finding). Detect platform from `stream_url` (twitch.tv / youtube.com / kick.com) and label dynamically; better, store `stream_platform` on the profile.
+
+- **Severity:** High
+- **File:** src/components/profile/ProfileCard.jsx
+- **Line:** 105–120
+- **Category:** DOMAIN — Profile statistics privacy + multi-game readiness
+- **Issue:** Renders four stats (Campaigns Played, Characters Created, Most Played System, Hours Played) unconditionally on whatever `user` is passed. Same privacy concern as `AverageStatistics` — no `show_statistics` gate. Plus `most_played_system || 'D&D 5e'` defaults non-D&D users to "D&D 5e" — a user who only plays Cyberpunk has their profile mislabel them.
+- **Suggested approach:** Gate stats behind a privacy preference. Drop the D&D 5e default — show "—" or "Not enough data" instead.
+
+- **Severity:** Medium
+- **File:** src/components/profile/ProfileCard.jsx
+- **Line:** 9–11, 30, 40, 48
+- **Category:** Brand color mismatch
+- **Issue:** `bg-[#37F2D1]` (×2), `bg-[#FF00FF]` (raw magenta — same as FriendsCarousel "streaming"), `bg-[#2A3441]` (×2), gradient `from-purple-500 via-pink-500 to-yellow-500` (off-palette gradient). Plus `bg-[#1E2430]`, `text-[#FF00FF]`.
+- **Suggested approach:** Brand-palette pass.
+
+- **Severity:** Medium
+- **File:** src/components/profile/ProfileCard.jsx
+- **Line:** 5
+- **Category:** Dead prop
+- **Issue:** `showFullStats = false` prop is declared but never used in the body. Either dead, or someone meant to gate the stats grid (lines 104–121) on it but forgot.
+- **Suggested approach:** Either use it (`{showFullStats && <Stats/>}`) or remove the prop.
+
+- **Severity:** Medium
+- **File:** src/components/profile/ProfileCard.jsx
+- **Line:** 71–98
+- **Category:** Accessibility (hover-only tooltip)
+- **Issue:** Achievement tooltip shows on `onMouseEnter`/`onMouseLeave`. Touch users cannot trigger it; keyboard users cannot trigger it (no `onFocus`/`onBlur`). Also positioned absolutely without `role="tooltip"` / `aria-describedby` linkage.
+- **Suggested approach:** Use Radix Tooltip primitive (already in the design system) — handles keyboard + touch + ARIA correctly.
+
+- **Severity:** Medium
+- **File:** src/components/profile/ProfileCard.jsx
+- **Line:** 65, 67
+- **Category:** Inconsistent cap handling
+- **Issue:** Renders `featuredAchievements.slice(0, 3)`. Same magic 3 already flagged.
+- **Suggested approach:** Shared constant.
+
+- **Severity:** Low
+- **File:** src/components/profile/ProfileCard.jsx
+- **Line:** N/A
+- **Category:** Image lazy loading
+- **Issue:** Avatar and achievement icons missing `loading="lazy" decoding="async"`.
+- **Suggested approach:** Add attributes.
+
+
+##### SocialHandlesDisplay.jsx
+
+- **Severity:** High
+- **File:** src/components/profile/SocialHandlesDisplay.jsx
+- **Line:** 13–40
+- **Category:** DOMAIN — Open redirect / URL trust on YouTube branch
+- **Issue:** `resolveHandle` for the `youtube` key (line 35) accepts **any URL the user types** if it matches `^https?://`: `if (/^https?:\/\//i.test(trimmed)) return { label: trimmed, url: trimmed }`. So a user can save `https://evil.example/phishing` as their YouTube handle, and the "leaving Guildstew" interstitial then offers a Continue button that opens `evil.example/phishing` in a new tab. The "fixed list" promise in the JSDoc on `SocialHandlesEditor.jsx:9` ("Free-form URLs got replaced by this fixed list so the leaving-Guildstew interstitial can trust the destination") is broken on the YouTube branch — it's the one platform that intentionally falls open. Same fall-through happens at line 39 for any unknown key (`return { label: trimmed, url: trimmed }`).
+- **Suggested approach:** For YouTube, only accept paths under `youtube.com/` and `youtu.be/`; if the user pastes a non-YouTube URL, either reject or strip. Replace the line-39 fallthrough with `return null` (unknown key). Generally: every social URL should be derived from a per-platform template, never user-supplied.
+
+- **Severity:** High
+- **File:** src/components/profile/SocialHandlesDisplay.jsx
+- **Line:** 13–40
+- **Category:** XSS / `data:`/`javascript:` URL surface
+- **Issue:** Line 35 only tests `/^https?:\/\//i` — but line 39 (the unknown-key fallthrough) returns `{ label: trimmed, url: trimmed }` with **no scheme check**. A row keyed something other than the five known platforms (e.g., a future platform that gets added then removed, or an attacker-controlled write to `social_handles` JSON in the DB) could produce `url: "javascript:alert(1)"`. The dialog's Continue button calls `window.open(url, "_blank", "noopener,noreferrer")`. Modern browsers block `javascript:` in `window.open` second-tab opens — but `data:`/`blob:` are not universally blocked.
+- **Suggested approach:** Whitelist `https?:` only, and only proceed if the URL parses with `new URL(url)` to a known set of hosts.
+
+- **Severity:** Medium
+- **File:** src/components/profile/SocialHandlesDisplay.jsx
+- **Line:** 16
+- **Category:** Sanitization corner case
+- **Issue:** `sanitizeHandle = v => v.replace(/^@/, "").trim()` only strips a single leading `@`. A user typing `@@boky` keeps one `@`. Also, no validation of handle character set — a user can type a handle with spaces or unicode characters, then `encodeURIComponent` produces a URL-safe but non-functional handle (`https://twitter.com/foo%20bar`).
+- **Suggested approach:** Per-platform handle regex (`twitter`: `^[A-Za-z0-9_]{1,15}$`), validate at edit time; reject invalid.
+
+- **Severity:** Medium
+- **File:** src/components/profile/SocialHandlesDisplay.jsx
+- **Line:** 68, 86, 107
+- **Category:** Brand color mismatch
+- **Issue:** `bg-[#1E2430]`, `border-[#37F2D1]/40`, `text-[#37F2D1]`, `bg-[#37F2D1]`, `bg-[#2dd9bd]`, `text-[#050816]` — six off-palette literals.
+- **Suggested approach:** Brand-palette pass.
+
+- **Severity:** Low
+- **File:** src/components/profile/SocialHandlesDisplay.jsx
+- **Line:** 17–19, 76–82
+- **Category:** UX / inconsistent affordance
+- **Issue:** Discord renders as a non-clickable `<span>` (no URL template). The user can't easily copy the Discord tag — no copy button. Compare to the clickable variants which open a confirm-dialog.
+- **Suggested approach:** Add a "Copy" affordance for Discord (and any future no-URL platforms).
+
+- **Severity:** Low
+- **File:** src/components/profile/SocialHandlesDisplay.jsx
+- **Line:** 69
+- **Category:** Accessibility
+- **Issue:** `title={resolved.url}` is a tooltip-on-hover, not announced by screen readers, doesn't work on touch. Button itself has the icon + handle visible — the URL hint is bonus info, but for screen reader users there's no way to know the destination before clicking.
+- **Suggested approach:** Add `aria-describedby` linking to a hidden span with the URL, or include the host in the visible label.
+
+##### SocialHandlesEditor.jsx
+
+- **Severity:** Medium
+- **File:** src/components/profile/SocialHandlesEditor.jsx
+- **Line:** 12–15
+- **Category:** Validation gaps / placeholder examples include real-looking PII
+- **Issue:** Placeholders use `"boky"` as the example handle on Discord/Twitter/Twitch/YouTube/Instagram. `boky` is the GitHub username on the deployed branch reference — using a real maintainer's handle as the placeholder is harmless but a bit cute and may feel like a leftover. More importantly, no validation: `discord` placeholder shows `boky#1234` (the legacy Discord tag format that Discord deprecated in 2023 — handles are now lowercase). User-entered Discord handles aren't validated against either format.
+- **Suggested approach:** Update the Discord placeholder to the new `boky` (no #) format. Validate inputs per platform regex (see SocialHandlesDisplay finding).
+
+- **Severity:** Medium
+- **File:** src/components/profile/SocialHandlesEditor.jsx
+- **Line:** 19–47
+- **Category:** Validation gap (no character limit, no live error)
+- **Issue:** `setField` writes whatever the user types without length cap or character validation. A user can type a 10MB string into the Twitch field. No live policy feedback (compare to `UsernameField` which shows availability / invalid status inline).
+- **Suggested approach:** Add per-field max length (50 chars), regex validation, and a small inline error like UsernameField has.
+
+- **Severity:** Medium
+- **File:** src/components/profile/SocialHandlesEditor.jsx
+- **Line:** 30, 38
+- **Category:** Brand color mismatch
+- **Issue:** `text-[#37F2D1]`, `bg-[#2A3441]`.
+- **Suggested approach:** Brand-palette pass.
+
+- **Severity:** Low
+- **File:** src/components/profile/SocialHandlesEditor.jsx
+- **Line:** 28
+- **Category:** Tailwind arbitrary values
+- **Issue:** `grid-cols-[120px,1fr]` arbitrary track. Acceptable but should be a reusable utility.
+- **Suggested approach:** N/A unless a pattern emerges.
+
+##### UsernameField.jsx
+
+- **Severity:** Medium
+- **File:** src/components/profile/UsernameField.jsx
+- **Line:** 37–40
+- **Category:** State sync / effect dependencies
+- **Issue:** `useEffect(() => { onStatus?.(status); }, [status])` deliberately disables the exhaustive-deps lint with a comment that omits `onStatus` — relying on the parent passing a stable function. If a parent inlines `onStatus={(s) => setUsernameStatus(s)}` it changes every render and **wouldn't** cause re-fires here (because `status` didn't change), but the eslint-disable comment masks the actual fragility: any future maintainer changing the dependency array will reintroduce the bug.
+- **Suggested approach:** Either wrap `onStatus` in a `useRef` pattern, or accept the parent's responsibility to memoize.
+
+- **Severity:** Medium
+- **File:** src/components/profile/UsernameField.jsx
+- **Line:** 42–68
+- **Category:** Username availability / enumeration vector
+- **Issue:** `isUsernameAvailable(trimmed, excludeUserId)` is called on every keystroke (after 400ms debounce). The endpoint thus exposes a username-enumeration oracle: an attacker can sweep the namespace by typing each candidate and reading the response. While username uniqueness is by definition public-ish (the user picks a unique name), unrestricted enumeration enables targeted phishing ("Hi @specific_user, …"). No rate limit on the lookup endpoint is mentioned.
+- **Suggested approach:** Server-side rate limit + CAPTCHA after N checks/min per IP. Long term: drop the live availability check in favor of submit-time verification only.
+
+- **Severity:** Medium
+- **File:** src/components/profile/UsernameField.jsx
+- **Line:** 57–68
+- **Category:** Race condition / stale availability response
+- **Issue:** If the user types `foo`, then quickly changes to `bar` before the 400ms debounce fires, the timer is cancelled (line 67 cleanup). Good. But if the user types `foo` (debounce fires, network in flight), then changes to `bar` while the request is en route, the `foo` response can resolve **after** the user has moved on — and `setStatus(available)` will reflect `foo`'s availability while the input shows `bar`. The cleanup only cancels the timeout, not the in-flight fetch.
+- **Suggested approach:** Track the latest issued query in a ref; on response, only apply state if the response matches the current `value`.
+
+- **Severity:** Low
+- **File:** src/components/profile/UsernameField.jsx
+- **Line:** 86–95
+- **Category:** Accessibility
+- **Issue:** Status indicator (loader/check/X) is purely visual — no `aria-live` region announcing "Username available" / "Username taken". Screen readers will not be told the result of the async check unless they re-read the `<p>` message.
+- **Suggested approach:** Wrap the message `<p>` in `<span aria-live="polite">` so status changes are announced.
+
+- **Severity:** Low
+- **File:** src/components/profile/UsernameField.jsx
+- **Line:** N/A
+- **Category:** Brand colors
+- **Issue:** Uses Tailwind generic `text-emerald-400`, `text-red-400`, `text-slate-400` — no off-palette hex. Cleaner than the rest of the folder.
+- **Suggested approach:** N/A — just noted.
+
+
+##### Batch 1A-viii Summary
+
+**Totals by severity (this batch):**
+
+| Severity   | Count |
+| ---------- | ----- |
+| Critical   | 9     |
+| High       | 36    |
+| Medium     | 47    |
+| Low        | 24    |
+| Cosmetic   | 0     |
+| **Total**  | **116** |
+
+**Totals by category (top categories):**
+
+- DOMAIN — Client-side authority / RLS-blocking Base44 leftovers: 8 findings (all Critical/High)
+- DOMAIN — Privacy leaks (public-vs-private profile, friends list, presence, last-seen): 7 findings
+- DOMAIN — XSS surface / user content rendering: 5 findings
+- DOMAIN — Spec mismatches (notifications system underbuilt, real-time delivery missing, presence "Invisible"/"Streaming" missing, edit/delete missing): 7 findings
+- Brand color mismatch: ~12 file-level occurrences (≥ 60 individual hex literals)
+- Accessibility: 14 findings
+- Dead code (unreferenced components): 4 components — `FriendsCarousel`, `GiphyPicker`, `FavoriteClass`, `FeaturedAchievements`, `ProfileCard` (5 actually — corrected in narrative below)
+- Hardcoded values / external URLs / secrets in source: 4 findings (one Critical: hardcoded Giphy API key)
+- Storage path violations: 2 findings (avatar/banner uploads via legacy generic uploader)
+- Performance (O(N×M), polling, missing virtualization, memory leaks): 6 findings
+- Concurrency / race conditions: 4 findings (chat send, profile save, username availability, multi-tab presence)
+- P.I.E. event emission gaps: 4 findings
+- Rate limiting / spam prevention: 4 findings (chat, comments, profile updates, username enumeration)
+- TODO / FIXME / stale comments: 2 findings
+
+**Top systemic issues across the social stack:**
+
+1. **The social stack is the worst single zone for client-side authority.** Three "fetch everything, filter in JS" patterns ride together and amplify each other: `ChatConversation.list()` returns every conversation in the system; `UserProfile.list()` returns every user's public profile (including `email`, `age`, and `role` which are written into it by `EditProfileDialog`); and `Message.create({ sender_id })` accepts a client-supplied sender. End-to-end, any signed-in user can: (a) read every other user's conversations and last-message previews; (b) read every other user's email and role; (c) post messages as any other user. This is an order of magnitude worse than the campaign/party leaks flagged in earlier batches because it hits *every* user, not just campaign participants.
+
+2. **Profile public-vs-private separation is broken at the write site.** `EditProfileDialog.jsx:222–245` syncs the user's `email`, `age`, and `role` into the public-readable `UserProfile` table on every save. The schema implies these are public; the editor confirms it. Any reader with `UserProfile.list()` access (currently all signed-in users — see ChatPanel) gets the full plaintext email of every user in the system. This is the single most egregious privacy bug found across the audit so far.
+
+3. **The notifications "system" is one toast.** The folder name promises a notifications platform; the contents are a single session-reminder toast. Spec calls for friend requests / DMs / guild invites / system notifications / preferences / mute / DND / rate-limiting / Realtime — none exist. This is not a bug to fix, it's a feature to build, and shipping the social stack publicly without it would mean every social interaction is silent.
+
+4. **Real-time delivery is replaced everywhere by polling.** Chat polls at 3s/5s/15s; presence polls via 2-minute heartbeat. No Supabase Realtime subscriptions anywhere in this batch. The cost is twofold: (a) UX latency (3s for a chat message to appear is detectable); (b) request volume scales linearly with concurrent users. Same DB load, dramatically worse experience.
+
+5. **Five dead components in 14 files (36% dead-code rate).** `FriendsCarousel`, `GiphyPicker` (with leaked API key), `FavoriteClass`, `FeaturedAchievements`, and `ProfileCard` are all defined and exported but unreferenced. Three of them (FavoriteClass, FeaturedAchievements, ProfileCard) overlap with code already inlined into `pages/UserProfile.jsx` and `pages/YourProfile.jsx` — strong signal that the components were the original target and the inlines are partial migrations that left the components stranded. Either complete the migration to component-form (DRY win) or delete the strandlings.
+
+**Specific note on client-side authority findings:**
+
+- **Count this batch:** 8 distinct findings across 5 files.
+- **Severity:** 4× Critical, 4× High.
+- **Files affected:**
+  - `src/components/chat/ChatPanel.jsx` — 4 findings: conversation list global fetch + JS filter; profile list global fetch; client-supplied `sender_id`; missing block-list enforcement on read/write.
+  - `src/components/profile/EditProfileDialog.jsx` — 1 finding: storage path violation on avatar/banner uploads (no path scoping, no MIME guard, SVG-XSS adjacent).
+  - `src/components/profile/PostComments.jsx` — 1 finding: comment delete authorization is purely a hidden button; the underlying JSONB array write is unauditable.
+  - `src/components/friends/FriendsCarousel.jsx` — 1 finding: implicit trust that the parent has filtered blocked users; no defense-in-depth.
+  - `src/components/presence/StatusDot.jsx` — 1 finding: client-side `last_seen_at` exposure (every profile read leaks raw last-seen timestamp).
+- **Severity to ship:** Critical. Until **all** of these move to RLS / RPC enforcement, the social stack must not be public. The ChatPanel and EditProfileDialog patterns alone are enough to call this batch a hard block on launch.
+
+**Specific note on privacy leaks:**
+
+- **Public-vs-private profile (Critical):** `EditProfileDialog.jsx:226` writes `email`, `age`, `role` into `user_profiles` (the public table). Multiple downstream readers (`ChatPanel`, `UserProfile.jsx`, `Friends.jsx`) consume it. Combined with `ChatPanel`'s global profile fetch, every user's email is exposed to every other user. Highest-priority privacy fix in the entire audit so far.
+- **Last-seen exposure (High):** `StatusDot` accepts a `profile` prop and reads `last_seen_at`; therefore every profile-fetching call site ships exact last-seen timestamps to the client. Any user can inspect another user's idle pattern. No bucketization, no opt-out.
+- **Friends-of-friends visibility (Medium):** `FriendsCarousel` is dead, but no code in this batch enforces friends-list privacy server-side. Cross-cutting risk to verify in the upstream queries.
+- **Presence "Invisible"/"appear offline" missing (High):** `STATUS_OPTIONS` lacks an Invisible value; the comment at `StatusDot.jsx:76` claims it exists but the picker doesn't render it. No way for a user to genuinely hide their presence.
+- **Profile statistics privacy gate missing (High):** `AverageStatistics` and `ProfileCard` render P.I.E. stats unconditionally with no `show_statistics` preference gate.
+- **Comment denormalized PII (Medium):** Comments embed `username` and `avatar_url` into a JSONB blob; account renames/deletions don't propagate. Old data persists indefinitely.
+
+**Specific note on Base44 leftovers blocking the RLS migration:**
+
+- **Count this batch:** 4 files, 11 distinct call-sites.
+- **Files:**
+  - `src/components/chat/ChatPanel.jsx` — `base44.entities.{ChatConversation, Message, UserProfile}.{list, create, update, filter}`, `base44.auth.me()` (5+ call sites).
+  - `src/components/profile/EditProfileDialog.jsx` — `base44.entities.Achievement.filter`, `base44.integrations.Core.UploadFile` (×2), `base44.auth.updateMe`, `base44.entities.UserProfile.{filter, update, create}` (5 call sites).
+  - `src/lib/PresenceContext.jsx` (out of scope but inferred from StatusDot integration) — `base44.entities.UserProfile.update` for status writes.
+  - `src/components/profile/PostComments.jsx` — no direct Base44 calls in-file but the parent's mutation handlers (out of scope) are presumably Base44-driven.
+- **Severity:** Critical. None of the RLS guarantees apply to the chat / profile surfaces until these call sites move to the Supabase typed client. The chat surface in particular MUST be on RLS before public launch — every Critical client-side-authority finding in this batch lives downstream of Base44.
+
+**Shippability per folder:**
+
+- **/components/friends/** — `FriendsCarousel` is dead and the folder has nothing else; the actual friends UX must live in `pages/Friends.jsx` (out of scope here) which depends on the friends-table query being RLS-enforced. The folder itself is shippable as soon as you decide whether to keep or delete `FriendsCarousel`.
+- **/components/chat/** — should NOT advance to public-launch state until: (a) conversation/message reads move to RLS-enforced server queries (no more `list()`+JS-filter); (b) `sender_id` is not client-supplied; (c) realtime replaces polling; (d) read receipts persist server-side; (e) the dead `GiphyPicker.jsx` is deleted **and the leaked Giphy API key is rotated**. The Giphy key is the single most urgent fix in the batch — rotate immediately regardless of any other work.
+- **/components/notifications/** — should NOT advance to public-launch state. The notifications system per spec is missing entirely; what ships is a single session-reminder toast. Treat as a major build, not a polish pass.
+- **/components/presence/** — should NOT advance to public-launch state until: (a) `last_seen_at` stops being exposed raw to the client; (b) an actual `invisible` / appear-offline option is added with the privacy contract enforced; (c) multi-tab leader election prevents flapping; (d) the picker has Streaming status (or the spec is amended). The current StatusDot UI is otherwise polished and reusable.
+- **/components/profile/** — should NOT advance to public-launch state until: (a) `email`/`age`/`role` are stripped from the UserProfile sync at `EditProfileDialog.jsx:226` (this is the worst single privacy bug in the audit); (b) avatar/banner uploads are routed through `user-assets/users/{user_id}/` with MIME + size + SVG-XSS validation; (c) the Base44 → Supabase RLS migration completes; (d) profile statistics gain a privacy gate; (e) the dead `FavoriteClass`, `FeaturedAchievements`, `ProfileCard` files are either wired in or deleted; (f) the `PostComments` schema moves from JSONB to a real `post_comments` table with RLS. The `EditProfileDialog` is feature-complete in shape but the save flow ships PII into a public table.
