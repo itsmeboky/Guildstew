@@ -6289,3 +6289,655 @@ Dice and P.I.E. are **not integrated** as the spec requires. The DiceRoller comp
 - **`SentientConflictDialog`** likewise has no `isGM` gating — a player who can open the dialog can resolve a contest, with no server-side check shown. Conflict outcomes also aren't logged. This is both a permission leak AND an audit-logging gap.
 - **`ItemHoverCard`** is read-only and not a permission risk itself, but renders user-supplied item fields without `safeText`-style sanitisation — a malicious item title or description from a homebrew item could affect everyone in the campaign.
 
+
+#### Batch 1A-v-c — `/src/components/trade/` and `/src/components/maps/`
+
+**Files in scope (4 files, ~1,565 lines):**
+- `src/components/trade/TradesPanel.jsx` (113 lines)
+- `src/components/trade/TradeOfferCard.jsx` (262 lines)
+- `src/components/trade/TradeOfferDialog.jsx` (268 lines)
+- `src/components/maps/InteractiveMapViewer.jsx` (~565 lines — read in pass)
+
+**Domain focus this batch:**
+- Player-to-player trade: two-sided consent, atomic transfer, race conditions, optimistic rollback, pending-trade item locking
+- GM trade override: audit logging, GM ownership verification (NB: no GM-grant/take dialog exists in `/components/trade/` — flagged below)
+- Trade permission gating: ownership verification before init/accept
+- Map fog-of-war / token visibility (maps)
+
+##### `src/components/trade/TradesPanel.jsx` (113 lines)
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradesPanel.jsx
+- **Line:** 17-24
+- **Category:** Error swallowing / observability
+- **Issue:** `try { rows = TradeOffer.filter(...) } catch { return [] }` silently returns "no trades" on any failure (network drop, permission denied, schema mismatch). React Query never sees the error so retry/error UI never fires; the panel renders "No pending trade offers — you're in the clear" while real pending trades exist. For a trade panel this is a deception risk: a player thinks no one offered them anything when in fact the request failed.
+- **Suggested approach:** Let the throw propagate and render an error state in the UI. At minimum, log the error.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradesPanel.jsx
+- **Line:** 18-21
+- **Category:** Performance / scaling
+- **Issue:** Server-side filter uses `campaign_id` only; the (sender || receiver) restriction is applied client-side after fetching every trade in the campaign. In a long-running campaign with hundreds of trades, every player downloads every other player's trade history every 10 seconds. Also leaks GM-only / private-recipient trade metadata to all clients (depends on RLS — but the query is greedy regardless).
+- **Suggested approach:** Add a server-side filter `or(sender_character_id.eq.X, receiver_character_id.eq.X)` and rely on RLS for authorization.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradesPanel.jsx
+- **Line:** 28
+- **Category:** Performance / battery
+- **Issue:** `refetchInterval: 10000` polls every 10s unconditionally — no `refetchIntervalInBackground: false`, no pause when the tab is hidden, no exponential back-off on errors. Every player viewing this panel hits the API 6×/min regardless of whether a trade is in flight. Should use a real-time channel (Supabase realtime / websocket) for trade events; polling is an anti-pattern for a feature where new offers are rare but latency-sensitive.
+- **Suggested approach:** Switch to a realtime subscription on `trade_offers` filtered by character id; fall back to polling only on subscription failure.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradesPanel.jsx
+- **Line:** 14
+- **Category:** Cache key correctness
+- **Issue:** Query key `["tradeOffers", campaignId, viewingCharacterId]` is correct for invalidation per-character, but `TradeOfferCard` invalidates with only `["tradeOffers", campaignId]` (line 81 in TradeOfferCard). React Query treats those as a prefix match (✓) — but the inconsistency is brittle: a future change to either side breaks invalidation silently.
+- **Suggested approach:** Standardise the invalidation key in a shared helper.
+
+- **Severity:** Low
+- **File:** src/components/trade/TradesPanel.jsx
+- **Line:** 44
+- **Category:** UX
+- **Issue:** History `slice(0, 10)` hardcodes a 10-row limit with no "show more" affordance. A campaign with active trading exhausts the history within an evening. Players can't audit a 3-month-old trade that's now in dispute.
+- **Suggested approach:** Add pagination or a "View all" link that opens a full history modal.
+
+- **Severity:** Low
+- **File:** src/components/trade/TradesPanel.jsx
+- **Line:** 60, 69, 78, 91, 92
+- **Category:** Brand color mismatches
+- **Issue:** Off-brand hex literals: `#37F2D1` (cyan, line 60), `#fbbf24` (amber, line 69), `#8B5CF6` (violet, line 78), `#0b1220` (line 91), `#1e293b` (line 91). Five hex literals across one 113-line file.
+- **Suggested approach:** Tokenise.
+
+- **Severity:** Low
+- **File:** src/components/trade/TradesPanel.jsx
+- **Line:** entire file
+- **Category:** Missing error boundaries
+- **Issue:** Systemic — flagged once.
+
+- **Severity:** Low
+- **File:** src/components/trade/TradesPanel.jsx
+- **Line:** 38-40
+- **Category:** Sort stability / domain
+- **Issue:** Sort uses `new Date(b.created_at || 0)`. If `created_at` is null/undefined the offer is dated to the unix epoch and ranked last. Worse, if two offers have the same timestamp (bulk import / clock skew), the order is implementation-defined. For a "recent history" panel that's a UX nit, but for `incoming` ordering it can hide a fresh offer behind an older duplicate.
+- **Suggested approach:** Tie-break by `id` (or by `updated_at`). Treat null `created_at` as a data-integrity error, not as epoch-dated.
+
+
+##### `src/components/trade/TradeOfferCard.jsx` (262 lines) — heart of trade execution
+
+- **Severity:** Critical
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 70-78
+- **Category:** DOMAIN — atomic transfer / data integrity
+- **Issue:** The accept transaction is THREE sequential client-side `await` calls (`Character.update(sender)`, `Character.update(receiver)`, `TradeOffer.update(offer.status)`). There is no transactional boundary. Failure modes:
+  1. First update succeeds, second fails → sender lost items, receiver got nothing → permanent loss.
+  2. Both updates succeed, status update fails → trade ledger says "pending" but inventories already moved. Receiver clicks Accept again, transfer runs a second time → duplication.
+  3. Network drop after sender update → sender shows the new state on refresh, receiver does not, trade row stays pending; another retry duplicates again.
+  The docblock (line 22) claims "we still fall back to best-effort rollback on partial failure" — there is NO rollback code in the mutation. Comment is a lie.
+- **Suggested approach:** Replace with a single server-side RPC / Supabase Edge Function (or DB transaction) that performs all three writes atomically. Until that exists, the trade feature is unsafe to ship.
+
+- **Severity:** Critical
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 45-79
+- **Category:** DOMAIN — race condition / duplication on simultaneous accept
+- **Issue:** No optimistic-lock (`status === 'pending'` re-check + version/`updated_at` compare-and-swap) before the writes. Two concurrent accepts (sender hits Cancel while receiver hits Accept; receiver double-clicks; two tabs open) each compute the post-trade state from current snapshots and overwrite. The result is double-application: items disappear from sender twice (one capped to empty), receiver gets the items twice. This is the canonical TOCTOU bug.
+- **Suggested approach:** RPC must `UPDATE trade_offers SET status='accepted' WHERE id=$1 AND status='pending' RETURNING *` first; if zero rows affected, abort. All three writes inside one transaction.
+
+- **Severity:** Critical
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 51-54, 70-77
+- **Category:** DOMAIN — stale-read / lost update
+- **Issue:** `sender` and `receiver` come from `characterMap` — the parent panel's render-time snapshot, fed by a query that polls every 10s. A trade offer can sit pending for hours; by the time the receiver clicks Accept, the inventories computed from the snapshot are stale. We blindly overwrite `inventory` and `currency` on both characters with values derived from a stale read. Any inventory/currency change made between the snapshot and the accept is silently reverted.
+- **Suggested approach:** Re-fetch both character rows inside the mutation (or do the entire diff server-side from authoritative state). Never `update(.. {inventory: x})` based on a client snapshot.
+
+- **Severity:** Critical
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 216-233 (`removeItems`)
+- **Category:** DOMAIN — duplication via missing-item silent skip
+- **Issue:** `if (idx === -1) continue;` — if the offered item is no longer in the sender's inventory at accept time (sender already gave it away, GM removed it, item was consumed), `removeItems` silently skips it. But `addItems` on line 58 still grants the item to the receiver. Net effect: the item materialises in the receiver's inventory out of thin air. The sender's "I no longer have this" is silently ignored and the trade still completes. This is duplication-on-stale-trade, not a partial failure.
+- **Suggested approach:** Throw on `idx === -1` and abort the entire accept; the offer is invalid because the sender no longer owns the offered goods. Surface "Sender no longer has X — trade rejected".
+
+- **Severity:** Critical
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 63-68
+- **Category:** DOMAIN — currency overflow / creation
+- **Issue:** `senderCurrency[k] = Math.max(0, current - off + req)`. If sender's actual current `gp` is less than `off` (because they spent it after offering), the deduction is silently clamped to 0. Meanwhile the receiver still gets `+ off` on line 67 — currency that the sender never actually had. Pure inflation: gold is created from nothing. Conversely if `receiver` doesn't have enough, the receiver's deduction also clamps and the sender still receives — same bug, opposite direction.
+- **Suggested approach:** Validate `current >= off` for each currency on each side before any update; throw if insufficient.
+
+- **Severity:** Critical
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** entire mutation (45-107)
+- **Category:** DOMAIN — no item lock during pending trade
+- **Issue:** Per the batch's domain rules ("player can't trade same item to two people simultaneously"), pending offers must reserve their items. Nothing in this component (or the dialog) marks an item as locked when an offer is created. A sender can list the same legendary sword in five concurrent offers; whoever clicks Accept first wins; the rest become silent duplications via the `idx === -1` path above. Compounds with the duplication bug for severe economic exploit potential.
+- **Suggested approach:** Either (a) lock items in a `pending_holds` table when an offer is created (release on cancel/decline/expire), or (b) validate at accept that no other pending offer references the same item id from the same character.
+
+- **Severity:** High
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 45-107
+- **Category:** DOMAIN — missing two-sided consent re-check
+- **Issue:** Domain rule: "Both parties must consent before transfer completes." Sender consent is implicit at offer creation, but the offer can sit pending indefinitely. There is no expiry, no "is this still valid?" handshake at accept time, no requirement that the sender's character is even online or owned by the same user (the sender may have been deleted, transferred to another player, or rerolled). The accept flow trusts the offer row blindly.
+- **Suggested approach:** Add a `pending_until` timestamp; expire offers on the server. On accept, re-verify sender_user_id still owns sender_character_id and the character still exists.
+
+- **Severity:** High
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 45-107, 109-116, 118-125
+- **Category:** DOMAIN — permission gating client-side only
+- **Issue:** All three mutations (`accept`, `decline`, `cancel`) issue raw `base44.entities.TradeOffer.update` and `Character.update` calls with no client-side identity guard beyond the `iAmReceiver` / `iAmSender` render condition (line 154, 177). A user with devtools can call `acceptMutation.mutate()` against any offer they can read, or call the entity API directly. Authorization MUST live server-side (RLS / RPC). Whether it does is not visible from this file. **Flag for backend audit:** verify RLS on `trade_offers.update` requires `auth.uid() = sender_user_id` for cancel and `= receiver_user_id` for accept/decline; verify `characters.update` denies inventory writes to anyone except the character's owner or campaign GM via RPC.
+- **Suggested approach:** Move the entire accept flow into a single RPC that re-derives caller identity from `auth.uid()`.
+
+- **Severity:** High
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 45-79
+- **Category:** State management / no optimistic rollback
+- **Issue:** Domain rules call out "missing optimistic-update rollback on failure". `useMutation` here has no `onMutate` (no optimistic write), no `onError` rollback compensation, no retry policy, no idempotency key. If the third update (status flip) fails after the two character writes succeed, both inventories already changed, the offer stays "pending", and clicking Accept again re-runs the whole sequence — re-applying the diff a second time. The toast says "Trade failed" while the state is partially mutated.
+- **Suggested approach:** Atomic RPC (see Critical above) makes this moot. Until then, at minimum: `idempotencyKey: offer.id`, exactly-once semantics, server-side dedup.
+
+- **Severity:** High
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 109-116, 118-125
+- **Category:** DOMAIN — missing audit log on decline / cancel
+- **Issue:** Only the `accepted` branch calls `logCombatEvent` (line 91-103). Declines and cancellations leave no log entry. For a campaign log this is acceptable noise reduction, but for trade dispute resolution ("did Alice ever offer Bob the Sword of X?") it loses critical history. Also: nothing logs WHO clicked the button; the offer row itself has `sender_user_id` but no `cancelled_by_user_id` / `declined_by_user_id`.
+- **Suggested approach:** Log all three terminal states; record actor user_id on the trade_offer row.
+
+- **Severity:** High
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 221, 239
+- **Category:** DOMAIN — fallback name-match swallows wrong items
+- **Issue:** `findIndex((it) => (it?.id && offered?.id && it.id === offered.id) || (!offered?.id && it?.name === offered?.name))`. The fallback is "if offered has no id, match by name". Two items with the same name (two healing potions, two unnamed daggers) collide: only the FIRST is removed, but the offer's "quantity" was applied as if the right one was matched. Worse: name collisions can cross-match a magic item with a mundane same-name copy ("Sword" vs "Sword").
+- **Suggested approach:** Require `id` on every offered item; reject offers without ids. Until then, also tie-break by `description` / `image_url` / `rarity` to reduce mismatches.
+
+- **Severity:** High
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 33-34, 154, 177
+- **Category:** DOMAIN — viewer-vs-actor decoupling
+- **Issue:** `iAmReceiver` / `iAmSender` are derived from a `viewingCharacterId` prop, not from `auth.uid()`. If a user has multiple characters in a campaign and switches the "viewing" character in the parent UI, the same trade offer card will flip between Accept/Decline buttons and Cancel buttons depending on which character they're "viewing". Possible scenario: a player owns BOTH the sender and receiver characters, sees Accept on a trade they sent themselves, double-spends through self-trade. Combined with the no-self-trade-validation gap in TradeOfferDialog, this is exploitable.
+- **Suggested approach:** Compute role from `auth.uid()` matched against `sender_user_id` / `receiver_user_id` (which the offer already stores), not from a UI-state viewing-character id. Block offers where sender_user_id === receiver_user_id.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 50
+- **Category:** Error message / UX
+- **Issue:** `if (!sender || !receiver) throw new Error("Character data missing — cannot execute trade.")` — but `sender`/`receiver` come from `characterMap`, which is the parent's player list. If a player's character was hard-deleted between offer creation and accept, this fires. Better: detect this case as a permanent invalidation (auto-cancel the offer) rather than just toasting an error every time the receiver clicks accept.
+- **Suggested approach:** Auto-cancel the trade with reason "counterparty character deleted".
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 224, 240
+- **Category:** Math / quantity defaults
+- **Issue:** `Number(offered?.quantity || 1)` swallows quantity 0 and quantity NaN both into 1. If a malformed offer has `quantity: 0` it's silently treated as 1 (one item moves anyway). Also `quantity: "3"` (string) → Number() → 3, fine; but `quantity: "abc"` → NaN || 1 → 1 — silently moves one item from a malformed payload.
+- **Suggested approach:** `Number.isFinite(n) && n > 0 ? n : throw` and reject the offer.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 226-230
+- **Category:** Stack handling
+- **Issue:** "If currentQty > offeredQty subtract; otherwise splice the row entirely." If `currentQty < offeredQty` (sender has 2 of an item but offered 5 because the offer is stale), the row is removed and the deficit is silently absorbed. Receiver still gets `addItems(receiverInv, offerItems)` with quantity 5 — currency-creation bug for stackable items, identical pattern to the currency `Math.max(0, …)` issue above.
+- **Suggested approach:** Throw on `currentQty < offeredQty`.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 80-105
+- **Category:** Cache invalidation breadth
+- **Issue:** `onSuccess` invalidates `["tradeOffers", campaignId]`, `["campaignCharacters", campaignId]`, `["campaignPlayers", campaignId]` but NOT any per-character caches keyed differently elsewhere (e.g. `["character", id]` if such a key exists). Other tabs/panels showing the affected character's inventory may not refresh until next focus.
+- **Suggested approach:** Add a query-key constants module; invalidate `predicate: (q) => q.queryKey[0] === 'character' && [senderId, receiverId].includes(q.queryKey[1])`.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 84-89
+- **Category:** Analytics correctness
+- **Issue:** `trackEvent(receiver?.user_id || sender?.user_id, ...)` attributes the trade to ONE user (and prefers receiver). For per-user economy metrics this under-counts the sender. Also: the event fires inside `onSuccess` before the toast — fine — but if `trackEvent` throws (network), it could crash the success handler before invalidation completes, depending on whether `trackEvent` swallows errors.
+- **Suggested approach:** Fire two events (`trade_completed_as_sender`, `trade_completed_as_receiver`) or include both user ids in the payload.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 250-261 (`summarizeTrade`)
+- **Category:** DOMAIN — log fidelity
+- **Issue:** Audit summary is "2 items sent, coin sent, coin received". Loses item names, quantities, denominations, and totals. A campaign-log entry of "Alice traded with Bob: 1 item sent, coin received" is useless for dispute resolution six weeks later. Also, only positive-counts are logged: a one-sided gift ("Alice gave Bob 100gp for nothing in return") shows "coin sent" with no recipient indication.
+- **Suggested approach:** Log the full offer payload (items list with names & ids, currency totals per denomination) so the campaign log can render a full ledger entry.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 113, 122
+- **Category:** Toast inconsistency
+- **Issue:** `toast("Trade declined")` and `toast("Trade cancelled")` use the bare `toast` call (info/default styling) while accept uses `toast.success` and errors use `toast.error`. UX inconsistency. Also: the project ships TWO toast systems (radix toast + sonner) — flagged systemically; this file commits to sonner only, which is fine, but mixed styling within sonner reads as accidental.
+- **Suggested approach:** Pick `toast.info` or `toast.success` consistently.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 152-189
+- **Category:** ACCESSIBILITY
+- **Issue:** (1) Pending-trade actions are three buttons in a flex row; on narrow screens they may collapse poorly (no test). (2) Accept/Decline buttons have no `aria-label` describing WHICH trade they apply to — a screen reader cycling through several pending trades will hear "Accept… Decline… Accept… Decline…" with no context. (3) The `<Badge>` showing status (line 134) has no `role="status"`. (4) Icons (`Handshake`, `ArrowRight`, `Check`, `X`) lack `aria-hidden`. (5) The italic `"{offer.message}"` quoted message is rendered with `whitespace-pre-wrap` but no `dir="auto"` or sanitisation — RTL/LTR override characters from a malicious user could rewrite the surrounding sender/receiver names visually.
+- **Suggested approach:** Add aria-labels on accept/decline including counterparty name; `aria-hidden` on icons; sanitise / `dir="auto"` on quoted message.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 149
+- **Category:** XSS surface (low likelihood, real risk)
+- **Issue:** `offer.message` is rendered as text (React escapes) — no XSS — but unicode bidi-override / zero-width characters / homoglyphs are not sanitised. A malicious player could embed a U+202E (RTL override) in the message to make subsequent UI text render reversed. Combined with `whitespace-pre-wrap` and a multi-line message, this can spoof status text.
+- **Suggested approach:** Strip bidi/zero-width control codepoints before rendering.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 4 (`import { toast } from "sonner"`)
+- **Category:** Two-toast-system debt
+- **Issue:** Systemic — flagged once (project ships radix toast + sonner in parallel). This file uses sonner exclusively; consistent within file but adds to the systemic count.
+
+- **Severity:** Low
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 204
+- **Category:** Performance / React keys
+- **Issue:** `safeItems.map((it, i) => (<li key={i}>...))` — index keys. If `sender_items`/`receiver_items` arrays are reordered (unlikely once persisted but possible in transit), animations/focus stick. Use `key={it.id || \`${it.name}-${i}\`}`.
+
+- **Severity:** Low
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 128, 130, 143, 149, 158, 168, 181
+- **Category:** Brand color mismatches
+- **Issue:** Off-brand: `bg-[#050816]` (line 128), `border-[#1e293b]` (128), `text-[#37F2D1]` (130), `text-[#FF5722]` (143 — close to brand `#FF5300` but not the same), `text-[#fbbf24]` (208), green-600/red-400/slate-* tokens elsewhere. Six hex literals + arbitrary tailwind values.
+- **Suggested approach:** Tokenise.
+
+- **Severity:** Low
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** entire file
+- **Category:** Missing error boundaries
+- **Issue:** Systemic — flagged once.
+
+- **Severity:** Low
+- **File:** src/components/trade/TradeOfferCard.jsx
+- **Line:** 159, 169, 182
+- **Category:** Race-protection UX
+- **Issue:** `disabled={mutation.isPending}` only protects against double-click of the SAME button. Receiver clicking Accept then immediately Decline (or vice versa) is not blocked — both mutations enqueue. The second arrives at the server after the first; the second `update(... {status: ...})` overwrites the first's status, but inventory writes from accept already executed.
+- **Suggested approach:** Disable all action buttons while ANY trade-action mutation is pending; ideally rely on server's optimistic-lock check.
+
+
+##### `src/components/trade/TradeOfferDialog.jsx` (268 lines)
+
+- **Severity:** High
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 92-103
+- **Category:** DOMAIN — no item lock at offer creation
+- **Issue:** `sendMutation` writes a `TradeOffer` row but does NOT mark the offered items as held/locked on the sender's character. The sender can immediately open another `TradeOfferDialog` and offer the same legendary sword to a second player. Whichever Accept fires first applies; the second triggers the duplication path in `TradeOfferCard.removeItems` (`idx === -1` silent skip). Pair this with the multi-tab scenario and the entire trade economy is exploitable from the dialog's send button.
+- **Suggested approach:** On send, transactionally upsert a `pending_holds` row per offered item; release on cancel/decline/expire. Server-side validation must reject offers whose items are already held by another pending offer.
+
+- **Severity:** High
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 78-103
+- **Category:** DOMAIN — ownership not verified at create time
+- **Issue:** Domain rule: "Player can only trade items they actually own (verify ownership before trade init)." The dialog snapshots `myInventory.items[id]` from the parent's character row (line 82). If the parent's character data is stale (or the item was just consumed), the offer is created against an item the sender no longer owns. There is no fresh server-side ownership check on send. The bug compounds at accept time via the `idx === -1` silent skip in `TradeOfferCard`.
+- **Suggested approach:** Server-side validate that every `sender_items[i].id` exists in the sender character's current inventory (and same for `receiver_items` — though receiver_items represent a REQUEST and "ownership at request time" is weaker, you still don't want to ask for items the receiver doesn't have).
+
+- **Severity:** High
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 92-103
+- **Category:** DOMAIN — no self-trade guard
+- **Issue:** Nothing rejects `myCharacter.id === targetCharacter.id` or `senderUserId === targetCharacter.user_id`. A player who owns multiple characters in the same campaign can create a trade offer between their own characters, then accept it themselves. Combined with `TradeOfferCard.iAmReceiver` being keyed off `viewingCharacterId`, this produces an item-laundering loop.
+- **Suggested approach:** Reject same-character trade in the dialog; reject same-user trade server-side (or require GM approval for cross-character trades within one user).
+
+- **Severity:** High
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 41, 96
+- **Category:** DOMAIN — sender_user_id can be null
+- **Issue:** Prop `senderUserId` is optional; when missing, the offer is written with `sender_user_id: null`. The docblock (line 32) admits the field is needed for "cancel vs decline permissions later" — yet the create code allows it to be null. A null `sender_user_id` makes RLS impossible: the server can't enforce "only sender can cancel". Also breaks audit logging.
+- **Suggested approach:** Make `senderUserId` required (PropTypes/TS enforcement); throw if missing; in RLS, default `null` to "no one can cancel".
+
+- **Severity:** High
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 252-262 (`indexInventory`)
+- **Category:** DOMAIN — unstable id generation, selection desync
+- **Issue:** `id = item?.id || \`${item?.name || "item"}-${idx}\``. The fallback id incorporates the inventory's array index. If the parent re-orders the inventory between renders (e.g. a sort, or items added/removed), the same physical item may now have a different generated id — but `offerItemIds` still references the OLD index-derived id. Selection state silently desyncs. Worse: an item that previously had no `id` and was selected can be replaced (at the same index) by a different item, transferring the selection to the wrong row.
+- **Suggested approach:** Require every inventory item to have a stable id at write time; if missing, generate via `crypto.randomUUID()` once and persist. Don't fall back to index-derived ids.
+
+- **Severity:** High
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 226-244
+- **Category:** DOMAIN — request-currency not validated against sender's WALLET
+- **Issue:** "You Request" currency is bounded by `targetCharacter.currency` (line 152, `maxCurrency={targetCharacter?.currency}`). That means the dialog allows requesting up to the receiver's full balance. Fine for requests. BUT: "You Offer" uses `myCharacter.currency` as max — also fine. The actual problem: the snapshot is stale. By the time the receiver clicks Accept, sender may not have enough — and `TradeOfferCard`'s `Math.max(0, …)` quietly clamps. The dialog's `max` attribute is enforcement-by-prayer, not validation. Also: `<input type=number>` `max` is a UA hint, not a hard limit; users can paste a larger value into the field in some browsers.
+- **Suggested approach:** Server-side reject offers whose currency exceeds the snapshot at send time AND validate again at accept time.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 105-119
+- **Category:** Audit log fidelity on offer creation
+- **Issue:** `logCombatEvent` records "X sent a trade offer to Y" with no payload — items, currencies, message all dropped. Same fidelity gap as in `TradeOfferCard`. A campaign-log entry without contents is a poor audit trail.
+- **Suggested approach:** Include item ids/names and currency totals in the event metadata.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 52-59
+- **Category:** State reset semantics
+- **Issue:** Reset effect runs whenever `open` flips to true OR when `myCharacter?.id` / `targetCharacter?.id` change. If the parent re-creates `myCharacter` or `targetCharacter` references with the same id (e.g. invalidation produces a new object), the effect's identity comparison still yields the same primitive id (so it doesn't refire). Good. BUT: if the user is mid-edit and the parent rerenders with a new `targetCharacter.inventory` (someone else gave them an item), the dialog's selection state references the OLD inventory; new items appear in the picker un-selectable for the current id namespace because `offerItemIds`/`requestItemIds` were captured against the prior `indexInventory` namespace. UX confusion at best, broken selection at worst.
+- **Suggested approach:** Reset selections when the inventory contents change, not just when ids change. Or freeze the inventory snapshot for the duration of the dialog session.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 84-90
+- **Category:** Validation sparseness
+- **Issue:** Only validation at send: "at least one side must contain something". No upper bounds on count of items, no message length cap (line 102 `message.trim()`), no rejection of zero-value currency keys, no schema validation on item shape. A malicious or buggy client can send a 50KB message or 10,000 items.
+- **Suggested approach:** Cap message length (e.g. 500 chars) and item count (e.g. 50 per side) client and server side.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 233-241
+- **Category:** Numeric input UX
+- **Issue:** `Number(e.target.value) || 0` — typing "" returns 0 (fine), typing "abc" returns 0 (silent), pasting "1e9" returns 1,000,000,000 then `Math.min(max, 1e9)` clamps. A user typing "10" first character "1" then "10" each triggers Math.max/min — fine. But `Math.max(0, Math.min(max, …))` means if `max` is 0 (sender has no gp), the field silently becomes 0 with no feedback that "0 is the only legal value". Also: `currency[k] ?? 0` (line 236) renders the value, but if the parent state contains a string the input becomes uncontrolled. Defensive `Number()` would help.
+- **Suggested approach:** Disable the input when `max === 0`; render a helper "you have no PP" instead.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 195-219
+- **Category:** ACCESSIBILITY
+- **Issue:** Inventory rows are `<button type="button">` toggles but have no `aria-pressed={selected}` to communicate selection state to assistive tech. Screen reader hears "Sword of Truth" but not whether it's currently in the offer. Also: `<img alt="">` (line 209) is fine if name follows as text (it does). The currency `<Input>` has no `aria-describedby` linking it to the `/{max}` helper text on line 243.
+- **Suggested approach:** `aria-pressed`, link helper text via `aria-describedby`.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 122-129
+- **Category:** ACCESSIBILITY
+- **Issue:** Dialog has a title but no `aria-describedby`. Modal is large (max-w-4xl, max-h-90vh, scrollable) — keyboard-only users have no programmatic summary. Decorative `Handshake` icon (line 126) is not `aria-hidden`.
+- **Suggested approach:** Add `aria-describedby` referencing a summary element; `aria-hidden` on icon.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 173, 204
+- **Category:** Brand color mismatches
+- **Issue:** Cyan brand-mismatch: send button is `bg-[#37F2D1]` with `text-[#050816]`. Selected inventory row uses `bg-[#37F2D1]/15 border-[#37F2D1]`. "You Request" accent is `#FF5722` (close to brand `#FF5300` but different). Container `bg-[#1E2430]`, `bg-[#0b1220]`, `border-[#1e293b]`, `bg-[#050816]` all off-brand surface tones.
+- **Issue counts:** 8+ hex literals in this file alone.
+- **Suggested approach:** Tokenise.
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 64-71
+- **Category:** Snapshot semantics misleading comment
+- **Issue:** Comment (lines 61-63) claims "a trade offer snapshots the full item row so the original owners can't change mid-flight and break the swap." This is misleading: the snapshot lives in the OFFER row, but at accept time `TradeOfferCard.removeItems` matches against the sender's CURRENT inventory by `id` or `name`, not against the snapshot. So if the sender modifies the item (renames it, changes quantity), the match still works by id; if the sender deletes it, `idx === -1` silently skips. The "snapshot can't be broken" claim is false in both directions — the snapshot is descriptive, not protective.
+- **Suggested approach:** Remove the comment or rewrite to "snapshot is a record of the offer at creation time; it does not reserve or lock the item against subsequent changes."
+
+- **Severity:** Medium
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** entire file
+- **Category:** No optimistic update / no offline support
+- **Issue:** `sendMutation` has no `onMutate` / `onError` rollback, no idempotency. If the user clicks Send and the network drops, they don't know whether the offer was created or not. Pressing Send again creates a duplicate offer.
+- **Suggested approach:** Add idempotency key (e.g. client-generated UUID); if the create errors with "already exists", treat as success.
+
+- **Severity:** Low
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 73-75
+- **Category:** Closure-over-stale-state
+- **Issue:** `toggle` is recreated every render, capturing `list` via closure. `onToggle={(id) => toggle(offerItemIds, setOfferItemIds, id)}` (line 138) is fine because it captures the latest `offerItemIds` each render. But the inline arrow allocates a new function each render — re-renders all child `<button>`s. With 50+ inventory rows this creates wasteful renders. Use `useCallback` or a functional `setState`.
+
+- **Severity:** Low
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 17 (`import { logCombatEvent } from "@/utils/combatLog";`)
+- **Category:** Naming / domain confusion
+- **Issue:** Trade events are logged to `combatLog`. Trade is not combat. Naming suggests the log utility was originally combat-only and grew to cover non-combat events without a rename. Future maintainers will be confused; greppability suffers.
+- **Suggested approach:** Rename to `campaignLog` / `eventLog`.
+
+- **Severity:** Low
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** entire file
+- **Category:** Missing error boundaries
+- **Issue:** Systemic — flagged once.
+
+- **Severity:** Low
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 175
+- **Category:** UX
+- **Issue:** Send button label "Send Trade Offer" is fine, but the button is enabled even when both sides are empty (validation only fires inside the mutation, surfacing as a toast error). Pre-disable the button when nothing is offered/requested for clearer feedback.
+
+- **Severity:** Cosmetic
+- **File:** src/components/trade/TradeOfferDialog.jsx
+- **Line:** 162
+- **Category:** UX
+- **Issue:** Textarea placeholder uses an em-space ellipsis "Add a note for the receiver…" — fine; consistent with other dialogs in the codebase.
+
+
+##### Cross-cutting trade folder findings
+
+- **Severity:** High
+- **File:** src/components/trade/ (folder-level)
+- **Line:** N/A
+- **Category:** DOMAIN — GM trade override absent from folder
+- **Issue:** Domain rule #2 ("GM Trade Override") describes GM grant/take/edit-items outside normal trade flow with required audit logging. **Nothing in /src/components/trade/ implements this.** No `GmGrantDialog.jsx`, no `GmInventoryEditor.jsx`, no GM-only branch in any of the three files. Either (a) GM grants live elsewhere (likely under `/components/campaign/` or `/components/gm/` — out of this batch's scope) or (b) the feature is unbuilt. Both `TradeOfferCard` and `TradeOfferDialog` are strictly player↔player.
+- **Recommendation for pass-1B:** Locate where GM grant/take is actually implemented (search for `Character.update` calls outside trade) and verify (1) GM ownership of campaign verified before write, (2) audit log entry generated per change, (3) RLS prevents non-GM users from invoking the path.
+
+- **Severity:** High
+- **File:** src/components/trade/ (folder-level)
+- **Line:** N/A
+- **Category:** DOMAIN — atomicity gap is repository-wide
+- **Issue:** All three files perform multi-row character mutations from the client without a transactional boundary. Any non-trade flow that mutates two characters at once likely has the same flaw. The trade folder is the canonical case but probably not the only one — pass-1B should grep for sequential `Character.update` calls in mutation handlers and audit them all.
+
+- **Severity:** Medium
+- **File:** src/components/trade/ (folder-level)
+- **Line:** N/A
+- **Category:** DOMAIN — no offer expiry / staleness limit
+- **Issue:** Pending offers live forever. There is no `pending_until` column read or written, no cron-based expiry, no UI hint about how long an offer has been pending. A 6-month-old offer can be "accepted" from a stale notification, applying a stale diff to current state.
+- **Suggested approach:** Add a 24h default expiry; reject accept on expired offers.
+
+
+##### `src/components/maps/InteractiveMapViewer.jsx` (369 lines)
+
+**Note on scope:** This component is a campaign-map *hotspot/POI editor* layered over a static image. It is NOT a tactical battle map: there is no fog-of-war, no token system, no grid, no measurement tools, no real-time multi-user sync. Findings reflect that scope.
+
+- **Severity:** Critical
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 8
+- **Category:** State management — prop/state desync
+- **Issue:** `useState(map?.hotspots || [])` initialises from props ONCE at mount. Subsequent prop changes to `map.hotspots` are ignored — there is no `useEffect([map.hotspots])` to reseed local state. Consequence: if the parent re-fetches the map from the server (another GM made changes, or a websocket update lands), this component continues displaying its mounted-time hotspots forever. Any external delete/add by another GM is silently invisible until the component remounts. Combined with the optimistic local mutation in `handleAddHotspot/Update/Delete`, a single user editing produces correct local UI but reads from a frozen snapshot of the world.
+- **Suggested approach:** Either drive entirely from props (controlled component, parent owns state) OR reseed via `useEffect(() => setHotspots(map?.hotspots || []), [map?.id, map?.hotspots])`. Currently the component is in a half-controlled limbo.
+
+- **Severity:** High
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** entire file
+- **Category:** DOMAIN — no secret / GM-only hotspot visibility
+- **Issue:** Every hotspot is rendered for every viewer with no `hidden`, `gm_only`, `revealed_to`, or `secret_plant`-like flag. A GM placing a "Dragon's Lair (revealed at session 6)" hotspot leaks the location to players the moment they open the map. Same concern as `secret_plant` / `villain_flag` on NPCs, flagged in batch 1A-v-b — except for maps the leak is even more visual (a literal dot on the map). The data model itself has no slot for it.
+- **Suggested approach:** Add `visibility: 'gm' | 'players' | 'all'` per hotspot; filter in render based on `canEdit` (proxy for GM) plus a separate `isGM` prop; for non-GMs, return early before rendering hotspots whose visibility !== 'players'/'all'. Also add server-side filtering in the map fetch so GM-only data never reaches a player client at all.
+
+- **Severity:** High
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 7, 95, 116, 225
+- **Category:** DOMAIN — `canEdit` conflates two roles
+- **Issue:** `canEdit` is the only permission. No distinction between "GM editing the master map" and "player adding their own travel-log hotspot". Any caller passing `canEdit=true` gets full add/edit/delete, including over hotspots placed by other users. There is no `created_by` / `placed_by` field on hotspots (data shape is `{x, y, name, description, entry_id, color, icon, id}`) so even if you wanted per-user permissions you couldn't enforce them.
+- **Suggested approach:** Split `canEdit` into `canEdit` and `isGM`; record `created_by` on each hotspot; only allow editing your own hotspots unless you're the GM.
+
+- **Severity:** High
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 67-81
+- **Category:** DOMAIN — concurrent edit / no version / last-write-wins
+- **Issue:** `handleAddHotspot` / `Update` / `Delete` each compute the new hotspot array from the LOCAL `hotspots` state (which is the mounted-time snapshot — see Critical above) and pass the entire array up via `onUpdateHotspots`. Two GMs editing the same map concurrently each overwrite the other; whoever saves last wins. There is no `version` field, no compare-and-swap, no merge. Combined with the prop/state desync bug, this is "permanent silent data loss on any concurrent edit".
+- **Suggested approach:** Server-side optimistic locking on `maps.hotspots` (or split into a `map_hotspots` table with one row per hotspot for granular conflict resolution).
+
+- **Severity:** High
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 75-81
+- **Category:** UX — destructive action with no confirmation
+- **Issue:** `handleDeleteHotspot` deletes immediately and persists to the parent — no confirmation dialog, no undo, no "are you sure?". One stray click on the trash button in the edit dialog (line 342-348) and the hotspot vanishes. For GM data this is data-loss territory.
+- **Suggested approach:** Add a confirm step (project already uses `<AlertDialog>` from radix — reuse it).
+
+- **Severity:** High
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 281-366
+- **Category:** ACCESSIBILITY — custom modal bypasses radix Dialog
+- **Issue:** The "Edit Hotspot" panel is a hand-rolled `fixed inset-0 bg-black/50` modal (line 282) instead of using `@/components/ui/dialog`. Consequences: (1) no focus trap — Tab can move to background elements; (2) no `aria-modal` / `role="dialog"`; (3) no automatic focus return on close; (4) no Escape-to-close (no keyboard handler bound); (5) no automatic body-scroll lock; (6) the click-outside handler is missing too — clicking the backdrop does NOT dismiss. All of this is provided by the radix Dialog component used elsewhere in the codebase.
+- **Suggested approach:** Replace with `<Dialog open={!!editingHotspot} onOpenChange={(o) => !o && setEditingHotspot(null)}>`.
+
+- **Severity:** High
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 217-250
+- **Category:** ACCESSIBILITY — hotspot is non-keyboard-accessible
+- **Issue:** Each hotspot is a `<div onClick>` with no `role="button"`, no `tabIndex`, no `aria-label`, no `onKeyDown`. Keyboard-only and screen-reader users cannot discover or activate hotspots. Hover-only tooltip (line 239) means there's no way to see the description without a mouse. The whole feature is keyboard-inaccessible.
+- **Suggested approach:** Convert to `<button type="button" aria-label={hotspot.name}>`, add visible focus styles, render tooltip on focus too, not just hover.
+
+- **Severity:** Medium
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 59
+- **Category:** Id collision risk
+- **Issue:** `id: Date.now().toString()` — two add-hotspot operations completing in the same millisecond produce identical ids. React keys collide (line 209), edit/delete hits the wrong row. Low probability for a manual UI but real for any future bulk-import or programmatic add.
+- **Suggested approach:** `crypto.randomUUID()`.
+
+- **Severity:** Medium
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 43-51
+- **Category:** UX — confusing add flow
+- **Issue:** "Click on the map to place your hotspot" is the prompt (line 118), but clicking only updates `newHotspot.x/y` in state — the user must ALSO type a name and press a separate "Add Hotspot" button (line 176-182). There is no visual marker on the map showing where the click landed before submission. If the user clicks twice, the previous coords are silently overwritten with no feedback. The form sits ABOVE the map (line 116-185), pushing the map down when opened — so the click area moves under the user's mouse mid-flow.
+- **Suggested approach:** Render a ghost/preview pin on click; commit to the array on Add Hotspot.
+
+- **Severity:** Medium
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 47-48
+- **Category:** Math — no bounds clamping, full-precision floats stored
+- **Issue:** `x = ((clientX - rect.left) / rect.width) * 100` — no clamp to [0, 100]. Click on rounded-corner overflow can yield negative or >100. Stored at full float precision (e.g. 47.382831214712...), bloating the persisted JSON. Also: percentages assume the image's intrinsic aspect ratio is preserved, which it is here (`w-full h-auto`), but if the parent ever sets a fixed height the percentage→pixel mapping breaks for square pins.
+- **Suggested approach:** `x = Math.max(0, Math.min(100, …)).toFixed(2)`.
+
+- **Severity:** Medium
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 199
+- **Category:** Pointer-events fragility
+- **Issue:** `style={{ pointerEvents: isAddingHotspot ? 'none' : 'auto' }}` on the `<img>` is a workaround so the parent `onClick={handleMapClick}` (line 193) catches clicks during add-mode. Without it, the img would catch the click and (in some browsers) the bubble might still reach the parent — the workaround is correct but fragile and unexplained. Also: when NOT adding, pointer-events:auto on the img means clicks on the image fire on the img element first; existing-hotspot clicks bubble up. If a future change adds an `onClick` to the img directly, this design breaks.
+- **Suggested approach:** Comment the why; or better, attach the click handler to the img directly and skip the wrapper.
+
+- **Severity:** Medium
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 223-230
+- **Category:** UX — silent click swallow
+- **Issue:** When `isAddingHotspot` is true, clicking an EXISTING hotspot does nothing: the click is `stopPropagation`'d (line 224), then both branches of the conditional fail (`canEdit && !isAddingHotspot` is false; `linkedEntry && onNavigateToEntry` may be missing). The user sees no feedback. They expected either "place new hotspot here" or "edit this hotspot".
+- **Suggested approach:** During add mode, hovering an existing hotspot should show "click to place new pin nearby — existing pin not editable in add mode", or convert to "drag to reposition".
+
+- **Severity:** Medium
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 239-248
+- **Category:** UX — tooltip clipping
+- **Issue:** Tooltip uses `absolute bottom-full ... whitespace-nowrap` inside a parent with `overflow-hidden` (line 191). For hotspots near the top of the map, the tooltip is clipped. Long location names overflow horizontally with no max-width.
+- **Suggested approach:** Use a portal-based tooltip (radix Tooltip) that escapes the overflow container, with `max-width` and wrap.
+
+- **Severity:** Medium
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 205, 242
+- **Category:** Stale linked-entry handling
+- **Issue:** `linkedEntry = entries?.find(e => e.id === hotspot.entry_id)` — if the linked entry was deleted, `linkedEntry` is undefined and the tooltip silently drops the link line. The hotspot is still clickable but `onNavigateToEntry` won't be called (line 227 guard). A user who placed a "link" on a hotspot can't tell it's broken — no "Linked entry deleted" indicator.
+- **Suggested approach:** Show a struck-through "Linked entry no longer exists" line; allow clearing the broken link from the edit dialog.
+
+- **Severity:** Medium
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 127-136, 292-301
+- **Category:** Component consistency
+- **Issue:** Native `<select>` element used here while the rest of the project uses shadcn `<Select>`. Inconsistent styling across browsers (Safari especially). Mismatched a11y semantics with surrounding shadcn components.
+- **Suggested approach:** Swap for `@/components/ui/select`.
+
+- **Severity:** Medium
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 12, 16-19
+- **Category:** Brand color mismatches
+- **Issue:** Default new-hotspot color is `#37F2D1` (cyan, off-brand). The hardcoded color palette has 20 entries — none of which include the documented brand `#FF5300` / `#f8a47c` / `#1B2535` / `#04685A`. Brand `#FF5300` is replaced by `#FF5722`. Total off-brand hex literals in this file: ~30+ counting the colors array, accent borders (`#37F2D1` ×9), and surface colors (`#1E2430`, `#2A3441`).
+- **Suggested approach:** Pull palette from brand tokens.
+
+- **Severity:** Medium
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 54-57, 67-73, 75-81
+- **Category:** Validation sparseness
+- **Issue:** Only validation: name not empty (line 54). No length cap (a 10KB name renders forever wide). No description length cap. No icon enum check (a malformed `icon` value falls back to `MapPin` via `getIconComponent`, which is graceful). No color regex check (an attacker passing `javascript:` … wait, color is rendered via `style={{ backgroundColor: color }}` — React's style object validates that, so harmless; but a malformed `#xyz` silently renders as transparent).
+- **Suggested approach:** Cap name to 60 chars, description to 500.
+
+- **Severity:** Low
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 195-200
+- **Category:** Image safety
+- **Issue:** `<img src={map.image_url}>` rendered with no `referrerPolicy`, no `loading="lazy"`, no `crossOrigin`. If `image_url` points to a third-party host, the request leaks `Referer`. For a campaign-private map this is a minor info-leak.
+- **Suggested approach:** `loading="lazy" referrerPolicy="no-referrer"`.
+
+- **Severity:** Low
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 197
+- **Category:** Accessibility — alt text
+- **Issue:** `alt={map.name}` — if `map.name` is undefined, alt becomes the literal string "undefined" or empty. Use `alt={map.name || "Campaign map"}`.
+
+- **Severity:** Low
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 5
+- **Category:** Two-toast-system debt
+- **Issue:** Systemic — sonner used here. Adds to systemic count.
+
+- **Severity:** Low
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** entire file
+- **Category:** Missing error boundaries
+- **Issue:** Systemic — flagged once.
+
+- **Severity:** Low
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 148-158, 311-322, 164-173, 328-337
+- **Category:** DRY — icon picker / color picker duplicated
+- **Issue:** The icon-grid and color-grid markup is duplicated almost verbatim between the Add form (lines 144-175) and the Edit dialog (lines 308-339). Two copies to maintain; future changes (e.g. add a new icon) must be made in both spots.
+- **Suggested approach:** Extract `<IconPicker value onChange>` and `<ColorPicker palette value onChange>` components.
+
+- **Severity:** Low
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 38-41
+- **Category:** Linear lookup
+- **Issue:** `getIconComponent` does `iconOptions.find(...)` for every hotspot on every render. With 14 icons and N hotspots that's O(N) lookups per render. Build a `Record<string, IconType>` once at module scope.
+
+- **Severity:** Low
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 116-185, 280-366
+- **Category:** Layout — form pushes map down
+- **Issue:** The Add Hotspot form is rendered ABOVE the map (`mb-4`), so opening it pushes the map down by ~250px. Users who scrolled to position the map then click "Add Hotspot" lose their place. Better: show the form as a sidebar or modal that doesn't reflow the map.
+
+- **Severity:** Cosmetic
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 256-277
+- **Category:** Legend behaviour
+- **Issue:** Legend is positioned `absolute top-4 right-4` over the map. On small screens with many hotspots it can cover important map content. `max-w-xs` + `max-h-64 overflow-y-auto` mitigate but don't solve. Consider making it draggable or collapsible.
+
+- **Severity:** Cosmetic
+- **File:** src/components/maps/InteractiveMapViewer.jsx
+- **Line:** 110
+- **Category:** Conditional label
+- **Issue:** `{showLegend ? "Hide" : "Show"} Legend` — minor i18n trap (string concatenation), not a bug. Flagged for the systemic i18n review pass.
+
+
+##### Batch 1A-v-c Summary
+
+**Files audited:** 4 files (TradesPanel.jsx, TradeOfferCard.jsx, TradeOfferDialog.jsx, InteractiveMapViewer.jsx) totalling ~1,012 lines.
+
+**Findings by severity:**
+- Critical: 6 (5 trade — atomic transfer / TOCTOU / stale-read / silent-skip duplication / item-lock missing; 1 maps — prop/state desync)
+- High: 16 (10 trade, 6 maps)
+- Medium: 25 (16 trade, 9 maps)
+- Low: 14 (9 trade, 5 maps)
+- Cosmetic: 3 (1 trade, 2 maps)
+
+**Findings by category (notable counts):**
+- DOMAIN — atomic transfer / data integrity / duplication / currency creation: 5 (all in TradeOfferCard, the central exploit surface)
+- DOMAIN — pending-trade item locking missing: 2 (TradeOfferDialog at create, TradeOfferCard at accept)
+- DOMAIN — ownership not re-verified at accept: 2
+- DOMAIN — two-sided consent / offer expiry: 2
+- DOMAIN — audit-log gaps (decline/cancel unlogged, summary fidelity poor): 3
+- DOMAIN — permission gating (client-side only, viewer-vs-actor decoupling, self-trade not blocked): 4
+- DOMAIN — GM trade override entirely absent from /components/trade/: 1 (folder-level)
+- DOMAIN — secret/GM-only hotspot visibility absent: 1 (maps)
+- DOMAIN — concurrent edit / last-write-wins (maps): 1
+- ACCESSIBILITY: 4 (custom modal bypass, non-keyboard hotspots, missing aria on trade actions, missing aria-pressed on inventory rows)
+- Brand color mismatches / hex literals: 4 files (every file). Approximate counts: TradesPanel 5, TradeOfferCard 6, TradeOfferDialog 8+, InteractiveMapViewer 30+.
+- Two-toast-system / sonner usage: 4 (every file commits to sonner; consistent within batch but adds to systemic count)
+- Missing error boundaries: 4 (every file, systemic)
+- React key=index / unstable-id keys: 3 (TradesPanel ok, TradeOfferCard 1, TradeOfferDialog id-instability, InteractiveMapViewer Date.now id-collision)
+- Validation sparseness (no caps on count/length, no schema): 3
+- Stale snapshot / no re-fetch: 4 (trade × 3, maps × 1)
+
+**Top systemic issues across this batch:**
+
+1. **The trade feature is unsafe to ship as written.** Five Critical-severity findings in `TradeOfferCard.jsx` describe canonical economic-exploit primitives: non-atomic multi-row writes, TOCTOU on accept, silent missing-item skip = duplication, currency overflow via `Math.max(0,...)` clamping, no item-lock during pending. The `acceptMutation` flow is entirely client-side and trusts a stale `characterMap` snapshot; combined with no optimistic-lock check on `offer.status === 'pending'`, two concurrent accepts (or accept+cancel) double-apply the diff. **Recommendation:** before further frontend work on trade, build a server-side `accept_trade_offer(offer_id)` RPC inside a DB transaction with row-level locking and ownership re-verification. The existing client logic should call that RPC and otherwise display only.
+
+2. **Trade ↔ inventory contract is implicit and inconsistent.** `removeItems` matches by id-or-name, swallows missing items (`idx === -1` continue), accepts `quantity || 1` (zero swallowed), uses `Math.max(0, …)` on currency that creates value out of nothing, and snapshots full item rows in the offer table while accept-time logic ignores the snapshot in favor of current inventory. There is no schema, no validation, no audit, and no atomicity. Every shortcut is dangerous individually; together they form a duplication speedrun.
+
+3. **Permission model conflates user-of-character with viewing-character.** `iAmReceiver`/`iAmSender` derive from `viewingCharacterId` (a UI prop) rather than `auth.uid()` matched to `sender_user_id`/`receiver_user_id`. A user owning two characters in the same campaign can self-trade and accept their own offer. `canEdit` on the map component conflates GM and player editor roles. No file in this batch references an `isGM` prop. **Recommendation:** propagate `auth.uid()` and `isGM` consistently from a top-level context; never use viewing-character as authorisation proxy.
+
+4. **GM trade override is not implemented in /components/trade/.** Domain rule #2 (GM grant/take/edit-items with audit logging) is completely absent. Either it lives elsewhere (likely `/components/campaign/` or `/components/gm/` — out of scope here) or it is unbuilt. Pass-1B should locate the implementation and audit it; if missing, this is a domain-rule gap.
+
+5. **InteractiveMapViewer is a hotspot/POI editor, not a tactical map.** No fog-of-war, tokens, grid, or measurement. If the product roadmap requires those, this file is the wrong place for them and a new component is needed. Within the editor's actual scope, the most damaging issues are: (a) prop/state desync (mounted-time freeze ignores external updates), (b) no GM-only hotspot visibility (every player sees every pin including secret-plant ones), (c) hand-rolled modal bypassing the radix Dialog component (focus-trap, Esc, aria-modal all missing), (d) destructive delete with no confirmation, and (e) last-write-wins on concurrent GM editing.
+
+6. **Brand palette debt is heavy here too** — primarily concentrated in `InteractiveMapViewer.jsx` which hardcodes a 20-entry color palette of off-brand hex values (default new-hotspot color is the systemic `#37F2D1` cyan). Across all four files: ~50 off-brand hex literals.
+
+**Specific note on trade-feature shippability:**
+- **`TradeOfferDialog`** (creation side): can be shipped to staging once item-lock + self-trade-block + senderUserId-required are added.
+- **`TradeOfferCard`** (execution side): **MUST NOT** be shipped without the server-side atomic RPC. The five Critical findings are a compounded duplication exploit. A single malicious user with two browsers can drain or duplicate any item.
+- **`TradesPanel`**: low-risk, but the polling cost and silent-error behaviour should be addressed before scale.
+
+**Specific note on map-feature secret-plant gating:**
+- The hotspot data shape has no `visibility` / `revealed_to` / `gm_only` field. Any "secret" location placed on the campaign map is immediately visible to all players opening the map. This mirrors the `secret_plant` / `villain_flag` audit gap on NPCs (batch 1A-v-b) and should be tracked together as a "GM-only data leakage to player clients" theme for backend pass.
