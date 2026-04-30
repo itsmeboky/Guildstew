@@ -5921,3 +5921,371 @@ Combat math in this batch is *plausible* but not *verified*. There is no automat
 **Dice / P.I.E. integration — specific note.**
 Dice and P.I.E. are **not integrated** as the spec requires. The DiceRoller component has no `onStat`/telemetry prop and emits nothing. The DeathSaveWindow rolls a d20 locally and notifies only its parent — no P.I.E. event for death-save outcomes (success/failure/nat-1/nat-20/stabilized/dead). The CombatDiceWindow does call `onStat()` for hit/miss/crit/nat-20/nat-1/spells_cast counters but does not emit a *roll-level* event with d20 value, modifier, advantage state, conditions applied, target id, or weapon. Bardic Inspiration / Lucky / DM Inspiration usage is logged via `logCombatEvent` (campaign log) but not via P.I.E. The result: P.I.E. has counters but cannot replay or audit a specific roll. Recommend a single `pie.dice({ kind, sides, value, modifier, total, advantage, disadvantage, conditions, source, actor, target, isForced })` event emitted from a single auditable RNG service that all dice components share.
 
+
+### Batch 1A-v-b: npc + items
+
+#### /src/components/npc/
+
+**File: NpcVillainPanel.jsx (912 lines)**
+
+- **Severity:** Medium
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 1
+- **Category:** Broken or unused imports
+- **Issue:** `useState` is imported but never used anywhere in the file. The component is purely controlled by `value`/`onChange` props with no internal state.
+- **Suggested approach:** Remove the `useState` import.
+
+- **Severity:** High
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 15
+- **Category:** Multi-game abstraction concerns (D&D-specific logic in supposedly system-agnostic NPC code)
+- **Issue:** This component lives in the system-agnostic `/components/npc/` folder but pulls D&D 5e-specific data (`DAMAGE_TYPES`, MCDM "Villain Actions", "Legendary Actions", saving throw abilities `STR/DEX/CON/INT/WIS/CHA`, "save DC", AoE shapes). All of that is tightly coupled to D&D 5e rules and should sit behind a system abstraction or live in `/components/dnd5e/`.
+- **Suggested approach:** Move this component into `/components/dnd5e/` (e.g. `/components/dnd5e/Dnd5eVillainPanel.jsx`), or have it consume an abstract `gameSystem` interface that exposes `damageTypes`, `saveAbilities`, and `actionResolutionTypes` so other game systems can plug in.
+
+- **Severity:** Medium
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 35-36, 38-92
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `SAVE_ABILITIES`, `AOE_SHAPES`, the four `BLANK_*` templates, plus an inline `BLANK_PHASE_ACTION` (line 474-490) duplicate D&D-rules data already (or should be) centralised in `/components/dnd5e/dnd5eRules`. `AOE_SHAPES` is also re-listed inline at lines 778-783 with the same values.
+- **Suggested approach:** Move these to `dnd5eRules` (or a shared schema file) and import. Single-source the AOE shape list — currently defined twice.
+
+- **Severity:** Medium
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 155, 190, 234, 275, 304, 351, 505, 571, 798
+- **Category:** Brand color mismatches
+- **Issue:** Hardcoded hex colors throughout — `#1a0514`, `#0b1220`, `#050816`, `#ef4444` — none of which match the documented brand palette (`#FF5300`, `#f8a47c`, `#1B2535`, `#04685A`). Counted ~20+ uses of these arbitrary hex values via `bg-[#…]` / `border-[#…]` arbitrary Tailwind values.
+- **Suggested approach:** Replace with CSS variables or Tailwind theme tokens once brand palette is finalized.
+
+- **Severity:** Medium
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 155, 190, 234, 275, 304, 351, 505, 571, 798
+- **Category:** Tailwind issues — arbitrary values
+- **Issue:** Heavy use of arbitrary Tailwind values (`bg-[#…]`, `text-[10px]`, `text-[11px]`, `text-[9px]`, `tracking-[0.2em]`, `border-rose-600/50`, `border-indigo-500/40`). Inconsistent micro-typography sizes (9 / 10 / 11 / xs) make the component hard to maintain.
+- **Suggested approach:** Promote the recurring sizes/colors to design tokens (`text-micro`, `text-mini` etc.) and consolidate.
+
+- **Severity:** High
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 94, entire file
+- **Category:** GM-only action permission leaks (DOMAIN)
+- **Issue:** This panel mutates `villain_data` (legendary resistances, phase transitions, secret villain actions, auras). There is no `isGM` / `canEdit` prop and no internal gating. If a parent ever renders this for a non-GM user (player viewing a CampaignNPC, or a stale GM check), the player can edit boss-fight scripting. NPC editing must be GM-only per domain rules.
+- **Suggested approach:** Accept an `isGM` (or `readOnly`) prop and either hide the panel or render fields disabled when false. Add a server-side RLS rule on `campaign_npcs.villain_data` updates as defense-in-depth.
+
+- **Severity:** High
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 94, entire file
+- **Category:** NPC data handling — secret_plant / villain_flag missing or leaked (DOMAIN)
+- **Issue:** Per migration history, `campaign_npc` has `secret_plant` and `villain_flag` columns that should be GM-only. This component edits `villain_data` (the actions/phases), but never reads or surfaces `villain_flag` or `secret_plant`. There is no UI to set the villain flag, no UI to mark/inspect secret_plant status, and no guard preventing this panel from rendering for an NPC that the GM hasn't actually flagged as a villain. The doc-comment on line 19 says "Surfaces … when the 'This NPC is a Villain' toggle is on" but that toggle isn't here — it must live in a parent that this audit can't reach. Risk: villain status might leak to players via the NPC list or here.
+- **Suggested approach:** Verify the parent (CampaignNPC editor/list) gates rendering by `villain_flag` AND `isGM`, AND that the player-facing NPC view filters `villain_flag`/`secret_plant`/`villain_data` columns from any select. Consider exposing `villain_flag` and `secret_plant` UI inside this panel for centralisation, gated by `isGM`.
+
+- **Severity:** Medium
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 94, 470, 631, 796
+- **Category:** Prop validation / inconsistent prop usage
+- **Issue:** No PropTypes / TypeScript / runtime validation. `value` can be `null`, `{}`, partially-formed, or carry stale legacy shapes — handled defensively at every read but never validated. `onChange` is invoked with full merged object every keystroke; consumer must accept a JSONB blob whose schema is not documented anywhere except by reading this file.
+- **Suggested approach:** Define a `VillainData` schema (zod or TS) and validate at component boundary. Document the `villain_data` JSONB shape near the migration that introduced it.
+
+- **Severity:** Medium
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 94-150
+- **Category:** State management smells — NPC state
+- **Issue:** Every keystroke calls `patch({ … })` which spreads the entire `value` object plus the new field and bubbles up through `onChange`. The parent presumably calls `CampaignNPC.update({ villain_data: next })` per the doc comment — that means a network write per keystroke unless the parent debounces. No debounce/throttle in this component.
+- **Suggested approach:** Either (a) document that the parent must debounce, (b) add internal state with a debounced `onChange`, or (c) commit on blur. As-is, typing "Tail Attack" is 11 PATCH requests.
+
+- **Severity:** Medium
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 124
+- **Category:** Race conditions in concurrent inventory updates (applied to NPC editing)
+- **Issue:** `villain.actions.map(...)` assumes `villain.actions` is an array. On line 109 the bootstrap creates 3 actions only when `length === 3`; if a stale shape arrives with `length !== 3` and `enabled === true`, `villain.actions` may be `undefined`/non-array and `updateVillainAction` will throw. Concurrent GM edits (two tabs) could also race on the JSONB blob: last-write-wins clobbers the other tab's phase/aura edits.
+- **Suggested approach:** Guard `villain.actions` reads with `Array.isArray(...)`. For multi-tab races, use optimistic concurrency (version column, or PostgREST `If-Match`) or scope writes to specific JSON sub-paths.
+
+- **Severity:** Medium
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 178-184, 233, 290, 319, 585
+- **Category:** Performance / React keys
+- **Issue:** Every list (`villain.actions`, `legendary`, `phases`, `auras`, `unlocked_actions`) uses `key={idx}`. Reordering or deleting a middle item will misalign React state and animations (focus, controlled input cursor jumps). With JSONB blobs this also fights React's reconciler when items shift.
+- **Suggested approach:** Add a stable `id` (uuid) to each item on creation (`{ id: crypto.randomUUID(), …BLANK_VILLAIN_ACTION }`) and key by it.
+
+- **Severity:** Medium
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 197, 205, 245, 393, 410, 543, 550, 716, 867
+- **Category:** Math errors / numeric input handling
+- **Issue:** Numeric inputs use the `Number(e.target.value) || 0` idiom in places (legendary_resistances, legendary_actions_per_round, legendary_cost) which silently coerces `"0"` and any blank/NaN to `0` — but in other places (save_dc, attack_bonus, trigger_value, hp_reset, save_dc again at 716, 868) the code uses `e.target.value === "" ? "" : Number(e.target.value)` which leaks empty strings into a JSONB that should hold numbers. Mixed strategies; "blank = no reset" semantics aren't guarded against `NaN` from non-numeric paste.
+- **Suggested approach:** Standardise on a single `parseIntOrNull` helper that returns `null` for blank and rejects `NaN`, and store consistently as `number | null`.
+
+- **Severity:** Medium
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 513-519, 638-640, 642-647
+- **Category:** Inline styles that should be Tailwind/CSS
+- **Issue:** `<input type="color">` (513) is an unstyled native control — inconsistent across browsers, no dark theme support. Inline `style={{ borderColor: \`${tint}55\` }}` and `style={{ background: \`${tint}30\`, color: tint, border: \`1px solid ${tint}80\` }}` (638-647) build colors via hex-string concatenation; no validation that `tint` is a valid hex (XSS-adjacent if `phase_color` is later persisted and rendered without sanitization, although here it's a color attribute it does not execute JS).
+- **Suggested approach:** Wrap the color picker in a styled component. Validate `phase_color` matches `/^#[0-9a-f]{6}$/i` before persisting/applying.
+
+- **Severity:** Medium
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 109-117
+- **Category:** State management smells (data destruction)
+- **Issue:** Toggling `villain_actions.enabled` ON wipes `legendary_actions` to `[]` and `legendary_actions_per_round` to `0` with no confirmation modal. A miss-click destroys hand-authored legendary actions. Same for `addLegendary` (line 128-132) which silently sets `villain.enabled = false` (only a tiny note explains afterward).
+- **Suggested approach:** Show a confirm dialog ("This will clear N legendary actions. Continue?") before destructive XOR. Or stash the cleared list in `data._legendary_backup` so it can be restored.
+
+- **Severity:** Medium
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 165-168, 197-201, 219-225, 280-282, 309-311, 397-403, 720-726
+- **Category:** ACCESSIBILITY
+- **Issue:** Multiple accessibility gaps: (1) The Switch on line 166 has no associated `<Label>` (the surrounding `<h3>` is not linked via `htmlFor`/`id`). (2) "On"/"Off" indicator is decorative text — screen readers will read it twice. (3) Color picker `<input type="color">` line 513 has only a `title` attr and no label, no ARIA description. (4) Trash buttons (lines 251-257, 520-526, 654-656, 806-812) are bare `<button>`s with no `aria-label` — only an icon child. (5) "Cost:" inline text (line 243) is not a `<label>` for the input that follows. (6) "Half on save" text (lines 402, 725) is not associated with its switch. (7) Hex color text `#9ca3af` etc. on dark gradient backgrounds — likely fails WCAG AA contrast for `text-[10px]` micro-text.
+- **Suggested approach:** Add `aria-label` to icon-only buttons, wire labels via `htmlFor`/`id`, use the existing `<Label>` component consistently, and run a contrast audit on micro-text.
+
+- **Severity:** Low
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 442, 451, 764, 773, 847, 856, 873
+- **Category:** Hardcoded values / sentinel anti-pattern
+- **Issue:** `"__none"` sentinel used to round-trip an empty value through Radix `<Select>` (which can't take empty-string `value`). The same sentinel is repeated in 7+ places. If the GM happens to type "__none" into a free-text condition somewhere, semantics collide (low likelihood given it's enum-only here).
+- **Suggested approach:** Extract `const NONE_SENTINEL = "__none";` once, or wrap a `NullableSelect` helper.
+
+- **Severity:** Low
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 443-447, 765-769, 877-879
+- **Category:** Performance — unnecessary recomputation
+- **Issue:** `Object.keys(CONDITION_COLORS).map(...)` is recomputed on every render, in three places. Same for `DAMAGE_TYPES.map(...)` (lines 435, 741, 851) and `SAVE_ABILITIES.map(...)` (388, 711, 861).
+- **Suggested approach:** Memoize at module scope: `const CONDITION_OPTIONS = [{value:"__none",label:"None"}, ...Object.keys(CONDITION_COLORS).map(c=>({value:c,label:c}))];`.
+
+- **Severity:** Low
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 631-794
+- **Category:** Duplicate components or near-duplicates
+- **Issue:** `VillainActionCard` (345-468) and `PhaseActionEditor` (631-794) share ~80% of their structure (resolution selector, save/attack/healing branches, damage dice + type, condition, AoE shape/size). Two near-duplicate forms means bugs get fixed in one and forgotten in the other.
+- **Suggested approach:** Extract a shared `<ActionResolutionFields>` component that both wrap.
+
+- **Severity:** Low
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 474-490
+- **Category:** Dead code / scoping
+- **Issue:** `BLANK_PHASE_ACTION` is declared inside `PhaseCard`, recreated on every render. Since it's a constant, it should be at module scope.
+- **Suggested approach:** Hoist alongside the other `BLANK_*` constants.
+
+- **Severity:** Low
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 904
+- **Category:** Performance / React keys
+- **Issue:** `<SelectItem key={o.value}>` — fine if values are unique, but the calling sites build options that may include the `"__none"` sentinel mixed with user-entered strings; in practice OK here, just brittle.
+- **Suggested approach:** Document the invariant or use a dedicated id.
+
+- **Severity:** Low
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** 18-34, 627-630
+- **Category:** Documentation
+- **Issue:** Good top-of-file docblock but the JSONB schema for `villain_data` is described only by reading code. No reference to the migration that added `villain_flag`/`secret_plant`/`villain_data`.
+- **Suggested approach:** Add a comment linking to the relevant supabase migration; consider a `types/villainData.d.ts` shared with the parent.
+
+- **Severity:** Low
+- **File:** src/components/npc/NpcVillainPanel.jsx
+- **Line:** entire file
+- **Category:** Missing error boundaries
+- **Issue:** No error boundary; a malformed `villain_data` blob (e.g., a string instead of object) on first read could crash the entire CampaignNPC editor. (Systemic — flagged once for this file per audit guidance.)
+- **Suggested approach:** Wrap the panel in a top-level `<ErrorBoundary>` once that infrastructure exists.
+
+#### /src/components/items/
+
+**File: ItemHoverCard.jsx (114 lines)**
+
+- **Severity:** High
+- **File:** src/components/items/ItemHoverCard.jsx
+- **Line:** 6-8, 24, 49-69
+- **Category:** Multi-game abstraction concerns (D&D-specific logic in supposedly system-agnostic items code)
+- **Issue:** The component sits in `/components/items/` (system-agnostic) but consumes D&D 5e concepts directly: `rarityFrameClasses`/`rarityBadgeClasses`/`rarityLabel` from `@/config/itemRarity` (D&D rarity tiers — common/uncommon/rare/etc.), `requires_attunement` (D&D 5e mechanic), `damage_dice` and `damage_type` and `range` (D&D-specific stat shape). This locks the item tooltip to one game system.
+- **Suggested approach:** Move to `/components/dnd5e/Dnd5eItemHoverCard.jsx` or accept a `gameSystem.renderItemBadge(item)` adapter so other systems can render their own attributes (e.g. PbtA tags, FATE aspects).
+
+- **Severity:** High
+- **File:** src/components/items/ItemHoverCard.jsx
+- **Line:** 50, 61, 66, 73, 85, 99, 108
+- **Category:** JSON editor validation / XSS risks (DOMAIN)
+- **Issue:** `item.name`, `item.description`, `item.type`, `item.damage`, `item.damage_type`, `item.range`, `item.properties[i]` are rendered as text without sanitization. React's default escaping protects against `<script>` injection, BUT `whitespace-pre-line` on description (line 107) plus arbitrary user text means malformed/abusive content (e.g. very long lines, RTL override chars `‮`, zero-width characters) still hit the DOM. If items can be authored via the JSON editor (per domain rules) and then surfaced to all players, GM-supplied or ill-formed JSON could hijack the UI layout for everyone in the campaign. No length cap on `name`, `type`, `properties`, or `range`.
+- **Suggested approach:** Add `safeText()` (already used in SentientConflictDialog) to all rendered fields; cap each to a sane length client-side; strip control characters; and add server-side validation when items are persisted.
+
+- **Severity:** Medium
+- **File:** src/components/items/ItemHoverCard.jsx
+- **Line:** 25
+- **Category:** Prop validation
+- **Issue:** `if (!item) return children;` — when `item` is falsy, the trigger is rendered without the HoverCard wrapper, but it's not wrapped in a fragment vs span consistently. Also no PropTypes/TS for `item` shape; line 49+ probes 6+ optional fields with `||` fallbacks. Spec is hidden in code.
+- **Suggested approach:** Add a TS interface or zod schema for the canonical `Item` shape. Document which fields are required.
+
+- **Severity:** Medium
+- **File:** src/components/items/ItemHoverCard.jsx
+- **Line:** 29, 41
+- **Category:** Brand color mismatches
+- **Issue:** Hardcoded `bg-[#0f1219]` (line 29) and `bg-[#0b1220]` (line 41) — neither matches the documented brand palette.
+- **Suggested approach:** Replace with brand tokens once palette is finalised.
+
+- **Severity:** Medium
+- **File:** src/components/items/ItemHoverCard.jsx
+- **Line:** 67, 72, 75, 82, 84, 89, 99
+- **Category:** Tailwind issues — arbitrary values
+- **Issue:** Heavy use of arbitrary type sizes `text-[10px]`, `text-[11px]`, plus opacity-suffixed colors (`bg-amber-500/15`, `border-amber-500/40`, `bg-red-900/30`, `border-red-700/40`, `bg-slate-800/80`, `border-slate-600/40`). Inconsistent with the rest of the design system.
+- **Suggested approach:** Define design tokens for micro-text and rarity/state palettes.
+
+- **Severity:** Medium
+- **File:** src/components/items/ItemHoverCard.jsx
+- **Line:** 36, 38-44
+- **Category:** ACCESSIBILITY
+- **Issue:** (1) `<HoverCardTrigger asChild>` over a `<span>` produces a non-focusable element by default — keyboard users cannot trigger the tooltip. Items in tables/lists need to be `<button>` or `tabIndex={0}` to receive hover-card open via focus. (2) The popover content has no `role="tooltip"` / `aria-describedby` linkage to the trigger. (3) The rarity badge uses color alone to convey rarity (text label is "rarityLabel" so OK) — verify the label is screen-reader visible. (4) No `alt` text concept here since `children` is opaque, but if children is an `<img>`, the caller must provide alt — flag this as a documented contract not enforced.
+- **Suggested approach:** Render the trigger as a focusable element (`<button type="button">`) when interactive, expose `aria-describedby`, and document the alt-text contract for image children.
+
+- **Severity:** Low
+- **File:** src/components/items/ItemHoverCard.jsx
+- **Line:** 55-59
+- **Category:** Hardcoded values / parsing logic
+- **Issue:** `properties` accepts both arrays and comma-separated strings. Splitting on `,` will mangle properties that legitimately contain commas (e.g., "Heavy, two-handed weapon" stored as a single string property). Inconsistent storage shape per item is a data-quality smell.
+- **Suggested approach:** Normalise to array at write time; remove the string fallback.
+
+- **Severity:** Low
+- **File:** src/components/items/ItemHoverCard.jsx
+- **Line:** 51, 60
+- **Category:** Hardcoded values / dual-field fallbacks
+- **Issue:** `item.type || item.category`, `item.damage || item.damage_dice`, `item.requires_attunement || item.attunement`, `item.description || item.desc` — schema has been migrated multiple times and not consolidated. Each fallback is a maintenance trap.
+- **Suggested approach:** Pick canonical names; migrate stored items; remove fallbacks.
+
+- **Severity:** Low
+- **File:** src/components/items/ItemHoverCard.jsx
+- **Line:** 108
+- **Category:** UX — silent truncation
+- **Issue:** Description over 320 chars is silently truncated with `…`. No "show more" affordance — users can never see full description from the hover card.
+- **Suggested approach:** Add a click target (or expand-on-click) to reveal the full description, or remove the truncation.
+
+- **Severity:** Low
+- **File:** src/components/items/ItemHoverCard.jsx
+- **Line:** 1
+- **Category:** Inconsistent file naming / imports
+- **Issue:** `import React from "react";` is included but not directly referenced (function components don't need explicit React import in modern Vite/Babel JSX runtime). Other audited files in this batch don't import React; inconsistent.
+- **Suggested approach:** Remove `import React from "react"`.
+
+- **Severity:** Low
+- **File:** src/components/items/ItemHoverCard.jsx
+- **Line:** entire file
+- **Category:** Missing error boundaries
+- **Issue:** Malformed item data (e.g. `item.properties = {}` non-array non-string) would throw inside the tooltip render. (Systemic — flagged once.)
+
+**File: SentientConflictDialog.jsx (165 lines)**
+
+- **Severity:** High
+- **File:** src/components/items/SentientConflictDialog.jsx
+- **Line:** 49, 51-61
+- **Category:** State management smells / fairness (RNG)
+- **Issue:** The dialog uses `Math.random()` for d20 rolls. `Math.random()` is not cryptographically secure, but the bigger issue is **transparency and audit**: a contested CHA roll is a player-affecting GM-side decision and the result should be (a) deterministic-replayable from a server-recorded seed/event, (b) emitted to P.I.E. or the campaign log so players see the same outcome the GM sees, and (c) ideally routed through the project's shared dice service (see other dice components in `/components/dice`). As-is, the result is local-only — a player viewing the GM's screen vs a synchronised dialog would diverge. No P.I.E. event, no campaign log entry, no broadcast to other clients.
+- **Suggested approach:** Route both rolls through the central dice/RNG service; emit `pie.dice({ kind:"sentient_conflict", … })` events; persist resolution to the campaign log so the conflict outcome is auditable.
+
+- **Severity:** High
+- **File:** src/components/items/SentientConflictDialog.jsx
+- **Line:** 30, 51-61
+- **Category:** GM-only action permission leaks (DOMAIN)
+- **Issue:** No `isGM` gating. Resolving sentient-item conflict is a GM ruling — a player triggering this from their inventory could bypass GM control and force "Roll Contested CHA". Although `onResolve` is parent-controlled, the dialog itself happily mutates state and calls `onResolve` regardless of who clicked.
+- **Suggested approach:** Accept `isGM` prop; if false, hide the "Roll" button and render the dialog read-only. Server-side, validate that conflict resolutions originate from the campaign GM.
+
+- **Severity:** High
+- **File:** src/components/items/SentientConflictDialog.jsx
+- **Line:** 51-61
+- **Category:** Missing audit logging for GM grant/take/edit (DOMAIN)
+- **Issue:** Sentient-item conflict outcomes can dictate item control switching from wielder to item (per `on_loss` text). That IS effectively a GM action altering item ownership/possession but no audit log entry, no campaign log emission, and no persistence of who initiated, what triggers fired, what totals rolled, or what the on_loss consequence was.
+- **Suggested approach:** Persist conflict resolutions to a `sentient_conflicts` log (or campaign event log) including timestamp, item_id, wielder_id, both raw rolls, both totals, winner, on_loss text snapshot.
+
+- **Severity:** High
+- **File:** src/components/items/SentientConflictDialog.jsx
+- **Line:** 30, entire file
+- **Category:** Multi-game abstraction concerns (D&D-specific logic in items code)
+- **Issue:** Sentient-item conflict mechanic is D&D 5e DMG specific (contested CHA, item CHA score, attunement context). Lives in system-agnostic `/components/items/`. Not portable to non-D&D systems.
+- **Suggested approach:** Move to `/components/dnd5e/SentientConflictDialog.jsx` or have a system adapter expose `resolveSentientConflict({ item, wielder })`.
+
+- **Severity:** Medium
+- **File:** src/components/items/SentientConflictDialog.jsx
+- **Line:** 36-43
+- **Category:** Math errors
+- **Issue:** `Number(sentience.charisma) || 10` swallows a legitimate CHA of 0 and a CHA of `NaN` indistinguishably, defaulting both to 10. Same for wielder fallback chain (line 38-42). Items with explicitly-set `charisma: 0` would be silently bumped to 10. The wielder lookup chain `attributes.cha || stats.charisma || charisma` (line 39-41) again swallows zero. While CHA 0 is unusual, the pattern is wrong.
+- **Suggested approach:** Use `Number.isFinite(...)` checks: `const score = Number.isFinite(Number(s.charisma)) ? Number(s.charisma) : 10;`.
+
+- **Severity:** Medium
+- **File:** src/components/items/SentientConflictDialog.jsx
+- **Line:** 38-42
+- **Category:** State management smells / schema duplication
+- **Issue:** Same dual-shape problem: wielder may have `attributes.cha` OR `stats.charisma` OR `charisma`. Three different storage shapes for the same datum. Same dual-shape pattern as ItemHoverCard's `type || category`.
+- **Suggested approach:** Pick one canonical character-attribute shape and migrate the others.
+
+- **Severity:** Medium
+- **File:** src/components/items/SentientConflictDialog.jsx
+- **Line:** 56
+- **Category:** Math errors / domain rule miss
+- **Issue:** "On a tie the wielder keeps control" per the docblock. The implementation says `winner = itemTotal > wielderTotal ? "item" : "wielder"`. That's correct for ties, but "item wins ONLY if strictly greater" should be a clearly named constant or comment to lock in the rule.
+- **Suggested approach:** `const ITEM_NEEDS_TO_BEAT = true; // ties go to wielder per DMG`.
+
+- **Severity:** Medium
+- **File:** src/components/items/SentientConflictDialog.jsx
+- **Line:** 74
+- **Category:** Brand color mismatches
+- **Issue:** Hardcoded `from-[#0b1430] to-[#050816]` gradient and `border-cyan-500/60`. Cyan is the systemic off-brand palette. Counted: 9 cyan-class uses, 5 rose-class uses, 4 hex literals (`#0b1430`, `#050816`, `#1a0a14`, `#050816` again).
+- **Suggested approach:** Move to brand tokens.
+
+- **Severity:** Medium
+- **File:** src/components/items/SentientConflictDialog.jsx
+- **Line:** 73-80, 144-149
+- **Category:** ACCESSIBILITY
+- **Issue:** (1) Dialog title contains `{safeText(item.name) || "Unnamed"}` — good. (2) No `aria-describedby` on the dialog wiring up the body. (3) The "Roll Contested CHA" CTA uses `text-[#050816]` on `bg-cyan-500` — likely passes contrast but the cyan is brand-mismatched. (4) The win/lose result panel (line 124-136) communicates result via background color and bold uppercase text — color alone is not used (text says "Item wins" / "Wielder retains control") so OK. (5) The Sparkles icon is purely decorative; no `aria-hidden` set. (6) The "Re-roll" button ignores its earlier resolution without a confirmation prompt — could be a footgun if GM mis-clicks after announcing the result. 
+- **Suggested approach:** Add `aria-describedby`, `aria-hidden` on decorative icons, and confirm before re-roll.
+
+- **Severity:** Medium
+- **File:** src/components/items/SentientConflictDialog.jsx
+- **Line:** 60, 154
+- **Category:** State management smells (re-roll defeats audit)
+- **Issue:** `onResolve` is fired on first roll. The "Re-roll" button (154) clears local state but does NOT inform the parent that the previous resolution has been invalidated — the parent has already received the original `{ winner, … }` and may have applied side effects (shifted control, played animation, persisted to log). Re-rolling silently diverges UI from persisted state.
+- **Suggested approach:** Either disallow re-roll once `onResolve` has fired with side effects, or fire `onResolve({ kind:"reset" })` so the parent can compensate.
+
+- **Severity:** Low
+- **File:** src/components/items/SentientConflictDialog.jsx
+- **Line:** 70
+- **Category:** Dead code / control flow
+- **Issue:** `if (!item) return null;` is checked AFTER all the destructuring on lines 35-47 (which already use `item?.…`). If `item` is null, those lines do unnecessary work.
+- **Suggested approach:** Move the early return to the top of the function (just after `useState` calls, or guard the body with `open && item`).
+
+- **Severity:** Low
+- **File:** src/components/items/SentientConflictDialog.jsx
+- **Line:** 91
+- **Category:** Performance / React keys
+- **Issue:** `triggers.map((t, i) => (<li key={i}>...))` — index keys; if triggers reorder, animations/cursor stick.
+- **Suggested approach:** Use `key={\`${i}-${t}\`}` at minimum, or assign IDs at write time.
+
+- **Severity:** Low
+- **File:** src/components/items/SentientConflictDialog.jsx
+- **Line:** entire file
+- **Category:** Missing error boundaries
+- **Issue:** Systemic — flagged once.
+
+##### Batch 1A-v-b Summary
+
+**Files audited:** 3 files (NpcVillainPanel.jsx, ItemHoverCard.jsx, SentientConflictDialog.jsx) totalling ~1,191 lines.
+
+**Findings by severity:**
+- Critical: 0
+- High: 9 (3 NPC, 6 items)
+- Medium: 22 (12 NPC, 10 items)
+- Low: 13 (7 NPC, 6 items)
+- Cosmetic: 0
+
+**Findings by category (notable counts):**
+- Multi-game abstraction concerns: 3 (one per file — every component in this batch is D&D 5e-coupled despite living in supposedly system-agnostic folders)
+- Brand color mismatches / arbitrary Tailwind values: 6 (every file)
+- ACCESSIBILITY: 3 (every file)
+- GM-only permission gating leaks: 2 (NpcVillainPanel, SentientConflictDialog)
+- Missing audit logging: 1 (SentientConflictDialog — sentient-item conflict outcomes are unlogged)
+- DOMAIN — secret_plant / villain_flag handling: 1 (NpcVillainPanel — never reads or surfaces these flags; relies on parent to gate render)
+- DOMAIN — JSON validation/XSS surface: 1 (ItemHoverCard renders user-supplied item fields without `safeText`)
+- Missing error boundaries: 3 (one per file, systemic)
+- Math errors / numeric handling: 3 (NpcVillainPanel mixed parsing, SentientConflictDialog `|| 10` swallows zero, tie-breaking semantics undocumented)
+- React key=index: 5 (NpcVillainPanel x4, SentientConflictDialog x1)
+- Schema dual-shape fallbacks (legacy migration debt): 3 (`type||category`, `damage||damage_dice`, `attributes.cha||stats.charisma||charisma`)
+
+**Top systemic issues across this batch:**
+1. **Layer violation (multi-game).** All three files live in `/components/npc/` or `/components/items/` (system-agnostic by design) yet hardcode D&D 5e mechanics: damage types, save abilities, MCDM Villain Actions, Legendary Resistances, item rarity, attunement, sentient CHA contests. Either move them under `/dnd5e/` or introduce a system adapter — this batch is a strong design-readiness flag.
+2. **Audit + sync gap on player-affecting GM rolls.** `SentientConflictDialog` rolls `Math.random()` locally with no P.I.E. event, no campaign log entry, no broadcast — players and GMs see different states. Mirrors the dice/P.I.E. integration gap already flagged elsewhere in Pass 1A.
+3. **Schema is implicit.** Every file consumes JSONB blobs (`villain_data`, `item`, `wielder.*`) with optional-chained fallbacks instead of validated schemas. Multiple dual-shape fallbacks point to incomplete migrations.
+4. **Brand palette debt is heavy here** — three files contribute roughly 30 instances of off-brand hex literals + cyan/rose/indigo tinting.
+
+**Specific note on permission leaks (secret_plant, villain_flag, GM-only action gating):**
+- **`NpcVillainPanel`** has *no* internal `isGM` / `readOnly` prop. It edits `villain_data` (legendary resistances, phase transitions, secret villain action arcs, auras) — all GM-only content per domain rules. The component relies entirely on the parent (`CampaignNPC` editor, not in this batch) to gate rendering. It also never reads or surfaces `villain_flag` or `secret_plant`, so any leak/visibility regression would be invisible from this component's perspective. **Recommendation: pass-1B should audit the parent CampaignNPC editor and the player-facing NPC list to verify (a) `villain_flag`/`secret_plant`/`villain_data` are stripped from non-GM selects, (b) RLS on `campaign_npcs` enforces GM-only writes to those columns, and (c) this panel is only rendered when `isGM && villain_flag === true`.**
+- **`SentientConflictDialog`** likewise has no `isGM` gating — a player who can open the dialog can resolve a contest, with no server-side check shown. Conflict outcomes also aren't logged. This is both a permission leak AND an audit-logging gap.
+- **`ItemHoverCard`** is read-only and not a permission risk itself, but renders user-supplied item fields without `safeText`-style sanitisation — a malicious item title or description from a homebrew item could affect everyone in the campaign.
+
