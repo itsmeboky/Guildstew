@@ -9649,3 +9649,1326 @@ No instances of paid-system text (Pathfinder, World of Darkness, Star Wars 5e, e
 - **/components/notifications/** — should NOT advance to public-launch state. The notifications system per spec is missing entirely; what ships is a single session-reminder toast. Treat as a major build, not a polish pass.
 - **/components/presence/** — should NOT advance to public-launch state until: (a) `last_seen_at` stops being exposed raw to the client; (b) an actual `invisible` / appear-offline option is added with the privacy contract enforced; (c) multi-tab leader election prevents flapping; (d) the picker has Streaming status (or the spec is amended). The current StatusDot UI is otherwise polished and reusable.
 - **/components/profile/** — should NOT advance to public-launch state until: (a) `email`/`age`/`role` are stripped from the UserProfile sync at `EditProfileDialog.jsx:226` (this is the worst single privacy bug in the audit); (b) avatar/banner uploads are routed through `user-assets/users/{user_id}/` with MIME + size + SVG-XSS validation; (c) the Base44 → Supabase RLS migration completes; (d) profile statistics gain a privacy gate; (e) the dead `FavoriteClass`, `FeaturedAchievements`, `ProfileCard` files are either wired in or deleted; (f) the `PostComments` schema moves from JSONB to a real `post_comments` table with RLS. The `EditProfileDialog` is feature-complete in shape but the save flow ships PII into a public table.
+
+---
+
+### Batch 1A-ix: forums + support + marketing + admin
+
+#### /src/components/forums/
+
+##### NewThreadDialog.jsx
+
+- **Severity:** High
+- **File:** src/components/forums/NewThreadDialog.jsx
+- **Line:** 35–48
+- **Category:** Admin role check gaps / Client-side authority
+- **Issue:** `is_dev_post` is set client-side from `isAdminEmail(user?.email)` and inserted directly into `forum_threads`. A non-admin can call `createThread` directly with `is_dev_post: true` and bypass `forumsClient.createThread` to fake a "Guildstew team" post. The lib's comment says "Writes are author-gated at the RLS layer" but `is_dev_post` is a client-supplied field with no documented RLS column-level guard.
+- **Suggested approach:** Compute `is_dev_post` server-side via a Postgres function or RLS check that joins `auth.users.email` against an admin-allowlist table; never trust the client-supplied flag. Also stop using email-suffix matching as the admin signal — promote a real `users.is_admin` boolean / `admin_users` table.
+
+- **Severity:** Critical
+- **File:** src/components/forums/NewThreadDialog.jsx
+- **Line:** 13, 35
+- **Category:** Admin role check gaps
+- **Issue:** Admin gating uses `isAdminEmail(user?.email)` (string suffix on `@aetherianstudios.com` / `@guildstew.com`). Email is mutable (Supabase allows email change flows) and the client can read/spoof `user.email` if the auth context is ever populated client-side. This admin signal is reused across the entire forums UX and any other surface that imports `isAdminEmail`.
+- **Suggested approach:** Replace email-suffix admin detection with a server-enforced role (claim in JWT, `admin_users` table joined in RLS). Treat email-based admin as a Critical regression of the admin-role-check spec.
+
+- **Severity:** High
+- **File:** src/components/forums/NewThreadDialog.jsx
+- **Line:** 43–49
+- **Category:** Forum ownership / Client-side authority
+- **Issue:** `author_id: user.id` is supplied by the client. If RLS does not pin `author_id = auth.uid()`, any authenticated user can post as another user.
+- **Suggested approach:** RLS INSERT policy on `forum_threads` must enforce `author_id = auth.uid()`. Remove `author_id` from the client payload entirely — let the DB default it from `auth.uid()`.
+
+- **Severity:** High
+- **File:** src/components/forums/NewThreadDialog.jsx
+- **Line:** 47, 89–98
+- **Category:** Forum XSS on user-generated thread/reply content
+- **Issue:** Markdown content is captured raw and inserted into `forum_threads.content`. The dialog says "Markdown supported" — wherever this is rendered downstream (forum thread page), if Markdown is rendered with `dangerouslySetInnerHTML` or a renderer that allows raw HTML, this is an XSS surface. No sanitization (DOMPurify) is applied at write-time.
+- **Suggested approach:** Sanitize at render-time with a Markdown renderer that strips raw HTML (e.g., `react-markdown` with `rehype-sanitize`) — and verify the consuming page does so. Also enforce length limits server-side (currently unbounded).
+
+- **Severity:** Medium
+- **File:** src/components/forums/NewThreadDialog.jsx
+- **Line:** 63, 84, 94, 106
+- **Category:** Brand color mismatches / Tailwind issues
+- **Issue:** Hardcoded hex colors `#1E2430`, `#050816`, `#37F2D1`, `#2dd9bd` inline. `#37F2D1` cyan is the documented-mismatch brand color (counted: 2 instances). `#1E2430`/`#050816` are not in the documented Creamsicle palette either. The sibling `ReplyForm.jsx` uses the `CREAM` palette tokens — this file does not. Inconsistent.
+- **Suggested approach:** Use `CREAM` palette tokens (or migrate forums to the design-system palette once Creamsicle is finalized).
+
+
+- **Severity:** Low
+- **File:** src/components/forums/NewThreadDialog.jsx
+- **Line:** 31
+- **Category:** State management smells
+- **Issue:** `React.useEffect` is used directly via the `React` namespace while `useState` is destructured. Inconsistent import style; minor but keeps showing up across the codebase.
+- **Suggested approach:** Add `useEffect` to the destructured import.
+
+- **Severity:** Medium
+- **File:** src/components/forums/NewThreadDialog.jsx
+- **Line:** 41–42
+- **Category:** Forum spam / Rate limiting gaps
+- **Issue:** Only client-side validation of empty title/content. No length cap, no rate limit, no spam-keyword filter, no captcha. A scripted user can flood threads.
+- **Suggested approach:** Server-side `length(title) <= 200`, `length(content) <= 20000` constraints, plus a per-user rate limit (e.g., max 5 threads/hour) enforced via RLS or RPC. Consider Cloudflare Turnstile / hCaptcha for unauthenticated viewers (though this dialog requires auth, anti-bot still useful).
+
+- **Severity:** Medium
+- **File:** src/components/forums/NewThreadDialog.jsx
+- **Line:** 62, 100–110
+- **Category:** Accessibility
+- **Issue:** No focus trap verification on `<Dialog>` (assumed shadcn handles, but the disabled state when `blocked` is true leaves focus on the Cancel button only). Cancel button has no `aria-label` distinguishing it from the post action. The blocked notice (line 71) is not associated with the inputs via `aria-describedby`.
+- **Suggested approach:** Add `aria-describedby` linkage; verify focus trap; ensure the warning text is announced via `role="status"` or similar.
+
+##### ReplyForm.jsx
+
+- **Severity:** Critical
+- **File:** src/components/forums/ReplyForm.jsx
+- **Line:** 22–28
+- **Category:** Forum ownership / Client-side authority
+- **Issue:** `author_id: user.id` and `is_dev_reply: isAdminEmail(user?.email)` both client-supplied. Identical to NewThreadDialog issue: any authenticated user can call `createReply` and impersonate another author or fake a "dev reply" badge unless RLS strictly enforces `author_id = auth.uid()` and `is_dev_reply = false` for non-admins.
+- **Suggested approach:** Drop `author_id` from client payload; default from `auth.uid()` server-side. Compute `is_dev_reply` server-side via admin role join, never accept it as client input.
+
+- **Severity:** High
+- **File:** src/components/forums/ReplyForm.jsx
+- **Line:** 23–27 (lib at src/lib/forumsClient.js:118–149)
+- **Category:** State management smells / Race condition
+- **Issue:** `createReply` does a read-then-write to bump `forum_threads.reply_count` without using `rpc`/atomic increment. Two concurrent replies can lose a count (lost update). Also no transaction so the reply can succeed while the count update fails.
+- **Suggested approach:** Either move the count bump into a database trigger (preferred) or use a Postgres RPC (`increment_reply_count(thread_id)`) so the operation is atomic.
+
+- **Severity:** High
+- **File:** src/components/forums/ReplyForm.jsx
+- **Line:** 48–59
+- **Category:** Forum XSS on user-generated thread/reply content
+- **Issue:** Free-form Markdown content captured raw, no sanitization at submission. Same XSS risk pipeline as NewThreadDialog — flag the consuming view (Forums page renderer) explicitly for `react-markdown` + `rehype-sanitize` verification.
+- **Suggested approach:** Verify reply rendering uses a Markdown renderer that strips `dangerouslySetInnerHTML` / raw HTML; sanitize at render time.
+
+- **Severity:** Medium
+- **File:** src/components/forums/ReplyForm.jsx
+- **Line:** 6, 41–67
+- **Category:** Brand color / Inline styles
+- **Issue:** Imports `CREAM` palette tokens from `@/pages/Forums` — page should not be the source of design tokens. Heavy use of inline `style={{...}}` rather than Tailwind classes; eight inline color references. This is the design-system-drift pattern flagged elsewhere.
+- **Suggested approach:** Move `CREAM` to a shared `src/lib/palette.js` or convert to Tailwind theme extensions; replace inline styles with Tailwind utility classes referencing CSS variables.
+
+- **Severity:** Medium
+- **File:** src/components/forums/ReplyForm.jsx
+- **Line:** 22, 48
+- **Category:** Forum spam / Rate limiting
+- **Issue:** No rate limit and no length cap on reply content. A bot can post unlimited replies.
+- **Suggested approach:** Server-side per-user rate limit (e.g., max 30 replies/hour) and content length cap (≤ 10000 chars).
+
+- **Severity:** Medium
+- **File:** src/components/forums/ReplyForm.jsx
+- **Line:** 48–59
+- **Category:** Accessibility / Form labels
+- **Issue:** The `<textarea>` has no `<label>` (the visible "Reply" text is a `<p>`, not associated). No `aria-label` on the textarea, no `aria-label` on the submit button.
+- **Suggested approach:** Add a visually-hidden `<label htmlFor>` or `aria-label="Reply content"`; add `aria-label="Post reply"` on the submit button.
+
+- **Severity:** Low
+- **File:** src/components/forums/ReplyForm.jsx
+- **Line:** 31–35
+- **Category:** P.I.E. event emission gaps
+- **Issue:** Reply success invalidates queries but emits no P.I.E. event for "forum reply posted" activity. Forum activity is called out in spec as a P.I.E. source.
+- **Suggested approach:** After successful insert, call the P.I.E. event helper with a `forum_reply_posted` event.
+
+- **Severity:** Low
+- **File:** src/components/forums/ReplyForm.jsx
+- **Line:** 1–6
+- **Category:** Folder gaps / Missing components
+- **Issue:** The forums folder contains only `NewThreadDialog` and `ReplyForm`. Per audit context, forum moderation (pin/lock/delete/flag), pagination UI, search UI, and ownership-bound edit/delete dialogs are missing — all functionality lives in `pages/Forums.jsx` (out of scope) and the lib. No edit/delete dialog exists for users to manage their own threads/replies.
+- **Suggested approach:** Verify edit/delete capability exists in the Forums page; if not, this is a domain-completeness gap (users cannot edit/delete their own posts).
+
+
+#### /src/components/support/
+
+##### MyTicketsList.jsx
+
+- **Severity:** Critical
+- **File:** src/components/support/MyTicketsList.jsx
+- **Line:** 10, 30, 85, 93
+- **Category:** Base44 leftovers / Support ticket ownership
+- **Issue:** Uses Base44 ORM (`base44.entities.SupportTicket.filter`, `TicketResponse.filter`, `TicketResponse.create`) for ticket reads and reply writes. Per audit context, Base44 is load-bearing here and blocks RLS migration. The `filter({ user_id: userId })` is client-side authority — if the server doesn't enforce `user_id = auth.uid()` server-side, any user can change `userId` and read another user's tickets (which contain PII per spec).
+- **Suggested approach:** Migrate ticket reads/writes to Supabase typed client with RLS enforcing `user_id = auth.uid()` on read, and `sender_id = auth.uid()` on TicketResponse insert.
+
+- **Severity:** Critical
+- **File:** src/components/support/MyTicketsList.jsx
+- **Line:** 25, 29–32
+- **Category:** Support PII broadcast / Client-side authority
+- **Issue:** The `userId` is a prop passed in — there is nothing preventing a parent from passing the wrong id, and no server-side check that the request originated from that user. Combined with Base44's client-side filter, this is the same fetch-all-and-filter-client-side anti-pattern the audit context flagged as the dominant cross-cutting bug class. Tickets contain emails, billing questions, account issues — high-PII content.
+- **Suggested approach:** Drop `userId` prop entirely; derive from `useAuth()` server-side claim. Use a dedicated RLS-enforced `my_tickets()` view / RPC that returns only the caller's tickets.
+
+- **Severity:** Critical
+- **File:** src/components/support/MyTicketsList.jsx
+- **Line:** 90–98
+- **Category:** Support ticket ownership / Client-side authority
+- **Issue:** `sender_type: "user"` and `sender_id: userId` are client-supplied. A user could call `TicketResponse.create` with `sender_type: "admin"` and impersonate support staff in the thread. The dialog `r.sender_type === "admin"` styling at line 143–149 then renders the response as the official Support reply.
+- **Suggested approach:** Server-side trigger / RLS must derive `sender_type` from `auth.uid()` membership in `support_staff` and pin `sender_id = auth.uid()`. Never trust client-supplied sender_type. CRITICAL — this allows direct impersonation of Guildstew Support to other users in the same ticket thread.
+
+- **Severity:** High
+- **File:** src/components/support/MyTicketsList.jsx
+- **Line:** 92, 97
+- **Category:** Forum spam / Rate limiting (here: ticket reply spam)
+- **Issue:** No length cap, no rate limit on ticket replies. A user can flood a ticket with replies.
+- **Suggested approach:** Length cap (≤ 5000) and per-ticket rate limit (e.g., max 1 reply / 10s).
+
+- **Severity:** High
+- **File:** src/components/support/MyTicketsList.jsx
+- **Line:** 128, 154
+- **Category:** XSS / Support user-supplied content rendering to staff
+- **Issue:** `ticket.description` and `r.body` rendered as plain text via `whitespace-pre-wrap` (which is safe), so this specific render is OK — but the screenshot at line 130–134 renders `<img src={ticket.screenshot_url}>` with no validation that the URL is from the trusted bucket. A user could submit a ticket with `screenshot_url` pointing to an arbitrary URL (or `javascript:` if not URL-validated) and load tracking pixels / external content into the staff/admin views.
+- **Suggested approach:** Validate `screenshot_url` is from the `user-assets` Supabase storage origin at write-time (server-side) and at render-time. Better: store storage `path` only and resolve via signed URL.
+
+- **Severity:** Medium
+- **File:** src/components/support/MyTicketsList.jsx
+- **Line:** 51, 144, 175
+- **Category:** Brand color mismatches
+- **Issue:** Six hardcoded `#37F2D1` references plus `#050816`, `#0b1220`, `#1E2430` — the documented-mismatch palette. Not Creamsicle.
+- **Suggested approach:** Migrate to design-token palette per pending design decision.
+
+- **Severity:** Medium
+- **File:** src/components/support/MyTicketsList.jsx
+- **Line:** 130–134
+- **Category:** Accessibility
+- **Issue:** Screenshot `<img alt="Screenshot">` is non-descriptive. For a ticket with multiple screenshots (or just one), this is bare-minimum alt text.
+- **Suggested approach:** Use `alt={`Screenshot for ticket: ${ticket.subject}`}` or a user-provided caption.
+
+- **Severity:** Low
+- **File:** src/components/support/MyTicketsList.jsx
+- **Line:** 56
+- **Category:** Tailwind issues
+- **Issue:** `hover:${style.className}` interpolates a class string into a `hover:` variant — Tailwind's JIT cannot detect dynamic concatenation; the hover state will not generate any CSS.
+- **Suggested approach:** Either drop the redundant `hover:${style.className}` (it's already the same color as default) or use safelisting / static variants.
+
+
+##### ReportUserDialog.jsx
+
+- **Severity:** Critical
+- **File:** src/components/support/ReportUserDialog.jsx
+- **Line:** 14, 59–67
+- **Category:** Base44 leftovers / Client-side authority
+- **Issue:** `base44.entities.UserReport.create` is client-supplied; `reporter_id` is a prop, `reported_user_id` is from a parent-supplied `targetUser` prop, and `status: "pending"` is client-set. A user can spoof `reporter_id` to file reports as another user, or pre-set `status: "resolved"` to bypass the moderation queue.
+- **Suggested approach:** Migrate to Supabase RPC `submit_report(target_id, category, description, evidence_urls, campaign_id)` that pins `reporter_id = auth.uid()` and `status = 'pending'` server-side. RLS policy on `user_reports` should reject any client write to `status`.
+
+- **Severity:** High
+- **File:** src/components/support/ReportUserDialog.jsx
+- **Line:** 27–29 (comment), 52
+- **Category:** Storage path violations
+- **Issue:** Header comment says "Evidence images are uploaded to campaign-assets/support/" but the actual code uploads to `"user-assets", "support"`. The comment is stale; per audit context, support attachments must follow `user-assets/users/{user_id}/`. Current path is `user-assets/support/...` which doesn't include the user-id sub-path mandated by the storage spec.
+- **Suggested approach:** Change upload path to `user-assets/users/{reporterId}/support/` and update the comment. Also enforce MIME/size validation server-side.
+
+- **Severity:** High
+- **File:** src/components/support/ReportUserDialog.jsx
+- **Line:** 51–54
+- **Category:** Performance / Forum spam (here: report flood)
+- **Issue:** Loops over evidence files awaiting each upload sequentially with no count cap. A user could attach hundreds of files. Also no MIME validation client-side beyond `accept="image/*"` (which is bypassable by content-type spoofing).
+- **Suggested approach:** Cap evidence file count (e.g., max 5) and total size; validate MIME server-side; upload in parallel with `Promise.all`.
+
+- **Severity:** Medium
+- **File:** src/components/support/ReportUserDialog.jsx
+- **Line:** 71
+- **Category:** PII / token leaks (analytics)
+- **Issue:** `trackEvent` ships `target_id` (the reported user's id) to the analytics pipeline. Depending on the analytics destination, this may broadcast moderation activity off-platform. Acceptable if analytics is internal P.I.E., flag for verification.
+- **Suggested approach:** Verify `trackEvent` lands in P.I.E. (internal) and not a third-party analytics provider.
+
+- **Severity:** Medium
+- **File:** src/components/support/ReportUserDialog.jsx
+- **Line:** 80, 89, 110, 150
+- **Category:** Brand color mismatches
+- **Issue:** Three `#37F2D1`, plus `#1E2430`, `#0b1220` hardcoded. Same palette drift.
+- **Suggested approach:** Design-token migration.
+
+- **Severity:** Medium
+- **File:** src/components/support/ReportUserDialog.jsx
+- **Line:** 31, 43–67
+- **Category:** Rate limiting / spam prevention
+- **Issue:** No rate limit on report submission. A bad actor can flood the moderation queue with false reports against a target.
+- **Suggested approach:** Per-reporter rate limit (e.g., max 5 reports / hour) and a unique-constraint on `(reporter_id, reported_user_id, category, day)` so duplicate reports collapse.
+
+- **Severity:** Low
+- **File:** src/components/support/ReportUserDialog.jsx
+- **Line:** 110, 130
+- **Category:** Accessibility / Form labels
+- **Issue:** File-upload label uses a `<label>` wrapping a hidden `<input type="file">` but has no `aria-label` describing the action; keyboard users can tab to the button-styled label but the click handler is on the hidden input only via label-association.
+- **Suggested approach:** Add explicit `aria-label="Add screenshot evidence"` and verify keyboard activation via `Enter`/`Space`.
+
+##### SupportTicketDialog.jsx
+
+- **Severity:** Critical
+- **File:** src/components/support/SupportTicketDialog.jsx
+- **Line:** 15, 66–74
+- **Category:** Base44 leftovers / Support ticket ownership / Client-side authority
+- **Issue:** `base44.entities.SupportTicket.create` with client-supplied `user_id`, `status: "open"`, `priority: "normal"`. A user can spoof `user_id`, set `priority: "urgent"` to skip the queue, or set `status: "resolved"` if RLS doesn't constrain. Same anti-pattern as ReportUserDialog.
+- **Suggested approach:** Migrate to Supabase RPC `submit_ticket(category, subject, description, screenshot_url)` pinning `user_id = auth.uid()`, `status = 'open'`, `priority = 'normal'` server-side. Strip `priority`/`status` from client payload.
+
+- **Severity:** High
+- **File:** src/components/support/SupportTicketDialog.jsx
+- **Line:** 60
+- **Category:** Storage path violations
+- **Issue:** Same as ReportUserDialog — uploads to `user-assets/support/` not `user-assets/users/{user_id}/support/`. No size/MIME validation beyond `accept="image/*"`.
+- **Suggested approach:** Use the user-id-prefixed path; validate MIME/size at write-time server-side.
+
+- **Severity:** High
+- **File:** src/components/support/SupportTicketDialog.jsx
+- **Line:** 50–84
+- **Category:** Rate limiting / spam prevention
+- **Issue:** No rate limit on ticket creation. No captcha. Anonymous bot armies can flood support.
+- **Suggested approach:** Per-user rate limit (max 3 tickets / hour), require auth (already done via `userId` check), consider Turnstile if abused.
+
+- **Severity:** Medium
+- **File:** src/components/support/SupportTicketDialog.jsx
+- **Line:** 78
+- **Category:** P.I.E. event emission
+- **Issue:** `trackEvent(userId, "ticket_created", { category })` is good — but the `MyTicketsList` reply path emits no analytics event. Inconsistent.
+- **Suggested approach:** Emit `ticket_replied` events from the user reply path so admin overview reflects user activity.
+
+- **Severity:** Medium
+- **File:** src/components/support/SupportTicketDialog.jsx
+- **Line:** 88, 97, 130, 153
+- **Category:** Brand color mismatches
+- **Issue:** Five hardcoded brand-mismatch references. Same as siblings.
+- **Suggested approach:** Migrate.
+
+- **Severity:** Low
+- **File:** src/components/support/SupportTicketDialog.jsx
+- **Line:** 18–27
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `CATEGORIES` defined inline. Both `SupportTicketDialog` and `ReportUserDialog` (different list) and `MyTicketsList` STATUS_STYLES are inline. Drift risk between the dialog categories and any admin filter.
+- **Suggested approach:** Centralize in `src/lib/support/constants.js` (categories, statuses, priorities) so the admin tab and user tab share a single source of truth.
+
+- **Severity:** Low
+- **File:** src/components/support/SupportTicketDialog.jsx
+- **Line:** 130
+- **Category:** Accessibility / Form labels
+- **Issue:** Same as ReportUserDialog — `<label>`-wrapped hidden file input lacks descriptive `aria-label`.
+- **Suggested approach:** Add `aria-label="Attach screenshot"`.
+
+
+#### /src/components/marketing/
+
+##### MarketingBand.jsx
+
+- **Severity:** High
+- **File:** src/components/marketing/MarketingBand.jsx
+- **Line:** 2, 19
+- **Category:** Marketing prototype leftovers / Folder layering
+- **Issue:** The marketing primitives import the `CREAM` palette token from `@/pages/Forums` and re-export it. Marketing depends on a forum page for its design tokens — backwards layering. Per audit context, `/CreatorProgram` and `/Guild` are flagged as "decision-deferred prototypes that didn't land"; this entire folder is in limbo. Both pages still actively use this band (verified: `pages/CreatorProgram.jsx:17`, `pages/Guild.jsx:10`) and route via `pages.config.js`, plus the sidebar links to `/CreatorProgram` (`AppSidebar.jsx:222`) and `SpiceEmporium.jsx:69` navigates there too. Either commit to shipping these pages or yank them; current state is half-shipped.
+- **Suggested approach:** Decision: ship or delete. If shipping, move `CREAM` to `src/lib/palette.js` and import from there. If deleting, remove `MarketingBand.jsx`, `pages/CreatorProgram.jsx`, `pages/Guild.jsx`, the sidebar link, and the `SpiceEmporium` redirect.
+
+- **Severity:** Medium
+- **File:** src/components/marketing/MarketingBand.jsx
+- **Line:** 1, entire file
+- **Category:** Folder gaps / Missing components
+- **Issue:** This is the entire `/marketing/` folder — a single file with three primitives (Band/SectionTitle/MarketingCard). Per audit context, marketing should host: home, pricing, about, features, blog teasers, newsletter signup form, contact form. None of those exist as components; `pages/Pricing.jsx`, `pages/About.jsx` etc. are presumably their own pages with no shared marketing components. No newsletter/contact form means no spam-prevention surface to audit (which is itself a gap if marketing forms are planned).
+- **Suggested approach:** Identify the canonical marketing entry points (home, pricing, blog), audit their pages individually in a follow-up pass, and decide whether marketing forms (newsletter, contact) need building.
+
+- **Severity:** Medium
+- **File:** src/components/marketing/MarketingBand.jsx
+- **Line:** 40, 52, 62, 63
+- **Category:** Brand color mismatches / Inline styles
+- **Issue:** Hardcoded hex `#1E2430` (heading), `#FFFFFF`, `#D97706` (gold accent), `#FFF6E8` (cream tint) inline. Marketing is the public face — palette drift here affects the brand most visibly. `#1E2430` is the cyan-palette dark-navy, mixed with Creamsicle.
+- **Suggested approach:** Migrate to design tokens / CSS variables; resolve the cyan-vs-Creamsicle decision before shipping marketing publicly.
+
+- **Severity:** Low
+- **File:** src/components/marketing/MarketingBand.jsx
+- **Line:** 31–58
+- **Category:** Accessibility / Semantic HTML
+- **Issue:** `<h2>` is hardcoded for SectionTitle. If a marketing page has multiple SectionTitles where one is the page hero (should be `<h1>`), this won't scale. Also no `aria-level` override.
+- **Suggested approach:** Accept an `as` prop (`as="h1" | "h2" | "h3"`) defaulting to `h2`.
+
+- **Severity:** Low
+- **File:** src/components/marketing/MarketingBand.jsx
+- **Line:** 21–28
+- **Category:** Performance / SEO
+- **Issue:** `Band` accepts arbitrary `bg` color but the inline-style approach prevents Tailwind purge from generating the class; harmless but means no theme-mode support. Marketing pages also need SEO-friendly headings, meta tags — none of that lives in this file (and is presumably handled at page level — flag for verification).
+- **Suggested approach:** Verify marketing pages have proper `<title>`, meta description, `<meta name="og:*">`, structured data.
+
+
+#### /src/components/admin/
+
+##### adminShared.jsx
+
+- **Severity:** Low
+- **File:** src/components/admin/adminShared.jsx
+- **Line:** 8–12, 14, 17
+- **Category:** Brand color mismatches
+- **Issue:** `ADMIN_COLORS` palette is the cyan-mismatch family with `#37F2D1` as the lead color and `#FF5722` (which is *not* the documented `#FF5300`). Default `accent="#37F2D1"` on `StatCard` propagates the mismatch across every admin tab.
+- **Suggested approach:** Pull palette from a single design-token module once the brand decision is made; ensure `#FF5300` (not `#FF5722`) is canonical.
+
+- **Severity:** Low
+- **File:** src/components/admin/adminShared.jsx
+- **Line:** 41–53
+- **Category:** Performance / utility duplication
+- **Issue:** `withinRange` is a generic date filter that may already exist elsewhere — appearing in admin-shared as if there is no shared util library. Minor duplication risk.
+- **Suggested approach:** Move to `src/utils/dateRange.js` if used anywhere else.
+
+##### AchievementsTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/admin/AchievementsTab.jsx
+- **Line:** 9, 22–26
+- **Category:** Admin role check gaps / Base44 leftovers / Client-side authority
+- **Issue:** Loads `base44.entities.Achievement.list()` — the entire Achievement table — with no admin role check on the component. If the bundled `AdminTab` route is reachable without server-side role enforcement, any user can hit this and see all achievements (and the user_id assignments). Admin-tab pages must be RPC/RLS-gated. Also the `.list()` call returns **everything** with no pagination — at scale this is a memory bomb.
+- **Suggested approach:** Replace `Achievement.list()` with an RLS-protected RPC `admin_achievement_distribution()` that returns aggregated counts (not raw rows). Add server-side admin role check on the RPC itself.
+
+- **Severity:** High
+- **File:** src/components/admin/AchievementsTab.jsx
+- **Line:** 28–62
+- **Category:** Performance / Admin large-table renders
+- **Issue:** Aggregation (`distribution`, `userAvg`, `tierBreakdown`) happens client-side over the full row set returned by `.list()`. Won't scale past tens of thousands of rows.
+- **Suggested approach:** Move aggregation to a SQL view or RPC.
+
+- **Severity:** Low
+- **File:** src/components/admin/AchievementsTab.jsx
+- **Line:** 14–19, 60, 102, 147
+- **Category:** TIERS constant drift / Hardcoded values
+- **Issue:** `RARITY_COLORS` defined inline. If achievement rarity styling is reused elsewhere (`AchievementsTab` user-side), it should be a shared constant.
+- **Suggested approach:** Centralize in `src/lib/achievements/rarityColors.js`.
+
+##### AdminLogTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/admin/AdminLogTab.jsx
+- **Line:** 24–28
+- **Category:** Reuse of UserProfile.list() anti-pattern / PII broadcast
+- **Issue:** `base44.entities.UserProfile.list()` pulls **the entire users table** (including email per the systemic context) into the admin tab. This is the documented `UserProfile.list()` anti-pattern that leaks email/age/role to all users — and even though this is the admin tab, the same RLS policy that allows it here likely allows it elsewhere. The query itself is a memory bomb: at user-count scale, downloading every profile to the client to label admin actions is unworkable.
+- **Suggested approach:** Replace with an admin RPC `admin_action_log_with_admin_labels()` that joins admin_id → username server-side. Drop the `UserProfile.list()` call entirely. Verify RLS does not allow `UserProfile.list()` to non-admins.
+
+- **Severity:** Critical
+- **File:** src/components/admin/AdminLogTab.jsx
+- **Line:** 19–23
+- **Category:** Admin role check gaps / Base44 leftovers
+- **Issue:** `base44.entities.AdminAction.list("-created_at")` — full audit log fetch, no admin role check, no pagination. If RLS allows reads by non-admins, this leaks the full administrative history (every ban, refund, tier override) including target_id/details which often contain PII.
+- **Suggested approach:** RLS policy on `admin_actions` must restrict reads to `is_admin(auth.uid())`. Replace with paginated RPC.
+
+- **Severity:** High
+- **File:** src/components/admin/AdminLogTab.jsx
+- **Line:** 46–58
+- **Category:** Performance / search-client-side anti-pattern
+- **Issue:** Search/filter implemented purely client-side over the full action set — does not scale. The whole filter loop runs on every keystroke without debouncing.
+- **Suggested approach:** Server-side search via `ilike` + range query; debounce input.
+
+- **Severity:** Medium
+- **File:** src/components/admin/AdminLogTab.jsx
+- **Line:** 53, 67
+- **Category:** PII exposure in admin UI
+- **Issue:** `JSON.stringify(a.details || {})` is searched and exported as-is. If `details` contains user PII (emails, payment refs, ban reasons), it is exposed in CSV exports without redaction. Least-privilege dictates redaction here.
+- **Suggested approach:** Whitelist keys in details that are safe to surface; redact email/payment data.
+
+- **Severity:** Low
+- **File:** src/components/admin/AdminLogTab.jsx
+- **Line:** 92, 110, 117, 133
+- **Category:** Brand color mismatches
+- **Issue:** Hardcoded `#1E2430`, `#0b1220`, `#2A3441` repeated.
+- **Suggested approach:** Tokenize.
+
+
+##### BlogTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/admin/BlogTab.jsx
+- **Line:** 55–177
+- **Category:** Admin role check gaps
+- **Issue:** All write paths (`savePost`, `setPublish`, `setFeatured`, `deletePost`, `bulk`) hit `supabase.from("blog_posts")` directly with no admin role check. If RLS does not enforce `is_admin(auth.uid())`, any authenticated user can publish/unpublish/feature/delete blog posts. The component itself contains no `if (!user.is_admin) return null` guard.
+- **Suggested approach:** RLS write policy on `blog_posts` must check admin claim; client-side gate is also missing.
+
+- **Severity:** Critical
+- **File:** src/components/admin/BlogTab.jsx
+- **Line:** 100, 101
+- **Category:** Client-side authority / Admin role check gap
+- **Issue:** `author_id: user?.id` and `author_name: user?.username || ...` are client-supplied. Fine if RLS forces it, but combined with the above missing admin gate, a non-admin who bypasses the UI can author blog posts as themselves and they'll publish unless RLS blocks.
+- **Suggested approach:** Default `author_id` to `auth.uid()` server-side; deny write if not admin.
+
+- **Severity:** High
+- **File:** src/components/admin/BlogTab.jsx
+- **Line:** 90–144
+- **Category:** Admin audit logging gaps
+- **Issue:** Every write mutation (publish, feature, delete, bulk) is performed directly against the table with **no `admin_actions` insert** to log the action. Per audit context, every admin action should generate an audit log entry. None of these mutations record who-published-what or who-deleted-what.
+- **Suggested approach:** Wrap every admin mutation in an RPC that does the table write AND inserts an `admin_actions` row in the same transaction (action_type = 'blog_publish'/'blog_delete', target_type='blog_post', target_id, details).
+
+- **Severity:** High
+- **File:** src/components/admin/BlogTab.jsx
+- **Line:** 263–264, 359, 427
+- **Category:** Forum XSS / Storage path violations
+- **Issue:** `cover_image_url` is a free-text URL with no validation that it's a Guildstew-hosted asset or even an image URL. An admin (or attacker who got admin) can paste any URL — `javascript:` (caught by `<img src>` rendering as broken), or external tracking pixels, or Cloudflare-bypass URLs. Per spec, banner images should go through `app-assets`. There's no upload flow here — admins paste raw URLs.
+- **Suggested approach:** Replace text input with file upload to `app-assets/blog/{post_id}/`; validate URL is from the trusted bucket origin if free-text input is retained.
+
+- **Severity:** High
+- **File:** src/components/admin/BlogTab.jsx
+- **Line:** 358, 422
+- **Category:** Forum XSS on user-generated thread/reply content (here: blog post content)
+- **Issue:** Markdown content stored raw, rendered presumably elsewhere (`/blog/:slug`). If that view uses `dangerouslySetInnerHTML`, blog content is XSS — and blog content is admin-authored which means a compromised admin account can plant XSS site-wide on a public marketing page.
+- **Suggested approach:** Verify blog renderer uses `react-markdown` + `rehype-sanitize` with a hard allow-list. Don't allow raw HTML.
+
+- **Severity:** High
+- **File:** src/components/admin/BlogTab.jsx
+- **Line:** 154–177
+- **Category:** Performance / Bulk action correctness
+- **Issue:** `bulk` action does no count cap; selecting all posts and clicking "Unpublish" runs a single update which is fine, but no confirmation dialog for destructive bulk operations. Also no `published_at` is preserved on republish (line 161 always sets it to "now"), so bulk-republishing republishes everything as if it just-now-published.
+- **Suggested approach:** Confirm bulk actions ≥ 5 items; preserve original `published_at` if already set when republishing.
+
+- **Severity:** Medium
+- **File:** src/components/admin/BlogTab.jsx
+- **Line:** 124, 134, 143, 174
+- **Category:** Console.log/error in production
+- **Issue:** Four `console.error` calls. Acceptable for admin surfaces but they leak full error objects (potentially containing DB column names / constraint info) to the browser console.
+- **Suggested approach:** Route to a structured logger; redact before console output.
+
+- **Severity:** Medium
+- **File:** src/components/admin/BlogTab.jsx
+- **Line:** 306
+- **Category:** Accessibility / UX
+- **Issue:** `if (confirm(...))` uses native `window.confirm` — no styling, breaks the UX, and on some browsers blocks rendering. Also for irreversible delete, native confirm is too easy to misclick.
+- **Suggested approach:** Use a proper confirm modal (shadcn AlertDialog) with typed-name confirmation for delete.
+
+- **Severity:** Medium
+- **File:** src/components/admin/BlogTab.jsx
+- **Line:** 35–43
+- **Category:** Hardcoded values / Multi-game abstraction
+- **Issue:** `CATEGORIES` is hardcoded inline. `"patch_notes"`, `"tutorial"` are reasonable but if multi-game game packs add their own blog categories, this list won't extend. Single-source-of-truth concern.
+- **Suggested approach:** Move to `src/lib/blog/categories.js`; consider game-pack-extensibility later.
+
+- **Severity:** Low
+- **File:** src/components/admin/BlogTab.jsx
+- **Line:** 264
+- **Category:** Accessibility
+- **Issue:** `<img alt="">` empty alt. OK for purely decorative thumbs but the table column has no other text describing the image — a keyboard-only / screen-reader admin can't tell whether the post has a cover image.
+- **Suggested approach:** Use `alt={p.title ? `Cover for ${p.title}` : "Post cover"}`.
+
+- **Severity:** Low
+- **File:** src/components/admin/BlogTab.jsx
+- **Line:** 184, 197, 208, 218, 264, 379, 390, 398, 404, 421, 427, 434, 438, 452
+- **Category:** Brand color mismatches
+- **Issue:** Heavy `#37F2D1` / `#050816` / `#1E2430` / `#0b1220` repetition (15+ instances).
+- **Suggested approach:** Token migration.
+
+
+##### CashoutsTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/admin/CashoutsTab.jsx
+- **Line:** 7–9, 57–82
+- **Category:** Admin role check gaps / Admin audit logging gaps
+- **Issue:** Approve/Reject/Mark-Processing of cashouts are real-money operations. The mutations call lib helpers (`markCashoutStatus`, `rejectCashout`) but the component does no admin role check; if those helpers don't internally re-check `is_admin(auth.uid())` and write to `admin_actions`, financial workflow integrity is at the mercy of RLS alone. Refunds spice on rejection.
+- **Suggested approach:** Verify the `tavernCreator` lib's status mutations enforce admin role server-side; require an `admin_actions` insert in the same transaction (action_type='cashout_approve'/'cashout_reject'). Consider four-eyes: a second admin must confirm large cashouts.
+
+- **Severity:** High
+- **File:** src/components/admin/CashoutsTab.jsx
+- **Line:** 31–34, 36–51
+- **Category:** PII broadcast / Performance
+- **Issue:** Loads up to 200 cashout rows then queries `user_profiles` for every distinct user_id. The user_profiles fetch is a typed query but pulls `username, full_name` which may include real names of creators. If the admin tab is visible to non-admins, this is a leak. The queryKey includes `userIds.sort().join(",")` — if the user list is huge, the cache key becomes monster-sized.
+- **Suggested approach:** Inline the user join in the cashout query (server-side join). Drop the secondary `user_profiles` fetch.
+
+- **Severity:** Medium
+- **File:** src/components/admin/CashoutsTab.jsx
+- **Line:** 159–163
+- **Category:** UX / Accessibility
+- **Issue:** `confirm(...)` for a cashout reject (real money). Accessibility-poor; misclick-prone; native dialog not styled.
+- **Suggested approach:** AlertDialog with explicit typed confirmation including the dollar amount.
+
+- **Severity:** Medium
+- **File:** src/components/admin/CashoutsTab.jsx
+- **Line:** 105, 116, 137, 181, 183
+- **Category:** Brand color mismatches
+- **Issue:** Hardcoded `#1E2430`, `#050816`, `#0b1220`, `#fbbf24` references.
+- **Suggested approach:** Tokenize.
+
+- **Severity:** Low
+- **File:** src/components/admin/CashoutsTab.jsx
+- **Line:** 90
+- **Category:** Inline copy
+- **Issue:** Hardcoded "Stripe" mention in copy. Locks UI to a single payments provider; flag if multi-provider is on the roadmap.
+- **Suggested approach:** Consider parameterizing payout-provider name.
+
+##### CombatStatsTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/admin/CombatStatsTab.jsx
+- **Line:** 8, 13–22
+- **Category:** Admin role check gaps / Base44 leftovers / Performance
+- **Issue:** `base44.entities.CharacterStat.list()` AND `base44.entities.Character.list()` — pulls the entire characters table AND the entire stats table. No admin role check, no pagination. Users have characters across every campaign — this query at scale is unworkable AND it leaks character data (private campaigns, character names, levels) if RLS allows broad reads.
+- **Suggested approach:** Replace with an aggregated `admin_combat_stats()` RPC returning pre-computed totals + by-class buckets. Drop client-side aggregation.
+
+- **Severity:** High
+- **File:** src/components/admin/CombatStatsTab.jsx
+- **Line:** 60–82
+- **Category:** Multi-game abstraction / Hardcoded "class"
+- **Issue:** `byClass` aggregates by `ch.class` — D&D-5e-specific concept. If multi-game packs introduce other systems (no class concept, or different class names), this won't extend. Per audit context game-pack management is on the roadmap.
+- **Suggested approach:** Generalize to an "archetype" concept driven by the game pack; group by `(game_system, class)`.
+
+- **Severity:** Medium
+- **File:** src/components/admin/CombatStatsTab.jsx
+- **Line:** 111, 120, 136
+- **Category:** Brand color mismatches
+- **Issue:** `#FF5722` (not the documented `#FF5300`), `#37F2D1` repeated.
+- **Suggested approach:** Tokenize.
+
+##### DocsTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/admin/DocsTab.jsx
+- **Line:** 65–85
+- **Category:** Admin role check gaps / Admin audit logging gaps
+- **Issue:** Save / delete documentation pages directly via supabase client. No admin role check, no audit log entry. Documentation is public-facing — a non-admin who bypasses RLS could publish arbitrary content site-wide.
+- **Suggested approach:** RLS write policy must enforce admin; wrap in RPC that logs to `admin_actions`.
+
+- **Severity:** High
+- **File:** src/components/admin/DocsTab.jsx
+- **Line:** 174, 226–232
+- **Category:** Forum XSS / XSS surface
+- **Issue:** Markdown content — same XSS pipeline concern as BlogTab. Public-facing docs page renders this; verify sanitizer.
+- **Suggested approach:** Verify `react-markdown` + `rehype-sanitize` strips raw HTML.
+
+- **Severity:** Medium
+- **File:** src/components/admin/DocsTab.jsx
+- **Line:** 144
+- **Category:** UX / Accessibility
+- **Issue:** Native `confirm()` for delete. Same as siblings.
+- **Suggested approach:** AlertDialog.
+
+- **Severity:** Low
+- **File:** src/components/admin/DocsTab.jsx
+- **Line:** 20–23
+- **Category:** Hardcoded values / Multi-game abstraction
+- **Issue:** `CATEGORIES` includes `"brewery"`, `"tavern"`, `"guild"`, `"admin"` — Guildstew-specific, fine for now, but if game packs ship their own docs, this won't extend.
+- **Suggested approach:** Centralize and consider per-game-pack categories later.
+
+- **Severity:** Low
+- **File:** src/components/admin/DocsTab.jsx
+- **Line:** 101, 108, 197, 204, 212, 218, 231, 241, 244, 252
+- **Category:** Brand color mismatches
+- **Issue:** Heavy palette-mismatch repetition.
+- **Suggested approach:** Tokenize.
+
+
+##### EventsTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/admin/EventsTab.jsx
+- **Line:** 53–74
+- **Category:** Admin role check gaps / Admin audit logging gaps
+- **Issue:** Direct `community_events` writes without admin role guard or audit log entry. Public-facing /events page reads from same table — non-admin RLS bypass would publish arbitrary events.
+- **Suggested approach:** RLS write enforce admin; wrap in RPC with `admin_actions` insert.
+
+- **Severity:** High
+- **File:** src/components/admin/EventsTab.jsx
+- **Line:** 100–101, 173, 217
+- **Category:** Storage path violations
+- **Issue:** `image_url` is free-text URL, no upload flow. Per audit context, admin-uploaded images (banners, event covers) should go to `app-assets`. Currently admins paste random URLs.
+- **Suggested approach:** Replace text input with `app-assets/events/` upload widget; validate origin if free-text retained.
+
+- **Severity:** Medium
+- **File:** src/components/admin/EventsTab.jsx
+- **Line:** 219–221
+- **Category:** XSS / Open redirect
+- **Issue:** `link_url` is a free-text URL that the public /events page presumably renders as a link. No URL validation — `javascript:` URLs would be a concern depending on how the public page renders. Open-redirect risk if the URL is used in tracking pixel/redirect.
+- **Suggested approach:** Validate URL is `http(s)://...`; reject `javascript:` / `data:`.
+
+- **Severity:** Medium
+- **File:** src/components/admin/EventsTab.jsx
+- **Line:** 129
+- **Category:** UX / Accessibility
+- **Issue:** Native `confirm()` for delete.
+- **Suggested approach:** AlertDialog.
+
+- **Severity:** Low
+- **File:** src/components/admin/EventsTab.jsx
+- **Line:** 81, 88, 101, 110, 183, 189, 192, 197, 203, 210, 213, 217, 220, 225
+- **Category:** Brand color mismatches
+- **Issue:** Heavy palette-mismatch repetition.
+
+- **Severity:** Low
+- **File:** src/components/admin/EventsTab.jsx
+- **Line:** 101
+- **Category:** Accessibility
+- **Issue:** `<img alt="">` empty for event cover images.
+- **Suggested approach:** Use `alt={`Cover for ${e.title}`}`.
+
+##### FAQTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/admin/FAQTab.jsx
+- **Line:** 54–93
+- **Category:** Admin role check gaps / Admin audit logging gaps
+- **Issue:** Same pattern as EventsTab/DocsTab — direct supabase writes, no role check, no audit log.
+- **Suggested approach:** RLS + RPC + audit entry.
+
+- **Severity:** High
+- **File:** src/components/admin/FAQTab.jsx
+- **Line:** 76–93
+- **Category:** State management smells / Race condition
+- **Issue:** `move` does two parallel `update`s for sort_order swap. If one succeeds and the other fails, the FAQ list can collide on `sort_order` for two rows in the same category. No transaction.
+- **Suggested approach:** Single RPC `swap_faq_sort_order(a_id, b_id)` that runs both updates in one transaction.
+
+- **Severity:** High
+- **File:** src/components/admin/FAQTab.jsx
+- **Line:** 215, 220
+- **Category:** Forum XSS / XSS surface
+- **Issue:** Markdown answer captured raw, rendered to public FAQ page. Same XSS risk as Blog/Docs.
+- **Suggested approach:** Verify FAQ render uses sanitizing Markdown.
+
+- **Severity:** Medium
+- **File:** src/components/admin/FAQTab.jsx
+- **Line:** 158
+- **Category:** UX / Accessibility
+- **Issue:** Native `confirm()`.
+
+- **Severity:** Low
+- **File:** src/components/admin/FAQTab.jsx
+- **Line:** 27–30
+- **Category:** Hardcoded values / Drift
+- **Issue:** `CATEGORIES` differs from DocsTab (here has `billing`/`technical`, DocsTab has `homebrew`/`guild`/`admin`). Two near-duplicate constants.
+- **Suggested approach:** Decide whether docs/FAQ share a category taxonomy; if not, document the divergence intentionally.
+
+- **Severity:** Low
+- **File:** src/components/admin/FAQTab.jsx
+- **Line:** 109, 116, 205, 212, 220, 227, 233, 241
+- **Category:** Brand color mismatches
+- **Issue:** Palette-mismatch repetition.
+
+
+##### ForumsTab.jsx
+
+- **Severity:** High
+- **File:** src/components/admin/ForumsTab.jsx
+- **Line:** 14–22, 85–92, 208–219
+- **Category:** Admin role check gaps (header notes RLS exists)
+- **Issue:** Header comment claims "Moderator writes run through the `admins_manage_forum_*` RLS policies" — better than nothing, but the component still hits supabase tables directly. If the migration's RLS column-level rules don't fully constrain `is_dev_post`, `is_pinned`, `is_locked`, `is_solution`, etc. to admins, mod gating fails. No client role-check guard; relies entirely on RLS.
+- **Suggested approach:** Verify RLS on `forum_threads`/`forum_replies` column-level allows `is_pinned`/`is_locked`/`is_dev_post`/`is_dev_reply`/`is_solution` writes only to admins. Wrap in admin-checked RPC for layered defense.
+
+- **Severity:** High
+- **File:** src/components/admin/ForumsTab.jsx
+- **Line:** 85–101, 208–232, 303–327
+- **Category:** Admin audit logging gaps
+- **Issue:** No `admin_actions` insert for any moderation action. Forum moderation (delete thread, delete reply, pin, lock, mark dev, mark solution, delete category) leaves no audit trail. This is one of the most-abused admin surfaces and audit logging here is essential.
+- **Suggested approach:** Wrap each mutation in an RPC writing both the table change AND `admin_actions(action_type='forum_pin'|'forum_lock'|'forum_delete'|...)`.
+
+- **Severity:** High
+- **File:** src/components/admin/ForumsTab.jsx
+- **Line:** 60–75
+- **Category:** Performance / Pagination
+- **Issue:** `.limit(200)` cap hides the rest of the threads. Search filters client-side over the limited 200 — if the moderator wants thread #201, it's invisible.
+- **Suggested approach:** Server-side `ilike` search; cursor pagination.
+
+- **Severity:** High
+- **File:** src/components/admin/ForumsTab.jsx
+- **Line:** 329–345
+- **Category:** State management / Race condition
+- **Issue:** Same parallel-update race condition as FAQTab `move`. Two updates without a transaction.
+- **Suggested approach:** RPC `swap_forum_category_order(a_id, b_id)`.
+
+- **Severity:** Medium
+- **File:** src/components/admin/ForumsTab.jsx
+- **Line:** 91, 100, 218, 231, 326, 344
+- **Category:** Console.log/error
+- **Issue:** Six `console.error` calls leaking PG error objects to the browser console.
+- **Suggested approach:** Structured logger.
+
+- **Severity:** Medium
+- **File:** src/components/admin/ForumsTab.jsx
+- **Line:** 167, 269, 414
+- **Category:** UX / Accessibility
+- **Issue:** Native `confirm()` for destructive actions (delete thread + replies, delete reply, delete category).
+- **Suggested approach:** AlertDialog.
+
+- **Severity:** Medium
+- **File:** src/components/admin/ForumsTab.jsx
+- **Line:** 247
+- **Category:** Forum XSS on user-generated content (admin view)
+- **Issue:** `<p className="...whitespace-pre-wrap">{r.content}</p>` renders user reply content as plain text — safe — but `line-clamp-3` truncates and the admin sees only first 3 lines, can miss attack content. Acceptable but flag for completeness.
+- **Suggested approach:** Allow expand on click; verify renderer strips HTML.
+
+- **Severity:** Low
+- **File:** src/components/admin/ForumsTab.jsx
+- **Line:** 395, 448
+- **Category:** Brand color mismatches / partial Creamsicle
+- **Issue:** Default category color is `#f8a47c` — actually the documented Creamsicle salmon. So at least *one* place uses the documented palette correctly. The rest of the file is `#37F2D1`/`#050816`/`#0b1220`/`#1E2430`. Consistent only with the cyan-mismatch.
+- **Suggested approach:** Once Creamsicle is the answer, propagate.
+
+- **Severity:** Low
+- **File:** src/components/admin/ForumsTab.jsx
+- **Line:** 132
+- **Category:** Multi-game abstraction
+- **Issue:** Forums admin shows view_count/reply_count metadata system-agnostically. No game-system gating — fine. Forum categories have a "Dev-only" flag (good); no game-pack scoping (might matter later).
+- **Suggested approach:** Consider per-game-pack category scoping in the future.
+
+
+##### GameplayTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/admin/GameplayTab.jsx
+- **Line:** 9, 16–30
+- **Category:** Admin role check gaps / Base44 leftovers / Performance
+- **Issue:** Three `.list()` calls — Characters, Campaigns, AnalyticsEvent — pull entire tables. No admin role check, no pagination. Campaigns table contains `player_ids` (PII linkage) which is then aggregated client-side. AnalyticsEvent could be enormous.
+- **Suggested approach:** Aggregated RPCs returning bucket counts, not rows. Admin-role-checked.
+
+- **Severity:** High
+- **File:** src/components/admin/GameplayTab.jsx
+- **Line:** 32–44
+- **Category:** Multi-game abstraction
+- **Issue:** Aggregates `c.race` and `c.class` — D&D-5e-specific. Multi-game packs won't fit (e.g., a sci-fi pack might use "species"/"role"). Combo strings also assume race/class taxonomy.
+- **Suggested approach:** Generalize to `(game_system, archetype_a, archetype_b)` once game packs ship.
+
+- **Severity:** Medium
+- **File:** src/components/admin/GameplayTab.jsx
+- **Line:** 91, 98, 137, 170
+- **Category:** Brand color mismatches
+- **Issue:** `#37F2D1`, `#0b1220`, `#1E2430` etc.
+- **Suggested approach:** Tokenize.
+
+##### HomepageTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/admin/HomepageTab.jsx
+- **Line:** 65–113, 280–293
+- **Category:** Admin role check gaps / Admin audit logging gaps
+- **Issue:** Direct `homepage_banners` and `site_config` writes. No admin role guard, no audit log. Per audit context, banner uploads should follow `app-assets` and have audit entries. None of that is implemented here.
+- **Suggested approach:** RLS write enforce admin; audit log via RPC.
+
+- **Severity:** Critical
+- **File:** src/components/admin/HomepageTab.jsx
+- **Line:** 195–217, 227–232, 348–351
+- **Category:** Storage path violations / XSS surface
+- **Issue:** `image_url` is a free-text URL — no upload flow, no validation that it's from `app-assets`. The only validation is `if (!form.image_url.trim())`. Public homepage banner — anyone with admin (or anyone exploiting the missing RLS) can paste any URL into the carousel: external pixels, racy content, or `javascript:` (caught by `<img src>` but renders preview). Per migration `20261117_homepage_banners.sql` and the audit context flag, this is the call-out: admin uploads must use app-assets.
+- **Suggested approach:** Replace text input with file upload widget that uploads to `app-assets/banners/{banner_id}/` and stores the storage path; validate origin if free-text retained.
+
+- **Severity:** High
+- **File:** src/components/admin/HomepageTab.jsx
+- **Line:** 88–104
+- **Category:** Race condition / State management
+- **Issue:** Same parallel-update sort_order race as FAQ/Forums.
+- **Suggested approach:** RPC swap.
+
+- **Severity:** High
+- **File:** src/components/admin/HomepageTab.jsx
+- **Line:** 200, 241, 322, 339, 355
+- **Category:** XSS / Open redirect
+- **Issue:** `link_url` for banner click-through, `link_url` for game-pack tiles — free-text URLs, no validation. Public homepage routes any user to wherever an admin (or RLS-bypasser) types. `javascript:` links and open-redirect issues.
+- **Suggested approach:** Validate `^(https?:\/\/|\/)`; reject non-http/non-relative.
+
+- **Severity:** Medium
+- **File:** src/components/admin/HomepageTab.jsx
+- **Line:** 76, 85, 103, 112, 292
+- **Category:** Console.log/error
+- **Issue:** Five `console.error`. Same leak pattern.
+
+- **Severity:** Medium
+- **File:** src/components/admin/HomepageTab.jsx
+- **Line:** 172
+- **Category:** UX / Accessibility
+- **Issue:** Native `confirm()` on banner delete.
+
+- **Severity:** Medium
+- **File:** src/components/admin/HomepageTab.jsx
+- **Line:** 141, 230, 350
+- **Category:** Accessibility
+- **Issue:** Three `<img alt="">` empty-alt instances on user-facing carousel banner content. Marketing accessibility — flag aggressive per scope rules.
+- **Suggested approach:** Use `alt={b.title || 'Homepage banner'}` and force admins to type alt text on save.
+
+- **Severity:** Low
+- **File:** src/components/admin/HomepageTab.jsx
+- **Line:** 30, 125, 132, 139, 152, 222, 228, 230, 235, 238, 242, 246, 256, 343, 344, 346, 349, 350, 353, 356, 358
+- **Category:** Brand color mismatches
+- **Issue:** Heavy palette-mismatch repetition (15+ instances).
+
+
+##### MarketplaceTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/admin/MarketplaceTab.jsx
+- **Line:** 9, 16–30
+- **Category:** Admin role check / Reuse of UserProfile.list() anti-pattern / Performance
+- **Issue:** Three `.list()` calls — `HomebrewRule`, `HomebrewReview`, `UserProfile`. Per audit context, `UserProfile.list()` leaks email/age/role to all users. The component also has no admin role check. At marketplace scale, downloading every brew + every review + every profile to the client is unworkable.
+- **Suggested approach:** Aggregated RPC; admin-role-gate; drop UserProfile.list().
+
+- **Severity:** High
+- **File:** src/components/admin/MarketplaceTab.jsx
+- **Line:** 64–79
+- **Category:** Performance
+- **Issue:** Top-downloads / top-rated computed by sorting and slicing the entire published-brews array client-side every render dependency change. At scale OK with memo but the underlying full-table fetch is the real problem.
+- **Suggested approach:** Move to SQL.
+
+- **Severity:** Medium
+- **File:** src/components/admin/MarketplaceTab.jsx
+- **Line:** 101–103, 155
+- **Category:** Brand color mismatches
+- **Issue:** `#37F2D1`, `#FF5722` repeated.
+
+##### OverviewTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/admin/OverviewTab.jsx
+- **Line:** 9, 20–49
+- **Category:** Admin role check / Performance / Reuse of UserProfile.list() / PII broadcast
+- **Issue:** Six `.list()` calls — `UserProfile`, `Campaign`, `AnalyticsEvent`, `SupportTicket`, `UserReport`, `HomebrewRule`. The Overview tab is the entry point and immediately downloads every users-table row, every campaign, every analytics event, every ticket, every report, every brew. This is the worst single fetch in the audit. PII (emails on UserProfile, ticket bodies, report descriptions) all broadcast to whoever opens this tab. No admin role check.
+- **Suggested approach:** Replace with an RPC `admin_overview()` returning a single object with pre-computed counts/MRR/series. Admin-role-checked server-side. Drop every `.list()` call.
+
+- **Severity:** Critical
+- **File:** src/components/admin/OverviewTab.jsx
+- **Line:** 64–88
+- **Category:** Hardcoded TIERS
+- **Issue:** `usersByTier` whitelists `{ free, adventurer, veteran, guild }` — if `TIERS` constant adds a new tier (admin tier override per migration `20261110_admin_tier_override.sql`, or new tiers added later), users in that tier won't be counted in MRR. Drift risk both ways: TIERS constant might evolve while this whitelist doesn't.
+- **Suggested approach:** Iterate dynamically from `TIERS` keys instead of hardcoding the four.
+
+- **Severity:** High
+- **File:** src/components/admin/OverviewTab.jsx
+- **Line:** 80–88
+- **Category:** Admin tier override / Storage limit override (audit context flag)
+- **Issue:** MRR calculation uses `TIERS[tier]?.price` × tier user count. Per audit context, admin tier overrides exist (per migration 20261110_admin_tier_override.sql). If a user is granted a free guild tier as override, they should not contribute to MRR. The query reads `subscription_tier` directly — overrides may live on a different column or the `subscription_tier` may include override-granted tiers, double-counting them in MRR.
+- **Suggested approach:** Verify how admin tier overrides are stored; subtract overridden users from MRR; or compute MRR off Stripe subscription state, not the user_profiles tier column.
+
+- **Severity:** Medium
+- **File:** src/components/admin/OverviewTab.jsx
+- **Line:** 157, 195, 205
+- **Category:** Brand color mismatches
+- **Issue:** `#37F2D1`, `#FF5722` repeated.
+
+
+##### RevenueTab.jsx
+
+- **Severity:** Low
+- **File:** src/components/admin/RevenueTab.jsx
+- **Line:** 17–23
+- **Category:** Hardcoded TIERS / GOOD PATTERN
+- **Issue:** `REVENUE_PRICES` correctly pulls from `TIERS.adventurer.price` etc. — this is the documented Boky requirement. Header comment explicitly says "MRR prices pull straight from the TIERS catalog so billing, admin, and the pricing page can never drift." This is the right pattern. Caveat: hardcodes the same three tier keys (`adventurer`, `veteran`, `guild`); if TIERS adds a new paid tier, MRR will undercount.
+- **Suggested approach:** Iterate dynamically over `TIERS` keys where `price > 0`.
+
+- **Severity:** Critical
+- **File:** src/components/admin/RevenueTab.jsx
+- **Line:** 9, 29–38
+- **Category:** Admin role check / Performance / Reuse of UserProfile.list()
+- **Issue:** `UserProfile.list()` + `AnalyticsEvent.list()` again — same broadcast / no-role-check pattern. Two of the worst tables to fully fetch.
+- **Suggested approach:** Aggregated RPC.
+
+- **Severity:** High
+- **File:** src/components/admin/RevenueTab.jsx
+- **Line:** 24, 86, 90–97, 126
+- **Category:** Hardcoded values / TIERS drift
+- **Issue:** `AI_COST_PER_EVENT = 0.10` is hardcoded but appears in user-visible chart and CSV export as factual cost. This number drifts the moment AI provider pricing changes. Also includes only 3 specific event types (`ai_quick_pick_used`, `ai_generate_used`, `ai_portrait_generated`) — if more AI events are added (P.I.E. AI uses, lore generation, etc.) the cost is undercounted.
+- **Suggested approach:** Move AI cost coefficient into config; enumerate AI event types from a single constant shared with the analytics emitter.
+
+- **Severity:** High
+- **File:** src/components/admin/RevenueTab.jsx
+- **Line:** 49–55
+- **Category:** Admin tier override (audit context flag)
+- **Issue:** Same MRR-counting bug as OverviewTab — admin-overridden tiers are counted into MRR even though they're free grants.
+- **Suggested approach:** Subtract overridden users.
+
+- **Severity:** Medium
+- **File:** src/components/admin/RevenueTab.jsx
+- **Line:** 126, 159, 177, 181, 195
+- **Category:** Brand color mismatches
+- **Issue:** `#FF5722`, `#37F2D1` repeated.
+
+##### SupportTicketsTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/admin/SupportTicketsTab.jsx
+- **Line:** 12, 41–50, 218
+- **Category:** Admin role check / Reuse of UserProfile.list() / PII broadcast / Base44 leftovers
+- **Issue:** `SupportTicket.list()` AND `UserProfile.list()` — again. Tickets contain PII (descriptions of billing issues, account problems, content reports), and joining client-side with full user profile rows broadcasts user emails to whoever opens the tab. No admin role check on the component. The `adminId` prop comes from a parent — if that parent doesn't gate properly, this entire component may render to non-admins.
+- **Suggested approach:** RPC `admin_tickets_list({status, priority, category, search, limit, offset})` that joins user fields server-side; admin-role-checked.
+
+- **Severity:** Critical
+- **File:** src/components/admin/SupportTicketsTab.jsx
+- **Line:** 33, 234–239
+- **Category:** Admin role check / Client-side authority
+- **Issue:** `adminId` is a prop passed from parent; reply mutation sets `author_id: adminId` and `is_admin: true` directly. A non-admin who reaches this component can post as admin in any ticket thread (with a forged adminId). Server must enforce `is_admin = is_admin(auth.uid())` and `author_id = auth.uid()` — never trust the client.
+- **Suggested approach:** RPC `admin_reply_ticket(ticket_id, content)` that derives `author_id` and `is_admin` from `auth.uid()` membership in `support_staff`.
+
+- **Severity:** High
+- **File:** src/components/admin/SupportTicketsTab.jsx
+- **Line:** 251–258
+- **Category:** Admin role check / Admin audit logging
+- **Issue:** `updateField` mutation patches `status`, `priority`, `admin_notes` directly via `SupportTicket.update`. No audit log entry. No role guard.
+- **Suggested approach:** RPC with admin-role-check + `admin_actions` insert.
+
+- **Severity:** High
+- **File:** src/components/admin/SupportTicketsTab.jsx
+- **Line:** 226–230
+- **Category:** Race condition
+- **Issue:** Reply path does two sequential awaits (status update, then create response). If the first succeeds and the second fails, ticket state is inconsistent (marked in_progress but no actual reply sent).
+- **Suggested approach:** Single RPC.
+
+- **Severity:** High
+- **File:** src/components/admin/SupportTicketsTab.jsx
+- **Line:** 305, 308–312, 339
+- **Category:** Forum XSS on user-generated content (admin view) / SVG XSS on screenshots
+- **Issue:** Ticket description and reply content rendered with `whitespace-pre-wrap` (safe text). But `screenshot_url` is rendered as `<img src>` with no validation of origin. A user could submit a ticket with `screenshot_url` pointing to an external SVG with embedded JS — though `<img>` doesn't execute SVG scripts, the URL still loads (tracking pixel, IP harvesting from staff). The ticket-render audit context flag says forums and support tickets are HIGH RISK for the same XSS pattern.
+- **Suggested approach:** Validate `screenshot_url` is from `user-assets` storage origin; never render raw external URLs.
+
+- **Severity:** Medium
+- **File:** src/components/admin/SupportTicketsTab.jsx
+- **Line:** 297
+- **Category:** PII display in admin UI
+- **Issue:** `profile.email` rendered in detail panel — legitimate but per least-privilege, only show email if admin needs it (which they probably do for tickets). Flag for review against the principle.
+
+- **Severity:** Medium
+- **File:** src/components/admin/SupportTicketsTab.jsx
+- **Line:** 28–31
+- **Category:** Hardcoded values / Drift
+- **Issue:** `CATEGORIES` here differs from `SupportTicketDialog.jsx` and `ReportUserDialog.jsx`. Three different category lists. (Here: same as SupportTicketDialog.) Centralize in shared lib.
+- **Suggested approach:** Same as earlier flag — single `support/categories.js`.
+
+- **Severity:** Low
+- **File:** src/components/admin/SupportTicketsTab.jsx
+- **Line:** 16–27, 142–144
+- **Category:** Tailwind issues
+- **Issue:** `STATUS_STYLES`/`PRIORITY_STYLES` `cls` strings include space-separated Tailwind class lists that work fine, but the duplicate definition with MyTicketsList.jsx (which uses `className`) is yet another drift point.
+
+- **Suggested approach:** Centralize.
+
+- **Severity:** Low
+- **File:** src/components/admin/SupportTicketsTab.jsx
+- **Line:** 111, 112, 130, 150, 155, 289, 291, 303, 329, 351, 357, 404
+- **Category:** Brand color mismatches
+- **Issue:** Heavy palette repetition.
+
+
+##### ReportsModerationTab.jsx
+
+- **Severity:** High (downgraded from Critical because it has SOME audit logging)
+- **File:** src/components/admin/ReportsModerationTab.jsx
+- **Line:** 65–77
+- **Category:** Admin audit logging — GOOD PATTERN with caveats
+- **Issue:** This file is the rare admin tab that DOES insert `admin_actions` (via `logAdminAction` helper). However: (a) the insert is a separate Base44 call AFTER the table mutation, not in a transaction — if the audit insert fails, the action still happened with no record (`console.error` only); (b) `admin_id` is client-supplied, so a non-admin could fake any admin's id; (c) no admin role check — only RLS protects the writes.
+- **Suggested approach:** Wrap each moderation action in a server-side RPC that performs both the mutation AND the audit insert atomically, deriving admin_id from `auth.uid()`.
+
+- **Severity:** Critical
+- **File:** src/components/admin/ReportsModerationTab.jsx
+- **Line:** 88–97, 453–458
+- **Category:** Reuse of UserProfile.list() / Performance / PII broadcast
+- **Issue:** Still calls `UserProfile.list()` AND `UserReport.list("-created_at")` AND `HomebrewRule.list()`. All full-table fetches; report descriptions contain detailed harassment/abuse content (PII).
+- **Suggested approach:** RPCs.
+
+- **Severity:** Critical
+- **File:** src/components/admin/ReportsModerationTab.jsx
+- **Line:** 134–164, 166–190
+- **Category:** Admin role check / Client-side authority
+- **Issue:** `warnUser` writes to `UserProfile.warnings` (an admin-only column on a public-readable table) and `banUser` sets `account_status: "banned"`. Both rely on RLS + Base44 with no server RPC and no role-from-jwt check. The component reads `adminId` from props (parent-trusted). If RLS doesn't lock these columns to admins-only, any authenticated user can call `UserProfile.update(target_user_id, { account_status: 'banned' })` and ban anyone they like.
+- **Suggested approach:** RPC `admin_warn_user`, `admin_ban_user` that derive admin_id from auth.uid() and require `is_admin`. Lock `warnings`/`account_status`/`banned_at` columns at RLS to admin-only writes.
+
+- **Severity:** High
+- **File:** src/components/admin/ReportsModerationTab.jsx
+- **Line:** 144–164, 166–190, 487–501, 540–553
+- **Category:** Race condition / atomicity
+- **Issue:** Each mod action does 2–4 sequential awaits (target update, report update, audit log, sometimes notification ticket). If any middle step fails, state is inconsistent (banned but not logged, warned but report still pending).
+- **Suggested approach:** Single RPC per action.
+
+- **Severity:** High
+- **File:** src/components/admin/ReportsModerationTab.jsx
+- **Line:** 540–553
+- **Category:** Forum/support spam / Cross-tab injection
+- **Issue:** Snippet shows the moderation tab CREATES a SupportTicket from the admin side ("notify creator" of rejection). That's user-facing — verify the ticket body doesn't render moderator notes that could include user-supplied content unrendered. Verify Base44 vs Supabase migration.
+- **Suggested approach:** Verify the consumer renders this safely.
+
+- **Severity:** Low
+- **File:** src/components/admin/ReportsModerationTab.jsx
+- **Line:** 36, 55, 67, 90, 95, 96, 114, 145, 169, 199, 218, etc.
+- **Category:** Brand color mismatches / Long file
+- **Issue:** 746-line file, `#37F2D1`, `#1E2430`, `#2A3441` repeated dozens of times. Also large file size suggests it should be split (UserReportsSub + ContentSub already separated but still in one file).
+- **Suggested approach:** Split into two files; tokenize colors.
+
+
+##### TavernAdminTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/admin/TavernAdminTab.jsx
+- **Line:** 55–100
+- **Category:** Admin role check / Admin audit logging
+- **Issue:** `toggleOfficial` (House Special — bypasses creator revenue split, 100% Guildstew revenue per line 248), `toggleFeatured` (Chef's Choice), `removeItem` — all financially-significant actions executed via direct supabase update with no admin role check and NO audit log entry. Setting `is_official: true` on someone else's listing diverts revenue from creator to platform.
+- **Suggested approach:** RPC with admin-role-check + `admin_actions` insert. Add a confirm dialog explicitly explaining "This bypasses the creator's revenue split."
+
+- **Severity:** High
+- **File:** src/components/admin/TavernAdminTab.jsx
+- **Line:** 29–39
+- **Category:** Performance / Pagination
+- **Issue:** `.limit(500)` cap. Search filters within 500 — items #501+ are invisible.
+- **Suggested approach:** Cursor pagination + server-side search.
+
+- **Severity:** Medium
+- **File:** src/components/admin/TavernAdminTab.jsx
+- **Line:** 174–177
+- **Category:** Storage path / Accessibility
+- **Issue:** `<img src={i.preview_image_url} alt="">` — empty alt. `preview_image_url` not validated as user-assets origin.
+- **Suggested approach:** alt text + origin validation.
+
+- **Severity:** Medium
+- **File:** src/components/admin/TavernAdminTab.jsx
+- **Line:** 229
+- **Category:** UX / Accessibility
+- **Issue:** Native `confirm()` for remove.
+
+- **Severity:** Low
+- **File:** src/components/admin/TavernAdminTab.jsx
+- **Line:** 125, 137, 146, 150, 177
+- **Category:** Brand color mismatches.
+
+##### TitlesTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/admin/TitlesTab.jsx
+- **Line:** 26, 99–122
+- **Category:** Admin role check / Admin audit logging / Client-side authority
+- **Issue:** `award` mutation inserts into `user_titles` with `granted_by: adminId` (client-supplied prop). No admin role check; no `admin_actions` log. A non-admin who reaches this UI could grant themselves any exclusive title (Crown / Founding Backer).
+- **Suggested approach:** RPC `admin_grant_title(user_id, title_id, note)` deriving `granted_by = auth.uid()` and requiring admin; insert `admin_actions` row.
+
+- **Severity:** Critical
+- **File:** src/components/admin/TitlesTab.jsx
+- **Line:** 124–137
+- **Category:** Admin role check / Admin audit logging
+- **Issue:** Same as award — `revoke` is direct supabase delete; no role check, no audit log.
+
+- **Severity:** Critical
+- **File:** src/components/admin/TitlesTab.jsx
+- **Line:** 62–73, 79–91
+- **Category:** Reuse of UserProfile.list() / PII broadcast
+- **Issue:** Two queries fetch `user_profiles` columns including `email` for grants and search matches. If RLS on `user_profiles` doesn't restrict admin-only fields like email, this leaks user emails to whoever opens the tab. The user search query especially — `.or(...email.ilike.%term%...)` — assumes admin scope.
+- **Suggested approach:** Verify RLS on `user_profiles` blocks email reads for non-admins. Use admin-only RPC for the search.
+
+- **Severity:** High
+- **File:** src/components/admin/TitlesTab.jsx
+- **Line:** 86
+- **Category:** SQL injection / unsafe ilike
+- **Issue:** `.or(`username.ilike.%${term}%,email.ilike.%${term}%`)` — `term` is interpolated into the PostgREST `or` filter string. PostgREST escapes filter values but if `term` contains `,` or `)` it will corrupt the filter. Not classic SQL injection but filter-poison.
+- **Suggested approach:** Sanitize `term` (strip `,)(\\` or use `escape_pattern`); or use `.ilike` per-column with `.or` chained as a Supabase function call rather than raw string.
+
+- **Severity:** Medium
+- **File:** src/components/admin/TitlesTab.jsx
+- **Line:** 285
+- **Category:** UX / Accessibility
+- **Issue:** Native `confirm()` for revoke.
+
+- **Severity:** Low
+- **File:** src/components/admin/TitlesTab.jsx
+- **Line:** 149, 150, 183, 185, 198, 203, 224, 227, 239, 246, 247
+- **Category:** Brand color mismatches.
+
+
+##### UsersTab.jsx
+
+- **Severity:** Critical
+- **File:** src/components/admin/UsersTab.jsx
+- **Line:** 13, 28–47
+- **Category:** Reuse of UserProfile.list() / Performance / PII broadcast
+- **Issue:** Four `.list()` calls — `UserProfile`, `AnalyticsEvent`, `Character`, `Campaign`. Pulls every user (with email, phone, role, all PII), every analytics event, every character, every campaign. The most PII-dense fetch in the entire admin surface; opening this tab broadcasts the full user table to the client. No server-side admin role check. If the parent route doesn't gate, this leaks the entire user database.
+- **Suggested approach:** Server-side RPC `admin_list_users({search, tier, status, cursor})` returning paged subset; same for events/characters/campaigns scoped to the selected user. Drop all four `.list()` calls.
+
+- **Severity:** Critical
+- **File:** src/components/admin/UsersTab.jsx
+- **Line:** 116–166
+- **Category:** Admin role check / Client-side authority
+- **Issue:** `warnMutation`, `banMutation`, `deleteMutation` all hit `UserProfile.update` directly via Base44. Sets `warnings`, `account_status`, `banned_at`, `deleted_at`. `adminId` is a prop, no server-side check that caller is admin. If RLS on `user_profiles` allows authenticated users to update other users' rows for these columns (because the column-level constraint may be missing), any user can ban any other user.
+- **Suggested approach:** RPC per action with `is_admin(auth.uid())` enforced. Lock down `account_status`/`warnings`/`banned_at`/`deleted_at` columns at RLS to admin-only writes.
+
+- **Severity:** High
+- **File:** src/components/admin/UsersTab.jsx
+- **Line:** 102–114
+- **Category:** Admin audit logging — same pattern as ReportsModerationTab
+- **Issue:** `logAction` writes `admin_actions` AFTER the mutation, not transactional. If the audit insert fails, action stands without record (only `console.error`). `admin_id: adminId` is client-supplied.
+- **Suggested approach:** Single RPC per action that does table mutation + audit insert atomically with `auth.uid()`-derived admin_id.
+
+- **Severity:** High
+- **File:** src/components/admin/UsersTab.jsx
+- **Line:** 16, 506–582
+- **Category:** Admin tier override (audit context flag)
+- **Issue:** `TierSection` UI calls `setTierOverride(uid, nextTier || null)` from `@/utils/campaignLifecycle`. Verify that helper writes to `user_profiles.admin_tier_override` (per migration `20261110_admin_tier_override.sql`) atomically and that the column is RLS-locked to admin-only. The component itself doesn't audit-log this either (no `logAction("set_tier_override", ...)`). Tier overrides are revenue-impacting — audit-log is essential.
+- **Suggested approach:** Verify `setTierOverride` lib for: (a) admin-only RLS, (b) `admin_actions` insert. If missing, add.
+
+- **Severity:** High
+- **File:** src/components/admin/UsersTab.jsx
+- **Line:** 16, 590–660
+- **Category:** Admin storage override (audit context flag)
+- **Issue:** Same as tier override — `setStorageOverride(uid, bytes)` writes to `storage_limit_override_bytes`. Verify column-level RLS, audit logging, and that the column name matches the migration's spec exactly. Per audit context, "Storage limit override per Boky's spec — flag wrong column name or missing usage" — column appears to be `storage_limit_override_bytes` (vs `storage_limit_bytes` which is the tier default). Verify naming matches Boky's spec; also verify `setStorageOverride` lib signature.
+- **Suggested approach:** Verify lib + RLS + audit log.
+
+- **Severity:** High
+- **File:** src/components/admin/UsersTab.jsx
+- **Line:** 80–84
+- **Category:** Multi-game / data-fetching anti-pattern
+- **Issue:** `selectedCharacters` filters by `c.user_id === selectedId || c.created_by === selected?.email` — using email as a join key is fragile (case-sensitivity, email-change). Also still reflects D&D-5e characters.
+- **Suggested approach:** Drop email-based join; use only `user_id`.
+
+- **Severity:** Medium
+- **File:** src/components/admin/UsersTab.jsx
+- **Line:** 168–183
+- **Category:** PII export
+- **Issue:** CSV export includes `email`. Legitimate but flag — admin downloads of full user PII should be access-logged separately.
+- **Suggested approach:** Log `admin_actions(action_type='export_users')` whenever CSV is downloaded.
+
+- **Severity:** Low
+- **File:** src/components/admin/UsersTab.jsx
+- **Line:** 196, 248, 534
+- **Category:** Brand color mismatches.
+
+##### VersionsTab.jsx
+
+- **Severity:** (skipped detailed read — pattern review)
+- **File:** src/components/admin/VersionsTab.jsx
+- **Issue:** Per file size (10395 bytes) likely follows the same pattern as DocsTab/EventsTab (CRUD + supabase direct + no role check + no audit). Flagged as: Critical admin role check gap + Critical admin audit logging gap if writes are present. Recommend verifying separately on next pass.
+- **Suggested approach:** Apply the same RPC + audit pattern.
+
+
+##### VersionsTab.jsx (verified)
+
+- **Severity:** Critical
+- **File:** src/components/admin/VersionsTab.jsx
+- **Line:** 40–60
+- **Category:** Admin role check / Admin audit logging gaps
+- **Issue:** Direct `version_history` writes (insert/update/delete). No admin role check, no audit log. Public homepage version-history card reads from this table, so a non-admin write here is publicly visible.
+- **Suggested approach:** RLS write enforce admin; RPC + `admin_actions` insert.
+
+- **Severity:** High
+- **File:** src/components/admin/VersionsTab.jsx
+- **Line:** 13–22
+- **Category:** Forum XSS on user-generated content
+- **Issue:** Header comment says "Rich changelog body is authored in Markdown for the same reasons as the Blog tab" — same XSS pipeline concern. Verify renderer sanitizes.
+
+- **Severity:** Low
+- **File:** src/components/admin/VersionsTab.jsx
+- **Line:** 82, 84
+- **Category:** Brand color mismatches.
+
+
+##### Batch 1A-ix Summary
+
+**Counts (159 findings total):**
+- Critical: 35
+- High: 48
+- Medium: 42
+- Low: 33
+- Cosmetic: 1
+
+**Files audited (26):**
+- /src/components/forums/ — 2 files (NewThreadDialog, ReplyForm)
+- /src/components/support/ — 3 files (MyTicketsList, ReportUserDialog, SupportTicketDialog)
+- /src/components/marketing/ — 1 file (MarketingBand)
+- /src/components/admin/ — 20 files
+
+**Top systemic issues in this batch:**
+1. The admin folder is the largest single concentration of Critical findings in the audit. Admin role check is essentially absent everywhere — every admin tab depends on RLS for security and most have no `is_admin(auth.uid())` enforcement. Combined with rampant `.list()` fetches (UserProfile, AnalyticsEvent, Character, Campaign, SupportTicket, UserReport, HomebrewRule, etc.), the admin surface is both a permission-check gap and a PII fire hose.
+2. Audit logging is inconsistent: ReportsModerationTab and UsersTab insert `admin_actions` but only after the table mutation (non-transactional, lossy). Most other admin tabs (BlogTab, EventsTab, FAQTab, DocsTab, ForumsTab, HomepageTab, CashoutsTab, TavernAdminTab, TitlesTab, VersionsTab, SupportTicketsTab) write nothing at all. The audit trail is an illusion.
+3. User-generated content in forums (threads/replies) and support tickets (descriptions/replies) is captured raw with no DOMPurify pipeline. Wherever consumers render this with Markdown + raw HTML pass-through, XSS is shipped to other users (forums) or to staff (support).
+4. Base44 is still load-bearing across most admin and support reads/writes — `base44.entities.UserProfile.list()` alone appears 7+ times in admin tabs. RLS migration cannot complete until these are gone.
+
+**Specific notes:**
+
+- **Admin role check gaps:** 17 distinct files in the admin folder write to admin-only tables with no client-side admin guard and no verified server-side role check. Critical-severity instances flagged in: BlogTab, CashoutsTab, DocsTab, EventsTab, FAQTab, ForumsTab (relies on RLS), HomepageTab, MarketplaceTab (read-only but PII), OverviewTab, RevenueTab, ReportsModerationTab, SupportTicketsTab, TavernAdminTab, TitlesTab, UsersTab, VersionsTab, AchievementsTab, AdminLogTab, GameplayTab, CombatStatsTab. Every one of these is shippable only after the RPC + RLS + audit-log migration completes.
+
+- **Hardcoded API keys / secrets found:** None in the components in this batch. Forum/support/marketing/admin code itself does not embed third-party API keys. (Giphy was the prior batch's Critical hit; nothing equivalent here.) However, `isAdminEmail` (forumsClient.js) hardcodes `@aetherianstudios.com` / `@guildstew.com` as the admin signal — not a key, but a soft secret that should not be the basis of admin gating.
+
+- **Forum/support XSS exposure:** All four user-content surfaces audited (NewThreadDialog, ReplyForm, SupportTicketDialog, MyTicketsList ticket-reply, plus admin BlogTab/DocsTab/FAQTab/VersionsTab Markdown content on public-facing pages) capture Markdown raw. None sanitize at write-time. Whether they're safe depends entirely on the consuming renderers (out of scope for this batch — flag for verification on Pass 2). Treat the forum thread/reply renderer + the public Blog/Docs/FAQ/Versions renderer as the single highest-risk Pass-2 audit target.
+
+- **Reuse of UserProfile.list() / fetch-all anti-patterns:** Confirmed in this batch (8 distinct call-sites): `AdminLogTab` (line 26), `CashoutsTab` (line 44 — typed query, narrower), `MarketplaceTab` (line 28), `OverviewTab` (line 22), `RevenueTab` (line 31), `SupportTicketsTab` (line 48), `ReportsModerationTab` (lines 95 + 458), `UsersTab` (line 30), `TitlesTab` (line 67 — typed but PII columns). Plus full-table `.list()` patterns on `Character`, `Campaign`, `AnalyticsEvent`, `Achievement`, `CharacterStat`, `HomebrewRule`, `HomebrewReview`, `SupportTicket`, `UserReport`, `AdminAction` — every admin tab is a fetch-all anti-pattern.
+
+- **Marketing prototype leftovers:** `/marketing/MarketingBand.jsx` is the only file in the folder; it serves `pages/CreatorProgram.jsx` and `pages/Guild.jsx` which are still wired into `pages.config.js`, the sidebar (`AppSidebar.jsx:222`), and `SpiceEmporium.jsx:69` redirect. The pages are not "leftover prototypes" in the sense of unreachable code — they're shipped — but the audit context flagged them as "decision-deferred." Either commit or delete.
+
+- **Hardcoded prices in marketing not pulled from TIERS:** `MarketingBand.jsx` itself contains no prices. Whether `/CreatorProgram` and `/Guild` pages hardcode pricing must be verified at the page level — out of scope for this batch.
+
+- **Admin tier override / storage override:** Both are exposed in `UsersTab.jsx` via `setTierOverride` / `setStorageOverride` lib helpers. Storage column appears as `storage_limit_override_bytes`. Verify the lib + RLS + audit logging on Pass 2.
+
+- **Admin audit logging gaps:** As noted — most admin tabs have no audit at all. Only `ReportsModerationTab` and `UsersTab` log; both non-atomically. The expectation per audit context that "every admin action should generate an audit log entry" is broadly violated.
+
+
+---
+
+## Pass 1A — Final Summary
+
+Pass 1A audited every component under `/src/components/`, broken into 9 sub-batches (1A-i through 1A-ix). What follows is the cross-batch synthesis.
+
+### Totals across all 9 sub-batches
+
+- **Critical:** 133
+- **High:** 366
+- **Medium:** 557
+- **Low:** 345
+- **Cosmetic:** 9
+- **Total:** 1410 findings across approximately 350 component files
+
+(Counts derived from severity-line grep across the entire `/audit/AUDIT_REPORT.md`. Minor double-counting may exist where a single defect was flagged at both component and lib layer; the systemic groupings below are the more accurate read.)
+
+### Top 15 highest-priority issues (Critical + High) across the entire frontend components audit
+
+These are the items that, in aggregate, gate launch:
+
+1. **`UserProfile.list()` / fetch-all anti-pattern is the dominant cross-cutting bug class** — appears in chat, profile, admin (all tabs), friends, party, support, lore, and the social stack. Every public surface that calls `.list()` and JS-filters leaks PII (email, age, role, last_seen_at) and DoS-bombs at scale. **Severity: Critical, system-wide.**
+
+2. **Admin role check gaps in every admin tab** — 17 distinct admin tab files write to admin-only tables with no client-side admin guard. Only RLS protects them, and the column-level RLS is not verified to constrain `is_pinned`/`is_locked`/`account_status`/`admin_tier_override`/`is_official`/`is_admin` writes to admins. **Severity: Critical, every admin surface.**
+
+3. **`isAdminEmail()` email-suffix admin detection** — `src/lib/forumsClient.js:202` and reused across forums, blog, docs, cashouts. Admin status determined from `user.email` ending in `@aetherianstudios.com` / `@guildstew.com`. Mutable, spoofable, not a real role. **Severity: Critical.**
+
+4. **Hardcoded Giphy API key in chat** — `src/components/chat/GiphyPicker.jsx`. Already the worst single secret leak in the audit; rotate immediately regardless of any other work.
+
+5. **Email/age/role written into public `user_profiles` table** — `src/components/profile/EditProfileDialog.jsx:226`. Every read of the public profile table thereafter ships PII to every other user. Highest-priority privacy fix.
+
+6. **`sender_type: "admin"` / `is_admin: true` client-supplied in support tickets** — `src/components/support/MyTicketsList.jsx:90–98` and `src/components/admin/SupportTicketsTab.jsx:234–239`. A user can impersonate Guildstew Support in their own ticket thread, or the staff side can be spoofed. **Severity: Critical.**
+
+7. **`author_id` / `creator_id` / `granted_by` / `admin_id` client-supplied across the entire app** — forums, blog, titles, admin actions, support, comments, lore. None defended by `auth.uid()`-derived defaults; relies entirely on RLS column-level rules that are not verified. **Severity: Critical, system-wide.**
+
+8. **XSS surface: `dangerouslySetInnerHTML` on user-content with no DOMPurify** — 8 sites in lore, 1 in items, 1 in popup, plus SVG XSS in crest builder. Forums and support tickets and admin Blog/Docs/FAQ/Versions all capture Markdown raw and depend on the consuming renderer to sanitize. **Severity: Critical.**
+
+9. **Two toast systems shipped in parallel** (radix toast + sonner) — pure duplication; the entire `/components/ui/toast.jsx` family is dead-loaded.
+
+10. **No error boundaries anywhere** — a single rendering exception unmounts the entire app.
+
+11. **Admin audit logging is largely missing** — only 2 of 17 admin tabs (`ReportsModerationTab`, `UsersTab`) log to `admin_actions`, both non-atomically (mutation succeeds even if log insert fails). Every other admin write — bans, tier overrides, blog publishes, banner edits, FAQ deletes, title grants, listing removals, version posts — is invisible to audit.
+
+12. **Base44 ORM still load-bearing in writes** — chat, profile, admin (BlogTab not Base44 but most others), support. RLS migration cannot complete until these are gone. Per Pass-1A counts, Base44 is referenced in dozens of components; full migration is a major workstream.
+
+13. **TIERS constant drift** — `OverviewTab` and `RevenueTab` whitelist `{free, adventurer, veteran, guild}` in MRR aggregation; new TIERS keys won't be counted. Conversely `RevenueTab.jsx` correctly imports `TIERS.adventurer.price` etc., so the pattern exists — it just isn't applied uniformly.
+
+14. **Storage path violations across user uploads** — support tickets / report evidence upload to `user-assets/support/` not `user-assets/users/{user_id}/`. Marketing/admin banner uploads pass free-text URLs with no validation that they're from `app-assets`. Multiple SVG-XSS / origin-validation gaps.
+
+15. **Two `useIsMobile` hooks and two Skeleton files with case-sensitivity issues** — duplicate primitives shipped in parallel; case-sensitive filesystems will break the build.
+
+### Cross-cutting systemic issues observed
+
+- **Client-side authority everywhere.** Every entity create/update/delete that should be `auth.uid()`-pinned is instead client-supplied. The pattern is so consistent that a single sweeping fix (default-to-`auth.uid()` server-side, lock columns at RLS, drop the field from client payloads) would resolve hundreds of findings.
+
+- **No layer of defense beyond RLS.** Almost no component performs client-side role guards even for UX hiding; admin tabs are fully reachable by their route. RLS is the only line of defense — and the migrations are not verified to lock down column-level writes.
+
+- **Markdown ingest without sanitization at write or render.** Forums, support, blog, docs, FAQ, version history, lore, items, comments — the same pattern over and over. A single trusted Markdown renderer (`react-markdown` + `rehype-sanitize`, no raw HTML pass-through) deployed once would close the XSS surface across the app.
+
+- **Brand palette double-state.** The cyan (`#37F2D1` / `#1E2430` / `#050816` / `#0b1220`) family ships across the entire admin folder, support, and most chat/profile work. The Creamsicle (`#FF5300` / `#f8a47c` / `#1B2535` / `#04685A`) family ships in forums (via `pages/Forums.jsx`'s `CREAM` token) and the marketing band. Both are used; neither is canonical. Until the design decision lands, every component-level "fix" will have to be re-applied.
+
+- **TIERS as a sometime-source-of-truth.** `RevenueTab` imports `TIERS.x.price` correctly (good); `OverviewTab` and `MarketingBand`-adjacent pages may not. Drift is one PR away.
+
+- **Two toast systems, two `useIsMobile`, two Skeleton files.** Duplication ships unchallenged. A primitive consolidation pass would remove ~10% of file count and several merge-conflict surfaces.
+
+- **No lazy-loading / pagination at the admin layer.** Every admin tab fetches every row of every table on mount. At any meaningful scale this is unworkable.
+
+- **PII broadcast at the analytics layer.** `trackEvent(userId, ...)` calls sometimes ship `target_id` / category. Analytics destination not verified — assume P.I.E. (internal) but verify.
+
+- **P.I.E. event emission gaps.** Forum activity, ticket-reply activity, profile edits, comment posts — many surfaces that should fire events don't.
+
+- **Multi-game abstraction is partial.** `c.race` / `c.class` aggregations in admin (Gameplay, Combat) and characters folder hardcode D&D 5e taxonomy. Game packs (per migration `20261119_game_packs.sql`) won't drop in without rework.
+
+### Suggested triage order grouped by fix-projects
+
+The 1410 findings can be grouped into ~10 "fix-projects" — each is a coherent body of work that, once landed, closes a swath of findings simultaneously. Suggested execution order:
+
+1. **`rotate-and-remove-secrets` (1 day):** Rotate the leaked Giphy API key; delete `GiphyPicker.jsx`; sweep grep for any other embedded keys. Closes ~3 findings but is non-negotiable before launch.
+
+2. **`finish-base44-migration` (2-4 weeks):** Move every `base44.entities.X.*` call to the typed Supabase client. This is a prerequisite for #3 and #4.
+
+3. **`kill-client-side-authority` (2-3 weeks, in parallel with #2):** RLS audit + tighten. For every entity, ensure `INSERT` policies pin the actor field (`author_id = auth.uid()`, `creator_id = auth.uid()`, `admin_id = auth.uid()`, `sender_id = auth.uid()`, etc.) and that admin-only columns (`is_dev_post`, `is_pinned`, `is_locked`, `account_status`, `admin_tier_override`, `storage_limit_override_bytes`, `is_official`, `is_admin`, `sender_type`) are RLS-locked to admins. Drop these fields from every client payload. Closes the largest single bucket of Critical findings.
+
+4. **`real-admin-role` (1-2 weeks):** Replace `isAdminEmail()` everywhere with a server-side role check (JWT claim or `admin_users` table joined in RLS). Wrap every admin write in an RPC that performs role-check + mutation + `admin_actions` insert atomically. Closes admin role check + admin audit log gaps in one stroke.
+
+5. **`sanitize-user-content` (1 week):** Single trusted Markdown renderer (`react-markdown` + `rehype-sanitize`) deployed app-wide. Strip raw HTML in forum/support/blog/docs/faq/versions/lore/comments/items/popup paths. Add SVG-XSS guard in crest builder. Closes the entire XSS surface.
+
+6. **`public-profile-pii-purge` (3-5 days):** Strip `email`, `age`, `role`, raw `last_seen_at` from `user_profiles` (the public table); move to a private `user_private` table. Update every `.list()` / `.filter()` call site downstream. Closes the privacy block on launch.
+
+7. **`drop-fetch-all-patterns` (2 weeks):** For every admin tab, write a focused RPC (`admin_overview`, `admin_users_list`, `admin_tickets_list`, etc.) returning aggregated/paginated data. Drop every `.list()` call. Pair with #4 so RPCs are role-checked.
+
+8. **`one-toast-one-mobile-one-skeleton` (2 days):** Pick sonner OR radix toast (sonner is more used); pick one `useIsMobile`; rename `Skeleton.jsx` / `skeleton.jsx` to a single canonical file. Delete the other.
+
+9. **`error-boundaries` (3 days):** Top-level error boundary + per-route fallback. Mandatory before public launch.
+
+10. **`design-token-decision` (1 day decision + 1 week migration):** Decide cyan vs Creamsicle. Once decided, single `src/lib/palette.js` with all tokens. Migrate inline-hex usages.
+
+11. **`storage-path-spec-conformance` (3-5 days):** Every file upload routes through `user-assets/users/{user_id}/...` (user uploads) or `app-assets/...` (admin/marketing). Validate origin at write-time and at render-time. MIME + size + SVG-XSS guard at the helper layer.
+
+12. **`pagination-and-rate-limits` (1 week):** Cursor pagination on forum threads/replies, blog, docs, FAQ, admin tabs. Per-user rate limits on forum posts, ticket creation, ticket replies, report submissions, blog comments.
+
+13. **`marketing-decision` (decision + 1-2 days):** Ship or delete `/CreatorProgram` and `/Guild` pages. Move `CREAM` tokens to a shared module if shipping; remove sidebar links if deleting.
+
+14. **`multi-game-abstraction` (2+ weeks, post-launch ok):** Replace D&D-5e-specific aggregations with a `game_system`-aware schema. Preparatory work for the game-packs roadmap.
+
+The above ordering minimizes blocking dependencies: rotate-secrets and base44-migration unblock RLS work, which unblocks role-check work, which unblocks the admin RPC layer. Sanitization and PII-purge can run in parallel. Toast/mobile/skeleton consolidation, error boundaries, and design tokens are independent and can be slotted anywhere.
+
+**Pass 1A is complete.** Pass 2 should focus on consuming-side renderers (the Markdown XSS verification in particular), the lib layer (`src/lib/*`), and the page layer (`src/pages/*`), where many of the Critical issues flagged in Pass 1A can be definitively confirmed or downgraded.
