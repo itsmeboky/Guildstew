@@ -6941,3 +6941,825 @@ Dice and P.I.E. are **not integrated** as the spec requires. The DiceRoller comp
 
 **Specific note on map-feature secret-plant gating:**
 - The hotspot data shape has no `visibility` / `revealed_to` / `gm_only` field. Any "secret" location placed on the campaign map is immediately visible to all players opening the map. This mirrors the `secret_plant` / `villain_flag` audit gap on NPCs (batch 1A-v-b) and should be tracked together as a "GM-only data leakage to player clients" theme for backend pass.
+
+---
+
+### Batch 1A-vi: homebrew + workshop + tavern + worldLore
+
+This batch audits four scope folders sequentially in the order specified. Findings are streamed to disk in small chunks to keep memory bounded.
+
+#### /src/components/homebrew/
+
+##### Folder-wide observations (homebrew/)
+
+This folder is dominated by base44 leftover code: 106 references to `base44.entities.*` across the four scope folders, with the bulk concentrated in `BreweryDetailDialog.jsx`, `MyBrewsList.jsx`, and the `Create*ModDialog.jsx` family. Every read/write goes through the legacy `base44Client` rather than the documented Next.js / Supabase surface. Treat this as a single systemic finding and call it out per file only where it produces a downstream defect (missing tier check, wrong column, etc.) rather than repeating per-file.
+
+Two parallel data shapes coexist in this folder:
+- `HomebrewRule` (table `homebrew_rules`) — used by `CreateHomebrewDialog.jsx`, `BreweryDetailDialog.jsx`, `BreweryCard.jsx`, `MyBrewsList.jsx` for "rule modifications" (rest rules, combat rules, custom items/monsters/spells embedded in a row).
+- `BreweryMod` (table `brewery_mods`) — used by `CreateContentPackDialog.jsx`, `CreateClassModDialog.jsx`, `CreateRaceModDialog.jsx`, `CreateSheetModDialog.jsx`, `CreateCodeModDialog.jsx`, `CreateReskinModDialog.jsx`, `ContentPackCard.jsx` for the newer Brewery content packs.
+
+The spec ("brewery_mods uses creator_id") only covers the second. The first appears to be a legacy schema being kept alive in parallel; it shows the same shape (`creator_id`, `is_published`, `rating_total`/`rating_count`, `downloads`, `cover_image_url`) but is a separate table. Most of the per-file findings below assume `brewery_mods` for the Create*ModDialog files and `homebrew_rules` for the HomebrewRule files; flag the duplication as a single high-severity architecture concern rather than per-row.
+
+###### Per-file findings — homebrew/
+
+- **Severity:** High
+- **File:** src/components/homebrew/BreweryCard.jsx
+- **Line:** 73
+- **Category:** Multi-game abstraction
+- **Issue:** Hardcoded D&D 5e fallback — `brew.game_system === "dnd5e" ? "D&D 5e" : brew.game_system` and `|| "D&D 5e"` default. When new game systems are added, every card silently mislabels rows with no `game_system` set as D&D 5e.
+- **Suggested approach:** route through a `GAME_SYSTEMS[id].displayName` map; render `Unknown` rather than defaulting to D&D when the column is null.
+
+- **Severity:** Medium
+- **File:** src/components/homebrew/BreweryCard.jsx
+- **Line:** 31, 53, 82
+- **Category:** Brand color mismatch
+- **Issue:** Hardcoded `#37F2D1` cyan for hover ring, glow shadow, title hover, and tag pills — six off-brand color literals in a 141-line file.
+- **Suggested approach:** map to brand tokens via Tailwind theme extension once palette is finalized.
+
+- **Severity:** Low
+- **File:** src/components/homebrew/BreweryCard.jsx
+- **Line:** 18
+- **Category:** Prop validation / unused props
+- **Issue:** `compact` prop documented but unused; either drop or implement.
+- **Suggested approach:** remove from signature; if needed by `MyBrewsList` shape, add an `eslint-disable` line and a `// kept for shape parity` comment.
+
+- **Severity:** Low
+- **File:** src/components/homebrew/BreweryCard.jsx
+- **Line:** 38
+- **Category:** Accessibility
+- **Issue:** Cover `<img>` has empty `alt=""` even when the brew has a meaningful title — decorative-only marking is correct only if the title is also rendered as text (it is here at line 53), so this is acceptable, but the pattern recurs without comment in 5 other homebrew files.
+- **Suggested approach:** keep `alt=""` here, but document the convention in a shared `<CoverImage>` wrapper to make intent visible.
+
+- **Severity:** Critical
+- **File:** src/components/homebrew/BreweryDetailDialog.jsx
+- **Line:** 16, 37–165
+- **Category:** Base44 leftover
+- **Issue:** Entire file goes through `base44.entities.Campaign`, `base44.entities.HomebrewRule`, `base44.entities.HomebrewReview`, `base44.entities.UserProfile`, `base44.entities.CampaignHomebrew`. No Supabase migration. Mutations include direct rating-aggregate write (line 154–166) that races on concurrent reviews.
+- **Suggested approach:** migrate read paths to the Supabase `homebrew_rules` table; move rating updates into a server-side RPC that recomputes from `homebrew_reviews` rows atomically rather than in-client `Number(brew.rating_total) + delta`.
+
+- **Severity:** Critical
+- **File:** src/components/homebrew/BreweryDetailDialog.jsx
+- **Line:** 142–177
+- **Category:** Race condition
+- **Issue:** Rating aggregate (`rating_total`, `rating_count`) is updated client-side via read-modify-write on the `homebrew_rules` row. Two concurrent reviewers will silently overwrite each other's `rating_count` increment.
+- **Suggested approach:** server-side RPC `submit_homebrew_review(homebrew_id, rating, comment)` that recomputes aggregates inside a transaction, or use Postgres triggers on `homebrew_reviews`.
+
+- **Severity:** Medium
+- **File:** src/components/homebrew/BreweryDetailDialog.jsx
+- **Line:** 155
+- **Category:** Math errors
+- **Issue:** `Math.max(0, ...)` clamping on rating_total. If a review goes from 5 → 1 (delta = −4) on a brew with stale 0 rating_total, this silently swallows the negative correction and inflates avg ratings.
+- **Suggested approach:** see RPC fix above; never clamp aggregates client-side.
+
+- **Severity:** Medium
+- **File:** src/components/homebrew/BreweryDetailDialog.jsx
+- **Line:** 17, 195–225, 266
+- **Category:** Brand color mismatch
+- **Issue:** ~25 occurrences of `#37F2D1`, plus `#1E2430`, `#0b1220`, `#050816`, `#1e293b` surface tokens. File is the visual centerpiece of the Brewery flow; palette debt is concentrated here.
+- **Suggested approach:** lift to CSS variables; design pass.
+
+- **Severity:** High
+- **File:** src/components/homebrew/BreweryDetailDialog.jsx
+- **Line:** 209
+- **Category:** Multi-game abstraction
+- **Issue:** Same `dnd5e ? "D&D 5e" : x || "D&D 5e"` mislabel pattern as BreweryCard.
+- **Suggested approach:** centralize in `GAME_SYSTEMS` lookup.
+
+- **Severity:** Critical
+- **File:** src/components/homebrew/MyBrewsList.jsx
+- **Line:** 25, 41–66
+- **Category:** Base44 leftover
+- **Issue:** Whole file is base44 — `HomebrewRule.filter`, `update`, `delete`, plus `Campaign`, `CampaignHomebrew`, `CampaignItem`, `Monster`, `Spell`, `CampaignClassFeature` all routed through `base44.entities`.
+- **Suggested approach:** migrate to Supabase queries; centralize the publish/unpublish action behind an RPC so RLS can enforce ownership.
+
+- **Severity:** High
+- **File:** src/components/homebrew/MyBrewsList.jsx
+- **Line:** 311–386
+- **Category:** Tier gate gap
+- **Issue:** `attachMutation` writes to `CampaignItem`, `Monster`, `Spell`, `CampaignClassFeature` with no tier check. The Brewery spec restricts publishing/install to certain tiers but this attach path lets *any* user (including Free) drop a brewery item directly into a campaign as if it were native content. There is also no check that the user is actually GM of the target campaign — it lists owned + co-DM campaigns at line 268–284 but trusts the join row write to be enforced server-side.
+- **Suggested approach:** route through an RPC `attach_homebrew_to_campaign(campaign_id, brew_id)` that re-verifies GM and tier; remove the client-side `is_system: false` bypass.
+
+- **Severity:** Critical
+- **File:** src/components/homebrew/CreateModDialog.jsx
+- **Line:** 36–77, 87–90
+- **Category:** Tier gate gap (DOMAIN)
+- **Issue:** Only `code_mod` is marked `veteranOnly`. Per spec **Free has NO Brewery access** — yet a Free user can open this picker and click Race/Class/Content Pack/Reskin/Sheet Mod with no friction (the downstream creators do gate publishing to Veteran, but the picker itself does not gate access). Additionally, `tier === "free"` users should not see this UI at all.
+- **Suggested approach:** wrap the entire dialog in `tierAtLeast(tier, "adventurer")` check; redirect to upgrade. Apply per-type gating via a `minTier` field, not just a `veteranOnly` boolean.
+
+- **Severity:** Critical
+- **File:** src/components/homebrew/CreateClassModDialog.jsx, CreateRaceModDialog.jsx, CreateContentPackDialog.jsx, CreateReskinModDialog.jsx, CreateSheetModDialog.jsx
+- **Line:** *ModDialog ~line 80–95 (`canPublish = tierAtLeast(... , "veteran")`) in each
+- **Category:** Tier gate gap (DOMAIN) — wrong tier number
+- **Issue:** Per spec: "Adventurer+ can publish non-code homebrew (items, monsters, spells, classes — data only). ONLY Veteran+ can publish CODE homebrew." All five non-code creators currently require **Veteran** to publish. This is a one-tier-too-strict gate that locks out the Adventurer tier from Brewery publishing of data mods. Only `CreateCodeModDialog.jsx` is correctly gated to Veteran.
+- **Suggested approach:** change `canPublish = tierAtLeast(..., "veteran")` to `... "adventurer"` in the five non-code creators; update the user-facing copy (e.g. line 207 of CreateSheetModDialog: "Publishing to the Brewery requires a Veteran subscription" → Adventurer). Pull the tier requirement from a single TIER_REQUIREMENTS constant keyed by mod type.
+
+- **Severity:** Medium
+- **File:** src/components/homebrew/CreateModDialog.jsx
+- **Line:** 176–189
+- **Category:** Dead code
+- **Issue:** `ComingSoonDialog` is defined but never rendered. Originally used as the placeholder for content_pack / code_mod before they got their own creators.
+- **Suggested approach:** delete.
+
+- **Severity:** Medium
+- **File:** src/components/homebrew/CodeModHelpPanel.jsx
+- **Line:** 36, 49, 68, 80, 119, 195, 204
+- **Category:** Brand color mismatch
+- **Issue:** ~12 occurrences of `#37F2D1` plus `#1E2430`, `#0b1220`, `#050816`, `#1e293b`. Otherwise a clean documentation panel.
+- **Suggested approach:** central palette mapping.
+
+- **Severity:** Low
+- **File:** src/components/homebrew/CodeModHelpPanel.jsx
+- **Line:** 79
+- **Category:** Accessibility
+- **Issue:** `Kbd` component renders `<code>` rather than `<kbd>`, which would more accurately describe a keystroke. Minor semantics/SR issue.
+- **Suggested approach:** swap to `<kbd>` element; existing styling still works.
+
+- **Severity:** High
+- **File:** src/components/homebrew/* (all mod creators that write to brewery_mods)
+- **Line:** N/A
+- **Category:** Missing column handling (DOMAIN)
+- **Issue:** No file in `src/components/homebrew/` references `source_mod_id` or `brewery_content_pack_tag`, both of which exist in `migrations/20261103_brewery_content_pack_tag.sql`. Install flows (Layer-2 → campaign-table copy) cannot record provenance, and content-pack tagging is unused — installs from a pack appear as untagged campaign rows.
+- **Suggested approach:** when installing a brewery mod, write `source_mod_id` on every campaign-table row created; when installing a content pack, also stamp `brewery_content_pack_tag = pack.slug || pack.id` so a future "uninstall pack" action can locate every entry it dropped in.
+
+- **Severity:** High
+- **File:** src/components/homebrew/CreateContentPackDialog.jsx
+- **Line:** 73, 90, 96, 170
+- **Category:** Multi-game abstraction
+- **Issue:** Game system defaults to `"dnd5e"` and is the only option in the picker (verified by no `<select>` for `gameSystem` rendered in shown fragment); also `BLANK_CONTENT_PACK` and `computeContentCounts` assume D&D-5e bucket names (monsters/items/spells/class_features). Class features are a 5e-specific schema concept.
+- **Suggested approach:** make the bucket schema selectable per game system; for non-5e packs, derive bucket list from `GAME_SYSTEMS[gameSystem].contentBuckets`.
+
+- **Severity:** High
+- **File:** src/components/homebrew/CreateContentPackDialog.jsx
+- **Line:** 39
+- **Category:** Duplicate / coupling
+- **Issue:** Content pack creator imports `CustomItemForm`, `CustomMonsterForm`, `CustomSpellForm`, `CustomClassFeatureForm`, `BLANK_*`, and `build*Modifications` directly from a 258 KB sibling component (`CreateHomebrewDialog`). This produces a circular-feeling dependency between the campaign-level homebrew creator and the brewery content pack creator. Editing one risks breaking the other; tree-shaking the dialog's heavy imports through this reuse is unlikely.
+- **Suggested approach:** extract the content-bucket forms into a shared `homebrewForms/` module that both consumers import.
+
+- **Severity:** Medium
+- **File:** src/components/homebrew/ContentPackCard.jsx
+- **Line:** 79
+- **Category:** Multi-game abstraction
+- **Issue:** Same `dnd5e ? "D&D 5e" : ... || "D&D 5e"` mislabel pattern.
+- **Suggested approach:** centralize.
+
+- **Severity:** Medium
+- **File:** src/components/homebrew/ContentPackCard.jsx
+- **Line:** 40, 74, 139, 170
+- **Category:** Brand color mismatch
+- **Issue:** ~10 `#37F2D1`, plus surface tokens.
+- **Suggested approach:** central palette.
+
+- **Severity:** Low
+- **File:** src/components/homebrew/ContentPackCard.jsx
+- **Line:** 44–48, 70–73
+- **Category:** Accessibility
+- **Issue:** Two clickable regions wrapped as `role="button" tabIndex=0` with `onKeyDown` only handling Enter (not Space). Inconsistent with BreweryCard.jsx which handles both.
+- **Suggested approach:** add Space handling; or refactor both to a shared CardClickable wrapper.
+
+- **Severity:** Low
+- **File:** src/components/homebrew/ContentPackCard.jsx
+- **Line:** 173
+- **Category:** Performance / React keys
+- **Issue:** `entries.slice(0, 8).map((e, i) => <li key={i} ...>)` — index keys on a list whose contents can change (entries are mutable inside the editor).
+- **Suggested approach:** key by `e.name` or `e.id` if available.
+
+- **Severity:** Critical
+- **File:** src/components/homebrew/InstallModDialog.jsx
+- **Line:** 44, 67, 110
+- **Category:** Tier gate gap (DOMAIN)
+- **Issue:** Tier check only fires for `mod_type === 'code_mod'`. Per spec **Free has NO Brewery access** — so installing *any* brewery mod (race / class / reskin / sheet_mod / content_pack) from a Free account should be blocked. Currently only code-mod install is gated at Adventurer; everything else is open to Free.
+- **Suggested approach:** add a top-level `tierAtLeast(tier, 'adventurer')` guard for any install, then keep the existing Adventurer-for-code rule (or upgrade the doc; current docstring at line 28 says "installation is one tier looser" — that comment matches code but contradicts the master spec).
+
+- **Severity:** High
+- **File:** src/components/homebrew/CreateHomebrewDialog.jsx
+- **Line:** entire file (5983 lines)
+- **Category:** Duplicate / size / maintainability
+- **Issue:** Single 258 KB component file containing the entire campaign-level homebrew creator (rule mods + custom item + custom monster + custom spell + custom class feature, plus their forms, validation, blank constants, build* helpers). Re-exported by `CreateContentPackDialog`. This is the largest .jsx file in the codebase by ~3x and bundles multiple unrelated form trees together. Editing a class-feature field requires loading the whole tree.
+- **Suggested approach:** split into `CreateHomebrewDialog.jsx` (shell + tabs), `forms/CustomItemForm.jsx`, `forms/CustomMonsterForm.jsx`, `forms/CustomSpellForm.jsx`, `forms/CustomClassFeatureForm.jsx`, and `forms/blanks.js`. CreateContentPackDialog imports from `forms/`.
+
+- **Severity:** Medium
+- **File:** src/components/homebrew/CreateHomebrewDialog.jsx
+- **Line:** 880, 1993, 4557
+- **Category:** Storage path comment drift
+- **Issue:** Comments say "Files land in campaign-assets/..." but code uploads to `user-assets` bucket. Code is correct (per spec user homebrew goes to user-assets) but comments mislead future contributors.
+- **Suggested approach:** update comments to reflect actual bucket.
+
+- **Severity:** Medium
+- **File:** src/components/homebrew/CreateHomebrewDialog.jsx
+- **Line:** 876, 890, 2006, 4569
+- **Category:** Console statements left in
+- **Issue:** Four `console.error(err)` calls inside upload error paths.
+- **Suggested approach:** replace with toast.error or a structured logger.
+
+- **Severity:** Medium
+- **File:** src/components/homebrew/CreateClassModDialog.jsx, CreateRaceModDialog.jsx
+- **Line:** ~187 / ~206 respectively
+- **Category:** Console statements
+- **Issue:** `console.error(err)` in mutation error paths.
+- **Suggested approach:** rely on toast.error / standardise logger.
+
+- **Severity:** Medium
+- **File:** src/components/homebrew/MyBrewsList.jsx
+- **Line:** 384
+- **Category:** Console statements
+- **Issue:** `console.warn("CampaignClassFeature create failed:", ...)` left in production path.
+- **Suggested approach:** remove or convert to telemetry event.
+
+- **Severity:** Low
+- **File:** src/components/homebrew/CreateCodeModDialog.jsx
+- **Line:** 194
+- **Category:** Accessibility / native dialogs
+- **Issue:** Uses `window.confirm` for the "publish makes this mod available to all players" prompt. Native confirm has poor a11y, no styling, and bypasses radix focus trap. Pattern is widespread (12 occurrences across batch — see worldLore findings below).
+- **Suggested approach:** swap for `<AlertDialog>` from `@/components/ui/alert-dialog`.
+
+- **Severity:** Medium
+- **File:** src/components/homebrew/SheetModSections.jsx
+- **Line:** 124–134
+- **Category:** TODO leftover
+- **Issue:** Comment "v1: display the stored computed value; the formula engine lands in a follow-up" — `computed` field type currently displays a placeholder formula in italic but never evaluates it. Live in production.
+- **Suggested approach:** ship live formula eval (formulaEvaluator already exists for code mods) or remove the `computed` field type from the schema until it's wired.
+
+- **Severity:** Medium
+- **File:** src/components/homebrew/SheetModSections.jsx
+- **Line:** 39
+- **Category:** State smell
+- **Issue:** Two-source mod_data fallback `character?.stats?.mod_data || character?.mod_data || {}` indicates a schema migration in progress — character rows have mod_data in two places. Reads from one and writes via `onChange(next)` callback (the parent picks where to land it) means write-time decisions aren't centralised.
+- **Suggested approach:** finish migration; pick one canonical home (recommend `stats.mod_data` since it lives with custom stats) and write a one-time backfill.
+
+- **Severity:** High
+- **File:** src/components/homebrew/CreateRaceModDialog.jsx, CreateClassModDialog.jsx, CreateSheetModDialog.jsx, CreateReskinModDialog.jsx, CreateCodeModDialog.jsx, CreateContentPackDialog.jsx
+- **Line:** all default `gameSystem = "dnd5e"`
+- **Category:** Multi-game abstraction
+- **Issue:** Every brewery creator hardcodes `dnd5e` as the default and only-supported game system. Race "ability scores", Class "spellcasting", Sheet sections "after_skills/after_features/after_proficiencies", and content pack buckets ("class_features", "spells") all assume D&D 5e schema.
+- **Suggested approach:** when system abstraction lands, gate creators behind a per-system feature manifest; race/class creators won't be reusable for non-5e systems.
+
+- **Severity:** Medium
+- **File:** src/components/homebrew/CreateRaceModDialog.jsx, CreateClassModDialog.jsx, CreateSheetModDialog.jsx, CreateReskinModDialog.jsx, CreateContentPackDialog.jsx, CreateCodeModDialog.jsx
+- **Line:** ~155–172 (each)
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `creator_tier: sub?.tier || "free"` is duplicated six times; `is_private: !isPublishing` / `published: isPublishing` / `status: isDraft ? "draft" : "active"` triplet duplicated across files; same payload-shape bug-surface six times.
+- **Suggested approach:** extract a `buildBreweryModPayload(mode, sub, base)` helper.
+
+##### Folder roll-up — homebrew/
+
+15 files / 14,077 lines / 11 base44 files / extensive duplication of mod-creator scaffolding / single 5,983-line `CreateHomebrewDialog.jsx` is the biggest file in the codebase. Tier gating is inverted on five non-code creators (Veteran instead of Adventurer); install dialog allows Free to install non-code mods (should be Adventurer+). No file references `source_mod_id` or `brewery_content_pack_tag` despite migrations adding both. Multi-game abstraction is absent. Brand palette debt is concentrated in BreweryDetailDialog (~25 #37F2D1 occurrences).
+
+#### /src/components/workshop/
+
+This folder contains four small files (CreatorCard, ProductCard, ProductGrid, TopProducts) tied to a separate `Workshop` page (`src/pages/Workshop.jsx`) that is itself a base44-era marketplace. The Tavern (Spice currency) and Brewery (subscription gating) flows have superseded this entire concept; only `ProductGrid` is still imported and only by the legacy `Workshop` page. The four files together contain ~155 lines and they show the older pre-Spice payment model with `$price.toFixed(2)` strings.
+
+- **Severity:** High
+- **File:** src/components/workshop/CreatorCard.jsx
+- **Line:** 1–29 (entire file)
+- **Category:** Dead code
+- **Issue:** No file in `src/` imports `CreatorCard`. The component renders a creator profile tile referencing `creator.avatar_url`, `creator.username`, and the legacy `UserProfile` page route.
+- **Suggested approach:** delete the file, or move to a `legacy/` folder pending Workshop replatform decision.
+
+- **Severity:** High
+- **File:** src/components/workshop/TopProducts.jsx
+- **Line:** 1–51 (entire file)
+- **Category:** Dead code
+- **Issue:** No file in `src/` imports `TopProducts`.
+- **Suggested approach:** delete.
+
+- **Severity:** High
+- **File:** src/components/workshop/ProductCard.jsx
+- **Line:** 1–54 (entire file)
+- **Category:** Dead code
+- **Issue:** No file in `src/` imports `ProductCard`. `ProductGrid` inlines its own card markup rather than reusing this one.
+- **Suggested approach:** delete; or, if the Workshop page is being kept, dedupe ProductGrid's inline card with ProductCard.
+
+- **Severity:** Critical
+- **File:** src/components/workshop/ProductGrid.jsx
+- **Line:** 52
+- **Category:** Tavern Spice/real-money confusion (DOMAIN)
+- **Issue:** Workshop page renders `${product.price.toFixed(2)}` real-USD price labels and an "Add to Cart" button (line 55) that goes nowhere. The Tavern marketplace is **Spice-only**; non-game-pack products in the marketplace must not advertise USD prices. Workshop appears to be a legacy concept that bypasses the Tavern's currency rules.
+- **Suggested approach:** decide whether `Workshop` is to be deprecated (recommended given Tavern + GamePacksGrid already cover the marketplace flows) or replaced. If kept, route everything through Spice or game-pack Stripe, never raw `$x.xx` toggleable prices on community products.
+
+- **Severity:** Medium
+- **File:** src/components/workshop/ProductGrid.jsx, ProductCard.jsx, TopProducts.jsx, CreatorCard.jsx
+- **Line:** 22 / 22 / 23 / 11 respectively
+- **Category:** Inline styles / external image dependency
+- **Issue:** Each file uses `style={{ backgroundImage: 'url(...)' }}` with a hardcoded **unsplash.com** URL fallback. External CDN dependency in production fallbacks risks broken images if Unsplash deprecates the photo IDs; also leaks referrer.
+- **Suggested approach:** ship a local placeholder asset (`public/placeholder-product.png`) and replace the four URLs.
+
+- **Severity:** Medium
+- **File:** src/components/workshop/ProductCard.jsx
+- **Line:** 41
+- **Category:** Math errors / null safety
+- **Issue:** `product.price.toFixed(2)` will throw if `price` is null/undefined. `ProductGrid` (line 52) and `TopProducts` (line 41) have the same crash. `product.rating.toFixed(1)` (ProductGrid line 50) similarly unguarded.
+- **Suggested approach:** wrap with `(product.price ?? 0).toFixed(2)` etc.
+
+- **Severity:** Critical
+- **File:** src/pages/Workshop.jsx
+- **Line:** 2, 10
+- **Category:** Base44 leftover (out-of-scope file flagged because it's the only consumer of this folder)
+- **Issue:** Calls `base44.entities.Product.list(...)`. Out of audit scope but its existence is what keeps `ProductGrid` from being dead.
+- **Suggested approach:** decision on Workshop deprecation; if kept, migrate the page to Supabase.
+
+##### Folder roll-up — workshop/
+
+3 of 4 files are unreferenced dead code. The 4th (`ProductGrid`) only renders for the legacy `Workshop` page, which itself uses base44 and shows USD prices in violation of the Tavern Spice-only rule. Recommend deleting the entire folder along with `src/pages/Workshop.jsx` once the deprecation decision is made; until then track as legacy debt with a `Workshop deprecation` ticket.
+
+#### /src/components/tavern/
+
+12 files. Generally better-organized than `homebrew/`: pulls `MIN_ITEM_PRICE`, `UPLOAD_FEES`, `formatSpice`, `applyDiscount` from `@/config/spiceConfig`, has its own `TAVERN_PALETTE` constants in `@/config/tavernPalette` (used by `TavernItemCard.jsx` and others), and routes purchases through `purchaseItem`/`uploadItem` helpers. The biggest concerns are external-URL-as-asset patterns (no actual file upload), Stripe-vs-Spice confusion in `GamePacksGrid` and `SpiceEmporium`, and a hardcoded $→Spice conversion ratio (`/ 250`) duplicated in seven spots.
+
+- **Severity:** High
+- **File:** src/components/tavern/CreatorUploadDialog.jsx
+- **Line:** 81–88, 227–264
+- **Category:** Form validation / file upload
+- **Issue:** Listing creation accepts arbitrary `preview_image_url`, `preview_images[]` URLs, and `file_url` as raw text inputs. There is no validation that the URL belongs to the user-assets bucket, no MIME/size checking, no actual file picker. Users can list any URL — including off-platform CDN content — leading to copyright leakage, broken listings (URL changes), and tavern-side hotlinking.
+- **Suggested approach:** wire actual `<input type="file">` + `uploadFile(file, "user-assets", "tavern/...")` (the existing helper used in DiceSkinCreator.jsx:107 and ThemeBuilder.jsx:93). Reject non-storage URLs at the form level; server-side enforce that `preview_image_url` starts with the user-assets origin.
+
+- **Severity:** High
+- **File:** src/components/tavern/CreatorUploadDialog.jsx
+- **Line:** 51–73, full file
+- **Category:** Tier gate gap (DOMAIN)
+- **Issue:** Upload dialog has no tier gate at the entry. Free can open the dialog; the only friction is that they cannot afford the 1,250-Spice fee. There should be an explicit min-tier check based on the spec: any subscriber (Free, Adventurer, Veteran, Guild) can list — Free pays 1,250, Adventurer 250, Veteran/Guild 0. Confirm the spec's "Free 1,250" is intentional rather than a "no-listing" gate; if the intent is Free **cannot** list at all, this dialog must check `tierAtLeast(tier, "adventurer")`.
+- **Suggested approach:** confirm spec; add explicit gate matching the decision.
+
+- **Severity:** Medium
+- **File:** src/components/tavern/CreatorUploadDialog.jsx
+- **Line:** 276, 359, 369; PurchaseConfirmDialog.jsx:123; TavernItemCard.jsx:100; SpiceEmporium.jsx (multiple); TavernItemDetailDialog.jsx (likely)
+- **Category:** Hardcoded values
+- **Issue:** `(price / 250).toFixed(2)` is repeated across at least 7 files for the Spice→USD display. The conversion ratio (`SPICE_PER_USD = 250`) is part of the master spec and should live in `spiceConfig` alongside `formatSpice`/`MIN_ITEM_PRICE`/`UPLOAD_FEES`. If the conversion changes, every site updates independently.
+- **Suggested approach:** export `SPICE_PER_USD` and a `formatSpiceAsUsd(spice)` helper from `spiceConfig`.
+
+- **Severity:** Medium
+- **File:** src/components/tavern/CreatorUploadDialog.jsx
+- **Line:** 138, 156, 197, 313
+- **Category:** Brand color mismatch
+- **Issue:** `#1E2430`, `#050816`, `#37F2D1` literals — about 12 occurrences. Every other tavern file (TavernItemCard, TavernItemDetailDialog) routes through `TAVERN_PALETTE` so this dialog is visually inconsistent within the same flow.
+- **Suggested approach:** use TAVERN_PALETTE here too.
+
+- **Severity:** Low
+- **File:** src/components/tavern/CreatorUploadDialog.jsx
+- **Line:** 241
+- **Category:** React keys / list mutability
+- **Issue:** `form.preview_images.map((url, i) => <span key={i}>...)` — index keys on a list users can remove items from mid-render.
+- **Suggested approach:** key by `url`.
+
+
+- **Severity:** Critical
+- **File:** src/components/tavern/SpiceEmporium.jsx
+- **Line:** 86–96
+- **Category:** Stripe / Spice confusion (DOMAIN)
+- **Issue:** "TODO(stripe): replace this simulated credit with a real Stripe Checkout session." The current `purchase` mutation calls `addSpice(user.id, bundle.spice, "purchase", ...)` *directly* with no payment, no session, no server-side verification. Any signed-in user can mint Spice by clicking Buy. This is a wallet-credit-without-payment exploit available in production until the Edge function lands.
+- **Suggested approach:** **block the purchase button until the Stripe endpoint exists.** Replace the mutation body with a "checkout coming soon" toast, or gate behind `import.meta.env.DEV` so the mock-credit path can't run in prod. Long-term: route through `supabase.functions.invoke("create-spice-checkout", ...)` mirroring `GamePacksGrid.jsx:53`.
+
+- **Severity:** High
+- **File:** src/components/tavern/SpiceEmporium.jsx
+- **Line:** 28–34
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `BUNDLES` array hardcodes the entire pricing matrix (`{ price: 5, spice: 1310, bonus: 60, ... }`). These should live with the spec's `$1 = 250 Spice` rule in `spiceConfig` so the bonus/% is derivable rather than hand-tuned (currently `5 * 250 + 60 = 1310` is verifiable but any change drifts).
+- **Suggested approach:** export `SPICE_BUNDLES` (or a `getBundles()` that derives from base ratio + bonus%) from `@/config/spiceConfig`.
+
+- **Severity:** High
+- **File:** src/components/tavern/SpiceEmporium.jsx
+- **Line:** 14–26
+- **Category:** Hardcoded values
+- **Issue:** Hardcoded Supabase storage URLs (`https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/...`). The project ID `ktdxhsstrgwciqkvprph` is leaked to the client. If the bucket / project / file path moves, every tier image breaks.
+- **Suggested approach:** route through `getPublicUrl("app-assets", "hero/...")` helper or import paths from a single asset manifest.
+
+- **Severity:** High
+- **File:** src/components/tavern/SpiceEmporium.jsx
+- **Line:** 161–198, 36–42, full file
+- **Category:** Inline styles
+- **Issue:** SpiceEmporium uses heavy inline `style={{ ... }}` blocks for gradients, animations, glow effects (~25 inline-style usages in this one file). Animation keyframes are emitted via a sibling `<Keyframes />` component (not shown). This is the worst inline-style offender in the four-folder scope.
+- **Suggested approach:** lift to a `tavern.css` or Tailwind plugin; the rarity gradient/border/accent map at line 36–42 in particular wants to live in `@/config/spiceConfig` or a `RARITY_TOKENS` constant.
+
+- **Severity:** Medium
+- **File:** src/components/tavern/SpiceEmporium.jsx
+- **Line:** 56
+- **Category:** State management smell
+- **Issue:** `inGuild` is computed but never used in this excerpt. (Defined but no downstream branch on `inGuild` in the mutation.) Likely vestigial after a refactor.
+- **Suggested approach:** delete unused local.
+
+- **Severity:** Critical
+- **File:** src/components/tavern/GamePacksGrid.jsx
+- **Line:** 73
+- **Category:** Console statements
+- **Issue:** `console.error("Buy game pack", err);` — left in production.
+- **Suggested approach:** structured logger or telemetry; toast already handles UX.
+
+- **Severity:** Medium
+- **File:** src/components/tavern/GamePacksGrid.jsx
+- **Line:** 195–198
+- **Category:** Brand color mismatch / inline styles
+- **Issue:** Buy button uses an inline `linear-gradient(135deg, #635BFF 0%, #00D4FF 100%)` (Stripe brand purple→cyan) — this references Stripe corporate colors, not Guildstew brand. Acceptable for a "via Stripe" affordance but flag for design review.
+- **Suggested approach:** confirm with brand whether to embrace Stripe color cue or retheme.
+
+- **Severity:** Critical
+- **File:** src/components/tavern/DiceSkinCreator.jsx
+- **Line:** 428
+- **Category:** XSS risks
+- **Issue:** `if (w) w.document.body.innerHTML = '<img src="${data}" />';` — opens a popup window and writes a string template literal directly to its `body.innerHTML`. While `data` here is `toDataURL("image/png")` and the popup is same-origin, the pattern is still a footgun (any future caller passing user content gets XSS) and bypasses CSP. Also `<img src="...">` without alt fails a11y.
+- **Suggested approach:** use `w.document.createElement("img"); img.src = data; w.document.body.appendChild(img);` — same effect, no string-interpolation.
+
+- **Severity:** Medium
+- **File:** src/components/tavern/DiceSkinPreview.jsx
+- **Line:** 50
+- **Category:** Hardcoded brand color
+- **Issue:** `scene.background = new THREE.Color(0x050816)` hardcodes the dark-navy background; should match TAVERN_PALETTE.
+- **Suggested approach:** use the palette token.
+
+
+- **Severity:** Medium
+- **File:** src/components/tavern/TavernItemDetailDialog.jsx
+- **Line:** 159, 176, 232, 271, 295
+- **Category:** Brand color mismatch
+- **Issue:** Mixes the cream/amber TAVERN_PALETTE (used in TavernItemCard.jsx) with hard-coded `#1E2430`, `#050816`, `#37F2D1`, `#0b1220`, `#1e293b` blacks/cyans. The detail dialog visually mismatches its own card.
+- **Suggested approach:** unify on TAVERN_PALETTE.
+
+- **Severity:** Medium
+- **File:** src/components/tavern/TavernItemDetailDialog.jsx
+- **Line:** 191–202
+- **Category:** React keys
+- **Issue:** Gallery thumbnails use `key={i}` but `gallery` order is fixed; minor. Tag list (line 222) also keys by `i`.
+- **Suggested approach:** key tags by `t`.
+
+- **Severity:** Medium
+- **File:** src/components/tavern/TavernItemDetailDialog.jsx
+- **Line:** 200, 184
+- **Category:** Accessibility
+- **Issue:** Thumbnail `<img alt="">` (line 200) — empty alt is fine since it's decorative for a button labeled by index, but no `aria-label` on the thumbnail buttons. Main gallery image (line 184) uses `alt={item.name}` — consistent.
+- **Suggested approach:** add `aria-label={\`Preview ${i+1}\`}` to thumbnail buttons.
+
+- **Severity:** Medium
+- **File:** src/components/tavern/AnimatedSpiceBalance.jsx
+- **Line:** 36–53
+- **Category:** Race / cleanup
+- **Issue:** `requestAnimationFrame(tick)` runs without cancellation cleanup. If the component unmounts mid-animation the tick continues to call `setDisplay` on an unmounted component (React 18 will warn / no-op but the closure keeps the rAF chain alive). Also `subscribeSpicePurchase` callback closes over the bus subscription but no cleanup return on unmount is documented.
+- **Suggested approach:** track the rAF id in a ref and cancel it in the cleanup; verify subscribeSpicePurchase returns an unsubscribe.
+
+- **Severity:** Low
+- **File:** src/components/tavern/AnimatedSpiceBalance.jsx
+- **Line:** 36
+- **Category:** React hooks
+- **Issue:** `useEffect(() => subscribeSpicePurchase(...), [])` returns the bus subscription's unsub, but the hook's deps are empty so it's stable. OK only if `subscribeSpicePurchase` is itself stable across renders — likely true since imported.
+- **Suggested approach:** verify and document.
+
+- **Severity:** Low
+- **File:** src/components/tavern/PurchaseConfirmDialog.jsx
+- **Line:** 123
+- **Category:** Hardcoded values
+- **Issue:** `(discounted / 250).toFixed(2)` — same SPICE_PER_USD drift.
+- **Suggested approach:** centralize.
+
+- **Severity:** Medium
+- **File:** src/components/tavern/TavernPortraitPicker.jsx
+- **Line:** 47, 56
+- **Category:** Inline styles / accessibility
+- **Issue:** `style={{ maxHeight }}` and `<button title={o.name}>` with no `aria-label`. Tooltip-only labels are inaccessible to screen readers; `title` is not a reliable a11y label.
+- **Suggested approach:** `aria-label={o.name}` on each button.
+
+- **Severity:** Low
+- **File:** src/components/tavern/TavernItemCard.jsx
+- **Line:** 17–22
+- **Category:** Inline styles / palette
+- **Issue:** Uses `style={{ backgroundColor: P.card, ... }}` instead of CSS classes — the file is consistent but heavy on inline styles even though it imports a palette object. Tailwind theming would be cleaner.
+- **Suggested approach:** map TAVERN_PALETTE into Tailwind theme tokens; replace inline styles with classes.
+
+##### Folder roll-up — tavern/
+
+12 files. Strongest folder of the batch on constant-extraction (uses `spiceConfig`, `tavernPalette`, `tavernCategories`) and atomic-purchase RPCs. **One Critical wallet-credit-without-payment exploit** in `SpiceEmporium.jsx` (the `purchase` mutation directly calls `addSpice` because the Stripe Edge function isn't wired). External `<input type="text">` URLs replace actual file uploads in CreatorUploadDialog. Stripe references are confined correctly to `GamePacksGrid` (game-pack USD purchases) — no Stripe code leaks into the cosmetic tavern_items flow. Spice→USD `/250` ratio is duplicated in 7 places. No Brewery/Tavern path treats user-supplied content as needing sanitisation; the tavern listings use plain text fields throughout (no `dangerouslySetInnerHTML`), which is the correct posture.
+
+#### /src/components/worldLore/
+
+43 files. Largest folder of the batch by file count, with the deepest GM-vs-player visibility surface in the codebase. Key systemic findings: 8 files render user-supplied lore HTML via `dangerouslySetInnerHTML` without explicit sanitization (XSS surface); 12 files use native `confirm()`/`window.confirm()`; client-side knowledge gates obfuscate via CSS/font but render the underlying content into the DOM (gate leak); GM-only badges drive UI but several writers don't enforce GM gate on the action.
+
+- **Severity:** Critical
+- **File:** src/components/worldLore/TemplateRenderer.jsx
+- **Line:** 60
+- **Category:** XSS risks (DOMAIN — user-supplied lore content)
+- **Issue:** `FreeformTemplate` renders `entry.content` via `dangerouslySetInnerHTML` whenever the content matches the regex `/<[a-z][\s\S]*>/i`. World lore entries are GM-authored but campaigns can have multiple GMs and co-DMs; one malicious or compromised co-DM can inject `<script>` or `<img onerror>` payloads that fire for every player viewing that entry. The trust boundary is currently zero — no DOMPurify, no allowlist of tags.
+- **Suggested approach:** route through DOMPurify (or rehype-sanitize + a strict tag allowlist) before injection. Same fix applies to all eight viewers below.
+
+- **Severity:** Critical
+- **File:** src/components/worldLore/ArtifactViewer.jsx (line 328), GrimoireViewer.jsx (286), FactionViewer.jsx (327), PantheonViewer.jsx (237), RecipeBookViewer.jsx (340), CelestialViewer.jsx (190), SectViewer.jsx (320)
+- **Line:** see file list
+- **Category:** XSS risks (DOMAIN)
+- **Issue:** Seven additional `dangerouslySetInnerHTML={{ __html: linkedEntry.content || '<p ...>...</p>' }}` sites — each one renders linked-entry HTML directly into the viewer when a player drills into a linked lore entry. A single poisoned linked entry compromises every viewer surface.
+- **Suggested approach:** centralize a `<SafeHtmlContent>` component that pipes through DOMPurify; replace all 8 sites with it.
+
+- **Severity:** Critical
+- **File:** src/components/worldLore/GatedEntryView.jsx
+- **Line:** 218, 308
+- **Category:** World lore knowledge-gate leak (DOMAIN)
+- **Issue:** When a player has `tier === "unknown"` for an entry's language, the component renders `entry?.content` directly into the DOM with only a CSS `font-family` swap (line 215) for visual obfuscation. A player can: copy the text, view DOM, disable CSS, or use a screen reader to read the *full English content*. Same pattern in PartialLanguageView (line 308). The "language gate" is purely cosmetic.
+- **Suggested approach:** when comprehension tier is "unknown", render an obfuscated transformation of the text (substitution cipher, runic Unicode mapping) rather than the original; only ship the plaintext to the client when the gate is satisfied. For full security, the original content should be fetched only after the decipher succeeds — currently the row is delivered to the client whether the gate passes or not.
+
+- **Severity:** High
+- **File:** src/components/worldLore/GatedEntryView.jsx
+- **Line:** 138, 196
+- **Category:** Math errors / fairness
+- **Issue:** Skill / decipher rolls use `Math.random()` directly in the React component. Beyond fairness concerns (any Chrome dev tools user can override the function), the roll is computed client-side and posted to `reveal_attempts` — a player can patch the result before insert. Similar pattern in `recordAttempt` mutation (line 70–86) — totals, dc, and pass/fail are all sent from the client.
+- **Suggested approach:** server-side RPC `roll_reveal_attempt(entry_id, gate_id)` that derives modifier from the auth.uid() character row, rolls server-side, and writes the attempt — never trust the client value.
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/GatedEntryView.jsx
+- **Line:** entire file (~440 lines)
+- **Category:** Code quality (positive note)
+- **Issue:** N/A — flagging as the most domain-heavy component in the folder; the gating model is well-structured; treat as the canonical example for GM-vs-player visibility patterns. Use this as the template for fixes in other lore viewers.
+- **Suggested approach:** N/A — but extract `LockedGate`, `LockedLanguageGate`, `PartialLanguageView`, `LanguageBanner`, `Annotations` into separate files when XSS fix lands.
+
+- **Severity:** High
+- **File:** src/components/worldLore/CommentThread.jsx (86), ArtifactViewer.jsx (167), GuildHallManager.jsx (155, 402), RecipeBookViewer.jsx (181), GrimoireViewer.jsx (172), GuildHallTrainingSection.jsx (379), EntryCategoryView.jsx (194), MonsterLibrary.jsx (68, 185), RumorBoardView.jsx (130)
+- **Line:** see file list
+- **Category:** Native dialogs / accessibility
+- **Issue:** 11 sites use native `confirm()`/`window.confirm()` for destructive actions (delete comment / artifact / guild hall / recipe / spell / training / lore entry / monster / rumor / AI bulk-generate). Native confirm has no styling, no focus trap that matches the page, and bypasses the radix AlertDialog used elsewhere. Some of these are highly destructive (`Revoke deed and delete all guild hall data`, `AI-generate images and complete data for all monsters`).
+- **Suggested approach:** swap each for `<AlertDialog>` from `@/components/ui/alert-dialog` with appropriate destructive-button styling and explicit "Type the name to confirm" pattern for the heaviest ones.
+
+
+- **Severity:** Critical
+- **File:** src/components/worldLore/EntryCategoryView.jsx
+- **Line:** 48–55, 88–91
+- **Category:** World lore visibility leak (DOMAIN)
+- **Issue:** `allEntries` is fetched as `WorldLoreEntry.filter({ campaign_id, category })` *without filtering on visibility*. The full set including `gm_only` entries is delivered to every player's client; `filterByVisibility` then hides them client-side. A player who inspects `window.__REACT_QUERY_STATE__` or the network tab sees every GM-only entry in plaintext. Same client-side filter pattern in `CategoryLandingCards.jsx:23–32` (allEntries + allRumors), `RecentActivity.jsx:26`, `RumorBoardView.jsx:30–43`.
+- **Suggested approach:** push visibility into the query — either RLS policy on `world_lore_entries` keyed off `auth.uid()`/role or an RPC `list_visible_lore(campaign_id, category)` that does the filter server-side. Same fix applies to comments (line 65 fans out per-entry queries — each one is also unfiltered).
+
+- **Severity:** High
+- **File:** src/components/worldLore/EntryCategoryView.jsx
+- **Line:** 65–68
+- **Category:** Performance
+- **Issue:** `Promise.all(entryIds.map((id) => WorldLoreComment.filter({ entry_id: id })))` fans out one network round-trip per entry to compute comment counts. For a 200-entry campaign that's 200 fetches.
+- **Suggested approach:** RPC or single `select entry_id, count(*) from world_lore_comments where entry_id = any($1) group by entry_id`.
+
+- **Severity:** High
+- **File:** src/components/worldLore/EntryForm.jsx
+- **Line:** 1–800+ (34,256 bytes, ~1100 lines)
+- **Category:** Size / maintainability
+- **Issue:** EntryForm covers every category's metadata fields, knowledge gates, attachments uploads, language gating, three image upload sites (lines 151, 732, 778). Templates, gates, partyPlayers, attachments — all in one file.
+- **Suggested approach:** split into category-specific metadata sub-forms once the schema stabilises; extract `KnowledgeGatesEditor`, `AttachmentsField` (already standalone), `LanguageGateEditor`.
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/EntryForm.jsx
+- **Line:** 65, 70, 186–191
+- **Category:** Missing column handling (DOMAIN)
+- **Issue:** EntryForm does write `image_url` and `images` (per spec these were added via migration), and writes `template_type` correctly. Verified.
+- **Suggested approach:** N/A — positive note; the spec column handling is in place here.
+
+- **Severity:** High
+- **File:** src/components/worldLore/CalendarViewer.jsx (68–70), CelestialViewer.jsx (50–61)
+- **Line:** see file list
+- **Category:** Performance / non-determinism
+- **Issue:** Use `Math.random()` directly in render to position decorative elements (stars, sparkles) — every re-render rerolls positions, causing flicker. Also non-deterministic SSR.
+- **Suggested approach:** memoize with `useMemo(() => Array.from({...}, () => ({ top: Math.random()*100, ... })), [])`.
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/EntryForm.jsx
+- **Line:** 36
+- **Category:** Crypto / id generation
+- **Issue:** Knowledge-gate id generated as `g_${Date.now()}_${Math.random()...}` — collision-resistant but informal. Acceptable for client-only ids that the server overwrites; flag because the gate id flows through `reveal_attempts.reveal_type` (`skill_gate:${gate.id}`) — collisions could mis-apply a player's prior pass to a new gate.
+- **Suggested approach:** use `crypto.randomUUID()` for stable gate ids, or have the server assign on first save.
+
+- **Severity:** Critical
+- **File:** src/components/worldLore/EntryCategoryView.jsx
+- **Line:** 117, 137 (and most other worldLore files)
+- **Category:** Base44 leftover
+- **Issue:** WorldLoreEntry CRUD goes through `base44.entities.WorldLoreEntry`. `WorldLoreComment`, `WorldLoreRumor`, `Legend`, `GuildHall`, `GuildHallOption`, `Monster` likewise. ~30 base44 sites in this folder.
+- **Suggested approach:** migrate to Supabase per the systemic finding in homebrew/.
+
+
+- **Severity:** Critical
+- **File:** src/components/worldLore/InteractiveGeographyMap.jsx
+- **Line:** 14–94, 19, 38, 73–77
+- **Category:** GM-vs-player visibility (DOMAIN)
+- **Issue:** Hotspot data shape has no visibility / `gm_only` / `revealed_to` field. Every player sees every pin including ones a GM places to mark secret locations. Mirrors the same `secret_plant`/`villain_flag` audit gap in the prior batch's `InteractiveMapViewer`. Hotspot id is `Date.now().toString()` (line 38) — collision-prone if two GMs add hotspots on the same campaign in the same millisecond. Hardcoded 20-color palette (line 73) repeats the off-brand cyan-and-friends palette from MapViewer; default `color: '#37F2D1'` (line 19, 41).
+- **Suggested approach:** add `visibility: 'all' | 'gm_only' | 'revealed'` field on the hotspot, filter for non-GM viewers; replace `Date.now()` with `crypto.randomUUID()`; lift palette to a shared constant.
+
+- **Severity:** High
+- **File:** src/components/worldLore/MonsterLibrary.jsx
+- **Line:** 14–19
+- **Category:** GM visibility leak (DOMAIN)
+- **Issue:** `canEdit ? monsters : monsters.filter(m => m.discovered)` — non-GM players still receive the full monster list in the React Query cache; the filter is purely UI. Once again the gate is client-side only. Stats data (CR, AC, HP, image_url) ships to the player even before they encounter the monster.
+- **Suggested approach:** filter on the server (Supabase RLS or RPC). Critical because monster stat blocks reveal encounter difficulty before a fight starts.
+
+- **Severity:** High
+- **File:** src/components/worldLore/MonsterLibrary.jsx
+- **Line:** 185–199, 220–243
+- **Category:** Base44 leftover / dangerous AI mass-action
+- **Issue:** Two destructive base44 function invocations behind native `confirm()`: `base44.functions.invoke('enrichMonsters', ...)` and `base44.functions.invoke('exportMonsterImages', ...)`. The "AI Enrich All" path can rewrite the entire monster table for a campaign with no undo, no per-monster diff, no progress UI beyond a toast. The export path fetches base64 and `atob`s it client-side — fine, but the binaryString construction is brittle on large payloads.
+- **Suggested approach:** migrate to a Supabase Edge function with RLS-enforced GM check; replace AI-enrich `confirm()` with an AlertDialog that lists what will change, and add an undo / dry-run mode. For the export, stream rather than base64-in-JSON.
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/MonsterLibrary.jsx
+- **Line:** 242
+- **Category:** Console statements
+- **Issue:** `console.error(err)` left in error handler.
+- **Suggested approach:** remove or wrap in dev-only.
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/MonsterLibrary.jsx
+- **Line:** 186–187, 216–217
+- **Category:** State smell / coupling
+- **Issue:** Reads campaign id from `URLSearchParams(window.location.search).get('id')` instead of receiving it as a prop or from React Router. Couples the component to the URL shape and breaks if the route changes.
+- **Suggested approach:** accept `campaignId` as a prop (the parent route already has it).
+
+
+- **Severity:** Critical
+- **File:** src/components/worldLore/RumorBoardView.jsx
+- **Line:** 29–49, 160–169
+- **Category:** GM truth-flag leak (DOMAIN)
+- **Issue:** `rumors` query returns every row including `is_true` (the GM-only "this rumor is actually true" flag) and `is_approved=false` auto-generated rumors. Players receive the full payload; client-side `visibleRumors` filter just hides them. A player who reads the network response or React Query cache learns whether each rumor is true and which are auto-generated — completely defeats the rumor mystery. UI explicitly labels the GM-only badge "GM: TRUE" / "GM: FALSE" (line 169) but the underlying boolean travels to every client.
+- **Suggested approach:** server-side: do not return `is_true` to non-GM viewers; have an RPC or a row-level transform that strips GM-only fields. Same approach for `is_approved=false` rows — drop them from the query result for non-GMs.
+
+- **Severity:** High
+- **File:** src/components/worldLore/RecentActivity.jsx
+- **Line:** 25–37
+- **Category:** GM visibility leak (DOMAIN)
+- **Issue:** Same client-side visibility filter pattern: `WorldLoreEntry.filter({ campaign_id }, "-created_at", 25)` returns every recent entry; `filterByVisibility` then trims for the player. GM-only entries leak.
+- **Suggested approach:** push visibility into the query (RLS or RPC).
+
+- **Severity:** High
+- **File:** src/components/worldLore/CategoryLandingCards.jsx
+- **Line:** 23, 32, 41
+- **Category:** GM visibility leak / N+1
+- **Issue:** Loads `worldLoreEntriesAll`, `worldLoreRumorsAll`, `worldLoreCommentsAll` for the campaign — all three are full-table fetches that drop GM-only filtering until the client. For a campaign with 1000+ entries the payload is large *and* leaky.
+- **Suggested approach:** server-side filtering + RPC that returns visible-counts per category in one round-trip.
+
+- **Severity:** High
+- **File:** src/components/worldLore/LegendTrackerView.jsx
+- **Line:** 87–97
+- **Category:** Race / data consistency
+- **Issue:** Auto-creates `WorldLoreRumor` rows in a loop with `created_at: new Date().toISOString()` and `is_approved: false`. No idempotency: if `useEffect` at line 110 fires twice (React Strict Mode dev, or re-render with same selected.id) two duplicate rumors land. Title rumors then can't be deduplicated.
+- **Suggested approach:** add an idempotency key (`source_legend_id`) and use upsert with `onConflict`.
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/LegendTrackerView.jsx
+- **Line:** 99
+- **Category:** Console statements
+- **Issue:** `console.error("Auto-rumor failed:", err)`.
+- **Suggested approach:** silent fail or telemetry.
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/GuildHallManager.jsx
+- **Line:** 75–80, 88–92
+- **Category:** TODO leftovers / partial features
+- **Issue:** Both AI generation and image upload are stubbed with toast errors saying "temporarily unavailable." UI buttons render but click results in error toasts. Best-case noise; worst-case broken expectation for GMs.
+- **Suggested approach:** hide the AI-generate button until the endpoint exists; wire image upload through the existing `uploadFile` helper used elsewhere in the folder (EntryForm.jsx:151 already uses it correctly with bucket "user-assets").
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/GuildHallManager.jsx
+- **Line:** 23 (after const declarations)
+- **Category:** Inconsistent file naming / module structure
+- **Issue:** Imports interleaved with const declarations (line 13–22 const, line 23 import). Most bundlers tolerate this but ES modules spec hoists imports — this is just inconsistent style.
+- **Suggested approach:** move all `import` statements to the top.
+
+- **Severity:** High
+- **File:** src/components/worldLore/GuildHallManager.jsx
+- **Line:** 47–72, 100–120
+- **Category:** Race condition / missing error handling
+- **Issue:** `await updateGuildHall(...)` (and create / contribute / select equivalents) discard the supabase response. If `error` is non-null the user sees a success toast and the UI proceeds. `total_contributed` is computed client-side as `current + delta` — two players contributing simultaneously will overwrite each other.
+- **Suggested approach:** check the supabase result; for `total_contributed`, use a Postgres `UPDATE ... SET total_contributed = total_contributed + $1` atomic increment.
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/GuildHallPanel.jsx
+- **Line:** 27, 37, 47
+- **Category:** Console statements
+- **Issue:** Three `console.error(...)` calls in mutation error paths.
+- **Suggested approach:** convert to telemetry / toast.
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/BulkMonsterImageUpload.jsx
+- **Line:** 82
+- **Category:** Console statements
+- **Issue:** `console.error(\`Failed to upload ${match.filename}:\`, error)`.
+- **Suggested approach:** keep for diagnostics or move to telemetry.
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/ConstellationEditor.jsx
+- **Line:** 118
+- **Category:** Console statements (debug)
+- **Issue:** `console.log("Saving constellation:", dataToSave)` — debug log left in.
+- **Suggested approach:** remove.
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/GuildHallDowntimeSection.jsx (95), GuildHallTrainingSection.jsx (54)
+- **Line:** see file list
+- **Category:** Console statements
+- **Issue:** `console.error("characters load failed:", error)` left in production.
+- **Suggested approach:** quiet or telemetry.
+
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/PlayerLegendTracker.jsx
+- **Line:** 9–21
+- **Category:** Hardcoded values
+- **Issue:** Hardcoded `LEGEND_BENCHMARKS` array of 11 score-to-label mappings. If the spec adjusts thresholds (or adds non-D&D systems with different fame curves) every place that displays a legend needs the same change.
+- **Suggested approach:** lift to `@/config/legendBenchmarks.js`.
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/PlayerLegendTracker.jsx, LegendTrackerView.jsx
+- **Line:** 9–21 (Player), parallel block in View
+- **Category:** Duplicate components
+- **Issue:** `PlayerLegendTracker.jsx` and `LegendTrackerView.jsx` have parallel benchmark arrays, parallel score widgets, and overlap heavily on UI. View is the GM-side, Player is the read-only side. Constants and labels should be shared.
+- **Suggested approach:** extract LEGEND_BENCHMARKS, LegendBadge, ScoreBar into shared modules; both views consume.
+
+- **Severity:** Low
+- **File:** src/components/worldLore/CategoryLandingCards.jsx, FactionHeader.jsx, FactionStats.jsx, RegionHeader.jsx, RegionStats.jsx, SectHeader.jsx, SectStats.jsx
+- **Line:** N/A (1–2 KB each)
+- **Category:** Duplicate / inconsistent file naming
+- **Issue:** Three near-identical "Header" + "Stats" pairs (Faction*, Region*, Sect*) with the same shape but copy-paste implementations. ~150 lines of duplicated layout code.
+- **Suggested approach:** unify into a generic `<EntityHeader name image stats>` and `<EntityStats fields>` driven by config; collapse 6 files into 2.
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/RecipeBookViewer.jsx, GrimoireViewer.jsx, PantheonViewer.jsx, FactionViewer.jsx, ArtifactViewer.jsx, SectViewer.jsx, CelestialViewer.jsx
+- **Line:** ~similar shape across files
+- **Category:** Duplicate viewers
+- **Issue:** Seven category-specific "Viewer" components with parallel structures: list selector + detail pane + linked-entry sidebar + `dangerouslySetInnerHTML` body. Most diverge only on the metadata fields rendered.
+- **Suggested approach:** merge into a generic `<CategoryViewer>` driven by category config from `@/data/worldLoreTemplates`; keep custom renderers (Calendar, Constellation, Map) as overrides.
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/TemplateRenderer.jsx
+- **Line:** 19–48 (1199 lines total)
+- **Category:** Size / maintainability
+- **Issue:** Largest worldLore file at ~1200 lines; renders 18 different template types in a single switch with each template's full markup inline.
+- **Suggested approach:** split per-template into `templates/wantedPoster.jsx`, etc.; switch becomes a lookup map.
+
+- **Severity:** Medium
+- **File:** src/components/worldLore/EntryForm.jsx
+- **Line:** 36
+- **Category:** Math / id collisions
+- **Issue:** see prior finding on gate id.
+- **Suggested approach:** see prior.
+
+- **Severity:** Low
+- **File:** src/components/worldLore/* (all 43 files)
+- **Line:** N/A
+- **Category:** Brand color mismatch
+- **Issue:** Aggregated `#37F2D1` count across worldLore is high (~80+ instances). Combined with `#1E2430`, `#0b1220`, `#050816`, `#1e293b`, `#1a1f2e`, `#151922`, `#1a1814`, `#12100e` — there are at least 8 distinct dark-surface tokens used inconsistently.
+- **Suggested approach:** consolidate to 3–4 surface tokens once design signs off the palette.
+
+- **Severity:** High
+- **File:** src/components/worldLore/* (all viewers)
+- **Line:** N/A
+- **Category:** Missing error boundaries
+- **Issue:** No file in worldLore (or any other batch folder) wraps its rendering in an error boundary. A bad `entry.metadata` shape, a malformed JSON in `knowledge_gates`, or a thrown error in `TemplateRenderer` crashes the entire World Lore page.
+- **Suggested approach:** wrap each top-level lore page (and the TemplateRenderer dispatch) in an ErrorBoundary that surfaces a friendly fallback while preserving the surrounding navigation.
+
+##### Folder roll-up — worldLore/
+
+43 files / 13,444 lines / heavy GM-vs-player visibility surface area / largest XSS attack surface in the batch (8 `dangerouslySetInnerHTML` sites on user-supplied lore HTML). Visibility is enforced exclusively client-side via `filterByVisibility` — the underlying queries fetch *all* rows, so any inspectable client (network tab, React Query devtools) reveals GM-only entries, unapproved rumors, the GM-only `is_true` flag, and full monster stat blocks before encounter. Knowledge gates are CSS-only — content text is delivered to the player even when the language tier is "unknown". Skill-check rolls are computed client-side and posted as the player's claimed result. Twelve native `confirm()` dialogs guard destructive actions including "Revoke deed and delete all guild hall data" and "AI-generate images for all monsters." Two `world_lore` columns (`image_url`, `images`, `template_type`) are correctly handled by `EntryForm` and `TemplateRenderer`. `Math.random()` for decorative star/sparkle positioning rerenders on every paint (Calendar, Celestial). 30+ base44 sites — second only to homebrew/.
+
+
+---
+
+##### Batch 1A-vi Summary
+
+**Scope:** 74 files / ~41,800 lines across `homebrew/`, `workshop/`, `tavern/`, `worldLore/`.
+
+**Findings by severity (this batch):**
+- Critical: 16
+- High: 25
+- Medium: 32
+- Low: 10
+- Cosmetic: 0
+- Total: ~83
+
+**Findings by category (top categories this batch):**
+- Base44 leftover: ~6 file-spanning findings covering 106 sites across the batch
+- Tier gate gaps (DOMAIN): 5 (CreateModDialog open-to-Free, five Create*ModDialog Veteran-instead-of-Adventurer, InstallModDialog open-to-Free for non-code mods, CreatorUploadDialog open-to-Free)
+- World lore visibility leaks (DOMAIN): 6 (EntryCategoryView, RecentActivity, CategoryLandingCards, RumorBoardView, MonsterLibrary, GatedEntryView content-leak)
+- XSS risks (DOMAIN): 2 file-spanning findings covering 8 `dangerouslySetInnerHTML` sites + 1 popup `innerHTML`
+- Spice/real-money confusion (DOMAIN): 2 (SpiceEmporium wallet-credit-without-payment, Workshop USD prices)
+- Multi-game abstraction: 6 (every brewery creator hardcodes `dnd5e`)
+- Brand color mismatch: ~12 file-level findings (~376 hex literals batch-wide)
+- Console statements: 13 (homebrew 5, tavern 1, worldLore 7)
+- Native `confirm()`/`alert()`: 12 sites collapsed into 2 findings
+- Dead code: 4 (Workshop CreatorCard/ProductCard/TopProducts + ComingSoonDialog in CreateModDialog)
+- Duplicate components: 4 (Faction/Region/Sect Header+Stats trios, parallel category viewers, parallel legend trackers)
+- Hardcoded values: 12 (`SPICE_PER_USD = 250` duplicated in 7 files, BUNDLES, LEGEND_BENCHMARKS, brewery creator_tier payload duplication, Workshop unsplash URLs)
+- Race conditions: 3 (rating aggregates, guild hall total_contributed, auto-rumor double-fire)
+- Performance: 4 (per-entry comment fan-out, Math.random in render, Promise.all over entry IDs, monster image base64)
+- Accessibility: 6 (kbd vs code, native dialogs, aria-label gaps, key-on-index, missing focus traps via window.confirm, no error boundaries)
+- File size / maintainability: 3 (CreateHomebrewDialog 5,983 lines, EntryForm 1,100 lines, TemplateRenderer 1,199 lines)
+
+**Top systemic issues:**
+
+1. **Tier gating drift across the Brewery.** All five non-code mod creators (`CreateClassModDialog`, `CreateRaceModDialog`, `CreateContentPackDialog`, `CreateReskinModDialog`, `CreateSheetModDialog`) gate **publishing** to `tierAtLeast(tier, "veteran")` — one tier too strict per spec ("Adventurer+ can publish non-code homebrew"). `CreateCodeModDialog` is correctly Veteran. `CreateModDialog` chooser is open to Free. `InstallModDialog` only gates code-mod install. There is no central `TIER_REQUIREMENTS` constant — tier strings are scattered across `tierAtLeast(...)` calls in each file. **Recommendation:** introduce `TIER_REQUIREMENTS = { brewery_data: "adventurer", brewery_code: "veteran", install: "adventurer" }` in a single config file; every gate consumes it.
+
+2. **Knowledge-gate / GM-visibility leaks are systemic, not isolated.** Every world-lore visibility gate (entries, rumors, monsters, hotspots, GM-only `is_true`, locked-language content) is enforced **client-side** while the underlying query returns the unredacted row. A determined player simply opens devtools and reads everything — including GM-only entries, rumor truth flags, stat blocks for unencountered monsters, and the plaintext of "unknown-language" lore. **This mirrors and expands the prior batch's `secret_plant`/`villain_flag` finding.** **Recommendation:** server-side enforcement is required. RLS policies on `world_lore_entries`, `world_lore_rumors`, `monsters`, plus an RPC `list_visible_lore(campaign_id, viewer_role)` that strips GM-only fields. Client-side filters become a UX nicety, not a security boundary.
+
+3. **XSS and content-rendering trust.** Eight `dangerouslySetInnerHTML` sites in worldLore (TemplateRenderer Freeform + 7 viewers) render lore content as raw HTML with no DOMPurify. Co-DM compromise or future "import lore" features cleanly opens a stored-XSS path that fires for every player viewing the campaign. Plus one tavern popup `innerHTML` template-literal site (DiceSkinCreator). **Recommendation:** centralize a `<SafeHtml>` component running DOMPurify with a strict allowlist; replace all 8+1 sites.
+
+4. **Two production-shippable monetization bugs.**
+   - `SpiceEmporium.jsx` mints Spice in production with no payment when a user clicks Buy (TODO(stripe) left an uncommented direct `addSpice` call in the mutation body). Until the Stripe Edge function lands this is a wallet-credit exploit available to any signed-in user.
+   - `Workshop.jsx` (out-of-folder, only consumer of `workshop/`) advertises USD-priced products with an "Add to Cart" button that goes nowhere — leftover Base44 marketplace concept that contradicts the Spice-only Tavern rule.
+
+**Specific note on TIERS constant drift:**
+There is no `@/config/tiers.js` (or equivalent) exporting tier names + per-tier numeric values (upload fees, splits, min cashout, Spice required for an action). Tiers travel through the codebase as the magic strings `"free"`, `"adventurer"`, `"veteran"`, `"guild"` and through the `tierAtLeast` helper. Upload fees live in `@/config/spiceConfig` (`UPLOAD_FEES`) — good — but the implied `CREATOR_SPLIT[tier]` and `MIN_CASHOUT_SPICE` are not visible in the four scope folders (likely server-side or in `tavernClient`). The five wrong-tier `canPublish` checks in homebrew creators would have been a single-file fix if the requirements lived in one place. **Recommendation:** a single `TIERS` config file with: `LABEL`, `MIN_TIER_FOR_ACTION` (publish-data, publish-code, install, list-tavern, request-cashout), `UPLOAD_FEE`, `CREATOR_SPLIT`, `SPICE_DISCOUNT`, plus a `tierAtLeast` helper.
+
+**Specific note on world lore visibility leaks:**
+Pattern is consistent — every list-style query in worldLore fetches the full row and applies `filterByVisibility` client-side. Files affected (in scope of this batch): `EntryCategoryView.jsx`, `RecentActivity.jsx`, `CategoryLandingCards.jsx`, `RumorBoardView.jsx`, `MonsterLibrary.jsx`, plus `GatedEntryView`'s content-rendering of locked-language entries. The `filterByVisibility` helper in `@/utils/worldLoreVisibility` is used as if it were a security control but it is presentation-only. **Recommendation: track this as a single backend cross-cutting ticket — "world lore visibility must move to RLS/RPC" — before further frontend feature work in this folder.**
+
+**Specific note on copyright / OGL concerns:**
+No instances of paid-system text (Pathfinder, World of Darkness, Star Wars 5e, etc.) being treated as freely shareable were observed in this batch. The Brewery creators all default to `gameSystem = "dnd5e"` (the OGL system) and the Tavern marketplace is cosmetics-only. Game packs use Stripe, gating the system to ownership before content download (correct per spec). The **risk** is that the multi-game abstraction is missing — when paid systems are added, the same Brewery creators would happily publish copyrighted text under the same flow unless gated. Track as a "pre-multi-game readiness" item rather than an active leak. The bigger near-term concern is the lack of any content-moderation surface on user-uploaded `entry.content` HTML (XSS aside, copyright-infringing prose can also be uploaded freely).
+
+**Shippability per folder:**
+- **homebrew/** — should not ship the Brewery flow until the five Veteran-vs-Adventurer canPublish checks are corrected and a `TIERS` constant exists. Base44 leftovers are heavy but functional; migrate alongside the tier-gate fix.
+- **workshop/** — recommend deletion; legacy Base44 marketplace superseded by Tavern + GamePacksGrid.
+- **tavern/** — generally ship-ready except for: (a) the `SpiceEmporium` wallet-credit-without-payment exploit (gate behind `import.meta.env.DEV` immediately), (b) URL-as-asset inputs in `CreatorUploadDialog`, (c) `SPICE_PER_USD` extraction.
+- **worldLore/** — **must not advance to public-launch state** until visibility leaks move server-side and the eight `dangerouslySetInnerHTML` sites pass through DOMPurify. Internal/closed-beta usage is acceptable but the trust model is incomplete.
+
