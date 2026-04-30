@@ -4980,3 +4980,944 @@ Folders covered (in order): `/src/components/characterCreator/`, `/src/component
 **Multi-game abstraction readiness:** **NOT READY.**
 The current `/characterCreator/` is effectively the `/dnd5e/characterCreator/` — D&D-specific data lives in every step, often hardcoded inline rather than imported from `/dnd5e/`. To support PF2e / WoD / Mörk Borg / CY_BORG / KoB / BitD as game packs, the steps must be split into a system-agnostic shell (mode selector, step navigation, basic identity) plus per-system step modules driven by a registry. As of this batch, that split does not exist; even `/characterCreator/AbilityScoresStep.jsx` hardcodes the six D&D abilities in 24 distinct lines. Plan on a substantial refactor before enabling a second game pack.
 
+
+
+### Batch 1A-v-a: combat + dice
+
+#### /src/components/combat/
+
+##### PortraitWithState.jsx
+
+- **Severity:** Medium
+  **File:** src/components/combat/PortraitWithState.jsx
+  **Line:** 37, 98–104
+  **Category:** DOMAIN — Combat tracker dynamic portrait states
+  **Issue:** Bloodied/dead thresholds (`<=50%`, `<=0`) are hardcoded directly into the component. Spec says 50% and 0% are required, but the literals are not exported as named constants and are duplicated between the component body and the `portraitStateOf` utility, so the two will drift if either is changed.
+  **Suggested approach:** Extract `BLOODIED_HP_PERCENT = 50` (and equivalent dead threshold) into a shared constants module (e.g. `combatConstants.js`); reuse across both the component and the helper.
+
+- **Severity:** Medium
+  **File:** src/components/combat/PortraitWithState.jsx
+  **Line:** 62–79
+  **Category:** Inline styles that should be Tailwind/CSS
+  **Issue:** Bloodied overlay uses an inline `style={{ backgroundImage, mixBlendMode, … }}` with multi-layer radial gradients embedded in JSX. This is brittle, hard to theme, and pure presentation that belongs in CSS.
+  **Suggested approach:** Move the overlay declarations into `index.css` under the existing `.bloodied-overlay` selector (already referenced by className), drive opacity with a CSS custom property.
+
+- **Severity:** Medium
+  **File:** src/components/combat/PortraitWithState.jsx
+  **Line:** 86
+  **Category:** Hardcoded values / accessibility
+  **Issue:** Death state is conveyed solely by the literal "💀" emoji + greyscale. Emoji rendering varies across platforms; for screen readers the emoji has no role/label.
+  **Suggested approach:** Wrap the skull in `<span role="img" aria-label="dead">…` (or a proper SVG icon component), and consider exposing a `deadIcon` prop so non-D&D systems (Mörk Borg etc.) can supply their own symbol — this component is currently in `/combat/` but its visuals are system-specific.
+
+- **Severity:** Low
+  **File:** src/components/combat/PortraitWithState.jsx
+  **Line:** 36
+  **Category:** Math / edge case
+  **Issue:** When `max <= 0`, `pct` defaults to `100` ("healthy"), but `cur` could still be `0`. The death check at line 37 catches `cur <= 0`, but a max-less monster with current=10 would render as healthy regardless of any wound state.
+  **Suggested approach:** Treat `max <= 0` as "unknown HP — render plain portrait, no overlay state" rather than forcing healthy.
+
+- **Severity:** Low
+  **File:** src/components/combat/PortraitWithState.jsx
+  **Line:** 1
+  **Category:** Missing error boundaries
+  **Issue:** No error boundary; image load errors fall through to a broken-image graphic with no fallback.
+  **Suggested approach:** Add an `onError` handler that swaps to the `fallback` slot when the `<img>` fails (e.g. broken Supabase URL after Base44 sunset).
+
+##### ConditionRing.jsx
+
+- **Severity:** High
+  **File:** src/components/combat/ConditionRing.jsx
+  **Line:** 26 (CONDITIONS / CONDITION_COLORS imported from `@/components/combat/conditions`)
+  **Category:** Multi-game abstraction concerns
+  **Issue:** Component is in `/combat/` (system-agnostic per audit rules) but imports a D&D-5e-specific condition list (Blinded, Charmed, Frightened, Stunned, etc.) from `combat/conditions.js`. PF2e/Mörk Borg/CY_BORG have entirely different status taxonomies; this component will not render their conditions correctly.
+  **Suggested approach:** Make the rendering driven by a `conditions` prop carrying `{ name, color, description }` already resolved by the caller (via the active game pack). The /combat/ component should not import the D&D condition table directly.
+
+- **Severity:** Medium
+  **File:** src/components/combat/ConditionRing.jsx
+  **Line:** 41 (`Dodging: "#37F2D1"`)
+  **Category:** Brand color mismatches
+  **Issue:** Hardcoded brand cyan `#37F2D1`. (1 occurrence in this file; logged for systemic count.)
+  **Suggested approach:** Replace with brand token once the palette decision lands.
+
+- **Severity:** Medium
+  **File:** src/components/combat/ConditionRing.jsx
+  **Line:** 28
+  **Category:** Hardcoded values
+  **Issue:** `MAX_VISIBLE = 4` ring cap, `step = 4` radius step, `20 + i * 3` rotation duration, `fontSize` thresholds — all magic numbers inline.
+  **Suggested approach:** Hoist to module-level constants with names; group as a `RING_TUNING` object so designers can adjust without re-reading the geometry math.
+
+- **Severity:** Medium
+  **File:** src/components/combat/ConditionRing.jsx
+  **Line:** 133
+  **Category:** Brand color mismatches / Tailwind arbitrary values
+  **Issue:** Tooltip uses arbitrary value `bg-[#050816]/97` (dark blue surface) plus `shadow-[0_20px_60px_rgba(0,0,0,0.8)]` — neither matches the documented surface palette and they're embedded across the `/combat/` and `/dice/` folders.
+  **Suggested approach:** Resolve once palette is finalized; replace with theme tokens.
+
+- **Severity:** Medium
+  **File:** src/components/combat/ConditionRing.jsx
+  **Line:** 51, 55
+  **Category:** Performance
+  **Issue:** Animation runs continuously on every visible portrait via `gs-spin` keyframe; with a long initiative order each conditioned combatant gets up to 4 SVG groups animating. With ~10+ combatants this can cause measurable repaint overhead on lower-end devices.
+  **Suggested approach:** Pause animations when off-screen (`IntersectionObserver` or CSS `content-visibility: auto`); consider gating the rotating arcs behind `prefers-reduced-motion` media query.
+
+- **Severity:** Medium
+  **File:** src/components/combat/ConditionRing.jsx
+  **Line:** 130–161
+  **Category:** Accessibility
+  **Issue:** The condition tooltip is shown on `mouseenter` only — no keyboard equivalent (`onFocus`/`onBlur`) and no ARIA. Players using keyboard or screen reader cannot discover what conditions a combatant has.
+  **Suggested approach:** Add focusable wrapper, mirror onFocus/onBlur with the hover state, give the tooltip `role="tooltip"` and the trigger `aria-describedby`. Without this, conditions are invisible to AT users.
+
+
+##### useTurnContext.jsx
+
+- **Severity:** High
+  **File:** src/components/combat/useTurnContext.jsx
+  **Line:** 20–93
+  **Category:** Inconsistent file naming
+  **Issue:** File is `.jsx` but contains zero JSX — exports a single hook returning a plain object. The other `.jsx` siblings in `/combat/` actually render JSX. Mixed naming is already noted as systemic; this is one of the cleaner violations to flag.
+  **Suggested approach:** Rename to `useTurnContext.js` (the hook is pure logic).
+
+- **Severity:** High
+  **File:** src/components/combat/useTurnContext.jsx
+  **Line:** 33–34
+  **Category:** DOMAIN — GM/player permission gating
+  **Issue:** `actorIsGM` is determined solely by `actor.type === "monster" || actor.type === "npc"`. There is no check that the actor was injected by an actually-GM session — any client could pass `{ type: "monster" }` and unlock GM-side ally/enemy queues. The hook is consumed by combat UIs that route different actions for GM vs player.
+  **Suggested approach:** Determine GM-ness from the campaign membership (e.g. `campaign.gm_id === currentUser.id`) at the call site and pass it in explicitly. Don't infer authorization from the actor entity's `type` field.
+
+- **Severity:** Medium
+  **File:** src/components/combat/useTurnContext.jsx
+  **Line:** 76–79
+  **Category:** Hardcoded values
+  **Issue:** "Up next" allies and enemies are capped at `4` in two unlabelled magic numbers.
+  **Suggested approach:** Hoist to a named constant (`UP_NEXT_LIMIT`), or accept it as a hook option.
+
+- **Severity:** Medium
+  **File:** src/components/combat/useTurnContext.jsx
+  **Line:** 45–53
+  **Category:** State management smells
+  **Issue:** Identity matching across four heuristics (`id`, `uniqueId`, `user_id`, `player-${user_id}`). This indicates the rest of the system stores combatant identity inconsistently and is a maintenance hazard — a missed alias means "is it my turn" silently returns false.
+  **Suggested approach:** Settle on a single canonical id at the moment a combatant is added to `combat_data.order`; use that same id across UI and DB writes.
+
+- **Severity:** Low
+  **File:** src/components/combat/useTurnContext.jsx
+  **Line:** 73
+  **Category:** Math / edge case
+  **Issue:** `if (c.id === active.id && order.length === 1) continue;` skips self only when there is exactly one combatant; if `order.length > 1` and the current actor appears elsewhere in the list (e.g. mounts, summoned creatures sharing an id), they'll be listed in their own up-next queue.
+  **Suggested approach:** Skip self unconditionally; the `length === 1` guard is unnecessary.
+
+##### hpColor.js
+
+- **Severity:** Medium
+  **File:** src/components/combat/hpColor.js
+  **Line:** 15–17, 22–25
+  **Category:** Brand color mismatches / hardcoded values
+  **Issue:** HP bar colors hardcoded as `#22c55e`/`#eab308`/`#ef4444` (Tailwind green-500/yellow-500/red-500). Used everywhere via `bg-[#…]` arbitrary classes which conflict with the documented palette (#FF5300/#04685A). Also, identical thresholds (50/25) live in both functions.
+  **Suggested approach:** Move thresholds and colors to a single config object, expose as `HP_COLOR_TIERS = [{min:50,…},{min:25,…},{min:0,…}]`. Replace inline hex with theme tokens once palette decision lands.
+
+- **Severity:** Medium
+  **File:** src/components/combat/hpColor.js
+  **Line:** 29–33
+  **Category:** Math errors / state management
+  **Issue:** `clampHp(current, max, delta)` subtracts delta from current — this is a damage-only signature when applied directly, but the docstring says "works for damage AND healing". Healing is encoded by passing a *negative* delta, which is non-obvious from the function name and trivially mis-called by passing positive heal amounts (which would deal damage). No callers within this file reveal which convention the rest of the app uses.
+  **Suggested approach:** Either rename to `applyDamage` (positive=damage) or split into `applyDamage`/`applyHeal`/`setHp` with explicit names.
+
+- **Severity:** Medium
+  **File:** src/components/combat/hpColor.js
+  **Line:** 48–93
+  **Category:** State management smells
+  **Issue:** `normalizeHp` exists specifically because HP shape is inconsistent across the codebase (six different observed shapes). This is itself a smell — the normalizer is a band-aid for upstream inconsistency.
+  **Suggested approach:** Pick a canonical HP shape (`{ current, max, temporary }`) and migrate all writers to emit it; relegate `normalizeHp` to a one-time migration helper rather than a runtime read path.
+
+- **Severity:** Low
+  **File:** src/components/combat/hpColor.js
+  **Line:** 86–90
+  **Category:** Math errors
+  **Issue:** SRD-style "135 (18d10 + 36)" parsing extracts only the first integer, which assumes the average always appears first. SRD/Open5e data is consistent here, but homebrew or imported monster blocks may format differently (e.g. `"(18d10+36) avg 135"`).
+  **Suggested approach:** Be explicit about the expected format, or look for a digit followed by `(` to ensure we extract the average rather than any first integer.
+
+##### deathSaves.js
+
+- **Severity:** Critical
+  **File:** src/components/combat/deathSaves.js
+  **Line:** 1–100
+  **Category:** Multi-game abstraction concerns
+  **Issue:** Entire module encodes D&D 5e-specific death save mechanics (3 successes / 3 failures, nat-20-revives-to-1, crit doubles failures) and lives in the system-agnostic `/combat/` folder. Pathfinder 2e uses a 4-stage Dying condition; Mörk Borg uses a critical-injury table; CY_BORG/KoB/BitD/WoD all differ.
+  **Suggested approach:** Move to `/dnd5e/` and have the combat tracker resolve "dying" semantics through an active-game-pack hook (e.g. `useGameSystem().resolveDeathRoll(...)`).
+
+- **Severity:** Medium
+  **File:** src/components/combat/deathSaves.js
+  **Line:** 50
+  **Category:** Math / state edge case
+  **Issue:** `normalizeDeathSaves` will set `stabilized = true` when `s >= 3 && f < 3`. Combined with `dead: !!saves?.dead || f >= 3`, an entry with `s=3, f=3` is computed `stabilized=false, dead=true` — fine. But a previously-stabilized character (`stabilized=true, s=3, f=0`) who later takes a failure (`s=3, f=1`) will still report `stabilized=true` because `s>=3 && f<3` is still true. Stabilization should not auto-reapply once cleared.
+  **Suggested approach:** Once stabilized, the actor leaves the dying state — they shouldn't be normalizing further saves at all. The normalizer should refuse to recompute stabilized; only the orchestrator should set/clear it.
+
+- **Severity:** Medium
+  **File:** src/components/combat/deathSaves.js
+  **Line:** 62–90
+  **Category:** DOMAIN — Dice/RNG concerns / race conditions
+  **Issue:** `applyDeathSaveRoll` takes a pre-rolled `d20` integer, so the source of randomness is opaque to this module. If the caller uses `Math.random()` for combat-critical rolls anti-cheat-wise, this function is complicit. Also, the function is purely synchronous on `existing` — concurrent writes (player and GM both rolling) will race.
+  **Suggested approach:** Document required RNG provenance in a JSDoc invariant; make all combat-critical rolls funnel through a single seeded/auditable RNG. Resolve persistence races at the database layer (transactional update with optimistic concurrency on `combat_data.version`).
+
+- **Severity:** Low
+  **File:** src/components/combat/deathSaves.js
+  **Line:** 95–99
+  **Category:** Hardcoded values
+  **Issue:** "Crits add 2 failures" magic number `add = critical ? 2 : 1`.
+  **Suggested approach:** Hoist into named constants `DEATH_FAILURE_PER_HIT = 1`, `DEATH_FAILURE_PER_CRIT = 2`.
+
+
+##### classResources.js
+
+- **Severity:** Critical
+  **File:** src/components/combat/classResources.js
+  **Line:** 1–189
+  **Category:** Multi-game abstraction concerns
+  **Issue:** Entire module is D&D 5e specific (Barbarian rages, Monk ki, Fighter Action Surge / Second Wind, Paladin Lay-on-Hands, Bard Inspiration, Sorcerer points, Cleric Channel Divinity, Druid Wild Shape) and imports from `@/components/dnd5e/dnd5eRules`. Yet it lives at `/components/combat/classResources.js`, defeating the abstraction.
+  **Suggested approach:** Move file to `/components/dnd5e/classResources.js`. Combat tracker should consume a system-agnostic `resources` array yielded by the active game pack.
+
+- **Severity:** High
+  **File:** src/components/combat/classResources.js
+  **Line:** 56–58, 117–119
+  **Category:** Hardcoded values / math
+  **Issue:** Action Surge fallback `level >= 17 ? (uses[17] || 2) : (uses[2] || 1)` mixes mechanics-table lookups with magic-number fallbacks. If `CLASS_ABILITY_MECHANICS['Action Surge'].uses` is missing or shaped differently, the silent fallback may give an incorrect resource count.
+  **Suggested approach:** If the table is required, fail loudly on missing keys (assert during dev). Don't bake the canonical numbers into both the table and the fallback.
+
+- **Severity:** Medium
+  **File:** src/components/combat/classResources.js
+  **Line:** 89, 141
+  **Category:** Math / hardcoded values
+  **Issue:** Wild Shape uses hardcoded `2` regardless of subclass; PHB Druid (Circle of the Moon) and various subclass features modify wild shape uses. `bardicInspirationRemaining` similarly uses `Math.max(1, chaMod)` regardless of class features that may scale it differently.
+  **Suggested approach:** Drive these from `dnd5eRules` (which already exists for some abilities).
+
+- **Severity:** Medium
+  **File:** src/components/combat/classResources.js
+  **Line:** 73, 129, 167
+  **Category:** State management smells
+  **Issue:** Reads `character.attributes?.cha`. The character schema elsewhere uses `stats.attributes.cha`, `attributes.charisma`, or `ability_scores.cha` depending on the writer. Silent fallback `|| 10` will produce wrong inspiration count.
+  **Suggested approach:** Normalize attribute access via a single helper (referenced repeatedly by prior batches).
+
+- **Severity:** Low
+  **File:** src/components/combat/classResources.js
+  **Line:** 47, 89, 161
+  **Category:** Hardcoded values
+  **Issue:** Default `RAGES_PER_DAY[level] || 2` — when the level lookup fails, every Barbarian regardless of level gets 2 rages.
+  **Suggested approach:** Don't silently mask missing-data bugs; either throw or log a warn.
+
+##### conditions.js
+
+- **Severity:** Critical
+  **File:** src/components/combat/conditions.js
+  **Line:** 1–383
+  **Category:** Multi-game abstraction concerns
+  **Issue:** Entire D&D 5e condition library plus modifier resolver lives in `/combat/`, including specific 5e rules (advantage/disadvantage cancel, War Caster feat, Barbarian Danger Sense level gate, exhaustion ladder per PHB p.291). Other systems do not have advantage/disadvantage; flagging this whole file as system-specific.
+  **Suggested approach:** Move to `/components/dnd5e/conditions.js`; expose `getConditionModifiers` as a game-pack interface method.
+
+- **Severity:** High
+  **File:** src/components/combat/conditions.js
+  **Line:** 41
+  **Category:** Brand color mismatches
+  **Issue:** `Dodging: "#37F2D1"` — brand cyan hardcoded. (1 occurrence; logged for systemic count.)
+  **Suggested approach:** Token replacement.
+
+- **Severity:** High
+  **File:** src/components/combat/conditions.js
+  **Line:** 226–235
+  **Category:** State management smells
+  **Issue:** Feat detection walks four possible shapes (`feats`, `features`, `class_features`, `metadata.feats`). Same systemic schema-shape problem as elsewhere — if a feat lives somewhere else (e.g. `subclass_features`) War Caster is silently inactive.
+  **Suggested approach:** Single canonical feat-list helper; remove the heuristic chain.
+
+- **Severity:** High
+  **File:** src/components/combat/conditions.js
+  **Line:** 315–322
+  **Category:** Math / DOMAIN combat correctness
+  **Issue:** `auto_fail_save` is currently flagged for *any* save against a target with the rule, regardless of whether the save is in `m.saves` (`["str","dex"]`). The TODO admits "Future: check save ability vs m.saves" — a Paralyzed creature should only auto-fail STR/DEX saves, but as written it auto-fails Wisdom/Charisma saves too.
+  **Suggested approach:** Implement the save-ability check now (`if (!m.saves?.includes(normalizedSave)) continue;`); this is a real combat-correctness bug.
+
+- **Severity:** Medium
+  **File:** src/components/combat/conditions.js
+  **Line:** 26–44
+  **Category:** Brand color mismatches
+  **Issue:** 17 inline condition colors hardcoded as hex strings; none match the brand palette. Some are duplicated across `ConditionRing.jsx`, action bar, and dice window. (17 hex literals; logged for systemic count.)
+  **Suggested approach:** Single source of color tokens once palette finalizes.
+
+- **Severity:** Medium
+  **File:** src/components/combat/conditions.js
+  **Line:** 178–187, 193–199
+  **Category:** Dead code / state management
+  **Issue:** `isIncapacitated` and `getNoActionConditionName` are functionally redundant — both walk the conditions list checking the same rule. Consumers can call one and infer the other.
+  **Suggested approach:** Replace `isIncapacitated` callers with `Boolean(getNoActionConditionName(...))`.
+
+- **Severity:** Medium
+  **File:** src/components/combat/conditions.js
+  **Line:** 348–373
+  **Category:** Math / DOMAIN
+  **Issue:** Exhaustion handler emits warnings only — does not actually halve speed/HP-max or zero out movement. The `warnings` array is informational; the combat tracker still computes movement/HP from the unmodified entity.
+  **Suggested approach:** Either return numeric multipliers (`speedMultiplier`, `hpMaxMultiplier`) for the consumer to apply, or document explicitly that exhaustion is informational.
+
+
+##### actionResolver.js
+
+- **Severity:** Critical
+  **File:** src/components/combat/actionResolver.js
+  **Line:** 1–883
+  **Category:** Multi-game abstraction concerns
+  **Issue:** This is the single largest D&D 5e mechanics file in the entire `/combat/` folder — 883 lines of D&D-specific behavior (action economy, cantrip scaling, upcasting, spell attack vs save, action surge, sneak attack assumptions). Comment at line 1 already calls itself "D&D 5e Action Resolver". Belongs entirely under `/dnd5e/`.
+  **Suggested approach:** Move to `/components/dnd5e/actionResolver.js`. Combat tracker should consume an opaque `{ rollType, cost, … }` resolved by the active game pack.
+
+- **Severity:** Critical
+  **File:** src/components/combat/actionResolver.js
+  **Line:** 80–183, 229–317, 538–598
+  **Category:** Hardcoded values / state management smells
+  **Issue:** Three large hardcoded spell tables (`SPELL_DAMAGE_DICE` ~100 entries, `SPELL_EFFECTS_FALLBACK` ~60 entries, `SPELL_ATTACK_SPELLS`/`SPELL_SAVE_MAP`/`NO_ROLL_SPELLS`). These duplicate data that lives in the `dnd5e_spells` table (per the comment on line 222–227). Risk: data drift when the DB row changes but the hardcoded table doesn't.
+  **Suggested approach:** Migrate the fallback tables out into a JSON data file consumed both by a one-time DB seed and by this resolver, or query the DB row once and rely on the `classifySpellEffect` parser. The current dual-source-of-truth is asking to drift.
+
+- **Severity:** High
+  **File:** src/components/combat/actionResolver.js
+  **Line:** 60–67, 70–73, 585–598
+  **Category:** Math / DOMAIN combat correctness
+  **Issue:** Bonus-action and reaction-spell sets are inconsistent. `Healing Word` and `Mass Healing Word` appear in BOTH `BONUS_ACTION_SPELLS` and `NO_ROLL_SPELLS`. `Magic Missile`, `Cure Wounds`, `Bless`, `Mage Armor` etc. show up in `NO_ROLL_SPELLS` even though several of them require a target/healing roll. `Counterspell` and `Dispel Magic` are listed in `NO_ROLL_SPELLS` AND `REACTION_SPELLS`. The interplay of `getSpellCost` and `resolveAction` may produce off-by-one action-economy bugs.
+  **Suggested approach:** Consolidate to a single per-spell descriptor `{ cost, rollType, … }`. Lint for spells appearing in multiple sets.
+
+- **Severity:** High
+  **File:** src/components/combat/actionResolver.js
+  **Line:** 246
+  **Category:** Math errors
+  **Issue:** Magic Missile listed as `dice: "3d4+3"` — that's the level-1 cast. Per RAW Magic Missile fires `1d4+1` per dart × 3 darts at level 1, with `+1d4+1 per upcast`. Some renderers will treat `3d4+3` as a single damage roll rather than three separate targeting rolls, which changes per-target distribution.
+  **Suggested approach:** Encode multi-target spells as `{ multiAttack: 3, dice: "1d4+1" }` so the renderer rolls each dart separately. The rest of the code already uses `multiAttack` for Scorching Ray (line 249).
+
+- **Severity:** High
+  **File:** src/components/combat/actionResolver.js
+  **Line:** 469–475
+  **Category:** Math / dice notation parsing
+  **Issue:** `getScaledDice` only handles the strict regex `^(\d+)d(\d+)$`. Anything with a `+modifier` (e.g. "1d4+1" Magic Missile cantrip variant) or compound dice ("2d8+4d6") returns unscaled. Comment (467) acknowledges the limitation but the resolver routes all cantrips through this path — Magic Stone (1d6), Magic Missile-style cantrips, Eldritch Blast multi-beam are silently mis-scaled.
+  **Suggested approach:** Extend the parser to accept `(\d+)d(\d+)(?:\+\d+)?` for the trailing flat, document that compound `+NdM` cannot scale via cantrip rule (which is correct), and emit a console warn when an unscalable shape is fed in.
+
+- **Severity:** High
+  **File:** src/components/combat/actionResolver.js
+  **Line:** 490–535
+  **Category:** Math / dice notation parsing
+  **Issue:** `getUpcastDice` handles three forms but silently bails on most edge cases (no upcast rule + non-simple base = unchanged). For spells like Magic Missile (`3d4+3`, +1d4+1 per upcast), the resulting expression `3d4+3+1d4+1` is technically valid but no consumer test confirms collapse correctness.
+  **Suggested approach:** Add unit tests covering at minimum: Magic Missile, Fireball, Burning Hands, Heal (flat), Inflict Wounds. Without them, upcasting is a silent-correctness hazard.
+
+- **Severity:** High
+  **File:** src/components/combat/actionResolver.js
+  **Line:** 353–457
+  **Category:** Math / DOMAIN combat correctness
+  **Issue:** `classifySpellEffect` parses spell effect from the description string, taking the first `\d+d\d+` it finds. For spells like "Toll the Dead" (1d8 if undamaged, 1d12 if damaged) it picks 1d8 silently; for spells like "Spiritual Weapon" (1d8 + spellmod) it picks 1d8 but cannot resolve the +mod; for Magic Missile descriptions ("three darts of magical force … each dart hits a creature … 1d4+1 force damage") the regex grabs "1d4" and drops the +1, then the multi-attack count of 3 is never inferred.
+  **Suggested approach:** Don't auto-classify damage from description text for combat-critical math. Treat parser output as advisory; require a manual entry for any spell used in actual combat dice flows.
+
+- **Severity:** Medium
+  **File:** src/components/combat/actionResolver.js
+  **Line:** 793, 796–797, 802
+  **Category:** State management / math
+  **Issue:** Falls back to `actor.attributes?.str || 10` etc. — same systemic schema shape problem as elsewhere. A character whose attributes live in `stats.attributes` will always roll with +0 mods.
+  **Suggested approach:** Single canonical attribute reader; remove the fallback chain.
+
+- **Severity:** Medium
+  **File:** src/components/combat/actionResolver.js
+  **Line:** 795
+  **Category:** Hardcoded values
+  **Issue:** `actor.proficiency_bonus || 2` silently gives every actor a level-1 proficiency bonus when the field is missing.
+  **Suggested approach:** Compute via `proficiencyBonus(actor.level)` (already imported on line 22) when missing, not a hardcoded 2.
+
+- **Severity:** Medium
+  **File:** src/components/combat/actionResolver.js
+  **Line:** 813
+  **Category:** Math / DOMAIN combat correctness
+  **Issue:** Finesse weapon detection uses `weapon.properties?.includes("Finesse")` — but the modifier choice is "ranged ? dex : str", so a Finesse melee weapon with high STR gets DEX applied even when STR is higher. RAW says Finesse lets the character *choose*; current code forces DEX.
+  **Suggested approach:** For Finesse weapons, take `Math.max(strMod, dexMod)`.
+
+- **Severity:** Low
+  **File:** src/components/combat/actionResolver.js
+  **Line:** 56
+  **Category:** DOMAIN combat correctness
+  **Issue:** "Throw" listed as `no_roll` with a comment admitting "RAW it's a weapon attack roll; the tool treats it as a flavor action". This is a deliberate-but-flagged correctness gap.
+  **Suggested approach:** Either make Throw a proper attack with a thrown weapon resolver, or document this in the GM tooltip so players don't think the dice flow is bugged.
+
+- **Severity:** Low
+  **File:** src/components/combat/actionResolver.js
+  **Line:** 822–828
+  **Category:** Hardcoded values
+  **Issue:** `getSpellSaveDC` returns `13` when actor is null. That's an arbitrary fallback that could mask missing-actor bugs.
+  **Suggested approach:** Throw or return `null`; let the caller decide what to do.
+
+
+##### DeathSaveWindow.jsx
+
+- **Severity:** Critical
+  **File:** src/components/combat/DeathSaveWindow.jsx
+  **Line:** 153
+  **Category:** DOMAIN — Dice/RNG concerns
+  **Issue:** Uses `Math.floor(Math.random() * 20) + 1` for the death-save d20. This is a **combat-critical** roll determining whether a PC lives or dies; a non-seedable, non-auditable RNG is an anti-cheat hole and can't be replayed in P.I.E. logs.
+  **Suggested approach:** Route the roll through a single auditable RNG service that emits a P.I.E. event with seed/source. Make `Math.random` for combat dice an ESLint-blocked pattern.
+
+- **Severity:** Critical
+  **File:** src/components/combat/DeathSaveWindow.jsx
+  **Line:** 207–214
+  **Category:** DOMAIN — missing P.I.E. telemetry
+  **Issue:** The death-save roll is generated locally and only emitted upward via `onRoll(d20)`. No P.I.E. event is emitted from this component at all (success/failure/nat-1/nat-20/stabilized/dead). The audit rules explicitly require dice rolls to feed P.I.E.; a critical dramatic moment is currently invisible to telemetry.
+  **Suggested approach:** Emit `pie.event({ kind: 'death_save', actor, value: d20, outcome, willStabilize, willDie, isSilent })` immediately after `setRollValue`. Verify whether the parent already emits — if so, document; if not, add here.
+
+- **Severity:** High
+  **File:** src/components/combat/DeathSaveWindow.jsx
+  **Line:** 188–193
+  **Category:** Hardcoded values / inclusivity
+  **Issue:** Stabilized SFX is binary male/female keyed off heuristic string match on `combatant.gender || pronouns`. Non-binary / they-them / unspecified all silently default to male. Also a localization landmine.
+  **Suggested approach:** Add a third "neutral" sting and pick neutral when neither female nor male is unambiguously declared; long-term, allow per-character custom stings.
+
+- **Severity:** High
+  **File:** src/components/combat/DeathSaveWindow.jsx
+  **Line:** 21–24, 32–44
+  **Category:** Hardcoded values / Base44 leftovers risk
+  **Issue:** Hardcoded full Supabase storage URLs (project ref `ktdxhsstrgwciqkvprph`) for icons and 8 MP3/WAV sound files. URL-encoded filenames with spaces are fragile. If the project ref ever changes (env split, dev/staging) every URL silently 404s.
+  **Suggested approach:** Use a `getCampaignAssetUrl('dnd5e/UI/life.png')` helper that reads the Supabase URL from `import.meta.env`. Move SFX into an asset registry; rename files to remove spaces.
+
+- **Severity:** High
+  **File:** src/components/combat/DeathSaveWindow.jsx
+  **Line:** 168–179
+  **Category:** Math / DOMAIN combat correctness — duplicate logic
+  **Issue:** The window predicts `nextSuccesses`/`nextFailures` with its own copy of the rules (nat20 resets, nat1=+2 failures, ≥10=success). This duplicates `applyDeathSaveRoll` from `deathSaves.js`. The component then calls `onRoll(d20)` and trusts the parent to apply the canonical rules — so two implementations of the same rule must stay in sync.
+  **Suggested approach:** Import `applyDeathSaveRoll` from `deathSaves.js` and use its computed `next` for the SFX decision; remove the inline duplicate.
+
+- **Severity:** Medium
+  **File:** src/components/combat/DeathSaveWindow.jsx
+  **Line:** 1–413
+  **Category:** Multi-game abstraction concerns
+  **Issue:** Component lives in `/combat/` but assumes 5e death-save mechanics (3 successes/3 failures, 10 threshold, nat-20 revives to 1 HP). Visual presentation also assumes 5e narrative (e.g. "Roll for Your Life" copy, life/death icons under `dnd5e/UI/`).
+  **Suggested approach:** Either move under `/dnd5e/` or accept a `rules` prop encapsulating per-system death/dying mechanics.
+
+- **Severity:** Medium
+  **File:** src/components/combat/DeathSaveWindow.jsx
+  **Line:** 218
+  **Category:** Hardcoded values
+  **Issue:** Magic numbers everywhere (350ms, 700ms, 1000ms ramp-up, 2500ms / 3400ms holds, 0.45/0.7/0.5 volumes, 0.85/1.0/1.3/1.55 playback rates).
+  **Suggested approach:** Hoist into a `DEATH_SAVE_TIMING` constants object so designers can tune without re-reading the code.
+
+- **Severity:** Medium
+  **File:** src/components/combat/DeathSaveWindow.jsx
+  **Line:** 235–411
+  **Category:** Accessibility / focus traps
+  **Issue:** Full-screen modal with `position: fixed inset-0 z-[200]` but no focus trap, no `role="dialog"`/`aria-modal`/`aria-labelledby`, no escape-to-cancel. The roll button is keyboard-reachable but the modal scrim doesn't trap tabbing.
+  **Suggested approach:** Wrap in a Radix `Dialog` (already in the dep list) so modal semantics, focus trap, and Esc are handled.
+
+- **Severity:** Medium
+  **File:** src/components/combat/DeathSaveWindow.jsx
+  **Line:** 246–265, 364, 396
+  **Category:** Inline styles that should be Tailwind/CSS / brand color mismatches
+  **Issue:** Heavy reliance on inline `style={{ background: radial-gradient … }}`, inline `boxShadow`, `textShadow`, gradient strings in JSX. Plus bare hex `#22c55e`, `#ef4444`, `#991b1b`, `#450a0a`, `#1a1f2e`, `rgba(239,68,68,…)` repeated ~8 times.
+  **Suggested approach:** CSS-class-ify; pull colors from a single token map.
+
+- **Severity:** Low
+  **File:** src/components/combat/DeathSaveWindow.jsx
+  **Line:** 212
+  **Category:** console.log/.error left in
+  **Issue:** `console.error("DeathSaveWindow onRoll error:", err);` left in user-facing build.
+  **Suggested approach:** Replace with the project's logger.
+
+- **Severity:** Low
+  **File:** src/components/combat/DeathSaveWindow.jsx
+  **Line:** 159
+  **Category:** Dead code
+  **Issue:** `let resultVolume = 0.7;` is declared but only ever read once in `tryPlay(makeAudio(resultUrl, { volume: resultVolume }))`; never reassigned (the `let` is a stub for branches that never set it).
+  **Suggested approach:** Convert to const, or delete and inline.
+
+- **Severity:** Low
+  **File:** src/components/combat/DeathSaveWindow.jsx
+  **Line:** 81–85
+  **Category:** State management smells
+  **Issue:** Default save shape inlined as a fallback; the project also has `blankDeathSaves()` in `deathSaves.js`.
+  **Suggested approach:** Import the helper.
+
+
+##### CombatActionBar.jsx
+
+- **Severity:** Critical
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** 1–1655
+  **Category:** Multi-game abstraction concerns
+  **Issue:** 1655-line component that imports D&D 5e rules tables (`RAGES_PER_DAY`, `kiPoints`, `CLASS_ABILITY_MECHANICS`, `computeArmorClass`) and hardcodes 5e-only mechanics: 12 class branches (Barbarian, Fighter, Monk, Paladin, Cleric, Druid, Bard, Sorcerer, Rogue), feat-by-name handling (Lucky, Great Weapon Master, Sharpshooter, Polearm Master), spell slots, ki diamonds, sorcery points. This is the single most D&D-coupled "system-agnostic" file in the folder.
+  **Suggested approach:** Move to `/components/dnd5e/CombatActionBar.jsx`. The combat tracker should render an action bar resolved from the active game pack's component slot.
+
+- **Severity:** High
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** 21–22, 25–34, 37–42
+  **Category:** Hardcoded values / Base44 leftovers risk
+  **Issue:** Two hardcoded full Supabase storage URLs (`PC_ICON_BASE`, `MONSTER_ICON_BASE`) baked at module load. ~25+ icon URLs constructed via string concat, every URL using `%20` for spaces.
+  **Suggested approach:** Centralize via `getCampaignAssetUrl(...)`; rename storage files to remove spaces.
+
+- **Severity:** High
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** 48–55
+  **Category:** Hardcoded values / DOMAIN
+  **Issue:** `CLASS_TINT` map applies a hue-rotate filter to coloured icons by class. The comment explicitly notes "only Rogue and Monk are actually used in the UI today; the others are future-proof placeholders". Three of the six entries are dead.
+  **Suggested approach:** Drop unused entries; let the theme system handle class colours.
+
+- **Severity:** High
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** 213–247
+  **Category:** State management smells / math
+  **Issue:** AC is computed inline by walking 5+ possible character shapes (`character.armor_class`, `character.equipped`, `character.equipment`, `character.attributes?.dex`, `character.stats?.dexterity`). On error in `computeArmorClass`, silently catches and falls back to `armor_class || 10`. No telemetry or warning, so misconfigured equipment silently rolls AC 10.
+  **Suggested approach:** Standardize AC source; surface fallback warnings to GM in dev mode at minimum.
+
+- **Severity:** High
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** 142, 187, 188
+  **Category:** DOMAIN — GM/player permission gating
+  **Issue:** Component decides "isCreature" from `character.type === 'monster' || 'npc'` — same pattern as `useTurnContext`. There is no separate `isGM` prop; the bar trusts that the parent only mounted it for entities the user is allowed to control. A player viewing a monster portrait would render an action bar that fires `onActionClick`, and authorization is left to the consumer.
+  **Suggested approach:** Add an explicit `canControl` boolean prop; wrap action handlers behind that gate inside the component.
+
+- **Severity:** High
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** 297–304
+  **Category:** Math errors
+  **Issue:** `totalMaxHp = maxHp + (tempHp > 0 ? tempHp : 0)`; `hpPercent = (currentHp / totalMaxHp) * 100`. Per RAW, temporary HP is a separate buffer in *front* of current HP, not added to max. Computing percent across `current/(max+temp)` makes the bar shrink when temp HP is granted (because the denominator grew) until current HP rises to match. Bar geometry then layers temp HP after the main bar at offset `hpPercent%`, but the percents are computed against different bases.
+  **Suggested approach:** Render two stacked rectangles: HP fill from 0 → currentHp/max, temp HP fill from currentHp/max → (currentHp+temp)/maxIfShown. Don't merge them into a single denominator.
+
+- **Severity:** High
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** 580
+  **Category:** Math errors
+  **Issue:** `chaMod = Math.max(1, Math.floor(((character.attributes?.cha || 10) - 10) / 2))` — silently treats negative modifiers as 1. RAW: Bard with Cha 8 has Cha mod -1, but Bardic Inspiration uses count = max(1, mod) ≠ this expression. Closer but: integer-divide of negative numbers in JS rounds toward zero (so `Math.floor(-1/2)` = `-1`), and `Math.max(1, -1) = 1` works coincidentally; however, the comment elsewhere uses `abilityModifier(...)`. Inline duplication of the modifier formula is itself smelly.
+  **Suggested approach:** Reuse the imported `abilityModifier` from dnd5eRules.
+
+- **Severity:** Medium
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** 762–777
+  **Category:** State management smells / accessibility
+  **Issue:** Hover uses a 3000ms `setTimeout` to open the spell-detail tooltip, with no keyboard equivalent and no cleanup if `setHoveredSpell` reaches `null` between hover and timer fire. Also, mouseleave only clears the latest `hoverTimer`; rapidly hovering across multiple spells could leak timers because `setHoverTimer` replaces the ref before the previous one is cleared.
+  **Suggested approach:** Use `useRef` for the timer, clearTimeout on every change. Add focus-driven open/close. Consider a Radix Tooltip with built-in delay+a11y.
+
+- **Severity:** Medium
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** 226 (`character.features` walked again here), 532–536, 222–225
+  **Category:** State management smells
+  **Issue:** Same shape-soup problem: feat list is read from `feats` OR `features` OR `class_features` OR `metadata.feats`. Three different reading sites in this file alone (lines 222–225, 282–287, 532–536) — each will silently miss feats stored in shapes the others handle.
+  **Suggested approach:** Single shared `getCharacterFeats(character)` helper.
+
+- **Severity:** Medium
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** 1453–1454
+  **Category:** Dead code / inconsistent file naming
+  **Issue:** `const toText = safeText; const safeRender = safeText;` declared at the bottom of the module but used throughout the JSX above. Two aliases for the same import — `safeRender` is the only one referenced before the declaration but the file works because the constants are hoisted via `var`-hoisting? Actually: these are `const` declarations *after* a JSX expression that uses them — only works because the JSX is inside functions evaluated later. Still confusing; both aliases point to the same import.
+  **Suggested approach:** Import once as `safeText`, use that name; remove the aliases.
+
+- **Severity:** Medium
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** 51 (filter strings), 1387 (drop-shadow strings), 1391 (linear-gradient)
+  **Category:** Inline styles that should be Tailwind/CSS
+  **Issue:** Heavy inline `style={{ filter, boxShadow, animation, borderImage }}` strings throughout — `borderImage: 'linear-gradient(45deg, #37F2D1, #FF5722, #37F2D1) 1'` is essentially the entire button accent baked into a JSX literal.
+  **Suggested approach:** Move to CSS classes / theme tokens.
+
+- **Severity:** Medium
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** Throughout (counted ~70+ inline hex usages)
+  **Category:** Brand color mismatches
+  **Issue:** ~30 distinct hex literals used inline (`#37F2D1`, `#050816`, `#111827`, `#1e293b`, `#1E2430`, `#1e2636`, `#a855f7`, `#fbbf24`, `#FF5722`, `#ef4444`, `#22c55e`, `#38bdf8`, `#6366f1`, `#4c1d95`, `#22d3ee`, `#0b1220`, `#a7f5e6`, `#d8b4fe`, `#fde68a`, `#334155`, `#818cf8`). None match the documented brand palette. (Counted ~50+ literal hex occurrences in this file alone — large contributor to the systemic mismatch.)
+  **Suggested approach:** Token replacement once palette is finalized.
+
+- **Severity:** Medium
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** 785, 1343, 1410, 1432, 1564, 1635, 1650
+  **Category:** Tailwind issues — arbitrary values
+  **Issue:** Many `rounded-[32px]`, `w-[52px]`, `h-[52px]`, `text-[9px]`, `text-[7px]`, `border-[10px]` etc. arbitrary values rather than configured spacing scale.
+  **Suggested approach:** Define a small set of design tokens; replace ad-hoc values.
+
+- **Severity:** Medium
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** 1408–1437
+  **Category:** Accessibility
+  **Issue:** `BasicActionSlot`, `MonsterActionSlot`, `SpellSlot` are `<button>` with image content but no aria-label — they rely on a hover-only tooltip for the action name. Screen readers see an unlabeled button. `<img>` `alt={tooltipText}` partly compensates, but missing for some image-less buttons.
+  **Suggested approach:** Add `aria-label={tooltipText}` to each button; keep the visual tooltip as supplementary.
+
+- **Severity:** Medium
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** 791, 798–799, 813
+  **Category:** Performance
+  **Issue:** Inline percentage style computed every render; `tempHp` overlay layered with separate transform, no memoization. With many combatants in a long initiative list, action bars re-render on every parent state change. The component does not memoize via `React.memo`.
+  **Suggested approach:** Wrap export in `React.memo` with a custom equality check on `character.id` + key resource fields.
+
+- **Severity:** Low
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** 1453, 1456
+  **Category:** Dead code
+  **Issue:** `const toText = safeText` is declared but only `safeRender` is the public name in this file; some sections use `toText` (lines 1459–1461, 1497–1505) others use `safeRender`.
+  **Suggested approach:** Pick one alias; the dual is confusing and adds no value.
+
+- **Severity:** Low
+  **File:** src/components/combat/CombatActionBar.jsx
+  **Line:** 1454 (`safeRender = safeText`)
+  **Category:** Inconsistent file naming / indirection
+  **Issue:** `safeRender` defined at module bottom but used at module top inside JSX inside functions — works, but reads out of order.
+  **Suggested approach:** Hoist or just call `safeText` directly.
+
+
+##### CombatDiceWindow.jsx
+
+- **Severity:** Critical
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 1–3122
+  **Category:** Multi-game abstraction concerns
+  **Issue:** 3122-line dice window — the largest single file in /combat/ — is entirely D&D 5e-specific. Imports a dozen 5e symbols (`abilityModifier`, `proficiencyBonus`, `SPELLCASTING_ABILITY`, `CLASS_SAVING_THROWS`, `sneakAttackDice`, `cantripScaling`, `MONK_MARTIAL_ARTS_DIE`, `divineSmiteDice`, `spellSaveDC`, `getSpellSlots`, `COVER`). Mechanics: Divine Smite, Stunning Strike, Sneak Attack, Great Weapon Fighting reroll, Power Attack, Bardic Inspiration, Lucky, Two-Weapon Fighting, Uncanny Dodge, Cover (Half/Three-Quarters), Concentration. None of this lives behind a per-system abstraction.
+  **Suggested approach:** Move under `/components/dnd5e/`. Define a small dice-window contract the game pack implements.
+
+- **Severity:** Critical
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 282–299, 682, 797, 857, 897, 986, 1182, 1190, 1196, 1225, 1247, 1265, 1575, 1603, 1747
+  **Category:** DOMAIN — Dice/RNG concerns
+  **Issue:** **16 separate `Math.random()` invocations** inside the most combat-critical dice flow in the app: paired d20 for advantage/disadvantage (line 682), Bardic Inspiration die (797), Lucky reroll (857), DM Inspiration reroll (897), saving throws (986, 1603), each crit-extra die (1182, 1190, 1196), Great Weapon Fighting rerolls (1225), Sneak Attack d6 (1247), Divine Smite radiant dice (1265), and the generic `rollDiceString` (292). All combat-critical, all opaque, all unreplayable. Anti-cheat is impossible.
+  **Suggested approach:** Single auditable RNG service (seedable per-encounter), all rolls funnel through it; emit a P.I.E. event per roll with seed + result. Make `Math.random` a banned token in `/combat/` via lint rule.
+
+- **Severity:** Critical
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 5, 337, 344, 356
+  **Category:** Base44 leftovers
+  **Issue:** Four direct base44 calls: `base44.auth.me()` (337), `base44.entities.UserProfile.filter(...)` (344), `base44.entities.Campaign.filter(...)` (356). The dice window still depends on Base44 for current user, profile, and campaign config. When Base44 is sunset the dice flow breaks.
+  **Suggested approach:** Replace with the Supabase auth/profile/campaign layer used by the rest of the v0.27 codebase.
+
+- **Severity:** Critical
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 658–739, 968–1007
+  **Category:** Race conditions in concurrent combat updates
+  **Issue:** Dice rolls call `setAttackRoll(...)` / `setPostHitDecisions(...)` and emit `onRoll(...)` to the parent without any optimistic-concurrency check on `combat_data.version`. Two players simultaneously resolving (e.g. attacker rolls damage while defender rolls Uncanny Dodge) can produce interleaved writes that drop one update.
+  **Suggested approach:** All combat state mutations should go through a single transactional handler with a version check; surface conflicts via a "the GM updated this — re-resolve?" toast.
+
+- **Severity:** High
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 50, 1959, 3079
+  **Category:** DOMAIN — GM/player permission gating
+  **Issue:** `isGM` is a plain prop with no validation. The component renders GM-only UI behind `{isGM && (...)}`. A malicious client passing `isGM={true}` could expose GM-only controls. Authorization should not depend on a frontend prop alone.
+  **Suggested approach:** Compute `isGM` from `campaign.gm_id === currentUser.id` server-side / inside trusted code; mutations must enforce authorization at the server (Supabase RLS), not just the client component.
+
+- **Severity:** High
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 1146–1232
+  **Category:** Math errors / DOMAIN combat correctness
+  **Issue:** Crit + Great Weapon Fighting + power attack + uncanny dodge interaction is implemented inline with branching that's hard to verify. Particularly: (a) when `critMaxFirst` is on, line 1180–1184 first pushes max dice and the visible `roll`, then re-rolls the rest, but then doubles `numDice *= 2` for display only — there's an off-by-one risk. (b) GWF reroll loop at 1225 only retries once even though RAW says you take the second roll regardless. (c) Power Attack +10 (line 1103) applies even when the weapon is a finesse one-hand; RAW restricts GWM to heavy melee, Sharpshooter to ranged.
+  **Suggested approach:** Extract a pure `rollWeaponDamage({...})` function with unit tests covering crit branches, GWF, GWM/Sharpshooter weapon gates, and rage damage. Current inline branching has too many silent edge cases.
+
+- **Severity:** High
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 695–697
+  **Category:** State management smells
+  **Issue:** `target.stats?.armor_class || target?.armor_class || 10` — same shape-soup pattern as everywhere else. AC of 10 silently applies if both fields are missing. Doesn't use `computeArmorClass` even though that helper exists elsewhere in the codebase.
+  **Suggested approach:** Single canonical AC reader; use the same helper as CombatActionBar.
+
+- **Severity:** High
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 974–981
+  **Category:** Math errors
+  **Issue:** Stunning Strike CON save: target proficiency is **not** added even if the target is proficient in CON saves. Line 982–985 admits "fall back to just their CON mod" for monsters; for player characters the proficiency bonus is silently dropped too. RAW: target rolls CON save with proficiency if proficient. Current implementation favors the attacker.
+  **Suggested approach:** Use `getSaveModifier(target, 'con')` from actionResolver — it already handles proficiency.
+
+- **Severity:** High
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 304–320
+  **Category:** State management smells
+  **Issue:** `getSpellAbilityMod` walks `CLASS_SPELL_ABILITY` keys looking for substring matches in `actor.class`. A character with class "Eldritch Knight" (subclass of Fighter) substring-matches "Fighter" → defaults wrong ability. Multiclassed PCs only get the first matching class.
+  **Suggested approach:** Match on canonical class array; respect explicit `actor.spellcasting_ability` already supported below.
+
+- **Severity:** High
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 1071–1083
+  **Category:** State management / DOMAIN
+  **Issue:** Two-Weapon Fighting style detection walks four shapes inline (`fighting_style`, `fightingStyle`, `fighting_styles`, `features`). `getCharacterFeats`-style helper still missing. Same issue as CombatActionBar lines 222–225.
+  **Suggested approach:** Single helper.
+
+- **Severity:** High
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 396–444
+  **Category:** Performance / state management
+  **Issue:** Spectator sync path mutates state (`setPhase`, `setAttackRoll`, `setIsCrit`, `setSelectedAction`) for every change in `spectatorData` and uses `setTimeout(... 100ms)` to trigger the dice roll animation. Large encounter (10+ combatants, frequent updates) means many short-lived timers stacking; no cleanup of pending timeouts when `spectatorData` changes mid-flight.
+  **Suggested approach:** `useRef` for the timer, clear on each spectator update; or migrate to a derived-state model that doesn't need timeouts.
+
+- **Severity:** High
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 663–667, 720–725, 1379, 1448, 1675, etc.
+  **Category:** DOMAIN — P.I.E. telemetry
+  **Issue:** P.I.E. `onStat` calls fire for many but not all roll events: covers `spells_cast`, `nat_20s`, `nat_1s`, `attacks_hit`, `attacks_missed`, `crits_landed` — but does NOT emit a roll-level event with the actual d20/damage value, conditions applied, advantage/disadvantage, target, etc. Bardic Inspiration / Lucky / DM Inspiration usage is logged in `logCombatEvent` but not via `onStat`. Death saves are not visible at all (those live in DeathSaveWindow). The audit rules specifically require dice rolls feed P.I.E.; coverage is partial.
+  **Suggested approach:** Standardize: every randomized roll emits `pie.dice({ kind, actor, target, value, total, advantage, conditions, source })`; existing per-stat counters then derive from the stream rather than being instrumented separately.
+
+- **Severity:** Medium
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 364
+  **Category:** console.error left in
+  **Issue:** `console.error("Failed to load campaign config", err);` — production console noise.
+  **Suggested approach:** Replace with the project's logger / toast.
+
+- **Severity:** Medium
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 1138–1139, 3 callsites
+  **Category:** Hardcoded values
+  **Issue:** Homebrew rule lookups via `getRule(homebrewRules, 'combat.critical_hits.max_all')` — the path string is hardcoded inline rather than imported as a constant.
+  **Suggested approach:** Module-level RULE_PATH constants.
+
+- **Severity:** Medium
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** Throughout — `bg-[#FF5722]`, `bg-[#37F2D1]`, `bg-[#22c55e]`, `bg-[#8B5CF6]`, etc.
+  **Category:** Brand color mismatches
+  **Issue:** Counted ~80+ inline hex literals in this file alone (`#37F2D1` appears 30+ times, `#050816`, `#FF5722`, `#22c55e`, `#ef4444`, `#fbbf24`, `#8B5CF6`, `#38bdf8`, `#a855f7`, dozens more). Massive contributor to the systemic palette mismatch.
+  **Suggested approach:** Token replacement.
+
+- **Severity:** Medium
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** Throughout — `text-[10px]`, `text-[11px]`, `rounded-2xl`, `border-[#…]`
+  **Category:** Tailwind issues — arbitrary values
+  **Issue:** Heavy use of arbitrary Tailwind values for sizes, colors, shadows. Hard to scan, hard to refactor.
+  **Suggested approach:** Define theme tokens.
+
+- **Severity:** Medium
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 1860, 1871, 1982, 2967, 3042
+  **Category:** Accessibility
+  **Issue:** Modal close: 5 different paths to `onClose()` — overlay click, X button, finish button, etc. — but no `role="dialog"`, no `aria-modal`, no focus trap, no Escape key handler. Same issue as DeathSaveWindow.
+  **Suggested approach:** Use Radix Dialog primitive.
+
+- **Severity:** Medium
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 1093–1100
+  **Category:** Math errors
+  **Issue:** Dueling fighting style: "no other weapons" check is approximated by "no `weapon2` slot equipped". Shield is correctly excluded ("Shield doesn't count as a weapon"), but the actual RAW check is "wielding a one-handed melee weapon and no other weapons", which fails when the second hand holds a non-shield non-weapon (e.g. a torch, a focus). Code permits the bonus in cases RAW disallows.
+  **Suggested approach:** Document the deviation or implement the full rule.
+
+- **Severity:** Medium
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 446–478
+  **Category:** Performance
+  **Issue:** `getQueueAvatars` is recomputed on every render (no `useMemo`); walks `allCombatants.length * 2` entries. With 12+ combatants that is ~24 iterations × multiple component renders.
+  **Suggested approach:** Memoize on `[allCombatants, actor, target]`.
+
+- **Severity:** Low
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 38
+  **Category:** Inconsistent imports / dead code
+  **Issue:** `const CLASS_SPELL_ABILITY = SPELLCASTING_ABILITY;` aliases an import. The codebase is mid-rename; one alias is fine but signals incomplete cleanup.
+  **Suggested approach:** Rename callsites and drop the alias.
+
+- **Severity:** Low
+  **File:** src/components/combat/CombatDiceWindow.jsx
+  **Line:** 1247
+  **Category:** Hardcoded values
+  **Issue:** Sneak attack die hardcoded as `Math.floor(Math.random() * 6) + 1` — the die size (6) is implicit. Other dice paths read the size from the dice expression.
+  **Suggested approach:** Use a `SNEAK_ATTACK_DIE_FACES = 6` constant or share the rolling helper.
+
+
+#### /src/components/dice/
+
+##### diceConfig.jsx
+
+- **Severity:** Low
+  **File:** src/components/dice/diceConfig.jsx
+  **Line:** 1–10
+  **Category:** Inconsistent file naming
+  **Issue:** File is `.jsx` but contains zero JSX — exports a single object literal. Same pattern as `combat/useTurnContext.jsx`.
+  **Suggested approach:** Rename to `.js`.
+
+- **Severity:** Low
+  **File:** src/components/dice/diceConfig.jsx
+  **Line:** 2–10
+  **Category:** Multi-game abstraction concerns
+  **Issue:** `DICE_SIDES` enumerates D&D-style polyhedrals (d4, d6, d8, d10, d12, d20, d100). Mörk Borg / CY_BORG use d6, d20; Blades in the Dark uses pools of d6; WoD uses d10 pools. The list is mostly fine but `d100` (percentile) is rarely used outside specific systems and there's no `d2`/`d3`. Minor system-leakage.
+  **Suggested approach:** Keep the list as the *available* dice; let game-pack components opt in.
+
+##### faceRotations.jsx
+
+- **Severity:** Low
+  **File:** src/components/dice/faceRotations.jsx
+  **Line:** 1–77
+  **Category:** Inconsistent file naming
+  **Issue:** `.jsx` extension but no JSX — file exports calibrated Euler-angle data only.
+  **Suggested approach:** Rename to `.js`.
+
+- **Severity:** Low
+  **File:** src/components/dice/faceRotations.jsx
+  **Line:** 4–76
+  **Category:** Hardcoded values
+  **Issue:** Calibrated Euler rotations are hard-coded as raw float literals — out of scope to fix (calibration is by definition ad-hoc data), but there's no comment indicating which model file shape these were calibrated against. If the GLBs in `campaign-assets/dice/models/` change, every rotation breaks silently.
+  **Suggested approach:** Add a comment stating which model SHAs/version these rotations correspond to; consider versioning the calibration alongside the models.
+
+##### DiceRoller3D.jsx
+
+- **Severity:** Medium
+  **File:** src/components/dice/DiceRoller3D.jsx
+  **Line:** 1
+  **Category:** Dead code
+  **Issue:** File is **empty** (0 bytes), never imported (grep confirms — only references are comments in `DiceCalibrator.jsx` calling out where a future component would live). Pure dead file.
+  **Suggested approach:** Delete the file, or stub it with the actual extracted 3D rendering code from `DiceRoller.jsx`. As-is it's a misleading placeholder.
+
+##### DiceRoller.jsx
+
+- **Severity:** Critical
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 766
+  **Category:** DOMAIN — Dice/RNG concerns / missing P.I.E. telemetry
+  **Issue:** `roll = Math.floor(Math.random() * sides) + 1;` — the **single visible roll source** for the user-facing 3D dice roller. No P.I.E. event is emitted from this component (search for `onStat`, `pie.`, or any telemetry callback returns nothing). The audit rules explicitly require "Dice rolls feed the P.I.E. telemetry system — flag missing event emission" and "Roll Screen Overlay should log to P.I.E. — flag missing logging". This component is the Roll Screen Overlay; it logs nothing.
+  **Suggested approach:** Funnel through the same auditable RNG service as combat. Emit `pie.dice({ kind: 'manual_roll', sides, value, modifier, total })` on every roll completion. Add an `onRoll`/telemetry prop the parent can wire up.
+
+- **Severity:** Critical
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 146–148, 155–158, 163–166, 649–652, 661–662, 671–672
+  **Category:** Hardcoded values / Base44 leftovers risk
+  **Issue:** **9 hardcoded `static.wixstatic.com` URLs** for crit GIFs (3) and roll/crit success/crit fail SFX (6). Wixstatic was the Base44 hosting CDN; if those URLs are de-provisioned every dice roll loses its sound + crit feedback. This is silent third-party hosting still in production.
+  **Suggested approach:** Migrate assets to Supabase `campaign-assets/dice/`; reference via `getCampaignAssetUrl(...)` like the rest of v0.27.
+
+- **Severity:** High
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 26–60
+  **Category:** Brand color mismatches
+  **Issue:** `Particles` config bakes in 14 distinct hex literals across three crit modes (`#37F2D1`, `#00FFFF`, `#8B5CF6`, `#FFD700`, `#FFFFFF`, `#FFA500`, `#DC2626`, `#7F1D1D`, `#000000`, `#450a0a`, `#FF6B6B`, `#FFFF00`, `#991b1b`). `#37F2D1` is the legacy brand cyan (pending decision). Same color literal duplicated across three places in this file.
+  **Suggested approach:** Move into a `DICE_PARTICLE_PALETTE` object once palette is finalized.
+
+- **Severity:** High
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 89, 94, 154–155, 654, 664, 674, 766
+  **Category:** DOMAIN — Dice/RNG concerns
+  **Issue:** Many `Math.random()` invocations in this file are *visual-only* (particle scatter, sound selection — fine). But line **766** (`roll = Math.floor(Math.random() * sides) + 1`) is THE roll source and is intermixed with the same RNG used for sparkles. There's no separation between "presentation jitter" RNG and "result" RNG, so a future code-mover could accidentally seed one and not the other. (Counted ~14 visual `Math.random` + 1 result `Math.random` in this file.)
+  **Suggested approach:** Two RNG sources — `useVisualRng()` (unseeded) and `useGameRng()` (seedable, audited). The visual scatter and sound selection use `useVisualRng`; the actual roll uses `useGameRng` + emits a P.I.E. event.
+
+- **Severity:** High
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 763–764
+  **Category:** DOMAIN — anti-cheat / auditing
+  **Issue:** `forcedResult` prop allows the parent to override the roll (`roll = Math.min(Math.max(1, forcedResult), sides)`). This exists for the calibrator, but the prop is exposed at component-public surface. A consumer in production combat could pass `forcedResult` to fix the result of a player roll. There is no telemetry distinguishing forced vs random rolls.
+  **Suggested approach:** Restrict forced rolls to a calibrator-only mode (e.g. require `mode='calibration'` prop in addition to forcedResult), and emit a distinct P.I.E. event so audit logs show the result was forced.
+
+- **Severity:** High
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 342–343
+  **Category:** State management smells
+  **Issue:** Reads `localStorage.getItem("diceConfig")` synchronously during component initialization. (a) Not SSR-safe (will throw on server). (b) `JSON.parse` has no try/catch — corrupt localStorage breaks the entire dice flow. (c) The same key is written by `pages/DiceCalibrator.jsx`, which means dice calibration is per-browser and not synced across devices.
+  **Suggested approach:** Wrap in `try/catch`; consider persisting calibration to user profile so it follows the user.
+
+- **Severity:** High
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 405–605 (the Init Three.js effect)
+  **Category:** Performance / state management
+  **Issue:** Massive 200-line `useEffect` with dependency `[isOpen, embedded, modelsReady, selectedDice, forcedResult]`. The comment explicitly says "Re-add forcedResult to dependency array so force re-roll works", which means changing `forcedResult` *re-instantiates the entire Three.js scene* — disposing the renderer, removing the canvas, and re-running `loadCustomConfig`. Heavy and unnecessary. Also: `selectedDice` in the dep array tears down the scene every time the user changes dice type.
+  **Suggested approach:** Init the renderer/scene once; parameterize the dice creation via the existing `createDice` call rather than re-instantiating WebGL.
+
+- **Severity:** Medium
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 378–381
+  **Category:** console.log/.error left in
+  **Issue:** `console.error("Failed to load custom dice model for ${type}:", err);` left in production.
+  **Suggested approach:** Replace with project logger or surface via a toast.
+
+- **Severity:** Medium
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 854–869, 850
+  **Category:** Accessibility
+  **Issue:** Modal mode (`isOpen=true`, not embedded) renders a full-screen `bg-black/70` overlay with no `role="dialog"`, no `aria-modal`, no focus trap, no Escape handler. Same issue as combat dice window and death save window.
+  **Suggested approach:** Use Radix Dialog.
+
+- **Severity:** Medium
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 145–148, 154–158, 163–166
+  **Category:** Accessibility
+  **Issue:** Three crit/result GIFs are decorative but use `alt` text describing them as "Critical Fail"/"Critical Success"/"Result Reveal" — these will be announced by screen readers as content during animations. Should be `alt=""` (decorative) since the result number is announced separately.
+  **Suggested approach:** Set `alt=""` on visual-only effects; rely on the rolled-number element for accessible announcement.
+
+- **Severity:** Medium
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 88–193
+  **Category:** Performance
+  **Issue:** `Particles` re-creates 40–100 sparkle divs + 12 trails + 15 embers every render. Inside a function component called whenever `showParticles` flips. The particles are intentionally short-lived (1s) but each is a DOM node with a per-element style object including custom properties.
+  **Suggested approach:** Use a single canvas / requestAnimationFrame loop, or at minimum gate behind `prefers-reduced-motion`.
+
+- **Severity:** Medium
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 195–222, 968–982
+  **Category:** Inline styles that should be Tailwind/CSS
+  **Issue:** Two embedded `<style>` blocks injecting `@keyframes` rules inline. The keyframes (pulseGlow, expandRing, sparkBurst, swirlTrail, floatUp) are global once injected, so multiple instances of the component re-inject the same rules.
+  **Suggested approach:** Move keyframes into the global stylesheet (`index.css`) once.
+
+- **Severity:** Medium
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 231–239
+  **Category:** Brand color mismatches
+  **Issue:** `STOCK_SKIN` defaults: `primaryLight: "#FF5722"` (close to but not exactly the documented `#FF5300`), `secondaryLight: "#8B5CF6"` (purple — not in palette), `baseColor: "#2a3441"` (dark blue surface — not the documented `#1B2535`).
+  **Suggested approach:** Reconcile against the brand palette decision; either align numbers or move STOCK_SKIN definition into the design tokens module.
+
+- **Severity:** Medium
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 805
+  **Category:** Hardcoded values
+  **Issue:** `orbitTurns: 1 + Math.random() * 1` and other animation tuning constants (1000ms duration, 12.0 maxRadius, spinX/Y/Z ranges) baked inline.
+  **Suggested approach:** Module-level `DICE_ANIM` constants object.
+
+- **Severity:** Low
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 815–828
+  **Category:** State management smells
+  **Issue:** `rollHistory` is local component state capped at the last 10 rolls. Lost on dialog close. If the user wants to reference prior rolls (or the GM wants an audit trail), the state is throwaway.
+  **Suggested approach:** Persist rolls into the campaign log or P.I.E. stream rather than ephemeral component state.
+
+- **Severity:** Low
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 17–24
+  **Category:** Hardcoded values
+  **Issue:** `diceTypes` array duplicates `DICE_SIDES` from `diceConfig.jsx` (different shape but overlapping data). Two sources of truth for which dice the roller supports.
+  **Suggested approach:** Derive from `DICE_SIDES`.
+
+- **Severity:** Low
+  **File:** src/components/dice/DiceRoller.jsx
+  **Line:** 944
+  **Category:** Math errors
+  **Issue:** `parseInt(e.target.value) || 0` — `parseInt` without radix; also empty input produces NaN which falls through the `|| 0`. Negative modifiers via leading `-` work but the input has `type="number"` with no `min`/`max`, so a user can type `1e9` and get a huge modifier.
+  **Suggested approach:** Add radix `parseInt(..., 10)`, clamp the modifier range.
+
+
+##### Batch 1A-v-a Summary
+
+**Findings by severity (this batch):**
+
+| Severity | Count |
+|---|---|
+| Critical | ~13 |
+| High | ~32 |
+| Medium | ~38 |
+| Low | ~17 |
+| Cosmetic | 0 |
+
+**Findings by primary category:**
+
+| Category | Count |
+|---|---|
+| Multi-game abstraction concerns | ~10 (entire combat folder is D&D 5e) |
+| Brand color mismatches | ~12 findings (~150+ literal hex occurrences in this batch alone) |
+| Hardcoded values / magic numbers | ~14 |
+| Math errors / DOMAIN combat correctness | ~12 |
+| DOMAIN — Dice/RNG concerns | ~5 (16 Math.random in CombatDiceWindow, 1 result + 14 visual in DiceRoller, 1 in DeathSaveWindow) |
+| DOMAIN — missing P.I.E. telemetry | ~3 (DiceRoller emits nothing; DeathSaveWindow emits nothing; CombatDiceWindow partial) |
+| DOMAIN — GM/player permission gating | ~3 |
+| State management smells | ~12 (HP/AC/feat/attribute shape soup, multiple readers per field) |
+| Performance | ~6 (re-init Three.js, unmemoized queues, particle DOM churn, action bar re-render) |
+| Tailwind issues — arbitrary values | ~3 |
+| Inline styles that should be Tailwind/CSS | ~6 |
+| Accessibility | ~7 (no focus traps on 3 modals, hover-only tooltips, unlabeled icon buttons, decorative GIFs) |
+| Base44 leftovers | ~4 (CombatDiceWindow direct calls; static.wixstatic.com URLs in DiceRoller) |
+| console.log/.error left in | ~3 |
+| Inconsistent file naming | ~3 (.jsx files with no JSX) |
+| Dead code | ~3 (DiceRoller3D.jsx empty, dual safeRender alias, isIncapacitated/getNoActionConditionName redundant) |
+| Race conditions in concurrent combat updates | 1 |
+| Missing error boundaries | 1 |
+
+**Top systemic issues for THIS batch:**
+
+1. **`/components/combat/` is `/components/dnd5e/combat/` in disguise.** Eight of the eleven files in `/combat/` are 100% D&D 5e — `actionResolver.js` (883 lines), `CombatDiceWindow.jsx` (3122 lines), `CombatActionBar.jsx` (1655 lines), `conditions.js`, `classResources.js`, `deathSaves.js`, plus the components that import them. Only `PortraitWithState.jsx`, `useTurnContext.jsx`, and `hpColor.js` are even close to system-agnostic, and even those bake-in 5e assumptions (50%/0% HP thresholds, advantage/disadvantage paired-d20 logic). To support PF2e / WoD / Mörk Borg / CY_BORG / KoB / BitD as game packs, the entire folder must be moved under `/dnd5e/` and a thin system-agnostic combat tracker built on top.
+
+2. **17 distinct `Math.random()` calls determine combat outcomes; zero of them are auditable.** `CombatDiceWindow.jsx` rolls advantage/disadvantage paired d20s, sneak attack d6s, divine smite radiants, GWF rerolls, Stunning Strike CON saves, Lucky/DM Inspiration rerolls, and crit-extra dice — 16 inline `Math.floor(Math.random() * N) + 1` invocations. `DeathSaveWindow.jsx` rolls the death save d20 the same way. `DiceRoller.jsx` rolls the visible 3D die the same way. There is no single RNG service, no seed, no way to replay an encounter, and (per audit rule) no anti-cheat hook. P.I.E. telemetry coverage is partial: hit/miss/crit counters fire, but the actual roll value, advantage state, conditions applied, and death-save outcomes are NOT emitted as discrete dice events. The Roll Screen Overlay (DiceRoller) emits no telemetry at all.
+
+3. **Math correctness is shaky in combat-critical paths.** `CombatActionBar.totalMaxHp = max + temp` makes the HP bar geometry wrong when temp HP changes. `actionResolver.getAttackModifier` forces DEX on Finesse weapons even when STR is higher (RAW gives the choice). `CombatDiceWindow.handleStunningStrike` skips target proficiency on the CON save (always favors attacker). `conditions.getConditionModifiers` flags `auto_fail_save` for any save against a paralyzed/petrified/stunned target instead of just STR/DEX (per RAW). `actionResolver.classifySpellEffect` parses spell descriptions with a single `\d+d\d+` regex — Magic Missile lands as 1d4 ignoring the +1 and the 3-dart count; Toll the Dead is always 1d8 even when 1d12 should fire; Spiritual Weapon drops the +mod. `GetUpcastDice` cannot collapse compound dice. None of these have unit tests.
+
+4. **GM/player authorization is inferred from frontend state only.** `useTurnContext.actorIsGM = actor.type === "monster" || "npc"`, `CombatActionBar.isCreature` does the same, `CombatDiceWindow.isGM` is a plain prop with no validation. There is no server-trusted "is this user the GM of this campaign" check at the component layer — players can render GM-only controls by spoofing combatant type or props. Authorization belongs in Supabase RLS, not in JSX.
+
+5. **Schema-shape soup.** Every combat file walks 3–5 alternative shapes for the same data: HP (`hit_points` / `hp` / `stats.hp`), attributes (`attributes.str` / `stats.strength` / `ability_scores.str`), feats (`feats` / `features` / `class_features` / `metadata.feats`), fighting style (`fighting_style` / `fightingStyle` / `fighting_styles` / inside `features`), AC (`armor_class` / computed via `equipped` / `equipment`). Each reader picks a different traversal order, so the same character can be missing a feat in one window and have it in another. Fix the writers, then collapse to a single canonical reader.
+
+6. **Combat tracker UI uses three full-screen modals (DeathSaveWindow, CombatDiceWindow, DiceRoller) — none have a focus trap, dialog role, or escape-key handler.** Radix Dialog is already in the dep list; this is a one-time migration with measurable a11y impact.
+
+**Combat math correctness — specific note.**
+Combat math in this batch is *plausible* but not *verified*. There is no automated test coverage for: HP-percent rendering with temp HP, AC computation across equipped/unequipped paths, advantage/disadvantage cancellation, crit dice doubling under each homebrew rule (max-all vs max-first), Great Weapon Fighting reroll behavior, sneak attack dice on crit, divine smite undead/fiend bonus, stunning-strike CON save proficiency, upcasting compound spell expressions, finesse-weapon STR-vs-DEX selection, Bardic Inspiration die parsing, Lucky reroll keep-the-better, Uncanny Dodge halving order-of-operations vs Divine Smite bonus dice, exhaustion ladder application. Several of these have known bugs called out in this audit (Stunning Strike proficiency dropped, Finesse always-DEX, auto-fail-save targeting wrong abilities). Before launch, a dedicated combat-math test suite is non-optional.
+
+**Dice / P.I.E. integration — specific note.**
+Dice and P.I.E. are **not integrated** as the spec requires. The DiceRoller component has no `onStat`/telemetry prop and emits nothing. The DeathSaveWindow rolls a d20 locally and notifies only its parent — no P.I.E. event for death-save outcomes (success/failure/nat-1/nat-20/stabilized/dead). The CombatDiceWindow does call `onStat()` for hit/miss/crit/nat-20/nat-1/spells_cast counters but does not emit a *roll-level* event with d20 value, modifier, advantage state, conditions applied, target id, or weapon. Bardic Inspiration / Lucky / DM Inspiration usage is logged via `logCombatEvent` (campaign log) but not via P.I.E. The result: P.I.E. has counters but cannot replay or audit a specific roll. Recommend a single `pie.dice({ kind, sides, value, modifier, total, advantage, disadvantage, conditions, source, actor, target, isForced })` event emitted from a single auditable RNG service that all dice components share.
+
