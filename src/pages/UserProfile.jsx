@@ -22,7 +22,7 @@ import { uploadFile } from "@/utils/uploadFile";
 import StatusDot from "@/components/presence/StatusDot";
 import { resolveStatus, statusMeta } from "@/lib/PresenceContext";
 import ReportUserDialog from "@/components/support/ReportUserDialog";
-import { CardSkeleton } from "@/components/ui/Skeleton";
+import { CardSkeleton } from "@/components/ui/skeleton";
 import SocialHandlesDisplay from "@/components/profile/SocialHandlesDisplay";
 
 export default function UserProfile() {

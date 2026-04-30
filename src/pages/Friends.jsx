@@ -12,7 +12,7 @@ import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import StatusDot from "@/components/presence/StatusDot";
 import { trackEvent } from "@/utils/analytics";
-import { RowSkeleton } from "@/components/ui/Skeleton";
+import { RowSkeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
