@@ -1,22 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Monitor } from "lucide-react";
-
-/**
- * Tracks whether the viewport is below the given breakpoint. Resizes
- * the state on window resize so flipping orientation on a tablet
- * flips the gate without a reload.
- */
-export function useIsMobile(breakpoint = 768) {
-  const [isMobile, setIsMobile] = useState(
-    typeof window !== "undefined" ? window.innerWidth < breakpoint : false,
-  );
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < breakpoint);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [breakpoint]);
-  return isMobile;
-}
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 /**
  * Blocks small viewports with a "use a computer" message. Wraps pages
