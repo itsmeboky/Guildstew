@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, Users, Sword, Trophy, ShoppingBag, DollarSign,
   LifeBuoy, Flag, ScrollText, GamepadIcon, Home, Store, Wallet, FileText, Rocket,
-  MessageSquare, HelpCircle, BookOpen, Calendar, Award,
+  MessageSquare, HelpCircle, BookOpen, Calendar, Award, Package,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import DocsTab from "@/components/admin/DocsTab";
 import EventsTab from "@/components/admin/EventsTab";
 import HomepageTab from "@/components/admin/HomepageTab";
 import TitlesTab from "@/components/admin/TitlesTab";
+import GamePackListingsTab from "@/components/admin/GamePackListingsTab";
 import { supabase as supabaseClient } from "@/api/supabaseClient";
 import { useQuery } from "@tanstack/react-query";
 
@@ -53,6 +54,7 @@ const TABS = [
   { id: "titles",       label: "Titles",              icon: Award },
   { id: "marketplace",  label: "Marketplace",         icon: ShoppingBag },
   { id: "tavern",       label: "Tavern",              icon: Store },
+  { id: "gamePacks",    label: "Game Packs",          icon: Package },
   { id: "cashouts",     label: "Cashouts",            icon: Wallet },
   { id: "blog",         label: "Blog",                icon: FileText },
   { id: "versions",     label: "Versions",            icon: Rocket },
@@ -180,6 +182,7 @@ export default function Admin() {
           {tab === "titles"       && <TitlesTab        adminId={user.id} />}
           {tab === "marketplace"  && <MarketplaceTab />}
           {tab === "tavern"       && <TavernAdminTab />}
+          {tab === "gamePacks"    && <GamePackListingsTab />}
           {tab === "cashouts"     && <CashoutsTab />}
           {tab === "blog"         && <BlogTab />}
           {tab === "versions"     && <VersionsTab />}
