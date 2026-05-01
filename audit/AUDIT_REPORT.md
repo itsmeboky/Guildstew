@@ -12807,3 +12807,672 @@ The current functions are client-orchestrated and not yet RPCs, but their names 
 Every one of these takes only the minimal logical parameters; every one derives the actor from `auth.uid()`; every one validates entitlement/ownership/admin-status server-side; every one runs in a single transaction. This is the model the rest of the app's data layer should converge on.
 
 **End of Batch 2-ii-b.**
+
+### Batch 2-ii-c: lib spice/creator/campaign-apps
+
+Scope: `src/lib/spiceWallet.js`, `src/lib/spiceStipend.js`, `src/lib/creatorMilestones.js`, `src/lib/campaignApplications.js`, `src/lib/campaignBans.js`. All five files exist with the exact names specified.
+
+Pre-flight: confirmed `spiceBalanceBus.js` and `tavernCreator.js` also exist in this domain space but are out of scope for this batch.
+
+#### /src/lib/spiceWallet.js
+
+- **Severity:** Critical
+- **File:** src/lib/spiceWallet.js
+- **Line:** 26-34 (`getWalletBalance`)
+- **Category:** Client-side authority / Permission leak
+- **Issue:** `userId` is caller-supplied. The query filters `eq("user_id", userId)` and trusts the client to ask only for its own wallet. If RLS on `spice_wallets` is permissive or absent (this layer has no comment asserting it is enforced), any client can read any user's wallet balance and lifetime totals by passing an arbitrary `userId`. Even with RLS the public function signature signals to callers that they may read other users' wallets, encouraging UI code to do so.
+- **Suggested approach:** Drop the `userId` parameter; derive actor from `(await supabase.auth.getUser()).data.user.id` inside the function (or a server RPC `rpc_my_wallet`). Document RLS expectation: `auth.uid() = user_id` for SELECT on `spice_wallets`.
+
+- **Severity:** Critical
+- **File:** src/lib/spiceWallet.js
+- **Line:** 46-65 (`addSpice`)
+- **Category:** Client-side authority / SpiceEmporium-style "credit without payment"
+- **Issue:** Both `userId` and `amount` are caller-supplied to `add_spice` RPC. There is no payment, entitlement, sale-completion, or admin check in this layer. If `add_spice` itself is `SECURITY DEFINER` without an internal authorization gate (e.g., requiring it be invoked from another RPC, not directly from the client), any authenticated user can credit Spice to any account. This is the exact SpiceEmporium-class anti-pattern flagged in Pass 1A.
+- **Suggested approach:** `add_spice` must NOT be callable directly from `anon`/`authenticated` PostgREST roles. Move credits behind purpose-specific server RPCs (`rpc_grant_stipend`, `rpc_credit_sale_proceeds`, `rpc_admin_credit`) that derive `user_id` server-side from the originating event (Stripe webhook payload, sale row, admin session) and pass `amount` from canonical config. Revoke EXECUTE on `add_spice` from client roles.
+
+- **Severity:** Critical
+- **File:** src/lib/spiceWallet.js
+- **Line:** 49-62 (`addSpice`)
+- **Category:** Non-atomic wallet operation / Missing transaction history pairing
+- **Issue:** The `add_spice` RPC mutates the wallet and returns `newBalance`; the client then performs a SEPARATE `INSERT INTO spice_transactions`. These are two round-trips. If the client crashes, network drops, or the second call fails for any reason, the wallet balance is changed but no ledger row is written — silently breaking the audit trail. The file's own docstring claims "balance_after is returned by the RPC and written to the ledger row so the ledger alone can reconstruct the wallet timeline" — but the ledger write is not in the same transaction as the balance write, so reconstruction is unsafe.
+- **Suggested approach:** Move the `spice_transactions` insert INSIDE the `add_spice` SQL function so the balance update and ledger insert happen in one PL/pgSQL transaction. The RPC should accept `p_transaction_type`, `p_description`, `p_reference_id` and write the ledger atomically. Equally for `spend_spice`.
+
+- **Severity:** Critical
+- **File:** src/lib/spiceWallet.js
+- **Line:** 67-96 (`spendSpice`)
+- **Category:** Non-atomic wallet operation / Missing transaction history pairing
+- **Issue:** Same split as `addSpice` — `spend_spice` RPC does the debit, then a separate client-side INSERT writes the ledger. A failure between the two leaves the ledger missing a debit row. The transaction's `balance_after` could become inconsistent on subsequent operations, and audit reconciliation will silently disagree with the wallet.
+- **Suggested approach:** Fold the ledger insert into the `spend_spice` PL/pgSQL function itself. Same pattern as above.
+
+- **Severity:** Critical
+- **File:** src/lib/spiceWallet.js
+- **Line:** 112-150 (`addGuildSpice`)
+- **Category:** Race condition / Non-atomic wallet operation
+- **Issue:** Self-acknowledged read-modify-write race ("Not as airtight as the personal RPCs"). Two concurrent `addGuildSpice` calls can both read `wallet.balance = X`, both compute `X + amount`, and both write `X + amount` instead of `X + 2*amount` — losing one credit entirely. The lifetime_total has the same race. Additionally, the wallet upsert path uses INSERT-or-UPDATE branched on a prior SELECT, which is itself racy: two concurrent first-time credits could both see `wallet=null` and both attempt INSERT, hitting a PK conflict, with one credit lost. The comment says "Swap to a dedicated RPC if contention shows up" — contention is impossible to detect without a ledger reconciliation tool, so this should be fixed proactively, not reactively.
+- **Suggested approach:** Mirror the personal-wallet pattern: `add_guild_spice(p_guild_id, p_amount, p_type, p_description, p_reference_id)` PL/pgSQL function with `INSERT … ON CONFLICT (guild_id) DO UPDATE SET balance = guild_spice_wallets.balance + EXCLUDED.balance` plus an inline ledger insert, all in one transaction.
+
+- **Severity:** Critical
+- **File:** src/lib/spiceWallet.js
+- **Line:** 152-186 (`spendGuildSpice`)
+- **Category:** Race condition / Negative balance possibility / Permission leak
+- **Issue:** Same read-modify-write race as `addGuildSpice`: two concurrent spends can both pass the `wallet.balance < amount` check (each sees the same pre-spend balance), and both will write `balance - amount`, allowing the wallet to overspend (effectively negative spend below zero by one transaction). Additionally, `spending_restricted` is SELECTed but NEVER CHECKED — a guild flagged with `spending_restricted = true` can still spend. This bypasses an entire policy field. Finally, the transaction_type is hardcoded as `"item_purchase"` regardless of what the spend is actually for, polluting the ledger taxonomy.
+- **Suggested approach:** Replace with an atomic `spend_guild_spice(p_guild_id, p_amount, p_type, p_description, p_reference_id)` PL/pgSQL RPC that does `UPDATE … SET balance = balance - p_amount WHERE guild_id = p_guild_id AND balance >= p_amount AND spending_restricted = false RETURNING balance`. Raise on zero rows updated. Inline the ledger insert in the same function. Pass the actual transaction type from the call site.
+
+- **Severity:** High
+- **File:** src/lib/spiceWallet.js
+- **Line:** 98-107 (`getTransactionHistory`)
+- **Category:** Client-side authority / Permission leak
+- **Issue:** Caller-supplied `userId` again. Any caller can request another user's transaction history. The ledger contains `reference_id`, `description`, and amounts that may reveal sensitive purchase/spending patterns. Same RLS-trust concern as `getWalletBalance`.
+- **Suggested approach:** Drop `userId`; derive from `auth.uid()`. RLS on `spice_transactions` must enforce `auth.uid() = user_id` for SELECT. For admin views, use a separate `rpc_admin_transaction_history(p_user_id)` that checks admin role server-side.
+
+- **Severity:** High
+- **File:** src/lib/spiceWallet.js
+- **Line:** 36-44 (`getGuildWalletBalance`)
+- **Category:** Permission leak / Missing membership check
+- **Issue:** Caller-supplied `guildId` with no verification that the caller is a member of that guild. Guild wallet balances may be considered guild-private; this layer offers no gate. Relies entirely on RLS, which would need to perform a `guild_members` membership check on every read.
+- **Suggested approach:** Either (a) prove RLS on `guild_spice_wallets` enforces `EXISTS (SELECT 1 FROM guild_members WHERE guild_id = guild_spice_wallets.guild_id AND user_id = auth.uid())`, or (b) wrap in `rpc_guild_wallet_balance(p_guild_id)` that performs the check server-side.
+
+- **Severity:** High
+- **File:** src/lib/spiceWallet.js
+- **Line:** 46, 67, 112, 152
+- **Category:** Missing P.I.E. event emission
+- **Issue:** None of the four wallet mutations (addSpice, spendSpice, addGuildSpice, spendGuildSpice) emit a P.I.E. event. P.I.E. is the canonical event bus for wallet activity (per other audited layers); downstream consumers (notifications, milestones, achievements, analytics) cannot observe wallet movements without it. This is the same finding flagged in tavernClient/tavernCreator audits.
+- **Suggested approach:** Once mutations are folded into atomic RPCs, emit a `pie_events` row inside the same SQL transaction (e.g., `spice.credit`, `spice.debit`, `guild_spice.credit`, `guild_spice.debit`) with `actor_id`, `amount`, `transaction_type`, `reference_id`.
+
+- **Severity:** High
+- **File:** src/lib/spiceWallet.js
+- **Line:** 46, 67
+- **Category:** Missing idempotency on retryable operations
+- **Issue:** `addSpice` and `spendSpice` accept a `referenceId` but make no idempotency guarantees. A network retry of the same operation will credit/debit twice. There is no unique constraint shown on `(transaction_type, reference_id)` or an idempotency key parameter to deduplicate.
+- **Suggested approach:** Add a unique partial index on `spice_transactions(transaction_type, reference_id) WHERE reference_id IS NOT NULL`. Inside the atomic RPC, attempt the ledger insert first and return existing balance on `ON CONFLICT DO NOTHING`. Optionally accept a client-generated `p_idempotency_key UUID`.
+
+- **Severity:** Medium
+- **File:** src/lib/spiceWallet.js
+- **Line:** 47, 68, 113, 153
+- **Category:** Inline validation / weak input checks
+- **Issue:** Validation is `!amount || amount <= 0` — fine for negatives, but allows non-integer/floating-point Spice amounts. Spice is an integer currency (per `$1 = 250 Spice`, min cashout `12500`). Passing `amount = 175.5` would silently corrupt ledger integrity.
+- **Suggested approach:** Validate `Number.isInteger(amount) && amount > 0` client-side and enforce `CHECK (amount > 0)` plus an integer column type server-side. Consider centralizing this validator in `spiceConfig`.
+
+- **Severity:** Medium
+- **File:** src/lib/spiceWallet.js
+- **Line:** 89-94 (`spendSpice`)
+- **Category:** Hardcoded user-facing string / coupling to UI
+- **Issue:** Library-layer wallet code calls `toast.error("Not enough Spice! …")` directly. Mixing UI side-effects into a data-access library couples this module to `sonner` and prevents non-UI consumers (cron jobs, server-side flows, tests) from using it without a toast surface.
+- **Suggested approach:** Return `{ success: false, reason: "insufficient" }` (already done) and let the calling component render the toast. Remove the toast import and call. Same fix in `spendGuildSpice` line 164.
+
+- **Severity:** Medium
+- **File:** src/lib/spiceWallet.js
+- **Line:** 27, 37
+- **Category:** Default-on-empty masking
+- **Issue:** `getWalletBalance` and `getGuildWalletBalance` return `EMPTY_WALLET` / `EMPTY_GUILD_WALLET` when the row is missing. This silently treats "wallet not yet provisioned" identically to "balance is zero". A user whose wallet creation failed will appear to have a zero balance and be allowed to attempt spends, which then fail confusingly server-side. Worse, calls to `addSpice` against a non-existent wallet rely on `add_spice` RPC to upsert — if it doesn't, the credit silently fails.
+- **Suggested approach:** Provision the wallet row at user-creation time (DB trigger on `auth.users` insert, or signup RPC). Have `getWalletBalance` distinguish missing-wallet from zero-balance via an explicit `provisioned: false` flag. Callers can then surface a "wallet not initialized" state rather than a deceptive zero.
+
+- **Severity:** Medium
+- **File:** src/lib/spiceWallet.js
+- **Line:** 28-32, 38-42, 100-105, 115-119, 158-161
+- **Category:** Missing error handling on Supabase calls
+- **Issue:** Several queries destructure only `data` and silently swallow `error`. `getWalletBalance`, `getGuildWalletBalance`, `getTransactionHistory`, and the read steps in `addGuildSpice`/`spendGuildSpice` will all return `undefined` on failure, then fall back to defaults. Errors like "permission denied", "row-level security violated", or "connection lost" become invisible empty wallets.
+- **Suggested approach:** Capture `error` and at minimum propagate (`if (error) throw error`) so callers can distinguish "no wallet" from "query failed". Particularly important for `spendGuildSpice` line 158-161 — a failed read currently leads to an "insufficient" reason, falsely informing the user they're out of Spice.
+
+- **Severity:** Medium
+- **File:** src/lib/spiceWallet.js
+- **Line:** 145
+- **Category:** Hardcoded transaction type
+- **Issue:** `transaction_type: "guild_stipend"` is hardcoded inside `addGuildSpice`, which is named generically. Any non-stipend guild credit (sale proceeds, admin grant, refund) routed through this function will be mis-typed in the ledger as a stipend, breaking analytics and reconciliation.
+- **Suggested approach:** Accept `transactionType` as a parameter (already done in personal `addSpice`); validate against an enum of allowed types. Same fix at line 181 (`spendGuildSpice` hardcodes `"item_purchase"`).
+
+- **Severity:** Medium
+- **File:** src/lib/spiceWallet.js
+- **Line:** 4-11 (docstring)
+- **Category:** Misleading documentation
+- **Issue:** The docstring claims "every movement to the `spice_transactions` ledger" and "Credits/debits go through the atomic `add_spice` / `spend_spice` RPCs so concurrent updates can't race. `balance_after` is returned by the RPC and written to the ledger row so the ledger alone can reconstruct the wallet timeline." This is materially false: (a) the ledger insert is NOT inside the RPC and is therefore not atomic with the balance write; (b) the guild wallet path (mentioned later) is explicitly NOT atomic; (c) reconstruction from the ledger alone is unsafe because a missing ledger row after a successful RPC is unobservable from the ledger.
+- **Suggested approach:** Once mutations are folded into atomic SQL RPCs, the docstring becomes accurate. Until then, the docstring should disclose the gap — but better to fix the gap and keep the doc.
+
+- **Severity:** Low
+- **File:** src/lib/spiceWallet.js
+- **Line:** 109-111 (comment)
+- **Category:** TODO / known-debt comment
+- **Issue:** "Not as airtight as the personal RPCs but sufficient while guild spending is GM-gated. Swap to a dedicated RPC if contention shows up." This is a TODO masquerading as documentation. "Sufficient while GM-gated" is wrong — even a single GM clicking twice quickly can race.
+- **Suggested approach:** Track as a real backlog item; remove the dismissive comment once the atomic RPC lands.
+
+- **Severity:** Low
+- **File:** src/lib/spiceWallet.js
+- **Line:** 1
+- **Category:** Naming / cleanup
+- **Issue:** Import path `@/api/supabaseClient` — confirm no lingering `base44` import alias in this file. None found in this file directly, but verify the `supabaseClient` module itself does not re-export anything `base44`-named.
+- **Suggested approach:** Continue migration audit at the `supabaseClient` module level; nothing to change here.
+
+#### /src/lib/spiceStipend.js
+
+- **Severity:** Critical
+- **File:** src/lib/spiceStipend.js
+- **Line:** 21 (`checkAndGrantStipend(userId, tier, guildId)`)
+- **Category:** Client-side authority / Tier verification missing / SpiceEmporium-style anti-pattern
+- **Issue:** All three parameters — `userId`, `tier`, `guildId` — are caller-supplied and trusted. The function reads `MONTHLY_STIPENDS[tier]` and credits Spice based on the client-claimed tier with no server-side verification that (a) the caller is `userId`, (b) the caller's actual subscription tier matches the claimed `tier`, or (c) the caller is a member of `guildId`. A malicious client can pass `tier: "veteran"` while subscribed to free and receive 400 Spice every 30 days, or pass `tier: "guild", guildId: <victim_guild>` to deposit Spice into an arbitrary guild's shared wallet (with the side-effect of stamping the caller's `last_stipend_at`, locking out their next legitimate grant — but still a free 250 to the targeted guild).
+- **Suggested approach:** Replace with `rpc_grant_monthly_stipend()` (zero parameters) executed by an authenticated session. The RPC derives `auth.uid()`, looks up the user's tier from the `subscriptions` (or equivalent) table, looks up `guild_id` from `guild_members` for guild tier, and credits the canonical amount atomically. Revoke EXECUTE on this from `anon` and ideally from `authenticated` — fire from a Stripe webhook or server-side cron instead.
+
+- **Severity:** Critical
+- **File:** src/lib/spiceStipend.js
+- **Line:** 27-58 (read-then-credit-then-stamp flow)
+- **Category:** Race condition / Double-grant on retry / Missing idempotency
+- **Issue:** Idempotency is implemented via a read-modify-write window: SELECT `last_stipend_at` → check 30-day window → credit wallet (`addSpice` or `addGuildSpice`) → upsert `last_stipend_at`. Three failure modes: (1) two concurrent calls both read the same `last_stipend_at`, both pass the gate, both credit; (2) credit succeeds, network drops before the upsert, next retry credits again because `last_stipend_at` was never stamped; (3) for guild stipend, the credit lands in `guild_spice_wallets` but the `last_stipend_at` is stamped on the user's `spice_wallets` — if the upsert fails, the guild gets the credit but the user's gate is unset, allowing repeated guild credits.
+- **Suggested approach:** Atomic SQL function: `UPDATE spice_wallets SET last_stipend_at = now() WHERE user_id = auth.uid() AND (last_stipend_at IS NULL OR last_stipend_at < now() - interval '30 days') RETURNING …`. If 0 rows updated, return "too_soon". Otherwise, in the same transaction, call the wallet-credit logic (also atomic) and emit P.I.E. event. The 30-day check and stamp must be a single atomic UPDATE so concurrent callers see at most one winner.
+
+- **Severity:** High
+- **File:** src/lib/spiceStipend.js
+- **Line:** 40-44
+- **Category:** Missing membership verification / Cross-tenant write
+- **Issue:** When `tier === "guild"` and `guildId` is supplied, `addGuildSpice(guildId, …)` is invoked with no verification that the caller is a member of that guild. Combined with the tier-spoofing issue above, this allows depositing Spice into an arbitrary guild's wallet. The shared-guild-wallet model also gives any guild member the ability to drain the wallet later via separate spend flows, so depositing to an unrelated guild may be more annoyance than exploit, but the cross-tenant write itself is the violation.
+- **Suggested approach:** In the server RPC, derive `guild_id` from `guild_members WHERE user_id = auth.uid() AND tier_role = 'guild'` (or equivalent). Never accept it from the client.
+
+- **Severity:** High
+- **File:** src/lib/spiceStipend.js
+- **Line:** 41-43
+- **Category:** Inconsistent stipend semantics / Hardcoded transaction taxonomy
+- **Issue:** Personal stipend uses transaction_type `"stipend"` and description `Monthly ${tier} stipend`; guild stipend uses description `"Monthly guild stipend"` but inherits `addGuildSpice`'s hardcoded `transaction_type: "guild_stipend"` (see spiceWallet.js:145). Reconciliation queries that filter by transaction_type need to know about both `stipend` and `guild_stipend`. Personal stipend descriptions interpolate the tier; guild stipend description does not record the granting member, making per-member attribution in audit/analytics impossible.
+- **Suggested approach:** Standardize the ledger taxonomy. Record `granting_user_id` on guild stipend ledger rows (separate column or in metadata) so audits can verify "250 per member" was granted exactly once per cycle per member.
+
+- **Severity:** High
+- **File:** src/lib/spiceStipend.js
+- **Line:** 21
+- **Category:** Missing handling of subscription tier mid-cycle changes
+- **Issue:** No documentation or logic for upgrade/downgrade paths. Concrete scenarios:
+  (a) Free → Veteran upgrade: user has no `last_stipend_at` (free is a no-op). On next login, gets 400. Acceptable.
+  (b) Adventurer → Veteran mid-cycle: user has `last_stipend_at` from 15 days ago. Returns "too_soon". User gets the upgraded stipend rate only at day 30. Is that intended? The spec is silent.
+  (c) Veteran → Adventurer downgrade: same — user gets 175 instead of 400 next cycle. OK.
+  (d) Veteran → Free downgrade: stipend never fires again (early-return on `tier=free`). OK, but `last_stipend_at` remains stamped.
+  (e) Guild → Adventurer: previously credited shared guild wallet; now credits personal. No reconciliation across the change.
+- **Suggested approach:** Document the policy in `spiceConfig` (likely "stipend rate locked per cycle, applies on next refresh"). If pro-ration is desired on upgrade, add a `subscription_tier_history` table and credit the delta. If immediate-grant on upgrade is desired, the stipend RPC should detect tier-change since last grant and waive the 30-day gate once.
+
+- **Severity:** High
+- **File:** src/lib/spiceStipend.js
+- **Line:** 41, 43
+- **Category:** Non-atomic wallet operation / Missing P.I.E. event
+- **Issue:** Inherits the non-atomicity of `addSpice` / `addGuildSpice` — credit and ledger insert are not in the same transaction. Additionally, no `pie_events` row is emitted for the stipend grant, so notifications/analytics cannot react to the event.
+- **Suggested approach:** Once stipend, wallet credit, and ledger insert are folded into one server RPC, emit a `subscription.stipend_granted` P.I.E. event in the same transaction.
+
+- **Severity:** Medium
+- **File:** src/lib/spiceStipend.js
+- **Line:** 27-31
+- **Category:** Missing error handling
+- **Issue:** Read of `last_stipend_at` discards the error. If RLS denies the read (e.g., the user is reading another user's wallet via spoofed `userId`), `wallet` is `undefined`, `lastStipend` is `null`, and the function proceeds to grant. So a permission error becomes a free grant. Also if the read transiently fails for any reason, double-credit is possible.
+- **Suggested approach:** Capture `error` and abort with a "lookup_failed" reason. Better: eliminate the read entirely by folding into the atomic UPDATE described above.
+
+- **Severity:** Medium
+- **File:** src/lib/spiceStipend.js
+- **Line:** 19
+- **Category:** Hardcoded constant that belongs in spiceConfig
+- **Issue:** `THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000` is the stipend cadence. Belongs in `spiceConfig` alongside `MONTHLY_STIPENDS`.
+- **Suggested approach:** Export `STIPEND_INTERVAL_MS` (or `STIPEND_INTERVAL_DAYS`) from `spiceConfig`. Reference it both client-side and in any server-side cron logic.
+
+- **Severity:** Medium
+- **File:** src/lib/spiceStipend.js
+- **Line:** 40
+- **Category:** Silent fallback when guild tier lacks guildId
+- **Issue:** `if (tier === "guild" && guildId)` — if the caller claims `tier: "guild"` but provides no `guildId`, the function silently falls through to credit the personal wallet at the guild rate (250). A guild-tier user without a guildId is itself a data-integrity problem; this code papers over it.
+- **Suggested approach:** Treat missing `guildId` for `tier=guild` as an error, not a fallback. The server-RPC version derives `guildId` and so cannot produce this state.
+
+- **Severity:** Medium
+- **File:** src/lib/spiceStipend.js
+- **Line:** 49-58
+- **Category:** Stamp-after-credit ordering risk
+- **Issue:** Stamp of `last_stipend_at` happens AFTER the credit. If credit succeeds and the stamp upsert fails (network, RLS, conflict), the next call will re-grant — double-credit. The opposite order (stamp first, then credit) flips the risk to "stamped but not credited" — a missing grant the user can complain about and retry safely.
+- **Suggested approach:** Resolve via atomic SQL UPDATE (described above). Within a single transaction, the ordering of stamp vs. credit doesn't matter because both commit together or roll back together.
+
+- **Severity:** Low
+- **File:** src/lib/spiceStipend.js
+- **Line:** 6-17 (docstring)
+- **Category:** Misleading documentation
+- **Issue:** "Idempotent by the `last_stipend_at` timestamp" overstates what the code actually delivers — the check and the stamp are not atomic, so it is idempotent only in the absence of concurrent calls or partial failure. As with spiceWallet's docstring, this is materially overconfident.
+- **Suggested approach:** Update wording once the RPC version makes the claim true.
+
+- **Severity:** Low
+- **File:** src/lib/spiceStipend.js
+- **Line:** 21
+- **Category:** Missing audit logging
+- **Issue:** No explicit audit-log entry is emitted for stipend grants beyond the ledger row in `spice_transactions`. For compliance/admin review, a higher-signal `audit_log` row with actor, tier, amount, timestamp, and outcome (`granted` / `too_soon` / `tier_change`) is useful — particularly because stipends are recurring entitlements where billing disputes will require historical reconstruction.
+- **Suggested approach:** Emit `audit_log` row inside the atomic stipend RPC alongside the ledger and P.I.E. event.
+
+#### /src/lib/creatorMilestones.js
+
+- **Severity:** Critical
+- **File:** src/lib/creatorMilestones.js
+- **Line:** 48 (`recordCreatorSale(creatorId, …)`)
+- **Category:** Client-side authority / Caller-supplied IDs
+- **Issue:** `creatorId` and `increment` are caller-supplied. The function then UPDATEs `user_profiles.creator_total_sales` for that creator. Without ironclad RLS this lets any client inflate any creator's sale count and trigger badge grants. Even with RLS enforcing `auth.uid() = user_id`, a creator can self-inflate their own sales/badges without a real sale ever occurring (`recordCreatorSale(myId, { increment: 500 })` → instant `legendary_creator`). The fact that this is exported and importable from any client surface makes it trivially exploitable.
+- **Suggested approach:** Move milestone updates server-side as a TRIGGER on `tavern_purchases` (or whatever the canonical sale row is). The client should NEVER be able to call `recordCreatorSale` directly — remove the function or replace with `rpc_record_creator_sale(p_purchase_id)` that re-derives `creator_id` and validates the purchase row exists, sums recorded amount, and awards milestones in one transaction. RLS alone is not sufficient because the creator IS the caller and RLS would have to allow their own writes.
+
+- **Severity:** Critical
+- **File:** src/lib/creatorMilestones.js
+- **Line:** 50-83
+- **Category:** Race condition / Non-atomic milestone unlock
+- **Issue:** Self-acknowledged read-modify-write ("the critical section is small enough that concurrent sales on the same creator collapse to one effective append"). This is wrong in two ways: (1) two concurrent sales can both read `prevSales = 9`, both compute `nextSales = 10`, both write 10, losing one sale entirely AND both granting `rising_creator` (the badge dedup via `Set` only protects within one call); (2) sales count can roll back if one transaction's write loses to another's stale snapshot. Lost-update is unbounded — a creator who makes 5 simultaneous sales could end up with `creator_total_sales = 1`. Badge grants depend on the count, so the audit trail of which sale crossed which threshold becomes unreconcilable.
+- **Suggested approach:** Atomic update only: `UPDATE user_profiles SET creator_total_sales = creator_total_sales + p_increment, creator_badges = …array_append-with-dedup… WHERE user_id = p_creator_id RETURNING creator_total_sales`. Compute newly-earned badges in PL/pgSQL using the returned new value. Run inside a SQL trigger on the sale row.
+
+- **Severity:** Critical
+- **File:** src/lib/creatorMilestones.js
+- **Line:** 92-125 (`grantPioneerIfEligible`)
+- **Category:** Race condition / Caller-supplied ID / Permission leak
+- **Issue:** Same caller-supplied `creatorId` problem. Beyond that, the eligibility check is (a) "is_pioneer_creator already set?" → (b) count distinct creators → (c) update flag. None of these are atomic. With ~99 pioneer creators already, the 100th and 101st listings race: both see `distinct.size = 100`, both pass the `> PIONEER_CAP` gate (since `> 100` is false at 100), both grant. Bound: every concurrent first-listing during the closing-window can over-grant by N. Worse, the count uses `select("creator_id")` with NO LIMIT — pulls every row in `tavern_items` to the client to dedupe. That's a fetch-all anti-pattern AND scales poorly AND leaks the full creator-id set to any caller.
+- **Suggested approach:** Server RPC: `INSERT INTO pioneer_creators (user_id) SELECT auth.uid() WHERE (SELECT count(*) FROM pioneer_creators) < 100 ON CONFLICT DO NOTHING RETURNING true`. A dedicated `pioneer_creators` table (or a unique-index-protected slot column) makes the cap atomic. Mirror to `user_profiles.is_pioneer_creator` via trigger if needed. Drop the client-side count entirely.
+
+- **Severity:** Critical
+- **File:** src/lib/creatorMilestones.js
+- **Line:** 105-108
+- **Category:** Fetch-all anti-pattern / Permission leak
+- **Issue:** `select("creator_id")` with no filter or limit returns every row's creator_id from `tavern_items`. Today this is fine; at any meaningful scale it's a network/perf problem AND it exposes the full active-creator population to any caller. RLS may restrict per-row visibility (in which case the count is silently wrong), or may permit it (in which case the client gets a list of all creator IDs — usable for follow-up profile harvesting).
+- **Suggested approach:** Replace with `select("creator_id", { count: "exact", head: true })` distinct-count via RPC, or better, eliminate this code path entirely per the previous finding.
+
+- **Severity:** Critical
+- **File:** src/lib/creatorMilestones.js
+- **Line:** 134-161 (`ensureReferralCode`)
+- **Category:** Caller-supplied user_id / Race condition / Weak randomness
+- **Issue:** (a) `userId` is caller-supplied — without strict RLS, a caller can set someone else's `creator_referral_code` (overwriting an existing one if the column doesn't have a `WHERE creator_referral_code IS NULL` guard at the SQL layer). (b) The collision-retry loop attempts up to 5 codes; if all collide (extremely unlikely but possible) it returns null silently. The "collision" detection is weak — the function assumes `error` indicates a unique-index collision, but any other error (RLS denial, network, FK violation) also returns null. (c) Two concurrent calls for the same user can both pass the "no code yet" check and both write codes — the latter wins, but the former may have been returned to the user as "your code." (d) `Math.random()` is not cryptographically secure; for a referral code visible publicly this is fine, but if codes are also used as low-friction auth tokens (sometimes happens), it would be a vulnerability.
+- **Suggested approach:** Server RPC `rpc_ensure_referral_code()` that derives `auth.uid()`, atomically: `UPDATE user_profiles SET creator_referral_code = COALESCE(creator_referral_code, generate_referral_code()) WHERE user_id = auth.uid() RETURNING creator_referral_code`. Generate code server-side using `gen_random_bytes()` or a base32-encoded UUID slice. Distinguish unique-index collision from other errors via `error.code = '23505'`.
+
+- **Severity:** High
+- **File:** src/lib/creatorMilestones.js
+- **Line:** 82, 122, 158
+- **Category:** console.error / silent error swallowing
+- **Issue:** All three functions catch and log to `console.error` then swallow. The docstring rationalizes this as "non-fatal: they log + swallow errors so a milestone write can never block the underlying purchase or listing." But the consequence is that a creator's missed milestone (badge not awarded, pioneer not stamped) silently disappears with only a console line — no retry queue, no admin alert, no `audit_log` row. Combined with the race conditions above, lost milestones are guaranteed at modest scale.
+- **Suggested approach:** When milestones move into the SQL trigger on the sale row, failures roll back the transaction or surface as alerts. For functions that genuinely should be best-effort, write to a `milestone_failures` retry table instead of `console.error`.
+
+- **Severity:** High
+- **File:** src/lib/creatorMilestones.js
+- **Line:** 48, 92
+- **Category:** Missing P.I.E. event emission
+- **Issue:** Neither `recordCreatorSale` (when a badge is unlocked) nor `grantPioneerIfEligible` emits a P.I.E. event. Notifications, social feeds ("X just hit Master Creator!"), and analytics cannot react.
+- **Suggested approach:** Inside the server-side milestone trigger/RPC, emit `creator.badge_unlocked` and `creator.pioneer_granted` events with `actor_id`, `slug`, `unlocked_at`.
+
+- **Severity:** High
+- **File:** src/lib/creatorMilestones.js
+- **Line:** 48-83
+- **Category:** Missing idempotency on milestone unlocks
+- **Issue:** The "newly earned" filter `prevSales < at && !prevBadges.includes(slug)` only protects against re-grant within the SAME function call. If a previous call partially succeeded (sales updated, badges array not updated due to a bug or race), the next call will re-grant the badge — the dedup via `Set` papers over it but the ledger has no idempotency key per badge. There's no record of "when was this badge earned" — only a flat slug list. Auditing "did badge X award correctly" is impossible.
+- **Suggested approach:** Replace `creator_badges` jsonb array with a `creator_badge_unlocks` table: `(user_id, slug, unlocked_at, sale_count_at_unlock)` with PRIMARY KEY `(user_id, slug)`. Idempotent by definition.
+
+- **Severity:** High
+- **File:** src/lib/creatorMilestones.js
+- **Line:** 92-125
+- **Category:** Missing audit logging on milestone unlock
+- **Issue:** Pioneer Creator is a one-time, capped-supply badge. There is no `audit_log` entry recording "user X received pioneer slot N at timestamp T." If the cap is mis-counted, there is no way to determine which 100 users were intended to get it. A capped, prestige-bearing entitlement deserves a permanent record.
+- **Suggested approach:** Atomic insert into `pioneer_creators` table (one row = one slot) IS the audit log. Order-by `unlocked_at` reproduces the timeline.
+
+- **Severity:** Medium
+- **File:** src/lib/creatorMilestones.js
+- **Line:** 23-32 (docstring)
+- **Category:** Documentation drift risk
+- **Issue:** Badge slugs and the "1-sale Creator title" cross-reference depend on (a) the Creator Program page's MILESTONES array staying in sync with `CREATOR_BADGE_THRESHOLDS` here, and (b) the title flow staying separate. A change in either breaks the contract silently — there's no shared source of truth.
+- **Suggested approach:** Move thresholds and slugs into a single shared `creatorMilestoneConfig` module imported by both this lib and the Creator Program page; better, into a SQL table with a seed migration so server triggers also reference the canonical list.
+
+- **Severity:** Medium
+- **File:** src/lib/creatorMilestones.js
+- **Line:** 41
+- **Category:** Hardcoded magic number
+- **Issue:** `PIONEER_CAP = 100` hardcoded inline. Belongs in shared milestone config.
+- **Suggested approach:** Export from `src/config/creatorConfig.js` (or include in `spiceConfig` if creator stuff lives there).
+
+- **Severity:** Medium
+- **File:** src/lib/creatorMilestones.js
+- **Line:** 132
+- **Category:** Hardcoded constant
+- **Issue:** `REFERRAL_ALPHABET` and the `6` length are inline. Referral codes are likely shared in marketing materials and validated elsewhere; the alphabet/length should be canonical.
+- **Suggested approach:** Move to `referralConfig.js`. Make length and alphabet a single source of truth used by both code generation and validation.
+
+- **Severity:** Medium
+- **File:** src/lib/creatorMilestones.js
+- **Line:** 144-155
+- **Category:** Weak collision detection / silent dropoff
+- **Issue:** The retry loop assumes any `error` from the update was a unique-index collision. Other failures (RLS deny, FK, transient) also retry up to 5 times with new codes, then return null. From the caller's perspective, "could not get a code right now" is indistinguishable from "your account is broken."
+- **Suggested approach:** Inspect `error.code === '23505'` (unique violation) to retry; surface other errors. Better: server RPC retries server-side and returns the code or a typed error.
+
+- **Severity:** Low
+- **File:** src/lib/creatorMilestones.js
+- **Line:** 51-53 (comment)
+- **Category:** TODO-as-doc / dismissive comment
+- **Issue:** "Read-modify-write — the critical section is small enough that concurrent sales on the same creator collapse to one effective append. Row-level RLS limits who can see/write these anyway." This rationalizes the race rather than flagging it. Concurrent sales DO NOT collapse to an effective append — they lose updates. RLS does not serialize writes.
+- **Suggested approach:** Replace with a TODO/FIXME pointing to the atomic-trigger fix project, and remove the dismissive justification.
+
+- **Severity:** Low
+- **File:** src/lib/creatorMilestones.js
+- **Line:** 102-104 (comment)
+- **Category:** Premature-optimization rationale
+- **Issue:** "Cheaper than a DISTINCT query for <1000 creators, which is the universe we're gating on." The pioneer cap is 100, but creators (in `tavern_items.creator_id`) is the universe being SELECTed — that's all-time creators, not just the 100. As the platform grows this becomes a much larger query than the comment implies.
+- **Suggested approach:** Remove the rationale; switch to a `pioneer_creators` table per the earlier Critical finding.
+
+#### /src/lib/campaignApplications.js
+
+- **Severity:** Critical
+- **File:** src/lib/campaignApplications.js
+- **Line:** 131-179 (`submitApplication`)
+- **Category:** Client-side authority / Caller-supplied applicant_id
+- **Issue:** `userId` is caller-supplied and written into BOTH `user_id` AND `applicant_id` on the row. There is no `auth.uid()` check. A caller can submit an application on behalf of any user — the new row will impersonate them, with the attacker's `characterId` and `message`. Even if RLS blocks the write, the function shape encourages clients to pass arbitrary IDs. Combined with the `or(user_id.eq.${userId},applicant_id.eq.${userId})` query string interpolation in `getMyApplication` (line 114), this is also an injection-shape risk if `userId` is not a clean UUID.
+- **Suggested approach:** Drop the `userId` parameter; derive `auth.uid()` server-side via `rpc_submit_application(p_campaign_id, p_character_id, p_message, p_is_modded)`. Validate `character_id` belongs to `auth.uid()` in the RPC. RLS on `campaign_applications` should enforce `auth.uid() = user_id` for INSERT/UPDATE.
+
+- **Severity:** Critical
+- **File:** src/lib/campaignApplications.js
+- **Line:** 201-243 (`acceptApplication`)
+- **Category:** Missing GM verification / Client-side authority
+- **Issue:** No verification that the caller is the campaign's `game_master_id`. Any authenticated user holding an application object can: (a) accept the application, adding the player to the campaign's `player_ids`; (b) update the application status; (c) re-parent the player's character (`characters.campaign_id = …`). This is dependent entirely on RLS; the function itself trusts whoever calls it. The instructions for this audit specifically note the column name is `game_master_id` — this code never even reads that column to compare.
+- **Suggested approach:** Server RPC `rpc_accept_application(p_application_id)` that asserts `EXISTS (SELECT 1 FROM campaigns WHERE id = (SELECT campaign_id FROM campaign_applications WHERE id = p_application_id) AND game_master_id = auth.uid())`. Atomically: insert into `campaign_members` (or update `player_ids`), set status accepted, re-parent character. RLS on `campaigns` UPDATE must include the `game_master_id = auth.uid()` predicate.
+
+- **Severity:** Critical
+- **File:** src/lib/campaignApplications.js
+- **Line:** 205-222 (`acceptApplication`)
+- **Category:** Race condition / max_players cap bypass
+- **Issue:** Read `player_ids` and `max_players`, check `ids.length >= cap`, then write `[…ids, playerId]`. Two GMs (or one GM clicking accept on two apps simultaneously) both read `ids = [a,b,c,d,e]` with `cap = 6`, both compute `[…ids, newPlayer]`, both write — but the LATER write WINS, so one of the two new players is dropped from `player_ids`. Worse: with `cap = 6` and `ids.length = 5`, both pass the cap check, both successfully accept the application (status row updates), but only one player ends up in `player_ids`. The dropped player has `status = accepted` but is NOT in the campaign — a ghosted member. Comment "Read the live player_ids so we don't clobber a concurrent write" is misleading; the read does not prevent the clobber.
+- **Suggested approach:** Use an atomic SQL update: `UPDATE campaigns SET player_ids = array_append(player_ids, p_player_id) WHERE id = p_campaign_id AND NOT (p_player_id = ANY(player_ids)) AND array_length(player_ids,1) < LEAST(max_players, 8) RETURNING …`. Better: replace the JSONB `player_ids` column with a proper `campaign_members` table that has `(campaign_id, user_id) UNIQUE` and a server-side trigger to enforce the cap.
+
+- **Severity:** Critical
+- **File:** src/lib/campaignApplications.js
+- **Line:** 213-216
+- **Category:** Hardcoded player cap / Inconsistent with TIERS
+- **Issue:** `Math.min(Number(camp?.max_players) || 6, 8)`. The cap is hardcoded at `8` and the default is `6`. The audit context establishes per-tier player caps tied to subscriptions (Free 4, Adventurer 12, Veteran/Guild unlimited). This `8` cap silently overrides whatever the tier system thinks the cap should be, AND the hardcoded `6` default is unrelated to the canonical "Guild = 6 members" guild-size rule. This is a Stripe/Tier-constant inlining pattern.
+- **Suggested approach:** Compute the cap server-side from the campaign owner's tier, not as a hardcoded `LEAST(8, max_players)`. Move tier→cap mapping into `tierConfig`. The `max_players` column should be set when the campaign is created based on the owner's tier; client should never re-derive a cap at accept-time.
+
+- **Severity:** Critical
+- **File:** src/lib/campaignApplications.js
+- **Line:** 245-286 (`rejectCharacter`, `rejectPlayer`)
+- **Category:** Missing GM verification
+- **Issue:** Same as `acceptApplication` — neither rejection path verifies the caller is the campaign's GM. Any authenticated user with an application id can write `status = rejected_character` (with their own `gmMessage`!) or `rejected_player`. The `rejected_character` path also auto-closes after `MAX_SUBMISSIONS`, so an attacker can spam-reject a competitor's application until it's auto-closed.
+- **Suggested approach:** Single server RPC for each rejection that asserts GM identity. Same pattern as the accept RPC.
+
+- **Severity:** High
+- **File:** src/lib/campaignApplications.js
+- **Line:** 18-22 (docstring) + 151
+- **Category:** Dual-write to deprecated column
+- **Issue:** Schema carries both `applicant_id` (legacy) and `user_id` (new canonical). Every write path mirrors to `applicant_id`. This dual-write contract increases the risk of the two columns diverging if a future write path forgets to set one. It also means RLS rules and triggers must read both, doubling the surface.
+- **Suggested approach:** Backfill `user_id` from `applicant_id` for any rows missing it, drop the `applicant_id` column, remove the dual-write. Track in a migration cleanup item.
+
+- **Severity:** High
+- **File:** src/lib/campaignApplications.js
+- **Line:** 114
+- **Category:** OR-filter with string interpolation
+- **Issue:** `.or(\`user_id.eq.${userId},applicant_id.eq.${userId}\`)` interpolates `userId` directly into a PostgREST filter string. PostgREST parses `or(...)` as a parameterized query, but unsanitized commas, parentheses, or dots in `userId` would break the filter. `userId` is expected to be a UUID; this is fragile and depends on shape.
+- **Suggested approach:** Validate UUID shape before interpolation, or use the Supabase JS chained filter API rather than the raw `or(...)` string. Eliminate the legacy column to remove the OR entirely.
+
+- **Severity:** High
+- **File:** src/lib/campaignApplications.js
+- **Line:** 131-179
+- **Category:** Missing rate limit / spam prevention
+- **Issue:** No cooldown or daily cap on application submissions. A user can apply, withdraw (status forced to … there is no withdraw path actually), or simply re-submit by calling `submitApplication` again. The `submission_count` is incremented to enforce 3-rejections-then-auto-close, but there's no rate limit at the submission level. A user could also submit applications to many different campaigns in rapid succession (no per-user/day cap).
+- **Suggested approach:** Add per-(user, campaign) and per-user/day rate limits in the server RPC. Reject submission if the prior submission to the same campaign is < 60s old or if the user has > N submissions/day across all campaigns. Track in a `rate_limits` table or a leaky-bucket implementation.
+
+- **Severity:** High
+- **File:** src/lib/campaignApplications.js
+- **Line:** 201-243
+- **Category:** Missing notification trigger on state change
+- **Issue:** Acceptance, character rejection, and player rejection all write the application status but emit no notification or P.I.E. event. The applicant has no in-app way to learn their app was accepted/rejected unless they poll. The audit instructions explicitly flag this as connecting to the missing notification system.
+- **Suggested approach:** Inside the (future) server RPCs, emit a P.I.E. event (`campaign_application.accepted` / `.rejected_character` / `.rejected_player` / `.auto_closed`) so the notification subsystem can deliver. Add the same on submission for the GM (`campaign_application.submitted`).
+
+- **Severity:** High
+- **File:** src/lib/campaignApplications.js
+- **Line:** 156
+- **Category:** Stale field / always-empty
+- **Issue:** `ban_violations: []` is hardcoded to empty on every submit. The function `validateCharacterForCampaign` (lines 35-83) computes violations but is never called inside `submitApplication` — so violations are never recorded. The column either is dead, or relies on the caller to compute and pass violations, but the field is unconditionally overwritten with `[]`.
+- **Suggested approach:** Either (a) call `validateCharacterForCampaign` server-side inside the submission RPC and record any violations on the row (pending GM review), or (b) remove the column. Currently it's a misleading nullable that always reads as empty.
+
+- **Severity:** High
+- **File:** src/lib/campaignApplications.js
+- **Line:** 35-83 (`validateCharacterForCampaign`)
+- **Category:** Client-side authority on validation
+- **Issue:** Ban-violation validation runs entirely client-side from the character object the client provides. A malicious applicant can submit a banned race/class/spell character by simply patching the local character JSON or never calling this function. Server-side ban enforcement is necessary at submission time AND at acceptance time (since the character could be edited between submit and accept).
+- **Suggested approach:** The submission RPC should call a `_validate_character_against_campaign_bans(p_character_id, p_campaign_id)` SQL helper that re-derives the character's race/class/subclass/spells/features/equipment from the canonical row and compares against bans. Same on accept.
+
+- **Severity:** High
+- **File:** src/lib/campaignApplications.js
+- **Line:** 181-194 (`listPendingApplications`)
+- **Category:** Permission leak / Missing GM check
+- **Issue:** Caller-supplied `campaignId`. Any authenticated user can list pending applications for any campaign — exposing applicant `user_id`, character_id, message, and submission_count. If RLS doesn't restrict this to GM-only, a competitor can survey who's applying where. The function does not verify the caller is the GM before returning data.
+- **Suggested approach:** Server-side gate: either RLS enforces `auth.uid() = (SELECT game_master_id FROM campaigns WHERE id = campaign_applications.campaign_id)`, or wrap in `rpc_list_pending_applications(p_campaign_id)` that performs the check. Document the RLS expectation either way.
+
+- **Severity:** High
+- **File:** src/lib/campaignApplications.js
+- **Line:** 236-242
+- **Category:** Silent error swallow / orphaned characters
+- **Issue:** `await supabase.from("characters").update({ campaign_id: …}).eq("id", …).catch(() => { /* non-fatal */ });` — a failure to associate the character with the campaign is silently swallowed. The application is now `accepted`, the player is in `player_ids`, but their character is not associated with the campaign. The GM panel won't see the character, and the player has no UI signal of the failure. Also, the catch is on the awaited Promise — if the chain throws synchronously (unlikely but) it doesn't catch.
+- **Suggested approach:** Move the character re-parent into the same atomic RPC as the accept. If it fails, the whole accept rolls back.
+
+- **Severity:** High
+- **File:** src/lib/campaignApplications.js
+- **Line:** 248-260 (`rejectCharacter` auto_closed branch)
+- **Category:** Off-by-one on submission cap / Missing pre-submit check
+- **Issue:** `if ((application.submission_count || 0) >= MAX_SUBMISSIONS)` — auto-closes when the application has been rejected for the 3rd time. But `submitApplication` increments `submission_count` BEFORE rejection happens, so the check at acceptance time uses the count of THE CURRENT submission. Also, `submitApplication` does not block resubmission when `submission_count` is already at MAX_SUBMISSIONS — only auto_closed status blocks it. Consequence: a player can submit a 4th time if the GM hasn't yet auto-closed.
+- **Suggested approach:** Block resubmission on `submission_count >= MAX_SUBMISSIONS`, not only on `status === auto_closed`. Move both the cap check and the increment server-side in the submit RPC.
+
+- **Severity:** Medium
+- **File:** src/lib/campaignApplications.js
+- **Line:** 97, 119, 190
+- **Category:** console.error / console.warn in library code
+- **Issue:** Three `console.error`/`console.warn` calls in this file. Library data-access code should propagate errors; calling components decide how to surface them.
+- **Suggested approach:** Replace with thrown errors or return-shape error fields. Remove all `console.*` from this lib.
+
+- **Severity:** Medium
+- **File:** src/lib/campaignApplications.js
+- **Line:** 142-144
+- **Category:** Race on auto_closed terminal state
+- **Issue:** `submitApplication` reads `existing` then checks `existing?.status === "auto_closed"` and throws. Between the read and the subsequent UPDATE/INSERT, the GM could close the application; the submit then races and may overwrite the closed status with a new pending row.
+- **Suggested approach:** Put the auto_closed check into the SQL UPDATE's WHERE clause (`WHERE id = ? AND status NOT IN ('auto_closed','accepted')`). Inside the server RPC.
+
+- **Severity:** Medium
+- **File:** src/lib/campaignApplications.js
+- **Line:** 24
+- **Category:** Hardcoded magic number
+- **Issue:** `MAX_SUBMISSIONS = 3` is exported, but it's a policy constant that should live in a campaign-config module so server triggers and admin UIs can reference the same source of truth.
+- **Suggested approach:** Move to `campaignConfig` (or wherever campaign policy constants live).
+
+- **Severity:** Medium
+- **File:** src/lib/campaignApplications.js
+- **Line:** 197-200 (docstring)
+- **Category:** Documentation drift
+- **Issue:** Docstring says "stash the character id on the app row for the review surface's history" — but `acceptApplication` does not stash `character_id` on the application row; it only sets `status`, `responded_at`, `updated_at`. The character_id was already on the row from submission; "stash" is misleading.
+- **Suggested approach:** Update the docstring or add the explicit stash if the review surface relies on a separate column.
+
+- **Severity:** Low
+- **File:** src/lib/campaignApplications.js
+- **Line:** 45
+- **Category:** Dead parameter
+- **Issue:** `const hit = (type, name) => violations.push({ type, name: ban.banned_name, reason: ban.reason });` — `name` parameter is unused; the function uses `ban.banned_name` from closure. Confusing reader signal.
+- **Suggested approach:** Drop the `name` parameter from `hit`; callers pass it but it's ignored.
+
+- **Severity:** Low
+- **File:** src/lib/campaignApplications.js
+- **Line:** 90-101 (`isCampaignModded`)
+- **Category:** Permission leak (low-severity)
+- **Issue:** Caller-supplied `campaignId`; anyone can list a campaign's installed mods (id, mod_id, mod_type, mod_name, mod_version). Mods may be public knowledge but the function leaks the per-campaign installed-mod list to anyone who asks.
+- **Suggested approach:** Restrict to applicants/members/GM. RLS enforcement preferred.
+
+#### /src/lib/campaignBans.js
+
+**Scope alignment note:** The audit prompt for this file describes "GMs can ban players from their campaigns" — i.e., banning *user accounts*. The actual `campaignBans.js` is a content-ban feature: bans for race/class/subclass/spell/feature/item entries. This is the "no Silvery Barbs" / "no Wish" preset feature. There is no player-ban functionality in this file. Either the prompt was written from outdated assumptions or a separate "campaign player-ban" module is missing entirely. **Flagged as a possible missing feature** (player-banning is referenced in the audit context as something that should exist) — recommend follow-up to confirm whether a separate `campaignPlayerBans` module needs to be created or whether the player-ban concept is genuinely absent from the codebase. Audit below covers the actual content-ban file.
+
+- **Severity:** Critical
+- **File:** src/lib/campaignBans.js
+- **Line:** 57-71 (`addBan`)
+- **Category:** Missing GM verification / Client-side authority
+- **Issue:** Caller-supplied `campaignId`, `ban_type`, `banned_name`, `reason`. No `auth.uid()` check that the caller is the campaign's `game_master_id`. Any authenticated user can add arbitrary bans to any campaign — e.g., banning the most popular race or spell to grief a campaign. Combined with the upsert's `onConflict: "campaign_id,ban_type,banned_name"`, an attacker can also overwrite a legitimate ban's `reason` field to inject misleading text shown to applicants.
+- **Suggested approach:** Server RPC `rpc_add_campaign_ban(p_campaign_id, p_ban_type, p_banned_name, p_reason)` that asserts `EXISTS (SELECT 1 FROM campaigns WHERE id = p_campaign_id AND game_master_id = auth.uid())` before insert. RLS on `campaign_bans` INSERT/UPDATE must enforce the same predicate.
+
+- **Severity:** Critical
+- **File:** src/lib/campaignBans.js
+- **Line:** 73-76 (`removeBan`)
+- **Category:** Missing GM verification / Client-side authority
+- **Issue:** `removeBan(banId)` takes only the ban id and DELETEs. There is no scope check (the caller could pass a ban id from any campaign), no GM check, no return value indicating whether anything was actually deleted. Any authenticated user can wipe any campaign's ban list one entry at a time (or in bulk by enumerating ids). Combined with `listCampaignBans` exposing all ban ids, this is trivially exploitable.
+- **Suggested approach:** Server RPC `rpc_remove_campaign_ban(p_ban_id)` that asserts the GM relationship in the WHERE clause: `DELETE FROM campaign_bans WHERE id = p_ban_id AND campaign_id IN (SELECT id FROM campaigns WHERE game_master_id = auth.uid()) RETURNING id`. Return whether a row was actually deleted.
+
+- **Severity:** Critical
+- **File:** src/lib/campaignBans.js
+- **Line:** 109-122 (`applyBanPreset`)
+- **Category:** Missing GM verification (inherited from addBan)
+- **Issue:** Inherits the no-GM-check vulnerability of `addBan`. Any authenticated user can apply any preset to any campaign. The per-row try/catch with `console.error` also masks per-entry failures so the caller can't tell which entries actually applied.
+- **Suggested approach:** Move preset application into a single server RPC that performs the GM check once and inserts all entries in one transaction. Return per-entry results.
+
+- **Severity:** High
+- **File:** src/lib/campaignBans.js
+- **Line:** 28-40 (`listCampaignBans`)
+- **Category:** Permission leak (low-impact) / silent error swallow
+- **Issue:** Caller-supplied `campaignId` with no membership/applicant gating. Probably acceptable (ban list is public to potential applicants), but worth confirming the design. Also, `console.error` and silent fallback to `[]` masks RLS failures.
+- **Suggested approach:** Confirm design intent of public ban-list visibility; if it should be applicant-only, gate via RLS. Replace `console.error` with thrown error.
+
+- **Severity:** High
+- **File:** src/lib/campaignBans.js
+- **Line:** 57-71
+- **Category:** Missing input validation
+- **Issue:** `addBan` does not validate that `ban_type` is in `BAN_TYPES`. The DB may have a CHECK constraint, but if not, arbitrary `ban_type` strings can be inserted. Also `banned_name.trim()` will throw `TypeError: Cannot read properties of undefined/null (reading 'trim')` if `banned_name` is missing — surfaces as a crash rather than a user-friendly error.
+- **Suggested approach:** Validate `BAN_TYPES.includes(ban_type)` and `typeof banned_name === 'string' && banned_name.trim().length > 0` before the upsert. Also enforce server-side via CHECK constraint.
+
+- **Severity:** High
+- **File:** src/lib/campaignBans.js
+- **Line:** 57, 73, 109
+- **Category:** Missing P.I.E. event / Missing audit logging
+- **Issue:** Bans are policy state. No `audit_log` row, no P.I.E. event on add/remove/preset. If a ban is removed (legitimately or by an attacker), there's no record. If a preset is applied, there's no log of who applied it.
+- **Suggested approach:** Inside the (future) server RPCs, write an `audit_log` row for each add/remove and emit P.I.E. events `campaign.ban_added` / `.ban_removed` / `.preset_applied`.
+
+- **Severity:** High
+- **File:** src/lib/campaignBans.js
+- **Line:** 57
+- **Category:** Missing notification trigger / Missing retroactive violation check
+- **Issue:** When a ban is added to a campaign that already has accepted players, those players' existing characters may now violate the new ban (e.g., a Silvery Barbs ban added to a campaign where a player is already using the spell). The function does not (a) re-validate existing accepted characters, (b) flag affected applications, or (c) notify players that their character now violates campaign policy. The applicant sees the new ban only on their next visit.
+- **Suggested approach:** On ban add, server-side trigger should scan existing campaign members' characters for violations and either flag them, notify the GM, or notify the player. At minimum emit a `campaign.ban_added` event so a downstream worker can do the scan.
+
+- **Severity:** Medium
+- **File:** src/lib/campaignBans.js
+- **Line:** 36, 118
+- **Category:** console.error in library code
+- **Issue:** Two `console.error` calls. Library data-access code should propagate errors.
+- **Suggested approach:** Replace with thrown errors or structured return.
+
+- **Severity:** Medium
+- **File:** src/lib/campaignBans.js
+- **Line:** 82-107 (`BAN_PRESETS`)
+- **Category:** Hardcoded content data in a data-access library
+- **Issue:** Three preset definitions (with copy/marketing strings) are hardcoded in the same module that talks to the database. This couples content presentation (labels, descriptions) to the data layer. Adding a preset requires a code deploy. Reads of the preset list are import-time.
+- **Suggested approach:** Move presets to a config file (`src/config/campaignBanPresets.js`) or, better, into a `campaign_ban_presets` SQL table so admins/GMs can add presets without a deploy. The library should only handle preset-application mechanics.
+
+- **Severity:** Medium
+- **File:** src/lib/campaignBans.js
+- **Line:** 109-122 (`applyBanPreset`)
+- **Category:** Non-atomic batch operation
+- **Issue:** The loop calls `addBan` once per entry. Each is a separate round-trip and a separate transaction. Partial-failure leaves a campaign with an inconsistent partial preset; the caller gets `added` count but no per-row result, and the surface has no way to retry just the failed rows.
+- **Suggested approach:** Single SQL upsert against the array, in one transaction. Return per-row results.
+
+- **Severity:** Low
+- **File:** src/lib/campaignBans.js
+- **Line:** 73-76
+- **Category:** Missing return value
+- **Issue:** `removeBan` returns nothing on success and throws on error. Callers cannot detect "ban id didn't exist" vs. "ban removed" — both succeed silently. With no GM check and no return-value, an attacker probing ban ids cannot be differentiated from a legitimate GM cleanup.
+- **Suggested approach:** Return the deleted row or a boolean. In the server RPC version, return `RETURNING id` so the caller knows whether anything was actually deleted.
+
+- **Severity:** Low
+- **File:** src/lib/campaignBans.js
+- **Line:** 17-26
+- **Category:** Coupling presentation to library
+- **Issue:** `BAN_TYPE_LABELS` (singular/plural display strings) lives in the data-access library. Pure presentation; belongs in a UI module.
+- **Suggested approach:** Move labels to a presentation/config file. The library only needs the `BAN_TYPES` enum.
+
+- **Severity:** Low
+- **File:** src/lib/campaignBans.js
+- **Line:** 31-32
+- **Category:** Note — column projection looks correct
+- **Issue:** Not a finding; positive note. The select is narrowed to `id, ban_type, banned_name, reason, created_at` rather than `*`. Continue this pattern.
+- **Suggested approach:** N/A — keep doing this.
+
+##### Batch 2-ii-c Summary
+
+**Totals by severity:**
+- Critical: 21
+- High: 25
+- Medium: 21
+- Low: 11
+- **Total findings: 78** (across 5 files, 816 source lines)
+
+**Totals by category (with counts):**
+- Client-side authority / caller-supplied IDs (user_id, campaign_id, applicant_id, gm_id, creator_id, ban_id, amount, tier): 14
+- Race conditions / non-atomic wallet or state operations: 11
+- Missing GM verification on campaign-scoped admin actions: 4
+- Missing actor pinning to auth.uid(): 14 (overlaps with caller-supplied)
+- Missing P.I.E. event emission: 4
+- Missing idempotency on retryable operations: 3 (stipend, milestone unlocks, referral code)
+- Missing transaction-history pairing / non-atomic ledger: 4
+- Negative balance / overspend possibility: 2 (`spendGuildSpice` race, `spending_restricted` ignored)
+- Permission leaks (cross-tenant or cross-user reads): 6
+- Hardcoded values that should be in config (`THIRTY_DAYS_MS`, `PIONEER_CAP`, `MAX_SUBMISSIONS`, player cap `8`, default `6`, transaction types, referral alphabet, BAN_PRESETS data): 8
+- Stripe-/Tier-constant inlining: 1 (campaignApplications player cap `LEAST(8, max_players)`)
+- console.log / console.error / console.warn in library code: 8 (creatorMilestones×3, campaignApplications×3, campaignBans×2)
+- Silent error swallowing (data destructuring without checking error): 7
+- Fetch-all anti-pattern: 1 (`grantPioneerIfEligible` selects all `tavern_items.creator_id`)
+- Missing input validation (ban_type enum, amount integer, banned_name nullable): 3
+- Missing notification trigger on state changes: 3 (campaign apps acceptance/rejection, ban adds)
+- Missing rate limit / spam prevention: 1 (campaignApplications submit)
+- Missing audit logging: 4 (stipend grants, pioneer creator, ban add/remove)
+- Missing retroactive policy enforcement: 1 (new bans don't re-validate existing characters)
+- Cross-tenant write potential: 2 (stipend guildId, application user_id)
+- Dual-write deprecated columns: 1 (applicant_id legacy + user_id new)
+- OR-filter with string interpolation: 1 (getMyApplication)
+- Misleading documentation / dismissive comments: 5
+- TODO/HACK comments: 2
+- Stale / always-empty fields: 1 (`ban_violations: []` always blank)
+- Off-by-one logic errors: 1 (submission_count cap check ordering)
+- Toast / UI side-effect coupling in lib code: 2 (spiceWallet)
+- SpiceEmporium-style "credit without payment" anti-patterns: 2 (`add_spice` direct call surface, stipend tier-spoofing)
+- Dead parameters: 1 (`hit(type, name)` — `name` unused)
+- Default-on-empty masking (`EMPTY_WALLET`): 2
+
+**Specific note — inline Spice math hardcoding count:** **0** direct inline arithmetic findings. `spiceStipend.js` correctly imports `MONTHLY_STIPENDS` from `@/config/spiceConfig`; `spiceWallet.js` does not perform any conversion math (it operates on raw amounts passed in). However, `THIRTY_DAYS_MS` (stipend cadence), `PIONEER_CAP` (creator gate), and per-tier player caps (campaignApplications hardcoded `8`/`6`) are *policy constants* that should sit alongside the Spice config family rather than be inlined; counted under the "hardcoded constants" category.
+
+**Specific note — non-atomic wallet operations count (Critical):** **4 Critical instances** of non-atomic wallet flows:
+1. `spiceWallet.js:46` `addSpice` — RPC + separate ledger insert.
+2. `spiceWallet.js:67` `spendSpice` — RPC + separate ledger insert.
+3. `spiceWallet.js:112` `addGuildSpice` — full read-modify-write with no atomic guarantee.
+4. `spiceWallet.js:152` `spendGuildSpice` — read-modify-write that can overspend AND ignores `spending_restricted`.
+
+Plus: `creatorMilestones.js:48` (`recordCreatorSale`) and `creatorMilestones.js:92` (`grantPioneerIfEligible`) are the same anti-pattern applied to milestone state. `campaignApplications.js:201` (`acceptApplication`) is the same pattern applied to `player_ids`.
+
+**Specific note — caller-supplied amount/user_id anti-patterns:** **14 functions** accept caller-supplied identity or amount parameters that should be derived from `auth.uid()` server-side:
+- spiceWallet: `getWalletBalance`, `getGuildWalletBalance`, `addSpice`, `spendSpice`, `getTransactionHistory`, `addGuildSpice`, `spendGuildSpice`
+- spiceStipend: `checkAndGrantStipend` (userId, tier, guildId — triple-spoof surface)
+- creatorMilestones: `recordCreatorSale`, `grantPioneerIfEligible`, `ensureReferralCode`
+- campaignApplications: `submitApplication`, `acceptApplication`, `rejectCharacter`, `rejectPlayer`, `listPendingApplications`
+- campaignBans: `addBan`, `removeBan`, `applyBanPreset`
+
+This rate (14 / ~24 exported functions) matches the systemic CLIENT-SIDE AUTHORITY pattern flagged in earlier batches.
+
+**Specific note — idempotency gaps (stipend, milestones):**
+- Stipend: idempotency window is correct in spirit (`last_stipend_at` 30-day check) but read-then-write makes it racy and partial-failure-prone. **Critical fix needed.**
+- Creator milestone badges: no per-badge unique key; rely on the in-memory `Set` dedup at write time. Re-grant possible after partial failure. **High fix needed.**
+- Pioneer creator: gate is a count, not a slot reservation. Concurrent first-listings can over-grant. **Critical fix needed.**
+- Referral codes: collision retry exists but no atomic generate-and-claim. Two concurrent calls for the same user can both write codes. **Critical fix needed.**
+- Wallet credit/debit: `referenceId` accepted but no unique constraint enforced or visible. **High fix needed.**
+
+**Specific note — Base44 leftover count:** **0**. No `base44` import paths, identifiers, or comments found in any of the five files. All five import from `@/api/supabaseClient`.
+
+**Specific note — Stripe-constant inlining:** **0** direct Stripe constants (price IDs, product IDs, dollar amounts). However, `campaignApplications.js:214` hardcodes a player cap of `8` (and a default of `6`) inline; per-tier player caps logically belong in tier/Stripe-config alongside the subscription tiers (Free 4 / Adventurer 12 / Veteran/Guild unlimited). Same family of mistake.
+
+**Cross-batch systemic confirmations (logged, not deep-dived):**
+- CLIENT-SIDE AUTHORITY confirmed across all 5 files. Foundational fix-project remains the right framing.
+- `isAdminEmail()` admin-role pattern: **NOT TRIGGERED** in this batch — none of these files contain admin gates (the gates that would belong here, e.g. admin-credit, admin-cashout, admin-unban, are simply *missing entirely*).
+- TIERS canonical: `MONTHLY_STIPENDS` in `spiceConfig.js` (free=0, adv=175, vet=400, guild=250) matches canonical. Player-cap hardcoding in campaignApplications does NOT match canonical tier-derived caps.
+- Spice constants: no inline `$1=250` math, no inline `min cashout 12500` math, no inline `min creator price 625` math observed. Constants come from `spiceConfig`. **Good signal.**
+- `spiceConfig` centralization: respected in `spiceStipend.js` import; not undermined elsewhere.
+
+##### Good Patterns Observed in Batch 2-ii-c
+
+Despite the volume of Critical findings, this batch contains several patterns worth replicating in the fix projects:
+
+1. **Tier-aware constants imported from canonical config** — `spiceStipend.js:2` imports `MONTHLY_STIPENDS` from `@/config/spiceConfig` and looks up amounts by tier key. This is the correct pattern: never hardcode tier-amount mappings inline, never accept the amount from the caller; always look it up from a single canonical source. Replicate this for upload fees, marketplace splits, cashout minimums, and player caps.
+
+2. **Personal-wallet RPC shape** — `add_spice(p_user_id, p_amount)` and `spend_spice(p_user_id, p_amount)` (`spiceWallet.js:49, 73`) demonstrate the right *direction* even though the ledger insert needs to be folded in. The PL/pgSQL RPC returning `balance_after` is the canonical way to do atomic wallet math; the fix is to extend the RPC signature with `p_transaction_type, p_description, p_reference_id, p_idempotency_key` and write the ledger row inside the same SQL function. **Reference shape for the wallet-atomicity fix project.**
+
+3. **Column-narrowed SELECTs** — `spiceWallet.js:30` (`select("balance, lifetime_earned, lifetime_spent, lifetime_purchased")`), `campaignBans.js:32`, and several others narrow the projection rather than `select("*")`. Continue this pattern; never project `*` in client queries.
+
+4. **Upsert with explicit onConflict key** — `campaignBans.js:66` uses `upsert(payload, { onConflict: "campaign_id,ban_type,banned_name" })` to dedupe ban entries naturally. This is the right shape for content collections that need natural-key idempotency. Once paired with a server-side GM check, this pattern is correct.
+
+5. **Documented state-machine with a single owning module** — `campaignApplications.js` docstring (lines 4-22) declares the canonical state-machine values and concentrates every write path in one module. **Good architectural discipline.** The fix work needs to push the implementations behind atomic RPCs but the surface organization is right.
+
+6. **Spec-contract validators** — `validateCharacterForCampaign` (`campaignApplications.js:35`) returns `{ valid, violations }` with documented contract. The shape is correct (clean for callers, easy to test); the missing piece is moving this from client-side advisory to server-enforced.
+
+7. **Constants exported by the module that owns them** — `BAN_TYPES`, `BAN_TYPE_LABELS`, `BAN_PRESETS`, `MAX_SUBMISSIONS`, `CREATOR_BADGE_THRESHOLDS` are all exported from the file that uses them. Easy to find. (The labels and presets ought to migrate to config/SQL eventually; the export pattern itself is good.)
+
+8. **Default-empty fallbacks for read paths** — `EMPTY_WALLET` / `EMPTY_GUILD_WALLET` / `groupBansByType` provide stable shapes for missing data. The pattern is good (callers always get a usable object); the failure mode is that they hide errors. Replicate the shape but propagate errors separately.
+
+**End of Batch 2-ii-c.**
