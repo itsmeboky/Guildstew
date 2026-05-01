@@ -38,8 +38,10 @@ export async function uploadFile(file, bucket = BUCKETS.USER, path = "", opts = 
   // Size / type validation only applies to user uploads — SRD seed
   // scripts pushing into `campaign-assets` can skip it.
   if (bucket === BUCKETS.USER && uploadType) {
-    if (!validateFile(file, uploadType)) {
-      throw new Error("File rejected by validator");
+    const validation = validateFile(file, uploadType);
+    if (!validation.valid) {
+      toast.error(validation.error);
+      throw new Error(validation.error);
     }
   }
 
