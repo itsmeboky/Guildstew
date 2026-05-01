@@ -11530,3 +11530,647 @@ Additionally, `billingClient.js` perpetuates the same anti-pattern (`startChecko
 - `src/lib/` batch: verify TIERS imports use the canonical export (not a copy) and `canUseTier` is the only feature-gate path.
 - Database migrations batch: verify RLS on every table audited. The data-layer findings above all depend on RLS being correctly authored — if RLS is fail-open for any of these tables, the Critical findings are worst-case-realized.
 
+
+### Batch 2-ii-a: lib auth/identity/forums
+
+**Scope:** `src/lib/AuthContext.jsx`, `src/lib/PresenceContext.jsx`, `src/lib/userSettings.js`, `src/lib/forumsClient.js`.
+
+**Pre-flight notes:**
+- Branch in use: `claude/audit-codebase-GCQ60` (task referenced `supabase-migration`; harness pinned this branch).
+- All four target files exist with the exact requested filenames under `src/lib/` (audit task referenced `/src/lib/` absolute, but project root is `/home/user/Guildstew/src/lib/`).
+- Audit performed sequentially in a single thread (no sub-agents).
+
+#### /src/lib/AuthContext.jsx
+
+- **Severity:** Critical
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 96–106
+- **Category:** Context smell — unstable object identity / cascading re-renders
+- **Issue:** `mergedUser` is reconstructed as a brand-new object literal on every render of `AuthProvider`. It is then passed inside another freshly-allocated literal as the context `value`. Because every consumer of `useAuth()` subscribes to the entire context object, every render of the provider (which is at the top of the app tree) triggers a re-render of every screen that calls `useAuth()`. There is no `useMemo` around `mergedUser` and no `useMemo` around the provider value.
+- **Suggested approach:** Memoize `mergedUser` with `useMemo` keyed on `[user, profile, profileFetched]`, and memoize the provider value with `useMemo` keyed on `[mergedUser, isAuthenticated, isLoadingAuth, authError, logout, navigateToLogin]`. Wrap `logout`, `navigateToLogin`, and `checkAuth` in `useCallback` so they are stable across renders.
+
+- **Severity:** Critical
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 64, 96–106
+- **Category:** PII broadcast / privacy
+- **Issue:** `fetchProfile` selects `*` from `user_profiles` and the resulting row is then spread into `mergedUser` at line 97 (`{ ...profile, ... }`). Per Pass 1A, `user_profiles` carries `email`, `age`, and `role` columns — those PII fields are broadcast through `useAuth()` to every component in the app, regardless of whether that component needs them. Combined with the systemic "user_profiles row contains PII at rest" issue from Pass 1A, this is the primary leak surface for PII into the React tree.
+- **Suggested approach:** Replace `select('*')` with an explicit, public-safe column list (`username, display_name, avatar_url, tier, ...`) and load private fields (`email`, `age`, `role`) only on demand via a dedicated `getMyPrivateProfile()` RPC. Stop spreading raw profile into the user object — expose `user` and `profile` as separate keys so callers must opt in.
+
+- **Severity:** High
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 41, 43, 46, 50, 54, 61, 69, 75, 77
+- **Category:** console.log (auth/session — heightened concern)
+- **Issue:** Nine `console.log`/`console.error` calls in the auth path log session presence, raw user IDs (`session.user.id`), and usernames to the browser console in production. Auth-context logging is a heightened-concern category per the batch brief — these strings end up in customer browser logs, support tickets, and any error-reporter pipeline that captures `console`.
+- **Suggested approach:** Strip all `console.*` from this file. Route real errors through a single error reporter (Sentry / `setAuthError`). Gate any debug logs behind `import.meta.env.DEV`.
+
+- **Severity:** High
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 16–37
+- **Category:** Race condition risks
+- **Issue:** `useEffect` mount calls `checkAuth()` immediately AND subscribes to `onAuthStateChange`. On a warm session, both fire and both call `fetchProfile(session.user.id)` concurrently — two HTTP round trips, two `setProfile` writes, two `setProfileFetched` writes, and two cache writes via the `mergedUser` `useEffect` (line 108). On a cold session this still doubles up if Supabase emits an `INITIAL_SESSION` event. There is no guard / abort controller / "already fetched for this user" check.
+- **Suggested approach:** Drop the explicit `checkAuth()` call on mount and rely on `onAuthStateChange` (which fires `INITIAL_SESSION` reliably in v2). Or guard `fetchProfile` with a `useRef` of "last fetched user id" so concurrent calls are deduped. Add an `AbortController` to cancel in-flight fetches when the user changes.
+
+- **Severity:** High
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 83–90
+- **Category:** Auth security — sign-out gaps / memory leaks
+- **Issue:** `logout()` calls `supabase.auth.signOut()` without checking the returned error, then immediately mutates local state and calls `queryClient.clear()`. It does NOT (a) await/cancel any active Realtime channel subscriptions (PresenceContext channels survive across logout boundaries until full-page navigation completes), (b) clear `authError`, (c) clear `profileFetched` (so a re-login briefly sees stale `profile_fetched: true`), or (d) handle the case where `signOut` itself fails (network error → user thinks they're signed out, server still has the session). The hard `window.location.href = '/'` also bypasses React Router state and any React unmount cleanup.
+- **Suggested approach:** Await `signOut`, surface its error via `setAuthError`, only then clear local state. Reset all auth-derived state (including `profileFetched`, `authError`). Trigger a `presenceContext.disconnect()` (or equivalent) before the navigation. Prefer `navigate('/')` from React Router over `window.location.href` so cleanup effects fire.
+
+- **Severity:** High
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 119, 121, 124
+- **Category:** Base44 leftovers
+- **Issue:** Three context value keys are clearly Base44 API-compat shims with no functional implementation: `isLoadingPublicSettings: false` (hardcoded), `appPublicSettings: null` (hardcoded), and `checkAppState: checkAuth` (Base44's auth probe was named `checkAppState`). These exist only so consumers calling `useAuth().checkAppState()` or reading `appPublicSettings` from the Base44 era don't crash.
+- **Suggested approach:** Audit every callsite for these three keys (`grep -r "checkAppState\|appPublicSettings\|isLoadingPublicSettings" src/`), migrate them to native names (`checkAuth`, drop `appPublicSettings` entirely or replace with a real `useAppPublicSettings()` query, drop `isLoadingPublicSettings`), then remove from this provider. Per the BASE44 NAMING DECISION, every Base44-flavored field here should be deleted (no `supabase`-prefixed equivalent needed since these were never real features).
+
+- **Severity:** High
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 96–112
+- **Category:** Race condition / cache thrash
+- **Issue:** The `useEffect` on line 108 calls `queryClient.setQueryData(['currentUser'], mergedUser)` whenever `mergedUser` changes — but `mergedUser` is a new object on every render (see Critical above). Combined with React Query's referential-equality checks, this thrashes the `['currentUser']` cache key and triggers a re-render of every component subscribed to `useQuery(['currentUser'])`. Also, the cache is never cleared on the `else` branch of the auth state change (line 26–31) — only on `logout()`, so a server-driven sign-out (token expiry, revoked) leaves stale `currentUser` in React Query.
+- **Suggested approach:** Memoize `mergedUser` (see first finding). Add `queryClient.setQueryData(['currentUser'], null)` (or `removeQueries`) inside the `else` branch of `onAuthStateChange`. Consider replacing the manual `setQueryData` with a proper `useQuery({ queryKey: ['currentUser'], queryFn: fetchProfile })` so React Query owns the lifecycle.
+
+- **Severity:** Medium
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 60–81
+- **Category:** Missing error handling on Supabase response
+- **Issue:** `fetchProfile` swallows the error path: errors other than `PGRST116` are only `console.error`'d and never surfaced to context consumers. There is no `profileError` state. Consumers (Layout's onboarding gate per the inline comment) cannot tell the difference between "profile loading," "profile loaded successfully," "profile not found (new user)," and "profile fetch failed (server down)" — all three latter cases collapse to `profile_fetched: true, profile: null`.
+- **Suggested approach:** Introduce `profileError` state and `setProfileError(error)` for the non-`PGRST116` branch. Expose it on context. Use `.maybeSingle()` instead of `.single()` so the "no rows" case is `data: null, error: null` and doesn't require special-casing `PGRST116`.
+
+- **Severity:** Medium
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 100
+- **Category:** PII / internal-id leak
+- **Issue:** `profile_id: profile?.id` exposes the internal `user_profiles.id` row PK to every component. Most callsites should use `user_id` (the `auth.users` UUID). Leaking the row PK couples the client to schema internals and gives attackers a second identifier to fuzz against RLS-protected endpoints.
+- **Suggested approach:** Audit callsites of `user.profile_id` (`grep -r "profile_id" src/`); migrate any legitimate uses to `user_id`. Then remove `profile_id` from `mergedUser`.
+
+- **Severity:** Medium
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 39–58
+- **Category:** Missing error handling — auth path control flow
+- **Issue:** `checkAuth()` only sets `setIsLoadingAuth(false)` after the try/catch. On the no-session branch (line 45 `if (session?.user)` is false), it never sets `setUser(null)` / `setIsAuthenticated(false)` explicitly — relies on the initial state. If `checkAuth` is later called via the exposed `checkAppState` after a logout, those state writes are missing and the user appears authenticated even though the session is gone.
+- **Suggested approach:** Add an explicit `else` for the no-session branch that resets `user`, `profile`, `isAuthenticated`, `profileFetched`. Or eliminate `checkAuth` entirely (see race-condition finding) and rely solely on `onAuthStateChange`.
+
+- **Severity:** Medium
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 89, 93
+- **Category:** Hard navigation bypassing React Router
+- **Issue:** Two hardcoded `window.location.href` redirects (`/` and `/login`). These trigger a full document reload, discarding any in-flight network requests, unmounting all React state without firing cleanup effects, and breaking SPA navigation back-stack expectations. Login URL is also hardcoded — if the route ever moves to `/auth/login` or `/sign-in`, this silently breaks.
+- **Suggested approach:** Inject a router-aware navigate function (`useNavigate()` hook from React Router) or accept one via context init. Centralize the `/login` route in a route constants module.
+
+- **Severity:** Medium
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 7–14, 131–135
+- **Category:** Context smell — missing error state surface
+- **Issue:** The hook `useAuth()` exposes `authError` but the only path that ever sets it is the catch in `checkAuth` (line 55). `fetchProfile` errors, `signOut` errors, and `onAuthStateChange` errors never reach `authError`. Consumers thus cannot show a generic "auth is broken, sign in again" banner. Additionally, `authError.type` is hardcoded to `'unknown'` (line 55) so the field is functionally useless for differentiated handling.
+- **Suggested approach:** Funnel all auth failures through a single `setAuthError({ type, message, source })` helper. Distinguish `'session_expired' | 'profile_fetch_failed' | 'sign_out_failed' | 'network'` so consumers can render the right UI.
+
+- **Severity:** Medium
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 19–34
+- **Category:** Missing session-refresh / token-expiry handling
+- **Issue:** No explicit handling of the `TOKEN_REFRESHED` or `USER_UPDATED` events. The default `onAuthStateChange` callback does call `setUser(session.user)` for these, which is correct, but `fetchProfile` is also re-invoked on every `TOKEN_REFRESHED` (which fires roughly every hour by default and on tab focus). That's an unnecessary re-fetch of the profile on every token refresh, and combined with the unstable-identity bug, every refresh thrashes the React Query cache and triggers a full app re-render.
+- **Suggested approach:** Switch on `event` and only re-fetch the profile on `SIGNED_IN` / `INITIAL_SESSION` / `USER_UPDATED`. Skip `TOKEN_REFRESHED` (the user object is unchanged). Document the chosen event matrix in a comment.
+
+- **Severity:** Medium
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 96
+- **Category:** Client-side authority — id derivation
+- **Issue:** `mergedUser.id = user.id` (the auth.users UUID). This is correct for AuthContext itself — but every downstream caller that does `await Entity.create({ user_id: currentUser.id, ... })` is then passing a *client-readable* identity into a write path. Per the systemic finding, all of those writes should derive `user_id` server-side from `auth.uid()`. AuthContext is the upstream source for the id consumers will mis-use; flagging here so the systemic fix-project ties to this surface.
+- **Suggested approach:** When the entity-layer fix-project lands, also remove `id` from the publicly-exposed `mergedUser` so client callers physically cannot pass it through to a write. Or rename it to a less-tempting `_authUid` and discourage write-path use.
+
+- **Severity:** Low
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 9–10, 24, 80
+- **Category:** State design — `profileFetched` boolean
+- **Issue:** `profileFetched` is a separate boolean that always lags `profile` by a render. Combined with the `mergedUser` object spread, consumers checking `user.profile_fetched && !user.username` to detect "new user, send to onboarding" will briefly see `profile_fetched: false` on every auth state change (line 24 sets it to false), causing the onboarding gate to flicker even for established users.
+- **Suggested approach:** Replace the boolean with a discriminated `profileStatus: 'idle' | 'loading' | 'loaded' | 'absent' | 'error'` enum on context. Update Layout's onboarding gate to check `profileStatus === 'absent'` explicitly.
+
+- **Severity:** Low
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 25, 49
+- **Category:** Missing error handling — silent `.catch(() => {})`
+- **Issue:** `fetchProfile(...).catch(() => {})` (line 25) silently swallows ALL profile-fetch failures from the auth-state-change path. Line 49 at least logs the error. Inconsistent error handling between the two paths means the same network failure produces logs in one case and silence in the other.
+- **Suggested approach:** Hoist the catch into `fetchProfile` itself (the function already handles the success/empty/error branches internally) and let both callers use the same handler. Or replace both `.catch` patterns with `await` inside try/catch.
+
+- **Severity:** Low
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 5
+- **Category:** Context smell — undefined default
+- **Issue:** `const AuthContext = createContext()` with no default value. The `useAuth()` hook compensates by throwing if context is undefined (line 133), but this throw fires on any test render that forgets to wrap with `AuthProvider` and produces a confusing failure mode in Storybook / unit tests.
+- **Suggested approach:** Provide a typed default with no-op functions and `isLoadingAuth: true` so renders outside a provider behave like "still loading," and document that production code must wrap in `AuthProvider`.
+
+- **Severity:** Cosmetic
+- **File:** src/lib/AuthContext.jsx
+- **Line:** 14, 88
+- **Category:** Cross-context coupling
+- **Issue:** `AuthProvider` reaches into `useQueryClient` to write `['currentUser']` and to `clear()` on logout. This creates a hidden dependency: any consumer of React Query that expects this key must coordinate with AuthContext. There is no documented contract for what's at `['currentUser']` or who else writes there.
+- **Suggested approach:** Either (a) move the React Query coupling out of AuthContext into a small `useSyncCurrentUserToQueryCache(user)` hook used at app shell, or (b) document the contract in a comment at the provider top.
+
+
+#### /src/lib/PresenceContext.jsx
+
+- **Severity:** Critical
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 3, 83
+- **Category:** Base44 leftover + Client-side authority (entities factory)
+- **Issue:** Imports `base44` from `@/api/base44Client` and uses `base44.entities.UserProfile.update(profileId, { status, last_seen_at, ...extra })` for every presence write. This is the entities.js factory anti-pattern (Pass 1A Critical — generic per-table CRUD with no field whitelist, no actor pinning) applied to a high-frequency write path (every 2 minutes per tab + every status change + every visibility change). The caller passes the **client-readable** `profileId` directly, with no server-side proof that the row belongs to the current user. RLS is the only gate.
+- **Suggested approach:** Replace with a dedicated `supabasePresence.setStatus(next)` (no profileId param — actor derived from `auth.uid()` server-side via an RPC `set_my_presence(p_status text)` that pins `user_id = auth.uid()`, whitelists status enum values, and stamps `last_seen_at = now()` server-side). Per the BASE44 NAMING DECISION, rename / replace the import to `@/api/supabasePresenceClient` (or fold into a single `supabaseClient` API surface).
+
+- **Severity:** Critical
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 80–87, 85
+- **Category:** Client-side authority — server-time spoofing
+- **Issue:** `last_seen_at` is set to `new Date().toISOString()` from the **client clock**. A malicious client can write `last_seen_at: '2099-01-01T00:00:00Z'` and remain "online" forever, defeating the 10-minute staleness gate at `resolveStatus` (line 46). Combined with the per-row open-write of `UserProfile.update`, this is exploitable today.
+- **Suggested approach:** Move presence writes behind an RPC that uses `now()` server-side. Strip `last_seen_at` from any client-callable update path. RLS column-level grants on `user_profiles` should make `last_seen_at` server-write-only.
+
+- **Severity:** High
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 42–48, 184
+- **Category:** Privacy — last-seen / presence broadcast
+- **Issue:** `resolveStatus` reads `profile.status` and `profile.last_seen_at` from any profile row passed to it. There is no "appear offline" / "hidden status" / per-viewer privacy gate — anyone who can `select` the profile row sees presence and last-seen-at. There is no `presence_visibility` field nor a tier-gated "invisible mode" (Discord-style) anywhere. The comment at line 7 promises "real-time online/offline/away/streaming status" but no opt-out is exposed.
+- **Suggested approach:** Add `presence_visibility` enum (`public | guild_only | friends_only | hidden`) to `user_profiles`. Read paths must respect it (RLS or view filter). Expose toggle in user settings. Strip `last_seen_at` from any read response when visibility is not `public`. Bonus: store `last_seen_at` only at minute granularity to reduce surveillance value.
+
+- **Severity:** High
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 65, 81
+- **Category:** PII / internal-id leak (downstream of AuthContext)
+- **Issue:** Pulls `profile_id` (the `user_profiles.id` row PK) off the `useAuth()` user object and uses it as the write key. This is downstream of the AuthContext leak flagged in batch 2-ii-a. Once the AuthContext fix removes `profile_id` from `mergedUser`, this file breaks. More importantly, the row PK should never have been the write key — it's the wrong identifier for "who am I."
+- **Suggested approach:** Pivot to `auth.uid()` via the RPC suggested in the previous Critical. Stop carrying `profileId` at all in this file.
+
+- **Severity:** High
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 102–117, 120–154, 158–181
+- **Category:** Multi-tab flapping / race conditions
+- **Issue:** Every browser tab runs its own copy of all three effects: heartbeat every 2 min, idle timer, visibility-change handler. Two tabs of the same user racing each other will write conflicting statuses (Tab A active → online, Tab B idle → away), each invalidating `['currentUser']` on every write. Sequence "Tab A goes idle → writes away → Tab B is active → writes online → Tab A heartbeats → writes away again" produces visible status oscillation. There's no `BroadcastChannel` / leader-election to designate a single tab as the presence owner.
+- **Suggested approach:** Use the `Web Locks API` (`navigator.locks.request('presence-leader', ...)`) or `BroadcastChannel` to elect a single presence-owner tab. Only the owner writes. Followers consume the owner's presence via storage events. Or accept the current behavior but document explicitly that "online" means "at least one active tab in the last 10 minutes" and let the server `last_seen_at` resolution handle it.
+
+- **Severity:** High
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 88–91
+- **Category:** Missing error handling / silent failure
+- **Issue:** `writeStatus` swallows every error with an empty `catch {}`. The caller has no way to know presence wasn't persisted. Combined with the optimistic `setStatusState` at lines 98 and 105–106, the UI will indefinitely show a status that the database never accepted (e.g., RLS denial, network outage, schema drift). Subsequent reads from `user_profiles.status` won't match what the UI shows.
+- **Suggested approach:** Catch separately into a `presenceError` state on context. Roll back the optimistic `setStatusState` on persistence failure. At minimum, instrument failures via the app's error reporter (not `console.*`) so server-side regressions are visible.
+
+- **Severity:** High
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 22, 184
+- **Category:** Missing P.I.E. event emission
+- **Issue:** Per the batch brief, the platform-internal-event (P.I.E.) bus must emit on every presence transition (online → away, online → offline, etc.). This file emits nothing. Downstream features that should react to presence transitions (analytics, friend activity feed, party / co-op widgets, "your friend X just came online") have no signal.
+- **Suggested approach:** After every successful `writeStatus`, emit a `pieEmit('presence.transition', { from, to, source: 'manual' | 'idle' | 'visibility' | 'beforeunload' | 'heartbeat' })`. Distinguish initial mount from real transitions to avoid false positives.
+
+- **Severity:** High
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 156–181
+- **Category:** Real-time / presence leaks — beforeunload reliability
+- **Issue:** `goOffline` calls `writeStatus('offline')` (an async fetch) inside `beforeunload`. Browsers do NOT wait for outstanding fetches in this handler, especially on mobile and on tab close. The comment at lines 161–164 acknowledges this but defers the fix to the 10-minute staleness gate. The result: a user who closes a tab is shown as "online" to others for up to 10 minutes after disconnect.
+- **Suggested approach:** Use `navigator.sendBeacon('/functions/v1/presence-offline', JSON.stringify({ ... }))` against a dedicated edge function that derives the user from session cookie. Or post via `fetch(..., { keepalive: true })`. Document the residual 10-minute window if neither is acceptable.
+
+- **Severity:** Medium
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 80–93
+- **Category:** Missing field whitelist on writes
+- **Issue:** `writeStatus(next, extra = {})` accepts an open `extra` payload that is spread into the `UserProfile.update` call (line 86 `...extra`). Today the only internal callers pass nothing, but the API surface is permissive — any future caller can write arbitrary `user_profiles` fields through a function whose name suggests it only writes presence.
+- **Suggested approach:** Remove the `extra` parameter entirely. If a caller needs to update a different field, it should not go through `writeStatus`. The RPC replacement (see Critical above) should accept only `p_status`.
+
+- **Severity:** Medium
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 184
+- **Category:** Context smell — unstable provider value
+- **Issue:** Provider value `{ status, setStatus, userId }` is a fresh object every render. `setStatus` is `useCallback`-wrapped (good) but `status` and `userId` change identity-wise on every render of the parent (`AuthProvider`) cascade. Every consumer of `useMyPresence()` re-renders.
+- **Suggested approach:** Wrap the provider value in `useMemo` keyed on `[status, setStatus, userId]`.
+
+- **Severity:** Medium
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 6–24
+- **Category:** Documentation drift — comment promises absent feature
+- **Issue:** The doc comment at the top promises "online/offline/away/streaming status" but `STATUS_OPTIONS` (line 26) contains no `streaming` value. Either the comment is aspirational or the feature was removed and the comment wasn't updated. Also, the comment promises `navigator.sendBeacon` fallback but the actual code at lines 158–181 never calls `sendBeacon` — only `writeStatus` which uses `fetch` via the entities factory.
+- **Suggested approach:** Update the comment to match implemented behavior, or implement `streaming` and `sendBeacon` if those are still wanted. No action on the code itself per the audit-only directive.
+
+- **Severity:** Medium
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 92
+- **Category:** Cache thrash — unconditional invalidation
+- **Issue:** `queryClient.invalidateQueries({ queryKey: ['currentUser'] })` runs after every `writeStatus`, including the failure path (line 88 catch falls through). Combined with the 2-minute heartbeat, this re-fetches the current-user query every 2 minutes unconditionally even when nothing changed, and on every visibility change, every idle transition, and every manual status change. Each invalidation cascades through every component using `useQuery(['currentUser'])`.
+- **Suggested approach:** Move `invalidateQueries` inside the success branch only. Better: don't invalidate at all — call `queryClient.setQueryData(['currentUser'], (prev) => ({ ...prev, status: next, last_seen_at: now }))` to update in place without a re-fetch.
+
+- **Severity:** Medium
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 102–117
+- **Category:** Race condition — initial-mount timer leak
+- **Issue:** When `profileId` flips from null → uuid (typical on initial auth resolution), the heartbeat effect fires and starts an interval. If `profileId` then flips back to null (sign-out), the cleanup runs (good). But if the user signs out and back in **as a different user** quickly, the cleanup may still be in flight when the new effect starts — potentially producing two intervals briefly, both writing presence with the new profileId. The state machine has no guard.
+- **Suggested approach:** Track `currentProfileIdRef.current = profileId` inside the effect and check it before every `writeStatus` call from the interval. Cancel writes if it doesn't match.
+
+- **Severity:** Medium
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 95–100
+- **Category:** Optimistic update with no rollback
+- **Issue:** `setStatus` updates local state (`setStatusState`) before awaiting `writeStatus`. The `writeStatus` `await` is fire-and-forget (no `await` in the caller). If the persistence call fails, local state is now divergent from server state until the next `['currentUser']` re-fetch (which is also gated on the same invalidation that fires regardless of success).
+- **Suggested approach:** `await writeStatus(next)` and on failure call `setStatusState(prev)` to roll back, plus surface a toast or error state.
+
+- **Severity:** Medium
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 147
+- **Category:** Performance / event-listener density
+- **Issue:** Five global event listeners (`mousemove`, `keypress`, `click`, `scroll`, `touchstart`) — `mousemove` in particular fires hundreds of times per second. Each fire calls `onActivity` which calls `clearTimeout` + `setTimeout` and may call two `setStatusState` + one async `writeStatus`. While the fast path is cheap, this is still measurable on low-end devices and battery-impactful on laptops.
+- **Suggested approach:** Throttle `onActivity` (lodash `throttle` at 1s, or a simple manual throttle) so the timer reset runs at most once per second. Drop `scroll` if `mousemove` covers most cases.
+
+- **Severity:** Low
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 26–31
+- **Category:** Hardcoded values that should be constants/config
+- **Issue:** Status values, label colors, and dot colors are hardcoded in this lib file. Other UI components rendering presence (StatusDot, friend list, party widget) likely also need the dot/label color mapping — they would either reimport from here (creates a UI-from-lib dependency) or duplicate the constants.
+- **Suggested approach:** Move `STATUS_OPTIONS` and `STATUS_BY_VALUE` to a `src/constants/presence.js` so both the context and any rendering component can import without coupling UI to context.
+
+- **Severity:** Low
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 59–60
+- **Category:** Hardcoded values — magic intervals
+- **Issue:** `IDLE_MS = 5 * 60 * 1000` and `HEARTBEAT_MS = 2 * 60 * 1000` are local module constants. The 10-minute staleness gate in `resolveStatus` (line 46) is a different magic number that should derive from these. If `HEARTBEAT_MS` is bumped past 10 minutes, the staleness gate flips correctly-online users to offline silently.
+- **Suggested approach:** Express the staleness gate as `STALE_MS = HEARTBEAT_MS * 5` (or similar) so the relationship is explicit. Or pull all three from `src/config/presence.js`.
+
+- **Severity:** Low
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 158–181
+- **Category:** Memory leak risk — listener double-bind
+- **Issue:** The effect for `beforeunload` / `visibilitychange` re-binds listeners every time `profileId` or `writeStatus` changes. Since `writeStatus` is `useCallback`-wrapped on `[profileId, queryClient]`, it changes when those change. `queryClient` is stable from React Query, so this is mostly stable — but a hot-reload or provider remount briefly produces unbound + bound listeners. Low impact in practice.
+- **Suggested approach:** Stash `goOffline` / `onVisibility` in a `useRef` and bind/unbind once per profileId change, not per writeStatus identity change.
+
+- **Severity:** Low
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 89–90
+- **Category:** TODO/FIXME — implicit deferral
+- **Issue:** Comment "Silently swallow — presence is best-effort. Console noise during offline flushes confuses other logs." is an implicit deferral of error handling. Not a `TODO` marker but functionally one. The "best-effort" framing has hidden a Critical (silent presence-spoof failures).
+- **Suggested approach:** Once the writeStatus path is moved to an RPC with proper error semantics, replace this comment with a real error-reporter call.
+
+- **Severity:** Low
+- **File:** src/lib/PresenceContext.jsx
+- **Line:** 88
+- **Category:** Inconsistent naming — no actual `try` body
+- **Issue:** `try { await ... }` followed by `catch {}` (no error binding). Linters that enforce the `no-empty` rule would flag this; the code intentionally swallows. Stylistic only.
+- **Suggested approach:** Either bind `catch (err)` and add a `void err;` to silence the linter, or use a wrapper `tryAsync(fn)` helper used consistently across the codebase.
+
+
+#### /src/lib/userSettings.js
+
+- **Severity:** Critical
+- **File:** src/lib/userSettings.js
+- **Line:** 17, 35, 49, 60, 71
+- **Category:** Client-side authority — caller-supplied user_id
+- **Issue:** Every public and private function takes `userId` as a parameter from the caller and uses it as the `.eq("user_id", userId)` filter and `.update().eq("user_id", userId)` predicate. There is no guard that the supplied `userId` matches `auth.uid()`. RLS is the only line of defense; if RLS is fail-open or mis-authored on the JSONB columns specifically, any client could read or overwrite any other user's settings and notification preferences.
+- **Suggested approach:** Drop the `userId` parameter from all five functions. Inside each function, call `const { data: { user } } = await supabase.auth.getUser()` and use `user.id` for the filter. Better: route writes through an RPC `set_my_setting(p_domain text, p_patch jsonb)` that pins `user_id = auth.uid()` server-side and validates the domain enum. This eliminates the read-modify-write race entirely (see separate finding).
+
+- **Severity:** Critical
+- **File:** src/lib/userSettings.js
+- **Line:** 49–53, 60–69, 71–80
+- **Category:** Race condition — read-modify-write on JSONB
+- **Issue:** `patchSettingsDomain` and `patchNotifications` perform a classic read-modify-write: `readJson` (network round trip) → in-memory shallow merge → `writeJson` (network round trip). Two concurrent patches from the same user (e.g., two tabs, double-click on a toggle, simultaneous patches to different domains) will race: the second `writeJson` overwrites the first based on a stale read. Sibling-key preservation that the comment promises is silently broken under concurrency.
+- **Suggested approach:** Replace with a server-side JSONB merge via Postgres `jsonb_set` or `||` operator inside an RPC: `update user_profiles set settings = settings || $patch_at_domain where user_id = auth.uid()`. Or use Supabase's `.update({ settings: supabase.sql\`settings || ${jsonb}\` })`. This is atomic and removes the two-trip race entirely.
+
+- **Severity:** Critical
+- **File:** src/lib/userSettings.js
+- **Line:** 60–69, 71–80
+- **Category:** Missing field whitelisting on writes
+- **Issue:** `patchSettingsDomain(userId, domain, patch)` accepts ANY `domain` string and ANY `patch` shape. A caller can pass `domain: "role"` with `patch: { value: "admin" }` and the function will happily write `settings.role = { value: "admin" }` into the JSONB blob. While `settings` is JSONB-only and not `user_profiles.role` directly, the comment at line 56 lists "appearance / accessibility / privacy / legal" as the expected domains — but no validation enforces this. Same problem for `patchNotifications` `bucket` and `patch`. A renderer that reads `settings.role` could be tricked into trusting the JSONB value.
+- **Suggested approach:** Define an explicit allowlist `const SETTINGS_DOMAINS = new Set(['appearance','accessibility','privacy','legal'])` and reject unknown domains. Per-domain, validate the `patch` shape (likely against `settingsDefaults` schema). Same for notification buckets. Enforce the same allowlist server-side in the suggested RPC so the client list is informational only.
+
+- **Severity:** High
+- **File:** src/lib/userSettings.js
+- **Line:** 19–32, 36–47, 50–53
+- **Category:** Missing error handling — swallowed errors on every path
+- **Issue:** Every function silently swallows errors: `getUserSettings` returns defaults on error; `readJson` returns `{}` on error; `writeJson` returns void on error. Callers cannot distinguish "the user has no preferences set" from "the network is down" from "RLS denied the read." A failed write returns the same `null`/`next` value as a successful one. The comment at line 13–14 frames this as "tolerating the absence" of the migration, but the same swallowing also hides RLS denials, schema typos, and quota errors. There is no telemetry path.
+- **Suggested approach:** Distinguish "column missing" (PostgREST error code `PGRST204` or `42703` undefined_column) from generic errors. Re-throw the latter; surface to a settings error toast. Add an error-reporter hook for unrecognized errors. Preserve the migration-tolerance only for the specific column-missing codes.
+
+- **Severity:** High
+- **File:** src/lib/userSettings.js
+- **Line:** 60–69, 71–80
+- **Category:** Optimistic merge has no rollback / no return on failure
+- **Issue:** Both patch functions return the merged `next` object after `writeJson`. But `writeJson` swallows errors silently, so the caller receives `next` even when the database wasn't updated. Caller-side state (likely React Query optimistic update) will diverge from the server. Combined with the read-modify-write race, this can leave users with persistently-wrong settings displayed.
+- **Suggested approach:** Make `writeJson` return `{ ok: boolean, error: Error | null }`. Have the patch functions return `{ next, persisted: boolean }`. Callers should rollback their optimistic state when `persisted === false`.
+
+- **Severity:** Medium
+- **File:** src/lib/userSettings.js
+- **Line:** 35–47
+- **Category:** Code smell — generic helpers leak schema knowledge
+- **Issue:** `readJson(userId, column)` and `writeJson(userId, column, value)` are generic helpers that take a column name from the caller. A caller could pass `column: "email"` to `readJson` and pull the user's email out (no allowlist). Same for `writeJson` — `writeJson(userId, "role", "admin")` would attempt to write the role column directly. These helpers as written are general-purpose escape hatches; only RLS / schema constraints prevent abuse. They are private to the module today, but the API surface shape is wrong.
+- **Suggested approach:** Make these helpers accept only a `'settings' | 'notification_preferences'` literal type (or pass through a closed allowlist). Or inline them into the two patch functions and remove the generic helpers entirely.
+
+- **Severity:** Medium
+- **File:** src/lib/userSettings.js
+- **Line:** 17, 35
+- **Category:** Fetch-all anti-pattern (mitigated)
+- **Issue:** Reads use `.select("settings, notification_preferences")` and `.select(column)` — which is correctly column-scoped (good!). However, the read uses `.eq("user_id", userId).maybeSingle()` with no additional guard. If RLS were ever to broaden, a client passing another user's id would get back their settings. This is the same client-side authority finding from a different angle — flagging again because the read path also needs the `auth.uid()` migration.
+- **Suggested approach:** Same as the Critical above — drop the userId param and source from session.
+
+- **Severity:** Medium
+- **File:** src/lib/userSettings.js
+- **Line:** 60–80
+- **Category:** Missing P.I.E. event emission
+- **Issue:** Settings changes (privacy toggles, notification opt-outs, theme changes) are platform-relevant events. Other features may want to react: the email service should hear "user disabled marketing emails" immediately, the privacy gate should hear "user changed visibility to friends-only" immediately. No P.I.E. emission.
+- **Suggested approach:** After a successful write, `pieEmit('user.settings.patched', { domain, patch })` and `pieEmit('user.notifications.patched', { bucket, patch })`.
+
+- **Severity:** Medium
+- **File:** src/lib/userSettings.js
+- **Line:** 60, 71
+- **Category:** Inconsistent naming — `patch` vs `patches` vs Supabase `update`
+- **Issue:** Public functions name the partial-update parameter `patch`, but Supabase's API uses `update`. The internal function is `writeJson(userId, column, value)` — `value` not `patch`. Three names for very similar concepts in one module make the call sites harder to read.
+- **Suggested approach:** Standardize: keep `patch` for partial JSONB merges, reserve `value` for full-column overwrites, and never use `update` as a parameter name (collides with Supabase's method name).
+
+- **Severity:** Low
+- **File:** src/lib/userSettings.js
+- **Line:** 18, 30, 31
+- **Category:** Default-soup — `mergeSettings({})` called twice on the same path
+- **Issue:** Lines 18 and 31 both return `{ settings: mergeSettings({}), notifications: mergeNotifications({}) }`. The result is computed twice (default-arg branch and catch branch) and returns a fresh object both times. Cheap but wasteful; a module-level `EMPTY_DEFAULTS = Object.freeze({ settings: mergeSettings({}), notifications: mergeNotifications({}) })` returned by reference would be cleaner and signal "this is the empty case."
+- **Suggested approach:** Hoist to module-level constant. Note that `mergeSettings`/`mergeNotifications` should be pure for this to be safe — verify in `@/config/settingsDefaults`.
+
+- **Severity:** Low
+- **File:** src/lib/userSettings.js
+- **Line:** 22
+- **Category:** Schema column naming — column carrying `_preferences` suffix
+- **Issue:** `notification_preferences` is the column; the in-memory shape is `notifications` (line 28). The function param `bucket` (line 71) lives inside `notification_preferences`. Inconsistency between DB column and in-memory key forces the `getUserSettings` mapping at line 28 — easy to forget when adding a new caller.
+- **Suggested approach:** Either rename the column to `notifications` in a future migration, or rename the in-memory key to `notification_preferences` to match. Document the mapping inline.
+
+- **Severity:** Low
+- **File:** src/lib/userSettings.js
+- **Line:** 51
+- **Category:** Missing optimistic concurrency / version
+- **Issue:** Writes have no version / etag check. Combined with the read-modify-write race already flagged, this means "last write wins" is the only conflict resolution. A user with two tabs editing different settings panes will lose one tab's changes, silently.
+- **Suggested approach:** Add a `settings_version` integer column. Reads include it; writes do `update ... where settings_version = $expected returning settings_version` and re-read on conflict. Or fix at the same time as the JSONB-merge RPC suggestion.
+
+- **Severity:** Cosmetic
+- **File:** src/lib/userSettings.js
+- **Line:** 4–15
+- **Category:** Documentation accuracy
+- **Issue:** Top-of-file comment is accurate and useful (rare in this codebase). The "fail quiet" line at 14 is the only red flag — the documented behavior is the source of the High severity finding above. Document the security implications too.
+- **Suggested approach:** Add a sentence: "Note: errors are swallowed for migration tolerance, which also hides RLS denials and network errors. See AUDIT for the planned RPC migration."
+
+
+#### /src/lib/forumsClient.js
+
+- **Severity:** Critical
+- **File:** src/lib/forumsClient.js
+- **Line:** 202–207
+- **Category:** isAdminEmail() pattern — server-side role check missing (Pass 1A Critical re-confirmed)
+- **Issue:** **Re-confirmed Pass 1A Critical.** `isAdminEmail(email)` returns `true` for any email ending in `@aetherianstudios.com` or `@guildstew.com` plus the hardcoded literal `itsmeboky@aetherianstudios.com`. This is a **client-side, suffix-based admin detector** that any code path can call to gate UI or actions. Email suffixes are not authoritative — they're trivially spoofable in any context where the email comes from a non-Supabase source (e.g., display data, search, profile views). Worse, the function lives in a forums client, suggesting forum-admin actions (pin, lock, mark-dev-post, delete) flow through it. The hardcoded literal and domain suffixes are also secrets-in-code from a config-management perspective.
+- **Suggested approach:** **Delete this function.** Replace every callsite with a server-derived `isAdmin` boolean: (a) JWT custom claim (Supabase Auth → `app_metadata.role = 'admin'` set via service-role only, then read on the client via `session.user.app_metadata.role`), AND (b) a server-side `admin_users` table joined in RLS policies for any actual admin write. The client's `isAdmin` read is for UI affordances only — every admin write path must be re-checked server-side via RLS or an edge function that asserts `auth.jwt() ->> 'app_metadata' ->> 'role' = 'admin'`. The hardcoded `aetherianstudios.com` / `guildstew.com` allowlist should be migrated into an `admin_users` table (one row per admin email or user_id), seeded via migration, and editable via service-role only.
+
+- **Severity:** Critical
+- **File:** src/lib/forumsClient.js
+- **Line:** 100–116
+- **Category:** Client-side authority — author_id + admin-only flag accepted from caller
+- **Issue:** `createThread({ category_id, author_id, author_name, title, content, is_dev_post })` accepts `author_id` AND `is_dev_post` from the caller. `is_dev_post` is an **admin-only marker** (used by the UI to highlight official dev communication). A malicious client can (a) impersonate any other user by passing their `author_id`, and (b) mark their own thread as `is_dev_post: true` to gain visual authority. RLS is the only line of defense; if RLS allows the row insert at all (e.g., for `auth.uid() = author_id`), the `is_dev_post` flag passes through unchecked because there is no `WITH CHECK` clause restricting it.
+- **Suggested approach:** Drop `author_id` and `is_dev_post` from the client-callable signature. Derive `author_id` server-side via an RPC `create_forum_thread(p_category_id, p_title, p_content)` that inserts with `author_id = auth.uid()`. For `is_dev_post`, route through a separate admin-only RPC `create_dev_post(...)` that asserts `is_admin(auth.uid())` (server-side check) before allowing the flag. Apply the same pattern to `is_pinned`, `is_locked`, `is_official` if they exist as columns.
+
+- **Severity:** Critical
+- **File:** src/lib/forumsClient.js
+- **Line:** 118–149
+- **Category:** Client-side authority — author_id + admin-only flag + server-time spoofing + race
+- **Issue:** Multi-vector Critical in `createReply`: (a) caller supplies `author_id` (impersonation); (b) caller supplies `is_dev_reply` admin-only marker; (c) the thread-bump at lines 138–146 writes `last_reply_at`, `updated_at` from the **client clock** (`new Date().toISOString()`) — a malicious client can backdate or future-date these to hijack the category sort order; (d) the bump is a read-modify-write across two round trips (`select reply_count` → `update reply_count + 1`) so two concurrent replies will produce `reply_count` = old + 1 instead of old + 2; (e) `last_reply_by` is set to the caller-supplied `author_id`, doubling down on (a). RLS cannot defend (c)–(e) because they're derived values on the same row.
+- **Suggested approach:** Replace with an RPC `create_forum_reply(p_thread_id, p_content, p_is_dev_reply)` that: pins `author_id = auth.uid()`; checks admin role for `is_dev_reply`; performs the bump atomically with `update forum_threads set reply_count = reply_count + 1, last_reply_at = now(), last_reply_by = auth.uid(), updated_at = now() where id = p_thread_id`; returns the inserted reply. Wraps in a transaction so the insert + bump can't desync.
+
+- **Severity:** Critical
+- **File:** src/lib/forumsClient.js
+- **Line:** 151–168
+- **Category:** Client-side authority — userId accepted from caller for `forum_likes`
+- **Issue:** `toggleLike(userId, replyId)` takes `userId` as a parameter and writes `{ user_id: userId, reply_id: replyId }` directly into `forum_likes` (line 165). A malicious caller can pass any other user's id and "like" replies on their behalf. The lookup at lines 153–158 also queries by the caller-supplied id, so a malicious client can poll "has user X liked reply Y?" — a privacy leak. Compounded by the `bumpLikes` race (next finding), this is a Critical for both impersonation and counter integrity.
+- **Suggested approach:** Drop the `userId` parameter. Source from `auth.uid()` server-side via an RPC `toggle_forum_like(p_reply_id)` that performs the toggle + bump atomically (via `INSERT ... ON CONFLICT (user_id, reply_id) DO DELETE` pattern, or an explicit transaction). Even better, store likes only and compute the count via a view + materialized aggregate, eliminating the bump entirely.
+
+- **Severity:** High
+- **File:** src/lib/forumsClient.js
+- **Line:** 170–180
+- **Category:** Race condition — likes_count read-modify-write
+- **Issue:** `bumpLikes(replyId, delta)` reads `likes_count` and writes `Math.max(0, prev + delta)`. Concurrent likes from different users on the same reply will both read the same `prev`, both write `prev + 1`, and the count under-counts by N-1 for N concurrent likes. The `Math.max(0, ...)` clamp is also client-side and can mask legitimate underflows that should signal a bug.
+- **Suggested approach:** Use a Postgres atomic update: `update forum_replies set likes_count = greatest(0, likes_count + $delta) where id = $reply_id`. Or eliminate the denormalized count and aggregate from `forum_likes` (count(*) per reply_id) via a view.
+
+- **Severity:** High
+- **File:** src/lib/forumsClient.js
+- **Line:** 67–77
+- **Category:** XSS surface / SQL injection-adjacent — unescaped `ilike` wildcards
+- **Issue:** `searchThreads` does `query.ilike("title", \`%${term}%\`)` with `term` coming directly from user input — only `.trim()` is applied. PostgREST's `ilike` operator interprets `%` and `_` as wildcards. A user searching for `_` matches every single character; searching for `%admin%` matches anything containing "admin". More concerning, a user can craft `term = 'a%b'` to defeat reasonable rate-limit / index expectations. Not a SQL-injection in the classic sense (PostgREST parameterizes), but it IS a wildcard-injection that can DoS the index or leak unintended results.
+- **Suggested approach:** Escape `%` and `_` and `\` in `term` before interpolation: `term.replace(/[\\%_]/g, '\\$&')`. Or switch to a full-text search column with `to_tsvector` and use `.textSearch()`. Additionally, reject queries shorter than 2 chars (after escaping) and longer than 64 chars.
+
+- **Severity:** High
+- **File:** src/lib/forumsClient.js
+- **Line:** 100–149, 192–200
+- **Category:** XSS surface — no DOMPurify on user content writes/reads
+- **Issue:** `createThread` and `createReply` accept `content` from the user and write it verbatim into the database. There is no sanitization before write. If `content` is rendered as HTML downstream (markdown renderer that allows raw HTML, dangerouslySetInnerHTML, etc.), every forum post is an XSS vector. The audit brief explicitly says "No DOMPurify on user content" is a known systemic — this file is one of its primary surfaces. Symmetric issue at the read side (line 90–98 returns content as-is): even if write is sanitized, a renderer that doesn't trust the column will still need to sanitize at render. Belt-and-suspenders missing.
+- **Suggested approach:** Decide on a sanitization boundary (recommend: render-side via DOMPurify, since write-side sanitization must guess at every future renderer). Document the chosen boundary in this file's header comment. If write-side is chosen, sanitize `title` AND `content` before insert in the RPC suggested above.
+
+- **Severity:** High
+- **File:** src/lib/forumsClient.js
+- **Line:** 90–98, 30–38, 40–65
+- **Category:** Missing pagination / limit
+- **Issue:** Three reads have unbounded or weakly-bounded pagination: (a) `listReplies(threadId)` has NO limit at all — a popular thread with 10 000 replies returns all of them; (b) `getCategoryStats(categoryIds)` returns ALL threads in the categories, not just stats — used to build category cards but pulls every row; (c) `listThreadsInCategory` defaults to `limit = 20` but accepts arbitrary client-supplied `limit` with no upper bound — a caller can pass `limit: 100000` and pull the whole category.
+- **Suggested approach:** (a) Add pagination to `listReplies` (`limit` + `offset`, default 50, max 200). (b) Refactor `getCategoryStats` to actually aggregate (count of threads, latest thread title) via a view or RPC instead of pulling rows. (c) Clamp `limit` in `listThreadsInCategory` to `Math.min(limit, 100)`.
+
+- **Severity:** High
+- **File:** src/lib/forumsClient.js
+- **Line:** 100, 118, 151
+- **Category:** Missing tier gating
+- **Issue:** No tier check on thread creation, reply creation, or like. Per the canonical TIERS constants from the batch brief (Free $0/4chars/1250 Spice fee/50-50, Adventurer $6.99/12chars/250 Spice fee, Veteran $12.99/unlimited, Guild $34.99/unlimited), there's no tier-aware rate limit on forum participation. Even if forums are open to all tiers, "create thread" is the kind of action that historically gets rate-limited per tier (e.g., Free: 5 threads/day, Adventurer: 20/day, Veteran/Guild: unlimited).
+- **Suggested approach:** Server-side enforce per-tier daily-thread + daily-reply quotas in the RPC. Read tier from `user_profiles.tier` (joined to `auth.uid()`). Surface the rate-limit error to the client so the UI can show "Upgrade to post more."
+
+- **Severity:** High
+- **File:** src/lib/forumsClient.js
+- **Line:** 100–149, 151–168
+- **Category:** Missing P.I.E. event emission
+- **Issue:** Per the batch brief, no P.I.E. emission on thread create, reply create, like/unlike. Downstream features (notifications to thread subscribers, "creator earned XP for X likes", anti-spam pipeline, daily-summary email) have no event source.
+- **Suggested approach:** Emit `pieEmit('forum.thread.created', { thread_id, category_id, author_id })` in `createThread`; `pieEmit('forum.reply.created', { reply_id, thread_id, author_id, mentioned_user_ids: [] })` in `createReply`; `pieEmit('forum.reply.liked', { reply_id, liker_id, author_id })` / `unliked` in `toggleLike`.
+
+- **Severity:** High
+- **File:** src/lib/forumsClient.js
+- **Line:** 6–10
+- **Category:** Documentation drift — comment is provably false
+- **Issue:** The header comment says "Writes are author-gated at the RLS layer; this file just builds the SQL." This is **not true** as written: the file accepts `author_id` from the caller in `createThread` (line 106), `createReply` (line 123), `last_reply_by` (line 143), and `forum_likes.user_id` (line 165). RLS at most can enforce `author_id = auth.uid()` on the insert (which would catch impersonation) — but the file shape implies the client SHOULD pass the id, which is the wrong API contract. The comment masks the Critical findings above.
+- **Suggested approach:** Either (a) replace the comment with the truth ("This file accepts caller-supplied author_id; RLS rejects rows where author_id ≠ auth.uid(). Verify RLS policy `forum_threads_insert` exists and enforces this") and verify the policy actually exists, or (b) once the RPC migration lands, update the comment to reflect that author_id is server-derived and never client-supplied.
+
+- **Severity:** Medium
+- **File:** src/lib/forumsClient.js
+- **Line:** 100
+- **Category:** Dead code — unused destructured parameter
+- **Issue:** `createThread` destructures `author_name` but never uses it (the insert at lines 104–111 omits it). Either the column is gone and the parameter is dead, or the insert is missing a column write. Callers may be passing `author_name` expecting it to be persisted.
+- **Suggested approach:** Verify schema (`\d forum_threads`). If the column exists, add `author_name` to the insert. If it doesn't exist, remove the parameter from the signature and audit callers.
+
+- **Severity:** Medium
+- **File:** src/lib/forumsClient.js
+- **Line:** 12, 22, 32, 42, 70, 81, 92, 153, 171, 184
+- **Category:** Missing error handling — every read ignores `error`
+- **Issue:** Ten `supabase.from(...).select(...)` calls destructure only `{ data }` (or `{ data: existing }`, `{ data: thread }`, etc.) and ignore the `error` field. Any read failure (RLS denial, network, schema drift) results in `data === null` and the function returns `[]` / `null` / `new Set()` / undefined silently. The call sites cannot distinguish "no rows" from "RLS blocked you" from "DB down."
+- **Suggested approach:** Always destructure `{ data, error }` and at minimum log/throw on `error`. Distinguish empty-result from error-result in the return shape (e.g., `{ rows: [], error: null }` or throw on error). Apply consistently across the file.
+
+- **Severity:** Medium
+- **File:** src/lib/forumsClient.js
+- **Line:** 15, 24, 32, 44, 72, 83, 94
+- **Category:** `select("*")` over-fetching / PII broadcast
+- **Issue:** `listCategories` (line 15), `getCategoryBySlug` (line 24), `listThreadsInCategory` (line 44), `getThread` (line 83), `listReplies` (line 94) all use `select("*")`. This returns every column on `forum_threads` and `forum_replies` including admin-only flags (`is_pinned`, `is_locked`, `is_dev_post`), `author_id`, raw `content`, and any future-added private columns. `getCategoryStats` (line 32) is the only read that scopes to specific columns.
+- **Suggested approach:** Replace `*` with explicit column lists per function. List the columns the rendering layer actually needs. Treat `author_id` as PII-adjacent (couples to user identity) and either replace with `author_username` via a join or strip from public reads.
+
+- **Severity:** Medium
+- **File:** src/lib/forumsClient.js
+- **Line:** 100–116, 192–200
+- **Category:** Missing input validation on title/content
+- **Issue:** No length limit on `title` (slugify clamps to 120 chars at line 199 but the original title is written verbatim to the DB) or `content`. A malicious or accidental megabyte-sized post will be accepted by the client. No content-emptiness check (`title = ""` would slugify to `"thread"` and produce a generic-slug thread). No category-existence check before insert.
+- **Suggested approach:** Server-side RPC enforces: `length(title) between 1 and 200`, `length(content) between 1 and 50000`, `category_id` exists in `forum_categories`. Client-side mirrors for UX but is non-authoritative.
+
+- **Severity:** Medium
+- **File:** src/lib/forumsClient.js
+- **Line:** 192–200
+- **Category:** Slug collision risk
+- **Issue:** `slugify(title)` returns the same slug for any two threads with the same title in the same category. The `getThread(categoryId, slug)` lookup at line 79 uses `.maybeSingle()` which throws if more than one row matches — so the second thread with title "Welcome" in the same category causes silent breakage of the URL routing for both. There's no `slug + counter` collision-resolution.
+- **Suggested approach:** Check for slug collision in the create RPC and append `-2`, `-3`, etc. Or change the URL scheme to `categories/:category_slug/:thread_id-:thread_slug` so the id disambiguates.
+
+- **Severity:** Medium
+- **File:** src/lib/forumsClient.js
+- **Line:** 100–149
+- **Category:** Missing transactional guarantees
+- **Issue:** `createReply` performs three separate Supabase round trips (insert reply → select thread.reply_count → update thread). If any one fails after the first, the system is left in inconsistent state: reply exists but counter is wrong, or counter advanced but reply failed (impossible here since insert is first, but generally). No transaction wraps the trio. Same problem for `toggleLike` + `bumpLikes`.
+- **Suggested approach:** Wrap each in a Postgres function (RPC) so the operations are atomic from the client's perspective. The bumps become a single atomic `update ... set reply_count = reply_count + 1` inside the same transaction as the insert.
+
+- **Severity:** Medium
+- **File:** src/lib/forumsClient.js
+- **Line:** 151–168
+- **Category:** Missing rate limiting
+- **Issue:** `toggleLike` has no rate limit. A malicious user can spam-toggle a like to: (a) generate excessive write load on `forum_likes` and `forum_replies`, (b) generate a flood of P.I.E. events (when those are added), and (c) potentially trigger notification storms on the reply author.
+- **Suggested approach:** Server-side per-user rate limit (e.g., 30 toggles per minute, 200 per hour). Use a `rate_limits` table or Postgres advisory locks. Client-side debounce as UX-only.
+
+- **Severity:** Medium
+- **File:** src/lib/forumsClient.js
+- **Line:** 49–60
+- **Category:** Inconsistent ordering — `is_pinned DESC` repeated across branches
+- **Issue:** All three sort branches in `listThreadsInCategory` lead with `order("is_pinned", { ascending: false })`. Easy to forget when adding a fourth branch. The pinned-first invariant is encoded by repetition rather than by a base query.
+- **Suggested approach:** Apply `is_pinned DESC` once before the switch, then add the secondary sort inside each case. Or move all three orderings to a `getSortClauses(sort)` helper.
+
+- **Severity:** Medium
+- **File:** src/lib/forumsClient.js
+- **Line:** 196
+- **Category:** Cosmetic — literal Unicode in regex source
+- **Issue:** `.replace(/[̀-ͯ]/g, "")` uses literal combining-diacritical Unicode characters in source code (visible as combining marks). Editors that don't render Unicode well will show this as a mojibake range. The intent is `̀-ͯ` (combining diacritical marks block).
+- **Suggested approach:** Rewrite as `.replace(/[̀-ͯ]/g, "")` for source-readability and editor portability.
+
+- **Severity:** Low
+- **File:** src/lib/forumsClient.js
+- **Line:** 110, 125
+- **Category:** Inconsistent naming — `is_dev_post` vs `is_dev_reply`
+- **Issue:** Threads use `is_dev_post`; replies use `is_dev_reply`. Same concept, two column names. Drift between thread and reply schemas.
+- **Suggested approach:** Either rename both to `is_official` (which the audit brief mentions as a likely existing flag) or pick one prefix and unify. Verify in migrations.
+
+
+- **Severity:** Low
+- **File:** src/lib/forumsClient.js
+- **Line:** 30–38
+- **Category:** API design — function name doesn't match behavior
+- **Issue:** `getCategoryStats` returns ALL threads in the categories (not stats). The naming implies aggregation; the implementation is a list. Callers expect counts/summaries and instead get raw rows — they likely do `.length` or other client-side aggregation, which inverts the abstraction.
+- **Suggested approach:** Rename to `listRecentThreadsInCategories` to match behavior, OR build a real stats aggregator (counts, latest title, latest author) via a Postgres view and return that.
+
+- **Severity:** Low
+- **File:** src/lib/forumsClient.js
+- **Line:** 12–18, 30–38, 40–65, 67–77, 79–88, 90–98
+- **Category:** Missing actor-context — public reads should distinguish self vs other
+- **Issue:** None of the read functions distinguish "current user is reading" from "anonymous read." Future features like "show 'Your post' badge on user-authored threads," "hide blocked users," or "show liked-by-me state" require an actor pin. Currently every consumer of these reads must do a second pass to compute self-relation.
+- **Suggested approach:** Either pass `current_user_id` (sourced from session) as an explicit parameter, or expose a sibling `listThreadsInCategoryForMe(categoryId, opts)` that joins user-relations server-side.
+
+- **Severity:** Low
+- **File:** src/lib/forumsClient.js
+- **Line:** 1–10
+- **Category:** Missing isAdmin helper colocation
+- **Issue:** `isAdminEmail` lives at the bottom of `forumsClient.js`, suggesting forums own admin detection. Other domains likely re-import `isAdminEmail` from this file (or duplicate it), creating a "forums depends on admin" coupling that's backwards.
+- **Suggested approach:** Once replaced (per the Critical), the canonical `isAdmin(user)` helper should live in `src/lib/AuthContext.jsx` or a dedicated `src/lib/admin.js` and be imported by everyone. Remove from `forumsClient.js`.
+
+- **Severity:** Cosmetic
+- **File:** src/lib/forumsClient.js
+- **Line:** 8
+- **Category:** Comment clarity
+- **Issue:** "this file just builds the SQL" is misleading — Supabase client builds PostgREST queries, not SQL. Minor terminology.
+- **Suggested approach:** Update to "this file just builds the PostgREST queries."
+
+
+##### Batch 2-ii-a Summary
+
+**Findings totals: 75**
+
+| Severity | AuthContext | PresenceContext | userSettings | forumsClient | **Total** |
+|---|---|---|---|---|---|
+| Critical | 2 | 2 | 3 | 4 | **11** |
+| High     | 5 | 6 | 2 | 6 | **19** |
+| Medium   | 7 | 7 | 4 | 9 | **27** |
+| Low      | 3 | 5 | 3 | 4 | **15** |
+| Cosmetic | 1 | 0 | 1 | 1 | **3**  |
+| **File total** | **18** | **20** | **13** | **24** | **75** |
+
+**Totals by category** (categories from the 25-item batch checklist; only those with hits are listed):
+
+| # | Category | Count |
+|---|---|---|
+| 7 | Client-side authority (caller-supplied user_id / author_id / admin flags) | 8 |
+| 5 | console.log / .error / .warn (heightened-concern auth path) | 1 (covers 9 calls) |
+| 14 | Race condition risks (R-M-W, multi-tab, double-fetch) | 6 |
+| 12 | Missing error handling on Supabase responses | 4 |
+| 23 | Context smells (unstable identity, missing loading/error state) | 4 |
+| 21 | Real-time / presence leaks (last-seen, beforeunload, multi-tab) | 4 |
+| 10 | Missing field whitelisting on writes | 3 |
+| 4 | Base44 leftovers | 2 |
+| 11 | Missing pagination | 1 (covers 3 spots) |
+| 19 | Missing P.I.E. event emission | 4 |
+| 18 | Missing tier gating | 1 |
+| 20 | XSS surface on user-content helpers | 2 |
+| 16 | isAdminEmail() pattern (heightened — Pass 1A Critical) | 1 |
+| 17 | Missing RLS-style server-side guards on admin actions | 5 (subsumed in #7) |
+| 15 | PII broadcast (email/profile spread, last_seen_at, profile_id, author_id) | 4 |
+| 22 | Auth security (sign-out gaps, session refresh, hard navigation) | 4 |
+| 25 | Memory leaks (listener re-bind, channel cleanup) | 1 |
+| 6 | TODO/FIXME (implicit deferral comments) | 1 |
+| 24 | Inconsistent naming (camelCase vs snake_case, dev_post vs dev_reply) | 3 |
+| 3 | Hardcoded values that should be env/constants | 2 |
+| 2 | Dead code (unused destructured param) | 1 |
+| 13 | `.single()` vs `.maybeSingle()` mismatch | 1 (slug collision) |
+| 8 | Fetch-all anti-pattern (mitigated by column scope but caller-id risk remains) | 1 |
+
+**isAdminEmail() — re-confirmed Critical (Pass 1A heightened):**
+- One instance: `src/lib/forumsClient.js:202–207`. Suffix-based admin detection on `@aetherianstudios.com` and `@guildstew.com` plus hardcoded literal `itsmeboky@aetherianstudios.com`.
+- **Canonical replacement pattern** (recommended for the fix-project):
+  1. Server-side: create `admin_users` table (`user_id uuid pk references auth.users, granted_at timestamptz, granted_by uuid references auth.users`); seed via migration with current admins. Set `app_metadata.role = 'admin'` on those users via service-role admin client.
+  2. RLS: every admin-write policy uses `(auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'` OR an `EXISTS (SELECT 1 FROM admin_users WHERE user_id = auth.uid())` check.
+  3. Client: read `session.user.app_metadata.role === 'admin'` for UI gates ONLY (never authoritative). Expose via `useAuth().isAdmin` boolean (memoized).
+  4. Delete `isAdminEmail` from `forumsClient.js`. Audit and migrate every callsite (`grep -r "isAdminEmail" src/`).
+  5. Document in CLAUDE.md or equivalent that email-suffix admin detection is forbidden and PR review must catch reintroductions.
+
+**Base44 leftover count — 5 references across 2 of the 4 files in batch:**
+- `src/lib/AuthContext.jsx`:
+  - line 119 `isLoadingPublicSettings: false` (Base44 API-compat shim, hardcoded)
+  - line 121 `appPublicSettings: null` (Base44 API-compat shim, hardcoded)
+  - line 124 `checkAppState: checkAuth` (Base44 method name aliased to native checkAuth)
+- `src/lib/PresenceContext.jsx`:
+  - line 3 `import { base44 } from '@/api/base44Client'`
+  - line 83 `base44.entities.UserProfile.update(profileId, { ... })`
+- `src/lib/userSettings.js`: **0 references** (already on `@/api/supabaseClient`).
+- `src/lib/forumsClient.js`: **0 references** (already on `@/api/supabaseClient`).
+- **Recommended action per BASE44 NAMING DECISION:** Delete the three AuthContext shim keys outright (no functional implementation; no `supabase`-prefixed equivalent needed). Migrate PresenceContext's import + write call to a dedicated `supabasePresence` helper module (or fold into the proposed `set_my_presence` RPC); delete the `base44Client` symbol from this file's surface.
+
+**Client-side authority anti-patterns at this layer — 8 distinct surfaces:**
+1. `AuthContext.jsx` exposes `user.id` (auth UUID) on the merged user, which downstream callers pass into entity-factory writes (`Entity.create({ user_id: currentUser.id, ... })`). Upstream of every "client-supplied user_id" Critical in subsequent batches.
+2. `PresenceContext.jsx:83` — `UserProfile.update(profileId, { status, last_seen_at })` via the entities factory; `profileId` is the user_profiles row PK from AuthContext.
+3. `PresenceContext.jsx:85` — client-clock `last_seen_at` enables presence-spoof for unbounded duration.
+4. `userSettings.js:17,35,49,60,71` — every public function takes `userId` as a caller parameter and trusts it.
+5. `forumsClient.js:100,106` — `createThread` accepts caller-supplied `author_id`.
+6. `forumsClient.js:118,123` — `createReply` accepts caller-supplied `author_id`.
+7. `forumsClient.js:142,143` — thread bump writes client-clock `last_reply_at`/`updated_at` and caller-supplied `last_reply_by`.
+8. `forumsClient.js:151,165` — `toggleLike` accepts caller-supplied `userId` for both lookup and insert into `forum_likes`.
+
+Plus 5 admin-only flag passthroughs (no server-side `is_admin` check):
+- `forumsClient.js:110` `is_dev_post` accepted from caller in `createThread`.
+- `forumsClient.js:125` `is_dev_reply` accepted from caller in `createReply`.
+- (Plus implicit `is_pinned` / `is_locked` / `is_official` if columns exist — verify in migrations batch.)
+
+All eight surfaces collapse to a single fix-project: every write at this layer should be replaced with an RPC that derives the actor from `auth.uid()` and validates field-level permissions server-side. The client should never pass an identity into a write path.
+
+**AuthContext stability/correctness — specific note:**
+- **Object identity:** `mergedUser` and the provider value are both fresh literals on every render (`AuthContext.jsx:96–125`). Combined, every `useAuth()` consumer re-renders on every parent render of `AuthProvider`. This is the single highest-impact perf issue in the file and likely a measurable contributor to app-wide render churn. Memoize both with `useMemo`; wrap `logout`, `navigateToLogin`, `checkAuth` in `useCallback`.
+- **Loading state:** `isLoadingAuth` boolean is correct but the related `isLoadingPublicSettings: false` (hardcoded) is a Base44 leftover that should be deleted, not perpetually returned as `false`. Profile-fetch state is captured by `profileFetched` boolean — should become a discriminated `profileStatus` enum (`idle | loading | loaded | absent | error`).
+- **Error state:** `authError` exists but is only populated by `checkAuth` catch path. `fetchProfile`, `signOut`, and `onAuthStateChange` failures never reach context. No `profileError` at all. Funnel all auth failures through a single `setAuthError({ type, message, source })` helper.
+- **Race condition:** Mount effect runs `checkAuth()` AND subscribes to `onAuthStateChange` — both fire `fetchProfile` for warm sessions. Drop the explicit `checkAuth()` call (Supabase v2 emits `INITIAL_SESSION` reliably) or guard `fetchProfile` with a `useRef` of "last fetched user id."
+- **Sign-out integrity:** `logout()` does not await/check `signOut` error, does not clear `authError`/`profileFetched`, does not coordinate with PresenceContext to flush "offline" status before navigation. Partial sign-out states are undetectable to the user.
+- **PII surface:** `select('*')` on `user_profiles` + spread into `mergedUser` broadcasts `email`, `age`, `role` (Pass 1A Critical) to every component. Replace with an explicit public-safe column list and load private fields on demand via a dedicated RPC.
+- **Cache coupling:** Manual `queryClient.setQueryData(['currentUser'], mergedUser)` thrashes on every render (unstable identity); never cleared on server-driven sign-out (only on `logout()` callsite). Either memoize the source (so the effect fires only on real changes) or migrate the whole `currentUser` lifecycle to a proper `useQuery({ queryKey: ['currentUser'], queryFn: fetchProfile })`.
+- **Net assessment:** The file is functionally working (it does sign-in, profile load, sign-out) but has structural issues that make it both a perf hotspot AND the upstream cause of the systemic "client-supplied user_id" anti-pattern across the app. The single highest-value fix is to memoize the context value and `mergedUser`; the highest-leverage architectural fix is to remove `id` from `mergedUser` so downstream callers physically cannot pass it through into a write.
+
