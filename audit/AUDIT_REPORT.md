@@ -14041,3 +14041,889 @@ The lib layer is the *intermediate stratum* between UI components and Supabase. 
 **`/src/lib/` is structurally sound but security-incorrect.** The architecture (single owning module per concern, exported state-machines, documented contracts) is good; the *trust boundaries* are wrong everywhere. The fix is large but mechanical — the right shape exists; the enforcement layer is missing. Recommend the fix-project be sequenced with admin-detection first (Phase 1), then wallet (Phase 2), then run Phases 3 + 4 in parallel.
 
 **End of Pass 2 Batch ii — `/src/lib/` is fully audited.**
+
+---
+
+### Batch 2-iii: utils layer
+
+Sub-batch 2-iii of Pass 2 — full audit of every `.js`/`.jsx` file in `/src/utils/`. After this batch, the `/src/utils/` folder is fully audited.
+
+Files in scope (alphabetical):
+`achievementChecker.js`, `analytics.js`, `campaignLifecycle.js`, `characterStats.js`, `characterTitle.js`, `combatLog.js`, `combatQueue.js`, `contentConflicts.js`, `csv.js`, `cursedItemHelpers.js`, `displayName.js`, `dnd5eSchema.js`, `dnd5e_schema.js`, `index.ts`, `languageComprehension.js`, `languageFonts.js`, `monsterHelpers.js`, `safeRender.js`, `seedTestCampaign.js`, `sessionTime.js`, `storagePaths.js`, `timeAgo.js`, `uploadFile.js`, `uploadValidator.js`, `username.js`, `worldLoreVisibility.js` (26 files).
+
+#### /src/utils/achievementChecker.js
+
+- **Severity:** Critical
+- **File:** src/utils/achievementChecker.js
+- **Line:** 58–105
+- **Category:** Achievement cheat-ability (client-trust evaluation) / Client-side authority
+- **Issue:** `checkAchievements(userId, characterId, campaignId)` runs all achievement predicates in the browser and inserts directly into `Achievement` entity rows with caller-supplied `user_id`, `character_id`, `campaign_id`, `achievement_key`, `title`, `description`, `rarity`, `icon`, `earned_at`. A user can call `base44.entities.Achievement.create(...)` directly from devtools and award themselves any achievement (including the title and rarity strings the UI displays) without ever having met the `def.check(stats)` predicate. There is no server-side re-evaluation.
+- **Suggested approach:** Move the entire flow to a SECURITY DEFINER RPC `award_achievements_for_character(character_id, campaign_id)` that (a) pins user_id to `auth.uid()`, (b) verifies the caller owns the character (or is the GM and is awarding a player in their campaign, with NPCs blocked), (c) loads stats server-side, (d) imports the predicate definitions server-side (or stores them in a table) and re-runs the check, (e) inserts only `(user_id, character_id, campaign_id, achievement_key, earned_at)` — never `title`, `description`, `rarity`, `icon` (those are joined from `achievement_definitions` at read time so the client can't override). RLS on `achievements` should `WITH CHECK (false)` for direct INSERT.
+
+- **Severity:** High
+- **File:** src/utils/achievementChecker.js
+- **Line:** 24, 28, 68
+- **Category:** Fetch-all anti-pattern / Field whitelisting
+- **Issue:** `CharacterStat.filter({ character_id })` and `Achievement.filter({ user_id })` both fetch full rows with every column. The `Achievement` fetch is done up front purely to build a Set of keys but ships the entire history's metadata back to the client.
+- **Suggested approach:** Replace with an RPC that returns just `{ achievement_key }[]` for the user; do the predicate check inside that RPC (per the Critical fix above) and skip the round-trip entirely. If the read stays client-side, switch to `.select('achievement_key')` / equivalent narrow projection.
+
+- **Severity:** High
+- **File:** src/utils/achievementChecker.js
+- **Line:** 33–49
+- **Category:** Math errors / Multi-game abstraction
+- **Issue:** `loadAggregateStats` blindly sums **every numeric column** across rows (`if typeof r[key] === 'number') acc[key] += r[key]`). That includes `id` (if it ever becomes numeric), `level`, `current_hp`, `max_hp`, `armor_class` — none of which should be lifetime-summed across campaigns. Also hardcodes only two high-water-mark fields (`highest_single_damage`, `most_healing_single_spell`); any new high-water field added later will be silently summed instead.
+- **Suggested approach:** Maintain an explicit allowlist of summable counters and an explicit allowlist of high-water fields. Never use `typeof === 'number'` as the schema boundary. Move this logic into the same server RPC so the schema stays single-sourced.
+
+- **Severity:** Medium
+- **File:** src/utils/achievementChecker.js
+- **Line:** 11
+- **Category:** BASE44 LEFTOVERS
+- **Issue:** Imports `base44` from `@/api/base44Client` and uses `base44.entities.{CharacterStat,Achievement}` throughout.
+- **Suggested approach:** Migrate to `supabase` / `supabaseClient` imports as part of the broader `base44 → supabase` rename. The achievement code should ultimately go through an RPC anyway (see Critical fix above), so the rename effort can be folded into that refactor.
+
+- **Severity:** Medium
+- **File:** src/utils/achievementChecker.js
+- **Line:** 102, 108
+- **Category:** console.log / .error / .warn
+- **Issue:** Two `console.warn` / `console.error` sites (Achievement create skipped + Achievement check error) plus an `eslint-disable-next-line` to silence the linter. In production these add log noise and may carry user IDs / achievement keys. Also masks broken backend behavior because errors are swallowed entirely by the outer catch.
+- **Suggested approach:** Route through a logger that's gated on `import.meta.env.DEV` or a `LOG_LEVEL` env. For production, fire a P.I.E. event `achievement_check_error` with non-PII metadata so monitoring catches systematic failures.
+
+
+- **Severity:** Medium
+- **File:** src/utils/achievementChecker.js
+- **Line:** 118–128
+- **Category:** Missing P.I.E. event emission
+- **Issue:** `checkAchievementsForCombatants` flattens awards but doesn't emit an `achievement_unlocked` analytics/P.I.E. event. The `analytics.js` event-type list explicitly references game progression but no helper here calls `trackEvent`.
+- **Suggested approach:** After successful insert (or inside the server RPC), emit a `P.I.E.` `achievement_unlocked` event with `{ achievement_key, rarity }` (no PII). This also lets the leaderboard / activity-feed surfaces consume the same firehose.
+
+- **Severity:** Medium
+- **File:** src/utils/achievementChecker.js
+- **Line:** 80–90
+- **Category:** Missing idempotency on retryable operations
+- **Issue:** Comment at L99–100 says "the unique constraint on (user_id, achievement_key) would catch duplicates" — but if that constraint is missing on the table (Pass 1A repeatedly noted missing constraints), every page load that calls `checkAchievements` for the same character will re-insert. The pre-fetch defense at L68–71 narrows the window but is not atomic.
+- **Suggested approach:** Confirm `UNIQUE(user_id, achievement_key)` exists on the `achievements` table; if not, add it. Inside the server RPC use `INSERT … ON CONFLICT DO NOTHING` so concurrent calls are idempotent.
+
+- **Severity:** Low
+- **File:** src/utils/achievementChecker.js
+- **Line:** 124
+- **Category:** PII broadcast
+- **Issue:** `combatantName` (likely the *character name*, but in some flows the player display name) is folded into the toast payload. If this is ever logged or shipped to analytics it leaks identity. Currently consumed locally only.
+- **Suggested approach:** Confirm `c.name` is always character-name, not the user's display name. Document explicitly. If the toast is fine, no change.
+
+#### /src/utils/analytics.js
+
+- **Severity:** Critical
+- **File:** src/utils/analytics.js
+- **Line:** 18–27
+- **Category:** Missing actor pinning to auth.uid() / Client-side authority
+- **Issue:** `trackEvent(userId, eventType, eventData)` writes `{ user_id: userId, event_type, event_data }` directly with whatever `userId` the caller passes. From devtools, `trackEvent('any-uuid', 'subscription_started', { plan: 'guild' })` produces a fraudulent analytics row attributed to another user. Worse: there is no schema check on `event_type`, so the entire event-type allowlist commented at L11–17 is purely advisory — typos, fake events, or impersonation events sail through.
+- **Suggested approach:** Replace with a SECURITY DEFINER RPC `pie_track_event(event_type text, event_data jsonb)` that (a) pins `user_id := auth.uid()`, (b) validates `event_type` against an enum or allowlist table, (c) strips disallowed keys from `event_data` (no `email`, `user_real_name`, `ip`, `payment_*`). RLS on `analytics_events` should `WITH CHECK (false)` for direct INSERT so only the RPC succeeds.
+
+- **Severity:** High
+- **File:** src/utils/analytics.js
+- **Line:** 24–27
+- **Category:** PII broadcast
+- **Issue:** `event_data` is spread verbatim into the row — whatever the caller passes lands in the database. There is no allowlist/denylist of keys. Combined with `url: window.location.pathname` this can capture profile slugs, character IDs, or session-token-bearing query strings depending on where it's called from. (`pathname` excludes the query string, which is the only mitigation, but hash-based SPA routing on some pages still embeds IDs.)
+- **Suggested approach:** Inside the RPC (per Critical fix), enforce a schema per `event_type`: each event has a fixed key allowlist. Reject extra keys. Strip any value that matches a UUID-followed-by-`@` pattern or contains an `@`. Also drop `pathname` if it contains a `/users/{uuid}/…` segment (or hash it).
+
+- **Severity:** Medium
+- **File:** src/utils/analytics.js
+- **Line:** 30, 35
+- **Category:** console.log / .error / .warn
+- **Issue:** Two `console.error('Analytics error:', …)` sites. In production this writes to the browser console on every analytics failure (RLS denial, network blip, etc.). Combined with the lack of a "do not track" toggle, every user has their console polluted on adblocked networks.
+- **Suggested approach:** Drop the console writes entirely (analytics is fire-and-forget by design); if telemetry on telemetry-failure is desired, gate behind `import.meta.env.DEV`.
+
+- **Severity:** High
+- **File:** src/utils/analytics.js
+- **Line:** (whole file)
+- **Category:** Privacy controls
+- **Issue:** No "do not track" toggle, no respect for `navigator.doNotTrack`, no opt-out plumbing. Every event the app fires goes to the database regardless of user preference. The system spec calls for P.I.E. as the canonical analytics layer — privacy is GDPR/CCPA territory.
+- **Suggested approach:** Add a `analytics_opt_out` flag to `user_profiles` and consult it at the start of `trackEvent` (also enforce inside the RPC). Honor `navigator.doNotTrack === '1'` for unauthenticated event firing.
+
+- **Severity:** Medium
+- **File:** src/utils/analytics.js
+- **Line:** (whole file)
+- **Category:** Missing batching / debouncing
+- **Issue:** Every call hits the network individually. For high-frequency events (`combat_started`, `combat_ended`, `ai_quick_pick_used`) this is a flood. No debouncing, no batching, no flush-on-unload.
+- **Suggested approach:** Buffer events in memory, flush on a 2–5s timer or `pagehide`. Cap buffer size so memory pressure isn't unbounded. Probably fold into a P.I.E. ingestion endpoint that accepts batch arrays.
+
+- **Severity:** Medium
+- **File:** src/utils/analytics.js
+- **Line:** 1, 21
+- **Category:** BASE44 LEFTOVERS
+- **Issue:** Imports `base44` and uses `base44.entities.AnalyticsEvent?.create`.
+- **Suggested approach:** Replace with `supabase.rpc('pie_track_event', …)` per the Critical RPC plan above.
+
+- **Severity:** Low
+- **File:** src/utils/analytics.js
+- **Line:** 21
+- **Category:** Cosmetic quality issues
+- **Issue:** Optional-chained call on `base44.entities.AnalyticsEvent?.create(…)` silently no-ops if the entity isn't registered — easy to miss when the table is mis-named or RLS-blocked.
+- **Suggested approach:** After RPC migration this disappears. Until then, log a one-time warning in dev when the entity is missing.
+
+#### /src/utils/campaignLifecycle.js
+
+- **Severity:** Critical
+- **File:** src/utils/campaignLifecycle.js
+- **Line:** 35–58
+- **Category:** Missing GM verification / Client-side authority
+- **Issue:** `archiveCampaign({ campaignId, userId, tier })` accepts caller-supplied `campaignId`, `userId`, and `tier`. There is **no check that `auth.uid()` is the campaign's GM** before flipping `status` to `'archived'`. A non-GM can call `supabase.from('campaigns').update({ status: 'archived' }).eq('id', someoneElsesCampaignId)` directly, or via this helper. Even if `campaigns` RLS blocks the UPDATE for non-GMs, the bookkeeping update at L52–55 mutates the *caller's* `archived_campaign_count` regardless — corrupting the counter.
+- **Suggested approach:** Replace with SECURITY DEFINER RPC `archive_campaign(p_campaign_id uuid)` that (a) loads the campaign, (b) asserts `game_master_id = auth.uid()`, (c) loads the user's tier server-side (don't trust caller-supplied tier), (d) checks the archive limit, (e) flips status, (f) atomically increments the counter. All in one transaction so partial failures don't desync the counter.
+
+- **Severity:** Critical
+- **File:** src/utils/campaignLifecycle.js
+- **Line:** 91–178
+- **Category:** Missing GM verification / Client-side authority
+- **Issue:** `deleteCampaign({ campaignId, gmUserId, wasArchived })` accepts caller-supplied `gmUserId` and `wasArchived`. It then deletes from 12 child tables + storage with no proof the caller is the GM. Even if RLS blocks each individual DELETE for non-GMs, the storage list/remove at L132–144 acts on `users/{gmUserId}/campaigns/{campaignId}/...` — the caller controls the path. A user could pass another user's `gmUserId` to attempt to enumerate or delete that user's storage. The `increment_user_storage` RPC at L154–157 with caller-supplied `p_user_id` and a *negative* value is also wide open to abuse if that RPC isn't itself locked.
+- **Suggested approach:** Replace with a single SECURITY DEFINER RPC `delete_campaign(p_campaign_id uuid)` that pins `gm_user_id` from the campaign row + asserts `game_master_id = auth.uid()`, runs the cascade in a single transaction, and atomically reclaims the storage counter. Storage cleanup (which can't run inside Postgres) should run from a signed cleanup edge function triggered by the RPC's commit, not from the browser.
+
+- **Severity:** High
+- **File:** src/utils/campaignLifecycle.js
+- **Line:** 109–113
+- **Category:** Race conditions in concurrent state mutations / Missing audit logging
+- **Issue:** Cascade deletes run in parallel via `Promise.all` against 12 tables; comment explicitly notes "Supabase FKs we use are not enforced". If any branch fails, the others may already have deleted — leaving a half-deleted campaign with partial child data and no rollback. No audit log is written for the deletion (per system spec, hard deletes should produce a `campaign_deleted` audit row with the export blob).
+- **Suggested approach:** Wrap in a single Postgres transaction inside the RPC (per Critical above). Add an `audit_log` insert for every state transition (archive, unarchive, delete) with `{ actor_id, campaign_id, action, occurred_at }`.
+
+- **Severity:** High
+- **File:** src/utils/campaignLifecycle.js
+- **Line:** 154–157
+- **Category:** Missing actor pinning
+- **Issue:** `supabase.rpc('increment_user_storage', { p_user_id: gmUserId, p_bytes: -(campaign.storage_used_bytes || 0) })` passes caller-supplied `p_user_id` and an arbitrary negative byte count. Any user can call this RPC to drive any other user's storage counter to zero (or below).
+- **Suggested approach:** RPC must pin `p_user_id := auth.uid()` (or take no user param at all and infer from the auth session). Allow only positive deltas via direct call; negative deltas should only be reachable via internal calls from other SECURITY DEFINER RPCs (not exposed to the API).
+
+- **Severity:** High
+- **File:** src/utils/campaignLifecycle.js
+- **Line:** 185–223
+- **Category:** Missing GM verification / Client-side authority
+- **Issue:** `exportCampaignData({ campaignId })` queries 9 campaign-scoped tables for SELECT *. If RLS doesn't lock down read for non-GMs, any user can export any campaign's full data. Even if RLS is correct, there's no actor check at this layer — the helper's contract relies entirely on RLS being correct, with no defense in depth. Also note: `campaign_log_entries` may include private GM notes.
+- **Suggested approach:** Add an explicit GM check at the helper's entry (`auth.uid() == campaign.game_master_id`). Have RLS confirm the same. In the long term, route through a SECURITY DEFINER export RPC that returns the full bundle in one round-trip.
+
+
+- **Severity:** High
+- **File:** src/utils/campaignLifecycle.js
+- **Line:** 218–221
+- **Category:** Path traversal / Filename sanitization
+- **Issue:** Export filename `${campaignName.replace(/[^a-z0-9]/gi, "-").toLowerCase()}-export.json`. The regex stripping is reasonable, but the campaign name is up to 4 chars on Free / 12 on Adv / unlimited on Vet/Guild — Vet/Guild names could be hundreds of chars and produce a download dialog with an unbounded filename. Also `-` runs aren't collapsed.
+- **Suggested approach:** Truncate to ~80 chars after sanitization, collapse `-{2,}` to single `-`, fall back to `campaign-{id}-export.json` if name is empty after sanitization.
+
+- **Severity:** Medium
+- **File:** src/utils/campaignLifecycle.js
+- **Line:** 21–29
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `archivedCampaignLimit` falls back to literal `2` if neither override nor tier limit is set. The canonical `Free=2 archived` is encoded in two places.
+- **Suggested approach:** Drop the literal fallback; if `tierData.limits.maxArchivedCampaigns` is undefined that's a config bug — surface it loudly instead of silently picking 2.
+
+- **Severity:** Medium
+- **File:** src/utils/campaignLifecycle.js
+- **Line:** 142, 160
+- **Category:** console.log / .error / .warn
+- **Issue:** Two `console.warn` sites swallowing storage cleanup failures. In production this leaves orphaned files in the bucket with no signal to ops.
+- **Suggested approach:** Emit a P.I.E. `campaign_delete_storage_cleanup_failed` event with the campaign_id and error code (no PII). Include in admin/health dashboards.
+
+- **Severity:** Medium
+- **File:** src/utils/campaignLifecycle.js
+- **Line:** 134–139
+- **Category:** Storage path violations / Hardcoded paths bypassing helper
+- **Issue:** Storage paths constructed by string interpolation (`users/${gmUserId}/campaigns/${campaignId}/${sub}`) instead of going through `storagePaths.js`. If the canonical storage path layout ever changes (e.g., to add a tenant prefix), this site is missed. Also: `storage.list(..., { limit: 1000 })` — if a campaign has > 1000 files in any subfolder, the rest are orphaned.
+- **Suggested approach:** Route through `storagePaths.js` (single source of truth). Paginate the `list` call, or move the cleanup to a backend job that recursively enumerates.
+
+- **Severity:** Medium
+- **File:** src/utils/campaignLifecycle.js
+- **Line:** 36, 70, 148, 164
+- **Category:** Field whitelisting (good practice — verify)
+- **Issue:** Several queries use `.select('id, ...specific columns...')` (good). But `campaigns` query at L48–49 only updates without selecting first to verify the campaign exists / belongs to the GM — no `.eq('game_master_id', userId)` defence-in-depth on the UPDATE.
+- **Suggested approach:** Add `.eq('game_master_id', userId)` defensively until the RPC migration is done; stops a non-GM from succeeding even if RLS is misconfigured.
+
+- **Severity:** Low
+- **File:** src/utils/campaignLifecycle.js
+- **Line:** (whole file)
+- **Category:** Missing P.I.E. event emission
+- **Issue:** No P.I.E. events fired for `campaign_archived`, `campaign_unarchived`, `campaign_deleted` — but `analytics.js` event-type comment mentions `campaign_created` and `campaign_joined` so these belong in the same family.
+- **Suggested approach:** Fire `trackEvent` (after RPC migration) for each state transition with `{ tier_at_time, was_archived }`.
+
+- **Severity:** Low
+- **File:** src/utils/campaignLifecycle.js
+- **Line:** 274–294
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `setTierOverride` hardcodes the tier list `["free", "adventurer", "veteran", "guild"]` instead of pulling from `TIERS`.
+- **Suggested approach:** `Object.keys(TIERS)` so any future tier slug change is single-sourced.
+
+
+#### /src/utils/characterStats.js
+
+> **Scope note:** Audit brief described this as D&D 5e math (proficiency bonus, AC, spell save DC). The actual file is a **stat-counter increment helper**, not 5e math. The 5e formulas live elsewhere (likely in `lib/` or component-side); flag the brief mismatch but audit what's here.
+
+- **Severity:** Critical
+- **File:** src/utils/characterStats.js
+- **Line:** 51–71
+- **Category:** Race conditions / Client-side authority
+- **Issue:** `incrementStat` reads the row via `.filter(...)`, computes `current + amount` in JavaScript, then writes back. Two concurrent calls (combat is intrinsically concurrent — multiple players, multiple ticks) will read the same value, both add, and both write — losing one increment. Worse: `caller-supplied character_id, campaign_id, field, amount` mean a player can fabricate `total_damage_dealt: 999999` for someone else's character (no actor pinning, RLS would have to enforce both ownership and per-field allowlisting).
+- **Suggested approach:** Replace with SECURITY DEFINER RPC `track_character_stat(p_character_id uuid, p_campaign_id uuid, p_field text, p_amount int)` that (a) validates `field` against an allowlist, (b) verifies `auth.uid()` owns the character (or is the GM of the campaign), (c) does the increment atomically inside Postgres (`UPDATE … SET counter = counter + p_amount RETURNING …`), (d) updates high-water marks atomically using `GREATEST`. Drops both the race and the client-trust problem.
+
+- **Severity:** High
+- **File:** src/utils/characterStats.js
+- **Line:** 22–34
+- **Category:** Fetch-all anti-pattern / Field whitelisting
+- **Issue:** `ensureStatsRow` does an unbounded read of all columns of every matching row, then a create with no field whitelisting. The caller controls `character_id` and `campaign_id` — RLS is the only thing stopping someone from creating rows for other characters/campaigns.
+- **Suggested approach:** Inside the RPC above, INSERT … ON CONFLICT DO NOTHING the row in a single statement, no read-modify-write needed.
+
+- **Severity:** Medium
+- **File:** src/utils/characterStats.js
+- **Line:** 16, 87–89
+- **Category:** Race conditions / Cosmetic quality
+- **Issue:** `STATS_CACHE` is a module-level Map with no eviction. Across long sessions / SPA navigation it grows unbounded. `clearStatsCache` exists but the audit can't confirm callers invoke it on logout / campaign change (out of scope here, but flag).
+- **Suggested approach:** Either drop the cache entirely (after RPC migration the read is gone) or add a max-entries LRU.
+
+- **Severity:** Medium
+- **File:** src/utils/characterStats.js
+- **Line:** 14
+- **Category:** BASE44 LEFTOVERS
+- **Issue:** `import { base44 } from '@/api/base44Client'` and `base44.entities.CharacterStat` throughout.
+- **Suggested approach:** Migrate to RPC + `supabaseClient` per Critical fix above.
+
+- **Severity:** Low
+- **File:** src/utils/characterStats.js
+- **Line:** 81
+- **Category:** console.log / .error / .warn
+- **Issue:** `console.error('Stat tracking error:', err)` in `trackStat`. Combat-frequency console noise.
+- **Suggested approach:** Drop or DEV-gate.
+
+#### /src/utils/characterTitle.js
+
+- **Severity:** Cosmetic
+- **File:** src/utils/characterTitle.js
+- **Line:** 7–12
+- **Category:** Field whitelisting / sanitization
+- **Issue:** `${name} ${title}` is rendered into UI verbatim. If the consumer uses `dangerouslySetInnerHTML`, an attacker who set their character's title to `<img onerror=… >` would XSS the surface. Pass 1A flagged 8+ XSS sites; this helper feeds some of them.
+- **Suggested approach:** Verify every consumer renders this through React's text path (default) — if any consumer passes the result through `dangerouslySetInnerHTML`, escape here. Document the contract: "this helper returns *raw* user text; render it as text, not HTML."
+
+#### /src/utils/combatLog.js
+
+- **Severity:** Critical
+- **File:** src/utils/combatLog.js
+- **Line:** 23–42, 49–67
+- **Category:** Client-side authority / Missing GM verification
+- **Issue:** Both `logCombatEvent` and `logSystemEvent` accept caller-supplied `campaignId`, `content`, `metadata`. Anyone in possession of any campaign id can write log entries to that campaign — including impersonating GM-only events (round dividers, "the GM ends combat") since `user_id`, `user_name`, `user_avatar` are explicitly set to null to mark the entry as system-authored. A non-GM (or non-member) calling `logSystemEvent(otherCampaignId, "Combat ends. Loot: 1000gp")` would inject a fake system message that all players see as authoritative.
+- **Suggested approach:** Replace with SECURITY DEFINER RPC `log_combat_event(p_campaign_id, p_content, p_metadata)` and `log_system_event(p_campaign_id, p_content, p_metadata)`; the latter must assert `game_master_id = auth.uid()`. The former should assert `auth.uid()` is a campaign member. Both should sanitize `metadata` against a per-event-type schema. RLS on `campaign_log_entries` should `WITH CHECK (false)` for direct INSERT.
+
+- **Severity:** High
+- **File:** src/utils/combatLog.js
+- **Line:** 26, 52
+- **Category:** BASE44 LEFTOVERS / Fetch-all anti-pattern
+- **Issue:** Dynamic `await import("@/api/base44Client")` in two places — Pass 2-i flagged this as a base44 dynamic-import site. The dynamic import pattern obscures the dependency graph and frustrates static "find every base44 reference" sweeps.
+- **Suggested approach:** Migrate to `supabase.rpc(...)` per Critical fix; drop the dynamic import.
+
+- **Severity:** High
+- **File:** src/utils/combatLog.js
+- **Line:** 31
+- **Category:** Field whitelisting / PII broadcast
+- **Issue:** `metadata` is spread verbatim into the row. Combat log entries are *visible to every campaign member* by design. If a caller ever passes `metadata: { ...character }` (which is plausible in a hurry-to-ship combat flow) it broadcasts the character sheet — including any PII fields the character object carries (linked user_id, etc.).
+- **Suggested approach:** Enforce schema at write time inside the RPC: per `metadata.event`, only listed keys are persisted. Drop everything else.
+
+- **Severity:** Medium
+- **File:** src/utils/combatLog.js
+- **Line:** 39, 64
+- **Category:** console.log / .error / .warn
+- **Issue:** Two `console.error` sites for failed log writes. Combat is high-frequency; in a flaky-network situation this floods the console.
+- **Suggested approach:** Drop or DEV-gate.
+
+- **Severity:** Medium
+- **File:** src/utils/combatLog.js
+- **Line:** 23–67
+- **Category:** Missing P.I.E. event emission
+- **Issue:** No telemetry for `combat_log_event_written`. The `analytics.js` event-type list mentions `combat_started` / `combat_ended` but not per-action — fine; just verify the higher-level events get emitted from the call sites (out of scope here).
+- **Suggested approach:** No change at this layer; spec the event taxonomy at the call-site level.
+
+- **Severity:** Low
+- **File:** src/utils/combatLog.js
+- **Line:** (whole file)
+- **Category:** Missing pagination
+- **Issue:** This file only writes log entries — reads happen elsewhere. Verify the read path paginates (out of scope here).
+- **Suggested approach:** Confirmed in components/`<CampaignLog>` audit (separate batch). No change here.
+
+
+#### /src/utils/combatQueue.js
+
+- **Severity:** Medium
+- **File:** src/utils/combatQueue.js
+- **Line:** 22, 29–52, 59–73
+- **Category:** Client-side authority / Storage path violations
+- **Issue:** Combat queue stored entirely in `localStorage` keyed by `gm_combat_queue_${campaignId}`. Per-device only — switch tablets, lose the queue. More importantly: the GM-only state lives client-side, so a player who knows the campaignId can read/write it from devtools (they can't affect other players' devices, but if any feature later cross-pollinates this with the database, the trust assumption is wrong). Acceptable today; flag for future-proofing.
+- **Suggested approach:** No immediate fix. If the combat queue ever needs to persist across devices for the GM, migrate to a DB table with `gm_user_id, campaign_id, payload jsonb` keyed on `(gm_user_id, campaign_id)` and RLS to GM-only.
+
+- **Severity:** Low
+- **File:** src/utils/combatQueue.js
+- **Line:** 64, 72
+- **Category:** Cosmetic quality issues
+- **Issue:** `window.dispatchEvent(new Event("storage"))` synthesizes a generic storage event with no detail — every same-tab listener fires regardless of which campaign changed. Wasted re-renders.
+- **Suggested approach:** Use a CustomEvent with `detail: { campaignId }` and update listeners to filter, or use a small EventTarget-based pubsub.
+
+- **Severity:** Low
+- **File:** src/utils/combatQueue.js
+- **Line:** 76
+- **Category:** Multi-game abstraction concerns
+- **Issue:** Hardcoded faction list `["enemy", "ally", "neutral"]` is D&D-flavor coded but probably fine for any tabletop game. Color hex codes too. Acceptable; flag only.
+- **Suggested approach:** Document as canonical for any multi-game pack.
+
+#### /src/utils/contentConflicts.js
+
+- **Severity:** Medium
+- **File:** src/utils/contentConflicts.js
+- **Line:** 137–143
+- **Category:** Client-side authority / Missing tier-aware enforcement (safety gating)
+- **Issue:** `isBlockedFromCampaign({ campaign, profile })` is a *purely client-side* gate for minor-from-adult-content. The `profile.is_minor` flag is whatever the client passes in. If the join campaign flow trusts this helper as the only check, an attacker can spoof `profile.is_minor = false` from devtools and join a red-rated campaign as a minor.
+- **Suggested approach:** Add a server-side check in the `join_campaign` RPC: load the joining user's profile from the auth.uid()-pinned row, evaluate the same predicate server-side, reject the join. Keep this client-side helper purely for UI hint ("This campaign is not available for you" before the join button is even shown).
+
+- **Severity:** Low
+- **File:** src/utils/contentConflicts.js
+- **Line:** 8–19
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `RATING_LABELS` and `RATING_ICON` inline; the canonical rating taxonomy probably lives in a data module already (consentTopics is imported but the rating set isn't).
+- **Suggested approach:** Move the rating taxonomy + label + icon into `data/contentRatings.js` so admin / settings / campaign-creation forms all source from one place.
+
+- **Severity:** Cosmetic
+- **File:** src/utils/contentConflicts.js
+- **Line:** 14–18, 26
+- **Category:** Multi-game abstraction concerns
+- **Issue:** Hardcoded emoji glyphs are UI-policy. Fine as a util fallback.
+- **Suggested approach:** No change.
+
+#### /src/utils/csv.js
+
+- **Severity:** Medium
+- **File:** src/utils/csv.js
+- **Line:** 11–21, 23–28
+- **Category:** Filename sanitization / CSV injection
+- **Issue:** `escape()` correctly handles RFC 4180 quoting but does NOT defend against **CSV formula injection** — if a cell value starts with `=`, `+`, `-`, or `@`, Excel will execute it as a formula on open (`=cmd|'/c calc'!A0` style). Admin exports are explicitly the use case here, and admin is exporting user-supplied data (usernames, campaign names, support tickets). One malicious user types `=HYPERLINK("https://evil","Click")` as their username; admin opens the export; spreadsheet renders a clickable phishing link.
+- **Suggested approach:** In `escape()`, after the existing quoting, if the value starts with `=`, `+`, `-`, `@`, `\t`, or `\r`, prepend a single `'` (apostrophe) — neutralizes the formula. This is the OWASP-recommended mitigation.
+
+- **Severity:** Low
+- **File:** src/utils/csv.js
+- **Line:** 30–41
+- **Category:** Filename sanitization
+- **Issue:** `downloadCsv(filename, ...)` uses caller-supplied filename verbatim. Caller is internal (admin dashboard) so risk is low, but a malicious filename could still confuse the browser's save-as dialog.
+- **Suggested approach:** Sanitize: strip `..`, `/`, NUL; truncate to ~80 chars. Same defense-in-depth pattern as `campaignLifecycle.js` export.
+
+#### /src/utils/cursedItemHelpers.js
+
+- **Severity:** Low
+- **File:** src/utils/cursedItemHelpers.js
+- **Line:** 51, 79–81
+- **Category:** Multi-game abstraction concerns
+- **Issue:** Hardcoded `WIS` defaults for ability and `15` default for save_dc are D&D 5e specific. Future game-pack swap would need these dynamic.
+- **Suggested approach:** Pull defaults from the active game-pack's manifest instead of inlining.
+
+- **Severity:** Cosmetic
+- **File:** src/utils/cursedItemHelpers.js
+- **Line:** 14, 27, 46, 62, 73, 88
+- **Category:** Cosmetic quality issues
+- **Issue:** Repeated `item.curse || item.properties?.curse || null` pattern in every helper. Refactor opportunity.
+- **Suggested approach:** One internal `getCurseBlock(item)` helper used by all six.
+
+#### /src/utils/displayName.js
+
+- **Severity:** Low (Pattern: GOOD)
+- **File:** src/utils/displayName.js
+- **Line:** 19–21, 31–39
+- **Category:** PII broadcast (POSITIVE FINDING)
+- **Issue:** This file is a **canonical good pattern**. The doc-comment explicitly states the "never email, never legal name" rule and the helper enforces it (no `profile.email`, no `profile.full_name` fallback). The UUID slice fallback at L37–38 is a measured leak (4 chars of a UUID is not personally identifying). Worth replicating elsewhere.
+- **Suggested approach:** Document in the global "good patterns" section. Verify every PII-sensitive surface (forums, Tavern, support inbox per audit pass 2-ii) consumes through these helpers — not the raw `profile.email` / `profile.full_name`.
+
+- **Severity:** Low
+- **File:** src/utils/displayName.js
+- **Line:** 60–61
+- **Category:** Field whitelisting / sanitization
+- **Issue:** `${charName} (${userName})` format string passes raw user-controlled values straight through. Same XSS concern as `characterTitle.js` — the string is rendered text-safely *if* React's default text path is used. Verify all consumers.
+- **Suggested approach:** Same as `characterTitle.js` — document the contract: returns raw text, render via React's text path; consumers using `dangerouslySetInnerHTML` must escape.
+
+
+#### /src/utils/index.ts
+
+- **Severity:** Cosmetic
+- **File:** src/utils/index.ts
+- **Line:** 4–6
+- **Category:** Path traversal / Filename sanitization
+- **Issue:** `createPageUrl(pageName)` lower-cases and replaces spaces with hyphens but does no other sanitization. Callers passing `"../admin"` or `"profile?id=foo"` would produce malformed URLs. Caller is internal so risk is low. Also the file is essentially empty (3 leading blank lines + 3 lines of code) with no other re-exports — no `safeText`, no `displayName`, no `storagePaths` re-exported.
+- **Suggested approach:** Either (a) remove blank lines and add a stricter regex (`replace(/[^a-z0-9-]/g, '')`); or (b) leave alone since calls are internal — flag for hygiene only.
+
+- **Severity:** Low
+- **File:** src/utils/index.ts
+- **Line:** (whole file)
+- **Category:** Cosmetic quality issues
+- **Issue:** File is `.ts` but the rest of `/src/utils/` is `.js` — naming inconsistency. Mixed-language utils folder.
+- **Suggested approach:** Rename to `index.js` for consistency, or migrate the rest. Pick one.
+
+#### /src/utils/languageComprehension.js
+
+- **Severity:** High
+- **File:** src/utils/languageComprehension.js
+- **Line:** 11–24, 73–92, 94–95
+- **Category:** Multi-game abstraction concerns
+- **Issue:** D&D 5e-specific everywhere: language family graph, the 18-skill list with hardcoded ability mappings, the six abilities (`str/dex/con/int/wis/cha`). Multi-game readiness requires this to come from a per-game-system manifest.
+- **Suggested approach:** Move `LANGUAGE_FAMILIES`, `SKILL_TO_ABILITY`, `SKILLS`, `ABILITIES` into a `gamePacks/dnd5e/` manifest. The util becomes a manifest consumer that takes `(character, gamePackId)` and resolves through the manifest.
+
+- **Severity:** Medium
+- **File:** src/utils/languageComprehension.js
+- **Line:** 119–126
+- **Category:** Math errors (D&D 5e calculations)
+- **Issue:** `proficiencyBonus` formula `Math.max(2, 2 + Math.floor((level - 1) / 4))`. For levels 1–4 that yields 2; for 5–8 yields 3; 9–12 yields 4; 13–16 yields 5; 17–20 yields 6 — **correct per 5e SRD**. Edge case: level 0 yields `Math.max(2, 2 + Math.floor(-1/4))` = `Math.max(2, 2 + (-1))` = 2 (since `Math.floor(-0.25) = -1`), which is technically forgiving but harmless. Negative levels would propagate. No bound check on upper level.
+- **Suggested approach:** Clamp level to `[1, 20]` before computing. Document the formula source.
+
+- **Severity:** Medium
+- **File:** src/utils/languageComprehension.js
+- **Line:** 97–117
+- **Category:** Math errors
+- **Issue:** `getAbilityModifier` correctly computes `Math.floor((score - 10) / 2)`. Ability score fallback to `10` is silent (no signal to caller that the data was missing). For score <= 1 the modifier still computes correctly (`Math.floor((1-10)/2) = -5`). No upper clamp; a homebrew character with score 30 yields `+10`, which is over the SRD cap of `+10` (score 30) — actually correct. Looks math-correct.
+- **Suggested approach:** No math change. Add a tiny dev-mode warning when fallback to 10 fires, so missing data surfaces during testing.
+
+- **Severity:** Low
+- **File:** src/utils/languageComprehension.js
+- **Line:** 154–168
+- **Category:** Race conditions / Client-side authority
+- **Issue:** `canReattempt` is a pure function — fine on its own. But the `attempt.attempted_at` it consumes is whatever the client passes. If the upstream attempts table allows clients to write `attempted_at`, a player can claim "my last attempt was 25 hours ago" even if they failed 5 minutes ago, bypassing the `24_hours` cooldown.
+- **Suggested approach:** Server-side: ensure `attempted_at` is set by `now()` in the DB, never trusted from the client. The util can stay as-is since it consumes the persisted timestamp.
+
+#### /src/utils/languageFonts.js
+
+- **Severity:** High
+- **File:** src/utils/languageFonts.js
+- **Line:** 23, 27
+- **Category:** Hardcoded values / Multi-game abstraction
+- **Issue:** `SUPABASE_FALLBACK = "https://ktdxhsstrgwciqkvprph.supabase.co"` — the production project URL is **hardcoded as a fallback** in shipped client code. Same hostname appears in `monsterHelpers.js` L201. If env is missing in any environment (CI, preview, downstream fork) the code silently points production traffic at this URL. Also: it's loading from the `campaign-assets` bucket (correct — SRD assets) but the path `dnd5e/languages/` is hardcoded so a future game pack swap requires code changes.
+- **Suggested approach:** Drop the hardcoded fallback — fail loudly if `VITE_SUPABASE_URL` isn't set. Move the path to a per-game-system manifest. Centralize the supabase host in one constant so it's not duplicated across helpers.
+
+- **Severity:** Medium
+- **File:** src/utils/languageFonts.js
+- **Line:** 51–67
+- **Category:** XSS / Field whitelisting
+- **Issue:** `loadLanguageFonts` builds CSS `@font-face` blocks via string concatenation including `${base}/${lang}-Regular.ttf`. `lang` is from the static `LANGUAGE_FONTS` allowlist (safe today). But if the array ever becomes dynamic (e.g., game-pack-supplied), a value containing a quote or `}` could escape the `url('...')` literal and inject CSS. The `<style>` `textContent` path doesn't get HTML-escaped — it's parsed as CSS.
+- **Suggested approach:** Validate each name against `/^[A-Za-z]+$/` before injection. Once `LANGUAGE_FONTS` becomes data-driven (per game pack), enforce in the manifest schema as well.
+
+- **Severity:** Medium
+- **File:** src/utils/languageFonts.js
+- **Line:** 16–21
+- **Category:** Multi-game abstraction concerns
+- **Issue:** `LANGUAGE_FONTS` array is the D&D 5e canonical language list. The comment on the file says "fantasy languages" — fine, but multi-game readiness needs this per-game-pack.
+- **Suggested approach:** Same as `languageComprehension.js` — move to per-game-pack manifest.
+
+- **Severity:** Cosmetic
+- **File:** src/utils/languageFonts.js
+- **Line:** 28
+- **Category:** Storage path / Bucket usage
+- **Issue:** Reads from `campaign-assets` bucket (SRD-only, read-only) — **correct usage** per the canonical bucket policy. Flag as positive pattern.
+- **Suggested approach:** No change. Document as good-pattern example.
+
+#### /src/utils/monsterHelpers.js
+
+- **Severity:** High
+- **File:** src/utils/monsterHelpers.js
+- **Line:** 200–210
+- **Category:** Hardcoded values / Storage path violations
+- **Issue:** `SUPABASE_MONSTER_PATH = "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/monsters"` — production URL hardcoded again. Also constructs image URLs by `encodeURIComponent(name)` — if a homebrew monster shares a name with an SRD monster (e.g., "Goblin"), the helper would serve the SRD image for the homebrew monster (silent bug, not a security issue).
+- **Suggested approach:** Pull the supabase host from env via a single util (one source of truth). Switch the URL builder to take an explicit `(gamePackId, monsterName)` so SRD vs homebrew is unambiguous. Homebrew should resolve via the user-assets bucket and the per-monster image_url field.
+
+- **Severity:** High
+- **File:** src/utils/monsterHelpers.js
+- **Line:** (whole file)
+- **Category:** Multi-game abstraction concerns
+- **Issue:** Every helper assumes 5e schema (`armor_class`, `hit_points`, `challenge_rating`, the `proficiencies[]` shape, the senses sub-keys, the action structure). `MONSTER_TYPES` is hardcoded.
+- **Suggested approach:** Same pattern — hide behind a per-game-pack normalizer interface; util becomes pack-agnostic.
+
+- **Severity:** Low
+- **File:** src/utils/monsterHelpers.js
+- **Line:** 21–24
+- **Category:** Cosmetic quality issues
+- **Issue:** `getStat` reads top-level field first, then nested `stats.field`. Inconsistent with the documented "5e API stashes most fields under stats" — the precedence inverts that.
+- **Suggested approach:** Flip precedence so `stats.field` wins, or document why top-level wins (homebrew override).
+
+- **Severity:** Low
+- **File:** src/utils/monsterHelpers.js
+- **Line:** 91–100, 102–107
+- **Category:** Math errors
+- **Issue:** `getAbilityScores` returns 10 default; `getAbilityMod` returns `+0` for non-finite. Math is correct (`Math.floor((score - 10) / 2)`).
+- **Suggested approach:** No change.
+
+#### /src/utils/safeRender.js
+
+- **Severity:** Low (Pattern: GOOD)
+- **File:** src/utils/safeRender.js
+- **Line:** 13–36
+- **Category:** XSS / Field whitelisting (POSITIVE FINDING — but with a gap)
+- **Issue:** `safeText` is the canonical "collapse anything to a string" helper for JSX rendering. It does NOT, however, sanitize HTML — its purpose is to prevent React's "Objects are not valid as a React child" crash, not to defend against XSS. Per the audit context, **8 `dangerouslySetInnerHTML` XSS sites in lore + 1 items + 1 popup + crest builder SVG XSS** are flagged. If any of those sites pass `safeText(val)` to `dangerouslySetInnerHTML`, they STILL get XSS — `safeText` returns raw text including any HTML the user typed.
+- **Suggested approach:** Add a separate `safeHtml(val)` helper that wraps DOMPurify.sanitize() (or strips all tags via a whitelist) and is the **only** sanitizer permitted for `dangerouslySetInnerHTML` payloads. Make a lint rule (or a code-review checklist) that any `dangerouslySetInnerHTML` whose value isn't `safeHtml(...)` is rejected.
+
+- **Severity:** Low
+- **File:** src/utils/safeRender.js
+- **Line:** 33
+- **Category:** Cosmetic quality issues
+- **Issue:** Final fallback is `JSON.stringify(val)` — fine for debugging but produces user-visible JSON in production if an unexpected shape arrives.
+- **Suggested approach:** Replace with `'[unrenderable]'` or an empty string in production builds; keep JSON in dev mode for diagnostic value.
+
+
+#### /src/utils/seedTestCampaign.js
+
+- **Severity:** Critical
+- **File:** src/utils/seedTestCampaign.js
+- **Line:** 380–383
+- **Category:** Test/dev tooling reachable in production
+- **Issue:** `if (typeof window !== "undefined" && import.meta.env.DEV) { window.seedTestCampaign = seedTestCampaign; }` — the `import.meta.env.DEV` gate **only governs the `window` exposure**. The module itself is still imported and bundled into the production app, the named export `seedTestCampaign` is still callable from any code path that imports it, and a determined attacker can also re-walk the module graph via Vite's HMR endpoints / source maps if those are shipped. Even ignoring that: the vast majority of risk comes from the file being shipped at all — it includes hardcoded fake UUIDs, fake emails, hardcoded test character data (38 HP rogue, 49 HP fighter, etc.), and the seed exposes a `cleanup` mode that runs `DELETE FROM campaigns WHERE title = 'Seeded Combat Test Campaign'` — anyone can name their campaign "Seeded Combat Test Campaign" and have it nuked by the next dev who runs the cleanup, OR an admin who happens to have it in their bundle and triggers it from the console.
+- **Suggested approach:** Move this entire module to a `scripts/` or `dev-tools/` folder OUTSIDE `src/` so Vite never bundles it. Or put the whole file inside a `if (import.meta.env.DEV)` dynamic import boundary. Long-term: make it a Node.js script that runs against the service-role key, not a browser-shipped helper.
+
+- **Severity:** Critical
+- **File:** src/utils/seedTestCampaign.js
+- **Line:** 178–185, 222–223, 241, 354
+- **Category:** Client-side authority / Missing actor pinning
+- **Issue:** `tryInsertFakeProfiles` writes to `user_profiles` with caller-supplied `user_id` values. `createTestCampaign` writes a campaign with `game_master_id: gmUser.id` (caller-supplied; here it's the auth user, but that's only because the helper choose to do `auth.getUser` — the underlying `Campaign.create` accepts arbitrary `game_master_id`). `createTestCharacters` writes `created_by: p.email` — overriding what should be a server-set RLS-trigger value. Cleanup deletes any row matching the title — pure non-RLS-aware delete.
+- **Suggested approach:** If kept at all (which we recommend NOT), gate every write inside an `is_admin(auth.uid())` check. Long-term: this is a service-role server-side script, not browser code.
+
+- **Severity:** Critical
+- **File:** src/utils/seedTestCampaign.js
+- **Line:** 26–162
+- **Category:** PII broadcast / Hardcoded test data with realistic-looking PII
+- **Issue:** Hardcoded fake players have realistic-looking emails (`lyra.test@guildstew.local`), usernames, full character builds, and avatar URLs pointing to `app-assets/test-characters/Lyra.png`. The `@guildstew.local` TLD doesn't exist but the rest looks real enough. Bundled into prod = these strings are searchable in the user's downloaded JS.
+- **Suggested approach:** Same as above — extract to a non-bundled script.
+
+- **Severity:** High
+- **File:** src/utils/seedTestCampaign.js
+- **Line:** 51–52, 91, 121, 159, 200–205
+- **Category:** Storage path violations / Hardcoded values
+- **Issue:** Hardcoded `https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/test-characters/...` URLs and an external `images.unsplash.com` URL. Also note `app-assets` — neither the canonical `user-assets` nor `campaign-assets` bucket per the storage policy in the audit context. If `app-assets` doesn't exist, these images 404; if it does, that's a third bucket the canonical policy didn't account for.
+- **Suggested approach:** Verify `app-assets` is a real bucket and document its purpose; or rewrite to use placeholder images from `campaign-assets`. Drop the unsplash URL (third-party tracker risk).
+
+- **Severity:** High
+- **File:** src/utils/seedTestCampaign.js
+- **Line:** 20, 222, 241, 279, 311
+- **Category:** BASE44 LEFTOVERS
+- **Issue:** Imports `base44` from `@/api/base44Client` and uses `base44.entities.Campaign.create`, `base44.entities.Character.create`, `base44.entities.Character.filter`, `base44.entities.Campaign.update`. Mixed with raw `supabase.from(...)` calls — the file is half-migrated.
+- **Suggested approach:** If the file survives at all, finish the migration to `supabase` directly. Otherwise drop the file (preferred).
+
+- **Severity:** High
+- **File:** src/utils/seedTestCampaign.js
+- **Line:** 286–378 (entire flow)
+- **Category:** console.log / .error / .warn
+- **Issue:** ~20+ `console.log/warn/error` calls. In dev that's fine; bundled into prod, the `[seed]` log noise is shipped even when no user calls the function.
+- **Suggested approach:** Resolve by extracting the whole file from the prod bundle.
+
+- **Severity:** Medium
+- **File:** src/utils/seedTestCampaign.js
+- **Line:** 336–339
+- **Category:** Race conditions / cleanup safety
+- **Issue:** Cleanup matches by `.eq("title", "Seeded Combat Test Campaign")` — title is editable by users. Any user could name their campaign that exact title and have it deleted on the next cleanup run.
+- **Suggested approach:** Match on a synthetic marker (e.g., a `is_seed: true` boolean column, or the `[SEED:guildstew-test]` tag in `description`) AND require admin role.
+
+#### /src/utils/sessionTime.js
+
+- **Severity:** Cosmetic
+- **File:** src/utils/sessionTime.js
+- **Line:** (whole file)
+- **Category:** Cosmetic quality issues
+- **Issue:** Pure utility, no security surface. IIFE-built `TIME_OPTIONS` runs once at module load — fine.
+- **Suggested approach:** No change.
+
+#### /src/utils/storagePaths.js
+
+- **Severity:** Critical
+- **File:** src/utils/storagePaths.js
+- **Line:** 34–61
+- **Category:** Path traversal / injection risks (NO INPUT VALIDATION)
+- **Issue:** Every helper interpolates `userId`, `characterId`, `campaignId`, `guildId`, `entryId`, `subpath`, `filename` directly into the path string with **no validation**. A caller passing `userId = "../../guilds/{otherGuild}/vault"` or `filename = "../../../../profile/avatar.webp"` writes outside the user's folder. The helper IS the canonical "single source of truth" — but it's not enforcing what it claims to enforce. Pass 1A flagged this as a known systemic issue; this util is supposed to be the fix.
+- **Suggested approach:** Validate every UUID-typed argument against a UUID regex (`/^[0-9a-f]{8}-...{12}$/i`) and reject otherwise. For `subpath` (which has no canonical shape), strip `..`, leading `/`, and NUL bytes; collapse repeated slashes. For `filename`, strip path separators, `..`, NUL, and length-bound to 255 chars. Throw a typed `InvalidStoragePathError` on rejection.
+
+- **Severity:** High
+- **File:** src/utils/storagePaths.js
+- **Line:** 66–69
+- **Category:** Hardcoded values / Storage path violations
+- **Issue:** `getUserAssetUrl(path)` uses `import.meta.env.VITE_SUPABASE_URL` — good, no hardcoded fallback here (unlike `languageFonts.js` and `monsterHelpers.js`). However, it builds a public URL from any `path` passed in — if a caller passes a path from a different bucket or a manipulated path, the URL is still constructed pointing into `user-assets`. Not a vuln, but a footgun if `path` came from external input.
+- **Suggested approach:** Validate `path` against an internal allowlist of "looks like a path we'd build" (starts with `users/{uuid}/` or `guilds/{uuid}/`).
+
+- **Severity:** Medium
+- **File:** src/utils/storagePaths.js
+- **Line:** 50–53
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `homebrewImagePath(userId, campaignId, type, filename)` — `type` is documented as `'monsters' | 'items' | 'spells'` but not validated. Caller passing `type = "../profile"` writes outside the campaign folder.
+- **Suggested approach:** Allowlist check on `type` against the documented set.
+
+- **Severity:** Cosmetic
+- **File:** src/utils/storagePaths.js
+- **Line:** (whole file)
+- **Category:** GOOD PATTERN
+- **Issue:** Top-level docstring clearly canonicalises the bucket layout. The bucket is correctly assumed to be `user-assets` (NOT `campaign-assets`). Storage path concept (UUID-keyed folders, never username) is correctly documented and implemented.
+- **Suggested approach:** Document as the canonical good-pattern reference. Add the validation per Critical fix above so it actually enforces what it documents.
+
+#### /src/utils/timeAgo.js
+
+- **Severity:** Cosmetic
+- **File:** src/utils/timeAgo.js
+- **Line:** (whole file)
+- **Category:** Cosmetic quality issues
+- **Issue:** Pure formatter, no security surface. Approximates "30 day months" / "12 month years" — fine for relative-time UI.
+- **Suggested approach:** No change.
+
+#### /src/utils/uploadFile.js
+
+- **Severity:** Critical
+- **File:** src/utils/uploadFile.js
+- **Line:** 35, 56–63
+- **Category:** Storage path violations / Client-side authority
+- **Issue:** `uploadFile(file, bucket, path, opts)` accepts caller-supplied `bucket` AND caller-supplied `path`. The default bucket is `BUCKETS.USER` (correct — `user-assets`, NOT `campaign-assets`, fixing the Pass 2-i finding for `base44Client.UploadFile`). HOWEVER, any caller can override with `BUCKETS.CAMPAIGN` (`campaign-assets`, the SRD-only read-only bucket). The validation at L40 explicitly *skips* checks when `bucket !== BUCKETS.USER` — so a caller passing the SRD bucket bypasses everything. Worse: the `path` is caller-supplied and **does not go through `storagePaths.js`**. A caller can write to `users/{otherUserId}/profile/avatar.webp`, bypassing the canonical UUID-folder isolation entirely (RLS on the bucket is the only defense — flag for verification).
+- **Suggested approach:** (a) Drop the `bucket` argument — bucket should be implied by `uploadType` (avatar / homebrew / lore → user-assets; SRD seed → server-side service-role only, NEVER from this helper). (b) Path construction must go through the matching `storagePaths.js` helper based on `uploadType`. (c) Server-side: the upload endpoint should verify `auth.uid()` matches the path's `{user_id}` segment.
+
+- **Severity:** Critical
+- **File:** src/utils/uploadFile.js
+- **Line:** 36, 49, 67–70
+- **Category:** Missing actor pinning
+- **Issue:** `userId` is caller-supplied. The quota check, the storage counter increment, and the storage counter decrement all run against whatever `userId` the caller passes. A user can pass another user's id and exhaust their quota / drain their counter.
+- **Suggested approach:** Drop `userId` from the args. Inside `incrementUserStorage` (currently a stub anyway — see uploadValidator) the RPC must pin `p_user_id := auth.uid()`.
+
+- **Severity:** Critical
+- **File:** src/utils/uploadFile.js
+- **Line:** 56
+- **Category:** File upload validation gaps / Path traversal
+- **Issue:** `safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_")` — strips most special chars but **does not strip leading dots** (`.htaccess`) and does **not** prevent `..` (the regex preserves `.` and `_`, so `..` becomes `..`). Combined with the caller-supplied `path` parameter, writing to `path = "users/foo/profile"`, `file.name = "../bar.png"` produces the path `users/foo/profile/{ts}_..bar.png` — the `Date.now()` prefix happens to defang traversal here, but only by accident. Length isn't bounded. NUL bytes aren't filtered (the regex strips them as non-allowed, OK).
+- **Suggested approach:** After `safeName`, additionally: (a) strip leading `.`, (b) replace `..` with `_`, (c) bound length to ~80 chars. Or better: ignore the original filename entirely; name the file by hash of its content (`{hash}.{ext}`) where `ext` is from the validated MIME, not the user-supplied filename.
+
+- **Severity:** Critical
+- **File:** src/utils/uploadFile.js
+- **Line:** 40–44
+- **Category:** File upload validation gaps (size/MIME/SVG)
+- **Issue:** The validation gate calls `validateFile(file, uploadType)` — but `validateFile` is a **stub that always returns `true`** (see `uploadValidator.js`). NO size limit, NO MIME allowlist, NO content sniffing, NO SVG sanitization, NO image format validation. **Every user can upload any file of any type and any size to user-assets.** Combined with the absent SVG sanitization and the Pass 1A finding of "crest builder SVG XSS", this is the upload-pipeline equivalent of an open S3 bucket.
+- **Suggested approach:** Restore real validation immediately. At minimum: (a) MIME allowlist per `uploadType` (`image/webp`, `image/png`, `image/jpeg` for avatars; `application/pdf` for session-docs; etc.) — **content-sniff** the magic bytes, do NOT trust `file.type`. (b) Size cap per `uploadType` (e.g., 5 MB for avatars, 25 MB for maps). (c) SVG: either reject entirely or run through DOMPurify with `USE_PROFILES: { svg: true, svgFilters: true }`. (d) Image format: re-encode through `<canvas>` to drop EXIF + any embedded scripts.
+
+- **Severity:** Critical
+- **File:** src/utils/uploadFile.js
+- **Line:** 48–54
+- **Category:** Missing tier-aware enforcement
+- **Issue:** Quota check goes through `checkUserStorageQuota(userId, file.size, tier || "free")`. `tier` is **caller-supplied** — a Free user can pass `"guild"` to get the unlimited-tier check. Worse, `checkUserStorageQuota` is a stub that always returns `{ allowed: true }` regardless. Tier-aware quota enforcement is completely absent.
+- **Suggested approach:** Drop the `tier` parameter — server resolves the user's tier from their `user_profiles` row. Restore real implementation in `uploadValidator` per the file-validation Critical fix.
+
+- **Severity:** High
+- **File:** src/utils/uploadFile.js
+- **Line:** 67–70, 98–101
+- **Category:** Race conditions in concurrent state mutations
+- **Issue:** `incrementUserStorage(userId, file.size)` runs AFTER the upload succeeds. If two uploads race (a tier-edge user with N bytes free uploads two N-byte files concurrently), both quota checks pass (both see N bytes free), both upload, both increment — quota exceeded. No atomic check-and-bump.
+- **Suggested approach:** Server-side RPC `reserve_storage_quota(p_bytes)` that atomically checks + increments in one transaction; release on upload failure.
+
+- **Severity:** High
+- **File:** src/utils/uploadFile.js
+- **Line:** 88–101
+- **Category:** Path traversal / Storage path violations
+- **Issue:** `deleteFile(pathOrUrl, { userId, fileSize, bucket })` accepts a caller-supplied `pathOrUrl` and runs `supabase.storage.remove([storagePath])` on it. The URL-stripping logic at L91–93 derives `storagePath` from the URL. **There is no check that the path belongs to the calling user.** RLS on the bucket is the only defense; if RLS allows DELETE on `users/{any}/...` paths, any user can delete anyone's files. The decrementUserStorage uses caller-supplied `userId` and `fileSize`, so even with correct RLS the storage counter can be poisoned.
+- **Suggested approach:** Server-side RPC for delete that pins `auth.uid()` and verifies the path matches `users/{auth.uid()}/...` (or guild-vault paths where the user has guild-member-with-permission). Decrement counter atomically inside the same RPC.
+
+- **Severity:** High
+- **File:** src/utils/uploadFile.js
+- **Line:** (whole file)
+- **Category:** Missing P.I.E. event emission
+- **Issue:** No `file_uploaded` / `file_deleted` analytics events emitted. Per the `analytics.js` event-type list this is a tracked surface.
+- **Suggested approach:** Emit `trackEvent(auth.uid(), 'file_uploaded', { upload_type, mime, size })` (no PII, no path) after successful upload.
+
+- **Severity:** Medium
+- **File:** src/utils/uploadFile.js
+- **Line:** 69, 100
+- **Category:** console.log / .error / .warn
+- **Issue:** `console.warn("increment_user_storage failed:", ...)` and similar — silently swallows storage-counter desyncs and logs to console. Quota becomes unreliable.
+- **Suggested approach:** Emit a P.I.E. error event so ops dashboards see counter desyncs.
+
+#### /src/utils/uploadValidator.js
+
+- **Severity:** Critical
+- **File:** src/utils/uploadValidator.js
+- **Line:** 33–51 (entire file)
+- **Category:** File upload validation gaps / Test/dev tooling reachable in production
+- **Issue:** **The entire file is a stub.** Every exported function is a no-op (`validateFile → true`, `checkUserStorageQuota → { allowed: true }`, `incrementUserStorage → no-op`, etc.). The doc-comment explicitly admits this is a "trust the server" stop-gap because the import chain was breaking the dev build. **This is the single most dangerous file in the batch.** Combined with the caller-supplied bucket/path/userId in `uploadFile.js`, every upload pipeline currently has zero client-side defense — and the comment says "real enforcement lives on the server side (DB triggers + increment_user_storage RPC)" but Pass 2-ii flagged that those RPCs themselves accept caller-supplied user_ids, so server enforcement is also weak.
+- **Suggested approach:** **Top-priority fix.** Restore the original implementation. Concretely: (a) `validateFile` must MIME-sniff the file content (read first N bytes, match against magic-bytes allowlist) and check size against per-uploadType limits and per-tier quotas; (b) `checkUserStorageQuota` must hit the server (not run client-side at all — this is asking the user to tell you how much quota they've used). Until restored, every upload surface is uncapped. Cross-reference Pass 2-ii's `incrementUserStorageBytes` flagged in `wallet.js` / billing layer.
+
+- **Severity:** High
+- **File:** src/utils/uploadValidator.js
+- **Line:** (whole file)
+- **Category:** Dead code / TODO/FIXME comments
+- **Issue:** The file is structurally a TODO (the comment says "Restore the full implementations once the billingClient / storageConfig import graph is audited.").
+- **Suggested approach:** Track as a P0 fix. Until then, every `uploadFile` call is unchecked.
+
+#### /src/utils/username.js
+
+- **Severity:** High
+- **File:** src/utils/username.js
+- **Line:** 43–55
+- **Category:** Race conditions / Missing rate limits
+- **Issue:** `isUsernameAvailable` is a TOCTOU check — between the availability query and the actual claim (presumably `update user_profiles set username = ?`), another user could grab the same name. There is no server-side uniqueness constraint visible from this file (must be enforced via UNIQUE index). Additionally: no rate limit on username changes — a user can change their username every second, which is the building block for harassment / impersonation churn.
+- **Suggested approach:** (a) Confirm `UNIQUE(LOWER(username))` index on `user_profiles`. (b) Add a `username_changed_at` column with a server-side trigger blocking changes more frequent than once per N hours/days. (c) Atomically claim via UPSERT in an RPC, returning `{ ok, reason }` instead of relying on the read-then-write client flow.
+
+- **Severity:** High
+- **File:** src/utils/username.js
+- **Line:** 25–27
+- **Category:** Field whitelisting / Path traversal / Username sanitization
+- **Issue:** Allowed character set `[a-zA-Z0-9_.-]` permits **dots and dashes anywhere** — including leading `.`, leading `-`, consecutive dots (`..`), or trailing `.` which are all problematic in URL slugs, filenames (if username is ever used as a path component — flagged in audit context), and look-alike attacks. Also: NO Unicode confusables check (`itѕme` with Cyrillic `s` would slip past the `itsme` reserved-prefix check at L28).
+- **Suggested approach:** (a) Disallow leading/trailing `.`, `_`, `-`. (b) Disallow consecutive `..`. (c) Normalize to NFKC + reject any char outside the ASCII allowlist (catches Cyrillic look-alikes). (d) For the reserved-prefix check, do the comparison after NFKC normalization.
+
+- **Severity:** High
+- **File:** src/utils/username.js
+- **Line:** 21–32
+- **Category:** Field whitelisting / System usernames not reserved
+- **Issue:** Only the `itsme` prefix is reserved. **No reservation of system-reserved usernames** like `admin`, `support`, `guildstew`, `aetherian`, `root`, `staff`, `mod`, `system`, `null`, `undefined`, `anonymous`, `everyone`, `owner`, `gm`. A user could grab `@admin` and pose as staff.
+- **Suggested approach:** Add a `RESERVED_USERNAMES` Set containing the canonical list. Reject during `validateUsername` with a friendly message.
+
+- **Severity:** Medium
+- **File:** src/utils/username.js
+- **Line:** 49
+- **Category:** Field whitelisting / Fetch-all anti-pattern
+- **Issue:** `.select("id, user_id")` is correctly narrowed (good). However, `.ilike("username", name)` does case-insensitive matching with **no escaping of `%` and `_`** — a user querying for username `a%` would match every username starting with `a`. The check would then return `available: false` even though the user is just typing — minor UX bug, but if the function is ever used as `available === true → grant`, an attacker types `a%` and gets `available: false`, no real harm. Still, sloppy.
+- **Suggested approach:** Escape `%` and `_` in the LIKE pattern, or use `=` instead of `ilike` with `LOWER(username) = LOWER(name)`.
+
+- **Severity:** Medium
+- **File:** src/utils/username.js
+- **Line:** 3
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `AETHERIAN_DOMAINS = ["@aetherianstudios.com", "@guildstew.com"]` — duplicate of what `forumsClient.js` `isAdminEmail()` (Pass 1A flagged at line 202) uses. Two sources of truth for "is this an admin domain".
+- **Suggested approach:** Single source of truth in `lib/admin.js` (or wherever the admin detection canonicalises). Both `username.js` and `forumsClient.js` consume from there.
+
+- **Severity:** Medium
+- **File:** src/utils/username.js
+- **Line:** 10–13
+- **Category:** Client-side authority
+- **Issue:** `isAetherianEmail(email)` accepts caller-supplied `email`. Used at L28 to decide whether to allow the `itsme` prefix. **A non-staff user can call `validateUsername("itsmeBOSS", "evil@aetherianstudios.com")`** and the helper returns `ok: true`, even though that email isn't actually their auth email. The actual claim path may verify against `auth.user().email` server-side — but if it doesn't, this is bypassable.
+- **Suggested approach:** Server-side: reserved-prefix enforcement must be in the RPC that writes `user_profiles.username`, comparing the auth email — not the form-input email. Client-side helper exists only for UX hint.
+
+#### /src/utils/worldLoreVisibility.js
+
+- **Severity:** Critical
+- **File:** src/utils/worldLoreVisibility.js
+- **Line:** 11–25
+- **Category:** Client-side authority
+- **Issue:** `filterByVisibility` is a **client-side** filter on entries that have already been fetched. If a non-GM, non-mole, non-listed player is granted `entries` from the server that includes `gm_only` or `selected` entries they shouldn't see, the helper hides them visually — but the data is in the user's browser. Devtools `console.log(entries)` reveals every secret the GM wrote. The audit context cited "8 dangerouslySetInnerHTML XSS sites in lore" — the secrecy gap matters because lore is the highest-trust GM-only data in a campaign.
+- **Suggested approach:** Server-side RLS on `world_lore_entries` must filter by visibility BEFORE returning rows: GM sees all, otherwise return only public + (selected AND user is in `visible_to_players` array OR user is mole). The client-side filter remains as belt-and-suspenders / ordering aid, never as the security boundary.
+
+- **Severity:** High
+- **File:** src/utils/worldLoreVisibility.js
+- **Line:** 39–43
+- **Category:** XSS / sanitization gap
+- **Issue:** `stripHtml(html)` is a regex-based tag stripper: `replace(/<[^>]+>/g, " ")`. This is **not safe HTML stripping** — it misses closed-then-reopened malformed cases, attribute-stripping, and javascript: URLs in `href`/`src` aren't relevant here (purely text output) but the docstring says "Strip HTML tags for preview rendering in lists / timelines." Given lore content is exactly the surface flagged for XSS, if any consumer accidentally renders `stripHtml(entry.body)` via `dangerouslySetInnerHTML` instead of as text, the regex doesn't defend.
+- **Suggested approach:** Either use `DOMParser` to parse and extract `textContent` (real strip), or document the contract as "returns text-only — render via React's text path, never `dangerouslySetInnerHTML`".
+
+- **Severity:** Low
+- **File:** src/utils/worldLoreVisibility.js
+- **Line:** 27–37
+- **Category:** Cosmetic quality issues
+- **Issue:** `VISIBILITY_OPTIONS` and `visibilityBadge` duplicate the label between the two; if a label is ever changed, both must be updated.
+- **Suggested approach:** Have `visibilityBadge` look up the label from `VISIBILITY_OPTIONS`.
+
+#### /src/utils/dnd5eSchema.js
+
+- **Severity:** Medium
+- **File:** src/utils/dnd5eSchema.js
+- **Line:** —
+- **Category:** Dead code (unreferenced functions, exports, files)
+- **Issue:** **File is empty (0 bytes).** Likely a stub left from a refactor. `dnd5e_schema.js` (snake_case duplicate) is also empty.
+- **Suggested approach:** Delete both files. If schema definitions are needed, place them in `data/dnd5eSchema.js` per existing data-vs-utils convention.
+
+#### /src/utils/dnd5e_schema.js
+
+- **Severity:** Medium
+- **File:** src/utils/dnd5e_schema.js
+- **Line:** —
+- **Category:** Dead code / Cosmetic naming
+- **Issue:** **File is empty (0 bytes)** AND its name (snake_case) duplicates `dnd5eSchema.js` (camelCase) — naming inconsistency on top of being dead.
+- **Suggested approach:** Delete. Pick one casing convention for the folder.
+
+
+##### Batch 2-iii Summary
+
+**Totals by severity:**
+- Critical: 17
+- High: 24
+- Medium: 22
+- Low: 14
+- Cosmetic: 8
+
+**Totals by category (top categories):**
+- Client-side authority / Missing actor pinning: ~14
+- File upload validation gaps (size/MIME/SVG): 4 (`uploadFile.js` × 4, all flowing through stub `uploadValidator`)
+- Storage path violations / hardcoded paths bypassing helper: 5
+- Path traversal / injection risks: 4 (`storagePaths.js`, `uploadFile.js`, `username.js`, `combatQueue` minor)
+- Multi-game abstraction concerns: 6 (`languageComprehension`, `languageFonts`, `monsterHelpers`, `cursedItemHelpers`, `combatQueue`, `worldLoreVisibility` overlaps)
+- BASE44 LEFTOVERS: 6 files (`achievementChecker`, `analytics`, `characterStats`, `combatLog`, `seedTestCampaign`)
+- Hardcoded values that should be constants: 6 (`languageFonts` SUPABASE_FALLBACK, `monsterHelpers` SUPABASE_MONSTER_PATH, `seedTestCampaign` URLs, `username` AETHERIAN_DOMAINS dup, `campaignLifecycle` archive limit, `contentConflicts` rating labels)
+- console.log / .error / .warn: ~12 sites
+- XSS / sanitization gaps: 3 (`safeRender`, `worldLoreVisibility.stripHtml`, `languageFonts` injection vector)
+- Race conditions in concurrent state mutations: 5 (`characterStats.incrementStat`, `uploadFile`, `username.isUsernameAvailable`, `campaignLifecycle.deleteCampaign`, `achievementChecker`)
+- Test/dev tooling reachable in production: 2 critical (`seedTestCampaign.js` + `uploadValidator.js` is a stub)
+- Missing P.I.E. event emission: 5 (`uploadFile`, `combatLog`, `campaignLifecycle`, `achievementChecker`, `analytics` design itself)
+- Achievement cheat-ability: 1 (`achievementChecker.js` entire pipeline)
+- Missing tier-aware enforcement: 2 (`uploadFile` quota, `campaignLifecycle` archive limits client-trust)
+- Math errors: 2 minor in `languageComprehension` (level clamp), formula correctness verified
+- Field whitelisting / Username sanitization: 4 (`username.js` × 3, `analytics.js` × 1)
+- Dead code: 2 empty schema files
+
+**Specific note on `uploadFile.js` status:**
+- Default bucket: ✅ `BUCKETS.USER` (`user-assets`) — fixes the Pass 2-i `base44Client.UploadFile` bucket bug.
+- Goes through `storagePaths.js`: ❌ NO. The `path` parameter is caller-supplied and concatenated directly into the upload key. Must be migrated to use `storagePaths.{userProfilePath, characterPortraitPath, …}` based on `uploadType`.
+- File size limit enforced: ❌ NO. `validateFile` is a stub that returns `true`.
+- MIME type validation (allowlist + content sniff): ❌ NO. Stub.
+- Filename sanitized: ⚠️ PARTIAL. The regex `[^a-zA-Z0-9._-]` strips most special chars but leaves `..`, leading `.`, and unbounded length unaddressed. The `Date.now()_` prefix accidentally defangs `..` traversal but only because of the prefix — fragile.
+- SVG content sanitization: ❌ NO. SVGs upload unchecked. Cross-references the Pass 1A "crest builder SVG XSS" finding.
+- Caller-supplied bucket / path / userId / tier: ❌ All four are caller-supplied.
+- Verdict: **major Critical regressions hidden behind reasonable-looking defaults**. The file looks safer than it is because (a) the default bucket is right, (b) the doc-comment claims validation runs — but the validator is a no-op stub.
+
+**Specific note on `storagePaths.js` correctness:**
+- Documents canonical bucket structure: ✅ YES, the docstring is correct (`users/{user_id}/...`, `guilds/{guild_id}/...`, UUID folders).
+- Uses `user-assets` (NOT `campaign-assets`): ✅ YES.
+- Validates UUIDs / strips traversal chars: ❌ NO. Helpers are pure string interpolation with zero validation. Single source of truth in name only — it does not actually enforce the rules it documents.
+- Used by every storage-touching helper: ❌ NO. `campaignLifecycle.js` (L122–138) constructs paths via raw template strings; `uploadFile.js` does the same with caller-supplied `path`; `seedTestCampaign.js` references `app-assets` URLs by hardcoded string.
+- Verdict: **the helper is correctly designed but not correctly enforced and not consistently used.** Adding UUID + traversal validation here, then routing every storage-touching helper through it, closes the loop.
+
+**Specific note on analytics PII risk:**
+- `trackEvent(userId, eventType, eventData)` accepts caller-supplied userId — no actor pinning.
+- `eventData` is spread verbatim into `analytics_events.event_data` JSONB — no schema, no PII strip, no key allowlist.
+- `event_type` is unvalidated — typos and fake events ship through.
+- `pathname` is captured from `window.location.pathname` — **excludes** query strings (mitigation), but SPA hash routes / paths containing UUIDs in them do leak identity.
+- No "do not track" toggle; no `navigator.doNotTrack` respect.
+- No batching / debouncing — every event hits the network individually.
+- Verdict: **Critical PII risk + Critical impersonation risk + missing privacy controls.** The simplest fix: replace with a single SECURITY DEFINER `pie_track_event(event_type, event_data)` RPC that pins user_id, validates event_type against an enum, and applies a per-event-type key allowlist.
+
+**Specific note on achievement cheat-ability:**
+- `checkAchievements` runs predicates client-side, then INSERTs into `Achievement` with caller-supplied user_id, character_id, achievement_key, title, description, rarity, icon, earned_at.
+- A user with devtools can call `base44.entities.Achievement.create({...})` directly and award themselves any achievement, including the rarity tier the UI displays.
+- No server-side re-evaluation. No idempotency unless the table has UNIQUE(user_id, achievement_key) — flag for verification.
+- Verdict: **Critical — every achievement is cheatable today.** Migrating to a SECURITY DEFINER RPC `award_achievements_for_character(character_id, campaign_id)` that re-evaluates predicates server-side and only writes (user_id, character_id, campaign_id, achievement_key, earned_at) — never the display fields — closes the cheat surface.
+
+**Specific note on `seedTestCampaign` reachability in production:**
+- The DEV-gate at L380–383 **only governs the `window.seedTestCampaign` exposure**. The module itself, the named export, and every helper inside are **bundled into the production app** unconditionally.
+- Hardcoded fake UUIDs, fake emails (`@guildstew.local`), fake character builds, hardcoded production storage URLs (`ktdxhsstrgwciqkvprph.supabase.co`) — all shipped to every visitor.
+- The `cleanup` function deletes campaigns by exact title match, with no admin gate — anyone can name their campaign "Seeded Combat Test Campaign" to bait deletion, or invoke cleanup themselves if they can re-import the module.
+- Verdict: **Critical.** Move out of `src/` (e.g., to `scripts/dev/seed-test-campaign.js`) so Vite never bundles it. Long-term: rewrite as a Node.js service-role script.
+
+**Specific note on Base44 leftover count:**
+- 5 files actively import `base44`:
+  - `achievementChecker.js` (static import)
+  - `analytics.js` (static import)
+  - `characterStats.js` (static import)
+  - `combatLog.js` (dynamic import × 2 — `await import("@/api/base44Client")`)
+  - `seedTestCampaign.js` (static import, mixed with raw supabase)
+- Notable: `campaignLifecycle.js`, `storagePaths.js`, `uploadFile.js`, `username.js` are **already migrated** to direct `supabase` client. Migration is partial; finish it.
+
+**Specific note on math correctness in `characterStats` / `languageComprehension` / `monsterHelpers`:**
+- `characterStats.js` is NOT 5e math — it's a counter increment helper. Audit-brief mismatch noted.
+- `languageComprehension.proficiencyBonus`: formula `Math.max(2, 2 + Math.floor((level - 1) / 4))` — **mathematically correct for levels 1–20**. Edge cases: negative levels, level 0 produce safe defaults but no validation. Confidence: **HIGH**.
+- `languageComprehension.getAbilityModifier`: `Math.floor((score - 10) / 2)` — **correct per 5e**. Confidence: **HIGH**.
+- `languageComprehension.getSkillModifier`: ability mod + (proficiency_bonus, doubled if expertise) — **correct per 5e**. Confidence: **HIGH**.
+- `monsterHelpers.getAbilityMod`: same `Math.floor((n - 10) / 2)` with sign formatting — **correct**. Confidence: **HIGH**.
+- No actual math errors found. The single math-adjacent flag is missing level-clamp on `proficiencyBonus`, which is robustness not correctness.
+
+##### Good Patterns Observed in Batch 2-iii
+
+1. **`displayName.js` — PII defense at the edge.** The doc-comment at the top of the file enumerates the rule ("never email, never legal name, even as fallback") and the helper enforces it (no `profile.email` reference, no `profile.full_name` reference). Falls back to a UUID slice — readable but not personally identifying. **This is the canonical good pattern for any user-facing display surface.** Worth replicating across forums, Tavern, support inbox, leaderboards, friend list.
+
+2. **`storagePaths.js` design (NOT enforcement) is correctly canonical.** Uses `user-assets` not `campaign-assets`. UUID-keyed folders. Documents the canonical path layout in the docstring. **Adding input validation (UUID regex + traversal strip) on top of this design produces the canonical correct upload-path helper.** Use as the template for what the helpers should look like.
+
+3. **`uploadFile.js` correctly defaults to `BUCKETS.USER`.** Even though every other aspect of the file is broken (caller-supplied bucket override, stub validator, caller-supplied path, caller-supplied userId), the *default* is correct — fixes the Pass 2-i `base44Client.UploadFile` bug where the default was `campaign-assets`. **Pattern to keep:** default to user-assets; only an explicit dev-time service-role pathway should write to `campaign-assets`.
+
+4. **`safeRender.safeText` defends against the React-child crash.** Recognizes the polymorphic shape of monster/spell/action data and collapses to text. **Note explicitly that this is a rendering-safety helper, not an XSS sanitizer** — pair it with a `safeHtml` helper for `dangerouslySetInnerHTML` payloads.
+
+5. **`campaignLifecycle.js` correctly maintains tier-aware archive counters and detaches characters on delete (preserves player-owned data).** The intent is right; the enforcement (caller-supplied IDs, no GM check, partial atomicity) is wrong. **Pattern worth keeping after RPC migration:** the lifecycle logic itself (archive counter bookkeeping, character detach, storage cleanup, audit-trail JSON export via `exportCampaignData`) is the right shape.
+
+6. **`worldLoreVisibility.js` documents intent clearly.** GM-sees-everything, public/gm_only/selected vocabulary, mole flag — the policy is unambiguous. **The bug is the policy lives in the client; lift it into RLS verbatim.**
+
+7. **`languageComprehension.js` math is correct per 5e SRD.** Despite the multi-game abstraction concern, the formulas (proficiency bonus, ability mod, skill mod with expertise) are right. Useful as a math-correctness reference.
+
+**End of Pass 2 Batch iii — `/src/utils/` is fully audited.**
+
