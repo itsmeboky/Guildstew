@@ -14041,3 +14041,184 @@ The lib layer is the *intermediate stratum* between UI components and Supabase. 
 **`/src/lib/` is structurally sound but security-incorrect.** The architecture (single owning module per concern, exported state-machines, documented contracts) is good; the *trust boundaries* are wrong everywhere. The fix is large but mechanical — the right shape exists; the enforcement layer is missing. Recommend the fix-project be sequenced with admin-detection first (Phase 1), then wallet (Phase 2), then run Phases 3 + 4 in parallel.
 
 **End of Pass 2 Batch ii — `/src/lib/` is fully audited.**
+
+### Batch 2-ii-e: lib formulaEvaluator (security boundary follow-up)
+
+This sub-batch reopens the lib audit specifically for `src/lib/formulaEvaluator.js`, the actual code-execution boundary for Brewery Layer 3 ("code mod") effects. Batch 2-ii-d hand-offed this file as the single most security-load-bearing module in the lib layer: if it executes user-supplied JavaScript, every install of a malicious mod is wormable RCE on a player's browser; if it evaluates a strict whitelisted DSL, the risk profile collapses to parser bugs and DoS.
+
+This audit answers that question first, then enumerates findings.
+
+#### /src/lib/formulaEvaluator.js
+
+**File summary (418 lines):** A custom whitelisted-token tokenizer feeds a recursive-descent parser that builds a small AST (`number`, `dice`, `path`, `unary`, `binary`, `call`). The AST is walked by `evalNode` against a context object and returns a number. Public API: `evaluateFormula(formula, context)`, `validateFormula(formula)`, and a `FORMULA_REFERENCE` documentation export. Identifiers are restricted to a whitelist (`ALLOWED_IDENT_ROOTS` × `ACTOR_TARGET_FIELDS`); functions are restricted to `min/max/floor/ceil/abs/if`. **No `eval`, no `new Function`, no `setTimeout(string)`, no `innerHTML`, no module access.**
+
+**Findings (chunk 1 of 4 — DoS / resource limits):**
+
+- **Severity:** Critical
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 257–272 (`rollDice`) + 44 (DICE token regex `^(\d*)d(\d+)…`)
+- **Category:** DoS / limits enforcement
+- **Issue:** Dice `count` and `faces` are read from `\d*` / `\d+` regex captures with **no upper bound**. `rollDice` then loops `count` times allocating a `rolls` array, and (when `khZ`/`klZ` is present) sorts that array. A formula like `99999999d6` will spin a ~100M-iteration tight loop and allocate a ~100M-element array, hanging the player's browser tab on every evaluation. Because formula evaluation runs on every event the mod hooks (e.g., `on_hit`, `on_damage`), one such mod published into a content pack DoS's every player who installs the pack — at every dice roll. Combined with the absence of an evaluation time budget (see next finding), this is a wormable-style availability attack against every viewer of the mod, gated only on content-pack distribution.
+- **Suggested approach:** Cap dice at parse time — reject `count > 100` and `faces > 1000` (or whatever the design tolerance is) inside the DICE branch of `parsePrimary`, with a clear validator error. Apply the same cap to `keepCount`. Treat the cap as policy in `src/config/formulaLimits.ts` so the creator form, the publish gate, and the runtime evaluator all read the same numbers.
+
+- **Severity:** Critical
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 344–351 (`evaluateFormula` — no time budget)
+- **Category:** DoS / limits enforcement
+- **Issue:** There is no wall-clock or step-count budget on evaluation. Combined with the dice DoS above and the lack of AST depth limits (next finding), an attacker can force unbounded CPU on the main thread. Even a non-malicious mod with a typo (`9999d9999`) will hang the tab — there is no graceful "formula exceeded budget" failure mode. Because `evalNode` is recursive and synchronous on the main thread, the user has no chance to navigate away.
+- **Suggested approach:** Either (a) wrap evaluation in a step-counter — pass a mutable `{ steps: 0, max: 10000 }` through `evalNode`, increment on every node visit, throw on overflow; or (b) move evaluation off the main thread into a Web Worker with a `setTimeout(terminate, 50ms)` watchdog. Option (a) is cheaper and sufficient for in-spec formulas. Option (b) is the right long-term answer once mods can chain formulas.
+
+- **Severity:** High
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 88–252 (recursive parser); 294–335 (recursive evaluator)
+- **Category:** DoS / limits enforcement
+- **Issue:** The parser (`parseExpression`/`parseAdditive`/…) and the evaluator (`evalNode`) are both fully recursive with **no depth limit**. A formula of `((((((…1…))))))` with several thousand parens will overflow the JS engine stack on parse; a deeply right-associative formula like `1+1+1+…+1` (constructed left-fold here, so OK) is safe, but `min(min(min(…1…)))` nested deeply is not. Stack overflow inside `evalNode` during play crashes the React tree above it (uncaught exception in a render-time call site) and may force a full reload depending on where `evaluateFormula` is invoked.
+- **Suggested approach:** Track depth in both `makeParser` (parameter to each `parseX`) and `evalNode` (extra arg). Cap at e.g. 32. Throw a typed `FormulaDepthError` at parse time — `validateFormula` then catches the typo before publish.
+
+- **Severity:** High
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 51–73 (`tokenize`); 344 (`evaluateFormula` entry)
+- **Category:** DoS / limits enforcement
+- **Issue:** No max formula length is enforced. The tokenizer `slice`s the source string on every match, which is **O(n²)** in the formula length (each slice copies). A 1MB formula (trivial to embed in a content-pack JSON) will spend tens of seconds parsing before any evaluation happens, and `validateFormula` is just as vulnerable as `evaluateFormula` — meaning the publish-time validation gate is itself a DoS surface for the creator UI.
+- **Suggested approach:** Enforce `formula.length <= 256` (or a similar policy number) at the very top of both `evaluateFormula` and `validateFormula`. Independently, swap the `slice`-based tokenizer for an index-advancing one (`re.lastIndex` with `/y` sticky regexes) so total tokenization is O(n).
+
+- **Severity:** High
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 158–161 (`NUMBER` literal — `Number(t.value)`)
+- **Category:** Number / type safety
+- **Issue:** Number literals are matched by `^\d+(?:\.\d+)?` with no length cap. A literal of 400 nines becomes `Infinity` after `Number(t.value)`. Infinity then propagates through arithmetic — `Infinity * 0 = NaN`, `Infinity / Infinity = NaN`, etc. — and lands in downstream consumers (damage, save DC) that almost certainly assume a finite integer. Whether this corrupts state, throws downstream, or just silently NaNs through to the UI depends on the consumer; none of them are validated here.
+- **Suggested approach:** At number-literal construction, reject `!Number.isFinite(parsed)` and reject literals longer than ~15 characters at the regex level. Independently, after final evaluation, clamp the result via `Number.isFinite(result) ? result : 0` (or throw) inside `evaluateFormula` so no caller ever sees Infinity/NaN.
+
+**Findings (chunk 2 of 4 — scope hygiene & path resolution):**
+
+- **Severity:** High
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 228–234 (`validatePath` — `config` branch)
+- **Category:** Sandbox/scope hygiene
+- **Issue:** `config.X` accepts **any** identifier `X` with no whitelist — only the segment count is enforced. This means `config.__proto__`, `config.constructor`, `config.toString`, `config.hasOwnProperty`, etc. all pass parse-time validation. At runtime `resolvePath` does `value[seg]`, so these expressions reach into the prototype chain of whatever object `modEngine.js` passes as `context.config`. The current evaluator coerces the result via `Number(...)` and falls back to `0` on non-finite, so the practical impact today is "returns 0 instead of erroring," **but** (a) the defense-in-depth is wrong — relying on `Number()` coercion to neutralize a prototype-chain reach is brittle, and (b) if any future refactor changes `resolvePath` to return objects (e.g., to support nested config), this becomes a real prototype-pollution / RCE-escape vector.
+- **Suggested approach:** Require the mod manifest to declare the set of `config.<key>` names it consumes (this is already implied by the creator UI rendering config-value inputs), and pass that whitelist into `validateFormula` / `evaluateFormula`. Reject any `config.X` whose `X` isn't in the manifest's declared config keys. Independently, in `resolvePath`, use `Object.hasOwn(value, seg)` rather than direct property access so the prototype chain is never traversed.
+
+- **Severity:** High
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 279–289 (`resolvePath`)
+- **Category:** Sandbox/scope hygiene
+- **Issue:** `resolvePath` does `value[seg]` without `Object.hasOwn` guarding. For `actor` and `target`, `validatePath` whitelists the second segment (so `actor.toString` is rejected at parse), which means today the prototype-chain reach is gated by the static whitelist — not by `resolvePath` itself. The defense is therefore single-layered: a typo in the whitelist (e.g., adding `"constructor"` as a future stat-block field) would immediately reopen prototype-chain reach. Defense in depth is missing.
+- **Suggested approach:** Same as above — convert `resolvePath` to `Object.hasOwn(value, seg) ? value[seg] : undefined`. It's a one-line change with no behavioral impact for legitimate inputs.
+
+- **Severity:** High
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 344 (`evaluateFormula` signature — `context = {}`)
+- **Category:** Integration with modEngine
+- **Issue:** `evaluateFormula` accepts `context` from any caller and trusts it implicitly — no schema validation, no type enforcement. Per Pass-1/2 hand-off context, `modEngine.js` passes caller-supplied `configValues` straight into the context unvalidated. If a future call site passes `context.config` as `null`, the `value == null` short-circuit in `resolvePath` saves us; if a future call site passes `context.config` as a function or as a Proxy with a getter, behavior is undefined. The evaluator should not trust `modEngine` to have validated the context.
+- **Suggested approach:** At the top of `evaluateFormula`, freeze a normalized context: `{ actor: pickWhitelist(context.actor, ACTOR_TARGET_FIELDS), target: pickWhitelist(context.target, ACTOR_TARGET_FIELDS), config: pickStringNumbers(context.config), … }` where `pickStringNumbers` keeps only string keys with finite numeric values. Reject Proxies via `util.types.isProxy`-equivalent checks (or just rely on `Object.hasOwn`). Document the contract: "whatever modEngine passes will be projected to a flat plain-object snapshot before evaluation."
+
+- **Severity:** Medium
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 279–289 (`resolvePath`)
+- **Category:** Error handling & user-facing messages
+- **Issue:** Missing context values silently coerce to `0` (per the in-file comment "saves one branch of defensive null-check at every call site"). This is a deliberate design choice for runtime evaluation, **but** it means a typo in `config.multiplyer` (when the manifest declares `multiplier`) silently evaluates to 0 and the mod produces wrong damage with no error surface — the creator never finds out, the player never notices, the bug is invisible. `validateFormula` has no chance to catch it because validation can't know the manifest's config keys.
+- **Suggested approach:** When `validateFormula` is called from the publish gate, accept an optional `declaredConfigKeys` argument and reject formulas referencing undeclared `config.<key>`. Keep `evaluateFormula`'s silent-zero behavior for runtime resilience, but emit a `console.warn` or telemetry event the first time a formula references a missing key per session — so creators can instrument their mods in QA.
+
+- **Severity:** Medium
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 318–331 (`call` evaluation)
+- **Category:** Number / type safety
+- **Issue:** No arity enforcement on `min`, `max`, `floor`, `ceil`, `abs`. `min()` with zero args returns `Math.min(...[]) = Infinity`; `max()` returns `-Infinity`; `floor()` evaluates `Math.floor(undefined || 0) = 0` (silently). `if(c, t)` (two args) returns `args[2] = undefined` for the truthy-`c` branch only by coincidence — actually it would return `undefined` as `t` is `args[1]`, but `args[2]` (the else) is `undefined` for the falsy branch. The arity check exists only for `if`. Inconsistent and surprising to creators.
+- **Suggested approach:** Add explicit arity checks at parse time (in `parseIdentOrCall`, after collecting args) — `min`/`max` require `>=2`, `floor`/`ceil`/`abs` require `===1`, `if` already checks `===3`. Failing at parse means `validateFormula` catches it; failing at eval means it surfaces only when the event fires.
+
+**Findings (chunk 3 of 4 — number safety, error handling, observability):**
+
+- **Severity:** Medium
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 300–316 (`binary` evaluation)
+- **Category:** Number / type safety
+- **Issue:** Division and modulo by zero return `0` silently. This protects against `Infinity`/`NaN` propagation, but it also masks formula bugs (e.g., `damage / config.divisor` with `divisor = 0` silently yields 0 damage, which a creator may not notice in playtest). The choice is reasonable for runtime, but it's undocumented at the API boundary and surprising to creators expecting "1/0 = error" or "1/0 = Infinity".
+- **Suggested approach:** Either keep silent-zero and document it in `FORMULA_REFERENCE.operators` (annotate `/` and `%` with "returns 0 on zero divisor"), or change behavior to throw a typed `FormulaDivisionByZeroError` that the caller can catch and report. Whichever you pick, make the choice explicit at the API boundary so creator UI tooling knows what to surface.
+
+- **Severity:** Medium
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 263 (`Math.random()` in `rollDice`)
+- **Category:** Number / type safety
+- **Issue:** Dice are rolled with `Math.random()`. Acceptable for entertainment-grade dice, but worth flagging for two reasons: (a) `Math.random()` is **not** cryptographically secure and is **not** suitable for any roll that affects spice/economy outcomes (e.g., loot table rolls, gacha-style outcomes); (b) all rolls are client-side and trivially manipulable by a determined player — this is fine for solo/private games but invalidates any "random integrity" assumption for competitive/economic modes. This file is the wrong place to fix it, but the audit log should note that the formula evaluator is **not** a fairness oracle.
+- **Suggested approach:** Document explicitly in the file header: "rolls are client-side and non-cryptographic; do not use formula output to drive spice or other economy-relevant outcomes." For economy-relevant rolls, expose a server-side RPC `roll_dice(formula, context)` that re-evaluates with a server-side RNG and returns the authoritative result. This is part of the kill-client-side-authority project, not a fix for this file alone.
+
+- **Severity:** Medium
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 69, 94–96, 183, 191, 219, 223, 226, 233, 238, 246 (error throws)
+- **Category:** Error handling & user-facing messages
+- **Issue:** Errors thrown from the parser / evaluator include byte-position offsets and raw token values. These are great for the creator form's on-blur validation (developer-facing), but the same errors will surface to **players** when an installed mod's formula fails at evaluation time (e.g., a config value typed as a string). There's no separation between "developer error" (publish-time, full diagnostics) and "runtime error" (player-time, sanitized "this mod is broken, please contact the creator"). Players will see internal token positions in their game UI.
+- **Suggested approach:** Wrap evaluator errors in two layers: a `FormulaParseError` with full diagnostics for `validateFormula`'s callers, and a generic `FormulaRuntimeError` with the formula name (not its body, not its position) for `evaluateFormula`'s callers. The component that surfaces formula failures to players should only see the runtime variant.
+
+- **Severity:** Medium
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** entire file
+- **Category:** Test coverage hints / Architecture
+- **Issue:** No co-located tests, no `if (debug)` paths, no obvious harness hooks — but also no exported `tokenize` / `makeParser` / `evalNode` for unit testing. Internal helpers are non-exported, which is the right encapsulation for a security boundary, **but** it means tests must either go through the public API (no direct lexer/parser unit tests) or this file must add a `__test__` export gated by `process.env.NODE_ENV === "test"`. Without that, parser regressions are detectable only end-to-end.
+- **Suggested approach:** Add a single `__internals` export object (gated to test env) exposing `{ tokenize, makeParser, evalNode, rollDice }`, or split the file into `formulaParser.js` (pure, all internals exported) + `formulaEvaluator.js` (thin wrapper, public API). The split also makes seeding `Math.random` for deterministic dice tests trivial — `rollDice` becomes a function that takes `rng` as a param.
+
+- **Severity:** Medium
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** entire file
+- **Category:** Observability / instrumentation
+- **Issue:** No telemetry. There is no signal when a formula throws at runtime, when evaluation exceeds an (unenforced) budget, when a `config.<key>` reference resolves to missing, or how often each function/operator is used. For a security boundary that runs on every player's browser, the absence of telemetry means we cannot detect mass DoS attempts, cannot detect a content-pack rollout that's silently zeroing every roll for a class of users, and cannot notify the creator that their mod is failing in production.
+- **Suggested approach:** Plumb a `telemetry` callback into the public API (`evaluateFormula(formula, context, { onError, onWarn, onSlow })`). The default implementation no-ops; the modEngine integration wires it to the existing logging surface. At minimum, log per-evaluation: `{ formulaHash, durationMs, errored, errorType, missingConfigKeys }`.
+
+**Findings (chunk 4 of 4 — typing, dead code, cosmetic):**
+
+- **Severity:** Medium
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 344 (`evaluateFormula` JSDoc) + 359 (`validateFormula` JSDoc)
+- **Category:** Missing types
+- **Issue:** Public API has minimal JSDoc — `context` is typed as `object` with no field shape, `evaluateFormula` is annotated to return `number` but in practice may return `Infinity`/`NaN` (see chunk 1, finding 5). No `.d.ts`, no TypeScript. Internal AST nodes (`{ type: "binary", op, left, right }` etc.) have no defined shape — a future refactor can introduce a typo'd node type and the `default` branches in `evalNode` will throw at runtime instead of being caught by tsc.
+- **Suggested approach:** Convert the file to TypeScript (or add a co-located `formulaEvaluator.d.ts`). Define a discriminated union `type AstNode = NumberNode | DiceNode | PathNode | UnaryNode | BinaryNode | CallNode` and a `FormulaContext` shape that mirrors `ALLOWED_IDENT_ROOTS` × `ACTOR_TARGET_FIELDS`. The compiler will catch ~half of the bugs flagged in this audit at edit time.
+
+- **Severity:** Low
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 171 (`raw: t.value` on dice node)
+- **Category:** Dead code / unused
+- **Issue:** The `raw` field on the dice AST node is set but never read. Either it was intended for diagnostics and the wiring was dropped, or it's a leftover from an earlier debugging pass. Costs nothing to leave but signals an unfinished plan.
+- **Suggested approach:** Either delete the field or wire it into the runtime error surface (e.g., "dice roll failed in `2d20kh1`") so an evaluation error mentions the dice notation that caused it.
+
+- **Severity:** Low
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 265–270 (`rollDice` keep-mode)
+- **Category:** Documented behavior / surprise
+- **Issue:** `keepCount > count` is silently clamped to `count` via `Math.min(rolls.length, ...)`. Reasonable, but undocumented — a creator writing `2d20kh3` expecting an error or warning won't get one. It just rolls 2d20 and keeps both. Same applies to `keepCount = 0` (returns 0, which may be intentional but is unexpected).
+- **Suggested approach:** Reject `keepCount > count` and `keepCount <= 0` at parse time inside `parsePrimary`'s DICE branch. `validateFormula` then catches it before publish.
+
+- **Severity:** Low
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 313–314 (`==` and `!=` use `===` / `!==`)
+- **Category:** Documented behavior / surprise
+- **Issue:** `==` and `!=` in formulas use JS strict equality (`===`/`!==`). Since both operands are coerced through arithmetic before reaching the comparison, this is fine in practice — but it's worth documenting that `==` is strict in formulas, because someone porting from a JS-mental-model will expect loose equality. (More importantly: `==` between `NaN` and `NaN` is always `false`, which combined with the silent NaN coercion in `resolvePath` means `config.broken_key == config.broken_key` evaluates to `false`. Surprising.)
+- **Suggested approach:** Document `==` semantics in `FORMULA_REFERENCE.operators`. If the silent-zero policy in `resolvePath` is kept, this becomes a non-issue (zeros do compare equal). If the policy changes to NaN-on-missing, this finding upgrades to Medium.
+
+- **Severity:** Cosmetic
+- **File:** src/lib/formulaEvaluator.js
+- **Line:** 25–40 (whitelists declared as `Set` constants)
+- **Category:** Inconsistent naming
+- **Issue:** `ALLOWED_IDENT_ROOTS` and `ACTOR_TARGET_FIELDS` are `SCREAMING_SNAKE_CASE`; `FUNCTIONS` is also screaming. Acceptable for module-level constants. Minor: `FORMULA_REFERENCE.actor_fields` uses `snake_case` keys for the documentation export, which is inconsistent with the rest of the codebase's tendency toward `camelCase` for object keys. Probably aligned with the formula syntax (which is itself snake_case), in which case it's fine — flag for review only.
+- **Suggested approach:** No action unless a wider naming-convention pass is undertaken.
+
+##### Architecture Verdict
+
+**Architecture:** **A — Parser + Interpreter (safest of the three).** The file implements a custom whitelisted-token tokenizer, a recursive-descent parser, a small typed AST (six node kinds), and a tree-walking evaluator. There is **no** `eval`, **no** `new Function`, **no** Function-constructor invocation, **no** `setTimeout(string)`, **no** `innerHTML`, **no** `document.write`, and **no** path by which an attacker-controlled string becomes executable JavaScript. The whitelist on identifier roots (`actor`/`target`/`config` + 5 direct scalars), on actor/target sub-fields (22 named stat-block fields), and on functions (6 named) is enforced at parse time, so `validateFormula` rejects unknown identifiers without ever entering the evaluator. The only path where an attacker can reach `value[seg]` on a non-whitelisted name is `config.<X>`, where `X` is unrestricted — and the `Number(...) → 0` coercion in `resolvePath` blocks the prototype-chain reach today, but only as a single layer of defense.
+
+**Safe to ship as-is:** **No — yes-with-caveats** if the four caveats below are addressed.
+
+The file is **not** an RCE risk. It **is** a denial-of-service risk, and DoS via a content-pack distribution multiplier is a launch-blocker — one malicious mod author can hang every player who installs the pack on every dice roll until the pack is uninstalled. The fix is small (cap dice counts, cap formula length, cap recursion depth, add an evaluation budget) but it is not optional.
+
+**Top 3 risks:**
+
+1. **Unbounded dice counts → tab-hang DoS** (Critical). `99999999d6` parses, evaluates by allocating ~100M elements, hangs the browser. Mitigation: cap `count`/`faces`/`keepCount` at parse time. ~10 lines of code.
+2. **No evaluation time/step budget** (Critical). Combined with deep AST recursion, no formula-length limit, and no max literal length, a creator (malicious or careless) can wedge any tab that loads their mod. Mitigation: thread a step counter through `evalNode` and throw at e.g. 10K steps; long-term, move evaluation into a Web Worker with a watchdog.
+3. **`config.<X>` accepts any sub-field** (High). Currently neutralized by `Number()` coercion, but the defense is single-layer and a future refactor that supports nested config will reopen prototype-chain reach. Mitigation: require the manifest to declare `config` keys, validate against that whitelist at parse, and use `Object.hasOwn` in `resolvePath`.
+
+**Plain-English summary (for the user's triage doc):**
+
+`formulaEvaluator.js` is the file that runs the math expressions inside player-installed code mods — things like "deal `2d6 + STR_mod` damage" or "add `floor(level / 4)` to your save DC." The good news, and it's important news: **this file does not run user JavaScript.** It does not call `eval`, it does not call `new Function`, and there is no path where a string in a content pack ends up being executed as JavaScript on a player's browser. A custom mini-language parser walks the formula, builds a small tree of allowed operations (numbers, dice, named functions, whitelisted variables), and a separate evaluator walks that tree to produce a number. This is the right architecture and it eliminates the worst-case scenario — "remote code execution via malicious content pack" — from the threat model. The bad news is that the file has **no resource limits**: dice counts are unbounded, formula length is unbounded, recursion depth is unbounded, and there is no time budget on evaluation. A single mod with `99999999d6` in any formula will hang every player's browser tab the moment it evaluates — and because mods evaluate formulas on every relevant in-game event, this is effectively a kill-switch for any browser that installs the pack. **A fix-project here is small and well-defined**: add four numeric caps (max dice count, max formula length, max recursion depth, max evaluation steps) and a manifest-driven `config.<key>` whitelist. It should be roughly a two-day implementation plus tests, and it should be a hard prerequisite before code-mod publishing is enabled at launch. The follow-on fairness/integrity work — moving economy-relevant rolls server-side — is a separate and larger project that belongs in the kill-client-side-authority track, not in this file.
+
+##### Updated lib Layer Verdict
+
+With formulaEvaluator audited (15 of 15 lib files now reviewed), the lib-layer assessment from 2-ii-d's combined summary **does not change in shape but does change in phasing**. The earlier summary's Phases 1–5 stand: admin-detection → wallet → tier-gated paths → caller-supplied-identity reads → manifest+sanitize+P.I.E.+audit. What changes is that **a new Phase 0 is required before Phase 1**: harden `formulaEvaluator.js` by capping dice counts, formula length, AST/eval depth, and evaluation steps, and by making `config.<key>` references manifest-validated. Without Phase 0, code-mod publishing at launch is a tab-hang DoS that any single creator can trigger across all installers. The good news is Phase 0 is **bounded and small** — ~50–100 lines of changes plus tests, all internal to a single file with a clean public API. It is **not** entangled with the kill-client-side-authority project (no Supabase, no RPCs, no auth) and can ship in parallel with Phase 1's admin-detection work. **Net:** code-mod publishing should be gated behind Phase 0 completion; nothing else in the lib-layer plan needs reordering.
+
