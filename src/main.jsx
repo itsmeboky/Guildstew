@@ -1,13 +1,16 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'
+import ErrorBoundary from '@/components/shared/ErrorBoundary'
 import '@/index.css'
 // Dev-only: exposes window.seedTestCampaign() for quick combat-test seeding
 import '@/utils/seedTestCampaign'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   // <React.StrictMode>
-  <App />
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
   // </React.StrictMode>,
 )
 
