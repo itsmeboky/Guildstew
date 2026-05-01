@@ -12174,3 +12174,636 @@ All eight surfaces collapse to a single fix-project: every write at this layer s
 - **Cache coupling:** Manual `queryClient.setQueryData(['currentUser'], mergedUser)` thrashes on every render (unstable identity); never cleared on server-driven sign-out (only on `logout()` callsite). Either memoize the source (so the effect fires only on real changes) or migrate the whole `currentUser` lifecycle to a proper `useQuery({ queryKey: ['currentUser'], queryFn: fetchProfile })`.
 - **Net assessment:** The file is functionally working (it does sign-in, profile load, sign-out) but has structural issues that make it both a perf hotspot AND the upstream cause of the systemic "client-supplied user_id" anti-pattern across the app. The single highest-value fix is to memoize the context value and `mergedUser`; the highest-leverage architectural fix is to remove `id` from `mergedUser` so downstream callers physically cannot pass it through into a write.
 
+
+
+### Batch 2-ii-b: lib tavern/cosmetics
+
+Pre-flight: working directory `/home/user/Guildstew`; branch `claude/audit-codebase-TAAN5` (system-assigned — note: task description requested `supabase-migration`; deferred to system instruction). All seven scoped files present in `src/lib/`. One adjacent out-of-scope file flagged for awareness: `src/lib/applyDiceSkin.js` (not audited in this batch).
+
+Pass-1A framing: this layer was praised as the cleanest (uses `spiceConfig`, `tavernPalette`, atomic-style purchase helpers). This batch validates that praise where it holds and flags the gaps that remain. A "Good Patterns Observed" subsection at the end captures the canonical patterns this layer demonstrates so future fix-projects can replicate them.
+
+#### /src/lib/tavernClient.js
+
+- **Severity:** Critical
+- **File:** src/lib/tavernClient.js
+- **Line:** 92–146
+- **Category:** Non-atomic purchase flow + Race conditions + Client-supplied authority
+- **Issue:** `purchaseItem({ item, buyerUserId, buyerTier, guildId })` is the central purchase path and is composed of four sequential network round-trips: (1) `spendSpice`/`spendGuildSpice`, (2) `addSpice` to creator, (3) `tavern_purchases` insert, (4) `tavern_items.purchase_count` read-modify-write. Steps 1 and 2 succeed independently; if step 3 returns a non-duplicate error the buyer has been debited and the creator credited but no ownership row exists. Step 4 is a classic read-modify-write race (reads `item.purchase_count` from the caller's stale snapshot, writes `value + 1`) — two concurrent purchases will lose increments. Pass-1A described this as "atomic purchase RPCs"; the current implementation is a client-orchestrated sequence with compensating-action semantics, not a server transaction.
+- **Suggested approach:** Replace the entire body with a single `rpc_purchase_tavern_item(p_item_id uuid, p_guild_id uuid default null)` server-side function that derives buyer from `auth.uid()`, re-reads the item row inside the transaction (price, creator_id, creator_tier, is_official, status='active'), applies tier discount via a server-side helper that reads the buyer's tier from `user_profiles`, debits/credits both wallets via `wallet_ledger` insert, inserts `tavern_purchases`, and increments `purchase_count` with `purchase_count = purchase_count + 1`. Single transaction; UNIQUE constraint on `(user_id, item_id)` already in place serves as the idempotency key.
+
+- **Severity:** Critical
+- **File:** src/lib/tavernClient.js
+- **Line:** 92–95, 109
+- **Category:** Client-side authority (price, tier, creator split)
+- **Issue:** `purchaseItem` takes the entire `item` object from the caller and passes `item.price` into `applyDiscount` and `item.creator_tier` into `calculateCreatorEarning`. The buyer's client can construct a stale or tampered item object with `price: 0` or `creator_tier: 'free'` (50/50 split) to alter what gets debited and what fraction routes to the creator vs. platform. Even without malice, a stale cached item object will carry an outdated price after a creator edit. Same vector applies to `is_official`, `creator_id`, and `purchase_count` all read from the caller's snapshot.
+- **Suggested approach:** RPC must re-read every authoritative field (price, creator_id, creator_tier, is_official, status) from `tavern_items` inside the transaction. The client-supplied parameter must be `p_item_id` only; the item object is for UI display, never authority.
+
+- **Severity:** Critical
+- **File:** src/lib/tavernClient.js
+- **Line:** 148–214
+- **Category:** Client-side authority (creatorId + creatorTier on upload)
+- **Issue:** `uploadItem({ creatorId, creatorTier, form })` accepts both `creatorId` and `creatorTier` from the caller. Two distinct attacks: (1) listing-as-someone-else by passing another user's UUID as `creatorId`; (2) tier-spoof by passing `creatorTier: 'veteran'` to bypass the upload fee while actually being on Free. The fee schedule pulled from `UPLOAD_FEES[creatorTier]` is therefore advisory only — server has no way to validate the claimed tier corresponds to the actual subscription state. Also affects creator-split locking at sale time (line 167 writes the claimed tier into the row, which `calculateCreatorEarning` later trusts).
+- **Suggested approach:** `rpc_create_tavern_listing(p_form jsonb)` derives `creator_id := auth.uid()` and reads `creator_tier` from a server-side tier resolver (e.g., `get_user_tier(auth.uid())` which inspects `subscriptions` or `user_profiles.tier`). Only the form fields (name, description, category, tags, price, preview_*, file_*) come from the client and are field-whitelisted server-side. Min-price (625 Spice), category enum, and storage-path validation all enforced inside the function.
+- **Suggested approach (Free-tier fairness):** On Free tier, also enforce 4-character listing-title minimum and 1250 Spice fee inside the RPC.
+
+- **Severity:** Critical
+- **File:** src/lib/tavernClient.js
+- **Line:** 148–161, 172
+- **Category:** Hardcoded values that should be constants — Spice min-price gate
+- **Issue:** No server-side or client-side enforcement that `form.price >= 625` (the canonical creator minimum). The caller can list an item for 1 Spice or 0 Spice. Also no enforcement of the `$1 = 250 Spice` conversion ratio on display values.
+- **Suggested approach:** RPC enforces `IF p_form->>'price' < 625 THEN RAISE`. Client also UI-validates against a `spiceConfig.MIN_LISTING_PRICE` constant for early feedback.
+
+- **Severity:** High
+- **File:** src/lib/tavernClient.js
+- **Line:** 21–43, 240–248
+- **Category:** Fetch-all anti-pattern + Missing pagination
+- **Issue:** `listTavernItems` does `select("*")` and returns every matching row with no `range()` or `limit()`. As the marketplace scales this becomes both a payload-size problem and a PII surface (the row may contain `file_url`, `file_data`, internal moderation flags). Same `select("*")` pattern in `getItem` (line 49), `getItemRatings` (line 244). `getItemRatings` additionally exposes `user_id` of every rater alongside the review text — PII broadcast.
+- **Suggested approach:** Define a public-safe column list constant (`TAVERN_ITEM_PUBLIC_COLUMNS`) — id, creator_id, name, description, category, tags, price, preview_image_url, preview_images, rating_sum, rating_count, purchase_count, created_at, status. Exclude `file_url`/`file_data` from listing fetches; gate them through a `rpc_get_tavern_item_assets(p_item_id)` that verifies the caller owns the item via `tavern_purchases`. Add cursor pagination to `listTavernItems` (`{ limit = 24, cursor = null }`). Replace `getItemRatings`'s `select("*")` with explicit columns and join the rater's display name via a view that does not leak email or auth UUID outside what's needed for display.
+
+- **Severity:** High
+- **File:** src/lib/tavernClient.js
+- **Line:** 41, 47, 57, 73, 83, 226, 242
+- **Category:** Missing error handling on Supabase responses
+- **Issue:** Every Supabase call in this file destructures only `data` (or only `error` for writes) and silently swallows the other half. `listTavernItems` line 41 `const { data } = await query` — if RLS denies, the client sees `data: null` and the function returns `[]` indistinguishable from "no items match." Same pattern at lines 47, 57, 73, 83, 226, 242. The user sees an empty page rather than an error.
+- **Suggested approach:** Destructure both `{ data, error }` and surface errors through a return-shape `{ ok: boolean, data, error }` or throw — let the caller decide between empty-state and error-state UI.
+
+- **Severity:** High
+- **File:** src/lib/tavernClient.js
+- **Line:** 30
+- **Category:** XSS / SQL-meta surface on listing search
+- **Issue:** `query.ilike("name", \`%${q.trim()}%\`)` interpolates user-supplied search input into a Postgres LIKE pattern without escaping the `%` and `_` wildcards. A user typing `%` searches for everything; `_` matches any single character. Not a SQL injection (PostgREST parameterizes the comparand), but does mean that result-set size is user-controllable independent of the actual search term, amplifying any unbounded-fetch concern from the previous finding. Also: title/description rendered later — XSS hardening is downstream's problem but flag it.
+- **Suggested approach:** Escape `%` and `_` before interpolation: `q.trim().replace(/[%_]/g, '\\$&')`. Add a server-side full-text index on `tsvector(name || ' ' || description)` and switch the query to `.textSearch('search_vector', q, { config: 'english' })` for proper search semantics.
+
+- **Severity:** High
+- **File:** src/lib/tavernClient.js
+- **Line:** 55–62, 70–90, 216
+- **Category:** Client-supplied user_id on read + write
+- **Issue:** `getUserPurchases(userId)`, `userOwnsItem(userId, …)`, and `rateItem({ userId, … })` all accept `userId` from the caller. `rateItem` further uses it as the row identity in the upsert. Even if RLS limits selects to `auth.uid()`, the function shape encourages the leaky upstream pattern where the component reads `currentUser.id` from AuthContext and forwards it. `rateItem` allows a client to insert ratings on behalf of any user_id (RLS dependent — verify in migrations batch).
+- **Suggested approach:** Drop the `userId` parameter from every read; the underlying queries should rely on RLS predicates `user_id = auth.uid()`. For `userOwnsItem`, derive both user and guild from server-side context via `rpc_user_owns_item(p_item_id)`. For `rateItem`, replace with `rpc_rate_tavern_item(p_item_id, p_rating, p_review)` that pins `user_id := auth.uid()` and additionally verifies the caller actually owns the item before accepting the review.
+
+- **Severity:** High
+- **File:** src/lib/tavernClient.js
+- **Line:** 138–143
+- **Category:** Race condition (read-modify-write counter)
+- **Issue:** `purchase_count` increment reads from `item.purchase_count` (caller-supplied stale value) and writes `value + 1`. Two concurrent purchases from different buyers will each read the same N and both write N+1, losing one increment. Same pattern in `rateItem` lines 226–235 (read all ratings, recompute sum/count, write back) — concurrent rate ops will overwrite each other.
+- **Suggested approach:** Move both increments into the purchase RPC as `update tavern_items set purchase_count = purchase_count + 1`. For ratings, either (a) keep the recompute but do it inside `rpc_rate_tavern_item` after the upsert in a single transaction, or (b) use an aggregating trigger on `tavern_ratings` that maintains `tavern_items.rating_sum` and `rating_count` automatically.
+
+- **Severity:** High
+- **File:** src/lib/tavernClient.js
+- **Line:** 220–223
+- **Category:** Missing ownership verification on rating
+- **Issue:** `rateItem` upserts a rating without verifying the user has actually purchased the item via `tavern_purchases`. A non-buyer can rate any listing — review-bombing or fake-positive surface.
+- **Suggested approach:** RPC checks `EXISTS (SELECT 1 FROM tavern_purchases WHERE user_id = auth.uid() AND item_id = p_item_id)`, raising on miss.
+
+- **Severity:** High
+- **File:** src/lib/tavernClient.js
+- **Line:** 173–176
+- **Category:** Storage path violation (no enforcement)
+- **Issue:** `preview_image_url`, `preview_images[]`, `file_url`, and `file_data` are all written verbatim from the caller. A creator could pass an arbitrary URL (third-party CDN, IP-grabber, malicious download), or a path under `campaign-assets/` (wrong bucket per spec), or include another user's id in the path. No validation that paths begin with `user-assets/users/{auth.uid()}/`.
+- **Suggested approach:** RPC validates each path matches the regex `^user-assets/users/{auth.uid()}/[a-zA-Z0-9_\-./]+$`. Reject `file_url` not under signed-URL or storage scheme. Strip query strings on write to prevent presigned-URL token capture in the listing.
+
+- **Severity:** High
+- **File:** src/lib/tavernClient.js
+- **Line:** 117, 134, 143, 185, 202–205
+- **Category:** Compensating-action error handling (non-atomic refunds) + console.error
+- **Issue:** Multiple `.catch(() => {})` swallows on best-effort refund/credit/insert paths (lines 117, 143, 185, 207-fallthrough). Critical money-movement steps (`addSpice` at 111, refund at 185, creator self-grant insert at 197) are described in comments as "non-fatal" — but a non-fatal failure on `addSpice` means the creator silently does not get paid for a real sale. Refund at 185 swallows its own catch silently. The single `console.error` at 204 is the only emitted signal across the entire file's compensating actions; everything else fails into the void. No `wallet_ledger` reconciliation hook, no admin alert.
+- **Suggested approach:** Move the entire transaction into the RPC (eliminates the need for compensating actions). For any remaining best-effort step that must stay client-side, write a `wallet_ledger` row with `pending_reconciliation: true` so the next idempotent retry job can finish it. Replace the lone `console.error` with the project's structured logger and add a server-side P.I.E. event for `tavern.purchase.creator_credit_failed` so admins are paged.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernClient.js
+- **Line:** 196–211
+- **Category:** Race condition + non-atomic creator self-grant
+- **Issue:** After the listing insert returns, the code separately inserts a `tavern_purchases` row with `price_paid: 0` to give the creator ownership of their own listing. Two failure modes: (1) the listing insert succeeds but the self-grant fails (network drop) — the creator now cannot use their own item until they "buy" it; the code comments mention an entitlements backstop (verify in tavernEntitlements review), but the design relies on a fallback rather than transactional consistency; (2) `grantPioneerIfEligible` runs after; if the eligibility check is also client-side it is racey across simultaneous first listings.
+- **Suggested approach:** Both side-effects (self-grant + pioneer flag) live inside `rpc_create_tavern_listing` so the listing only commits if all three writes succeed. Pioneer eligibility uses `SELECT count(distinct creator_id) FROM tavern_items FOR UPDATE` inside the transaction so two concurrent first-time creators cannot both claim the 100th slot.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernClient.js
+- **Line:** 5
+- **Category:** Hardcoded values that should be constants — split percentages
+- **Issue:** Imports `applyDiscount, calculateCreatorEarning, UPLOAD_FEES` from `@/config/spiceConfig`. Good — splits and fees are centralized. However, the value 0 from `UPLOAD_FEES[creatorTier] ?? UPLOAD_FEES.free` (line 151) silently falls back to Free's 1250 when the caller passes an unknown tier string. This is the wrong default: an unknown tier should fail closed, not charge the highest fee. Also the fallback should be looked up via a tier-resolver that errors on unknown values.
+- **Suggested approach:** `UPLOAD_FEES[tier]` should `throw` (or the caller should validate) on unknown tiers rather than falling back. After moving to RPC the issue dissolves because the server reads tier from `auth.uid()` and cannot receive a "wrong" tier string.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernClient.js
+- **Line:** 187, 204
+- **Category:** console.* statements
+- **Issue:** `toast.error("Failed to list item.")` (line 187) is appropriate but generic — eats the actual `error.message`. `console.error("Creator self-grant", purchaseErr)` at line 204 is a raw `console.error` — should route through structured logging.
+- **Suggested approach:** Adopt project logger; surface a per-error toast that includes a tracking id but not the raw error.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernClient.js
+- **Line:** N/A (entire file)
+- **Category:** Missing P.I.E. event emission
+- **Issue:** No P.I.E. (or equivalent analytics/event-bus) emission on listing-created, item-purchased, item-rated, refund-issued. Pass-1A noted these as required for the Tavern flywheel. Currently the only signals emitted are `recordCreatorSale` and `grantPioneerIfEligible` — both internal-only.
+- **Suggested approach:** Inside the relevant RPC, after the transaction commits, insert a row into `pie_events` (or pg_notify) with `{ kind: 'tavern.purchase' | 'tavern.listing_created' | 'tavern.rating_added', actor_id, target_item_id, payload }`. Subscribers stream from there.
+
+- **Severity:** Low
+- **File:** src/lib/tavernClient.js
+- **Line:** 70–90
+- **Category:** Multi-game abstraction concern
+- **Issue:** `userOwnsItem` keys ownership solely on `(user_id, item_id)` or `(guild_id, item_id)` — fine for cosmetics, but if a future game pack requires per-game license gating ("D&D edition cosmetic only applies in D&D campaigns"), this helper has no game/system parameter. Currently all cosmetics are D&D-flavored; PF2e launch will need either a per-game ownership view or a system tag on items.
+- **Suggested approach:** Add `system tagged { 'agnostic' | 'dnd5e' | 'pf2e' | … }` column on `tavern_items` and an optional `{ system }` filter on `userOwnsItem` so callers in a PF2e campaign view do not see D&D-only purchases as "owned but inactive."
+
+- **Severity:** Low
+- **File:** src/lib/tavernClient.js
+- **Line:** 1
+- **Category:** Base44 leftover audit
+- **Issue:** `import { supabase } from "@/api/supabaseClient"` — clean import, no Base44 leftover. Confirmed zero Base44 references in this file.
+- **Suggested approach:** None (informational — this is the canonical pattern other files should match).
+
+#### /src/lib/tavernCreator.js
+
+- **Severity:** Critical
+- **File:** src/lib/tavernCreator.js
+- **Line:** 149–158, 165–174
+- **Category:** Missing admin gating + Client-supplied authority on refund
+- **Issue:** `markCashoutStatus(requestId, nextStatus, { notes })` and `rejectCashout(request, { notes })` are exposed without any server-side admin verification. Any authenticated user calling `markCashoutStatus(someId, 'paid')` will succeed unless `cashout_requests` RLS is correctly admin-gated (verify in migrations batch). `rejectCashout` is worse: it takes a fully caller-supplied `request` object and refunds `request.spice_amount` to `request.user_id` — a malicious admin (or any caller able to bypass RLS) can refund 1,000,000 Spice to their own account by passing `{ id: <real_pending_request_id>, user_id: <self>, spice_amount: 1000000 }`. The function never re-reads the row to verify `spice_amount` matches the actual debit or that the request hasn't already been rejected/paid.
+- **Suggested approach:** `rpc_admin_mark_cashout(p_request_id, p_status, p_notes)` runs `SECURITY DEFINER` and checks `EXISTS (SELECT 1 FROM admin_users WHERE user_id = auth.uid())` before any write; re-reads the row inside the transaction to source `user_id` and `spice_amount` for the refund; enforces a state machine (pending → processing → paid|rejected, no other transitions). `rejectCashout` becomes a thin wrapper over the RPC with status='rejected'.
+
+- **Severity:** Critical
+- **File:** src/lib/tavernCreator.js
+- **Line:** 90–126
+- **Category:** Non-atomic cashout flow + Client-supplied user_id + Client-computed payout amount
+- **Issue:** `requestCashout(creatorId, spiceAmount)` (1) takes `creatorId` from the caller; (2) computes `usd_amount` client-side via `estimateCashout` and writes it directly into `cashout_requests` — admins later approve based on this client-supplied dollar figure; (3) is a two-phase compensating-action flow (debit, then insert; refund on insert failure). A buyer could pass any `creatorId` (RLS-dependent) or, more dangerously, pass their own creatorId with a tampered `spiceAmount`/`usd_amount` to inflate the payout. Even ignoring tamper, the `usd_amount` is not re-derived server-side from the (canonical) Spice→USD ratio.
+- **Suggested approach:** `rpc_request_cashout(p_spice_amount integer)` derives `user_id := auth.uid()`, recomputes `usd_amount` server-side via `p_spice_amount / SPICE_USD_RATE`, validates `>= MIN_CASHOUT`, debits the wallet and inserts the request in one transaction. Caller never supplies dollar figures.
+
+- **Severity:** Critical
+- **File:** src/lib/tavernCreator.js
+- **Line:** 22–35
+- **Category:** Hardcoded values that should be constants — payout fee + Spice→USD ratio
+- **Issue:** `STRIPE_PCT = 0.029` and `STRIPE_FIXED = 0.30` are hardcoded at the top of the file (lines 22–23). The Spice→USD conversion `spiceAmount / 250` (line 26) hardcodes the canonical `$1 = 250 Spice` ratio inline rather than importing it from `spiceConfig`. Any change to either value (Stripe fee revision, promotional ratio change, regional pricing) requires editing this file rather than the config; the same magic numbers will inevitably drift in other surfaces (Spice purchase pricing, in-game shop, etc.).
+- **Suggested approach:** Move `STRIPE_PCT`, `STRIPE_FIXED`, and `SPICE_USD_RATE = 250` into `@/config/spiceConfig`. Export `usdFromSpice(spice)`, `spiceFromUsd(usd)`, `estimatePayoutFee(usdGross)` helpers; have `estimateCashout` call them. After the cashout RPC migration, this whole module's purpose is display-only.
+
+- **Severity:** High
+- **File:** src/lib/tavernCreator.js
+- **Line:** 37, 47, 59, 79
+- **Category:** Client-supplied user_id on read
+- **Issue:** Every read helper takes `creatorId` as the first parameter — `getMyListings`, `getMySalesLedger`, `calcEarnings`, `getMyCashoutRequests`. Each is a "my" function (the names imply self-only access) but the identity is supplied by the caller and therefore depends entirely on `tavern_items` and `spice_transactions` RLS to enforce `user_id = auth.uid()`. Same systemic anti-pattern flagged in earlier batches; collapses into the AuthContext leaky-id fix.
+- **Suggested approach:** Drop the `creatorId` parameter entirely. Each query relies on RLS to return only the calling user's rows. After the AuthContext refactor, components have no `id` to pass anyway.
+
+- **Severity:** High
+- **File:** src/lib/tavernCreator.js
+- **Line:** 39–45, 49–57, 81–88, 132–138, 141–147
+- **Category:** Fetch-all anti-pattern
+- **Issue:** Five `select("*")` queries: `getMyListings`, `getMySalesLedger`, `getMyCashoutRequests`, `listPendingCashouts`, `listAllCashouts`. Cashout rows likely contain admin-only columns (admin_notes, processor_response, payout_method_id) that are now flowing to the creator's own dashboard. `tavern_items` rows contain `file_data`/`file_url` flowing into the listings dashboard (less leaky here since the creator owns them, but still excess).
+- **Suggested approach:** Define a creator-safe column list and an admin-safe column list; pick the right list per call site.
+
+- **Severity:** High
+- **File:** src/lib/tavernCreator.js
+- **Line:** 131–147
+- **Category:** Missing admin gating on listings
+- **Issue:** `listPendingCashouts()` and `listAllCashouts()` have no admin check. Whether they actually expose data to non-admins depends on RLS; the function shape implies they may be wired into a generic admin view that does not pre-check `isAdmin`. Even if RLS blocks the rows, the function name promises broad access — a non-admin caller will see an empty list rather than a 403, masking permission bugs.
+- **Suggested approach:** Move both behind `rpc_admin_list_cashouts({status_filter, limit, cursor})` running `SECURITY DEFINER` with explicit admin check. Client-side, gate the UI off `isAdmin` from auth context.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernCreator.js
+- **Line:** 154
+- **Category:** Client-clock timestamp on write
+- **Issue:** `processed_at: new Date().toISOString()` — this is the canonical "audit timestamp set by client" anti-pattern. An admin's clock skew rewrites history; even worse, in a malicious-admin scenario the admin can backdate the cashout to obscure timing. Same problem flagged for `last_seen_at` in PresenceContext (Pass 2-ii-a).
+- **Suggested approach:** Inside the RPC, set `processed_at := now()`. Drop the field from the client-supplied update.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernCreator.js
+- **Line:** 39, 49, 65, 81, 109, 132, 141, 150
+- **Category:** Missing error handling on Supabase responses
+- **Issue:** Most queries destructure only `data` and ignore `error`. `markCashoutStatus` (line 150) is `await supabase.from(…).update(…).eq(…)` with no destructure at all — the function returns void and silently swallows any error, so an admin clicking "approve" gets no feedback if RLS rejects.
+- **Suggested approach:** Return an error from each helper (or throw); call sites surface it as a toast.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernCreator.js
+- **Line:** 113–115
+- **Category:** Float arithmetic on money
+- **Issue:** `usd_amount: estimate.gross` writes a JavaScript-float dollar value into the DB. Coupled with `Number(gross.toFixed(2))` in `estimateCashout`, the column round-trips through float precision. For small per-transaction amounts the practical risk is low; for cumulative analytics it accrues. Industry-standard fix is integer cents.
+- **Suggested approach:** Store `usd_cents integer` in `cashout_requests`; convert at display only. RPC computes `(p_spice_amount * 100) / SPICE_USD_RATE` as integer division to avoid float entirely.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernCreator.js
+- **Line:** 121
+- **Category:** Compensating-action error handling
+- **Issue:** `addSpice(...).catch(() => {})` on the refund path silently drops failures. If the cashout-insert fails AND the refund fails, the creator is silently down `spiceAmount` with no record, no admin alert, no reconciliation hook.
+- **Suggested approach:** After RPC migration this disappears. Until then, log via structured logger and write a `wallet_ledger` row with `pending_reconciliation: true`.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernCreator.js
+- **Line:** 165–174
+- **Category:** Non-atomic refund-on-reject
+- **Issue:** `rejectCashout` does `addSpice` then `markCashoutStatus` as two separate awaits. If `addSpice` succeeds but `markCashoutStatus` fails, the request stays `pending` and a re-reject double-refunds. If `markCashoutStatus` succeeds first (in a refactor) and `addSpice` fails, the user is marked rejected with no refund.
+- **Suggested approach:** Single RPC with both writes in one transaction; remove the two-step pattern from the client.
+
+- **Severity:** Low
+- **File:** src/lib/tavernCreator.js
+- **Line:** N/A
+- **Category:** Missing P.I.E. event emission
+- **Issue:** No event emitted on `cashout.requested`, `cashout.approved`, `cashout.rejected`, `cashout.paid`. These are exactly the surfaces auditors and the creator's own UI care about most.
+- **Suggested approach:** Emit from inside each RPC after commit.
+
+- **Severity:** Low
+- **File:** src/lib/tavernCreator.js
+- **Line:** 1
+- **Category:** Base44 leftover audit
+- **Issue:** Clean import from `@/api/supabaseClient`; zero Base44 references.
+- **Suggested approach:** None (informational).
+
+#### /src/lib/tavernCosmetics.js
+
+- **Severity:** High
+- **File:** src/lib/tavernCosmetics.js
+- **Line:** 18, 43, 65, 81, 93
+- **Category:** Client-supplied user_id on read
+- **Issue:** Every public function takes `userId` from the caller — `getOwnedItemsByCategories(userId, …)`, `getActiveCosmeticItem(userId, …)`, `getActiveDiceSkin(userId)`, `getActiveProfileBannerUrl(userId)`, `getOwnedPortraitOptions(userId, …)`. The chain of calls eventually hits `listEntitlements(userId)` and `getActiveCosmetics(userId)` (audited in their own files). Whether this is exploitable depends on whether the underlying RLS scopes by `auth.uid()`, but the function shape is the canonical leaky-id pattern. Specific callable misuse: `getActiveProfileBannerUrl(other_user_id)` for cross-user profile-banner lookup is by-design (anyone visiting a profile needs to render the banner) — but the function gives no signal about whether the request is "self" or "other," which means callers can't apply the right field whitelist. Owned-item lookups (everything except banner) should be self-only.
+- **Suggested approach:** Split the API: `getMyOwnedItemsByCategories(categories, { currentGuildId })`, `getMyActiveDiceSkin()`, `getMyOwnedPortraitOptions(...)` (RLS via `auth.uid()`); keep `getActiveProfileBannerUrl(userId)` but back it with an RPC `rpc_get_public_active_banner(p_user_id)` that reads only the URL from the joined item. This explicitly distinguishes self-lookups (relying on `auth.uid()`) from cross-user public lookups (returning a single hand-picked field).
+
+- **Severity:** High
+- **File:** src/lib/tavernCosmetics.js
+- **Line:** 26–30, 52–56
+- **Category:** Fetch-all anti-pattern + PII risk
+- **Issue:** Both Supabase queries do `select("*")` on `tavern_items`. `getOwnedItemsByCategories` is acceptable for self (the user already owns the item, so seeing `file_url`/`file_data` is fine), but `getActiveCosmeticItem` is the function that backs cross-user lookups (`getActiveProfileBannerUrl`) and indirectly leaks `file_url`, `file_data`, `creator_id`, internal flags through to whoever views the profile. A profile-banner viewer should see only `file_url`-or-`preview_image_url`.
+- **Suggested approach:** `getActiveCosmeticItem` accepts a `{ fields }` parameter or splits into `_self` and `_public` variants; the public one fetches only the columns the consumer needs.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernCosmetics.js
+- **Line:** 18–36
+- **Category:** N+1 / inefficient fetch pattern
+- **Issue:** `getOwnedItemsByCategories` first fetches all entitlements (which may itself be a large list), then `.in("id", ids)` against `tavern_items`. For a user with many entitlements across many categories this is fine, but the entitlement fetch is unbounded and unpaginated; on a Free tier user this is small, on a Veteran with hundreds of cosmetics across categories this is one big payload. Worse, every category-specific surface (dice roller, character creator, profile) calls this independently — no shared cache.
+- **Suggested approach:** Single SQL view `v_user_cosmetics` joining `tavern_purchases` to `tavern_items` and filtering by `auth.uid()` + current guild on the server. Client calls `.from('v_user_cosmetics').select(public_safe_columns).in('category', cats)` — one round trip, server-bounded. Memoize with React Query keyed on `(user_id, currentGuildId)`.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernCosmetics.js
+- **Line:** 71–73
+- **Category:** Hardcoded values that should be constants — fallback dice skin
+- **Issue:** Default dice skin is hardcoded inline: `color: "#1a1a2e"`, `texture: "plastic"`, `glow: null`. The `#1a1a2e` color is brand-adjacent (close to the canonical `#1B2535`) but not exact — small drift that compounds across surfaces. The "plastic" texture string is a magic value without an enum.
+- **Suggested approach:** Move into a `DEFAULT_DICE_SKIN` constant in `tavernTheme.js` or a new `cosmeticDefaults.js`. Use the canonical `#1B2535` if that's the intended default. Define a `DICE_TEXTURES` enum (`'plastic' | 'metal' | 'wood' | 'gem' | 'crystal'`) and reference it.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernCosmetics.js
+- **Line:** 32–35
+- **Category:** Race condition / consistency
+- **Issue:** `_source` is annotated by Array.find against entitlements after the items query returns. If a guild membership changes between the entitlement fetch (line 22) and the items fetch (line 26), the annotation is stale. Low practical impact but mentioned for completeness.
+- **Suggested approach:** The unified view (above) returns source as a column (`'personal'|'guild'`).
+
+- **Severity:** Medium
+- **File:** src/lib/tavernCosmetics.js
+- **Line:** 41, 52, 66, 82
+- **Category:** Missing error handling
+- **Issue:** Same pattern — only `data` destructured, errors swallowed. A failed RLS read silently renders the user's profile banner as null and the dice as the default skin, with no indication that something went wrong.
+- **Suggested approach:** Return `{ ok, data, error }` or throw.
+
+- **Severity:** Low
+- **File:** src/lib/tavernCosmetics.js
+- **Line:** 100–129
+- **Category:** Multi-game abstraction concern
+- **Issue:** Portrait-pack flattening assumes `file_data.images` is an array of URL strings. Future system-specific portrait packs (PF2e iconics, Call of Cthulhu portraits) may need richer per-image metadata (system-tag, attribution, size variants). The flattened output shape `{ id, image_url, name, source }` cannot carry that.
+- **Suggested approach:** Preserve the per-image object so callers can inspect `system`, `attribution`, etc. Return a shape `{ id, item_id, image, name, source }` where `image` is the raw object from `file_data.images[idx]`.
+
+- **Severity:** Low
+- **File:** src/lib/tavernCosmetics.js
+- **Line:** 1
+- **Category:** Base44 leftover audit
+- **Issue:** Clean import; zero Base44 references.
+- **Suggested approach:** None.
+
+#### /src/lib/tavernEntitlements.js
+
+- **Severity:** High
+- **File:** src/lib/tavernEntitlements.js
+- **Line:** 23, 92, 128
+- **Category:** Client-side entitlement checks + Client-supplied user_id
+- **Issue:** `listEntitlements`, `hasAccess`, and `accessSource` are all client-side entitlement resolvers. They take `userId` and `currentGuildId` from the caller and run their decision on top of multiple Supabase reads. Three structural issues: (1) the `currentGuildId` is supplied by the client (sourced from SubscriptionContext) — a user who left a guild but still holds a stale context value can call `hasAccess(self, item, { currentGuildId: <guild_just_left> })` and return `true` when they should return `false`; the server-side guild-membership check is never validated; (2) `userId` from the caller is the systemic AuthContext leak; (3) RLS is the only thing keeping a caller from passing someone else's userId and getting their entitlement list back. The entire module is "advisory" — the actual access gate must happen server-side, not via these helpers.
+- **Suggested approach:** Replace with `rpc_list_my_entitlements()` and `rpc_has_access(p_item_id)` running `SECURITY DEFINER`. Inside, derive `user_id := auth.uid()`, look up the user's *current* guild from `guild_members WHERE user_id = auth.uid() AND status = 'active'`, then run the same logic in one SQL query (`UNION ALL` of personal purchases, current-guild purchases, and own-creator items). Cache the result in React Query keyed only on `user_id` (no `currentGuildId` parameter — the server resolves it).
+
+- **Severity:** High
+- **File:** src/lib/tavernEntitlements.js
+- **Line:** 27–69, 95–119, 131–154
+- **Category:** N+1 / multi-roundtrip on hot path
+- **Issue:** `listEntitlements` does 3 sequential round-trips (personal purchases, guild purchases, creator backstop). `hasAccess` does up to 3 sequential `maybeSingle()` queries — every "Buy / Already Owned" badge in the marketplace UI triggers up to 3 round-trips per item displayed. On a 24-item listing page that's potentially 72 queries. Even cached, the first paint stalls. `accessSource` duplicates the same 3-query structure.
+- **Suggested approach:** Single SQL function as above. For `hasAccess`/`accessSource`, expose one RPC `rpc_access_source(p_item_id)` that returns `null|'personal'|'guild'|'creator'` in one round trip. For listings, return entitlement state inline via a `v_tavern_items_with_my_access` view that joins my entitlements as a column (`my_access_source`) — eliminates the per-card lookup entirely.
+
+- **Severity:** High
+- **File:** src/lib/tavernEntitlements.js
+- **Line:** 63–82
+- **Category:** Creator-backstop fragility
+- **Issue:** The "creator backstop" branch unions any item where `creator_id = userId` into the entitlements list. This works as a defensive measure but it depends on `creator_id` being correctly server-pinned at upload time — which `tavernClient.uploadItem` currently does NOT do (the creator_id is supplied by the caller; flagged as Critical above). If a malicious uploader passes someone else's UUID as creator_id, the legitimate user gains entitlement to an item they did not upload. The backstop and the upload bug compound each other.
+- **Suggested approach:** Once upload-RPC pins creator_id from `auth.uid()`, the backstop is safe. Until then, the backstop is itself a privilege-escalation vector — but removing it would break legacy listings, so keep it and prioritize the upload-RPC fix.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernEntitlements.js
+- **Line:** 27, 44, 66, 95, 104, 114, 131, 139, 149
+- **Category:** Missing error handling
+- **Issue:** Same pattern — `data` destructured, errors swallowed. A failed entitlement read silently drops the user out of "owned" state and re-prompts them to buy something they already own. Critical UX correctness issue: a transient RLS or network error becomes a "user is asked to pay twice" surface.
+- **Suggested approach:** Surface errors; the UI should distinguish "loading," "error," and "definitively does not own." Currently the latter two are indistinguishable.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernEntitlements.js
+- **Line:** 27, 44
+- **Category:** Stale entitlement after purchase reversal
+- **Issue:** No client-side cache layer is shown here, but downstream callers in tavernCosmetics.js will likely cache via React Query. If a guild's purchase is later refunded/revoked (whether by admin tooling not yet built, or by guild deletion), the entitlement list in cache will still show the item as owned until the cache key invalidates. There's no event subscription / channel listener for `tavern_purchases` row deletes. Same concern for cashout-reject flows that might reverse `sale_earning` entries — though entitlements don't depend on those, the analogous staleness applies to wallet balances.
+- **Suggested approach:** When the purchase RPC commits, emit a P.I.E. event the client subscribes to and invalidates the entitlements query on. For revoke flows, write a server-side trigger that emits the same event. Document the cache key and TTL.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernEntitlements.js
+- **Line:** 23–85
+- **Category:** Missing pagination
+- **Issue:** `listEntitlements` returns every owned item with no limit. A long-tenure Veteran/Guild user could realistically own hundreds of cosmetics; a guild with 6 members all uploading aggressively could push the guild-purchases list well past 1000. No cursor, no paging.
+- **Suggested approach:** RPC accepts `{ category_filter, limit, cursor }`. UI views (character creator, dice roller) only need the categories they're rendering — push the filter into the query rather than fetching everything and filtering client-side (which is what `getOwnedItemsByCategories` currently does).
+
+- **Severity:** Low
+- **File:** src/lib/tavernEntitlements.js
+- **Line:** 1
+- **Category:** Base44 leftover audit
+- **Issue:** Clean import; zero Base44 references.
+- **Suggested approach:** None.
+
+#### /src/lib/tavernTheme.js
+
+- **Severity:** High
+- **File:** src/lib/tavernTheme.js
+- **Line:** 71–110, 96–100
+- **Category:** XSS surface on theme apply
+- **Issue:** `applyTheme(themeData)` writes user-controlled values directly onto `document.documentElement.style`. Two specific concerns: (1) `root.style.setProperty('--theme-img-${key}', \`url(${url})\`)` interpolates a URL into a CSS `url(...)` token without validation — a creator can craft a theme with `images.navTexture = "javascript:alert(1)"` or `"x); evil-property: dangerous; --x: url("`. CSS variables don't execute JavaScript, but the second variant can break out of the `url()` and inject arbitrary CSS declarations onto `:root`, including `background-image: url('javascript:...')` in older engines or `content` injection that breaks layout. (2) Color values (`colors[key]`) are passed to `setProperty` as raw strings — `setProperty` itself sanitizes invalid values, but a value like `red; --evil: ...` will be rejected by the parser only if the property accepts the entire string atomically (which `setProperty` does, so it's safer than concatenating into a `style="..."` attribute, but a `<creator-controlled string>` flowing through `style.setProperty` should still be treated as untrusted).
+- **Suggested approach:** Validate every URL via `try { new URL(url, location.origin) }` and reject anything not `https:` (or matching the storage CDN allowlist). For color values, validate against a hex/rgb/hsl regex before passing to `setProperty`. Consider storing themes as a JSON Schema-validated blob server-side and re-validating on read so a malicious creator cannot publish a theme with non-conforming fields.
+
+- **Severity:** High
+- **File:** src/lib/tavernTheme.js
+- **Line:** 125–135
+- **Category:** XSS / external-resource surface on font load
+- **Issue:** `injectFont(id, family, weights)` constructs a Google Fonts URL from a creator-controlled `family` string. While `encodeURIComponent` neutralizes most injection, the resulting URL is still a remote stylesheet that the browser fetches and applies. Two follow-ons: (a) a creator could fingerprint viewers by registering a custom font on their own domain and styling it as the theme's "Google Font" — but `https://fonts.googleapis.com/...` is hardcoded so this is bounded. The actual risk is (b) leaking which themes a user has applied to Google Analytics via the font request URL (privacy, not security).
+- **Suggested approach:** Maintain a server-side allowlist of fonts (`['Cinzel', 'Lora', 'IM Fell English', …]`) that themes can reference. Reject any `family` not on the list. UI then chooses from a closed enum. Bonus: bundle the allowlisted fonts locally to avoid the third-party request entirely.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernTheme.js
+- **Line:** 57, 122, 134
+- **Category:** Module-level mutable state
+- **Issue:** `let loadedFontIds = []` is module-level mutable state. Multiple concurrent `applyTheme` calls (e.g., a fast theme switcher) could race the array, with `clearTheme` removing fonts that a parallel `applyTheme` just inserted, then losing track of them. Also: the same module instance is shared across the entire app, so any test or surface that tries to apply themes in isolation contaminates the global registry.
+- **Suggested approach:** Make `loadedFontIds` a `Set` and clear it atomically inside `clearTheme`. Better: query the DOM for elements with the known id prefix (`document.querySelectorAll('link[id^="theme-font-"]')`) and remove them — sourcing-of-truth from the DOM eliminates the mutable-state race entirely.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernTheme.js
+- **Line:** 59–69
+- **Category:** Fetch-all / category gate at client
+- **Issue:** `loadThemeItem` selects `id, name, category, file_data` and then asserts `data.category !== 'ui_theme'` client-side. The check is correct but happens after the fetch — if a non-theme item id is passed, the row is fetched, parsed, and discarded. Also: `file_data` for some categories may be large (audio data, image arrays); always reading it is wasteful.
+- **Suggested approach:** Add `.eq("category", "ui_theme")` to the query so the server filters first.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernTheme.js
+- **Line:** 61
+- **Category:** Dynamic import inside hot path
+- **Issue:** `const { supabase } = await import("@/api/supabaseClient")` performs a dynamic import on every `loadThemeItem` call. Bundlers will hoist this into a separate chunk, adding an extra round-trip the first time a theme is loaded. The comment block mentions theming is incremental — first paint of the themed UI matters here.
+- **Suggested approach:** Hoist the import to the top of the file: `import { supabase } from "@/api/supabaseClient"`. The lazy form was likely a workaround for a circular import; verify and break the cycle directly if so.
+
+- **Severity:** Medium
+- **File:** src/lib/tavernTheme.js
+- **Line:** 23–35
+- **Category:** Brand color drift / hardcoded values
+- **Issue:** This file does not hardcode brand colors (the actual values come from the user-installed theme), but it defines the canonical color-key vocabulary. Worth documenting in the audit because: (a) the brand canonical palette per Pass 1A is `#FF5300` (orange), `#f8a47c` (peach), `#1B2535` (dark), `#04685A` (teal), with the cyan `#37F2D1` flagged as drift. Themes published via ThemeBuilder will use whatever colors the creator picks, but the *default fallback* (no theme installed) must come from somewhere — currently nothing in this file declares those defaults.
+- **Suggested approach:** Add a `DEFAULT_THEME` constant in a sibling `tavernThemeDefaults.js` (or extend this file) that captures the canonical brand colors keyed by the same `COLOR_KEYS`. `applyTheme(null)` or `clearTheme()` should fall back to these instead of unsetting the vars and exposing whatever stylesheet defaults exist.
+
+- **Severity:** Low
+- **File:** src/lib/tavernTheme.js
+- **Line:** 49–55
+- **Category:** Legacy compatibility shim
+- **Issue:** `LEGACY_KEY_MAP` exists for "pre-Part-B builder" themes. Pass-1A noted Tavern is the cleanest folder; this shim is a known piece of debt. Acceptable for now but should have a sunset migration: read every `tavern_items` row with category `ui_theme`, normalize `file_data.colors` keys via the map, write them back, then delete the shim from this file.
+- **Suggested approach:** Migration script; remove `LEGACY_KEY_MAP` and the back-fill loop after.
+
+- **Severity:** Low
+- **File:** src/lib/tavernTheme.js
+- **Line:** N/A
+- **Category:** Base44 leftover audit
+- **Issue:** Zero Base44 references.
+- **Suggested approach:** None.
+
+#### /src/lib/activeCosmetics.js
+
+- **Severity:** Critical
+- **File:** src/lib/activeCosmetics.js
+- **Line:** 47–63, 69–79
+- **Category:** Missing ownership verification on activation
+- **Issue:** `setActiveCosmetic(userId, slotKey, itemId)` writes any `itemId` into the user's `active_cosmetics` blob without verifying the user owns that item. A caller can set their active dice skin to a $50 cosmetic they never bought; downstream readers (`getActiveCosmeticItem`, `getActiveDiceSkin`) fetch the item by id and apply it. Whether this is exploitable end-to-end depends on whether the renderer also re-checks entitlement (it does not — see `tavernCosmetics.js:43` which fetches the item without an entitlement gate). This is the canonical "set active cosmetic verifies user owns it (not just that the ID exists)" rule from the batch context, and it is **not enforced**.
+- **Suggested approach:** Replace with `rpc_apply_cosmetic(p_category, p_item_id)` running `SECURITY DEFINER` that: (1) derives `user_id := auth.uid()`; (2) validates `EXISTS (SELECT 1 FROM tavern_purchases WHERE (user_id = auth.uid() OR guild_id IN (SELECT guild_id FROM guild_members WHERE user_id = auth.uid() AND status='active')) AND item_id = p_item_id) OR EXISTS (SELECT 1 FROM tavern_items WHERE id = p_item_id AND creator_id = auth.uid())`; (3) validates the item's category matches `p_category`; (4) updates `user_profiles.active_cosmetics`. Same RPC powers `clearCosmetic` (with `p_item_id = null`, skipping the ownership check).
+
+- **Severity:** Critical
+- **File:** src/lib/activeCosmetics.js
+- **Line:** 30, 52
+- **Category:** Client-supplied user_id on read + write
+- **Issue:** `getActiveCosmetics(userId)` and `setActiveCosmetic(userId, …)` both take `userId` from the caller. The write path filters with `.eq("user_id", userId)` — RLS-dependent. If RLS is missing or permissive, a caller could set another user's active cosmetics. Combined with the missing ownership check above, an attacker with write-RLS access could force a target user's UI to render arbitrary item ids (potentially items pulled from `file_url` paths the attacker controls — UI defacement at a minimum).
+- **Suggested approach:** Drop `userId` parameter. RPC pins to `auth.uid()` server-side.
+
+- **Severity:** High
+- **File:** src/lib/activeCosmetics.js
+- **Line:** 52–63
+- **Category:** Race condition (concurrent slot toggles)
+- **Issue:** `setActiveCosmetic` reads `getActiveCosmetics` then writes the merged blob — classic read-modify-write race. Two concurrent activations (e.g., user clicks two different cosmetics in quick succession, or dice-skin-apply fires alongside theme-apply) will read the same baseline and one write will clobber the other's slot change. The `active_cosmetics` column is JSONB; the right operation is server-side merge, not client-side merge.
+- **Suggested approach:** RPC uses `update user_profiles set active_cosmetics = jsonb_set(coalesce(active_cosmetics, '{}'::jsonb), ARRAY[p_slot_key], to_jsonb(p_item_id::text)) where user_id = auth.uid()`. Single atomic update, no read first.
+
+- **Severity:** High
+- **File:** src/lib/activeCosmetics.js
+- **Line:** 34–44, 56–61
+- **Category:** Silent error swallowing + dead-code-style fallback
+- **Issue:** Both `getActiveCosmetics` and `setActiveCosmetic` wrap their queries in try/catch with empty catch blocks, silently returning `{}` or doing nothing. The justification ("`active_cosmetics` is an optional migration") is reasonable for a transitional state but introduces two failure modes: (1) any RLS denial or transient network error becomes "no active cosmetics" with no signal to the user, who sees their carefully-configured dice skin silently revert to the default; (2) failed writes fail silently — a user clicks "Apply" and gets back a UI optimistically rendering the new cosmetic, but the server never persisted it. After the migration is universal, this defensive code is dead/leaky and should be removed.
+- **Suggested approach:** If the migration is now universal, remove the try/catch and the `error` fallback — let errors propagate to the caller. If the migration is still optional, do a one-time capability check at app init and route through a noop client if the column doesn't exist, instead of swallowing every error inline.
+
+- **Severity:** Medium
+- **File:** src/lib/activeCosmetics.js
+- **Line:** 14–24
+- **Category:** Multi-game abstraction concern
+- **Issue:** `COSMETIC_SLOTS` is a fixed set of slot keys hardcoded in client code. PF2e launch may need new slots (system-specific dice, system-specific portraits, system theme); D&D-only slots (e.g., a `class_emblem` slot) shouldn't appear for PF2e users. Currently any new slot requires a code change in this file plus a corresponding column convention in the `active_cosmetics` JSONB blob. Comment about `portrait_pack` not taking a slot is also a one-off carve-out that would multiply across systems.
+- **Suggested approach:** Source the slot list from a server-side `cosmetic_slots` table (or seed it into a config row). Each row: `{ category, slot_key, applies_to_systems[] }`. Client reads on init and renders the right slots per active campaign system. Eliminates the per-launch code change.
+
+- **Severity:** Medium
+- **File:** src/lib/activeCosmetics.js
+- **Line:** 81–85
+- **Category:** Client-side derived helper / consistency
+- **Issue:** `isItemActive(activeCosmetics, category, itemId)` is a pure-function helper that takes the `activeCosmetics` blob from the caller. Fine in isolation, but together with `getActiveCosmetics` it implies a "fetch once, check many" usage pattern. If the cache is stale (between server-side activation and React Query refetch), the helper returns the wrong answer. Low impact (UI badge correctness), but worth noting.
+- **Suggested approach:** Memoize within React Query so callers that use `isItemActive` always read from the latest fetched state, not a snapshot prop.
+
+- **Severity:** Low
+- **File:** src/lib/activeCosmetics.js
+- **Line:** N/A
+- **Category:** Missing P.I.E. event emission
+- **Issue:** Activating/clearing a cosmetic is a user-meaningful action with no event emitted. P.I.E.-style stream would let the dice roller, profile banner, and theme loader auto-react across tabs without manual cache invalidation.
+- **Suggested approach:** Emit `cosmetic.applied { slot, item_id }` and `cosmetic.cleared { slot }` from inside the RPC.
+
+- **Severity:** Low
+- **File:** src/lib/activeCosmetics.js
+- **Line:** N/A
+- **Category:** Base44 leftover audit
+- **Issue:** Zero Base44 references.
+- **Suggested approach:** None.
+
+#### /src/lib/useActiveDiceSkin.js
+
+- **Severity:** High
+- **File:** src/lib/useActiveDiceSkin.js
+- **Line:** 17, 18
+- **Category:** Client-supplied user_id (downstream of AuthContext leak)
+- **Issue:** `queryKey: ["activeCosmetics", user?.id]` and `queryFn: () => getActiveCosmetics(user.id)` both consume `user.id` from `useAuth()`. This is the canonical downstream consumer of the AuthContext leaky-id pattern flagged in Pass 2-ii-a. The hook itself isn't the source of the bug — it just propagates it. After the AuthContext refactor (drop `id` from `mergedUser`), this queryFn becomes `getMyActiveCosmetics()` with no parameter and the queryKey becomes a static `["activeCosmetics", "self"]` (or just `["activeCosmetics"]` since RLS scopes the result).
+- **Suggested approach:** Migrate after AuthContext: remove `user.id`-based query keying; use a tagged "self" key. The query function calls the parameterless RPC.
+
+- **Severity:** High
+- **File:** src/lib/useActiveDiceSkin.js
+- **Line:** 24–36
+- **Category:** Missing ownership verification at render
+- **Issue:** The hook fetches the dice-skin item by id and renders its `file_data` without checking the user owns it. Combined with `setActiveCosmetic`'s missing ownership check (flagged Critical above), this hook will happily apply any item id the user (or an attacker who set it server-side) wrote into the `dice_skin_id` slot. An attacker who knows the id of a premium dice skin can set `active_cosmetics.dice_skin_id = <premium_id>` and render it for free. Once the activation RPC enforces ownership, this hook is safe; until then, it's the rendering surface that closes the loop on the entitlement bypass.
+- **Suggested approach:** Switch to the consolidated `rpc_get_my_active_dice_skin()` which (a) reads the user's `active_cosmetics.dice_skin_id`, (b) verifies ownership server-side, (c) returns `file_data` only if owned, else null. Defense-in-depth: even with the activation-RPC fix, also gate the read to prevent admin tooling or future bugs from re-introducing the bypass.
+
+- **Severity:** Medium
+- **File:** src/lib/useActiveDiceSkin.js
+- **Line:** 28–33
+- **Category:** Missing error handling
+- **Issue:** Same swallow-the-error pattern: `const { data } = await supabase.from(…).select(…)` discards `error`. React Query's `isError` will never trip, so a network or RLS failure leaves the dice roller silently rendering its default — same UX-correctness concern as elsewhere in this batch.
+- **Suggested approach:** Destructure `{ data, error }`; throw on error so React Query can surface it.
+
+- **Severity:** Medium
+- **File:** src/lib/useActiveDiceSkin.js
+- **Line:** 16–36
+- **Category:** Two-step query (chained roundtrips)
+- **Issue:** Two sequential React Query calls — first to get the cosmetics blob, then to get the item. The second query is gated on the first's result via `enabled: !!skinId`. Total time-to-rendered-skin is at least 2 round-trips. With the consolidated RPC (above) it becomes 1.
+- **Suggested approach:** Consolidate into one RPC that returns either `{ skin: file_data }` or `{ skin: null }`.
+
+- **Severity:** Low
+- **File:** src/lib/useActiveDiceSkin.js
+- **Line:** 22
+- **Category:** Hardcoded slot key
+- **Issue:** `cosmetics?.dice_skin_id` hardcodes the slot key from `COSMETIC_SLOTS.dice_skin`. Should use `slotForCategory("dice_skin")` for consistency with the rest of the codebase.
+- **Suggested approach:** `const skinId = cosmetics?.[slotForCategory("dice_skin")] || null;` — small change but eliminates one drift-source if the slot key ever changes.
+
+- **Severity:** Low
+- **File:** src/lib/useActiveDiceSkin.js
+- **Line:** N/A
+- **Category:** Base44 leftover audit
+- **Issue:** Zero Base44 references.
+- **Suggested approach:** None.
+
+##### Batch 2-ii-b Summary
+
+**Totals by severity (across 7 files):**
+| Severity | Count |
+|---|---|
+| Critical | 9 |
+| High | 18 |
+| Medium | 25 |
+| Low | 13 |
+| **Total** | **65** |
+
+**Per-file totals:**
+| File | Critical | High | Medium | Low | Total |
+|---|---|---|---|---|---|
+| tavernClient.js | 4 | 7 | 5 | 2 | 18 |
+| tavernCreator.js | 3 | 3 | 5 | 2 | 13 |
+| tavernCosmetics.js | 0 | 2 | 4 | 2 | 8 |
+| tavernEntitlements.js | 0 | 3 | 3 | 1 | 7 |
+| tavernTheme.js | 0 | 2 | 4 | 2 | 8 |
+| activeCosmetics.js | 2 | 2 | 2 | 2 | 8 |
+| useActiveDiceSkin.js | 0 | 2 | 2 | 2 | 6 |
+
+**Totals by category (top categories at this layer):**
+| Category | Count |
+|---|---|
+| Client-side authority (caller-supplied user_id, creator_id, buyer_id, price, tier, dollar amount) | 14 distinct surfaces |
+| Missing error handling on Supabase responses | 7 (one per file) |
+| Fetch-all `select("*")` anti-pattern | 7 instances |
+| Missing pagination | 4 instances (listTavernItems, getMyListings, listEntitlements, listAllCashouts) |
+| Race conditions (read-modify-write or concurrent toggles) | 5 instances (purchase_count, rating recompute, self-grant + pioneer, active cosmetic merge) |
+| Non-atomic purchase / refund / cashout flows | 4 distinct flows (purchase, upload, cashout request, cashout reject) |
+| Missing ownership verification | 2 (rateItem, setActiveCosmetic) |
+| Missing tier gating server-side | 2 (uploadItem creatorTier, purchaseItem buyerTier) |
+| Missing admin gating | 2 (markCashoutStatus, listPendingCashouts/listAllCashouts) |
+| Hardcoded Spice / fee / split / conversion values that should be config | 5 instances (Stripe pct, Stripe fixed, $1=250 conversion, default dice color/texture, min-listing-price unenforced) |
+| Storage path validation missing | 1 (uploadItem file_url + preview_image_url) |
+| XSS / CSS-injection surface | 2 (theme apply via setProperty, font URL injection) |
+| Client-clock timestamp on write | 1 (cashout processed_at) |
+| Compensating-action error handling (silent `.catch(() => {})`) | 4 (purchase paths + refund + self-grant) |
+| `console.*` statements | 1 (tavernClient.js:204) |
+| Missing P.I.E. event emission | 5 (purchase, listing-created, rating, cashout-state, cosmetic-applied) |
+| Multi-game abstraction concerns | 3 (userOwnsItem, portrait pack flatten, COSMETIC_SLOTS) |
+| Legacy / known-debt shims | 1 (LEGACY_KEY_MAP) |
+
+**Specific note on Spice/fee/split hardcoding count at this layer:** 5 inline values that should be config-sourced — `STRIPE_PCT = 0.029` (tavernCreator:22), `STRIPE_FIXED = 0.30` (tavernCreator:23), `spiceAmount / 250` Spice→USD ratio (tavernCreator:26), default dice skin `#1a1a2e` / "plastic" (tavernCosmetics:71–72), and the 625-Spice min listing price which is **never enforced** in this batch (neither client-side nor flowed through server). **Splits and tier discounts are correctly centralized** via `calculateCreatorEarning` and `applyDiscount` in `spiceConfig` — that pattern is the model the rest of the app should adopt; see Good Patterns below.
+
+**Specific note on Base44 leftover count at this layer:** **0 across all 7 files.** Every file imports `supabase` from `@/api/supabaseClient` directly. This batch is fully migrated and is the cleanest layer the audit has examined for Base44 hygiene. (Confirms Pass 1A's framing that Tavern is the cleanest folder, at least on the naming axis.)
+
+**Specific note on client-side authority anti-patterns at this layer — 14 distinct surfaces:**
+1. `tavernClient.purchaseItem` — caller supplies `buyerUserId`, `buyerTier`, full `item` object (price, creator_id, creator_tier, is_official) → 4 distinct authority leaks in one function.
+2. `tavernClient.uploadItem` — caller supplies `creatorId` (listing-as-anyone) AND `creatorTier` (fee-bypass + permanent split-spoof on every future sale of that listing).
+3. `tavernClient.rateItem` — caller supplies `userId`; no ownership check.
+4. `tavernClient.userOwnsItem` / `getUserPurchases` — caller supplies `userId` on reads.
+5. `tavernCreator.requestCashout` — caller supplies `creatorId` AND `spiceAmount` AND derives `usd_amount` client-side that admin pays out from.
+6. `tavernCreator.markCashoutStatus` — caller supplies `requestId, nextStatus` with no admin verification or state-machine guard.
+7. `tavernCreator.rejectCashout` — accepts a fully caller-supplied `request` object; will refund any user_id any amount referenced in `request.spice_amount`.
+8. `tavernCreator.getMyListings` / `getMySalesLedger` / `calcEarnings` / `getMyCashoutRequests` — all take `creatorId` (RLS-dependent).
+9. `tavernCosmetics.*` — every helper takes `userId`; mixes self-only and cross-user public lookups under one signature.
+10. `tavernEntitlements.listEntitlements` / `hasAccess` / `accessSource` — caller supplies `userId` AND `currentGuildId` (the latter sourced from a stale client context can grant access after the user left the guild).
+11. `activeCosmetics.setActiveCosmetic` — caller supplies `userId, slotKey, itemId`; no ownership check on `itemId`, no auth check on `userId`.
+12. `activeCosmetics.getActiveCosmetics` — caller supplies `userId` on read.
+13. `useActiveDiceSkin` — propagates `user.id` into the queryFn (downstream of AuthContext leak).
+14. `tavernTheme.loadThemeItem` — accepts any `themeId` and reads it; while themes are intentionally cross-user (you apply someone else's theme), the loader should fetch via a public-safe RPC, not a raw row select.
+
+All 14 collapse into one fix-project once an authoritative server pattern is established (RPC + `auth.uid()` + entitlement re-check inside the transaction). Five of them are also currency-affecting (purchase, upload-fee, cashout-request, cashout-mark, cashout-reject) and should be the highest priority.
+
+**Other isolated-but-notable specifics:**
+- Brand color drift: 0 instances of canonical brand colors hardcoded into these files (one near-miss `#1a1a2e` vs canonical `#1B2535` in `tavernCosmetics.js:71`); the cyan `#37F2D1` known-drift color does not appear in this batch.
+- isAdminEmail() callsites in this batch: 0 (the function is only used in `forumsClient.js`).
+- TODO/FIXME/HACK/XXX comments: 0 in this batch.
+- Storage-bucket violations: enforcement is missing for tavern listing assets — paths are not validated against `user-assets/users/{auth.uid()}/`. No active violations yet (the form layer presumably writes to that bucket), but the data layer offers no defense if the form is bypassed.
+
+##### Good Patterns Observed in Batch 2-ii-b
+
+This is intel for fix-projects. The Tavern layer demonstrates several canonical patterns that future fixes should replicate across other surfaces. Listed in approximate order of replicability — earlier items have the broadest applicability.
+
+**1. Centralized Spice math via `@/config/spiceConfig`**
+- `applyDiscount(price, tier)` — single source of truth for tier-discount math (Adventurer 10%, Veteran/Guild 20%). Callers pass tier; never recompute the percentage.
+- `calculateCreatorEarning(price, creatorTier)` — single source of truth for creator splits (Free 50/50, Adventurer 30/70, Veteran/Guild 20/80). Callers pass tier; the function returns the creator's slice.
+- `UPLOAD_FEES` — keyed dict (`free → 1250`, `adventurer → 250`, `veteran/guild → 0`). Callers index by tier.
+- `MIN_CASHOUT` — single constant for the 12,500-Spice cashout floor.
+- **Replicate this pattern for:** any other Spice math the app does (in-game shop pricing, gameplay rewards, event payouts). Never inline a Spice arithmetic operation; always go through a named helper in `spiceConfig`.
+- **Gap to close:** The min-listing-price (625 Spice) and the Spice→USD ratio (250) are NOT yet in `spiceConfig`. Add `MIN_LISTING_PRICE`, `SPICE_USD_RATE`, `STRIPE_FEE_PCT`, `STRIPE_FEE_FIXED`, plus `usdFromSpice`, `spiceFromUsd`, `estimatePayoutFee` helpers to bring this to full coverage.
+
+**2. Tier locked at listing time (`creator_tier` column on `tavern_items`)**
+The creator's tier at the moment they list an item is captured into the row, so subsequent sales always settle at that tier's split — even if the creator later upgrades or downgrades their subscription. This is correct accounting and prevents tier-upgrade exploits. Callers read `item.creator_tier` (sourced from the row) into `calculateCreatorEarning`. **Replicate this pattern wherever a tier-dependent value should be locked in at the moment a transaction begins** (e.g., game-pack license tiers, guild-feature snapshots).
+
+**3. UNIQUE constraint on `(user_id, item_id)` as idempotency key**
+`tavern_purchases` has a UNIQUE constraint on the buyer + item pair, so the database itself blocks double-purchase races. The client code recognizes the duplicate-key error message (`/duplicate|unique/i`) and treats it as success — the buyer already owns the item, so the duplicate insert is a no-op. **Replicate for any "idempotent acquisition" flow:** wallet top-ups, redeem-code flows, event signups. Use a UNIQUE on the natural key and treat duplicate-violation as success rather than orchestrating with a SELECT-then-INSERT race.
+
+**4. "Leaving guild revokes access" via current-guild filter (not stored guild_id)**
+`tavernEntitlements.listEntitlements` and `hasAccess` filter guild purchases by `currentGuildId` (the user's *current* guild) rather than by the `guild_id` stored on the purchase row. A user who leaves a guild loses access to its purchases automatically — no row deletion needed, no manual revocation. The purchase row remains intact for accounting/auditing while access is determined dynamically by membership. **Replicate this pattern for:** guild-shared features (guild themes, guild dice skins, shared notes) — never check "did *anyone* in *some* guild buy this," always check "is the current user *currently* in *this specific* guild."
+
+**5. Self-grant via zero-price purchase row (uniform ownership model)**
+After upload, the creator gets a `tavern_purchases` row with `price_paid: 0` for their own item. This means every "owned" check is one query against `tavern_purchases` with no special-case branches for "creators of their own work." Combined with the creator-id backstop in `listEntitlements`, ownership is robust. **Replicate this pattern for:** any flow where the creator/author should automatically have access to what they made (game-pack authoring, character template authoring).
+
+**6. Slot-aware cosmetic mapping (`COSMETIC_SLOTS` + `slotForCategory`)**
+`activeCosmetics.js` defines a single `category → slot_key` mapping and exposes `slotForCategory(category)` so every surface uses the same slot keys. No stringly-typed lookups scattered across the app. **Replicate this pattern for:** any "category determines storage location" mapping (PIE event types, role-permission tables, tier-feature flags). Pull the mapping into a single module; expose a lookup function; never inline the mapping in consumers.
+
+**7. Decoupled side-effect helpers (`recordCreatorSale` + `grantPioneerIfEligible`)**
+The purchase flow's "side effects" (lifetime-sale counter, pioneer-flag grant) are external functions imported from `creatorMilestones`, not inlined into the purchase path. Easy to swap, test, or extend. **Replicate this pattern for:** any flow where the "primary action" has multiple gameplay/analytics consequences. Keep the primary action minimal; compose side effects from named helpers.
+
+**8. Tier-aware fee fallback structure (`UPLOAD_FEES[tier] ?? UPLOAD_FEES.free`)**
+The pattern of `LOOKUP[key] ?? LOOKUP.default` is concise — but the current default of `free` is wrong (should fail closed, not charge the highest fee). The *shape* is correct; the choice of default needs review. **Replicate the shape, not the value:** `LOOKUP[key] ?? throwOrFailClosed()`.
+
+**9. CSS variable layer for theming**
+`tavernTheme.applyTheme` writes to `:root` CSS custom properties (`--theme-pageBackground`, etc.) and components opt in by referencing `var(--theme-*)`. Migration is incremental — components can adopt themed values one at a time without breaking unmigrated callers. **Replicate this pattern for:** any other theme-able subsystem (sound packs, animation timings, font scales).
+
+**10. Legacy schema back-fill via key-map shim (`LEGACY_KEY_MAP`)**
+Old themes saved with pre-Part-B color keys (`background`, `card`, `primary`, `secondary`, `text`) are normalized into the current key set on read. Avoids forcing a one-time data migration; the shim can be removed once a back-fill migration runs. **Replicate this pattern for:** any schema rename where deleting old data isn't acceptable. Two-phase: ship the shim immediately so reads keep working; later run a migration and remove the shim.
+
+**11. Cashout fee transparency (`estimateCashout`)**
+Returns `{ spice, gross, fee, net }` so the creator sees the Stripe fee BEFORE confirming the cashout — no surprise deductions. **Replicate this pattern for:** any user-facing money flow (Spice purchase confirmation, subscription upgrades, refund estimates). Always show the breakdown.
+
+**12. UUID-keyed everything**
+Every entitlement and ownership check is by `item_id` (UUID), never by composite keys like `(creator_name, item_name)` or by file paths. Simple, collision-resistant, and trivially indexable. **Replicate this pattern wherever** other surfaces still key by name or path.
+
+**Canonical RPC-naming intent (proposed for the fix-project, derived from the patterns above):**
+The current functions are client-orchestrated and not yet RPCs, but their names line up cleanly to a future server-side pattern. After the fix-project, the canonical RPC suite for this layer should be:
+- `rpc_purchase_tavern_item(p_item_id, p_guild_id default null)`
+- `rpc_create_tavern_listing(p_form jsonb)`
+- `rpc_rate_tavern_item(p_item_id, p_rating, p_review)`
+- `rpc_request_cashout(p_spice_amount integer)`
+- `rpc_admin_mark_cashout(p_request_id, p_status, p_notes)`
+- `rpc_apply_cosmetic(p_category, p_item_id)`
+- `rpc_clear_cosmetic(p_category)`
+- `rpc_get_my_active_dice_skin()`
+- `rpc_list_my_entitlements()`
+- `rpc_has_access(p_item_id)`
+- `rpc_access_source(p_item_id)`
+
+Every one of these takes only the minimal logical parameters; every one derives the actor from `auth.uid()`; every one validates entitlement/ownership/admin-status server-side; every one runs in a single transaction. This is the model the rest of the app's data layer should converge on.
+
+**End of Batch 2-ii-b.**
