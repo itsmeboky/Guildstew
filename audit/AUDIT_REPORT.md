@@ -15387,3 +15387,318 @@ This batch is the largest single migration target by file count (15 files) but t
 
 **End of Pass 2 Batch iv — `/functions/` is fully audited.**
 
+
+### Batch 2-v-a: RLS audit — auth/profiles/identity
+
+This batch audits migration coverage of the auth/identity domain: `user_profiles`, `user_settings` (JSONB on user_profiles), `user_titles`, presence/online status, friends, and blocked users. Sub-batch 2-v-a of Pass 2's RLS finale; subsequent sub-batches will cover campaigns/sessions/party (2-v-b), characters/lore/homebrew (2-v-c), commerce (2-v-d), forums/admin/misc (2-v-e).
+
+#### Migration Files In Scope
+
+| Migration | Touches | Notes |
+|---|---|---|
+| `20261018_campaign_consent_columns.sql` | `user_profiles` | Adds `content_preference`, `content_preferences` (age/rating) — no RLS work |
+| `20261107_active_cosmetics.sql` | `user_profiles` | Adds `active_cosmetics` JSONB pointer |
+| `20261110_admin_tier_override.sql` | `user_profiles` | Adds `admin_tier_override` TEXT + CHECK constraint |
+| `20261113_user_settings.sql` | `user_profiles` | Adds `settings` and `notification_preferences` JSONB blobs (NOT a separate `user_settings` table — see finding below) |
+| `20261114_ensure_all_tables.sql` | `user_profiles` (idempotent re-run) | Consolidates the above ALTERs; no RLS work |
+| `20261115_schema_fixes.sql` | `user_profiles` | Adds `status` (presence), `display_title`; re-asserts admin_tier_override CHECK constraint |
+| `20261120_user_titles.sql` | `user_titles`, `title_catalog` | Creates the only identity-domain tables actually authored in `/migrations/`. Enables RLS. Policies use `USING(TRUE)` |
+| `20261122_creator_milestones.sql` | `user_profiles` | Adds `creator_total_sales`, `creator_badges`, `is_pioneer_creator`, `creator_referral_code`, `referred_by_creator` |
+
+**Out-of-scope reference cited for admin pattern (not audited under this batch):** `20261109_blog_and_versions.sql` shows the canonical email-suffix admin policy used app-wide.
+
+**Tables in scope that are NEVER CREATEd in `/migrations/`:** `user_profiles` (the foundation of identity), and **no migration exists for `friends`, `friend_requests`, `friendships`, `blocked_users`, or `user_blocks`** — see findings.
+
+**Tables in scope that don't exist as tables:** `user_settings` is a misleading filename — `20261113_user_settings.sql` adds JSONB columns to `user_profiles`; there is no separate `user_settings` table. Same goes for "presence" — there is no `presence`/`online_status`/`last_seen` table; presence is `user_profiles.status` (TEXT, default `'online'`) and privacy lives in `user_profiles.settings.privacy` JSONB.
+
+#### RLS Coverage Matrix
+
+| Table | RLS Enabled? | SELECT policy | INSERT policy | UPDATE policy | DELETE policy | Tight? | PII columns? | Notes |
+|---|---|---|---|---|---|---|---|---|
+| `user_profiles` | ✗ (not in scope migrations) | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ (email/age/role baseline + admin_tier_override + content_preference + creator graph + status) | Foundational table never created or RLS-protected by any in-scope migration. Either inherits Supabase/Base44 baseline RLS (unverified here) or is wide-open. Pass 1A already flagged email/age/role as Critical PII. |
+| `user_settings` | n/a | n/a | n/a | n/a | n/a | n/a | n/a | No such table exists. Settings live in `user_profiles.settings` JSONB and inherit whatever RLS protects user_profiles. |
+| `user_titles` | ✓ (20261120 L46) | ✓ public-read `USING(TRUE)` | ⚠ `FOR ALL USING(TRUE) WITH CHECK(TRUE)` | ⚠ same | ⚠ same | ✗ Critical | partial (graph: granted_by, note) | The single `user_titles_admin_write` policy is `FOR ALL` with `USING(TRUE) WITH CHECK(TRUE)` — universally permissive. Any authenticated user can grant themselves any title including `founding_backer`/`chef_de_cuisine`. |
+| `title_catalog` | ✓ (20261120 L45) | ✓ public-read `USING(TRUE)` | ✗ | ✗ | ✗ | ✓ for SELECT only | none | No write policies → deny-all to non-service-role for writes. Likely intentional (catalog is seeded), flag for verification. |
+| presence (`user_profiles.status`) | inherits user_profiles | inherits | inherits | inherits | inherits | ✗ | ✓ (presence visible to all if profiles are publicly readable) | Privacy toggles `settings.privacy.showOnlineFriends`/`showOnlineEveryone` exist as JSONB but are NOT enforced by any SQL policy. Client-side only. |
+| `friends` / `friendships` / `friend_requests` | n/a — table missing | n/a | n/a | n/a | n/a | n/a | n/a | No migration creates these. Pass 1A-viii's friends UI must therefore call into a table created outside `/migrations/` (Base44 baseline, manually-applied SQL, or — worst case — non-existent at the DB layer). |
+| `blocked_users` / `user_blocks` | n/a — table missing | n/a | n/a | n/a | n/a | n/a | n/a | No migration creates these. Same gap as friends. |
+
+---
+
+#### Table: user_profiles
+
+The foundational identity table. Every `/migrations/` file that touches it does so via `ALTER TABLE` — no migration in scope `CREATE`s it, enables RLS on it, or attaches a policy to it. Combined with Pass 1A's findings (email/age/role written into the public profile, AuthContext spreading `select('*')` everywhere, generic `entities.list/create/update/delete`), this table is the single most consequential gap in the entire RLS posture.
+
+- **Severity:** Critical
+- **File:** all in-scope migrations (none creates or RLS-enables `user_profiles`)
+- **Table:** user_profiles
+- **Category:** 1 (RLS not enabled on user-data table)
+- **Issue:** No `/migrations/` file enables RLS on `user_profiles` or attaches any policy. The table is presumed to be created by a Base44 / Supabase-auth baseline that this audit cannot see. From the perspective of declarative, version-controlled schema, there is **no enforcement** of who may read or write user profiles. Every column added by `20261018`, `20261107`, `20261110`, `20261113`, `20261114`, `20261115`, `20261122` lands on a table whose access control is not in the repo.
+- **Suggested approach:** Add an explicit migration that (a) verifies the table exists, (b) `ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY`, (c) attaches a SELECT policy returning only the calling user's row plus a curated public projection, (d) attaches an UPDATE policy with `WITH CHECK (auth.uid() = user_id AND admin_tier_override IS NOT DISTINCT FROM OLD.admin_tier_override AND role IS NOT DISTINCT FROM OLD.role)` to prevent privilege-escalation rewrites, (e) attaches an INSERT policy pinning `user_id = auth.uid()`, (f) attaches a DELETE policy of `false` (use cascade from auth.users only).
+
+- **Severity:** Critical
+- **File:** `20261110_admin_tier_override.sql` L13–16; `20261115_schema_fixes.sql` L20–40
+- **Table:** user_profiles
+- **Category:** 5 (Missing UPDATE WITH CHECK clauses), 8 (Missing column-level protection for PII)
+- **Issue:** `admin_tier_override` is a CHECK-constrained TEXT column added directly to `user_profiles`. Combined with the universal pattern of `entities.update(...)` doing `select('*').update({...payload})` against the user's own row, **a user could send an update that includes `admin_tier_override: 'guild'`** and — absent an UPDATE policy with WITH CHECK — promote themselves to the highest paid tier without paying. The CHECK constraint only validates the *enum value*, not *who set it*.
+- **Suggested approach:** Move admin-controllable columns (`admin_tier_override`, any `role`, any staff flags) to a sibling `user_admin_overrides` table whose UPDATE policy requires `EXISTS (SELECT 1 FROM admin_users WHERE user_id = auth.uid())`. Or, if the column must stay on `user_profiles`, add an UPDATE policy with `WITH CHECK (NEW.admin_tier_override IS NOT DISTINCT FROM OLD.admin_tier_override OR EXISTS (SELECT 1 FROM admin_users WHERE user_id = auth.uid()))`.
+
+- **Severity:** Critical
+- **File:** `20261115_schema_fixes.sql` L20–26
+- **Table:** user_profiles
+- **Category:** 18 (Privacy controls not enforced at SQL level), 19 (Last-seen / online-status leaking despite privacy toggle)
+- **Issue:** `status` (presence) is a plain TEXT column with `DEFAULT 'online'`. Privacy toggles `settings.privacy.showOnlineFriends` and `settings.privacy.showOnlineEveryone` are documented in the JSONB shape (`20261113` L14-15) but **no SQL policy reads them**. Whatever read policy ends up on `user_profiles` will return `status` to whoever can read the row, regardless of the user's stated privacy preference.
+- **Suggested approach:** Either (1) move `status` (+ any `last_seen_at` if added later) into a dedicated `user_presence` table whose SELECT policy joins back to the owner's `settings.privacy.showOnlineEveryone` and `settings.privacy.showOnlineFriends` plus a friends-table check; or (2) replace public reads with a VIEW `user_profiles_public` that returns `CASE WHEN settings->'privacy'->>'showOnlineEveryone' = 'true' THEN status ELSE NULL END AS status`.
+
+- **Severity:** High
+- **File:** `20261115_schema_fixes.sql` L25
+- **Table:** user_profiles
+- **Category:** 15 (Missing CHECK constraints on enum-like fields)
+- **Issue:** `status TEXT DEFAULT 'online'` has no CHECK constraint on the allowed enum (`'online' | 'offline' | 'away' | 'invisible' | 'do_not_disturb'`). Anyone who can update the row can set `status` to arbitrary text, which could break presence rendering or be used for stored-payload tricks (e.g., HTML in status if the renderer is sloppy).
+- **Suggested approach:** Add `CHECK (status IN ('online','offline','away','invisible','do_not_disturb'))` and verify the React presence renderer treats it as a strict enum, not free text.
+
+- **Severity:** High
+- **File:** `20261122_creator_milestones.sql` L20–25
+- **Table:** user_profiles
+- **Category:** 5 (Missing UPDATE WITH CHECK), 17 (Cross-tenant leaks), 21 (Inconsistent column naming)
+- **Issue:** `creator_total_sales`, `creator_badges`, `is_pioneer_creator` are server-derived but live on `user_profiles` and (absent a tight UPDATE policy) can be self-edited the same way `admin_tier_override` can. `referred_by_creator UUID` has no FK constraint to `auth.users(id)` or `user_profiles(user_id)` and no CHECK preventing self-referral (`referred_by_creator = user_id`). `creator_referral_code` is unique-on-not-null but has no length / charset CHECK matching the documented "6-char alphanumeric" shape — a user with write access could set their own to `'A'`. Inconsistent naming: `referred_by_creator` (column on user_profiles) is functionally a `referrer_user_id` — the "_creator" suffix conflates role with identity.
+- **Suggested approach:** Move server-derived counters (`creator_total_sales`, `creator_badges`, `is_pioneer_creator`) into a `creator_stats` table whose UPDATE policy is admin/service-role-only. Add FK `referred_by_creator → user_profiles(user_id) ON DELETE SET NULL` and CHECK `referred_by_creator IS DISTINCT FROM user_id`. Add CHECK `creator_referral_code ~ '^[A-Z0-9]{6}$'`.
+
+- **Severity:** High
+- **File:** `20261122_creator_milestones.sql` L36–38
+- **Table:** user_profiles
+- **Category:** 26 (ALTER patterns leaving columns nullable / bad defaults)
+- **Issue:** The backfill `UPDATE user_profiles SET creator_referral_code = UPPER(SUBSTRING(REPLACE(user_id::text, '-', ''), 1, 6))` derives the referral code from the first 6 hex chars of the user's UUID. This is **deterministic and reverse-mappable** — given any `creator_referral_code`, an attacker can guess the prefix of the referring user's auth UUID. UUIDs are not secrets per se, but exposing a UUID prefix on a *public* referral code (links shared in marketing) leaks identity-graph metadata and partially fingerprints the user.
+- **Suggested approach:** Re-roll the backfill using `gen_random_uuid()`-derived random characters and consider a `pgcrypto`-based 6-char base32 generator that's collision-checked against the existing partial unique index.
+
+- **Severity:** High
+- **File:** `20261018_campaign_consent_columns.sql` L18–19
+- **Table:** user_profiles
+- **Category:** 8 (PII column-level protection)
+- **Issue:** `content_preference TEXT DEFAULT 'Teen'` and `content_preferences JSONB` capture age-rating preferences. While not strictly PII, these strongly correlate with the user's age (combined with the `age` column flagged in Pass 1A) and reveal content tolerances that competitors / harassers / underage-targeting parties could mine. They land on a table with no SELECT policy in scope.
+- **Suggested approach:** Move to the same `user_private` split recommended for email/age/role, or include in the projection-restricted `user_profiles_public` VIEW.
+
+- **Severity:** Medium
+- **File:** `20261113_user_settings.sql` L25–27; `20261107_active_cosmetics.sql` L15–16
+- **Table:** user_profiles
+- **Category:** 8 (PII), 18 (Privacy controls)
+- **Issue:** `settings JSONB` contains `legal.analyticsCookies` and `legal.marketingCookies` — these are GDPR/CCPA-relevant consent records. Storing them in a free-form JSONB blob on a wide-open profile means any read of the profile leaks the user's consent posture, and any write to the profile can rewrite their consent record (legally consequential — pretending to be the user could falsify consent). `notification_preferences` and `active_cosmetics` are less sensitive but follow the same access pattern.
+- **Suggested approach:** Split consent into a dedicated `user_consents` table with append-only history, RLS that only permits the user to insert new consent rows (never UPDATE/DELETE), and a SECURITY DEFINER function for reading the latest consent. Settings as a whole should be self-only-readable; do not include settings in any public projection.
+
+- **Severity:** Medium
+- **File:** `20261110_admin_tier_override.sql` L1–11 (comment)
+- **Table:** user_profiles
+- **Category:** 24 (TODO/FIXME comments — informational)
+- **Issue:** The migration's comment explicitly documents that the override is "Enforced at read time in `src/api/billingClient.js`" — i.e., the *security boundary is the client*. This re-confirms the systemic CLIENT-SIDE AUTHORITY issue and is filed here for the schema record.
+- **Suggested approach:** Move tier resolution into a SECURITY DEFINER `resolve_user_tier(p_user_id UUID)` function that the client calls via RPC. The function reads `admin_tier_override` and the Stripe-linked subscription; no other code path needs raw access to the column.
+
+- **Severity:** Cosmetic
+- **File:** `20261122_creator_milestones.sql` L29–31; multiple
+- **Table:** user_profiles
+- **Category:** 22 (Indexes on policy-critical columns)
+- **Issue:** `idx_user_profiles_creator_referral_code` exists, but there is no index on `user_id` itself in any in-scope migration. Once a SELECT policy of `user_id = auth.uid()` lands, every read becomes an index seek; without an index, RLS turns into a full scan and is DoS-able.
+- **Suggested approach:** When the missing CREATE TABLE / RLS migration is authored, ensure `(user_id)` is indexed (or `user_id` is the PK, which is the more common pattern).
+
+---
+
+#### Table: user_settings
+
+- **Severity:** Cosmetic
+- **File:** `20261113_user_settings.sql` (filename)
+- **Table:** user_settings (does not exist as a table)
+- **Category:** 21 (Inconsistent naming)
+- **Issue:** The filename `20261113_user_settings.sql` implies a table by that name, but the migration only adds JSONB columns to `user_profiles`. Anyone grepping for `CREATE TABLE user_settings` will get zero hits and may assume the feature is unimplemented.
+- **Suggested approach:** Rename to `20261113_user_profile_settings_columns.sql` on next housekeeping pass, or split settings into a real `user_settings` table (recommended — see PII findings above; a real table would let RLS gate the consent/privacy blob distinctly from the public profile).
+
+---
+
+#### Table: user_titles
+
+The table itself is well-shaped (PK, FK to title_catalog, unique `(user_id, title_id)`, supporting index). RLS is enabled. **The policies are the problem.**
+
+- **Severity:** Critical
+- **File:** `20261120_user_titles.sql` L56–61
+- **Table:** user_titles
+- **Category:** 3 (Universally-permissive policies)
+- **Issue:** The `user_titles_admin_write` policy is declared as `FOR ALL USING (TRUE) WITH CHECK (TRUE)`. The migration's own comment admits the intent: "we leave the policy permissive so the service role can grant titles, and rely on the admin gate in the React panel." This is exactly the systemic CLIENT-SIDE AUTHORITY anti-pattern at the database boundary. Any authenticated user calling `entities('user_titles').create({user_id: <theirs>, title_id: 'founding_backer'})` succeeds — and `founding_backer` is documented as a Kickstarter exclusive that should "never be granted again". Same applies to `chef_de_cuisine` (Aetherian Studios staff title), and to *anyone else's* user_id (a user could grant titles to other accounts).
+- **Suggested approach:** Replace with a real admin gate: `CREATE POLICY user_titles_admin_write ON user_titles FOR INSERT|UPDATE|DELETE TO authenticated USING (EXISTS (SELECT 1 FROM admin_users WHERE user_id = auth.uid())) WITH CHECK (EXISTS (SELECT 1 FROM admin_users WHERE user_id = auth.uid()));` — and create the `admin_users` table (see Admin Role Infrastructure section below). The service role bypasses RLS by design, so the admin check does not block legitimate server-side grants.
+
+- **Severity:** High
+- **File:** `20261120_user_titles.sql` L52–55
+- **Table:** user_titles
+- **Category:** 7 (SELECT policies that leak cross-tenant)
+- **Issue:** `user_titles_read_own` is named "read_own" but the policy body is `USING (TRUE)` — i.e., everyone reads everyone's titles. The comment explains the intent: titles render on profile cards, so they need to be public. That's defensible *for the title_id*, but the table also exposes `granted_by` (admin/staff UUID), `granted_at` timestamp, and `note` (a free-text admin note: "comp tier for beta-testing", etc.). Notes attached to title grants are now world-readable.
+- **Suggested approach:** Either (1) move admin-only fields (`granted_by`, `note`) to a sibling `user_titles_admin_meta` table with admin-only RLS, or (2) replace the policy with a `USING (TRUE)` projected through a VIEW `public_user_titles AS SELECT user_id, title_id, granted_at FROM user_titles` and grant SELECT on the view but not the table.
+
+- **Severity:** High
+- **File:** `20261120_user_titles.sql` L34, L37
+- **Table:** user_titles
+- **Category:** 12 (Missing FK cascades to auth.users)
+- **Issue:** `user_id UUID NOT NULL` and `granted_by UUID` are typed as UUID but neither has a foreign key to `auth.users(id)`. When an account is deleted, its `user_titles` rows orphan (with stale `user_id`s referencing nothing) and `granted_by` references vanish. Cross-cutting: this also breaks any future RLS check that joins back to `auth.users` to detect deleted accounts.
+- **Suggested approach:** `ALTER TABLE user_titles ADD CONSTRAINT user_titles_user_fk FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE; ADD CONSTRAINT user_titles_granted_by_fk FOREIGN KEY (granted_by) REFERENCES auth.users(id) ON DELETE SET NULL;`
+
+- **Severity:** Medium
+- **File:** `20261120_user_titles.sql` L60
+- **Table:** user_titles
+- **Category:** 4 (Missing INSERT actor pinning)
+- **Issue:** Even after fixing the universally-permissive WITH CHECK, the policy as written would still let a hypothetical admin insert `granted_by = <some other admin's UUID>`. There's no constraint that `granted_by = auth.uid()` on INSERT.
+- **Suggested approach:** In the corrected admin-only INSERT policy, set `WITH CHECK (granted_by = auth.uid() AND EXISTS (SELECT 1 FROM admin_users WHERE user_id = auth.uid()))`.
+
+
+---
+
+#### Table: title_catalog
+
+- **Severity:** Medium
+- **File:** `20261120_user_titles.sql` L45, L49–51
+- **Table:** title_catalog
+- **Category:** 2 (RLS enabled but no write policies — verify intent)
+- **Issue:** RLS is enabled with only a SELECT policy (`title_catalog_read USING(TRUE)`). No INSERT/UPDATE/DELETE policy exists, so writes are deny-all to non-service-role. This is likely intentional (catalog is seeded via the migration's own INSERT, and catalog entries should not be user-mutable), but flag for explicit confirmation.
+- **Suggested approach:** Add a comment to the migration explicitly stating "writes via service role only" or add an admin-only ALL policy with `EXISTS (SELECT 1 FROM admin_users ...)` so the intent is declarative rather than load-bearing on absence-of-policy.
+
+- **Severity:** Low
+- **File:** `20261120_user_titles.sql` L19–24, L65–75
+- **Table:** title_catalog
+- **Category:** 15 (Missing CHECK constraints)
+- **Issue:** `unlock_rule TEXT NOT NULL` is documented as an enum (`'default' | 'tier' | 'guild_member' | 'guild_owner' | 'manual'`) but has no CHECK constraint enforcing the set. A typo on a future seed insert would silently land garbage.
+- **Suggested approach:** `CHECK (unlock_rule IN ('default','tier','guild_member','guild_owner','manual'))`.
+
+---
+
+#### Table: presence / online_status / last_seen
+
+There is no dedicated presence table. Presence consists of two fields scattered across `user_profiles`:
+- `status` (TEXT, default `'online'`) — see findings above under user_profiles
+- `settings.privacy.{showOnlineFriends, showOnlineEveryone}` (JSONB) — privacy toggles
+
+- **Severity:** Critical
+- **File:** N/A (no migration creates a presence table)
+- **Table:** presence (missing)
+- **Category:** 18, 19 (Privacy not enforced at SQL level; last-seen leaking despite toggle)
+- **Issue:** Pass 1A-viii flagged the Friends/Presence UI; this audit confirms the database has no privacy-enforcing structure for presence. The toggles exist as documentation in JSONB shape but no SQL reads them. Anyone able to read `user_profiles` reads `status`. There is no `last_seen_at` column, so "appears offline after 5 minutes idle" must be computed client-side or in some non-migrated table — either way, not enforced here.
+- **Suggested approach:** Create `user_presence (user_id PK FK→auth.users, status TEXT CHECK enum, last_seen_at TIMESTAMPTZ, visibility TEXT CHECK ('everyone','friends','none'))` with RLS: SELECT policy that returns the row only if `visibility='everyone'` OR (`visibility='friends'` AND requester is friends per a friends table) OR `user_id = auth.uid()`. Move `status` off `user_profiles`.
+
+- **Severity:** High
+- **File:** N/A
+- **Table:** presence
+- **Category:** 22 (Indexes on policy-critical columns)
+- **Issue:** Whatever future presence table emerges will need an index on `(user_id)` and likely on `(last_seen_at)` for "online in the last N minutes" queries. Without that, presence reads under load become a sequential scan + RLS evaluation, which is the worst-case path.
+- **Suggested approach:** Plan for the index when the table is created; do not retrofit.
+
+---
+
+#### Table: friends / friendships / friend_requests
+
+**No migration in `/migrations/` creates these tables.** Pass 1A-viii audited a Friends UI and Pass 2-iv flagged a `searchUsers` PII regression; both depend on a friends table existing somewhere. This audit cannot find that somewhere in the migration folder.
+
+- **Severity:** Critical
+- **File:** N/A (table absent)
+- **Table:** friends / friend_requests
+- **Category:** 1 (RLS on user-data table)
+- **Issue:** The friends domain has no schema in scope. Either (a) the table is created by a Base44 baseline / Supabase initial-schema dump that lives outside `/migrations/`, in which case its RLS posture is undocumented and likely default-permissive; or (b) the table doesn't exist and the friends UI is calling against a table that fails silently because the entities factory's `select('*')` against a missing table just returns an error and the client treats it as empty (the client-side authority pattern flagged in earlier passes); or (c) it lives under a different domain name not matched by the grep. Any of those is a Critical gap because the entire identity-graph feature lacks a verifiable RLS contract.
+- **Suggested approach:** Author the missing migration. Minimum shape: `friend_requests (id, from_user_id FK→auth.users CASCADE, to_user_id FK→auth.users CASCADE, status TEXT CHECK ('pending','accepted','rejected','cancelled'), created_at, responded_at, UNIQUE(from_user_id, to_user_id))` and `friendships (user_a_id, user_b_id, created_at)` with `CHECK(user_a_id < user_b_id)` to canonicalize the pair. Enable RLS with policies: SELECT on friend_requests if `auth.uid() IN (from_user_id, to_user_id)`; INSERT pinned to `from_user_id = auth.uid()`; UPDATE only by `to_user_id` and only to flip status from 'pending' → 'accepted'/'rejected'; SELECT on friendships if `auth.uid() IN (user_a_id, user_b_id)`. Add indexes on `(to_user_id, status)` and `(user_a_id), (user_b_id)`.
+
+- **Severity:** Critical
+- **File:** N/A
+- **Table:** friend_requests
+- **Category:** 17 (Cross-tenant leaks in friend / block / presence systems)
+- **Issue:** Without an RLS-protected friend_requests table, both parties' inboxes can leak. A's pending requests should be visible to A and to the recipient B only — never to a third party C. The audit cannot confirm this property holds because the table isn't authored here.
+- **Suggested approach:** As above; SELECT policy must restrict to `auth.uid() IN (from_user_id, to_user_id)`.
+
+---
+
+#### Table: blocked_users / user_blocks
+
+**No migration in `/migrations/` creates these tables.**
+
+- **Severity:** Critical
+- **File:** N/A
+- **Table:** blocked_users / user_blocks
+- **Category:** 1, 17, 18 (RLS on user-data; cross-tenant leaks; privacy not enforced at SQL level)
+- **Issue:** The block-list domain has no schema in scope. If blocking is enforced solely at the client/UI layer (filtering messages, hiding profiles in search), then the block has no real teeth: a malicious client can simply skip the filter and read the blocked user's content via direct table access. Privacy norm for blocks is also that the blocked party should *not* see they're blocked; without a SELECT policy that enforces this asymmetry, even the existence of a block list leaks.
+- **Suggested approach:** Author `user_blocks (blocker_id FK→auth.users CASCADE, blocked_id FK→auth.users CASCADE, created_at, PRIMARY KEY(blocker_id, blocked_id))` with RLS: SELECT only if `auth.uid() = blocker_id` (blocked party cannot see); INSERT `WITH CHECK (blocker_id = auth.uid() AND blocked_id <> auth.uid())`; DELETE only if `auth.uid() = blocker_id`; no UPDATE. Then patch every cross-user-read policy in the database to JOIN against `user_blocks` and filter out rows where the *target* has blocked the requester (this is the load-bearing piece — RLS at the source of truth, not at the consumer).
+
+---
+
+#### Admin Role Infrastructure
+
+- **Severity:** Critical
+- **File:** `20261109_blog_and_versions.sql` L60–76 (cited cross-batch); `20261120_user_titles.sql` L56–61 (no admin gate at all)
+- **Table:** N/A (cross-cutting)
+- **Category:** 10 (Missing admin role infrastructure), 11 (isAdminEmail-style email-suffix admin checks IN SQL)
+- **Issue:** No `admin_users` table exists in `/migrations/`. No JWT custom claim mechanism is provisioned. The only admin-detection pattern used in SQL is the email-suffix match in `20261109_blog_and_versions.sql` (`auth.jwt() ->> 'email' LIKE '%@aetherianstudios.com'` etc.) — exactly the SQL mirror of the `isAdminEmail()` Critical from `forumsClient.js:202`. This means: (a) anyone who registers with an `@aetherianstudios.com` or `@guildstew.com` email gets admin-level access to blog/versions; (b) email confirmation in Supabase auth is the only thing standing between an attacker and admin if those domains' MX records are misconfigured or if a self-hosted provider is used; (c) the pattern propagates — any future admin-gated migration is expected to copy/paste the same email-LIKE clause. `user_titles_admin_write` does not even attempt this and is fully open.
+- **Suggested approach:** Author a foundational migration that creates `admin_users (user_id UUID PK FK→auth.users CASCADE, role TEXT CHECK ('staff','superadmin'), created_at, granted_by UUID FK→auth.users)`; seed the staff list from the current email override list; replace every email-LIKE policy across the database with `EXISTS (SELECT 1 FROM admin_users WHERE user_id = auth.uid())`. Then add a JWT custom claim (Supabase auth hook) that mirrors `admin_users` membership into the JWT for client-side affordance — but never as a security boundary, since custom claims can be added/removed by the auth server independent of the table.
+
+---
+
+#### SECURITY DEFINER / Triggers
+
+- **Severity:** Low (informational — out-of-scope migration cited)
+- **File:** `20261109_blog_and_versions.sql` L82–89 (cross-batch reference)
+- **Table:** N/A
+- **Category:** 9 (SECURITY DEFINER functions with user-supplied input)
+- **Issue:** The only SECURITY DEFINER function spotted while scanning in-scope migrations is `increment_blog_view(p_slug TEXT)` (out-of-scope batch 2-v-e). It takes a user-supplied slug, so flag it for that batch. **No SECURITY DEFINER functions exist in any in-scope identity-domain migration.** No triggers are created in scope either.
+- **Suggested approach:** Defer to batch 2-v-e for blog/forums. For identity, when the missing migrations are authored, prefer SECURITY INVOKER for read paths and use SECURITY DEFINER sparingly for admin-write paths with strict input validation.
+
+
+---
+
+#### Cross-cutting findings
+
+- **Severity:** Medium
+- **File:** `20261114_ensure_all_tables.sql` (entire file)
+- **Table:** user_profiles + many others
+- **Category:** 25 (Migration file ordering issues)
+- **Issue:** `20261114_ensure_all_tables.sql` is documented as an idempotent re-run of every prior table/column to "stop app-load crashes" without replaying every individual migration. This implies the migration history was not always run end-to-end on every environment — i.e., environments may exist where some columns were never added by their original migration but only by `20261114`. The downstream migrations `20261115_schema_fixes.sql`, `20261120_user_titles.sql`, and `20261122_creator_milestones.sql` add to `user_profiles` columns assuming previous columns are present. If `20261114` is skipped on a fresh DB and the originals failed, later migrations target columns that may not exist. The CHECK constraint re-add in `20261115` L30–40 is defensive against this, but the risk pattern is broader.
+- **Suggested approach:** Add a guard at the top of each post-`20261114` migration that asserts the prior migrations ran (e.g., `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_profiles' AND column_name='settings') THEN RAISE EXCEPTION 'run 20261113_user_settings.sql first'; END IF; END $$;`).
+
+- **Severity:** Low
+- **File:** all in-scope migrations
+- **Table:** N/A
+- **Category:** 23 (Comments containing "base44" or migration leftovers)
+- **Issue:** Grepped for "base44" across all in-scope migrations: zero hits. Identity-domain migrations are clean of Base44 references in comments and SQL bodies. (Per the systemic context, Base44 references are concentrated elsewhere; identity migrations have already been cleaned.)
+- **Suggested approach:** None — flag is informational confirmation that this domain is past the Base44-naming hygiene step.
+
+- **Severity:** Low
+- **File:** all in-scope migrations
+- **Table:** N/A
+- **Category:** 24 (TODO / FIXME comments)
+- **Issue:** Grepped for TODO/FIXME/XXX/HACK across all in-scope migrations: zero hits. The only "concerning" comment is `20261120_user_titles.sql` L57–59 explicitly admitting the `USING(TRUE) WITH CHECK(TRUE)` permissive policy is load-bearing on the React admin gate — already filed as Critical above.
+- **Suggested approach:** None — informational.
+
+---
+
+##### Batch 2-v-a Summary
+
+**Tables audited (count):** 7 nominal targets — `user_profiles`, `user_settings`, `user_titles`, `title_catalog` (incidental), presence, friends/friend_requests, blocked_users/user_blocks. Of these, **only 2 are actually authored in `/migrations/`** (`user_titles`, `title_catalog`). `user_profiles` is ALTERed but never CREATEd or RLS-policied in scope. `user_settings` does not exist as a table. Presence/friends/blocks have no migration coverage at all.
+
+**Tables with RLS disabled:** 1 confirmed (`user_profiles` — no `ENABLE ROW LEVEL SECURITY` in scope). 3 indeterminate because the table does not exist in `/migrations/` (presence, friends, blocks).
+
+**Tables with universally-permissive policies:** 1 — `user_titles` via `user_titles_admin_write` (`FOR ALL USING(TRUE) WITH CHECK(TRUE)`). The accompanying `user_titles_read_own` is named "read_own" but is also `USING(TRUE)` — flagged High but defensible as public-by-design for the title_id field; problematic only for `granted_by`/`note`.
+
+**Tables missing INSERT actor pinning:** 1 (`user_titles` — see Critical finding). The table additionally fails to pin `granted_by` to `auth.uid()`. `user_profiles` has no INSERT policy in scope at all.
+
+**PII exposure summary:**
+- `user_profiles` columns added in scope that are PII or privacy-sensitive: `admin_tier_override`, `status` (presence), `display_title`, `content_preference`, `content_preferences`, `settings` (incl. legal/consent + privacy toggles), `notification_preferences`, `active_cosmetics`, `creator_total_sales`, `creator_badges`, `is_pioneer_creator`, `creator_referral_code`, `referred_by_creator`. Combined with the email/age/role flagged in Pass 1A, every column on `user_profiles` is either user-private, server-derived, or graph-leaking — and there is no SELECT policy in the migrations to gate any of it.
+- `user_titles` exposes `granted_by` (admin UUID) and `note` (free-text admin comment) under a `USING(TRUE)` SELECT policy.
+- No column-level VIEW or `user_private` split exists. Recommended pattern (per `H` rules): split `user_profiles` into a public projection VIEW + private sibling table.
+
+**Admin role infrastructure status:** **Missing.** There is no `admin_users` table, no JWT custom-claim mechanism, and no in-scope migration that establishes either. The cross-batch evidence (`20261109_blog_and_versions.sql`) shows the existing pattern is email-suffix matching in SQL — i.e., the SQL twin of the `isAdminEmail()` Critical at `forumsClient.js:202`. `user_titles_admin_write` does not even apply that pattern; it's wide open.
+
+**Top 5 highest-priority issues for this batch:**
+
+1. **`user_profiles` has no RLS in scope** — the foundational identity table is either inheriting an unverified Base44/Supabase baseline or is wide open. Combined with the entities factory's `select('*').update(...)` pattern, a malicious client can rewrite `admin_tier_override`, `creator_badges`, `is_pioneer_creator`, `status`, and any future admin-controlled column on their own row. (Critical)
+2. **`user_titles_admin_write` policy is `USING(TRUE) WITH CHECK(TRUE)`** — any authenticated user can grant themselves any title including the documented-as-exclusive `founding_backer` and `chef_de_cuisine`, and can grant titles to other users. Migration comment explicitly admits the permissive intent. (Critical)
+3. **No `admin_users` table exists; admin = email suffix in SQL.** The existing pattern in `20261109` mirrors the `isAdminEmail()` Critical. Every admin-gated future policy will inherit this footgun unless the foundational `admin_users` migration is authored first. (Critical)
+4. **No friends, friend_requests, or blocked_users tables in `/migrations/`** — the entire identity-graph + harassment-prevention domain has no schema authored in version control. Pass 1A-viii's UI and Pass 2-iv's PII regression both depend on tables that don't exist in scope. Whatever does enforce this lives outside the audited surface. (Critical)
+5. **Privacy controls (`settings.privacy.showOnlineFriends`, `showOnlineEveryone`) and presence (`user_profiles.status`) are not enforced at the SQL level.** Any reader who can read the profile reads the status, regardless of stated preference. The toggle is decorative client-side state. (Critical)
+
+**Overall verdict:** **The auth/identity database layer is NOT the last line of defense — it is also leaky.** The audit's working hypothesis going into Pass 2 was that RLS could compensate for the documented client-side authority pattern. For the auth/identity domain, that hypothesis fails:
+
+- The foundational table (`user_profiles`) has no policy in scope, so RLS cannot compensate for the `entities('user_profiles').update(...)` pattern that lets users self-edit their tier override and creator metrics.
+- The one identity table that IS RLS-policied (`user_titles`) declares its policies with `USING(TRUE) WITH CHECK(TRUE)`, which is functionally equivalent to no RLS while pretending otherwise — arguably worse because the presence of the policy creates false confidence.
+- The presence/friends/blocks subdomains have no schema in scope at all; whatever exists lives in a Base44 baseline this audit cannot verify.
+- The admin-detection pattern is email-suffix matching in SQL, propagating the `isAdminEmail()` anti-pattern from client code into the database.
+
+The remediation order for this domain should be: (1) author the missing `admin_users` table and replace email-LIKE policies; (2) author the missing `user_profiles` RLS migration with column-level PII split; (3) replace `user_titles_admin_write`'s permissive policy with an `admin_users`-joined check; (4) author the missing friends/blocks/presence schema with proper cross-tenant policies. Items (1)–(3) are tractable in isolation; (4) is a multi-table effort and depends on the friends/block design being settled first.
+
