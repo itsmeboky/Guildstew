@@ -10972,3 +10972,561 @@ The 1410 findings can be grouped into ~10 "fix-projects" — each is a coherent 
 The above ordering minimizes blocking dependencies: rotate-secrets and base44-migration unblock RLS work, which unblocks role-check work, which unblocks the admin RPC layer. Sanitization and PII-purge can run in parallel. Toast/mobile/skeleton consolidation, error boundaries, and design tokens are independent and can be slotted anywhere.
 
 **Pass 1A is complete.** Pass 2 should focus on consuming-side renderers (the Markdown XSS verification in particular), the lib layer (`src/lib/*`), and the page layer (`src/pages/*`), where many of the Critical issues flagged in Pass 1A can be definitively confirmed or downgraded.
+
+
+---
+
+## Pass 2 — Backend, Data Layer & Schema Audit
+
+Pass 2 focuses on the data and backend layer (api, lib, utils, functions, migrations) of the Guildstew codebase. Pass 1A flagged ~1410 findings in `/src/components/`; Pass 2 verifies the systemic issues that surfaced (client-side authority, TIERS drift, XSS surface, isAdminEmail() pattern, public-profile PII, Base44 leftovers) at their source-of-truth layer.
+
+### Batch 2-i: /src/api/
+
+This batch covers `supabaseClient.js`, `base44Client.js`, `entities.js`, `aiClient.js`, `billingClient.js`, and `integrations.js`. Per the user's naming decision, all `base44`-named files/exports/comments are flagged for migration to `supabase`-prefixed equivalents (replacement file: `src/api/supabaseEntities.js`).
+
+#### /src/api/supabaseClient.js
+
+- **Severity:** Low
+- **File:** src/api/supabaseClient.js
+- **Line:** 10
+- **Category:** Auth security / client config
+- **Issue:** `createClient(supabaseUrl, supabaseAnonKey)` is invoked with no options object. Auth persistence behaviour is implicit (defaults to `localStorage` + `autoRefreshToken: true` + `detectSessionInUrl: true`). For a browser app handling tier-gated billing and admin overrides, the auth options should be explicit and reviewed (e.g. `persistSession`, `storageKey`, `flowType: 'pkce'`, `detectSessionInUrl`).
+- **Suggested approach:** Pass an explicit `auth` options object (`persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce'`) and a stable `storageKey` so silent default changes in `@supabase/supabase-js` cannot regress auth persistence/reset behaviour.
+
+- **Severity:** Low
+- **File:** src/api/supabaseClient.js
+- **Line:** 6-8
+- **Category:** Hardcoded values / runtime fail-mode
+- **Issue:** Module-load throw if env vars are missing. In a Vite/SSR/test context this hard-throws at import time, which crashes the entire app shell with no graceful UX (no error boundary in scope at module-load time). Pass 1A noted there's now a top-level ErrorBoundary, but a thrown Error at import is caught by no boundary — it kills the bundle.
+- **Suggested approach:** Either (a) export a lazy `getSupabase()` that throws on first use so an error boundary can catch it, or (b) replace the throw with a console.error + safe stub client that returns descriptive errors on every call so the auth screen can render and tell the user to configure env.
+
+- **Severity:** Cosmetic
+- **File:** src/api/supabaseClient.js
+- **Line:** 1-10
+- **Category:** Missing TypeScript/JSDoc types
+- **Issue:** No JSDoc `@type {import('@supabase/supabase-js').SupabaseClient}` annotation on the `supabase` export. Every consumer would benefit from the inferred type; adding the annotation is one line.
+- **Suggested approach:** Add `/** @type {import('@supabase/supabase-js').SupabaseClient} */` immediately above the `export const supabase = ...` line.
+
+##### supabaseClient.js verification notes (informational, not findings)
+- ✓ Single Supabase client instance exported (verified — no second `createClient` in file).
+- ✓ Uses `VITE_SUPABASE_ANON_KEY` (anon key, not service role).
+- ✓ No custom `fetch` interceptor, headers, or middleware that could leak data.
+- ✓ Uses Vite env vars correctly.
+
+
+#### /src/api/base44Client.js
+
+This entire file is a Base44 leftover by name and surface area. It is now a thin wrapper around `supabaseClient` + `entities` (no Base44 SDK dependency remains in the file itself), but the module name, the export name, and the comment scaffolding all preserve the Base44 mental model. Per the user's naming decision: this file should be deleted; consumers should import from `./supabaseClient` (auth), `./supabaseEntities` (CRUD), and `./integrations` (Core.UploadFile, etc.) directly.
+
+- **Severity:** Critical
+- **File:** src/api/base44Client.js
+- **Line:** entire file
+- **Category:** Base44 leftovers
+- **Issue:** Filename `base44Client.js` and exported name `base44` are Base44-era naming. Per migration spec these should be removed entirely; the wrapping object adds zero value over importing `supabase`, `entities`, and `integrations` directly.
+- **Suggested approach:** Delete `src/api/base44Client.js`. Migrate every `import { base44 } from '@/api/base44Client'` callsite (Pass 1A flagged dozens) to `import { supabase } from '@/api/supabaseClient'` + `import { entities } from '@/api/supabaseEntities'` + `import { Core } from '@/api/integrations'`. The `base44.auth.updateMe` helper is the only piece with non-trivial behaviour; relocate it to `supabaseClient.js` as `updateMe(updates)` or to a new `src/api/auth.js`.
+
+- **Severity:** High
+- **File:** src/api/base44Client.js
+- **Line:** 23-26
+- **Category:** Auth security / silent failure
+- **Issue:** `auth.logout(redirectUrl)` calls `supabase.auth.signOut()` without `await`. The signOut call returns a Promise; the immediate `window.location.href = redirectUrl` may race the sign-out. On a slow network the user can navigate away before the local session is cleared, leaving stale auth state in localStorage (and an active session on the next page load until the promise resolves).
+- **Suggested approach:** Make the function `async` and `await supabase.auth.signOut()` before redirecting. Also handle the error case (sign-out failure) so the UI can surface it.
+
+- **Severity:** High
+- **File:** src/api/base44Client.js
+- **Line:** 35-49
+- **Category:** Missing error handling / silent failure
+- **Issue:** `functions.invoke(name, payload)` swallows every error, logs `console.warn`, and returns `null`. Callers cannot distinguish "function not deployed" from "function returned an error" from "function returned `null`". Combined with no return type, this silently masks billing/AI/email failures.
+- **Suggested approach:** Re-throw the error (or return a `{ ok: false, error }` shape) so callers can branch on failure. Reserve `console.warn` for genuinely informational events; rate-limit it if needed.
+
+- **Severity:** High
+- **File:** src/api/base44Client.js
+- **Line:** 41, 46
+- **Category:** console.warn left in
+- **Issue:** `console.warn` calls in production code path on every Edge Function failure. Will spam the console if a function is undeployed and called frequently.
+- **Suggested approach:** Remove or gate behind `import.meta.env.DEV`.
+
+- **Severity:** Critical
+- **File:** src/api/base44Client.js
+- **Line:** 70-86
+- **Category:** Storage path violations
+- **Issue:** `integrations.Core.UploadFile` defaults `bucket = 'campaign-assets'`. Per the storage-path spec, `campaign-assets` is **SRD only / read-only** for the app — every user upload here is a spec violation. The path also has no `users/{user_id}/...` prefix; it just becomes `${Date.now()}_${file.name}` at the bucket root, which (a) leaks user uploads into the SRD bucket, (b) names them with the unsanitized client-supplied filename, and (c) provides no per-user path namespace for RLS scoping.
+- **Suggested approach:** Default bucket to `user-assets` (matching `integrations.js`). Require an authenticated `userId` (pulled from `supabase.auth.getUser()`, never a prop) and prefix the path with `users/{user_id}/...`. Sanitize `file.name` (strip path separators, normalize unicode, cap length). Reject any caller that requests `bucket === 'campaign-assets'` unless an admin-only flag is present (and even then, route through a server-side function, not the browser).
+
+- **Severity:** High
+- **File:** src/api/base44Client.js
+- **Line:** 71
+- **Category:** Dead code / cosmetic bug
+- **Issue:** `const actualFile = file instanceof File ? file : file;` — both ternary branches are identical. The check is a no-op.
+- **Suggested approach:** Delete the line and use `file` directly. If the original intent was to coerce a Blob/buffer to a File, implement that explicitly.
+
+- **Severity:** Medium
+- **File:** src/api/base44Client.js
+- **Line:** 73-74
+- **Category:** Storage path / filename sanitization
+- **Issue:** `${Date.now()}_${actualFile.name}` interpolates a user-supplied filename directly into a storage path. A filename containing `../` or path separators could escape the intended directory. `Date.now()` is also predictable (collisions possible inside a single millisecond on rapid uploads).
+- **Suggested approach:** Use `crypto.randomUUID()` instead of `Date.now()`; sanitize `file.name` with a strict allowlist (`[A-Za-z0-9._-]`, length-capped) before concatenation; or generate the entire object key server-side.
+
+- **Severity:** Medium
+- **File:** src/api/base44Client.js
+- **Line:** 87
+- **Category:** Dead code / TODO leftover
+- **Issue:** `ExtractDataFromUploadedFile() { console.warn('Not implemented yet') }` is a permanent stub. If no caller depends on it, delete; if a caller does, implement it.
+- **Suggested approach:** Search for callers; either implement against a Supabase Edge Function or delete the export entirely.
+
+- **Severity:** Medium
+- **File:** src/api/base44Client.js
+- **Line:** 69
+- **Category:** Dead code
+- **Issue:** `SendSMS()` is a permanent stub with `console.warn`. Same pattern as ExtractDataFromUploadedFile.
+- **Suggested approach:** Delete unless a real implementation is planned within the next release.
+
+- **Severity:** Low
+- **File:** src/api/base44Client.js
+- **Line:** 28-31
+- **Category:** Auth security / coupling
+- **Issue:** `redirectToLogin(redirectUrl)` writes to `localStorage` (`post_login_redirect`) and force-navigates via `window.location.href`. The localStorage key is unscoped (could collide with other tabs/sessions), and the redirect URL is taken from a caller-supplied argument with no allowlist — open-redirect surface if a route ever passes user-controlled input.
+- **Suggested approach:** Validate `redirectUrl` against an allowlist of in-app paths (must start with `/`, no protocol/host). Namespace the localStorage key (e.g. `guildstew:post_login_redirect`).
+
+- **Severity:** Low
+- **File:** src/api/base44Client.js
+- **Line:** 8-21
+- **Category:** Auth security
+- **Issue:** `auth.updateMe(updates)` accepts arbitrary `updates` keys and forwards them all to `user_profiles`. Without a column whitelist, a caller could (RLS permitting) update sensitive columns (`is_admin`, `account_status`, `admin_tier_override`, `storage_limit_override_bytes`, `email`, `role`). Pass 1A flagged this as the "client-side authority" anti-pattern; this is its source-of-truth.
+- **Suggested approach:** Whitelist allowed user-mutable fields (`display_name`, `avatar_url`, `bio`, ...) and strip everything else before the update. Server-side RLS must back this up, but the client should not blindly forward arbitrary keys.
+
+
+#### /src/api/entities.js
+
+This file is the source-of-truth for the "client-side authority" anti-pattern flagged across Pass 1A. `createEntity(tableName)` is a generic CRUD factory that exposes `.list()` / `.filter()` / `.create()` / `.update()` / `.delete()` on **every** table, with no per-entity authorization, no field whitelisting, no actor pinning, and no pagination defaults. Every UserProfile.list(), Character.create({ owner_user_id }), Message.create({ sender_id }), etc. anti-pattern Pass 1A flagged ultimately resolves to one of these five generic methods. Per the user's naming decision this file should be renamed `supabaseEntities.js` (and `Query`/`User` re-exports retired).
+
+- **Severity:** Critical
+- **File:** src/api/entities.js
+- **Line:** 23-41
+- **Category:** .list() / fetch-all anti-pattern at the data layer
+- **Issue:** `.list(sort, limit)` on every entity issues `supabase.from(table).select('*')` with no caller-side filter, no actor scope, and **no default limit**. If RLS for a table is unset or fail-open, this returns the entire table. `UserProfile.list()` (the canonical example Pass 1A flagged dozens of times) returns every user's row including `email`, `age`, `role`, `last_seen_at` (per Pass 1A's privacy bug). Apply this to `messages`, `posts`, `support_tickets`, etc., and the same exposure exists.
+- **Suggested approach:** Refuse `.list()` without a `limit` (require an explicit `limit`, with a hard ceiling — 100 or 200 — at the helper layer). Force `.list()` callers to scope to the current user's data via either a server-side RPC or an explicit `filter({ owner_user_id: auth.uid() })`. For tables that have no per-user concept (SRD: `dnd5e_*`), expose a separate read-only helper. Consider deprecating `.list()` entirely on `user_profiles` — there is no legitimate client-side use case for "list all users."
+
+- **Severity:** Critical
+- **File:** src/api/entities.js
+- **Line:** 43-55
+- **Category:** Client-supplied actor ID anti-pattern
+- **Issue:** `.create(obj)` accepts an arbitrary `obj` and inserts it as-is. The browser is free to set `author_id`, `creator_id`, `sender_id`, `owner_user_id`, `admin_id`, `is_admin`, `is_dev_post`, `is_official`, `is_pinned`, `is_locked`, `account_status`, `admin_tier_override`, `storage_limit_override_bytes` — every field Pass 1A flagged as RLS-must-lock. The factory has no notion of "actor" and no opportunity to pin actor fields to `auth.uid()`.
+- **Suggested approach:** Replace the generic factory with per-entity helpers (or per-entity `actorFields` config) that strip/overwrite known actor columns with `auth.uid()` before insert. Server-side RLS must back this up, but the client should not blindly forward author/sender/owner IDs from caller input. For sensitive tables (posts, messages, support_tickets, admin_actions, subscriptions, user_profiles), wrap writes in server-side RPCs.
+
+- **Severity:** Critical
+- **File:** src/api/entities.js
+- **Line:** 57-66
+- **Category:** Client-supplied actor ID / missing field whitelist
+- **Issue:** `.update(id, updates)` accepts any `id` (including IDs the caller does not own) and arbitrary `updates`. RLS is the only thing preventing a caller from updating someone else's row, or updating an admin-only column on their own row. There is no field whitelist, no ownership check, no audit log.
+- **Suggested approach:** Per-entity field whitelists, mandatory `auth.uid()` ownership precondition, and server-side audit-logging RPCs for sensitive entities. At minimum, refuse updates to columns whose names match a known sensitive set (`is_*`, `*_admin*`, `*_override*`, `account_status`, `role`, `email`, `subscription_*`).
+
+- **Severity:** High
+- **File:** src/api/entities.js
+- **Line:** 68-75
+- **Category:** Auth security / missing session checks before mutations
+- **Issue:** `.delete(id)` issues `supabase.from(table).delete().eq('id', id)` with no actor check. Same RLS dependency as `.update`.
+- **Suggested approach:** Wrap deletes in per-entity helpers that require `auth.uid()` ownership (where applicable) or server-side RPC for admin deletes (with an `admin_actions` audit row).
+
+- **Severity:** Critical
+- **File:** src/api/entities.js
+- **Line:** 44, 51
+- **Category:** console.log / .error left in (HEIGHTENED)
+- **Issue:** `console.log('CREATE ${tableName}:', JSON.stringify(obj, null, 2))` logs **every create payload** to the browser console. For tables that include sensitive data (PII in `user_profiles`, message bodies in `messages`, ticket contents in `support_tickets`, `admin_actions` payloads, `subscriptions` rows containing Stripe IDs), this leaks every write to anyone with devtools open and to any browser extension that scrapes the console. `console.error` on the failure path further leaks the full Supabase error including details/hints.
+- **Suggested approach:** Remove both console statements outright. If verbose logging is needed for debugging, gate behind `import.meta.env.DEV` and redact known sensitive fields (email, age, payment IDs, message_body, ticket message text, prompt content).
+
+- **Severity:** High
+- **File:** src/api/entities.js
+- **Line:** 6, 24
+- **Category:** SELECT * usage (missing column lists)
+- **Issue:** Every `.list()` and `.filter()` issues `select('*')`. This (a) returns every column including ones that should be PII-redacted (`user_profiles.email`, `user_profiles.age`, `user_profiles.role`, `user_profiles.last_seen_at`), (b) makes schema changes visible to clients without intent, and (c) prevents Postgres from using covering indexes.
+- **Suggested approach:** Per-entity column allowlists at the helper level. For `user_profiles` specifically, default `.list()`/`.filter()` to a public-safe column set and require an explicit "private fields" opt-in (which should only be available to admin RPCs).
+
+- **Severity:** High
+- **File:** src/api/entities.js
+- **Line:** 1-77
+- **Category:** Missing pagination on potentially large result sets
+- **Issue:** `.list()` and `.filter()` have no default limit. A caller that omits `limit` retrieves the entire table. For `messages`, `posts`, `analytics_events`, `admin_actions`, `support_tickets`, `chat_conversations`, this is a DoS surface as the table grows.
+- **Suggested approach:** Default `limit` to a sane page size (e.g. 50), enforce a hard cap (e.g. 500), and add a `.page(cursor)` helper for cursor-based pagination on large tables.
+
+- **Severity:** High
+- **File:** src/api/entities.js
+- **Line:** 79-154
+- **Category:** Inconsistent naming (camelCase vs snake_case for entity exports) / duplicate aliases
+- **Issue:** Multiple entity keys point at the same table — leftover compatibility shims that should be retired:
+  - `User` and `UserProfile` → `user_profiles`
+  - `CampaignClassFeature` and `CampaignAbility` → `campaign_class_features`
+  - `Dnd5eClassFeature` and `Dnd5eAbility` → `dnd5e_class_features`
+  - `TicketResponse` and `TicketMessage` → `ticket_messages`
+  Each duplicate is a hazard: a future schema change touches one alias and silently regresses callsites using the other. The comments at lines 88-92 and 102-104 explicitly call out these as transitional shims.
+- **Suggested approach:** Pick one canonical name per table (the user's naming-migration is the right time). Codemod every callsite to the canonical name and delete the alias.
+
+- **Severity:** High
+- **File:** src/api/entities.js
+- **Line:** 156-157
+- **Category:** Dead code / footgun export
+- **Issue:** `export const Query = entities` is a duplicate alias. `export const User = null` is a foot-gun: any caller doing `import { User } from '@/api/entities'` and calling `User.list()` will throw `TypeError: cannot read properties of null`. Pass 1A flagged dozens of `User`-import callsites; this null export means each one is a runtime crash unless the caller imports from elsewhere.
+- **Suggested approach:** Delete `Query` and `User`. If there's a transitional consumer of `User`, point it at `entities.User` (which is the `user_profiles` shim) or delete the consumer.
+
+- **Severity:** Medium
+- **File:** src/api/entities.js
+- **Line:** 5-21
+- **Category:** Inconsistent error response shapes
+- **Issue:** Error handling is `if (error) throw error` — the raw Supabase error is rethrown unwrapped. Different tables return different `code`/`message`/`details` shapes. Callers cannot rely on a stable error contract; Pass 1A's findings showed dozens of inconsistent toast messages downstream as a result.
+- **Suggested approach:** Wrap the throw in a custom `EntityError` class with normalized fields (`code`, `userMessage`, `cause`) so UI layers can render consistent toasts.
+
+- **Severity:** Medium
+- **File:** src/api/entities.js
+- **Line:** 60
+- **Category:** Race condition / missing transaction handling
+- **Issue:** `.update()` always sets `updated_at: new Date().toISOString()` from the client clock. Two concurrent updates from two devices with skewed clocks can write a stale `updated_at`. There is no optimistic-concurrency guard (no `If-Match`/`updated_at` precondition), so last-write-wins silently overwrites an intervening write.
+- **Suggested approach:** Compute `updated_at` server-side via a Postgres trigger/default. For entities where concurrent edits are realistic (campaigns, character sheets, GM notes), add an `updated_at` precondition (`.eq('updated_at', expectedTimestamp)`) and surface the conflict to the user.
+
+- **Severity:** Medium
+- **File:** src/api/entities.js
+- **Line:** 1-154
+- **Category:** Missing transaction handling on multi-step writes
+- **Issue:** No transaction primitive. Any feature that needs "create A then B" (e.g. character + character_stats, campaign + campaign_invitation, support_ticket + initial ticket_message) must do two sequential writes with no rollback. If the second fails, the first is orphaned.
+- **Suggested approach:** Provide a thin `entities.tx(asyncFn)` helper that calls a Postgres RPC wrapping the multi-step write, or document per-feature RPCs for known multi-step writes.
+
+- **Severity:** Low
+- **File:** src/api/entities.js
+- **Line:** 88-92, 102-104, 108-112
+- **Category:** TODO / FIXME / migration leftovers
+- **Issue:** Comments document in-flight migrations (campaign_abilities → campaign_class_features, JSONB → top-level tables). The aliases exist for backward compat. These should be tracked as outstanding migration work, not code-comment TODOs.
+- **Suggested approach:** Open issues for each migration callout, then delete the comment + retire the alias once callsites are migrated.
+
+- **Severity:** Low
+- **File:** src/api/entities.js
+- **Line:** 1-159
+- **Category:** Base44 leftovers (file naming)
+- **Issue:** Per the user's naming decision, this file should be renamed `supabaseEntities.js`. The current name is generic but every Pass 1A callsite imports `entities` from elsewhere (`base44Client.js`'s re-export). The naming decision aligns the canonical entity-CRUD surface with the `supabase`-prefixed convention.
+- **Suggested approach:** Rename `src/api/entities.js` → `src/api/supabaseEntities.js`. Update all imports. Delete `base44Client.js` in the same change.
+
+- **Severity:** Cosmetic
+- **File:** src/api/entities.js
+- **Line:** 79-154
+- **Category:** Missing TypeScript/JSDoc types
+- **Issue:** No types on the `entities` map. Every consumer is essentially typing against `any`. A simple `keyof Database['public']['Tables']`-style typing would catch most table-name typos at compile time.
+- **Suggested approach:** Generate types via `supabase gen types typescript` (or hand-write a `Database` interface) and type `createEntity<T extends keyof Database['public']['Tables']>`.
+
+
+#### /src/api/aiClient.js
+
+- **Severity:** Critical
+- **File:** src/api/aiClient.js
+- **Line:** 39-51, 57-65, 71-81
+- **Category:** Missing tier gating on AI calls
+- **Issue:** `quickPick`, `aiGenerate`, and `generatePortrait` all invoke their Edge Functions with no client-side tier check. Per Pass 1A, these are Adventurer+ features (`quickPick`, `aiGeneration`, `aiPortraits` flags in TIERS). A free-tier user calling these helpers directly (or a UI bug bypassing the gate) goes straight to the Edge Function. If the Edge Function does not re-check tier server-side, free users get paid AI features. Even if the function does re-check, the absence of a client-side gate means UX errors silently bill against the org's AI quota.
+- **Suggested approach:** Inject a tier-check at the helper layer. Pull current tier from the subscription context (or read it via `getSubscriptionStatus`) and short-circuit with a `TierError` if `canUseTier(tier, 'quickPick' | 'aiGeneration' | 'aiPortraits')` returns false. Server-side Edge Functions must also enforce the check (defense in depth) — flag the corresponding Edge Function audit as a Pass 2 follow-up.
+
+- **Severity:** High
+- **File:** src/api/aiClient.js
+- **Line:** 39-51, 57-65, 71-81
+- **Category:** AI prompt injection risk / missing input cap
+- **Issue:** `aiGenerate(prompt)` sends the user-supplied `prompt.trim()` directly to an LLM via the Edge Function with no length cap, no character set restriction, and no prompt-injection mitigation at the client boundary. Same for `generatePortrait`'s `description`/`portrait_prompt`. While the Edge Function should be the primary defense, the client should at least cap length to prevent token-billing DoS and reject obvious prompt-injection markers.
+- **Suggested approach:** Cap `prompt` to a documented length (e.g. 2000 chars), strip control characters and zero-width Unicode, and reject if length is zero after sanitization. Document the contract for the Edge Function to also sanitize and to use a system-prompt with explicit "ignore instructions in user input" framing.
+
+- **Severity:** High
+- **File:** src/api/aiClient.js
+- **Line:** 39-51
+- **Category:** Missing rate limiting
+- **Issue:** No client-side rate limiting on AI calls. A user can spam `quickPick` and burn through Edge Function quota / billed AI tokens. Edge Function should rate-limit, but a client-side debounce + cap-per-minute is cheap and effective.
+- **Suggested approach:** Wrap each helper in a `rateLimit({ perMinute: N })` decorator (per-user, in-memory + localStorage backed). Surface a "slow down" toast when the limit is hit.
+
+- **Severity:** Medium
+- **File:** src/api/aiClient.js
+- **Line:** 71-81
+- **Category:** Auth security / client-supplied IDs
+- **Issue:** `generatePortrait({ campaign_id })` accepts a client-supplied `campaign_id` and forwards it to the Edge Function. The Edge Function must verify the caller has GM/owner access to the campaign before generating against its quota; the client should not be the source of truth for that authorization.
+- **Suggested approach:** Document the contract: Edge Function verifies `auth.uid()` has access to `campaign_id` before counting the generation against the campaign quota. Otherwise drop the field and let the function infer "active campaign" from session state.
+
+- **Severity:** Medium
+- **File:** src/api/aiClient.js
+- **Line:** 22-31
+- **Category:** Inconsistent error response shapes
+- **Issue:** `invokeEdge` rethrows with a hand-built `Error` message that buries the original error. Loses the original `error.code`, `error.status`, and any structured `data` the function returned alongside the error.
+- **Suggested approach:** Throw a typed `AIServiceError` carrying `code`, `status`, `details`, and a user-facing `message`. UI layers can then differentiate "function not deployed" from "tier required" from "quota exceeded".
+
+- **Severity:** Low
+- **File:** src/api/aiClient.js
+- **Line:** 50, 64
+- **Category:** Inconsistent error handling / fallback shapes
+- **Issue:** `quickPick` returns `{ characters: [] }` on a missing-data response (silently swallowing a malformed response). `aiGenerate` returns the entire `data` object as-is if `data.character` is absent (so callers may receive `{ characters: [...] }` from `quickPick`-shaped data). The shape-tolerance is convenient but masks server bugs.
+- **Suggested approach:** Pick one shape per helper, validate it (e.g. via Zod), and throw on shape mismatch.
+
+- **Severity:** Cosmetic
+- **File:** src/api/aiClient.js
+- **Line:** 39
+- **Category:** Cosmetic / readability
+- **Issue:** Renaming `class` to `klass` in the destructure is a minor JS-keyword workaround. Acceptable but worth noting.
+- **Suggested approach:** No change required; flagged for completeness.
+
+##### aiClient.js verification notes (informational, not findings)
+- ✓ All AI calls go through Supabase Edge Functions (no API key in client).
+- ✓ No console.log/warn left in.
+- ✓ No hardcoded Anthropic/OpenAI keys.
+
+
+#### /src/api/billingClient.js
+
+The TIERS constant in this file is the canonical source-of-truth for the subscription catalog. Pass 1A flagged "TIERS constant drift" as a known systemic issue across the components folder; this audit verifies the canonical values against the tier spec given for this batch.
+
+##### TIERS canonical-spec verification
+
+| Tier | Spec price | File price | Spec chars | File chars | Spec Tavern fee | File Tavern fee | Spec split | File split | Spec discount | File discount |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Free | $0 | 0 ✓ | 4 | 4 ✓ | **1250 Spice** | **5.00 (USD)** ✗ | 50/50 | [50,50] ✓ | n/a | 0 ✓ |
+| Adventurer | $6.99 | 6.99 ✓ | 12 | 12 ✓ | **250 Spice** | **1.00 (USD)** ✗ | 30/70 | [30,70] ✓ | 10% Spice | 0.10 ✓ (label "Tavern discount") |
+| Veteran | $12.99 | 12.99 ✓ | unlimited | Infinity ✓ | waived | 0 ✓ | 20/80 | [20,80] ✓ | 20% Spice | 0.20 ✓ |
+| Guild | $34.99 | 34.99 ✓ | unlimited | Infinity ✓ | waived | 0 ✓ | 20/80 | [20,80] ✓ | 20% Spice | 0.20 ✓ |
+
+- **Severity:** High
+- **File:** src/api/billingClient.js
+- **Line:** 45, 83
+- **Category:** TIERS constant drift from canonical spec
+- **Issue:** `tavernUploadFee` is denominated in **USD** (`5.00`, `1.00`) but the canonical spec denominates the Tavern upload fee in **Spice** (`1250`, `250`). The drift is propagated into the user-facing feature copy at lines 26 ("Upload to Tavern ($5 fee, 50/50 split)") and line 63 ("Upload to Tavern ($1 fee, 30/70 split)").
+- **Suggested approach:** Change `tavernUploadFee: 5.00` → `tavernUploadFee: 1250` (Free), `tavernUploadFee: 1.00` → `tavernUploadFee: 250` (Adventurer). Either rename the key to `tavernUploadFeeSpice` for clarity or document the unit in a comment. Update the corresponding feature-list strings to "Upload to Tavern (1250 Spice fee, 50/50 split)" and "Upload to Tavern (250 Spice fee, 30/70 split)". Audit every `tavernUploadFee`-consuming callsite (Pass 1A flagged Tavern UI as drift-prone) and update simultaneously.
+
+- **Severity:** High
+- **File:** src/api/billingClient.js
+- **Line:** 65, 102, 140
+- **Category:** TIERS constant drift / feature copy
+- **Issue:** Adventurer feature: "10% Tavern discount", Veteran: "20% Tavern discount", Guild: "20% discount" (in the bundled bullet) — the canonical spec calls these out specifically as "Spice discount" not "Tavern discount". The discount is applied to Spice purchases per spec; the file copy implies a discount on the Tavern (which is an emporium, but the discount is on Spice purchases that fund Tavern uploads).
+- **Suggested approach:** Confirm with product whether the discount is on Spice purchases (canonical spec) or on Tavern fees (current copy). Update the feature strings to match.
+
+- **Severity:** Critical
+- **File:** src/api/billingClient.js
+- **Line:** 283-300
+- **Category:** Auth security / client-supplied actor IDs
+- **Issue:** `startCheckout({ tier, user_id, user_email })` accepts client-supplied `user_id` and `user_email` and forwards them to the `create-checkout-session` Edge Function. A malicious caller could pass another user's ID + email and create a Stripe customer/session under their identity, leading to subscription assignment confusion (the webhook will tie the Stripe customer to whatever user_id was provided). The Edge Function **must** ignore these and pull from `auth.uid()` server-side.
+- **Suggested approach:** Drop the `user_id` and `user_email` parameters from the client surface. Have the Edge Function read `auth.uid()` from the JWT and fetch email from `user_profiles`. If the Edge Function already does this, delete the client-provided fields to prevent confusion.
+
+- **Severity:** Critical
+- **File:** src/api/billingClient.js
+- **Line:** 302-313
+- **Category:** Auth security / client-supplied actor IDs
+- **Issue:** `openBillingPortal(userId)` accepts a client-supplied `userId`. Same anti-pattern as `startCheckout`. A caller passing another user's ID gets a billing-portal session for that user (RLS will gate Stripe customer lookup, but the Edge Function must enforce auth.uid() === userId).
+- **Suggested approach:** Drop `userId` from the client surface; Edge Function reads `auth.uid()`.
+
+- **Severity:** High
+- **File:** src/api/billingClient.js
+- **Line:** 317-348
+- **Category:** Client-supplied actor ID anti-pattern
+- **Issue:** `listGuildMembers(ownerUserId)`, `listIncomingGuildInvites(userId)`, `listOutgoingGuildInvites(ownerUserId)` all accept client-supplied IDs and use them in `.eq('user_id', X)` / `.or('user_id.eq.X,guild_owner_id.eq.X')`. RLS is the only thing preventing a user from listing another guild's members or another user's invites. If RLS for `subscriptions`/`guild_invites` is loose, this leaks guild composition.
+- **Suggested approach:** Replace client-supplied IDs with `(await supabase.auth.getUser()).data.user.id` inside each helper. Server-side RLS must verify the caller is the owner/invitee for each query.
+
+- **Severity:** High
+- **File:** src/api/billingClient.js
+- **Line:** 350-368
+- **Category:** Client-supplied actor ID anti-pattern
+- **Issue:** `guildInvite/Accept/Decline/Remove/Leave` all accept client-supplied `owner_user_id`, `invitee_user_id`, `member_user_id`, `user_id` and forward to Edge Functions. Edge Functions must verify caller identity; the client should not source these from props.
+- **Suggested approach:** Drop the client-provided owner/invitee/member IDs (or treat them as advisory and override with `auth.uid()` server-side). Document the auth contract for each Edge Function.
+
+- **Severity:** High
+- **File:** src/api/billingClient.js
+- **Line:** 250
+- **Category:** Missing error handling / silent failure
+- **Issue:** `try { ... } catch { /* non-fatal — fall through to normal lookup */ }` swallows every error from the admin-override lookup with no logging at all (not even DEV-gated). If the column genuinely doesn't exist, fine; but a transient network error or RLS misconfiguration silently falls through to "free tier" — admin-override grants will appear to vanish on a transient failure, which is a critical UX regression for hand-granted tiers.
+- **Suggested approach:** Differentiate "column does not exist" (PGRST204 / 42703) from other errors. Log the latter (DEV-gated). Surface a "subscription lookup degraded" indicator in the UI when the override lookup fails so admins notice.
+
+- **Severity:** High
+- **File:** src/api/billingClient.js
+- **Line:** 226-249
+- **Category:** Auth security / admin override read on client
+- **Issue:** `admin_tier_override` is read from `user_profiles` directly by the client. RLS must prevent users from setting their own override (write-side gate); the read-side gate is the only thing preventing Lebowski from inspecting another user's override (low impact but still PII-adjacent). More importantly: the `admin_tier_override` column **lives on `user_profiles` itself**, which Pass 1A already flagged as the "public PII" privacy bug — adding admin-override status to that table widens the privacy exposure.
+- **Suggested approach:** Move `admin_tier_override` (and `storage_limit_override_bytes` per Pass 1A) to the private `user_private` table that the public-profile-PII-purge fix-project will create. Enforce write-side via an `admin_actions` audit-logged RPC.
+
+- **Severity:** Medium
+- **File:** src/api/billingClient.js
+- **Line:** 322-323, 332-334, 341-343
+- **Category:** Missing error handling / silent failure
+- **Issue:** Three places do `if (error) return []` — silent fallback to empty list on error. UI will render "no members / no invites" rather than "couldn't load." Same pattern repeated.
+- **Suggested approach:** Throw the error (or return `{ ok: false, error }`) so the UI can show a retry affordance.
+
+- **Severity:** Medium
+- **File:** src/api/billingClient.js
+- **Line:** 167-169
+- **Category:** Logic bug / fail-open
+- **Issue:** `tierAtLeast(currentTier, requiredTier)` uses `TIER_ORDER.indexOf(currentTier) >= TIER_ORDER.indexOf(requiredTier)`. If `currentTier` is `undefined`/`null`/unknown, `indexOf` returns `-1`. If `requiredTier` is also unknown, `-1 >= -1` returns `true` — so a broken/missing tier value passes a gate intended for "veteran or higher".
+- **Suggested approach:** Validate both arguments are members of `TIER_ORDER`; throw or return `false` for unknowns.
+
+- **Severity:** Medium
+- **File:** src/api/billingClient.js
+- **Line:** 176-189
+- **Category:** Logic bug / fail-open
+- **Issue:** `canUseTier(tier, feature)` returns `true` by default at the bottom (line 188) for any unknown feature key. Security gates should fail closed: an unknown feature should default to "denied" so a typo'd feature key (`"aiGenertaion"`) doesn't accidentally grant access.
+- **Suggested approach:** Change the default to `return false` and add explicit branches for any new feature. Throw in DEV when an unknown key is queried so the typo surfaces in tests.
+
+- **Severity:** Medium
+- **File:** src/api/billingClient.js
+- **Line:** 318-324
+- **Category:** SQL injection-adjacent (PostgREST `.or()` filter)
+- **Issue:** `.or(`user_id.eq.${ownerUserId},guild_owner_id.eq.${ownerUserId}`)` interpolates the raw `ownerUserId` into a PostgREST filter string. If `ownerUserId` is ever an attacker-controlled non-UUID string, the filter could be manipulated (e.g. injecting additional `or.` clauses). Server-side this would be caught by RLS + UUID type-coercion, but the helper does not validate.
+- **Suggested approach:** Validate `ownerUserId` matches the UUID regex before interpolation, or use the supabase-js `.or` helper with an array form. (Confirm with @supabase/supabase-js docs for the safest interpolation pattern.)
+
+- **Severity:** Medium
+- **File:** src/api/billingClient.js
+- **Line:** 196-206
+- **Category:** Missing webhook / Stripe TODO
+- **Issue:** Module-level comment notes Edge Functions handle Stripe network ops, but there's no client surface for "subscription event received" reactivity. This file does not implement webhook handling (correct — webhooks must be in Edge Functions), but Pass 2 should verify a `stripe-webhook` Edge Function exists, validates the Stripe signature, and updates `subscriptions` + `user_profiles.admin_tier_override` (or wherever subscriptions are persisted). Flag here for the supabase/functions audit batch.
+- **Suggested approach:** During the supabase/functions/ batch of Pass 2, verify: (a) `stripe-webhook` Edge Function exists, (b) signature validation uses `stripe.webhooks.constructEvent` against `STRIPE_WEBHOOK_SECRET`, (c) all relevant events (`customer.subscription.created/updated/deleted`, `invoice.paid`, `invoice.payment_failed`) are handled, (d) updates are idempotent (idempotency key on the webhook event ID).
+
+- **Severity:** Low
+- **File:** src/api/billingClient.js
+- **Line:** 56, 94, 132
+- **Category:** Hardcoded values / env-var dependency
+- **Issue:** `stripePriceId` reads from `import.meta.env?.VITE_STRIPE_PRICE_ADVENTURER || null`. The optional-chain on `import.meta.env` is a defensive guard that should never be needed in Vite — it's a code smell suggesting tests or SSR contexts where `import.meta.env` might be absent.
+- **Suggested approach:** Drop the optional chain; if SSR is in scope, polyfill `import.meta.env` instead.
+
+- **Severity:** Low
+- **File:** src/api/billingClient.js
+- **Line:** 292-293
+- **Category:** Hardcoded values / URL construction
+- **Issue:** `success_url` and `cancel_url` use `window.location.origin` directly. If the app is ever embedded (iframe) or the origin differs from the canonical app URL, Stripe redirects to the wrong place. Also: query string `?subscription=success&tier=${tier}` puts the tier in a URL — fine for analytics but flagged for completeness.
+- **Suggested approach:** Use a configured `APP_URL` env var rather than `window.location.origin`. Keep the tier query string only if the Settings page reads it for confirmation UI.
+
+- **Severity:** Low
+- **File:** src/api/billingClient.js
+- **Line:** 244-247
+- **Category:** Logic / edge case
+- **Issue:** Admin override response sets `current_period_end: null` and `cancel_at_period_end: false`. If any UI consumer renders `current_period_end` as "renews on …", admin-overridden users will see a missing/odd date.
+- **Suggested approach:** Either set a sentinel string (`"admin_override"`) or document that `null` means "no expiry" so consumer UIs branch correctly.
+
+- **Severity:** Cosmetic
+- **File:** src/api/billingClient.js
+- **Line:** 102, 119, 140, 157
+- **Category:** Inconsistent feature labelling
+- **Issue:** Veteran's `maxArchivedCampaigns: 10` and Guild's `maxArchivedCampaigns: 15` are not surfaced in the spec given for this batch. Verify with product whether this is canonical.
+- **Suggested approach:** Cross-reference with the canonical tier spec; flag drift if any.
+
+
+#### /src/api/integrations.js
+
+This file is the post-migration replacement for the old `Base44.integrations.Core` surface. Most methods are stubs that warn and return empty results; only `UploadFile` is wired through to a real Supabase Storage helper.
+
+- **Severity:** High
+- **File:** src/api/integrations.js
+- **Line:** 4-13
+- **Category:** Base44 leftovers (comment) / dead-code surface
+- **Issue:** Module-level comment explicitly says "The old Base44 integrations object proxied through Edge Functions that were never deployed. Only UploadFile actually works — it goes straight to Supabase Storage now. The rest are stubs that log a warning so callers don't crash." The stubs preserve the Base44 surface area without behaviour, masking missing functionality.
+- **Suggested approach:** Update the comment to drop Base44 references. For each stub: either implement (point to a Supabase Edge Function) or delete. Stubs that silently return `{ result: '' }` / `{ url: '' }` cause downstream callers to render empty content with no error toast.
+
+- **Severity:** High
+- **File:** src/api/integrations.js
+- **Line:** 18-22
+- **Category:** Dead code / stub functions returning fake data
+- **Issue:** `InvokeLLM`, `GenerateImage`, `SendEmail`, `SendSMS`, `ExtractDataFromUploadedFile` all `console.warn` and return placeholder objects. Callers that depend on these (Pass 1A flagged a few in components) will silently render "" or fail without surfacing the gap.
+- **Suggested approach:** Either implement against a real Edge Function or throw an explicit `NotImplementedError` so callers fail loud. Returning `{ result: '' }` and `{ url: '' }` is a worst-of-both-worlds: callers think the call succeeded and render empty content.
+
+- **Severity:** Medium
+- **File:** src/api/integrations.js
+- **Line:** 18-22
+- **Category:** console.warn left in
+- **Issue:** Five `console.warn` statements that fire on every stub invocation. Will spam the console in any environment where these are still called.
+- **Suggested approach:** Delete the warns or replace with thrown errors per the previous finding.
+
+- **Severity:** Medium
+- **File:** src/api/integrations.js
+- **Line:** 25-30
+- **Category:** Inconsistent naming / dual export shapes
+- **Issue:** Both `export const Core = { ... }` and individual top-level exports (`UploadFile`, `InvokeLLM`, `SendEmail`, `SendSMS`, `GenerateImage`, `ExtractDataFromUploadedFile`) plus `export const integrations = { Core }`. Three different ways to import the same function. Consumers will inconsistently use `Core.UploadFile`, `UploadFile`, and `integrations.Core.UploadFile`. Pass 1A's "dynamic vs static import inconsistencies" build warnings flagged this exact problem.
+- **Suggested approach:** Pick one canonical export shape (probably named exports of each function) and remove the others. Codemod consumers.
+
+- **Severity:** Medium
+- **File:** src/api/integrations.js
+- **Line:** 15
+- **Category:** Auth security / client-supplied actor IDs
+- **Issue:** `Core.UploadFile({ file, bucket, path, userId, uploadType, tier })` accepts a client-supplied `userId` and `tier` and passes them to `uploadFile` (in `src/utils/uploadFile.js` — out of this batch). Tier-gating for upload (e.g. storage quota enforcement) cannot trust caller-supplied `tier`; same for `userId` used in path namespacing.
+- **Suggested approach:** Drop `userId`/`tier` from the function signature; pull both from session/subscription context inside `uploadFile` itself. Flag the corresponding `src/utils/uploadFile.js` audit (next batch) to confirm.
+
+- **Severity:** Low
+- **File:** src/api/integrations.js
+- **Line:** 1-2
+- **Category:** Unused / shifted dependency
+- **Issue:** This file delegates entirely to `src/utils/uploadFile.js`. The file is essentially a thin compatibility shim. Combined with `base44Client.js`'s own `integrations.Core.UploadFile` (which bypasses this file and re-implements the upload inline at `base44Client.js:70-86`), there are two parallel UploadFile implementations in `/src/api/`.
+- **Suggested approach:** Remove the duplicate inline implementation in `base44Client.js` (or delete `base44Client.js` entirely per its own findings); leave `integrations.js`'s `Core.UploadFile` as the single canonical client-side wrapper around `utils/uploadFile`.
+
+- **Severity:** Cosmetic
+- **File:** src/api/integrations.js
+- **Line:** 32
+- **Category:** Inconsistent naming
+- **Issue:** Lowercase `integrations` export sits alongside uppercase `Core` and uppercase function exports. Convention is unclear.
+- **Suggested approach:** If keeping the namespaced export, rename to `Integrations` for consistency with `Core`; otherwise delete it (the named exports cover all callsites).
+
+
+##### Batch 2-i Summary
+
+**Totals by severity:**
+- Critical: 8
+- High: 18
+- Medium: 14
+- Low: 11
+- Cosmetic: 5
+- **Total: 56**
+
+**Totals by category:**
+- Base44 leftovers: 3 (file naming, comments, surface preservation) — `base44Client.js` entire file is the largest single leftover.
+- Client-side authority anti-patterns at the data layer: 9 (entities.js `.list()`/`.create()`/`.update()`/`.delete()`; billingClient.js `startCheckout`/`openBillingPortal`/list-guild-members/guild-invite/accept/decline/remove/leave; integrations.js `UploadFile({ userId, tier })`).
+- TIERS constant drift: 2 (Tavern fee unit USD vs Spice; "Tavern discount" vs "Spice discount" wording).
+- console.log / .warn / .error left in: 4 (entities.js CREATE log + error log [Critical due to PII], base44Client.js function-invoke warns, integrations.js stub warns).
+- Auth security (client-supplied IDs, missing session checks, open-redirect, admin-override read): 6.
+- Storage path violations: 1 (base44Client.js UploadFile defaults to `campaign-assets` SRD bucket, no `users/{user_id}/...` prefix).
+- Missing error handling / silent failure: 5 (base44Client.js functions.invoke; billingClient.js admin-override try/catch + 3× guild-list helpers; integrations.js stubs).
+- Missing pagination / SELECT * / fetch-all: 3 (entities.js `.list()`, `.filter()` SELECT *, no default limit).
+- Missing tier gating on AI calls: 1 (aiClient.js — but applies to all three AI helpers).
+- AI prompt injection / input cap: 2 (aiClient.js prompt cap + rate limit).
+- Inconsistent error response shapes: 3 (entities.js, aiClient.js invokeEdge, billingClient.js silent fallbacks).
+- Inconsistent naming / dual export shapes: 4 (entities.js User/UserProfile + Dnd5e* + Ticket* aliases; integrations.js triple-export).
+- Logic bugs / fail-open: 3 (billingClient.js `tierAtLeast` -1 >= -1; `canUseTier` default true; entities.js `User=null` runtime crash).
+- Race conditions / missing transactions: 2 (entities.js client-clock `updated_at`; multi-step writes).
+- Dead code / stubs: 3 (base44Client.js SendSMS + ExtractDataFromUploadedFile; aiClient.js shape-tolerance; integrations.js five stubs).
+- Hardcoded values / runtime fail-mode: 3 (supabaseClient.js module throw, billingClient.js Stripe price env vars, billingClient.js window.location.origin).
+- Stripe webhook coverage: 1 (flag for supabase/functions audit).
+- Auth options / persistence: 1 (supabaseClient.js implicit defaults).
+- Missing TypeScript/JSDoc types: 2 (supabaseClient.js, entities.js).
+- TODO / FIXME / migration leftovers: 1 (entities.js compatibility-shim comments).
+- Dead/duplicate UploadFile implementations: 1 (base44Client.js inline vs integrations.js + utils/uploadFile.js).
+- SQL-injection-adjacent (PostgREST `.or()` interpolation): 1 (billingClient.js listGuildMembers).
+
+**Base44 leftovers count and migration-readiness:**
+
+Three direct Base44 leftover findings, but the cumulative migration surface is larger than the count suggests:
+1. **`src/api/base44Client.js`** — entire file. Filename, exported `base44` namespace, and module-level comment scaffolding are Base44-era. The file has no remaining Base44 SDK dependency (it imports from `./supabaseClient` and `./entities` only) so it's a pure thin wrapper. Recommendation: **delete the file entirely**; relocate `auth.updateMe` to a new `src/api/auth.js` (or into `supabaseClient.js`); migrate the dozens of Pass 1A-flagged `import { base44 } from '@/api/base44Client'` callsites to direct imports from `./supabaseClient`, `./supabaseEntities`, and `./integrations`.
+2. **`src/api/entities.js`** → rename to `src/api/supabaseEntities.js` per the user's naming decision. Same content; updated import paths app-wide.
+3. **`src/api/integrations.js`** comment block references "the old Base44 integrations object." Comment cleanup.
+
+The migration is **near-ready** at the api-layer level: no Base44 SDK package import remains in any of the six files audited. The remaining work is naming + re-import codemod (mechanical). The actual *blocker* on the migration is the consumer side — Pass 1A flagged dozens of `base44.entities.X.method()` and `base44.integrations.Core.UploadFile()` callsites in `src/components/`. Those need to migrate before `base44Client.js` can be deleted. Recommend the migration land as a single PR: rename `entities.js` → `supabaseEntities.js`, codemod every consumer, delete `base44Client.js`, sweep grep for any residual `base44` string. Aligns with Pass 1A's `finish-base44-migration` fix-project.
+
+**TIERS drift note:**
+
+TIERS at `billingClient.js:12-163` is the canonical catalog; Pass 1A's "TIERS as a sometime-source-of-truth" finding holds — the catalog is *correctly authored* in this file, but two specific drifts vs the canonical spec given for this batch:
+- **Tavern upload fee unit drift (High):** Free tier `tavernUploadFee: 5.00` and Adventurer tier `tavernUploadFee: 1.00` are denominated in USD but spec says **1250 Spice / 250 Spice** respectively. The drift is propagated into the user-facing feature copy (`"$5 fee"`, `"$1 fee"`). This is the single biggest TIERS drift in the file.
+- **"Tavern discount" vs "Spice discount" copy drift (High):** Adventurer/Veteran/Guild feature lists say "Tavern discount" but spec calls these "Spice discount" — the discount mechanic is on Spice purchases per spec, not on Tavern fees.
+
+Other catalog values (price, character limits, splits, percentage discounts, storage limits) match canonical spec.
+
+**Client-side authority anti-patterns at the data layer (the #1 systemic finding):**
+
+The entire `entities.js` factory is a client-side authority anti-pattern at its root. `createEntity(table)` exposes `.list()` / `.filter()` / `.create()` / `.update()` / `.delete()` on every table with:
+- No actor pinning on `.create()` (caller can set `author_id`, `creator_id`, `sender_id`, `owner_user_id`, `is_admin`, `is_dev_post`, `account_status`, `admin_tier_override`, etc.).
+- No field whitelist on `.update()` (arbitrary `updates` object forwarded as-is).
+- No ownership precondition on `.delete()` (only RLS gates).
+- No default limit on `.list()` (entire table returned if RLS is fail-open).
+- `select('*')` everywhere (returns PII columns by default).
+
+This factory is the source-of-truth for every Pass 1A flag like "UserProfile.list() everywhere", "client-supplied author_id/sender_id", and "admin-only fields written from client." **All of those are downstream symptoms of this single design choice.** The fix-project `finish-base44-migration` (Pass 1A's #2) and `kill-client-side-authority` (Pass 1A's #3) should land *together* with a redesign of the entity layer:
+
+- Replace generic `createEntity(table)` with per-entity helpers that know which fields are actor-pinned, which are admin-only, and which are user-mutable.
+- Move sensitive writes (subscriptions, admin_actions, user_profile sensitive fields, posts.is_pinned/is_locked/is_dev_post, support_tickets sender_type, messages.sender_id) to server-side RPCs that derive actor from `auth.uid()` and audit-log to `admin_actions` where applicable.
+- Default `.list()` to `limit: 50, max: 500`, and a public-safe column allowlist for `user_profiles`.
+- Replace `select('*')` with explicit column lists per entity.
+
+Additionally, `billingClient.js` perpetuates the same anti-pattern (`startCheckout({ user_id, user_email })`, `openBillingPortal(userId)`, all `listGuild*`/`guild*` helpers accept caller-supplied IDs). Those should be rewritten to source IDs from session.
+
+**Verification follow-ups for later Pass 2 batches:**
+- `supabase/functions/` batch: verify `stripe-webhook`, `create-checkout-session`, `create-billing-portal-session`, `get-subscription-status`, `guild-invite/accept/decline/remove/leave`, `quick-pick-characters`, `ai-generate-character`, `generate-character-portrait`, `invoke-llm`, `generate-image`, `send-email` all exist, validate auth.uid(), and re-check tier server-side.
+- `src/utils/uploadFile.js` batch: verify the path namespacing (`users/{user_id}/...`), MIME/size guards, and tier-gated quota enforcement that this batch's findings depend on.
+- `src/lib/` batch: verify TIERS imports use the canonical export (not a copy) and `canUseTier` is the only feature-gate path.
+- Database migrations batch: verify RLS on every table audited. The data-layer findings above all depend on RLS being correctly authored — if RLS is fail-open for any of these tables, the Critical findings are worst-case-realized.
+
