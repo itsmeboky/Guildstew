@@ -5,6 +5,7 @@ import NavigationTracker from '@/lib/NavigationTracker'
 import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
+import GamePackListing from './pages/GamePackListing';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { SubscriptionProvider } from '@/lib/SubscriptionContext';
 import { PresenceProvider } from '@/lib/PresenceContext';
@@ -144,6 +145,11 @@ const AuthenticatedApp = () => {
             {Pages.CampaignsFind ? <Pages.CampaignsFind /> : <PageNotFound />}
           </ErrorBoundary>
         </LayoutWrapper>
+      } />
+      <Route path="/tavern/packs/:slug" element={
+        <ErrorBoundary resetKeys={routeResetKeys}>
+          <GamePackListing />
+        </ErrorBoundary>
       } />
       {Object.entries(Pages).map(([path, Page]) => (
         <Route
