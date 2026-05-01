@@ -13476,3 +13476,568 @@ Despite the volume of Critical findings, this batch contains several patterns wo
 8. **Default-empty fallbacks for read paths** — `EMPTY_WALLET` / `EMPTY_GUILD_WALLET` / `groupBansByType` provide stable shapes for missing data. The pattern is good (callers always get a usable object); the failure mode is that they hide errors. Replicate the shape but propagate errors separately.
 
 **End of Batch 2-ii-c.**
+
+### Batch 2-ii-d: lib mod-engine + brewery-content-pack
+
+Pre-flight: `pwd=/home/user/Guildstew`, branch=`claude/audit-codebase-rqlUM`, audit report exists, both target files exist (`src/lib/modEngine.js`, `src/lib/breweryContentPack.js`). No deviation. Adjacent files in domain (`breweryClassApply.js`, `breweryRaceApply.js`) are out of scope for this batch.
+
+#### /src/lib/modEngine.js
+
+- **Severity:** Critical
+- **File:** src/lib/modEngine.js
+- **Line:** 140
+- **Category:** CLIENT-SIDE AUTHORITY (caller-supplied user_id)
+- **Issue:** `installMod(campaignId, modId, userId, { configValues })` accepts `userId` from the caller and inserts it verbatim into `campaign_installed_mods.installed_by`. Caller can spoof "who installed it" — useful for laundering blame on a malicious install or for falsely attributing installs in audit trails (when those exist).
+- **Suggested approach:** Drop the `userId` parameter entirely. Move install to an atomic RPC that pins `installed_by := auth.uid()` server-side. Same applies to ownership/audit columns generally.
+
+- **Severity:** Critical
+- **File:** src/lib/modEngine.js
+- **Line:** 140–218
+- **Category:** Missing tier verification (Veteran for code-mod install)
+- **Issue:** The engine performs zero tier checks before installing. Pass 1A noted that `InstallModDialog` blocks code-mod installs at the UI layer, but the engine accepts any `mod_type` (including `code_mod`) without verifying the caller is on Adventurer+ (data) or Veteran+ (code). UI gate is bypassable; engine gate is missing.
+- **Suggested approach:** Move install through an atomic RPC that derives the caller's tier from `auth.uid()` and rejects code-mod installs for non-Veteran tiers, content-pack/data-mod installs for Free tier. Never rely on `InstallModDialog` to be the sole gate.
+
+- **Severity:** Critical
+- **File:** src/lib/modEngine.js
+- **Line:** 187
+- **Category:** Missing ownership / GM-of-campaign verification
+- **Issue:** `installMod` writes to `campaign_installed_mods` for an arbitrary `campaignId` with no check that the caller is GM (or co-GM) of that campaign. Any authenticated user could install mods into any campaign whose id they know.
+- **Suggested approach:** Atomic RPC reads `campaigns.user_id` for the target campaign and rejects unless `auth.uid()` matches (or is in a co-GM list). Same gate is needed on `uninstallMod`, `forceUninstallMod`, `setModStatus`, `setModPriority`.
+
+- **Severity:** Critical
+- **File:** src/lib/modEngine.js
+- **Line:** 142–146
+- **Category:** Missing publication / eligibility verification before applying mods
+- **Issue:** `select("*").from("brewery_mods").eq("id", modId)` accepts any mod row — no filter on `is_published`, `status='approved'`, ownership-by-installer, or paid-content entitlement. A user could install a draft, rejected, or paid mod they have not unlocked.
+- **Suggested approach:** RPC filters to published+approved mods; for paid mods (Veteran-only code packs, paid game packs), verify entitlement against the caller's purchases / subscription tier server-side before snapshotting.
+
+- **Severity:** Critical
+- **File:** src/lib/modEngine.js
+- **Line:** 180–184
+- **Category:** Missing field whitelisting / caller-supplied configValues
+- **Issue:** `configValues` from the caller is merged into `pinned_metadata.config_values` and later fed directly to `evaluateFormula` at runtime (line 594). No type, range, or schema validation against the mod's declared `config_schema` — caller can pin arbitrary values (very large numbers, function-shaped objects, prototype-pollution payloads) that will then be consumed by formula evaluation in combat.
+- **Suggested approach:** Validate every `configValues[key]` against the param's declared type / min / max in `config_schema` server-side. Drop unknown keys. Fall back to schema defaults for missing keys (already done) and reject the install on type-mismatch.
+
+- **Severity:** Critical
+- **File:** src/lib/modEngine.js
+- **Line:** 170–174
+- **Category:** Missing field whitelisting on writes (mod.metadata spread)
+- **Issue:** `pinnedMetadata = { ...(mod.metadata || {}), mod_type: mod.mod_type, name: mod.name }` — spreads the entire `mod.metadata` JSONB blob into the install row's `pinned_metadata` with no whitelist. Any creator-controlled key in `metadata` ends up persisted to every install of that mod, including potentially `is_official`, `is_featured`, internal flags, or large payloads.
+- **Suggested approach:** Whitelist exactly the fields the engine consumes: `triggers`, `config_values`, `config_schema`, `sheet_changes`, `renames`, `contents`, `name`, `description`. Reject or drop everything else at the RPC layer.
+
+- **Severity:** Critical
+- **File:** src/lib/modEngine.js
+- **Line:** 187–195
+- **Category:** Race conditions in concurrent install (no idempotency / no onConflict)
+- **Issue:** Insert into `campaign_installed_mods` has no `onConflict` clause. Two concurrent install clicks (or replay) will either create duplicate install rows (if no unique constraint exists) or hard-fail (if one does), leaving the user staring at an opaque error. Compounded: the content-pack rollback at line 207–211 deletes by `(campaign_id, mod_id)` only, so it would yank a *prior* successful install if duplicates exist.
+- **Suggested approach:** Add a unique index on `(campaign_id, mod_id)` and use `upsert` with `onConflict: 'campaign_id,mod_id'`. Alternatively, run install through an atomic RPC that does the insert + content-pack copy in one transaction so partial failure rolls back automatically rather than via a client-side compensating delete.
+
+- **Severity:** High
+- **File:** src/lib/modEngine.js
+- **Line:** 187–214
+- **Category:** Race conditions / non-atomic compensating rollback
+- **Issue:** The install is two writes (insert install row, then `installContentPack` which fans out to 4 tables). The compensating delete on line 207–211 runs only if `installContentPack` returns `success:false`; if the network drops between the install-row insert and the content-pack call, the install row stays + content is missing. Same shape as every "client-orchestrated transaction" anti-pattern flagged in earlier batches.
+- **Suggested approach:** Move the entire install into a single PL/pgSQL function so install row + content rows commit or rollback together. Guarantees no half-installed state regardless of network conditions.
+
+- **Severity:** High
+- **File:** src/lib/modEngine.js
+- **Line:** 225–245
+- **Category:** Client-side conflict check (bypassable)
+- **Issue:** `checkConflicts` runs on the client against the locally cached `campaign_installed_mods` list. A determined caller can mutate the in-memory `modCache` map (or just call `installMod` directly skipping the check) and bypass the override-collision gate.
+- **Suggested approach:** Run conflict detection inside the install RPC against the live DB state, atomically, before insert. Client-side check stays as a UX-only preview but never as the gate.
+
+- **Severity:** High
+- **File:** src/lib/modEngine.js
+- **Line:** 142–146
+- **Category:** Fetch-all / over-projection (`select("*")` on brewery_mods)
+- **Issue:** Reads every column on `brewery_mods` — would include any internal moderation fields, draft state, or non-public columns. Also has the cross-tenant exposure surface described above.
+- **Suggested approach:** Narrow projection to the exact fields needed: `id, version, patches, metadata, mod_type, name, game_system, is_published, status`. Add explicit publication filters.
+
+- **Severity:** High
+- **File:** src/lib/modEngine.js
+- **Line:** 27–32
+- **Category:** Fetch-all anti-pattern (`select("*")` on campaign_installed_mods)
+- **Issue:** `loadCampaignMods` selects every column from every active install row for the campaign. The full `pinned_metadata` and `pinned_patches` blobs can be large, and the engine consumes only specific subfields.
+- **Suggested approach:** Narrow projection to `id, mod_id, status, priority, pinned_patches, pinned_metadata, installed_version, error_message`. If `pinned_metadata` is consistently large, consider splitting hot fields onto dedicated columns.
+
+- **Severity:** High
+- **File:** src/lib/modEngine.js
+- **Line:** 22, 499
+- **Category:** Race conditions / module-level mutable state
+- **Issue:** `modCache` (line 22) and `gateTracker` (line 499) are module-level singletons keyed only by `campaignId`. Two concurrent React tabs of the same campaign share the same gate counters; a tab that switches between user accounts (impersonation, sign-out/sign-in) without page reload can see another user's cached install list. `gateTracker` is also unbounded — leaks indefinitely as triggers fire.
+- **Suggested approach:** Move both maps into a per-route or per-session cache (React context, query cache) keyed by `(userId, campaignId)`. Wipe both on auth state change. Bound `gateTracker` with an LRU or scope reset on combat-end events.
+
+- **Severity:** High
+- **File:** src/lib/modEngine.js
+- **Line:** 596, 605, 608
+- **Category:** Code execution surface (formula eval on client)
+- **Issue:** `evaluateFormula(formula, formulaContext)` runs creator-supplied formula strings on the client at every combat trigger. The formulas come from `pinned_metadata.triggers[].effect.formula` (and `save_dc_formula` / `dc_formula`) — i.e., from `brewery_mods.metadata` written by the creator. Engine relies entirely on `formulaEvaluator.js` to enforce a safe grammar (no `eval`, no `new Function`). If `formulaEvaluator` has any escape (function-call passthrough, identifier loophole), every player who installs a code mod runs the creator's expression. Verified the engine itself does not call `eval`/`Function`/`new Function` directly. Risk surface is concentrated in `formulaEvaluator.js` (out of scope for this batch, but logging here as a follow-up).
+- **Suggested approach:** Cross-batch action: deep-audit `src/lib/formulaEvaluator.js` (likely covered in 2-ii-a/b/c — verify) for grammar tightness. At install time, run `validateFormula` server-side and reject mods that fail. Re-validate at session-start. Never trust a pinned formula just because it was pinned at install — re-validate.
+
+- **Severity:** High
+- **File:** src/lib/modEngine.js
+- **Line:** 307–323
+- **Category:** Missing error handling on Supabase responses
+- **Issue:** `setModStatus` and `setModPriority` await the update but never read `error` or return anything. Failures are silent; the UI proceeds as if the change committed.
+- **Suggested approach:** Destructure `{ error }`, return `{ success, reason }`, surface the error to the caller. Same pattern as the other write functions in the file.
+
+- **Severity:** High
+- **File:** src/lib/modEngine.js
+- **Line:** 124–132
+- **Category:** Trust of client-stored mod_dependencies
+- **Issue:** `checkCharacterCompatibility` reads `character.mod_dependencies` as the source of truth. A character row's `mod_dependencies` array is writable by the player; a player can clear it client-side and bypass the compatibility gate to bring an out-of-spec character into a campaign that's missing the mod.
+- **Suggested approach:** Recompute `mod_dependencies` server-side from the character's actual race/class/feature references whenever a character is saved. The client-stored array is then a verified snapshot, not a trust boundary.
+
+- **Severity:** High
+- **File:** src/lib/modEngine.js
+- **Line:** 187, 252, 289
+- **Category:** Race conditions in concurrent install/uninstall/install
+- **Issue:** `installMod` → `uninstallMod` → `installMod` triggered in fast succession against the same `(campaign_id, mod_id)` will interleave. With no DB-level lock and no idempotency key, the final state is non-deterministic: install row exists / doesn't, content rows exist / don't, gateTracker entries linger or vanish.
+- **Suggested approach:** Serialize all install/uninstall through a single RPC that takes a row lock on `campaign_installed_mods` for the (campaign, mod) pair. Use generated idempotency keys per click so retries collapse instead of stacking.
+
+- **Severity:** Medium
+- **File:** src/lib/modEngine.js
+- **Line:** 153
+- **Category:** Multi-game readiness — hardcoded dnd5e default
+- **Issue:** `const campaignSystem = campaign?.game_system || "dnd5e";` — silently treats missing `game_system` as D&D 5e. Once game_packs roll out (PF2e, WoD, Mörk Borg, CY_BORG, KoB, BitD), a campaign with NULL game_system would falsely accept dnd5e mods.
+- **Suggested approach:** Either treat missing `game_system` as a hard error / require backfill, or require explicit caller-provided system — never silent default.
+
+- **Severity:** Medium
+- **File:** src/lib/modEngine.js
+- **Line:** 327–331
+- **Category:** Multi-game readiness — hardcoded D&D 5e taxonomy in VALID_TARGETS
+- **Issue:** `VALID_TARGETS` hardcodes D&D-isms: `death_saves`, `critical_hits`, `ability_scores`, `magic`, `progression`, `encumbrance`. PF2e, WoD, and BitD don't share this taxonomy. Engine validation will reject legitimate non-dnd5e patches once those systems land.
+- **Suggested approach:** Pull `VALID_TARGETS` from a per-game-system manifest keyed off `campaigns.game_system`. Validate patches against the system-specific target list at install time.
+
+- **Severity:** Medium
+- **File:** src/lib/modEngine.js
+- **Line:** 513–519
+- **Category:** Multi-game readiness — hardcoded D&D 5e gate vocabulary
+- **Issue:** `gateScope` hardcodes `once_per_turn`, `once_per_round`, `once_per_rest`, `proficiency_bonus`. Other systems use stress/clocks (BitD), gambits (Mörk Borg), willpower (WoD).
+- **Suggested approach:** Move gate definitions into the per-game-system manifest. Loader maps each system's recovery vocabulary onto a normalized `scope` enum; engine reads from the loaded manifest, not hardcoded literals.
+
+- **Severity:** Medium
+- **File:** src/lib/modEngine.js
+- **Line:** 525–530
+- **Category:** Hardcoded values that should be constants (`proficiency_bonus` cap math)
+- **Issue:** `Number(context?.actor?.prof) || 0` and `Math.max(1, cap)` inline the proficiency-bonus-uses-per-rest rule. Min-1 floor is a silent design choice — should it really default to 1 if `prof` is missing or zero?
+- **Suggested approach:** Document the intent; if "always at least one use" is the design, name the constant; if not, return false instead of clamping to 1.
+
+- **Severity:** Medium
+- **File:** src/lib/modEngine.js
+- **Line:** 24, 67, 106, 113, 125, 225, 252, 289, 307, 316, 352, 436, 577
+- **Category:** Missing P.I.E. event emission
+- **Issue:** No P.I.E. events emitted on install, uninstall, force-uninstall, status change, priority change, or trigger fires. Subscribers (analytics, achievements, GM logs) cannot react to mod state changes or in-combat trigger fires.
+- **Suggested approach:** Emit `mod.installed`, `mod.uninstalled`, `mod.status_changed`, `mod.trigger_fired` events with `{ campaign_id, mod_id, mod_name, mod_type, actor_user_id }` payloads. Especially important for Pioneer Creator badge attribution and combat-replay logs.
+
+- **Severity:** Medium
+- **File:** src/lib/modEngine.js
+- **Line:** 187, 252, 289, 307, 316
+- **Category:** Missing audit logging on publish/install/uninstall
+- **Issue:** No write to an audit table on install/uninstall/status/priority. GMs can't see "who toggled this mod off mid-session" and creators can't see post-mortem usage data on which campaigns installed their work.
+- **Suggested approach:** Insert an audit row inside the install/uninstall RPC with `{ campaign_id, mod_id, action, actor_user_id, before_state, after_state, ts }`.
+
+- **Severity:** Medium
+- **File:** src/lib/modEngine.js
+- **Line:** 252–267
+- **Category:** Cross-tenant data exposure (character names leaked in warning)
+- **Issue:** `uninstallMod` returns `affected_characters: c.name` for every character that depends on the mod. RLS-permitted by virtue of being a campaign-scoped read (the GM is uninstalling mods in their own campaign), but if the gate is moved to a worker / audit context, it would leak names. Marking medium for awareness.
+- **Suggested approach:** Confirm RLS on `characters` restricts this read to GM/co-GM only. If the function ever runs in a system context, switch to a count + truncated name list with explicit permission check.
+
+- **Severity:** Medium
+- **File:** src/lib/modEngine.js
+- **Line:** 277, 297
+- **Category:** Missing error handling on uninstallContentPack
+- **Issue:** `await uninstallContentPack(campaignId, modId)` discards the return value. A partial failure inside content-pack uninstall (one of four table deletes erroring) leaves orphaned rows tagged with the pack's `source_mod_id`, but the engine reports `success: true` and removes the install row anyway — orphans now have no path back to a mod and cannot be cleanly retried.
+- **Suggested approach:** Capture the result; if any table failed, leave the install row in place (or mark it `status='error'`) so a retry can target it. Surface the failure to the caller.
+
+- **Severity:** Medium
+- **File:** src/lib/modEngine.js
+- **Line:** 316–322
+- **Category:** Caller-supplied priority with no validation
+- **Issue:** `setModPriority(campaignId, modId, priority)` accepts any caller-provided priority — no upper bound, no integer coercion, no GM ownership check. A negative or NaN priority will sort weirdly; an absurdly large value disrupts the deterministic sort order.
+- **Suggested approach:** Coerce to integer, clamp to a sensible range (`0–10000`), require GM ownership in the RPC.
+
+- **Severity:** Medium
+- **File:** src/lib/modEngine.js
+- **Line:** 188
+- **Category:** Missing version handling on install (replay/upgrade ambiguity)
+- **Issue:** `installed_version: mod.version || "1.0.0"` pins a string. There's no check whether the same `(campaign_id, mod_id)` already has an install row at a different version — a re-install after a creator updates the mod inserts a *new* row rather than upgrading the existing one. The docstring says "the GM has to opt in to an update" but there's no upgrade path here.
+- **Suggested approach:** Add an explicit `upgradeMod(campaignId, modId)` that re-snapshots patches/metadata/version onto the existing install row inside an RPC. Reject duplicate installs at the unique-index layer.
+
+- **Severity:** Medium
+- **File:** src/lib/modEngine.js
+- **Line:** 22
+- **Category:** Missing pagination / cache key narrowness
+- **Issue:** `loadCampaignMods` caches by `campaignId` only. If two campaigns get accessed in the same tab and the user toggles state in one, no cross-cache invalidation occurs. Only matters if a mod is reused across campaigns; still, cache key probably also wants `(userId)` to be safe across account switches.
+- **Suggested approach:** Key cache by `${userId}:${campaignId}`. Bound the map size with an LRU.
+
+- **Severity:** Low
+- **File:** src/lib/modEngine.js
+- **Line:** 289–305
+- **Category:** Missing error handling (forceUninstallMod)
+- **Issue:** `forceUninstallMod` doesn't check the delete error or return anything. Failures pass silently.
+- **Suggested approach:** Mirror `uninstallMod`'s `{success, reason}` shape.
+
+- **Severity:** Low
+- **File:** src/lib/modEngine.js
+- **Line:** 524
+- **Category:** Hardcoded fallback identifier (`trigger.id || "_"`)
+- **Issue:** When a trigger lacks an `id`, gate-tracking collapses every id-less trigger in the same mod into a single `_` key. Two id-less triggers will share their gate counter — one fires, the other is silently locked out.
+- **Suggested approach:** Validate at install that every trigger has an id (uuid generated if missing); never fall back to `_`. Surface as a validation error in `validateInstalledMods`.
+
+- **Severity:** Cosmetic
+- **File:** src/lib/modEngine.js
+- **Line:** 34, 393, 624, 635
+- **Category:** console.log / .warn / .error
+- **Issue:** Four console calls (`console.warn` x3, `console.error` x1). All in genuinely-exceptional paths (load failure, validation flagging failure, formula runtime error). Acceptable as-is per project conventions, but flagging per the audit directive.
+- **Suggested approach:** Route through a structured logger that can be silenced in production; preserve the formula-error output as it carries useful trigger context.
+
+- **Severity:** Cosmetic
+- **File:** src/lib/modEngine.js
+- **Line:** 48
+- **Category:** Code smell / forward-reference guard
+- **Issue:** `if (typeof gateTracker !== "undefined" && gateTracker?.clear)` inside `invalidateModCache` (line 42) defends against `gateTracker` not being defined yet — but `gateTracker` is declared later in the same module (line 499). Hoisting saves it (the `const` doesn't hoist a value, but the reference is statically resolvable). The runtime `typeof` guard is a defensive remnant, possibly from before the file was reorganized.
+- **Suggested approach:** Move `gateTracker` declaration above `invalidateModCache`, drop the `typeof` guard. Cleaner ordering and removes a confusing maybe-undefined branch.
+
+- **Severity:** Cosmetic
+- **File:** src/lib/modEngine.js
+- **Line:** 417–435
+- **Category:** Dead/orphan docstring
+- **Issue:** Two consecutive JSDoc blocks before `getSheetModifications` (line 417 docs reskin `getDisplayName` semantics; line 421 docs `getSheetModifications` itself). The reskin block describes `getDisplayName` (which is defined at line 479) but is physically attached to `getSheetModifications`. Either the blocks were swapped during a refactor or one was orphaned.
+- **Suggested approach:** Move the reskin/`getDisplayName` block to immediately precede `getDisplayName`. Or merge into a section header.
+
+- **Severity:** Cosmetic
+- **File:** src/lib/modEngine.js
+- **Line:** 1
+- **Category:** BASE44 NAMING
+- **Issue:** No `base44` references found. Imports use `@/api/supabaseClient`. Clean.
+- **Suggested approach:** None — note for the per-batch tally only.
+
+
+#### /src/lib/breweryContentPack.js
+
+- **Severity:** Critical
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 98
+- **Category:** CLIENT-SIDE AUTHORITY (caller-supplied campaignId, modId, metadata)
+- **Issue:** `installContentPack(campaignId, modId, metadata)` accepts all three from the caller. `metadata` is the entire content blob — caller can supply arbitrary monsters/items/spells/features that were never actually published in the source `brewery_mods` row. No re-fetch from DB to verify. A direct call (bypassing `installMod`) lets a player inject any content they want into any campaign id they know.
+- **Suggested approach:** Move install into an atomic RPC. Server fetches the canonical `metadata` from `brewery_mods` by `modId` after verifying it's published; never trust the caller's blob. Server also verifies `auth.uid()` is GM of `campaignId`.
+
+- **Severity:** Critical
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 117, 135, 158, 176
+- **Category:** Missing GM-of-campaign verification on bulk insert
+- **Issue:** Direct inserts into `monsters`, `campaign_items`, `spells`, `campaign_class_features` for an arbitrary `campaign_id` with no check that the caller is GM. If RLS on these four tables is anything less than airtight, this is a cross-tenant write primitive: "install pack X into someone else's campaign and pollute their content." Even with RLS, the engine should not assume.
+- **Suggested approach:** Run all four inserts inside an RPC (`SECURITY DEFINER`) that first validates `auth.uid() = (SELECT user_id FROM campaigns WHERE id = p_campaign_id)`. Reject otherwise.
+
+- **Severity:** Critical
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 98
+- **Category:** Missing tier verification (Adventurer for data, Veteran for code) — TIER GATE INVERSION CHECK
+- **Issue:** No tier check at all. Per Pass 1A, the Brewery UI has the tier-gate inversion bug; the engine layer here would be the place to actually *enforce* the canonical rule (Adventurer+ for content packs, Veteran+ only when the pack contains code mods). It enforces neither. Cannot confirm or deny inversion at this layer because no gate exists; recording as "absent gate."
+- **Suggested approach:** RPC verifies caller is on Adventurer+ before installing any content pack. If the pack's `metadata` includes referenced code mods or contains executable formulas, additionally verify Veteran+. Free tier: reject with "Brewery requires Adventurer+."
+
+- **Severity:** Critical
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 112, 130, 172
+- **Category:** Missing field whitelisting (creator-supplied object spread into JSONB)
+- **Issue:** `stats: m`, `properties: it`, `properties: cf` — the entire creator-supplied entry object is dumped into a JSONB column. A creator can stash arbitrary keys (`is_official: true`, `is_featured: true`, hidden tracking fields, prototype-pollution payloads if anything reads-as-object, large blobs to exhaust storage). These JSONB blobs are then rendered to GMs and players.
+- **Suggested approach:** Whitelist the exact fields each entry type carries. Monsters: `name, cr, hp, ac, speed, abilities, attacks, traits, image_url`. Items: `name, type, rarity, weight, cost, attunement, description`. Spells: the documented spell shape. Features: `name, level, class, description, type`. Drop everything else server-side.
+
+- **Severity:** High
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 106–179
+- **Category:** No content-volume limits / DoS surface
+- **Issue:** No upper bound on how many monsters/items/spells/features a single pack can ship. A malicious or accidentally-bloated pack with 50,000 monsters will execute `supabase.from("monsters").insert(rows)` with all of them in a single payload, hit storage limits, blow past request size, or OOM the campaign. Each install is a write amplification.
+- **Suggested approach:** Enforce per-bucket caps at publish time and re-check at install time. Reasonable starting points: 200 monsters, 200 items, 200 spells, 200 features per pack. Reject larger packs at publish.
+- **Severity:** High
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 112, 124, 142, 165
+- **Category:** XSS surface on pack metadata (description, name, image alt)
+- **Issue:** `description`, `name`, and `image_url` from the creator's pack are persisted to `monsters`/`campaign_items`/`spells`/`campaign_class_features` tables and then rendered downstream. Per the systemic-issues note, the lore + items + popup layers carry **8 + 1 + 1 = 10 known `dangerouslySetInnerHTML` sites**. Markdown homebrew descriptions bound for monsters/items/spells will hit those same renderers. Bundling unsanitized content via packs is a wide XSS distribution vector — install one malicious pack, every player in every campaign that installs it gets popped.
+- **Suggested approach:** Sanitize all rich-text fields (description, higher_level, casting_time-if-rich) at publish time using a server-side allowlist sanitizer (DOMPurify in Node, or rehype-sanitize). Strip raw HTML, allow only the markdown-derived subset that the renderers expect. Then deprecate `dangerouslySetInnerHTML` in favor of a Markdown-render-with-sanitize component.
+
+- **Severity:** High
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 112, 131
+- **Category:** SVG XSS / image_url validation
+- **Issue:** `image_url: m.image_url || null` accepts any URL the creator supplied. SVG images uploaded to storage (or referenced off-site) can carry inline `<script>` and execute when rendered as an `<img>` from the same origin. No mime check, no domain allowlist, no SVG-rejection.
+- **Suggested approach:** Validate at publish: reject SVG mime types entirely, restrict `image_url` to your own storage domain (`user-assets/users/{user_id}/`), and verify the URL is reachable + image-content-type. Same applies to pack covers.
+
+- **Severity:** High
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 98–179
+- **Category:** Race conditions / non-atomic multi-table install
+- **Issue:** The four bucket inserts run sequentially with early-return on first failure. If `spells` insert fails after `monsters` and `campaign_items` succeeded, the partial content stays in the campaign. The caller in modEngine *attempts* a compensating delete on the install row only — not on the actually-inserted content rows.
+- **Suggested approach:** Wrap all four inserts in a single PL/pgSQL function that runs in a transaction. On any failure, rollback the entire pack install. Compensating-delete-from-the-client pattern is fragile; let the database do it.
+
+- **Severity:** High
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 98
+- **Category:** Missing publication / approval check
+- **Issue:** No verification that `modId` corresponds to a published, approved content pack. A direct caller can install a draft pack or a pack flagged for moderation review.
+- **Suggested approach:** Server-side: lookup the mod by id, require `is_published=true AND status='approved' AND mod_type='content_pack'`. Reject otherwise.
+
+- **Severity:** High
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 98
+- **Category:** Missing version handling on re-install / pack update
+- **Issue:** No version check or idempotency. Installing the same pack twice into the same campaign duplicates every monster/item/spell/feature row. When a creator publishes v2 of a pack and a GM "upgrades", the existing rows aren't updated — they're orphaned and v2 piles on top.
+- **Suggested approach:** Either (a) make install idempotent by deleting any existing `source_mod_id=modId` rows in the four tables before insert (re-snapshot), or (b) make `(campaign_id, source_mod_id, name)` unique with `upsert(onConflict)` so re-install patches by name. Couple to a `pinned_pack_version` on the install row.
+
+- **Severity:** High
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 193–207
+- **Category:** Cross-tenant uninstall risk
+- **Issue:** `uninstallContentPack` deletes by `(campaign_id, source_mod_id)` only — no GM ownership check. If a non-GM caller can reach this function (and RLS isn't enforcing it on the four tables), they could uninstall content packs from other people's campaigns.
+- **Suggested approach:** RPC verifies caller is GM of `campaignId`. RLS policies on `monsters`/`campaign_items`/`spells`/`campaign_class_features` enforce delete only by GM (defense in depth).
+
+- **Severity:** High
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 193–213
+- **Category:** Race conditions / partial-uninstall orphans
+- **Issue:** `Promise.all` runs four deletes in parallel; if one fails (e.g., spells), the other three succeed and the caller gets `success: false` with `failures` listing the partial. The install row in `campaign_installed_mods` is then deleted by the modEngine wrapper anyway (it doesn't check `result.success` — see modEngine.js line 277, 297). Result: orphaned rows in one bucket with no `mod_id` pointer back, no retry path.
+- **Suggested approach:** Run inside a transaction (RPC). On any failure, rollback all four. Caller (modEngine) must check the result and gate the `campaign_installed_mods` delete on it.
+
+- **Severity:** Medium
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 117, 135, 158, 176
+- **Category:** Multi-game readiness — D&D 5e tables baked into engine
+- **Issue:** Hardcoded targets `monsters`, `campaign_items`, `spells`, `campaign_class_features`. Once PF2e/WoD/BitD packs land, those systems have different content shapes (BitD has crews + scores not "spells", Mörk Borg has scrolls and abominations not "monsters" per se). The engine assumes D&D 5e schema universally.
+- **Suggested approach:** Route per-game-system to a manifest that maps content buckets → tables. `manifest['dnd5e'].buckets = { monsters, items, spells, features }`; `manifest['bitd'].buckets = { crews, scores, factions }`. Engine consumes manifest, doesn't hardcode.
+
+- **Severity:** Medium
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 127, 128, 145–151, 169, 170
+- **Category:** Multi-game readiness — D&D 5e default literals
+- **Issue:** `"Wondrous Item"` (line 127), `"Common"` rarity (128), `"Evocation"` school (147), `"1 action"` casting time (148), `"Instantaneous"` duration (150), `"General Ability"` feature type (169), `"Class Feature"` discriminator (170) are all D&D 5e literals embedded directly. None of them belong in cross-system code.
+- **Suggested approach:** Per-bucket defaults live in the per-game-system manifest. Engine uses `manifest[system].defaults.item.type` etc., never inline literals.
+
+- **Severity:** Medium
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 128
+- **Category:** Hardcoded normalization (rarity slug)
+- **Issue:** `(it.rarity || "Common").toString().toLowerCase().replace(/ /g, "_")` — implicit slug normalization rule lives inline. If the receiving column expects a fixed enum (`common`, `uncommon`, `rare`, `very_rare`, `legendary`, `artifact`), there's no validation that the result is in-set.
+- **Suggested approach:** Keep an explicit allowlist constant (already lives in `src/config/itemRarities.js` or similar — verify). Validate `slug ∈ allowed`. Reject otherwise rather than persisting an unknown rarity that breaks downstream filters.
+
+- **Severity:** Medium
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 152
+- **Category:** Field-name normalization fallback (`higher_level || higher_levels`)
+- **Issue:** `higher_level: sp.higher_level || sp.higher_levels || ""` — accepts both spellings. Indicates upstream data shape isn't canonical. If two different upstream sources used different keys, the receiver shouldn't quietly paper over it.
+- **Suggested approach:** Normalize at publish time (single canonical key). Then engine reads the canonical key and never the alias.
+
+- **Severity:** Medium
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 154
+- **Category:** Hardcoded source string
+- **Issue:** `source: "brewery_pack"` — magic string. If the `source` column is queried for filtering or analytics, the value should come from a constant in the brewery config so it can be searched / refactored.
+- **Suggested approach:** Export a `MOD_SOURCE_BREWERY_PACK = "brewery_pack"` constant.
+
+- **Severity:** Medium
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 98–213
+- **Category:** Missing P.I.E. event emission
+- **Issue:** No events emitted on pack install or uninstall. Pioneer Creator badge attribution, Tavern recommendation engine, and creator-side install-count metrics depend on these signals.
+- **Suggested approach:** Emit `brewery.pack_installed` / `brewery.pack_uninstalled` with `{ campaign_id, mod_id, creator_id, counts }`. Especially important for creator analytics and milestone tracking.
+
+- **Severity:** Medium
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 98–213
+- **Category:** Missing audit logging on bulk content insert/delete
+- **Issue:** Bulk inserts of up to (current limit ∞) rows into shared content tables with no audit trail. If a malicious user manages to spray rows into someone else's campaign, no record exists to roll it back surgically.
+- **Suggested approach:** Audit row per pack install/uninstall capturing `{ campaign_id, mod_id, actor_user_id, action, counts, source_mod_id }`.
+
+- **Severity:** Medium
+- **File:** src/lib/breweryContentPack.js
+- **Line:** General — content-pack publishing path
+- **Issue:** No copyright/OGL gate visible. Per spec, packs must not freely distribute non-OGL system content (e.g., reproducing copyrighted spell text). This file is the install layer; the publish layer (likely in BreweryClient or `lib/brewery*`) should enforce. Flagging here for cross-batch follow-up.
+- **Suggested approach:** Publish-side: require creator to attest content is OGL-compliant or original; flag suspect content for moderation. Optional: run a hash check against known SRD content blobs and reject duplicates.
+
+- **Severity:** Medium
+- **File:** src/lib/breweryContentPack.js
+- **Line:** General
+- **Issue:** Storage paths are not touched here directly (image_url is just a string), but the engine accepts arbitrary `image_url` without checking it lives under `user-assets/users/{user_id}/` per the canonical storage path rule.
+- **Suggested approach:** At publish time, validate every `image_url` (cover + per-entry) lives under the creator's namespace in `user-assets/`. Reject off-domain or other-user references.
+
+- **Severity:** Low
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 13
+- **Category:** Missing pagination on listing — N/A
+- **Issue:** This file doesn't list packs (no read paths, only install/uninstall + size helpers). Listing concerns belong to `breweryClient.js` / Tavern pages. Logging here as "checked, not applicable."
+- **Suggested approach:** None for this file.
+
+- **Severity:** Low
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 99–101
+- **Category:** Error handling — silent return on missing args
+- **Issue:** `if (!campaignId || !modId || !metadata?.contents)` returns `success: false` without distinguishing which arg is missing. Caller (`installMod`) wraps this into a generic message. Hard to debug from logs.
+- **Suggested approach:** Return distinct reasons (`"missing campaignId"`, `"missing modId"`, `"missing contents"`).
+
+- **Severity:** Low
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 145
+- **Category:** Coercion-only validation
+- **Issue:** `level: Number(sp.level ?? 0)` — silently coerces `"high"` or `null` to `0` (level 0 = cantrip). A creator typo could turn a 9th-level spell into a cantrip without warning.
+- **Suggested approach:** Validate `level ∈ [0, 9]` (or per-system range) at publish time. Reject NaN.
+
+- **Severity:** Low
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 76, 78–87
+- **Category:** Comment style / localization
+- **Issue:** Pluralization is hardcoded in English (`Monster${counts.monsters === 1 ? "" : "s"}`). Not i18n-ready.
+- **Suggested approach:** Defer until i18n strategy is locked. Logging for future-pass tally.
+
+- **Severity:** Cosmetic
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 203
+- **Category:** console.log / .warn / .error
+- **Issue:** One `console.warn` on per-table delete failure. Acceptable as-is per project conventions; flagging per audit directive.
+- **Suggested approach:** Route through structured logger eventually.
+
+- **Severity:** Cosmetic
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 1
+- **Category:** BASE44 NAMING
+- **Issue:** No `base44` references found. Imports use `@/api/supabaseClient`. Clean.
+- **Suggested approach:** None — note for the per-batch tally only.
+
+- **Severity:** Cosmetic
+- **File:** src/lib/breweryContentPack.js
+- **Line:** 8
+- **Category:** Naming inconsistency in docstring vs code
+- **Issue:** Docstring (line 8) refers to the column as `brewery_pack_mod_id`, but the actual code uses `source_mod_id` (lines 115, 133, 156, 174, 201). Comment is stale relative to migration `20261104_brewery_content_pack_source_mod_id.sql` which canonicalized the column name.
+- **Suggested approach:** Update the docstring to say `source_mod_id`.
+
+
+##### Batch 2-ii-d Summary
+
+**Findings totals: 60 across 2 files (863 source lines)**
+
+| Severity | modEngine.js | breweryContentPack.js | **Total** |
+|---|---|---|---|
+| Critical | 7 | 4 | **11** |
+| High     | 9 | 8 | **17** |
+| Medium   | 11 | 8 | **19** |
+| Low      | 2 | 4 | **6**  |
+| Cosmetic | 4 | 3 | **7**  |
+| **File total** | **33** | **27** | **60** |
+
+**Totals by category (top hits):**
+
+| # | Category | Count |
+|---|---|---|
+| 7 | CLIENT-SIDE AUTHORITY (caller-supplied user_id, campaignId, modId, configValues, full metadata blob) | 5 distinct surfaces |
+| 10 | Missing field whitelisting on writes (`{ ...mod.metadata }`, `stats: m`, `properties: it/cf`, configValues) | 3 |
+| 13 | Race conditions / non-atomic multi-step writes (install row + content rows, install/uninstall replay, parallel-delete partial fail) | 6 |
+| 15 | Missing tier verification (Veteran for code-mod install, Adventurer for content-pack install) | 2 |
+| 16 | Missing ownership/install-eligibility / GM-of-campaign verification | 3 |
+| 18 | XSS surface on mod/pack metadata descriptions (Markdown→dangerouslySetInnerHTML) | 1 (system-wide impact) |
+| 19 | SVG XSS on uploaded assets (image_url unrestricted) | 1 |
+| 17 | Code execution surface (formula evaluator on creator-supplied formulas) | 1 (engine layer; root cause in formulaEvaluator.js) |
+| 8 | Fetch-all `select("*")` anti-pattern | 2 |
+| 24 | Multi-game readiness — hardcoded D&D 5e taxonomy/tables/defaults | 5 |
+| 21 | Missing P.I.E. event emission | 2 |
+| 20 | Missing audit logging on install/uninstall | 2 |
+| 26 | Missing version handling on pack/mod re-install (no idempotency, no upgrade path) | 2 |
+| 27 | source_mod_id linkage / docstring-vs-code naming drift | 1 |
+| 25 | Copyright / OGL gating absent | 1 |
+| 22 | Storage path validation (image_url not constrained to user-assets/{user_id}/) | 1 |
+| 12 | Missing error handling on Supabase responses (`setModStatus`, `setModPriority`, `forceUninstallMod`, uninstallContentPack discarded result) | 3 |
+| 5 | console.log/.warn/.error | 5 calls across both files |
+| 4 | BASE44 leftovers | **0** |
+| 3 | Hardcoded values that should be constants | 6 |
+| 11 | Missing pagination | N/A (campaign-scoped, bounded) |
+| 14 | PII broadcast (character names returned in uninstall warning) | 1 (low blast radius) |
+| 28 | Tier gate inversion verification | see specific note below |
+
+**Specific note — TIER GATE INVERSION verification (Pass 1A):**
+Pass 1A flagged the Brewery UI as inverting the tier gates (gating Adventurer-eligible non-code mod creators behind Veteran). At the engine/data layer audited in this batch, **no tier gate exists at all** — neither correct nor inverted. `installMod` (modEngine.js:140) and `installContentPack` (breweryContentPack.js:98) both proceed without checking caller tier. This means: (a) the inverted UI gate from Pass 1A is *the only gate*, and (b) the engine is currently bypassable by any direct caller. **Resolution requires both fixing the UI gate (Pass 1A's framing) and adding a server-enforced tier gate at the engine RPC layer with the correct rule:** Adventurer+ for any content-pack/data-mod install, Veteran+ additionally required when the install includes code-mod entries.
+
+**Specific note — code execution / sandboxing concerns:**
+Engine itself contains **no `eval`, `Function`, `new Function`, or dynamic script injection**. Code-mod execution flows through `evaluateFormula` (imported from `src/lib/formulaEvaluator.js`, out of scope for this batch but must be deep-audited if not already covered in batches 2-ii-a/b/c) and `validateFormula`. The engine trusts both helpers to enforce a safe expression grammar. **Risk surface for client-side arbitrary-code execution is fully delegated to `formulaEvaluator.js`** — the engine is correct in shape (no direct eval) but the entire safety story rests on that one file. Action: verify formulaEvaluator audit coverage; if not yet covered, schedule a focused security pass on it before any code-mod beta. Additionally, `pinned_metadata.config_values` (modEngine.js:184) flow into `evaluateFormula`'s `formulaContext` (line 594) without runtime validation, so even with a tight formula grammar, a malicious caller can poison the *values* the formula consumes.
+
+**Specific note — XSS surface on mod/pack metadata:**
+Engine layer does not call `dangerouslySetInnerHTML` directly, but the *content it persists* — pack monsters / items / spells / class_features descriptions, mod names, mod descriptions — is the upstream source for the **8 `dangerouslySetInnerHTML` sites in lore + 1 in items + 1 in popup** identified in the systemic-issues note. A single malicious published content pack distributes XSS across every campaign that installs it. The engine has zero sanitization gate; sanitization belongs on either the publish-side (content_pack publish flow) or the render-side (replace `dangerouslySetInnerHTML` with a sanitized markdown component). Both should be done; the publish-side is more defensible because it eliminates the payload at write time. Image fields (`image_url`) are unconstrained — SVG-XSS risk is open.
+
+**Specific note — multi-game readiness concerns:**
+Both files are heavily D&D 5e-coupled, in ways that will block the `game_packs` roadmap (PF2e, WoD, Mörk Borg, CY_BORG, KoB, BitD).
+- modEngine.js: silent default `game_system || "dnd5e"` (line 153); `VALID_TARGETS` hardcodes D&D-isms (death_saves, critical_hits, ability_scores, magic, encumbrance — line 327); gate vocabulary hardcodes D&D recovery cycles (once_per_turn/round/rest/proficiency_bonus — line 513).
+- breweryContentPack.js: hardcodes D&D content tables (`monsters`, `campaign_items`, `spells`, `campaign_class_features` — lines 117, 135, 158, 176); embeds D&D 5e default literals throughout ("Wondrous Item", "Common", "Evocation", "1 action", "Instantaneous", "General Ability", "Class Feature").
+**Severity is currently Medium** because the dnd5e launch is unaffected; **escalates to High** the moment a non-dnd5e game pack is added without a manifest indirection. Recommended fix: per-game-system manifest (loaded by `game_system`) that supplies VALID_TARGETS, gate scopes, content buckets, table routings, and per-bucket defaults.
+
+**Specific note — Base44 leftover count:** **0 across both files.** Both import from `@/api/supabaseClient`. Clean.
+
+##### Good Patterns Observed in Batch 2-ii-d
+
+1. **Version pinning at install (snapshot pattern)** — `installMod` snapshots `mod.patches`, `mod.metadata`, and `mod.version` into the install row (modEngine.js:191–193). A creator updating their mod cannot retroactively break installed campaigns; the GM has to opt in to an update. **Replicate this pattern for any user-installed-then-creator-modifiable content** (templates, character sheets, future automations).
+
+2. **Per-bucket cached counts on the model** — `BLANK_CONTENT_PACK.content_counts` (breweryContentPack.js:31–36) and `contentPackSize` (line 59) cache bucket counts so the marketplace grid never round-trips the full content blob just to render "15 Monsters · 8 Items". Correct shape: cached for hot path, scan-fallback when cache is empty. **Replicate for any large JSONB blob whose size/shape is needed in list views.**
+
+3. **Tagged-source uninstall (`source_mod_id`)** — Every row inserted by `installContentPack` is tagged with `source_mod_id = modId` (lines 115, 133, 156, 174). Uninstall is a single `WHERE source_mod_id = modId` per table (lines 197–201). The GM's own homebrew (no `source_mod_id` set) is untouched. Clean separation of pack-installed vs hand-written content. **Replicate for any bulk-imported content pattern.**
+
+4. **Per-trigger error isolation in combat** — `checkModTriggers` catches per-trigger formula errors and continues evaluating other triggers (modEngine.js:623). One bad mod's runtime error doesn't kill the entire combat round. The bad mod gets flipped to `status='error'` for session-start to surface. **Correct shape for any plugin-style runtime where one bad plugin shouldn't take down the host.**
+
+5. **Cache invalidation paired with trigger-gate reset** — `invalidateModCache` (modEngine.js:42) explicitly clears scoped gateTracker entries for the campaign so a "once per round" gate from an uninstalled mod doesn't linger. Demonstrates awareness that mod state has multiple coupled caches that must be invalidated together. (Shape is right; the narrowing-by-prefix logic could be tightened, but the *intent* is correct.)
+
+6. **Validation as a shared contract** — `validateFormula` is imported from `formulaEvaluator.js` and re-exported (modEngine.js:344) so the creator-form on-blur check, session-start validation, and runtime evaluation all use *exactly the same* parser. **No "looks safe" / "actually runs" divergence.** Excellent discipline, replicate for any client/server validation pair.
+
+
+##### Pass 2 Batch ii (lib) Combined Summary
+
+`/src/lib/` is now fully audited across four sub-batches. This combined summary covers 2-ii-a through 2-ii-d.
+
+**Total findings across `/src/lib/`: 278**
+
+| Sub-batch | Files | Critical | High | Medium | Low | Cosmetic | Total |
+|---|---|---|---|---|---|---|---|
+| 2-ii-a (Auth/Presence/UserSettings/Forums) | 4 | 11 | 19 | 27 | 15 | 3 | **75** |
+| 2-ii-b (Tavern + cosmetics + theme + entitlements + dice) | 7 | 9 | 18 | 25 | 13 | 0 | **65** |
+| 2-ii-c (Spice wallet + stipend + creator milestones + applications + bans) | 5 | 21 | 25 | 21 | 11 | 0 | **78** |
+| 2-ii-d (Mod engine + content pack) | 2 | 11 | 17 | 19 | 6 | 7 | **60** |
+| **Combined** | **18** | **52** | **79** | **92** | **45** | **10** | **278** |
+
+**Severity distribution at the lib layer:**
+- **Critical: 52** (19% of findings) — concentrated in caller-supplied identity/amount surfaces, missing tier gates, missing GM/ownership checks, non-atomic wallet flows, and non-atomic install/uninstall flows.
+- **High: 79** (28%) — race conditions, missing field whitelisting, fetch-all anti-patterns, error-handling gaps, XSS distribution surfaces.
+- **Medium: 92** (33%) — multi-game readiness, missing P.I.E. emission, missing audit logging, hardcoded constants that belong in config.
+- **Low + Cosmetic: 55** (20%) — naming, documentation drift, console statements, code smells.
+
+**Top systemic issues across `/src/lib/`:**
+
+1. **CLIENT-SIDE AUTHORITY is universal at this layer.** Per-batch counts: 2-ii-a (8 surfaces), 2-ii-b (14 surfaces), 2-ii-c (14 functions), 2-ii-d (5 surfaces). **Combined: 41+ distinct functions accept caller-supplied user_id / creator_id / buyer_id / amount / tier / mod_id / pack_id / campaign_id / configValues / metadata.** This is the single largest fix-project the codebase needs. The canonical replacement pattern (atomic `SECURITY DEFINER` RPC that derives identity from `auth.uid()` and pins all amount/tier from server-side lookups) is established in batches 2-ii-b/c; the work is mechanical but vast.
+
+2. **Non-atomic multi-step writes are pervasive.** Wallet credit + ledger insert (4 instances), purchase + balance + creator credit + ledger (4 flows), install row + content pack copy (1 flow), pack install across 4 tables (1 flow), milestone unlocks (3 flows). **Combined: ~13 distinct multi-step flows that need to collapse into single PL/pgSQL functions.** Compensating-action pattern (client-side rollback delete on failure) is consistently fragile across batches.
+
+3. **Tier-gating is enforced inconsistently across the lib layer.** UI-layer gates exist (Pass 1A) but engine/data-layer gates are routinely missing or absent. Pass 1A's TIER GATE INVERSION in the Brewery is *uncovered* by this layer — engine accepts any tier. Same shape in tavernClient (uploadItem creatorTier spoofable), spiceStipend (tier spoofable), modEngine + breweryContentPack (no tier gate at all). **Combined: 6+ files where tier enforcement should live but doesn't.**
+
+4. **XSS distribution surfaces accumulate in stored content.** lore (8 sites), items (1), popups (1), and now mod/pack metadata (high distribution multiplier — one malicious published pack hits every campaign that installs it). **Sanitize-on-publish would eliminate all of these in one fix-project**; render-side replacement of `dangerouslySetInnerHTML` with a sanitizing markdown component is the bigger refactor but solves the rendering side. Both should be in scope.
+
+5. **Multi-game readiness debt is concentrated in modEngine + content-pack + tavernCosmetics + activeCosmetics.** D&D 5e taxonomy, default literals, and table routings are baked in. **Severity escalates the moment a non-dnd5e game pack is added.** A per-game-system manifest layer (loaded by `campaigns.game_system`) is the canonical fix; should land *before* the first non-dnd5e game pack ships.
+
+6. **`isAdminEmail()` admin-detection at `forumsClient.js:202` is the lone Pass 1A Critical at this layer** and the canonical replacement is documented in Batch 2-ii-a's summary (admin_users table + `app_metadata.role`). Remaining lib files do not contain admin gates at all — meaning admin-credit, admin-cashout, admin-unban, admin-moderate paths exist as functions but with **zero admin verification** (subsumed under CLIENT-SIDE AUTHORITY counts).
+
+7. **P.I.E. event emission is absent across most state-changing operations.** Combined: ~17 missing event emissions across batches (mod install/uninstall, pack install/uninstall, purchase, listing-created, rating, cashout-state-change, cosmetic-applied, milestone, ban, application-state, presence-edge). Reactive subscribers (achievements, badges, notifications, analytics) cannot fire.
+
+8. **`select("*")` over-projection is consistent across 12+ surfaces.** Narrow projections exist in places (campaignBans, spiceWallet); the discipline isn't universal.
+
+9. **Hardcoded policy constants leak across files.** Stipend cadence (`THIRTY_DAYS_MS`), pioneer cap, player caps (8/6), Stripe percentages, $1=250 conversion, default cosmetics, brewery defaults (`"Wondrous Item"`, `"Common"`, `"Evocation"`), gate vocabulary. **All belong in `src/config/`** alongside `spiceConfig`.
+
+10. **Base44 leftover hygiene at the lib layer is essentially complete.** Combined Base44 references: **5** (all in 2-ii-a: AuthContext × 3 API-compat shims, PresenceContext × 2 import + entity update). Batches 2-ii-b/c/d have **0 Base44 leftovers**. The remaining 5 are specifically Base44 API-compat shims that need a focused removal pass once the consuming UI no longer expects them.
+
+**Lib-layer readiness assessment for the kill-client-side-authority fix-project:**
+
+The lib layer is the *intermediate stratum* between UI components and Supabase. The fix-project needs to convert this layer from "client orchestrator that issues raw Supabase reads/writes" to "thin client wrapper around server-enforced RPCs." Specifically:
+
+- **Phase 1 (foundational, blocks everything else):** Establish the `admin_users` table + `app_metadata.role` pattern (2-ii-a finding); delete `isAdminEmail`. This is a prerequisite for any admin-gated RPC to verify the actor.
+- **Phase 2 (highest blast-radius):** Convert wallet credit/debit + creator-revenue paths to atomic RPCs (2-ii-c findings). Spice integrity is the single largest financial-risk surface in the codebase.
+- **Phase 3 (parallelizable, large surface):** Convert tier-gated install/upload/purchase paths to atomic RPCs that pin tier from `auth.uid()` server-side. Covers tavernClient.uploadItem, tavernClient.purchaseItem, modEngine.installMod, breweryContentPack.installContentPack, spiceStipend.checkAndGrantStipend.
+- **Phase 4 (UX-facing but mechanical):** Convert remaining caller-supplied-identity reads (cosmetics, entitlements, profile lookups) to derive `userId` server-side. ~20 functions.
+- **Phase 5 (correctness + future-proofing):** Per-game-system manifest layer; sanitize-on-publish for XSS surfaces; P.I.E. emission backfill; audit-log backfill.
+
+**Estimated lib-layer fix volume:** ~50 functions need to migrate to atomic RPCs (counting only the Critical-flagged surfaces); ~30 more need server-side tier/ownership/admin verification added (High-flagged); ~20 more need narrowing/whitelisting/sanitization (Medium-flagged). The work is well-bounded once the canonical patterns (atomic RPC, admin_users + app_metadata.role, per-game-system manifest, sanitize-on-publish, structured P.I.E. event payloads) are agreed upon.
+
+**`/src/lib/` is structurally sound but security-incorrect.** The architecture (single owning module per concern, exported state-machines, documented contracts) is good; the *trust boundaries* are wrong everywhere. The fix is large but mechanical — the right shape exists; the enforcement layer is missing. Recommend the fix-project be sequenced with admin-detection first (Phase 1), then wallet (Phase 2), then run Phases 3 + 4 in parallel.
+
+**End of Pass 2 Batch ii — `/src/lib/` is fully audited.**
