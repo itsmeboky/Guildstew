@@ -14927,3 +14927,463 @@ Files in scope (alphabetical):
 
 **End of Pass 2 Batch iii — `/src/utils/` is fully audited.**
 
+
+---
+
+### Batch 2-iv: functions layer
+
+Scope: `/functions/*.ts` — the legacy Base44 cloud-function folder. 15 files total. All files import `npm:@base44/sdk@0.8.4` and use the Base44 `Deno.serve` runtime model (`base44.auth.me()`, `base44.entities.*`, `base44.asServiceRole.*`, `base44.integrations.Core.*`).
+
+**Critical context discovered while auditing this batch:** the `base44.functions.invoke(...)` shim in `src/api/base44Client.js:36-50` no longer routes to the Base44 runtime. It routes to `supabase.functions.invoke(...)` — i.e. Supabase Edge Functions. **There is no `supabase/functions/` directory in the repo.** That means every `base44.functions.invoke('<name>', ...)` call from `src/` lands on a non-existent Supabase Edge Function, hits the shim's catch-all at line 41-43/45-47 (`console.warn('Edge Function "<name>" not available yet:', ...)`), and **silently returns `null`**. The caller is generally unaware. Functions in `/functions/` are not deployed anywhere reachable, so their code is effectively orphaned even when something in `src/` "calls" them. This makes the LIVE/STUB/PORTED/DEAD categorization more nuanced than the brief implies — see notes per-file.
+
+In addition: the Deno files themselves cannot run in a Supabase Edge runtime as-written (they import `@base44/sdk`, use Base44 entity API, use `asServiceRole`). They were Base44-runtime-only. Porting requires rewriting against `supabase-js` + service-role key in env, not lifting and shifting.
+
+#### Migration Status Inventory
+
+| File | Bytes | Grep count in /src/ | Status | One-line description |
+|---|---|---|---|---|
+| `debugGetMonsterImages.ts` | 0 | 0 | **STUB** (orphaned) | Empty file. No `Deno.serve`. Not called from `src/`. |
+| `debugUser.ts` | 770 | 0 | **DEAD** | Returns the caller's auth user + their `UserProfile`. Internal debug endpoint. No `src/` reference. |
+| `enrichMonsters.ts` | 5669 | 1 | **LIVE** (silently failing) | Called by `src/components/worldLore/MonsterLibrary.jsx:189` via `base44.functions.invoke`. Generates GenerateImage + InvokeLLM enrichments for D&D monsters in a campaign. Currently returns `null` silently because there is no Supabase Edge Function with this name. |
+| `exportCampaignData.ts` | 3801 | 5 | **LIVE + name-collides-with-PORTED** | Called by `src/pages/CampaignSettings.jsx:251` to produce an RTF download. **Distinct** from the `exportCampaignData` exported by `src/utils/campaignLifecycle.js:185` (which produces a JSON blob and is called from `DeleteCampaignDialog.jsx`). Two functions, same name, different behavior — name collision is itself a migration risk. |
+| `exportMonsterImages.ts` | 2657 | 1 | **LIVE** (silently failing) | Called by `src/components/worldLore/MonsterLibrary.jsx:220`. Zips monster images per-campaign. Returns base64 ZIP. |
+| `fetchDnd5eSpells.ts` | 1149 | 0 | **DEAD** | Proxy to Open5e API to fetch SRD spells. No `src/` reference. |
+| `fixUserProfile.ts` | 2240 | 0 | **DEAD** (and dangerous if revived) | Allows any authenticated user to look up a User by arbitrary email and rewrite their username + UserProfile. Not called from `src/`. |
+| `getMonsterImages.ts` | 0 | 0 | **STUB** (orphaned) | Empty file. Not called from `src/`. |
+| `preloadDnd5eItems.ts` | 13003 | 1 (comment only) | **DEAD** | Only reference in `src/` is a *comment* in `CampaignGMPanel.jsx:109` saying it was shipped. Code references undefined variable `allItemsWithEnchanted` (line 118) — file is broken even on its own terms. |
+| `preloadDnd5eMonsters.ts` | 132386 | 1 (comment only) | **DEAD** | Only reference in `src/` is a comment in `CampaignGMPanel.jsx:109`. Bulk-creates 731-line static `DND5E_MONSTERS` array. |
+| `repairMonsterImages.ts` | 55881 | 0 | **DEAD** | Bulk-overwrites monster `image_url` from a static MONSTER_IMAGES dictionary. No `src/` reference. |
+| `searchUsers.ts` | 1500 | 5 (replaced) | **PORTED** | Replaced by local `async function searchUsers` in `src/pages/Friends.jsx:30-47` which queries `user_profiles` directly via Supabase. Friends.jsx:24-29 doc-comment confirms this is a deliberate replacement of the "dead `searchUsers` Edge Function that used to throw CORS." |
+| `sendSessionReminder.ts` | 1806 | 1 | **LIVE** (silently failing) | Called by `src/pages/CampaignSettings.jsx:171` via `base44.functions.invoke`. Creates SessionReminder rows for all participants. |
+| `syncUserProfiles.ts` | 2553 | 2 (both comments) | **PORTED** | Both `src/` references are comments noting the function was removed and profile-sync is now handled by `AuthContext.jsx` on login. |
+| `updateLegendScore.ts` | 3955 | 1 | **LIVE** (silently failing) | Called by `src/components/worldLore/PlayerLegendTracker.jsx:34` via `base44.functions.invoke`. Adjusts character `legend_score` and grants benchmark Achievements. |
+
+**Status totals: 5 LIVE, 0 callable-STUB (2 STUB are orphaned and effectively DEAD), 2 PORTED, 8 DEAD.**
+
+#### /functions/enrichMonsters.ts (LIVE)
+
+5669 bytes, 163 lines. Called from `src/components/worldLore/MonsterLibrary.jsx:189` via `base44.functions.invoke('enrichMonsters', { campaign_id })`. Currently returns `null` silently in production because the shim routes to `supabase.functions.invoke` and there is no Supabase Edge Function with this name. The legacy Deno code is also non-runnable as-is in a Supabase Edge environment (uses `@base44/sdk`).
+
+- **Severity:** Critical
+- **File:** `functions/enrichMonsters.ts`
+- **Line:** 1, 5
+- **Category:** BASE44 LEFTOVER (file-level)
+- **Issue:** Entire file imports `npm:@base44/sdk@0.8.4` and uses `createClientFromRequest`/`base44.entities`/`base44.asServiceRole`. Cannot run in any environment now that Base44 is being decommissioned.
+- **Suggested approach:** Port to a Supabase Edge Function `enrich-monsters`. Use `supabase-js` server client with service-role key sourced from env. Must be rewritten — no lift-and-shift possible.
+
+- **Severity:** Critical
+- **File:** `functions/enrichMonsters.ts`
+- **Line:** 12, 18, 30
+- **Category:** CLIENT-SIDE AUTHORITY (caller-supplied campaign_id) + Missing tier verification
+- **Issue:** `campaign_id` is taken from request body and used to filter via `base44.entities.Campaign.filter({ id: campaign_id })` — caller-supplied. Authorization check at line 25 only requires `campaign.game_master_id === user.id`, but doesn't verify the user's *tier* allows AI image generation or LLM calls. A free-tier GM can trigger arbitrary numbers of `GenerateImage` + `InvokeLLM` calls (line 74, 97) — direct cost-attack vector.
+- **Suggested approach:** When porting to Supabase Edge Function, (a) fetch campaign row server-side with `.eq('game_master_id', auth.uid())` — never trust client `campaign_id` alone for write authorization, (b) check user's `subscription_tier` and enforce a per-call quota / per-campaign quota via a `monster_enrichment_log` table.
+
+- **Severity:** Critical
+- **File:** `functions/enrichMonsters.ts`
+- **Line:** 56-150
+- **Category:** Missing rate limits on external-call functions (AI)
+- **Issue:** Loops over every monster in the campaign. Each iteration may call `GenerateImage` (one image per monster) and `InvokeLLM` (one LLM call per monster). On a campaign with 100 unmapped monsters this is 200 paid AI calls per click. Zero rate limit, zero per-user quota, zero billing-budget check.
+- **Suggested approach:** When porting, enforce `(a)` per-user daily monster-enrichment quota (e.g. Free=0, Adventurer=10, Vet=50, Guild=100), `(b)` per-campaign cooldown (e.g. once per 24h), `(c)` server-side cost ceiling that aborts when crossed.
+
+- **Severity:** High
+- **File:** `functions/enrichMonsters.ts`
+- **Line:** 47-50
+- **Category:** Race conditions in non-atomic operations
+- **Issue:** Dedup loop deletes "duplicate by lower-cased name" monsters one-at-a-time using `asServiceRole`. If two GMs (or one GM in two browser tabs) trigger this concurrently, both will iterate the same set and both will issue deletes — the second pass will fail or delete arbitrary rows. No transaction, no row lock.
+- **Suggested approach:** Move the dedup logic into a Postgres function that runs in a single transaction with `SELECT ... FOR UPDATE` on the campaign row. Or use a `pg_advisory_xact_lock(hashtext('enrich:'||campaign_id))` to serialize.
+
+- **Severity:** High
+- **File:** `functions/enrichMonsters.ts`
+- **Line:** 57-66
+- **Category:** Missing error handling
+- **Issue:** When `GenerateImage` or `InvokeLLM` fails (line 79, 143), the error is logged with `console.error` but the loop continues — so the user gets a 200 response with `images_generated: 0` even when every call failed. The user has no visibility into partial failure.
+- **Suggested approach:** Track failures per-monster and return them in the response: `{ images_generated, monsters_enriched, failed_monsters: [{ name, reason }] }`. Surface to the user.
+
+- **Severity:** High
+- **File:** `functions/enrichMonsters.ts`
+- **Line:** 86-95
+- **Category:** Hardcoded URLs + SRD/copyright concerns
+- **Issue:** LLM prompt asks the model to "extract the exact official D&D 5e 2024 data ... from https://www.dndbeyond.com/sources/dnd/br-2024/creature-stat-blocks" using `add_context_from_internet: true`. This is asking the LLM to scrape and reproduce verbatim copyrighted Wizards of the Coast stat blocks, then write them into the database. SRD-licensed reproduction is OK; verbatim 2024 stat blocks from the dndbeyond URL almost certainly are not.
+- **Suggested approach:** Constrain the prompt to SRD-only sources (Open5e, the WotC SRD documents), document this in the source. Note this as a legal-review item before re-deploying.
+
+- **Severity:** Medium
+- **File:** `functions/enrichMonsters.ts`
+- **Line:** 79, 143, 161
+- **Category:** console.log / .error / .warn
+- **Issue:** Three `console.error` calls. Line 79 and 143 log monster names + full error objects (acceptable for debug, but propagated to whatever log sink the runtime uses). Line 161 swallows the entire request error and returns `error.message` to the client — leaks internal stack info.
+- **Suggested approach:** When porting, replace `error.message` echoes with a generic `'Internal error'` and route the real message to a structured logger.
+
+- **Severity:** Low
+- **File:** `functions/enrichMonsters.ts`
+- **Line:** 25
+- **Category:** Missing audit logging on mutations
+- **Issue:** Successful enrichment runs that delete duplicates and bulk-update monsters emit no audit_log row. A later "where did my monster go?" support ticket has no trail.
+- **Suggested approach:** When porting, write an `audit_log` row per delete + per update.
+
+#### /functions/exportCampaignData.ts (LIVE — name-collides-with-PORTED)
+
+3801 bytes, 115 lines. Called from `src/pages/CampaignSettings.jsx:251` to produce an RTF download. Distinct from the same-named function in `src/utils/campaignLifecycle.js:185` (which produces a JSON blob; called by DeleteCampaignDialog).
+
+- **Severity:** Critical
+- **File:** `functions/exportCampaignData.ts`
+- **Line:** entire file
+- **Category:** BASE44 LEFTOVER (file-level)
+- **Issue:** Imports `npm:@base44/sdk@0.8.4`, uses `base44.entities`, `base44.asServiceRole`. Same migration story as enrichMonsters.
+- **Suggested approach:** Rewrite as a Supabase Edge Function `export-campaign-data-rtf`. Or — since RTF generation is pure-string work — turn into a client-side helper module in `src/lib/exportCampaignArchivesRtf.js` that fetches the rows via supabase-js (RLS-protected) and assembles the RTF in the browser. **Latter is preferred** because the function does no privileged work the client can't do under correct RLS.
+
+- **Severity:** Critical
+- **File:** `functions/exportCampaignData.ts`
+- **Line:** 12, 15, 21
+- **Category:** CLIENT-SIDE AUTHORITY (caller-supplied campaign_id)
+- **Issue:** Caller-supplied `campaign_id` is used to fetch the campaign with `asServiceRole` (bypassing RLS), then authorization is performed in JS by comparing `campaign.game_master_id !== user.id && !campaign.co_dm_ids?.includes(user.id)`. This is the same client-side-authority pattern the brief flags universally. If `campaign_id` collides with a foreign campaign and the in-JS check has any bug (e.g. `co_dm_ids` shape change), the function leaks foreign campaign data.
+- **Suggested approach:** Drop `asServiceRole`; fetch with the user's session client so RLS does the authorization. Or move RTF assembly into a Postgres function with `SECURITY INVOKER` so the same RLS policies apply.
+
+- **Severity:** High
+- **File:** `functions/exportCampaignData.ts`
+- **Line:** 41-49, 55-63, 69-76, 82-83, 92-95
+- **Category:** PII broadcast / RTF injection
+- **Issue:** RTF is built via string concatenation. Campaign title (line 36), NPC names/descriptions/notes, item names/descriptions, map names/notes, world_lore, homebrew rule names/descriptions are all interpolated raw into the RTF body. RTF has its own backslash-control-word grammar; a name containing `\par\plain\fs48 ATTACK` will inject formatting, and depending on viewer can include OLE-link control words (`\objdata`) that some readers honor. This file ships to the GM's machine — same trust boundary as the GM, but if a co-DM was malicious they could inject.
+- **Suggested approach:** Escape `\`, `{`, `}` in every interpolated value (RFC 1.6 RTF spec) before concatenation. Better, use a vetted RTF builder library.
+
+- **Severity:** Medium
+- **File:** `functions/exportCampaignData.ts`
+- **Line:** 88-100
+- **Category:** Missing error handling
+- **Issue:** `JSON.parse(campaign.homebrew_rules)` is wrapped in try/catch that swallows errors silently with a comment "Ignore parse errors." User downloads an RTF with no homebrew section and no warning that their data couldn't be parsed.
+- **Suggested approach:** When porting, surface parse errors to the response: `{ warnings: ['homebrew_rules JSON unreadable'] }`.
+
+- **Severity:** Medium
+- **File:** `functions/exportCampaignData.ts`
+- **Line:** 109
+- **Category:** Inconsistent / unsafe error handling
+- **Issue:** `campaign.title.replace(/[^a-z0-9]/gi, '_')` collapses to a clean filename, but if title is empty the filename is `_archives.rtf`, and the RTF heading at line 36 still injects raw title without escaping (see issue above).
+- **Suggested approach:** Normalize once at top of handler.
+
+- **Severity:** Medium
+- **File:** `functions/exportCampaignData.ts`
+- **Line:** 113
+- **Category:** Inconsistent error response shapes
+- **Issue:** Returns `{ error: error.message }` — leaks internal error text.
+- **Suggested approach:** Return a generic error string, log the real message server-side.
+
+- **Severity:** Low
+- **File:** `functions/exportCampaignData.ts`
+- **Line:** N/A
+- **Category:** Naming collision
+- **Issue:** Same name as `src/utils/campaignLifecycle.js:185 exportCampaignData` which does a *different* thing (JSON dump for delete-flow). Two `exportCampaignData` symbols means a future grep-and-rip migration will be ambiguous.
+- **Suggested approach:** Rename the RTF helper to `exportCampaignArchivesRtf` when porting; keep the JSON one as `exportCampaignData`.
+
+#### /functions/exportMonsterImages.ts (LIVE)
+
+2657 bytes, 64 lines. Called from `src/components/worldLore/MonsterLibrary.jsx:220`.
+
+- **Severity:** Critical
+- **File:** `functions/exportMonsterImages.ts`
+- **Line:** entire file
+- **Category:** BASE44 LEFTOVER (file-level)
+- **Issue:** Imports `npm:@base44/sdk@0.8.4`. Cannot run.
+- **Suggested approach:** Port to Supabase Edge Function `export-monster-images` (Edge Function preferred over RPC because it streams large binary to the client and uses external `fetch` to retrieve images).
+
+- **Severity:** Critical
+- **File:** `functions/exportMonsterImages.ts`
+- **Line:** 17, 23
+- **Category:** CLIENT-SIDE AUTHORITY (caller-supplied campaign_id) + Missing role/permission verification
+- **Issue:** **No GM check at all.** Accepts `campaign_id` and immediately runs `base44.entities.Monster.filter({ campaign_id })` then bundles every monster image in the campaign. Any authenticated user who knows or guesses a campaign UUID can dump every monster image in that campaign. The other functions in this folder at least gate on `game_master_id === user.id`; this one does not even do `auth.me()` checks.
+- **Suggested approach:** When porting, mandatory: (a) call `auth.uid()`, (b) verify caller is GM/co-DM/player of the campaign before zipping. Use a `.eq('id', campaign_id)` query that joins on the membership tables under RLS.
+
+- **Severity:** High
+- **File:** `functions/exportMonsterImages.ts`
+- **Line:** 6-14
+- **Category:** CORS / origin validation gaps
+- **Issue:** `Access-Control-Allow-Origin: '*'` on the OPTIONS preflight (and on the error response at line 62). Allows any origin to invoke this function, exposing the auth-less data leak above to any third-party site that has the user's session cookie.
+- **Suggested approach:** Constrain Allow-Origin to the production app origin(s). Set in env, not hard-coded.
+
+- **Severity:** High
+- **File:** `functions/exportMonsterImages.ts`
+- **Line:** 28-54
+- **Category:** Missing rate limits + SSRF risk
+- **Issue:** Loops over every monster, calls `fetch(imageUrl)` against the URL stored on the monster row. (a) No rate limit — a campaign with many monsters can run hundreds of parallel outbound HTTP requests through the function's egress. (b) `imageUrl` comes from the database but was originally caller-supplied (monsters are user-created). No validation that the URL is in an allowlist of known image hosts. **SSRF vector**: a malicious GM could set `imageUrl` to an internal IP (`http://169.254.169.254/...`) and the function would happily fetch and base64-encode the response into the ZIP.
+- **Suggested approach:** Validate every `imageUrl` against an allowlist of CDN hosts (Supabase Storage origin, base44.app while it still exists, project's own CDN). Reject anything else. Add per-user rate limit (e.g. once per minute per user).
+
+- **Severity:** High
+- **File:** `functions/exportMonsterImages.ts`
+- **Line:** 49
+- **Category:** console.log / .error / .warn
+- **Issue:** `console.error('Failed to fetch image for ${monster.name}:', err)` logs monster name (not severe) but the err object can include the full URL — if SSRF was attempted the internal target ends up in logs.
+- **Suggested approach:** Strip URL from error before logging; log a sanitized failure code.
+
+- **Severity:** Medium
+- **File:** `functions/exportMonsterImages.ts`
+- **Line:** 57-59
+- **Category:** Memory pressure
+- **Issue:** Builds the entire ZIP in memory and base64-encodes it. A campaign with hundreds of large images will OOM the function. No streaming.
+- **Suggested approach:** Stream the ZIP to the response body instead of base64-buffering. Or chunk by page.
+
+- **Severity:** Medium
+- **File:** `functions/exportMonsterImages.ts`
+- **Line:** 36-37
+- **Category:** Storage path violations (filename only, less severe)
+- **Issue:** `monster.id` is used as a filename fallback. UUIDs are fine for filenames but `monster.name` user input is sanitized only to `[^a-z0-9]` — non-ASCII names collapse to `_`. Acceptable but lossy.
+- **Suggested approach:** Document, or use a transliteration library.
+
+#### /functions/sendSessionReminder.ts (LIVE)
+
+1806 bytes, 58 lines. Called from `src/pages/CampaignSettings.jsx:171`.
+
+- **Severity:** Critical
+- **File:** `functions/sendSessionReminder.ts`
+- **Line:** entire file
+- **Category:** BASE44 LEFTOVER (file-level)
+- **Issue:** Imports `npm:@base44/sdk@0.8.4`. Cannot run.
+- **Suggested approach:** Port to a Postgres RPC `send_session_reminder(campaign_id uuid)`. The function does only DB work (creates SessionReminder rows, updates `campaigns.last_reminder_sent`) — no external API call — so it belongs in Postgres for atomicity, not in an Edge Function.
+
+- **Severity:** Critical
+- **File:** `functions/sendSessionReminder.ts`
+- **Line:** 12-15
+- **Category:** CLIENT-SIDE AUTHORITY (caller-supplied campaign_id)
+- **Issue:** Accepts `campaign_id` from request body. Fetches campaign with `asServiceRole`. Authorization check is in JS at line 23-28.
+- **Suggested approach:** RPC version: `auth.uid()` + RLS-bound `campaigns` row query. JS-side authorization is unnecessary if the SELECT is already RLS-bound.
+
+- **Severity:** Critical
+- **File:** `functions/sendSessionReminder.ts`
+- **Line:** 38-47
+- **Category:** Missing rate limits
+- **Issue:** A GM can call this in a tight loop and create unlimited `SessionReminder` rows for every participant of every session. There is no per-campaign or per-user cooldown. The `campaign.last_reminder_sent` field is *written* (line 50) but never *checked* before sending.
+- **Suggested approach:** Read `last_reminder_sent`; reject if less than e.g. 1 hour ago. Enforce in the RPC, not the client.
+
+- **Severity:** High
+- **File:** `functions/sendSessionReminder.ts`
+- **Line:** 31-45
+- **Category:** Missing idempotency on retryable operations
+- **Issue:** Network retry from client will create a second batch of SessionReminder rows. No idempotency key, no upsert.
+- **Suggested approach:** Use a `(campaign_id, user_id, session_time)` unique constraint or upsert with `onConflict`.
+
+- **Severity:** High
+- **File:** `functions/sendSessionReminder.ts`
+- **Line:** 38-47
+- **Category:** Race conditions in non-atomic operations
+- **Issue:** `Promise.all` parallel inserts followed by a separate `Campaign.update`. If the inserts succeed and the update fails, `last_reminder_sent` is stale — making the rate-limit check (when added) wrong. Not transactional.
+- **Suggested approach:** Single Postgres function with a transaction.
+
+- **Severity:** High
+- **File:** `functions/sendSessionReminder.ts`
+- **Line:** 31-35
+- **Category:** PII broadcast / sub-issue
+- **Issue:** Reminder rows are created with `user_id` of every participant. If a SessionReminder row exposes participant identity to other participants via RLS, this leaks the player roster. (Cannot verify without RLS — flagging for Pass 2-v.)
+- **Suggested approach:** RLS on `session_reminders`: `user_id = auth.uid()` for read.
+
+- **Severity:** Medium
+- **File:** `functions/sendSessionReminder.ts`
+- **Line:** 12
+- **Category:** Missing input validation
+- **Issue:** `campaign_id` not validated for presence before being used in filter. If absent, query becomes `filter({ id: undefined })` which under Base44's API might list all campaigns.
+- **Suggested approach:** Reject early if missing/non-UUID.
+
+- **Severity:** Low
+- **File:** `functions/sendSessionReminder.ts`
+- **Line:** 42
+- **Category:** Logic
+- **Issue:** `session_time: campaign.next_session_time || new Date().toISOString()` — if `next_session_time` is null, the reminder is timestamped "now" silently. User probably wanted to be told "no session scheduled."
+- **Suggested approach:** Reject early if `next_session_time` is null.
+
+#### /functions/updateLegendScore.ts (LIVE)
+
+3955 bytes, 101 lines. Called from `src/components/worldLore/PlayerLegendTracker.jsx:34`. Adjusts `character.legend_score` in -100..+100 range and grants benchmark Achievements when threshold crossings happen.
+
+- **Severity:** Critical
+- **File:** `functions/updateLegendScore.ts`
+- **Line:** entire file
+- **Category:** BASE44 LEFTOVER (file-level)
+- **Issue:** Imports `npm:@base44/sdk@0.8.4`.
+- **Suggested approach:** Port to Postgres RPC `apply_legend_score(character_id uuid, is_critical_success boolean) returns table(...)`. All work is row-level + benchmark-set check + insert-if-missing — atomic-friendly. RPC strongly preferred.
+
+- **Severity:** Critical
+- **File:** `functions/updateLegendScore.ts`
+- **Line:** 25-29, 32, 75
+- **Category:** CLIENT-SIDE AUTHORITY (caller-supplied character_id) + Missing role/permission verification
+- **Issue:** Caller supplies `character_id` and `is_critical_success`. The function runs `Character.filter({ id: character_id })` (line 32) **without any auth/role check** — does not verify the caller is the GM of the character's campaign or even the character's owner. Any authenticated user who knows a `character_id` can apply legend-score deltas to that character (boost a friend's character, sabotage an enemy's). Achievements are granted to `character.created_by`, not to the caller — so an attacker can farm achievements onto another user's account.
+- **Suggested approach:** RPC must check (a) the caller is the campaign's GM (via `campaigns.game_master_id = auth.uid()`), (b) the character belongs to that campaign. Without (a), this is a free achievement-grief vector.
+
+- **Severity:** Critical
+- **File:** `functions/updateLegendScore.ts`
+- **Line:** 25, 47-49
+- **Category:** CLIENT-SIDE AUTHORITY (caller-supplied delta direction)
+- **Issue:** `is_critical_success` is a client boolean. The function trusts it to decide whether to add or subtract points. A malicious client can always send `true` to ramp scores up to +100, unlocking the "Living Legend" achievement.
+- **Suggested approach:** The caller should provide a signed game-event reference (e.g. a `dice_roll_id` whose row stores the actual outcome), and the RPC reads the outcome from that row server-side. Never trust caller-supplied delta direction.
+
+- **Severity:** High
+- **File:** `functions/updateLegendScore.ts`
+- **Line:** 56-72, 75-77, 80-89
+- **Category:** Race conditions in non-atomic operations
+- **Issue:** Sequence: (1) read current score, (2) compute new score, (3) walk benchmarks, (4) `Achievement.filter` for each crossing to check pre-existence, (5) `Character.update` with new score, (6) `Achievement.create` per benchmark. Six round trips. Two concurrent calls can both observe `currentScore=70`, both compute `newScore=80`, both pass the "no existing achievement" check at line 68, and both insert duplicate Renowned Hero achievements.
+- **Suggested approach:** Single transaction with `SELECT ... FOR UPDATE` on the character row. Achievement uniqueness should be enforced by a `(user_id, title)` UNIQUE constraint at the table level so duplicate inserts cannot succeed even racy.
+
+- **Severity:** High
+- **File:** `functions/updateLegendScore.ts`
+- **Line:** 51
+- **Category:** Hardcoded values that should be constants
+- **Issue:** `Math.max(-100, Math.min(100, ...))` — the score clamp range is duplicated as magic numbers. Same numbers appear in `LEGEND_BENCHMARKS` (line 4-13).
+- **Suggested approach:** Centralize in a `legend.js` config with `LEGEND_MIN`, `LEGEND_MAX`, and the benchmark table.
+
+- **Severity:** Medium
+- **File:** `functions/updateLegendScore.ts`
+- **Line:** 43
+- **Category:** Default-value fallback masks GM intent
+- **Issue:** `legendSettings = campaign.legend_settings || { crit_success_points: 10, crit_fail_points: 10 }`. If a GM explicitly sets `legend_settings` to `{ crit_success_points: 0, crit_fail_points: 0 }` to *disable* legend scoring, the JS truthy fallback won't trigger (it's a non-null object) — so this is fine. But if the campaign has `null` it silently falls back to 10/10. GMs who never opted in still get score events.
+- **Suggested approach:** Require `legend_settings` to exist and be enabled before applying.
+
+- **Severity:** Medium
+- **File:** `functions/updateLegendScore.ts`
+- **Line:** 80-89
+- **Category:** Missing audit logging
+- **Issue:** Achievement grants and score changes don't write to an audit table. Disputes about "I never crossed -80" are unresolvable.
+- **Suggested approach:** Insert an `audit_log` row per score change.
+
+- **Severity:** Medium
+- **File:** `functions/updateLegendScore.ts`
+- **Line:** 99
+- **Category:** Inconsistent error response shapes
+- **Issue:** Returns `error.message` to the client. Same leak pattern as the rest of /functions/.
+- **Suggested approach:** Generic error string + server-side log of the real one.
+
+- **Severity:** Low
+- **File:** `functions/updateLegendScore.ts`
+- **Line:** 32, 37
+- **Category:** Fetch-all anti-patterns
+- **Issue:** `.filter({ id: ... }).then(c => c[0])` to fetch one row. Cosmetic — but two such calls.
+- **Suggested approach:** When porting, single SELECT.
+
+#### DEAD / STUB / PORTED files — one-line dispositions
+
+Per-file findings are not warranted for these (per the brief), but flagging notable security or hygiene concerns where the file is *dead but dangerous if revived*:
+
+- **`debugGetMonsterImages.ts`** (STUB, 0 bytes, orphaned): **suggested action: delete.** Empty file serves no purpose.
+
+- **`getMonsterImages.ts`** (STUB, 0 bytes, orphaned): **suggested action: delete.** Empty file serves no purpose.
+
+- **`debugUser.ts`** (DEAD): **suggested action: delete.** A debug endpoint that returns `auth.me()` plus the caller's UserProfile. Not actively wired but exists in the deploy bundle. If a future deploy script blanket-pushes `/functions/`, this would expose a debug surface in production. Per the seedTestCampaign pattern flagged in 2-iii — "dev/test tooling reachable in production" — this qualifies. Delete now.
+
+- **`fetchDnd5eSpells.ts`** (DEAD): **suggested action: delete.** Auth-gated proxy to Open5e. Not currently called. Open5e does not require an API key, so the only "secret" leak is that authenticated users could use it as a free network egress proxy for one specific URL. Low risk but pointless. Delete.
+
+- **`fixUserProfile.ts`** (DEAD): **suggested action: delete IMMEDIATELY (highest priority among dead files).** This is the most dangerous artifact in the entire folder. Behavior: any authenticated user supplies an `email` and a `username`; the function uses `asServiceRole` to look up the User by that email and rewrite the user's `username` and create/update their `UserProfile` (line 21-56). **There is zero check that the caller owns the email or has admin rights.** Originally meant as a one-shot admin repair tool, but the only auth gate is `auth.me()` (any logged-in user passes). If this ever gets re-deployed, anyone can rewrite any user's username — username squatting, impersonation, displacement of established creators on Tavern. Delete the file.
+
+- **`preloadDnd5eItems.ts`** (DEAD): **suggested action: delete.** Additional bug: line 118 references `allItemsWithEnchanted` which is **never defined** in the file (only `itemIcons` is defined). The function would throw `ReferenceError` if invoked. Genuinely broken even on its own terms.
+
+- **`preloadDnd5eMonsters.ts`** (DEAD): **suggested action: delete.** 731 lines of static D&D monster data baked into a Deno function. This data should live in a seed migration / static JSON, not a cloud function. Note: file contains both `https://base44.app/...` URLs and `https://qtrypzzcjebvfcihiynt.supabase.co/storage/...` URLs — the Supabase project ID `qtrypzzcjebvfcihiynt` is hard-coded throughout. Not a secret per se (project IDs are visible in any Supabase URL), but it's an accidental tie-in to a specific deployment. The Tarrasque comment block at the bottom of the file (around line 700) reveals the file was authored with LLM assistance and includes leftover developer notes ("Wait, Tarrasque wasn't in the previous list...") in source — this is dev-thought-leakage in production code.
+
+- **`repairMonsterImages.ts`** (DEAD): **suggested action: delete.** Same hard-coded Supabase project ID, same 421-line embedded image dictionary. Was a one-shot data-fix tool. Note: line 401-403 contains a noteworthy comment block about the function intentionally overwriting user-customized monster image_urls — if revived, this could destroy GM curation work. Delete; if a similar tool is needed later, build it as an admin RPC with explicit confirmation.
+
+- **`searchUsers.ts`** (PORTED): **suggested action: delete.** Replacement lives in `src/pages/Friends.jsx:30-47`. Behavior of replacement: queries `user_profiles` directly via Supabase. The replacement is also slightly more permissive (does not strip `email` from results — line 35 of the legacy returned `safeProfile` without email, while the local function returns the full profile row including email). **Migration risk:** the ported version regresses on email-PII protection. Flag this as a follow-up for Pass 3 (the original function deliberately stripped email; the port doesn't).
+
+- **`syncUserProfiles.ts`** (PORTED): **suggested action: delete.** Replacement is wired into `AuthContext.jsx` per the `Friends.jsx:68` comment. Note: the legacy function's profile-merge logic (line 16-32) uses lots of `user.x || existingProfile.x || default` chains — verify the AuthContext port preserves the fallback-default constants (especially the `#FF5722` and `#37F2D1` brand colors at lines 28-29).
+
+##### Batch 2-iv Summary
+
+**Migration status totals (15 files):**
+- LIVE: **5** — `enrichMonsters`, `exportCampaignData`, `exportMonsterImages`, `sendSessionReminder`, `updateLegendScore`
+- STUB: **2** — `debugGetMonsterImages`, `getMonsterImages` (both 0 bytes, both orphaned — not called from anywhere, so silent-failure-of-stub is not a runtime concern)
+- PORTED: **2** — `searchUsers`, `syncUserProfiles`
+- DEAD: **6** — `debugUser`, `fetchDnd5eSpells`, `fixUserProfile`, `preloadDnd5eItems`, `preloadDnd5eMonsters`, `repairMonsterImages`
+
+(Total = 15. STUB+DEAD = 8 effectively-dead files; PORTED = 2 awaiting deletion; LIVE = 5 awaiting port.)
+
+**Findings totals by severity (LIVE files only — 39 findings):**
+- Critical: **13** (5 file-level Base44 leftovers + 8 client-side-authority / role-check / SSRF / cost-attack)
+- High: **15**
+- Medium: **9**
+- Low: **2**
+- Cosmetic: **0**
+
+**Findings totals by category (LIVE files):**
+- BASE44 LEFTOVER (file-level): 5 (every LIVE file)
+- CLIENT-SIDE AUTHORITY: 5
+- Race conditions in non-atomic operations: 3
+- Missing rate limits on external-call functions: 2
+- Missing role/permission verification: 2 (notably `exportMonsterImages` has *zero* role check; `updateLegendScore` has *zero* role check)
+- Missing tier verification: 1 (`enrichMonsters` AI cost-attack)
+- Missing error handling: 2
+- Missing audit logging: 2
+- Missing idempotency: 1
+- PII broadcast: 2 (RTF injection + reminder roster leak)
+- Hardcoded URLs / SSRF: 2
+- CORS / origin validation gaps: 1
+- Missing input validation: 1
+- console.log/.error/.warn: 4
+- Inconsistent error response shapes: 4 (`error.message` echo to client across all five LIVE files)
+- Hardcoded values that should be constants: 1
+- Naming collision: 1 (`exportCampaignData` collides with `src/utils/campaignLifecycle.js`)
+- Memory pressure: 1
+- Default fallback masks intent: 1
+- Logic: 1
+- Storage path violations (filename only): 1
+- Fetch-all anti-patterns: 1
+
+**Base44 leftover count (file-level):** **15 of 15 files** — every file in `/functions/` is Base44-runtime code (`@base44/sdk`). The entire folder is a Base44 leftover. Combined with the prior counts (~11 files across api+lib+utils flagged in 2-i/2-ii/2-iii), the total Base44-leftover file count after this batch is approximately **26 files**. /functions/ alone is the densest concentration as predicted.
+
+**LIVE functions handling currency / commerce / Stripe:** **None.** No commerce code in /functions/. No Stripe webhooks, no Spice ledger updates, no payment processing. (Commerce surface lives in `src/api/billingClient.js` per Pass 2-i and `supabase.functions.invoke('create-gamepack-checkout', ...)` per `GamePacksGrid.jsx:53` — those are out of scope here.) Risk surface for /functions/ is therefore (a) AI cost attacks (`enrichMonsters`), (b) achievement / score griefing (`updateLegendScore`), (c) PII / data leak (`exportMonsterImages`, `exportCampaignData`), (d) reminder spam (`sendSessionReminder`).
+
+**Right destination per LIVE function:**
+
+| Function | Destination | Reason |
+|---|---|---|
+| `enrichMonsters` | **Supabase Edge Function** | Requires external API calls (image gen + LLM), needs careful rate-limit + tier enforcement, can't run in pure Postgres. |
+| `exportCampaignData` (RTF) | **`src/lib/exportCampaignArchivesRtf.js`** (client module) | Pure string assembly. RLS-bound supabase-js queries from the browser do all the privileged work. No server-side compute needed. |
+| `exportMonsterImages` | **Supabase Edge Function** | Streams binary, runs many outbound `fetch` calls, needs SSRF allowlist + CORS lockdown. Server-side mandatory. |
+| `sendSessionReminder` | **Postgres RPC `send_session_reminder(campaign_id)`** | Pure DB work, needs transactionality + uniqueness constraint + cooldown read-then-write. Best in Postgres. |
+| `updateLegendScore` | **Postgres RPC `apply_legend_score(character_id, dice_roll_id)`** | Pure DB work, needs `SELECT ... FOR UPDATE` for race-free score++benchmark logic + `audit_log` insert. Best in Postgres. |
+
+**Specific cross-cutting notes:**
+
+1. **The `base44.functions.invoke` shim silently swallows missing-edge-function errors (base44Client.js:41-47) and returns `null`.** This means every LIVE call from `src/` is currently a no-op in production — not a thrown error, just a silent `null`. UX symptom: `enrichMonsters` shows "0 images generated" with no error toast; `sendSessionReminder` shows success but no reminders sent; `updateLegendScore` shows the old score in the UI; `exportMonsterImages` produces an empty download; `exportCampaignData` (RTF flavor) silently fails. **This is itself Critical** — see broader transcript for the shim issue.
+
+2. **None of the LIVE functions emit P.I.E. events.** Every mutation should fire one (legend-score-changed, reminder-sent, monster-enriched, etc.) per the project-wide P.I.E. event mandate. After porting, every RPC / Edge Function should emit.
+
+3. **No upload validation appears in this batch.** `uploadValidator.js` (flagged in 2-iii as a stub) is not consumed by any /functions/ code. The image fetches in `exportMonsterImages` and `enrichMonsters.GenerateImage` rely on the upstream URL being trustworthy — neither validates input or output blob.
+
+4. **`fixUserProfile.ts` is the single most dangerous file in the entire batch** (auth-bypass username rewrite). Even though DEAD, the file still sits in a `/functions/` deploy folder. Delete on the next push.
+
+5. **Two PORTED files but the ports diverge from the legacy in a security-relevant way.** `searchUsers` legacy stripped `email` before returning; the Friends.jsx replacement returns the full profile including email. This is a regression introduced by the port.
+
+##### Updated Base44 Migration Project Scope
+
+After Pass 2-i + 2-ii + 2-iii + 2-iv, the total Base44 migration scope is:
+
+**File counts (Base44-tagged files across the audited surfaces):**
+- /src/api/: ~5 base44-prefixed or base44-shimmed files (per 2-i totals)
+- /src/lib/: ~3 base44 references (per 2-ii)
+- /src/utils/: ~3 base44 references (per 2-iii)
+- /functions/: **15** files — every single file
+- **Total: ~26 files** carrying Base44 references that need migration or deletion
+
+**Functions to delete (PORTED + DEAD + STUB-orphaned in /functions/):** **10 files**
+1. `debugGetMonsterImages.ts` (STUB orphan) — empty
+2. `getMonsterImages.ts` (STUB orphan) — empty
+3. `debugUser.ts` (DEAD) — debug endpoint
+4. `fetchDnd5eSpells.ts` (DEAD) — Open5e proxy
+5. `fixUserProfile.ts` (DEAD) — **DANGEROUS, prioritize**
+6. `preloadDnd5eItems.ts` (DEAD) — broken (undefined var) and replaced by static seed
+7. `preloadDnd5eMonsters.ts` (DEAD) — replaced by static seed
+8. `repairMonsterImages.ts` (DEAD) — one-shot fix, hard-coded project ID
+9. `searchUsers.ts` (PORTED) — replaced in Friends.jsx (with email-PII regression to fix in Pass 3)
+10. `syncUserProfiles.ts` (PORTED) — replaced in AuthContext.jsx (verify color-default constants port)
+
+**Functions to port (LIVE + STUB-but-called):** **5 files** (no STUB-but-called this batch)
+1. `enrichMonsters.ts` → Edge Function (large; AI cost + tier gating)
+2. `exportCampaignData.ts` → client lib module (small; pure RTF assembly)
+3. `exportMonsterImages.ts` → Edge Function (medium; CORS + SSRF + memory streaming)
+4. `sendSessionReminder.ts` → Postgres RPC (small; DB-only)
+5. `updateLegendScore.ts` → Postgres RPC (small; DB-only with race protection)
+
+**Estimated effort (rough person-day buckets):**
+
+- **Quick wins (≤1 day each, ~3 person-days total):** Delete the 10 dead/ported files; port `exportCampaignData` to a client module; port `sendSessionReminder` to RPC.
+- **Medium (1-2 days each, ~3-4 person-days total):** Port `updateLegendScore` to RPC (race + uniqueness + audit log); port `exportMonsterImages` to Edge Function (CORS + SSRF allowlist + streaming). 
+- **Large (3-5 days):** `enrichMonsters` to Edge Function (rate-limit infra, tier gating, cost ceiling, partial-failure surfacing, audit log, plus the AI provider integration — which depends on whether `invoke-llm` and `generate-image` Edge Functions exist; likely they do not yet).
+- **Cross-cutting (1-2 days):** Fix the `base44.functions.invoke` shim's silent-failure mode (it should *throw* on missing function, not return null) — otherwise the next LIVE invocation that doesn't have its Edge Function deployed will repeat the same silent-no-op bug.
+
+**Total /functions/ migration estimate: ~9-12 person-days**, plus the 1-2 days for the shim fix, plus the corresponding migration work in /src/api/, /src/lib/, /src/utils/ already scoped in 2-i/-ii/-iii.
+
+This batch is the largest single migration target by file count (15 files) but the LIVE work is small (5 files, none of which are large or commerce-critical). The bulk of /functions/ is stale — the priority is **deletion** (10 files), which is low-risk and high-cleanup-value.
+
+**End of Pass 2 Batch iv — `/functions/` is fully audited.**
+
