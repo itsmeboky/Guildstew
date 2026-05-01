@@ -285,6 +285,9 @@ async function repairCampaign(campaign, gm) {
 }
 
 export async function seedTestCampaign() {
+  if (!import.meta.env.DEV) {
+    throw new Error('seedTestCampaign is dev-only and not available in production builds.');
+  }
   console.log("[seed] Starting test campaign seed…");
   const gm = await getCurrentUser();
   console.log(`[seed] Running as GM: ${gm.email} (${gm.id})`);
@@ -329,6 +332,9 @@ export async function seedTestCampaign() {
 }
 
 seedTestCampaign.cleanup = async function cleanupTestCampaign() {
+  if (!import.meta.env.DEV) {
+    throw new Error('seedTestCampaign is dev-only and not available in production builds.');
+  }
   console.log("[seed] Cleaning up seeded test data…");
 
   // Find seeded campaigns by title (bypasses RLS `created_by` filters by
