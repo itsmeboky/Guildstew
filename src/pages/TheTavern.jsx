@@ -24,6 +24,7 @@ import TavernItemCard from "@/components/tavern/TavernItemCard";
 import TavernItemDetailDialog from "@/components/tavern/TavernItemDetailDialog";
 import CreatorUploadDialog from "@/components/tavern/CreatorUploadDialog";
 import GamePacksGrid from "@/components/tavern/GamePacksGrid";
+import GamePackListingsGrid from "@/components/tavern/GamePackListingsGrid";
 
 // Sentinel category for the Game Packs tab — lives alongside the
 // Spice-priced categories but is rendered by a completely separate
@@ -297,7 +298,8 @@ export default function TheTavern() {
             no search/sort). All other tabs render the Spice-priced
             tavern_items grid. */}
         {selectedCategory === GAME_PACKS_TAB ? (
-          <div className="space-y-4">
+          <div className="space-y-6">
+            <GamePackListingsGrid />
             <GamePacksGrid />
           </div>
         ) : items.length === 0 ? (
