@@ -634,20 +634,30 @@ const DiceRoller = forwardRef((props, ref) => {
       return;
 
     const container = containerRef.current;
-    // Use container dimensions if available, otherwise fallback (though full screen logic should handle this via resize normally, simplified here for immediate render)
-    const width = container.clientWidth || 300;
-    const height = container.clientHeight || 300;
+    // Modal mode renders the canvas fullscreen (the modal content
+    // sits on top, with a "landing zone" placeholder where the dice
+    // used to live). Embedded mode keeps using its host container's
+    // dimensions so it can sit inline (e.g. CombatDiceWindow).
+    const fullscreen = !embedded;
+    const width = fullscreen ? window.innerWidth : (container.clientWidth || 300);
+    const height = fullscreen ? window.innerHeight : (container.clientHeight || 300);
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
-    // Scale camera distance based on container size to keep dice visual size constant
-    const baseSize = 300;
-    const scale = Math.max(width, height) / baseSize;
-    const distance = 3 * scale;
-    
-    camera.position.set(distance, distance, distance);
+    let camera;
+    if (fullscreen) {
+      // Tight FOV + far camera so the dice keeps roughly its
+      // previous apparent size despite the canvas being huge.
+      camera = new THREE.PerspectiveCamera(15, width / height, 0.1, 100);
+      camera.position.set(8, 8, 8);
+    } else {
+      camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
+      const baseSize = 300;
+      const scale = Math.max(width, height) / baseSize;
+      const distance = 3 * scale;
+      camera.position.set(distance, distance, distance);
+    }
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
@@ -659,12 +669,19 @@ const DiceRoller = forwardRef((props, ref) => {
     renderer.toneMappingExposure = 1.2;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(renderer.domElement);
+    if (fullscreen) {
+      // The wrapper div has pointer-events:none so the modal stays
+      // clickable; the canvas itself needs pointer-events:auto so
+      // it can accept dice clicks / pointer drags.
+      renderer.domElement.style.pointerEvents = "auto";
+      renderer.domElement.style.display = "block";
+    }
     rendererRef.current = renderer;
 
     const handleResize = () => {
-      if (!container || !camera || !renderer) return;
-      const newWidth = container.clientWidth;
-      const newHeight = container.clientHeight;
+      if (!camera || !renderer) return;
+      const newWidth = fullscreen ? window.innerWidth : container.clientWidth;
+      const newHeight = fullscreen ? window.innerHeight : container.clientHeight;
       camera.aspect = newWidth / newHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(newWidth, newHeight);
@@ -1230,6 +1247,25 @@ const DiceRoller = forwardRef((props, ref) => {
 
   // Modal mode
   return (
+    <>
+      {/* Fullscreen canvas — sits above the modal so dice can fly
+          across the whole screen. The wrapper is pointer-events:none
+          so the modal underneath stays clickable; the canvas itself
+          flips pointer-events back on so the dice can be grabbed. */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 60,
+          pointerEvents: "none",
+        }}
+      >
+        <div
+          ref={containerRef}
+          data-dice-canvas
+          style={{ width: "100%", height: "100%" }}
+        />
+      </div>
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="relative max-w-lg w-full">
         {/* Close Button */}
@@ -1253,17 +1289,27 @@ const DiceRoller = forwardRef((props, ref) => {
 
           <div className="relative flex flex-col flex-1 min-h-0 gap-4 overflow-hidden">
 
-            {/* 3D Dice Display */}
+            {/* 3D Dice Display — landing-zone placeholder. The actual
+                canvas is the fullscreen layer above the modal; this
+                dotted circle marks the area where the dice lands. */}
             <div
               className="relative flex justify-center items-center overflow-visible shrink-0 bg-black/20 rounded-2xl border border-white/5"
               style={{ minHeight: "400px" }}
             >
               <div
-                ref={containerRef}
-                className="cursor-pointer overflow-visible"
-                style={{ width: 400, height: 400 }}
-                onClick={!isRolling ? () => handleRoll() : undefined}
-              />
+                className="flex items-center justify-center rounded-full"
+                style={{
+                  width: 220,
+                  height: 220,
+                  border: "2px dashed rgba(255,255,255,0.15)",
+                  color: "rgba(255,255,255,0.35)",
+                  letterSpacing: "0.18em",
+                  fontWeight: 700,
+                  fontSize: 12,
+                }}
+              >
+                LANDING
+              </div>
               {showParticles && <Particles type={particleType} />}
               {revealAnim && !isRolling && !isCocked && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
 
@@ -1430,6 +1476,7 @@ const DiceRoller = forwardRef((props, ref) => {
       {showCockedAnim && <CockedAnimation />}
       {lameAnim && <LameAnimation rejected={lameAnim.rejected} />}
     </div>
+    </>
   );
 });
 
