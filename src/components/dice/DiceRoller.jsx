@@ -607,43 +607,71 @@ function createFallbackD20() {
   return mesh;
 }
 
-const RevealOverlay = ({ value, color }) => {
-  const [scale, setScale] = useState(0);
+// Top-of-arena reveal — fades in over 400ms, renders centered just
+// below the arena's top edge with a subtle blurred dark plate behind
+// the number for legibility against the dice/floor visuals.
+const RevealOverlay = ({ value, color, modifier = 0 }) => {
+  const [opacity, setOpacity] = useState(0);
+  const total = (typeof value === "number" ? value : 0) + (modifier || 0);
   useEffect(() => {
     let raf;
     const start = performance.now();
     const animate = () => {
-      const t = Math.min((performance.now() - start) / 600, 1);
-      const easeT = t < 0.4
-        ? easeOutBack(t / 0.4) * 1.3
-        : 1.3 - (1.3 - 1) * easeOutCubic((t - 0.4) / 0.6);
-      setScale(easeT);
+      const t = Math.min((performance.now() - start) / 400, 1);
+      setOpacity(t);
       if (t < 1) raf = requestAnimationFrame(animate);
     };
     animate();
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  const sign = modifier > 0 ? "+" : modifier < 0 ? "" : "";
   return (
-    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
-      <div style={{
-        transform: `scale(${scale})`,
-        color,
-        fontFamily: "'Cream', 'Cinzel', serif",
-        fontSize: 120,
-        fontWeight: 900,
-        lineHeight: 1,
-        textShadow: `0 0 40px ${color}, 0 0 80px ${color}66, 0 4px 20px rgba(0,0,0,0.6)`,
-        filter: "drop-shadow(0 8px 20px rgba(0,0,0,0.5))",
-      }}>
-        {value}
+    <div
+      className="absolute top-3 left-1/2 -translate-x-1/2 pointer-events-none z-40 flex flex-col items-center"
+      style={{
+        opacity,
+        transition: "opacity 80ms linear",
+      }}
+    >
+      <div
+        className="px-6 py-2 rounded-2xl flex flex-col items-center"
+        style={{
+          background: "rgba(0,0,0,0.4)",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+          border: "1px solid rgba(255,255,255,0.06)",
+        }}
+      >
+        <div
+          style={{
+            color,
+            fontFamily: "'Cream', 'Cinzel', serif",
+            fontSize: 80,
+            fontWeight: 900,
+            lineHeight: 1,
+            textShadow: `0 0 28px ${color}, 0 0 56px ${color}66, 0 3px 14px rgba(0,0,0,0.6)`,
+          }}
+        >
+          {value}
+        </div>
+        {modifier !== 0 && (
+          <div
+            className="mt-1 text-xs font-bold tracking-wider"
+            style={{ color: "rgba(255,255,255,0.7)" }}
+          >
+            {value} {sign}{modifier} = <span className="text-white">{total}</span>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-// Phase 1: chicken slides left → right. Phase 2: gold "COCKED!" text
-// fades in at top center with a scale-bounce, then pulses.
+// Phase 1: chicken slides left → right across the arena. Phase 2:
+// gold "COCKED!" text fades in at the top of the arena with a
+// scale-bounce, then pulses. Both phases are absolute-positioned so
+// the component lives inside the arena div, not the viewport.
 const CockedAnimation = () => {
   const [phase, setPhase] = useState(1);
   useEffect(() => {
@@ -651,14 +679,14 @@ const CockedAnimation = () => {
     return () => clearTimeout(t);
   }, []);
   return (
-    <div className="fixed inset-0 pointer-events-none z-[70] overflow-hidden">
+    <div className="absolute inset-0 pointer-events-none z-[70] overflow-hidden">
       <style>{`
         @keyframes chickenRun {
-          0%   { left: -10vw; transform: translateY(0) rotate(-6deg); }
+          0%   { left: -10%; transform: translateY(0) rotate(-6deg); }
           25%  { transform: translateY(-30px) rotate(4deg); }
           50%  { transform: translateY(0) rotate(-4deg); }
           75%  { transform: translateY(-22px) rotate(6deg); }
-          100% { left: 110vw; transform: translateY(0) rotate(-2deg); }
+          100% { left: 110%; transform: translateY(0) rotate(-2deg); }
         }
         @keyframes cockedPop {
           0%   { transform: translate(-50%, 0) scale(0.4); opacity: 0; }
@@ -675,7 +703,7 @@ const CockedAnimation = () => {
           style={{
             position: "absolute",
             top: "50%",
-            fontSize: 96,
+            fontSize: 72,
             animation: "chickenRun 1100ms cubic-bezier(.5,1.6,.55,.85) forwards",
           }}
         >
@@ -686,14 +714,20 @@ const CockedAnimation = () => {
         <div
           style={{
             position: "absolute",
-            top: "12vh",
+            top: 12,
             left: "50%",
+            padding: "8px 24px",
+            background: "rgba(0,0,0,0.4)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            border: "1px solid rgba(255,255,255,0.06)",
+            borderRadius: 16,
             color: "#FFD700",
             fontFamily: "'Cream', 'Cinzel', serif",
             fontWeight: 900,
-            fontSize: "min(14vw, 160px)",
+            fontSize: 56,
             letterSpacing: "0.08em",
-            textShadow: "0 0 30px #FFD700, 0 0 60px #FFA500, 0 6px 18px rgba(0,0,0,0.55)",
+            textShadow: "0 0 24px #FFD700, 0 0 48px #FFA500, 0 4px 12px rgba(0,0,0,0.55)",
             animation:
               "cockedPop 480ms cubic-bezier(.34,1.56,.64,1) forwards, cockedPulse 1.4s ease-in-out 480ms infinite",
           }}
@@ -706,10 +740,11 @@ const CockedAnimation = () => {
 };
 
 // Wobbling italic "Lame..." text. When `rejected` is true the color
-// flips pink and the copy nudges the player to try again.
+// flips pink and the copy nudges the player to try again. Lives at
+// the top of the arena (absolute) so it parallels the result reveal.
 const LameAnimation = ({ rejected = false }) => {
   return (
-    <div className="fixed inset-0 pointer-events-none z-[70] flex items-start justify-center">
+    <div className="absolute inset-0 pointer-events-none z-[70] flex items-start justify-center">
       <style>{`
         @keyframes lameWobble {
           0%   { transform: translate(-2px, 0) rotate(-2deg); }
@@ -727,11 +762,17 @@ const LameAnimation = ({ rejected = false }) => {
       `}</style>
       <div
         style={{
-          marginTop: "14vh",
+          marginTop: 12,
+          padding: "8px 24px",
+          background: "rgba(0,0,0,0.4)",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+          border: "1px solid rgba(255,255,255,0.06)",
+          borderRadius: 16,
           fontStyle: "italic",
           fontFamily: "'Cream', 'Cinzel', serif",
           fontWeight: 700,
-          fontSize: "min(9vw, 96px)",
+          fontSize: 48,
           color: rejected ? "#fb7185" : "#94a3b8",
           textShadow: rejected
             ? "0 0 20px #fb718580, 0 4px 14px rgba(0,0,0,0.5)"
@@ -1439,7 +1480,7 @@ const DiceRoller = forwardRef((props, ref) => {
             // plays before the number drops.
             setTimeout(() => {
               const total = finalValue + rollMod;
-              setRevealAnim({ value: finalValue, color: "#94a3b8" });
+              setRevealAnim({ value: finalValue, color: "#94a3b8", modifier: rollMod });
               setLastRoll({ roll: finalValue, total });
               if (!embedded) {
                 setRollHistory((prev) => [
@@ -1471,7 +1512,7 @@ const DiceRoller = forwardRef((props, ref) => {
           else if (finalValue >= (DICE_SIDES[selectedDice] * 0.85)) { revealColor = "#37F2D1"; }
           else if (finalValue <= (DICE_SIDES[selectedDice] * 0.15)) { revealColor = "#94a3b8"; }
 
-          setRevealAnim({ value: finalValue, color: revealColor });
+          setRevealAnim({ value: finalValue, color: revealColor, modifier: rollMod });
           setParticleType(pType);
           setShowParticles(true);
           setTimeout(() => setShowParticles(false), 1200);
@@ -2092,7 +2133,7 @@ const DiceRoller = forwardRef((props, ref) => {
       revealColor = "#94a3b8";
     }
 
-    setRevealAnim({ value: finalValue, color: revealColor });
+    setRevealAnim({ value: finalValue, color: revealColor, modifier: rollMod });
     setParticleType(pType);
     setShowParticles(true);
     setTimeout(() => setShowParticles(false), 1200);
@@ -2403,8 +2444,14 @@ const DiceRoller = forwardRef((props, ref) => {
             />
             {showParticles && <Particles type={particleType} />}
             {revealAnim && !isRolling && !isCocked && (
-              <RevealOverlay value={revealAnim.value} color={revealAnim.color} />
+              <RevealOverlay
+                value={revealAnim.value}
+                color={revealAnim.color}
+                modifier={revealAnim.modifier ?? 0}
+              />
             )}
+            {showCockedAnim && <CockedAnimation />}
+            {lameAnim && <LameAnimation rejected={lameAnim.rejected} />}
           </div>
 
           {/* Bottom strip */}
@@ -2490,8 +2537,6 @@ const DiceRoller = forwardRef((props, ref) => {
             </p>
           </div>
         </div>
-        {showCockedAnim && <CockedAnimation />}
-        {lameAnim && <LameAnimation rejected={lameAnim.rejected} />}
       </div>
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
