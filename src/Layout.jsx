@@ -635,9 +635,9 @@ export default function Layout({ children, currentPageName }) {
         style={{ backgroundColor: 'var(--theme-navBackground, #FF5722)' }}
       >
         <Link to={createPageUrl("Home")} className="flex items-center gap-3">
-          <LazyImage 
-            src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/branding/d93253ec3_image.png" 
-            alt="Guildstew" 
+          <LazyImage
+            src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/branding/GuildStewLogoOfficialForApplication.png"
+            alt="Guildstew"
             className="h-10 w-auto bg-transparent"
             objectFit="contain"
           />
