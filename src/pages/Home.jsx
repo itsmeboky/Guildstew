@@ -169,7 +169,7 @@ export default function Home() {
   const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + slides.length) % Math.max(1, slides.length));
 
   return (
-    <div className="theme-homepage-bg relative min-h-screen bg-white">
+    <div className="relative min-h-screen bg-white">
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;
@@ -188,14 +188,28 @@ export default function Home() {
         }
       `}</style>
 
-      {/* Banner Wallpaper */}
-      <div className="absolute top-0 left-0 right-0 h-[33vh] overflow-hidden">
-        <LazyImage 
-          src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/7a4e888b3_BannerHome.png" 
-          alt="Banner" 
-          className="absolute inset-0 w-full h-full"
+      {/* Banner Wallpaper — image and fade color come from the
+          active theme. Falls back to BannerHome.png + white when
+          no theme is applied. */}
+      <div
+        className="absolute top-0 left-0 right-0 h-[33vh] overflow-hidden"
+        style={{
+          '--banner-fade-color': 'var(--theme-color-bannerFade, #ffffff)',
+        }}
+      >
+        <div
+          className="absolute inset-0 w-full h-full bg-cover bg-center"
+          style={{
+            backgroundImage: 'var(--theme-img-homepageBackground, url(https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/7a4e888b3_BannerHome.png))',
+          }}
+          aria-label="Banner"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/30 to-white" />
+        <div
+          className="absolute inset-0"
+          style={{
+            background: 'linear-gradient(to bottom, transparent, color-mix(in srgb, var(--banner-fade-color) 30%, transparent), var(--banner-fade-color))',
+          }}
+        />
       </div>
 
       {/* pt-44 (~176px) keeps the hero row clear of the nav and

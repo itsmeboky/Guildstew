@@ -16,7 +16,7 @@ import BreweryCard from "@/components/homebrew/BreweryCard";
 import BreweryDetailDialog from "@/components/homebrew/BreweryDetailDialog";
 import CreateModDialog from "@/components/homebrew/CreateModDialog";
 import ContentPackCard from "@/components/homebrew/ContentPackCard";
-import { CardSkeleton } from "@/components/ui/Skeleton";
+import { CardSkeleton } from "@/components/ui/skeleton";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";

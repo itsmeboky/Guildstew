@@ -25,9 +25,12 @@ import { displayName, displayInitial } from "@/utils/displayName";
  *   - Members: promote/demote to Officer, remove
  *   - Danger zone: disband (requires typing the exact guild name)
  *
- * All mutations go through supabase writes against the `guilds` row
- * (lazily inserted on first save) plus the existing guildRemove Edge
- * Function for member removal.
+ * All settings (name, crest, spending flag, officer roster, disband)
+ * write to the `guilds` row keyed on owner_user_id. The spending
+ * flag is also mirrored to guild_spice_wallets.spending_restricted
+ * so the Tavern checkout can gate purchases without an extra hop.
+ * Member removal still flows through the existing guildRemove Edge
+ * Function.
  */
 export default function GuildSettingsDialog({
   open,
@@ -89,9 +92,10 @@ export default function GuildSettingsDialog({
 
   const savePermissions = useMutation({
     mutationFn: async (nextRestricted) => {
-      // Mirror the flag onto both the guild row and the wallet row so
-      // the Tavern checkout (which reads from the wallet) and the
-      // Hall (which reads from the guild row) stay in sync.
+      // spending_restricted lives on the guilds row (canonical) and
+      // is mirrored onto the wallet so the Tavern checkout — which
+      // already reads from the wallet — can gate purchases without
+      // a second round-trip.
       const { error: guildErr } = await supabase
         .from("guilds")
         .upsert(
@@ -115,6 +119,8 @@ export default function GuildSettingsDialog({
 
   const toggleOfficer = useMutation({
     mutationFn: async (userId) => {
+      // officer_ids is a UUID[] column on the guilds row — flip
+      // membership in/out of the array.
       const nextSet = officerIds.includes(userId)
         ? officerIds.filter((id) => id !== userId)
         : [...officerIds, userId];
@@ -146,10 +152,11 @@ export default function GuildSettingsDialog({
 
   const disbandGuild = useMutation({
     mutationFn: async () => {
-      // No server-side "disband" endpoint yet — deleting the guilds row
-      // removes the settings, and the leader can cancel the Guild-tier
-      // subscription to clear memberships. Call out the billing step
-      // in the toast so the UI doesn't pretend it's fully undone.
+      // No server-side "disband" endpoint yet — deleting the
+      // guild_halls row removes the settings, and the leader can
+      // cancel the Guild-tier subscription to clear memberships.
+      // Call out the billing step in the toast so the UI doesn't
+      // pretend it's fully undone.
       const { error } = await supabase.from("guilds").delete().eq("owner_user_id", guildOwnerId);
       if (error) throw error;
     },

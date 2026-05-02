@@ -85,14 +85,17 @@ export const buildEmblemList = () => {
 export const EMBLEM_LIST = buildEmblemList();
 
 // Per-slot emblem state factory. Centered (50, 45) on the field at
-// 1.0 scale. Color matches the gold default of the rest of the
-// builder so a freshly-added emblem reads on the dark fill.
+// 1.0 scale, fully opaque, no rotation. Color matches the gold
+// default of the rest of the builder so a freshly-added emblem
+// reads on the dark fill.
 export const defaultEmblemSlot = () => ({
   id: "none",
   color: "#f59e0b",
   scale: 1.0,
   x: 50,
   y: 45,
+  rotation: 0,
+  opacity: 1.0,
   svgData: null,
   customLabel: null,
 });
@@ -138,11 +141,19 @@ export default function CrestBuilder({
   const [primaryColor, setPrimaryColor] = useState("#2563eb");
   const [secondaryColor, setSecondaryColor] = useState("#1a1a1a");
 
-  // Patterns state (Step 5). Two stackable layers, each with type
-  // + color. Layer order is owned separately so the future Layers
-  // tab can rearrange without touching either pattern's own state.
-  const [pattern1, setPattern1] = useState({ type: "none", color: "#f59e0b" });
-  const [pattern2, setPattern2] = useState({ type: "none", color: "#ffffff" });
+  // Patterns state. Each layer carries its own transform stack
+  // (scale / rotation / position / opacity) plus the type + color
+  // it was already tracking. Layer order is owned separately so
+  // the Layers tab can rearrange without touching either pattern's
+  // own state.
+  const [pattern1, setPattern1] = useState({
+    type: "none", color: "#ffffff",
+    scale: 1.0, rotation: 0, x: 50, y: 50, opacity: 1.0,
+  });
+  const [pattern2, setPattern2] = useState({
+    type: "none", color: "#dc2626",
+    scale: 1.0, rotation: 0, x: 50, y: 50, opacity: 1.0,
+  });
 
   // Emblems — up to 4 slots. Starts with one empty slot so the
   // Emblems tab always has something to point at. `activeIdx`
@@ -157,12 +168,26 @@ export default function CrestBuilder({
   }, []);
 
   // Pick a built-in emblem into the active slot — fetch + parse
-  // first so the slot lands with svgData ready to render.
+  // first so the slot lands with svgData ready to render. A null
+  // `def` clears the active slot (the "None" filter row uses this
+  // path).
   const selectEmblem = React.useCallback(async (def) => {
+    if (!def) {
+      setEmblems((prev) => prev.map((slot, i) => (
+        i === activeEmblemIdx
+          ? { ...slot, id: "none", svgData: null, customLabel: null }
+          : slot
+      )));
+      return;
+    }
     const data = await fetchSVGPaths(def.url);
+    if (!data) {
+      console.error("Failed to fetch/parse SVG for", def.url);
+      return;
+    }
     setEmblems((prev) => prev.map((slot, i) => (
       i === activeEmblemIdx
-        ? { ...slot, id: def.id, svgData: data, customLabel: null }
+        ? { ...slot, id: def.id, svgData: data, customLabel: def.label }
         : slot
     )));
   }, [activeEmblemIdx]);
@@ -230,13 +255,30 @@ export default function CrestBuilder({
       setPrimaryColor(pick(PRESET_COLORS));
       setSecondaryColor(pick(PRESET_COLORS));
 
-      // Patterns
+      // Patterns. Each randomized slot gets a fresh transform stack
+      // so the preview reads as obviously-different on every roll —
+      // rotation 0–360, opacity 0.6–1.0, scale 0.8–1.2; x/y stay
+      // centered (50/50) by default since the transforms already do
+      // most of the visual work.
       const patternIds = Object.keys(PATTERNS).filter((id) => id !== "none");
-      setPattern1({ type: pick(patternIds), color: pick(PRESET_COLORS) });
+      const randomPattern = (color) => ({
+        type: pick(patternIds),
+        color,
+        scale:    parseFloat(randFloat(0.8, 1.2).toFixed(2)),
+        rotation: randInt(0, 360),
+        opacity:  parseFloat(randFloat(0.6, 1.0).toFixed(2)),
+        x: 50,
+        y: 50,
+      });
+      setPattern1(randomPattern(pick(PRESET_COLORS)));
       if (Math.random() < 0.5) {
-        setPattern2({ type: pick(patternIds), color: pick(PRESET_COLORS) });
+        setPattern2(randomPattern(pick(PRESET_COLORS)));
       } else {
-        setPattern2({ type: "none", color: pick(PRESET_COLORS) });
+        setPattern2({
+          type: "none",
+          color: pick(PRESET_COLORS),
+          scale: 1, rotation: 0, x: 50, y: 50, opacity: 1,
+        });
       }
 
       // 1–2 emblems
@@ -256,6 +298,11 @@ export default function CrestBuilder({
         scale: parseFloat(randFloat(0.6, 1.2).toFixed(2)),
         x: randInt(30, 70),
         y: randInt(30, 60),
+        // Rotation rolls freely; opacity stays at 1.0 even on
+        // randomize because translucent emblems look muddy by
+        // default — users opt in via the slider when they want it.
+        rotation: randInt(0, 360),
+        opacity: 1.0,
         svgData: fetched[i],
         customLabel: null,
       }));
@@ -289,8 +336,30 @@ export default function CrestBuilder({
     if (d.background_color_2) setSecondaryColor(d.background_color_2);
 
     // Patterns
-    if (d.pattern_1) setPattern1({ type: d.pattern_1, color: d.pattern_1_color || "#f59e0b" });
-    if (d.pattern_2) setPattern2({ type: d.pattern_2, color: d.pattern_2_color || "#ffffff" });
+    if (d.pattern_1) {
+      setPattern1((prev) => ({
+        ...prev,
+        type: d.pattern_1,
+        color: d.pattern_1_color || prev.color,
+        scale:    d.pattern_1_scale    ?? prev.scale,
+        rotation: d.pattern_1_rotation ?? prev.rotation,
+        x:        d.pattern_1_x        ?? prev.x,
+        y:        d.pattern_1_y        ?? prev.y,
+        opacity:  d.pattern_1_opacity  ?? prev.opacity,
+      }));
+    }
+    if (d.pattern_2) {
+      setPattern2((prev) => ({
+        ...prev,
+        type: d.pattern_2,
+        color: d.pattern_2_color || prev.color,
+        scale:    d.pattern_2_scale    ?? prev.scale,
+        rotation: d.pattern_2_rotation ?? prev.rotation,
+        x:        d.pattern_2_x        ?? prev.x,
+        y:        d.pattern_2_y        ?? prev.y,
+        opacity:  d.pattern_2_opacity  ?? prev.opacity,
+      }));
+    }
 
     // Layer order
     if (Array.isArray(d.layer_order) && d.layer_order.length > 0) {
@@ -317,6 +386,8 @@ export default function CrestBuilder({
         scale: typeof e.scale === "number" ? e.scale : 1.0,
         x: typeof e.x === "number" ? e.x : 50,
         y: typeof e.y === "number" ? e.y : 45,
+        rotation: typeof e.rotation === "number" ? e.rotation : 0,
+        opacity:  typeof e.opacity  === "number" ? e.opacity  : 1.0,
         svgData: null,
         customLabel: e.custom_label || null,
       }));
@@ -355,8 +426,18 @@ export default function CrestBuilder({
     background_color_2: secondaryColor,
     pattern_1: pattern1.type,
     pattern_1_color: pattern1.color,
+    pattern_1_scale: pattern1.scale,
+    pattern_1_rotation: pattern1.rotation,
+    pattern_1_x: pattern1.x,
+    pattern_1_y: pattern1.y,
+    pattern_1_opacity: pattern1.opacity,
     pattern_2: pattern2.type,
     pattern_2_color: pattern2.color,
+    pattern_2_scale: pattern2.scale,
+    pattern_2_rotation: pattern2.rotation,
+    pattern_2_x: pattern2.x,
+    pattern_2_y: pattern2.y,
+    pattern_2_opacity: pattern2.opacity,
     layer_order: layerOrder,
     emblems: emblems.map((e) => ({
       id: e.id,
@@ -364,6 +445,8 @@ export default function CrestBuilder({
       scale: e.scale,
       x: e.x,
       y: e.y,
+      rotation: e.rotation,
+      opacity: e.opacity,
       custom_label: e.customLabel,
     })),
     motto_text: motto,
@@ -1181,26 +1264,45 @@ function ColorPicker({ label, value, onChange }) {
  */
 function PatternsTab({ pattern1, onPattern1, pattern2, onPattern2 }) {
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: "10px" }}>
-      <PatternPicker
-        label="Pattern 1"
-        value={pattern1}
-        onChange={onPattern1}
-      />
-      <div style={{ borderTop: "1px solid #2a3441" }} />
-      <PatternPicker
-        label="Pattern 2"
-        value={pattern2}
-        onChange={onPattern2}
-      />
-      <div style={{ flex: 1 }} />
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <style>{`
+        .crest-patterns-body::-webkit-scrollbar { width: 6px; }
+        .crest-patterns-body::-webkit-scrollbar-track { background: transparent; }
+        .crest-patterns-body::-webkit-scrollbar-thumb { background: #3a4451; border-radius: 3px; }
+        .crest-patterns-body::-webkit-scrollbar-thumb:hover { background: #4a5568; }
+      `}</style>
+      <div
+        className="crest-patterns-body"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          paddingRight: "4px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+        }}
+      >
+        <PatternPicker
+          label="Pattern 1"
+          value={pattern1}
+          onChange={onPattern1}
+        />
+        <div style={{ borderTop: "1px solid #2a3441" }} />
+        <PatternPicker
+          label="Pattern 2"
+          value={pattern2}
+          onChange={onPattern2}
+        />
+      </div>
       <p
         style={{
-          margin: 0,
+          margin: "8px 0 0 0",
           fontSize: "8px",
           color: "#4a5568",
           fontStyle: "italic",
           fontFamily: FONT_STACK,
+          flexShrink: 0,
         }}
       >
         Use the Layers tab to control render order.
@@ -1210,6 +1312,7 @@ function PatternsTab({ pattern1, onPattern1, pattern2, onPattern2 }) {
 }
 
 function PatternPicker({ label, value, onChange }) {
+  const patch = (updates) => onChange({ ...value, ...updates });
   return (
     <div>
       <div
@@ -1232,7 +1335,7 @@ function PatternPicker({ label, value, onChange }) {
             <button
               key={id}
               type="button"
-              onClick={() => onChange({ ...value, type: id })}
+              onClick={() => patch({ type: id })}
               style={{
                 fontFamily: FONT_STACK,
                 fontSize: "9px",
@@ -1257,11 +1360,58 @@ function PatternPicker({ label, value, onChange }) {
         })}
       </div>
       {value.type !== "none" && (
-        <ColorPicker
-          label="Color"
-          value={value.color}
-          onChange={(c) => onChange({ ...value, color: c })}
-        />
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <ColorPicker
+            label="Color"
+            value={value.color}
+            onChange={(c) => patch({ color: c })}
+          />
+          <EmblemSlider
+            label="Opacity"
+            min={0}
+            max={1}
+            step={0.05}
+            value={value.opacity ?? 1}
+            onChange={(v) => patch({ opacity: v })}
+          />
+          <div style={{ display: "flex", gap: "10px" }}>
+            <EmblemSlider
+              label="Scale"
+              min={0.3}
+              max={2}
+              step={0.05}
+              value={value.scale ?? 1}
+              onChange={(v) => patch({ scale: v })}
+            />
+            <EmblemSlider
+              label="Rotation"
+              min={0}
+              max={360}
+              step={1}
+              value={value.rotation ?? 0}
+              onChange={(v) => patch({ rotation: v })}
+              suffix="°"
+            />
+          </div>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <EmblemSlider
+              label="X"
+              min={0}
+              max={100}
+              step={1}
+              value={value.x ?? 50}
+              onChange={(v) => patch({ x: v })}
+            />
+            <EmblemSlider
+              label="Y"
+              min={0}
+              max={100}
+              step={1}
+              value={value.y ?? 50}
+              onChange={(v) => patch({ y: v })}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1284,29 +1434,131 @@ function PatternPicker({ label, value, onChange }) {
 
 const svgCache = {};
 
+// Shape selectors used to harvest renderable elements out of a
+// parsed SVG. Kept here so each parsing pass uses the same list.
+const SHAPE_SELECTOR = "path, circle, rect, polygon, polyline, ellipse, line";
+const SHAPE_TAGS = new Set([
+  "path", "circle", "rect", "polygon", "polyline", "ellipse", "line",
+]);
+
+/**
+ * Pull shape elements out of a parsed Document, with three fallbacks
+ * so namespace quirks in the source SVG can't leave us empty-handed:
+ *
+ *   1. Plain CSS selector (works for most files).
+ *   2. Namespace-agnostic `*|tag` selectors (handles SVGs whose
+ *      shapes ended up under a non-default namespace prefix).
+ *   3. Manual depth-first walk of the tree matching by localName
+ *      (last resort — works no matter what XML weirdness is in
+ *      play).
+ */
+function collectShapes(doc, root) {
+  let nodes = Array.from((root || doc).querySelectorAll(SHAPE_SELECTOR));
+  if (nodes.length > 0) return nodes;
+
+  // Try a namespace-agnostic selector. Some SVGs created by certain
+  // editors (or hand-written with weird prefixes) put shapes in a
+  // different namespace, and the plain selector skips them.
+  try {
+    const nsSelector = [...SHAPE_TAGS].map((t) => `*|${t}`).join(",");
+    nodes = Array.from((root || doc).querySelectorAll(nsSelector));
+    if (nodes.length > 0) return nodes;
+  } catch { /* selector unsupported in this engine — fall through */ }
+
+  // Manual walk. Bulletproof.
+  const out = [];
+  const walk = (node) => {
+    if (!node) return;
+    const name = (node.localName || node.nodeName || "").toLowerCase();
+    if (SHAPE_TAGS.has(name)) out.push(node);
+    if (node.childNodes) {
+      for (const child of node.childNodes) walk(child);
+    }
+  };
+  walk(root || doc.documentElement);
+  return out;
+}
+
 export async function fetchSVGPaths(url) {
   if (svgCache[url]) return svgCache[url];
   try {
-    const text = await (await fetch(url)).text();
-    const doc = new DOMParser().parseFromString(text, "image/svg+xml");
-    const svg = doc.querySelector("svg");
-    const vb = svg?.getAttribute("viewBox") || "0 0 100 100";
-    const elements = Array.from(
-      doc.querySelectorAll("path,circle,rect,polygon,polyline,ellipse,line"),
-    ).map((el) => {
-      const attrs = {};
-      for (const a of el.attributes) {
-        // Drop the source's own coloring so our dynamic fill wins.
-        if (!["fill", "stroke", "style"].includes(a.name)) {
-          attrs[a.name] = a.value;
+    // mode: 'cors' is the default for cross-origin fetches but we
+    // pin it explicitly so the intent is documented for future
+    // readers (and so a future build tool can't strip it).
+    const res = await fetch(url, { mode: "cors" });
+    if (!res.ok) {
+      console.error("SVG fetch failed:", url, res.status, res.statusText);
+      return null;
+    }
+    const text = await res.text();
+
+    // Stage 1: parse as image/svg+xml (the canonical MIME for SVG).
+    let doc = new DOMParser().parseFromString(text, "image/svg+xml");
+    let svg = doc.querySelector("svg");
+    let shapes = collectShapes(doc, svg);
+
+    // Stage 2: if nothing came back, the strict XML parser may have
+    // tripped over namespace declarations. Re-parse with the much
+    // more forgiving HTML parser, which puts SVG elements in the
+    // SVG namespace automatically and exposes them via the regular
+    // CSS selector engine.
+    if (shapes.length === 0) {
+      doc = new DOMParser().parseFromString(text, "text/html");
+      svg = doc.querySelector("svg");
+      shapes = collectShapes(doc, svg);
+    }
+
+    const vb = svg?.getAttribute("viewBox") || "0 0 300 300";
+
+    if (shapes.length > 0) {
+      const elements = shapes.map((el) => {
+        const attrs = {};
+        for (const a of el.attributes) {
+          // Drop the source's own coloring so our dynamic fill wins.
+          if (!["fill", "stroke", "style"].includes(a.name)) {
+            attrs[a.name] = a.value;
+          }
         }
+        return { tag: (el.localName || el.tagName).toLowerCase(), attrs };
+      });
+      const result = { vb, elements, isRaster: false };
+      svgCache[url] = result;
+      return result;
+    }
+
+    // Raster fallback. The guild emblem catalog hosts PNGs wrapped
+    // in <svg><image href="data:image/png;base64,…"/></svg>, so
+    // when the shape harvester finds nothing we look for an <image>
+    // and capture its data URL + bounds. The renderer recolors
+    // these via an <feColorMatrix> filter rather than fill/stroke
+    // (since there's no vector geometry to color).
+    const imageEl = (svg || doc).querySelector("image") ||
+      Array.from(doc.getElementsByTagName("image"))[0] ||
+      null;
+    if (imageEl) {
+      const href = imageEl.getAttribute("xlink:href") ||
+        imageEl.getAttribute("href") ||
+        imageEl.getAttributeNS("http://www.w3.org/1999/xlink", "href");
+      if (href) {
+        const x = parseFloat(imageEl.getAttribute("x") || "0");
+        const y = parseFloat(imageEl.getAttribute("y") || "0");
+        const w = parseFloat(imageEl.getAttribute("width") || "300");
+        const h = parseFloat(imageEl.getAttribute("height") || "300");
+        const result = {
+          vb,
+          elements: [],
+          isRaster: true,
+          rasterData: { href, x, y, width: w, height: h },
+        };
+        svgCache[url] = result;
+        return result;
       }
-      return { tag: el.tagName.toLowerCase(), attrs };
-    });
-    const result = { vb, elements };
-    svgCache[url] = result;
-    return result;
-  } catch {
+    }
+
+    console.error("SVG had no recognizable elements:", url);
+    return null;
+  } catch (error) {
+    console.error("SVG fetch failed:", url, error);
     return null;
   }
 }
@@ -1326,29 +1578,100 @@ export async function fetchSVGPaths(url) {
  * The whole group is clipped to the shield's clipPath so any part
  * of the emblem that overhangs the silhouette is hidden cleanly.
  */
-export function EmblemOnCrest({ data, color, scale, x, y, clipId, vb }) {
+export function EmblemOnCrest({
+  data,
+  color,
+  scale,
+  x,
+  y,
+  rotation = 0,
+  opacity = 1,
+  clipId,
+  vb,
+}) {
+  // Stable filter id per instance so React reconciliation doesn't
+  // churn the <filter> definition on every render.
+  const reactId = React.useId();
   if (!data) return null;
   const [, , cw, ch] = vb.split(" ").map(Number);
   const [, , evw, evh] = data.vb.split(" ").map(Number);
-  const s = scale * (cw / evw) * 0.7;
-  return (
-    <g
-      transform={`translate(${(x / 100) * cw},${(y / 100) * ch}) scale(${s}) translate(${-evw / 2},${-evh / 2})`}
-      clipPath={`url(#${clipId})`}
-    >
-      {data.elements.map((el, i) => {
-        const Tag = el.tag;
-        return (
-          <Tag
-            key={i}
-            {...el.attrs}
-            fill={color}
-            stroke={color}
-            strokeWidth="0.5"
-            opacity="0.92"
+  // x and y are 0–100 percentages of the crest dimensions.
+  const px = (x / 100) * cw;
+  const py = (y / 100) * ch;
+
+  // ── Raster branch ────────────────────────────────────────────
+  // The guild catalog ships PNGs wrapped in SVG. We render the
+  // <image> as-is and recolor via an <feColorMatrix>: pin every
+  // RGB channel to the chosen color while passing the original
+  // alpha straight through, so transparent areas stay transparent
+  // and the silhouette picks up the user's color.
+  if (data.isRaster && data.rasterData) {
+    const rd = data.rasterData;
+    // Slightly larger base scale than vector (0.8 vs 0.7) — raster
+    // glyphs in this catalog use more padding inside their viewBox.
+    const s = scale * (cw / evw) * 0.8;
+    const r = parseInt(color.slice(1, 3), 16) / 255;
+    const g = parseInt(color.slice(3, 5), 16) / 255;
+    const b = parseInt(color.slice(5, 7), 16) / 255;
+    const filterId = `recolor-${reactId.replace(/[:]/g, "")}`;
+
+    return (
+      <g clipPath={`url(#${clipId})`}>
+        <defs>
+          <filter id={filterId} colorInterpolationFilters="sRGB">
+            <feColorMatrix
+              type="matrix"
+              values={`0 0 0 0 ${r}  0 0 0 0 ${g}  0 0 0 0 ${b}  0 0 0 1 0`}
+            />
+          </filter>
+        </defs>
+        <g transform={`translate(${px}, ${py}) rotate(${rotation}) scale(${s}) translate(${-evw / 2}, ${-evh / 2})`}>
+          <image
+            href={rd.href}
+            xlinkHref={rd.href}
+            x={rd.x}
+            y={rd.y}
+            width={rd.width}
+            height={rd.height}
+            filter={`url(#${filterId})`}
+            opacity={opacity}
+            preserveAspectRatio="xMidYMid meet"
           />
-        );
-      })}
+        </g>
+      </g>
+    );
+  }
+
+  // ── Vector branch ────────────────────────────────────────────
+  if (!data.elements || data.elements.length === 0) return null;
+
+  // Scale factor: fit emblem viewbox into crest viewbox, then apply
+  // the user's slider value on top.
+  const s = scale * (cw / evw) * 0.7;
+
+  // Same two-level wrap as the raster branch: outer <g> carries the
+  // clipPath in shield coords, inner <g> owns the transform. This
+  // ensures the clip is applied AFTER the user's scale / rotation /
+  // position, so an emblem that overshoots the silhouette gets cut
+  // off rather than bleeding past it.
+  return (
+    <g clipPath={`url(#${clipId})`}>
+      <g
+        transform={`translate(${px}, ${py}) rotate(${rotation}) scale(${s}) translate(${-evw / 2}, ${-evh / 2})`}
+      >
+        {data.elements.map((el, i) =>
+          // React.createElement directly — bypasses any JSX
+          // capitalization quirks for lowercase string tag values.
+          React.createElement(el.tag, {
+            key: i,
+            ...el.attrs,
+            fill: color,
+            stroke: color,
+            strokeWidth: "0.5",
+            opacity,
+          }),
+        )}
+      </g>
     </g>
   );
 }
@@ -1419,6 +1742,27 @@ function MottoTab({ motto, onMotto, mottoColor, onMottoColor }) {
 }
 
 /**
+ * Build the label string used in both the LayerStack indicator
+ * (right column) and the LayersTab list. Format:
+ *   "Pattern 1: Chevron"
+ *   "Pattern 1: Chevron (45°)"        — non-zero rotation only
+ *   "Pattern 1: Chevron (80%)"        — opacity below 1.0 only
+ *   "Pattern 1: Chevron (45°, 80%)"   — both
+ */
+function patternLayerLabel(prefix, p) {
+  const baseName = PATTERNS[p?.type] || "None";
+  const base = `${prefix}: ${baseName}`;
+  if (!p || p.type === "none") return base;
+  const parts = [];
+  const rot = Math.round(p.rotation ?? 0);
+  if (rot !== 0) parts.push(`${rot}°`);
+  const op = p.opacity ?? 1;
+  if (op < 1) parts.push(`${Math.round(op * 100)}%`);
+  if (parts.length === 0) return base;
+  return `${base} (${parts.join(", ")})`;
+}
+
+/**
  * Layers tab.
  *
  * Visualizes the render stack top-to-bottom. The Motto bar pins the
@@ -1444,12 +1788,12 @@ function LayersTab({ layerOrder, onLayerOrder, pattern1, pattern2, emblems, prim
   const populatedEmblems = emblems.filter((s) => s?.svgData).length;
   const meta = {
     pattern1: {
-      label: `Pattern 1: ${PATTERNS[pattern1.type]}`,
+      label: patternLayerLabel("Pattern 1", pattern1),
       color: pattern1.color,
       active: pattern1.type !== "none",
     },
     pattern2: {
-      label: `Pattern 2: ${PATTERNS[pattern2.type]}`,
+      label: patternLayerLabel("Pattern 2", pattern2),
       color: pattern2.color,
       active: pattern2.type !== "none",
     },
@@ -1641,6 +1985,10 @@ function EmblemsTab({
         .crest-emblem-grid::-webkit-scrollbar-track { background: #1E2430; }
         .crest-emblem-grid::-webkit-scrollbar-thumb { background: #3a4451; border-radius: 3px; }
         .crest-emblem-grid::-webkit-scrollbar-thumb:hover { background: #4a5568; }
+        .crest-emblem-controls::-webkit-scrollbar { width: 6px; }
+        .crest-emblem-controls::-webkit-scrollbar-track { background: transparent; }
+        .crest-emblem-controls::-webkit-scrollbar-thumb { background: #3a4451; border-radius: 3px; }
+        .crest-emblem-controls::-webkit-scrollbar-thumb:hover { background: #4a5568; }
       `}</style>
 
       <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -1723,12 +2071,16 @@ function EmblemsTab({
           <CategoryButton active={category === "general"} onClick={() => setCategory("general")} label="General" />
         </div>
 
-        {/* Emblem grid — only this scrolls */}
+        {/* Emblem grid — only this scrolls. minHeight pins ~2 rows so
+            the per-slot controls below can never crowd the picker
+            out of view; once a slot is selected the controls row
+            scrolls internally if it doesn't fit instead of pushing
+            the grid down. */}
         <div
           className="crest-emblem-grid"
           style={{
-            flex: 1,
-            minHeight: 0,
+            flex: "1 1 auto",
+            minHeight: "120px",
             overflowY: "auto",
             border: "1px solid #2a3441",
             borderRadius: "8px",
@@ -1785,6 +2137,22 @@ function EmblemsTab({
           </div>
         </div>
 
+        {/* Bottom region: upload row + (optionally) per-slot
+            controls. Capped at 55% of the panel so the grid above
+            keeps at least ~120px visible, and overflows internally
+            via the styled scrollbar if the controls don't fit. */}
+        <div
+          className="crest-emblem-controls"
+          style={{
+            flexShrink: 0,
+            maxHeight: "55%",
+            overflowY: "auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            paddingRight: "4px",
+          }}
+        >
         {/* Custom upload row */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
           <button
@@ -1840,15 +2208,15 @@ function EmblemsTab({
               value={slot.color}
               onChange={(c) => onUpdateEmblem(activeEmblemIdx, { color: c })}
             />
+            <EmblemSlider
+              label="Size"
+              min={0.3}
+              max={1.8}
+              step={0.05}
+              value={slot.scale}
+              onChange={(v) => onUpdateEmblem(activeEmblemIdx, { scale: v })}
+            />
             <div style={{ display: "flex", gap: "10px", alignItems: "flex-end" }}>
-              <EmblemSlider
-                label="Size"
-                min={0.3}
-                max={1.8}
-                step={0.05}
-                value={slot.scale}
-                onChange={(v) => onUpdateEmblem(activeEmblemIdx, { scale: v })}
-              />
               <EmblemSlider
                 label="X"
                 min={10}
@@ -1864,6 +2232,25 @@ function EmblemsTab({
                 step={1}
                 value={slot.y}
                 onChange={(v) => onUpdateEmblem(activeEmblemIdx, { y: v })}
+              />
+            </div>
+            <div style={{ display: "flex", gap: "10px", alignItems: "flex-end" }}>
+              <EmblemSlider
+                label="Rotation"
+                min={0}
+                max={360}
+                step={1}
+                value={slot.rotation ?? 0}
+                onChange={(v) => onUpdateEmblem(activeEmblemIdx, { rotation: v })}
+                suffix="°"
+              />
+              <EmblemSlider
+                label="Opacity"
+                min={0}
+                max={1}
+                step={0.05}
+                value={slot.opacity ?? 1}
+                onChange={(v) => onUpdateEmblem(activeEmblemIdx, { opacity: v })}
               />
             </div>
             <button
@@ -1888,6 +2275,7 @@ function EmblemsTab({
             </button>
           </div>
         )}
+        </div>
       </div>
     </>
   );
@@ -1919,7 +2307,7 @@ function CategoryButton({ active, onClick, label }) {
   );
 }
 
-function EmblemSlider({ label, min, max, step, value, onChange }) {
+function EmblemSlider({ label, min, max, step, value, onChange, suffix = "" }) {
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
       <div
@@ -1937,7 +2325,9 @@ function EmblemSlider({ label, min, max, step, value, onChange }) {
       >
         <span>{label}</span>
         <span style={{ color: "#64748b" }}>
-          {typeof value === "number" ? (Number.isInteger(value) ? value : value.toFixed(2)) : value}
+          {typeof value === "number"
+            ? `${Number.isInteger(value) ? value : value.toFixed(2)}${suffix}`
+            : value}
         </span>
       </div>
       <input
@@ -1954,6 +2344,47 @@ function EmblemSlider({ label, min, max, step, value, onChange }) {
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Wrap a pattern's geometry in a transform group that respects the
+ * slot's per-layer scale / rotation / position / opacity sliders.
+ *
+ * Transform order (read right-to-left):
+ *   translate(cx, cy) ∘ rotate(θ) ∘ scale(s) ∘ translate(-cx, -cy)
+ * which rotates and scales around the (cx, cy) pivot rather than
+ * the SVG origin. cx / cy come from the slot's x% / y% multiplied
+ * into the shield's viewBox dimensions, so x=50 / y=50 keeps the
+ * pivot at the geometric center.
+ */
+export function renderPatternLayer(p, clipId, vb, shieldD) {
+  if (!p || p.type === "none") return null;
+  const [, , w, h] = vb.split(/\s+/).map(Number);
+  const cx = ((p.x ?? 50) / 100) * w;
+  const cy = ((p.y ?? 50) / 100) * h;
+  const scale = p.scale ?? 1;
+  const rotation = p.rotation ?? 0;
+  const opacity = p.opacity ?? 1;
+  // Two-level wrap on purpose:
+  //   outer <g> owns the clipPath, no transform — its local coord
+  //     system is the SVG root, so the shield clip is interpreted
+  //     in shield-viewBox coords.
+  //   inner <g> owns the transform — children render into the
+  //     outer's coord system through it, and the outer's clip
+  //     applies to the *post-transform* result.
+  // If we put both attributes on the same element the clip would
+  // be interpreted in the post-transform local coords (and so would
+  // scale/rotate alongside the pattern), letting overflow leak past
+  // the silhouette.
+  return (
+    <g clipPath={`url(#${clipId})`} opacity={opacity}>
+      <g
+        transform={`translate(${cx}, ${cy}) rotate(${rotation}) scale(${scale}) translate(${-cx}, ${-cy})`}
+      >
+        {renderPattern(p.type, p.color, vb, clipId, shieldD)}
+      </g>
+    </g>
   );
 }
 
@@ -2208,7 +2639,7 @@ function CrestSvg({
       const p = id === "pattern1" ? pattern1 : pattern2;
       return (
         <React.Fragment key={id}>
-          {renderPattern(p.type, p.color, shield.vb, clipId, shield.d)}
+          {renderPatternLayer(p, clipId, shield.vb, shield.d)}
         </React.Fragment>
       );
     }
@@ -2217,22 +2648,32 @@ function CrestSvg({
       // the bottom of the emblem stack and slot 3 at the top —
       // matches how the slot tabs read left-to-right in the editor.
       return (
-        <React.Fragment key={id}>
-          {emblems.map((slot, i) =>
-            slot?.svgData ? (
+        <g key={id}>
+          {emblems.map((slot, i) => {
+            const svg = slot?.svgData;
+            if (!svg) return null;
+            // Vector emblems carry shape elements; raster emblems
+            // carry the embedded <image> data instead. Either kind
+            // is renderable.
+            const hasVector = Array.isArray(svg.elements) && svg.elements.length > 0;
+            const hasRaster = svg.isRaster === true && !!svg.rasterData?.href;
+            if (!hasVector && !hasRaster) return null;
+            return (
               <EmblemOnCrest
                 key={i}
-                data={slot.svgData}
+                data={svg}
                 color={slot.color}
                 scale={slot.scale}
                 x={slot.x}
                 y={slot.y}
+                rotation={slot.rotation ?? 0}
+                opacity={slot.opacity ?? 1}
                 clipId={clipId}
                 vb={shield.vb}
               />
-            ) : null,
-          )}
-        </React.Fragment>
+            );
+          })}
+        </g>
       );
     }
     return null;
@@ -2331,8 +2772,16 @@ function CrestSvg({
 function LayerStack({ layerOrder, pattern1, pattern2, emblems = [] }) {
   const populatedEmblems = emblems.filter((s) => s?.svgData).length;
   const slotMeta = {
-    pattern1: { label: `Pattern 1: ${PATTERNS[pattern1.type]}`, color: pattern1.color, active: pattern1.type !== "none" },
-    pattern2: { label: `Pattern 2: ${PATTERNS[pattern2.type]}`, color: pattern2.color, active: pattern2.type !== "none" },
+    pattern1: {
+      label: patternLayerLabel("Pattern 1", pattern1),
+      color: pattern1.color,
+      active: pattern1.type !== "none",
+    },
+    pattern2: {
+      label: patternLayerLabel("Pattern 2", pattern2),
+      color: pattern2.color,
+      active: pattern2.type !== "none",
+    },
     emblems: {
       label: populatedEmblems
         ? `Emblems (${populatedEmblems})`

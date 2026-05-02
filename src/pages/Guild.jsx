@@ -42,9 +42,11 @@ function GuildHub() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const goToCrestBuilder = () => navigate("/guild/crest-builder");
 
-  // Guild settings row. Lazily created — the leader's first edit
-  // in step 6 inserts the row, so reading before that simply returns
-  // null and we fall back to sensible defaults throughout the Hall.
+  // Subscription guild row (separate from the campaign-scoped
+  // guild_halls table — this one carries name / crest / officers /
+  // spending flag / max_members / founded_at). Lazily created on
+  // the leader's first edit, so a fresh guild reads as null until
+  // settings are saved.
   const { data: guild } = useQuery({
     queryKey: ["guildRow", guildOwnerId],
     queryFn: async () => {

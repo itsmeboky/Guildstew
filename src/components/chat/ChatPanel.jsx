@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, ArrowLeft, Send, Volume2, VolumeX } from "lucide-react";
-import { Skeleton, AvatarSkeleton } from "@/components/ui/Skeleton";
+import { Skeleton, AvatarSkeleton } from "@/components/ui/skeleton";
 
 const CHAT_NOTIFICATION_SOUNDS = [
   "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/notification/chatnotif1.mp3",
