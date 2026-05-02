@@ -495,7 +495,7 @@ const DiceRoller = forwardRef((props, ref) => {
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setClearColor(0x000000, 0);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.8;
+    renderer.toneMappingExposure = 1.2;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
@@ -510,48 +510,28 @@ const DiceRoller = forwardRef((props, ref) => {
     };
     window.addEventListener('resize', handleResize);
 
-    const pColor = new THREE.Color(primaryColor);
-    const sColor = new THREE.Color(secondaryColor);
-
-    // Lights - Adjusted for Tint and Proximity
-    // Ambient light for base color tint
-    const ambientLight = new THREE.AmbientLight(sColor, 2.0); 
+    // Neutral lighting — dice color now comes from vertex colors
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
-    // Hemisphere light for gradient
-    const hemiLight = new THREE.HemisphereLight(pColor, sColor, 1.5);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444466, 0.8);
     hemiLight.position.set(0, 10, 0);
     scene.add(hemiLight);
 
-    // Point lights CLOSER to the dice for intense local color
-    const ringRadius = 2.5; // Closer
-    const numLights = 6;
-    const ringLights = [];
-    for (let i = 0; i < numLights; i++) {
-      const angle = (i / numLights) * Math.PI * 2;
-      const lightColor = i % 2 === 0 ? pColor : sColor;
-      
-      const pointLight = new THREE.PointLight(lightColor, 5.0, 10); // Less intensity, closer decay
-      pointLight.position.set(
-        Math.cos(angle) * ringRadius,
-        2, // Lower height
-        Math.sin(angle) * ringRadius
-      );
-      scene.add(pointLight);
-      ringLights.push(pointLight);
-    }
-
-    // Soft directional light for definition
-    const keyLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    keyLight.position.set(5, 10, 5);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
+    keyLight.position.set(5, 8, 5);
     scene.add(keyLight);
 
-    // Store lights
-    scene.userData = { ambientLight, hemiLight, keyLight, ringLights };
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
+    fillLight.position.set(-5, 3, -3);
+    scene.add(fillLight);
 
-    const bottomFill = new THREE.PointLight(0xffffff, 1.5, 20);
-    bottomFill.position.set(0, -3, 0);
-    scene.add(bottomFill);
+    // Subtle accent in secondary color for atmosphere only — NOT driving dice color
+    const accentLight = new THREE.PointLight(secondaryColor, 0.6, 8);
+    accentLight.position.set(-3, 2, 3);
+    scene.add(accentLight);
+
+    scene.userData = { ambientLight, hemiLight, keyLight, fillLight, accentLight };
 
     const shadowGeometry = new THREE.CircleGeometry(1.5, 32);
     const shadowMaterial = new THREE.MeshBasicMaterial({
@@ -669,27 +649,17 @@ const DiceRoller = forwardRef((props, ref) => {
     };
   }, [isOpen, embedded, modelsReady, selectedDice, forcedResult]); // Re-add forcedResult to dependency array so force re-roll works
 
-  // Update lights when colors change. If the player has a Tavern
-  // dice skin applied, its lighting colors win over the prop-passed
-  // `primaryColor` / `secondaryColor` so the skin drives the look.
   useEffect(() => {
-    if (!sceneRef.current?.userData) return;
-    const skin = activeSkin || null;
-    const pColor = new THREE.Color(skin?.primaryLight || primaryColor);
-    const sColor = new THREE.Color(skin?.secondaryLight || secondaryColor);
-    const { ambientLight, hemiLight, keyLight, ringLights } = sceneRef.current.userData;
-    if (ambientLight) ambientLight.color.set(sColor);
-    if (hemiLight) {
-      hemiLight.color.set(pColor);
-      hemiLight.groundColor.set(sColor);
+    if (sceneRef.current?.userData?.accentLight) {
+      sceneRef.current.userData.accentLight.color.set(secondaryColor);
     }
-    if (keyLight) keyLight.color.set(pColor);
-    if (ringLights) {
-      ringLights.forEach((light, i) => {
-        light.color.set(i % 2 === 0 ? pColor : sColor);
-      });
+    if (diceRef.current && modelsReady) {
+      const customModel = customModelsRef.current[selectedDice];
+      if (customModel?.scene) {
+        applyVertexGradient(diceRef.current, primaryColor, secondaryColor, isThemedSkin);
+      }
     }
-  }, [primaryColor, secondaryColor, activeSkin]);
+  }, [primaryColor, secondaryColor, isThemedSkin, modelsReady, selectedDice]);
 
   // Re-skin the current die whenever the active Tavern dice skin
   // changes (e.g. player applies a new skin from My Collection
