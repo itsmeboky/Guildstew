@@ -355,10 +355,11 @@ export default function UserProfile() {
       </div>
       {/* Hero Banner - Fixed to take 50% of page */}
       <div className="fixed top-0 left-0 right-0 h-[50vh] z-0">
-        <div 
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ 
+        <div
+          className="absolute inset-0 bg-cover bg-top"
+          style={{
             backgroundImage: `url(${user?.banner_url || 'https://images.unsplash.com/photo-1569003339405-ea396a5a8a90?w=1200&h=400&fit=crop'})`,
+            backgroundPosition: 'top',
             filter: 'brightness(0.7)'
           }}
         />

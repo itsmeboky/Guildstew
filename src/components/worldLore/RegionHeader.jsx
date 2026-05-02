@@ -22,10 +22,10 @@ export default function RegionHeader({ region }) {
   return (
     <div className="relative w-full h-48 rounded-xl overflow-hidden mb-6">
       {region.image_url ? (
-        <img 
-          src={region.image_url} 
+        <img
+          src={region.image_url}
           alt={region.name}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover object-top"
         />
       ) : (
         <div className="w-full h-full bg-gradient-to-br from-[#2A3441] to-[#1E2430]" />

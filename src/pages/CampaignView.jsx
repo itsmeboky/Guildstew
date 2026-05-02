@@ -180,7 +180,7 @@ export default function CampaignView() {
             <img
               src={campaign.cover_image_url || campaign.banner_url || campaign.image_url}
               alt=""
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover object-top"
             />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-[#1a1f2e] via-[#2A3441] to-[#050816]" />

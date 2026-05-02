@@ -186,12 +186,12 @@ export default function CampaignPanel() {
       </div>
       
       {/* Hero Banner */}
-      <div 
-        className="h-96 bg-cover bg-center relative"
-        style={{ 
+      <div
+        className="h-96 bg-cover bg-top relative"
+        style={{
           backgroundImage: `url(${campaign.cover_image_url || 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=1200&h=400&fit=crop'})`,
           backgroundSize: 'cover',
-          backgroundPosition: 'center'
+          backgroundPosition: 'top'
         }}
       >
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/30 to-[#1E2430]" />

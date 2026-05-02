@@ -366,7 +366,7 @@ function TavernHero({ config }) {
     >
       {image && (
         <>
-          <img src={image} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <img src={image} alt="" className="absolute inset-0 w-full h-full object-cover object-top" />
           <div
             className="absolute inset-0"
             style={{

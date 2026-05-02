@@ -190,10 +190,11 @@ export default function Home() {
 
       {/* Banner Wallpaper */}
       <div className="absolute top-0 left-0 right-0 h-[33vh] overflow-hidden">
-        <LazyImage 
-          src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/7a4e888b3_BannerHome.png" 
-          alt="Banner" 
+        <LazyImage
+          src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/7a4e888b3_BannerHome.png"
+          alt="Banner"
           className="absolute inset-0 w-full h-full"
+          imageClassName="object-top"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/30 to-white" />
       </div>
@@ -238,7 +239,7 @@ export default function Home() {
                     src={slide.image}
                     alt="Hero"
                     className="absolute inset-0 w-full h-full"
-                    imageClassName={slide.backgroundPosition === 'left center' ? 'object-left' : ''}
+                    imageClassName={`object-top ${slide.backgroundPosition === 'left center' ? 'object-left' : ''}`}
                   />
                   <div className="absolute inset-0" 
                     style={{
