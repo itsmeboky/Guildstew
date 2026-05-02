@@ -520,28 +520,22 @@ function findMatchingRoll({
   return null;
 }
 
-// Darken a hex color by a factor (0..1). Returns a CSS hex.
-function darkenHex(hex, factor) {
-  const c = new THREE.Color(hex);
-  c.multiplyScalar(Math.max(0, 1 - factor));
-  return `#${c.getHexString()}`;
-}
-
-// Procedural table texture: vertical primary→darker-primary gradient
-// with a faint hex grid in secondary color (8% opacity, ~32px hex).
-function buildTableTexture(primary, secondary) {
+// Arena floor texture: Brand Navy base at 60% opacity with a faint
+// secondary-color hex grid overlaid at 10% opacity, radial-gradient
+// masked so the floor edges fade to fully transparent and blend
+// into the modal background instead of showing harsh seams.
+function buildTableTexture(secondary) {
   const size = 512;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext("2d");
 
-  const grad = ctx.createLinearGradient(0, 0, 0, size);
-  grad.addColorStop(0, primary);
-  grad.addColorStop(1, darkenHex(primary, 0.55));
-  ctx.fillStyle = grad;
+  // 1) Brand Navy base, 60% opacity.
+  ctx.fillStyle = "rgba(27, 37, 53, 0.6)";
   ctx.fillRect(0, 0, size, size);
 
-  ctx.globalAlpha = 0.08;
+  // 2) Hex grid in secondaryColor at ~10% opacity.
+  ctx.globalAlpha = 0.1;
   ctx.strokeStyle = secondary;
   ctx.lineWidth = 1.25;
   const hexR = 32;
@@ -564,8 +558,25 @@ function buildTableTexture(primary, secondary) {
     }
   }
   ctx.globalAlpha = 1;
+
+  // 3) Radial mask: punch out the corners so the floor fades to
+  // transparent before reaching the wall line. We use destination-out
+  // with a radial gradient that's transparent at the center (keep)
+  // and opaque at the edges (erase).
+  const mask = ctx.createRadialGradient(
+    size / 2, size / 2, size * 0.25,
+    size / 2, size / 2, size * 0.55
+  );
+  mask.addColorStop(0, "rgba(0,0,0,0)");
+  mask.addColorStop(0.7, "rgba(0,0,0,0.4)");
+  mask.addColorStop(1, "rgba(0,0,0,1)");
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.fillStyle = mask;
+  ctx.fillRect(0, 0, size, size);
+  ctx.globalCompositeOperation = "source-over";
+
   const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
   return tex;
 }
 
@@ -1045,7 +1056,7 @@ const DiceRoller = forwardRef((props, ref) => {
       // Premium table surface — 6×6 with gradient + hex pattern.
       const tableSize = (ARENA.halfSize + ARENA.wallThickness) * 2;
       const tableGeometry = new THREE.PlaneGeometry(tableSize, tableSize);
-      const tableTex = buildTableTexture(primaryColor, secondaryColor);
+      const tableTex = buildTableTexture(secondaryColor);
       const tableMaterial = new THREE.MeshBasicMaterial({
         map: tableTex,
         transparent: true,
@@ -1790,9 +1801,11 @@ const DiceRoller = forwardRef((props, ref) => {
     const flashMs = 80;
     const dropMs = 180;
     const stagger = 40;
-    const settledOpacity = 0.15;
+    const settledOpacity = 0.2;
     const flashColor = new THREE.Color(primaryColor);
-    const settleColor = new THREE.Color(secondaryColor);
+    // Walls settle to a low-opacity primary outline — bright flash on
+    // landing, then dim glow that sits in the player's brand color.
+    const settleColor = new THREE.Color(primaryColor);
     return new Promise((resolve) => {
       let landedCount = 0;
       meshes.forEach((mesh, i) => {
