@@ -677,11 +677,18 @@ const DiceRoller = forwardRef((props, ref) => {
 
     let camera;
     if (fullscreen) {
-      // Wider FOV + closer camera shrinks the resting dice and
-      // softens the perspective compression during the arc, so the
-      // dice doesn't dramatically shrink as it leaves center.
-      camera = new THREE.PerspectiveCamera(28, width / height, 0.1, 100);
-      camera.position.set(5, 5, 5);
+      // Camera tuned for two goals at once:
+      //  1. Resting dice fills ~30-40% of screen height. With dice
+      //     auto-fit to ~2.5 world units and camera at (10,10,10)
+      //     (distance 17.32), a 24° FOV gives a visible scene height
+      //     of 2·17.32·tan(12°) ≈ 7.36 → dice is 2.5/7.36 ≈ 34%.
+      //  2. Minimal perspective shrinkage during the throw arc. With
+      //     orbit radius up to 2.6 along the camera axis, the
+      //     far/near distance ratio is 17.72/14.63 ≈ 1.21 (vs ~1.54
+      //     at the previous (5,5,5) setting), so the dice stays
+      //     visually clear all the way around the orbit.
+      camera = new THREE.PerspectiveCamera(24, width / height, 0.1, 100);
+      camera.position.set(10, 10, 10);
     } else {
       camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
       const baseSize = 300;
