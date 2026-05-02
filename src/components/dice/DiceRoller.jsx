@@ -948,31 +948,26 @@ const DiceRoller = forwardRef((props, ref) => {
       return;
 
     const container = containerRef.current;
-    // Modal mode renders the canvas fullscreen (the modal content
-    // sits on top, with a "landing zone" placeholder where the dice
-    // used to live). Embedded mode keeps using its host container's
-    // dimensions so it can sit inline (e.g. CombatDiceWindow).
-    const fullscreen = !embedded;
-    const width = fullscreen ? window.innerWidth : (container.clientWidth || 300);
-    const height = fullscreen ? window.innerHeight : (container.clientHeight || 300);
+    // Both modal and embedded modes now render the canvas inside
+    // their host container. Modal mode adds the physics arena (walls,
+    // floor, top-down camera); embedded mode keeps the lightweight
+    // keyframe-only setup (shadow disc, isometric camera).
+    const arenaMode = !embedded;
+    const width = container.clientWidth || 300;
+    const height = container.clientHeight || 300;
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
 
     let camera;
-    if (fullscreen) {
-      // Camera tuned for two goals at once:
-      //  1. Resting dice fills ~30-40% of screen height. With dice
-      //     auto-fit to ~2.5 world units and camera at (10,10,10)
-      //     (distance 17.32), a 24° FOV gives a visible scene height
-      //     of 2·17.32·tan(12°) ≈ 7.36 → dice is 2.5/7.36 ≈ 34%.
-      //  2. Minimal perspective shrinkage during the throw arc. With
-      //     orbit radius up to 2.6 along the camera axis, the
-      //     far/near distance ratio is 17.72/14.63 ≈ 1.21 (vs ~1.54
-      //     at the previous (5,5,5) setting), so the dice stays
-      //     visually clear all the way around the orbit.
-      camera = new THREE.PerspectiveCamera(24, width / height, 0.1, 100);
-      camera.position.set(10, 10, 10);
+    if (arenaMode) {
+      // "Roll20 angle" — camera lives almost directly above the floor
+      // with a tiny Z offset so the up-face number is dominant but
+      // the player still sees a hint of dimension on the dice. FOV 30
+      // is narrow enough to minimize perspective distortion across
+      // the 6×6 arena while still fitting the floor + walls.
+      camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 100);
+      camera.position.set(0, 12, 0.5);
     } else {
       camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
       const baseSize = 300;
@@ -991,26 +986,29 @@ const DiceRoller = forwardRef((props, ref) => {
     renderer.toneMappingExposure = 1.2;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(renderer.domElement);
-    if (fullscreen) {
-      // The fullscreen canvas has pointer-events:none so clicks pass
-      // straight through to the modal beneath it. We pick up dice
-      // grabs at the window level via raycasting (see the pointer
-      // event block below) and only intercept when the ray actually
-      // hits the dice mesh.
-      renderer.domElement.style.pointerEvents = "none";
+    if (arenaMode) {
       renderer.domElement.style.display = "block";
+      renderer.domElement.style.width = "100%";
+      renderer.domElement.style.height = "100%";
+      renderer.domElement.style.touchAction = "none";
     }
     rendererRef.current = renderer;
 
     const handleResize = () => {
-      if (!camera || !renderer) return;
-      const newWidth = fullscreen ? window.innerWidth : container.clientWidth;
-      const newHeight = fullscreen ? window.innerHeight : container.clientHeight;
+      if (!camera || !renderer || !container) return;
+      const newWidth = container.clientWidth;
+      const newHeight = container.clientHeight;
+      if (newWidth === 0 || newHeight === 0) return;
       camera.aspect = newWidth / newHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(newWidth, newHeight);
     };
     window.addEventListener('resize', handleResize);
+    let resizeObserver = null;
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(handleResize);
+      resizeObserver.observe(container);
+    }
 
     // Neutral lighting — dice color now comes from vertex colors
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -1035,8 +1033,8 @@ const DiceRoller = forwardRef((props, ref) => {
 
     scene.userData = { ambientLight, hemiLight, keyLight, fillLight, accentLight };
 
-    if (fullscreen) {
-      // ─── Physics world (modal/fullscreen mode only) ───
+    if (arenaMode) {
+      // ─── Physics world (modal/arena mode only) ───
       const { world, diceMat, walls } = buildPhysicsWorld();
       diceMaterialRef.current = diceMat;
       wallBodiesRef.current = walls;
@@ -1479,14 +1477,13 @@ const DiceRoller = forwardRef((props, ref) => {
     };
     animate();
 
-    // Mouse pickup + shake-to-roll. Only wired for the fullscreen
-    // (modal) canvas; embedded mode keeps its simple click-to-roll.
-    // We listen at the window level because the canvas is
-    // pointer-events:none — we raycast on pointerdown and only
-    // intercept (preventDefault, capture, etc.) when the ray hits
-    // the dice mesh.
+    // Mouse pickup + shake-to-roll. Only wired for the modal/arena
+    // canvas; embedded mode keeps its simple click-to-roll. The
+    // canvas is contained inside the modal arena so we attach
+    // listeners to the canvas directly — no window-level capture
+    // needed.
     let detachPointer = () => {};
-    if (fullscreen) {
+    if (arenaMode) {
       const canvas = renderer.domElement;
       const raycaster = new THREE.Raycaster();
       const ndc = new THREE.Vector2();
@@ -1517,17 +1514,15 @@ const DiceRoller = forwardRef((props, ref) => {
       const onPointerMoveHover = (e) => {
         if (dragStateRef.current.isDown) return;
         if (rollingRef.current || isCockedRef.current) {
-          document.body.style.cursor = "";
+          canvas.style.cursor = "";
           return;
         }
-        document.body.style.cursor = hitsDice(e.clientX, e.clientY) ? "grab" : "";
+        canvas.style.cursor = hitsDice(e.clientX, e.clientY) ? "grab" : "";
       };
 
       const onPointerDown = (e) => {
         if (rollingRef.current || isCockedRef.current) return;
         if (!hitsDice(e.clientX, e.clientY)) return;
-        // Hit the dice — start dragging and prevent the click from
-        // bubbling to anything underneath (e.g. modal close button).
         e.preventDefault();
         e.stopPropagation();
         const drag = dragStateRef.current;
@@ -1542,7 +1537,7 @@ const DiceRoller = forwardRef((props, ref) => {
         projectToWorld(e.clientX, e.clientY, tmp);
         drag.targetX = tmp.x;
         drag.targetZ = tmp.z;
-        document.body.style.cursor = "grabbing";
+        canvas.style.cursor = "grabbing";
       };
 
       const onPointerMove = (e) => {
@@ -1571,7 +1566,7 @@ const DiceRoller = forwardRef((props, ref) => {
         if (!drag.isDown) return;
         drag.isDown = false;
         drag.isDragging = false;
-        document.body.style.cursor = "";
+        canvas.style.cursor = "";
         const lazy = drag.accumulatedShake <= 250;
         // Hand the dice's current world position to handleRoll so
         // the roll animation (or physics impulse) begins where the
@@ -1592,19 +1587,20 @@ const DiceRoller = forwardRef((props, ref) => {
         }
       };
 
-      // pointerdown gets `capture: true` so we can intercept clicks
-      // that would otherwise hit modal buttons before they fire.
-      window.addEventListener("pointerdown", onPointerDown, true);
-      window.addEventListener("pointermove", onPointerMove);
+      // Attach to the canvas directly. Pointer events outside the
+      // arena (modifier input, ROLL button, etc.) flow normally to
+      // the modal controls without any capture trickery.
+      canvas.addEventListener("pointerdown", onPointerDown);
+      canvas.addEventListener("pointermove", onPointerMove);
       window.addEventListener("pointerup", onPointerUp);
       window.addEventListener("pointercancel", onPointerUp);
 
       detachPointer = () => {
-        window.removeEventListener("pointerdown", onPointerDown, true);
-        window.removeEventListener("pointermove", onPointerMove);
+        canvas.removeEventListener("pointerdown", onPointerDown);
+        canvas.removeEventListener("pointermove", onPointerMove);
         window.removeEventListener("pointerup", onPointerUp);
         window.removeEventListener("pointercancel", onPointerUp);
-        document.body.style.cursor = "";
+        canvas.style.cursor = "";
       };
     }
 
@@ -1612,6 +1608,7 @@ const DiceRoller = forwardRef((props, ref) => {
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      if (resizeObserver) resizeObserver.disconnect();
       detachPointer();
       isInitializedRef.current = false;
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
@@ -2281,42 +2278,27 @@ const DiceRoller = forwardRef((props, ref) => {
     );
   }
 
-  // Modal mode
+  // Modal mode — arena-contained layout. Header on top, the dice
+  // arena fills the bulk of the modal, and a single bottom strip
+  // hosts the controls + horizontal roll history.
   return (
-    <>
-      {/* Fullscreen canvas — sits above the modal so dice can fly
-          across the whole screen. The wrapper is pointer-events:none
-          so the modal underneath stays clickable; the canvas itself
-          flips pointer-events back on so the dice can be grabbed. */}
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 60,
-          pointerEvents: "none",
-        }}
-      >
-        <div
-          ref={containerRef}
-          data-dice-canvas
-          style={{ width: "100%", height: "100%" }}
-        />
-      </div>
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="relative max-w-lg w-full">
+      <div className="relative w-full" style={{ maxWidth: 640 }}>
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute -top-4 -right-4 w-10 h-10 rounded-full bg-[#FF5722] hover:bg-[#FF6B3D] transition-colors flex items-center justify-center text-white z-10 shadow-lg"
+          className="absolute -top-4 -right-4 w-10 h-10 rounded-full bg-[#FF5722] hover:bg-[#FF6B3D] transition-colors flex items-center justify-center text-white z-20 shadow-lg"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Frame */}
-        <div className="relative bg-[#1E2430] border border-white/10 rounded-3xl p-6 shadow-2xl flex flex-col h-[800px] max-h-[90vh] w-[500px]">
-          
+        <div
+          className="relative bg-[#1E2430] border border-white/10 rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+          style={{ height: 800, maxHeight: "90vh" }}
+        >
           {/* Header */}
-          <div className="flex items-center justify-between mb-4 shrink-0">
+          <div className="flex items-center justify-between px-5 py-3 shrink-0 border-b border-white/5">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-[#37F2D1] rounded-full animate-pulse" />
               <h2 className="text-white font-bold tracking-wider">DICE ROLLER</h2>
@@ -2328,190 +2310,124 @@ const DiceRoller = forwardRef((props, ref) => {
             )}
           </div>
 
-          <div className="relative flex flex-col flex-1 min-h-0 gap-4 overflow-hidden">
-
-            {/* 3D Dice Display — landing-zone placeholder. The actual
-                canvas is the fullscreen layer above the modal; this
-                dotted circle marks the area where the dice lands. */}
+          {/* Arena — fills bulk of modal, contains the canvas + overlays */}
+          <div
+            className="relative flex-1 min-h-0 overflow-hidden bg-[#1B2535]"
+          >
             <div
-              className="relative flex justify-center items-center overflow-visible shrink-0 bg-black/20 rounded-2xl border border-white/5"
-              style={{ minHeight: "400px" }}
-            >
-              <div
-                className="flex items-center justify-center rounded-full"
-                style={{
-                  width: 220,
-                  height: 220,
-                  border: "2px dashed rgba(255,255,255,0.15)",
-                  color: "rgba(255,255,255,0.35)",
-                  letterSpacing: "0.18em",
-                  fontWeight: 700,
-                  fontSize: 12,
-                }}
-              >
-                LANDING
-              </div>
-              {showParticles && <Particles type={particleType} />}
-              {revealAnim && !isRolling && !isCocked && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
-
-              {lastRoll && !isRolling && !isCocked && modifier !== 0 && (
-                <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-6 py-1.5 rounded-full font-bold text-xs bg-[#37F2D1] text-[#1E2430] shadow-lg whitespace-nowrap border border-white/20">
-                  TOTAL: {lastRoll.total}
-                </div>
-              )}
-            </div>
-
-            {/* Rolled Number */}
-            {lastRoll && !isRolling && !isCocked && (
-              <div className="text-center">
-                <span className="text-6xl font-bold text-white">
-                  {lastRoll.roll}
-                </span>
-                {modifier !== 0 && (
-                  <span className="text-3xl text-gray-400 ml-2">
-                    {modifier > 0 ? "+" : ""}
-                    {modifier} = {lastRoll.total}
-                  </span>
-                )}
-              </div>
+              ref={containerRef}
+              data-dice-canvas
+              className="absolute inset-0"
+            />
+            {showParticles && <Particles type={particleType} />}
+            {revealAnim && !isRolling && !isCocked && (
+              <RevealOverlay value={revealAnim.value} color={revealAnim.color} />
             )}
+          </div>
 
-            {/* Instruction / ROLL button */}
-            <div className="text-center flex flex-col items-center gap-2">
+          {/* Bottom strip */}
+          <div className="shrink-0 border-t border-white/5 px-4 pt-3 pb-2 bg-[#161B26]">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={!isRolling ? () => handleRoll() : undefined}
                 disabled={isRolling}
-                className={`inline-block px-6 py-2 border-2 rounded-lg font-semibold tracking-wide transition-colors ${
-                  isCocked
-                    ? "border-[#FFD700] text-[#FFD700] hover:bg-[#FFD700]/10"
-                    : "border-[#FF5722] text-[#FF5722] hover:bg-[#FF5722]/10"
-                } ${isRolling ? "opacity-60 cursor-default" : "cursor-pointer"}`}
+                className={`shrink-0 h-10 px-5 rounded-lg font-bold tracking-wide text-white transition-colors ${
+                  isRolling
+                    ? "bg-[#FF5722]/40 cursor-default"
+                    : isCocked
+                      ? "bg-[#FFD700] text-[#1E2430] hover:bg-[#FFE34D]"
+                      : "bg-[#FF5300] hover:bg-[#FF6B3D] cursor-pointer"
+                }`}
+                style={{ minWidth: 120 }}
               >
                 {isRolling ? "ROLLING..." : isCocked ? "ROLL AGAIN" : "ROLL"}
               </button>
-              <p className="text-[11px] text-slate-400 italic">
-                {allowLazyRolls
-                  ? "Or grab the dice and shake to roll"
-                  : "Or grab the dice and shake to roll — must shake!"}
-              </p>
-            </div>
 
-            {/* Controls: dice, modifier */}
-            <div className="grid grid-cols-2 gap-4 shrink-0">
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 mb-1 block tracking-wider">DICE TYPE</label>
-                <select
-                  value={selectedDice}
-                  onChange={(e) => setSelectedDice(e.target.value)}
-                  className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm font-semibold focus:border-[#37F2D1] transition-colors outline-none appearance-none cursor-pointer hover:bg-black/40"
-                >
-                  {diceTypes.map((dice) => (
-                    <option key={dice.name} value={dice.name}>
-                      {dice.name.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
+              <select
+                value={selectedDice}
+                onChange={(e) => setSelectedDice(e.target.value)}
+                className="shrink-0 h-10 bg-black/30 border border-white/10 rounded-lg px-2 text-white text-sm font-semibold focus:border-[#37F2D1] transition-colors outline-none appearance-none cursor-pointer hover:bg-black/40"
+                style={{ width: 80 }}
+              >
+                {diceTypes.map((dice) => (
+                  <option key={dice.name} value={dice.name}>
+                    {dice.name.toUpperCase()}
+                  </option>
+                ))}
+              </select>
+
+              <div className="relative shrink-0" style={{ width: 80 }}>
+                <input
+                  type="number"
+                  value={modifier}
+                  onChange={(e) => setModifier(parseInt(e.target.value) || 0)}
+                  className="w-full h-10 bg-black/30 border border-white/10 rounded-lg pl-6 pr-2 text-center text-white font-semibold focus:border-[#37F2D1] transition-colors outline-none"
+                />
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-bold">+</span>
               </div>
 
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 mb-1 block tracking-wider">
-                  MODIFIER
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    value={modifier}
-                    onChange={(e) =>
-                      setModifier(parseInt(e.target.value) || 0)
-                    }
-                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-center text-white font-semibold focus:border-[#37F2D1] transition-colors outline-none"
-                  />
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-bold">+</span>
-                </div>
-              </div>
-            </div>
-
-            {/* History */}
-            {rollHistory.length > 0 && (
-              <div className="flex flex-col min-h-0 flex-1">
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <h3 className="text-[10px] font-bold text-slate-500 tracking-wider">
-                    RECENT ROLLS
-                  </h3>
-                  <button
-                    onClick={() => setRollHistory([])}
-                    className="text-[10px] text-slate-500 hover:text-[#FF5722] transition-colors"
-                  >
-                    CLEAR
-                  </button>
-                </div>
-                <div className="bg-black/20 rounded-lg p-2 overflow-y-auto custom-scrollbar border border-white/5 flex-1 min-h-[100px]">
-                  <style>{`
-                    .custom-scrollbar::-webkit-scrollbar {
-                      width: 4px;
-                    }
-                    .custom-scrollbar::-webkit-scrollbar-track {
-                      background: rgba(0, 0, 0, 0.2);
-                    }
-                    .custom-scrollbar::-webkit-scrollbar-thumb {
-                      background: #37F2D1;
-                      border-radius: 4px;
-                    }
-                    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                      background: #2dd9bd;
-                    }
-                  `}</style>
-                  <div className="space-y-1">
-                    {rollHistory.map((entry, idx) => (
+              <div className="flex-1 min-w-0 overflow-x-auto custom-scrollbar">
+                <div className="flex items-stretch gap-1.5 justify-end">
+                  {rollHistory.slice(0, 5).map((entry, idx) => {
+                    const isCritS = entry.result === 20 && entry.dice === "d20";
+                    const isCritF = entry.result === 1 && entry.dice === "d20";
+                    return (
                       <div
                         key={idx}
-                        className="flex items-center justify-between text-sm p-2 rounded hover:bg-white/5 transition-colors"
+                        className={`shrink-0 flex flex-col items-center justify-center rounded-md px-2 py-1 border ${
+                          isCritS
+                            ? "border-[#FFD700]/60 bg-[#FFD700]/10"
+                            : isCritF
+                              ? "border-[#DC2626]/60 bg-[#DC2626]/10"
+                              : "border-white/10 bg-black/30"
+                        }`}
+                        style={{ minWidth: 40 }}
+                        title={entry.timestamp}
                       >
-                        <span className="text-xs text-gray-500 font-mono">
-                          {entry.timestamp}
+                        <span className={`font-bold text-sm leading-none ${
+                          isCritS ? "text-[#FFD700]" :
+                          isCritF ? "text-[#DC2626]" :
+                          "text-white"
+                        }`}>
+                          {entry.modifier !== 0 ? entry.total : entry.result}
                         </span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[#37F2D1] font-bold text-xs bg-[#37F2D1]/10 px-1.5 py-0.5 rounded">
-                            {entry.dice.toUpperCase()}
-                          </span>
-                          <span className={`font-bold ${
-                            entry.result === 20 && entry.dice === "d20" ? "text-[#FFD700]" :
-                            entry.result === 1 && entry.dice === "d20" ? "text-[#DC2626]" :
-                            "text-white"
-                          }`}>
-                            {entry.result}
-                          </span>
-                          {entry.lazy && (
-                            <span className="text-amber-400 font-bold text-[10px] bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded tracking-wider">
-                              LAZY
-                            </span>
-                          )}
-                          {entry.modifier !== 0 && (
-                            <>
-                              <span className="text-gray-500 text-xs">
-                                ({entry.modifier > 0 ? "+" : ""}
-                                {entry.modifier})
-                              </span>
-                              <span className="text-white font-bold text-xs bg-white/10 px-1.5 py-0.5 rounded">
-                                = {entry.total}
-                              </span>
-                            </>
-                          )}
-                        </div>
+                        <span className="text-[8px] tracking-wider text-slate-400 mt-0.5">
+                          {entry.dice.toUpperCase()}
+                          {entry.lazy && <span className="text-amber-400 ml-0.5">·LAZY</span>}
+                        </span>
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
-            )}
+            </div>
+            <p className="text-[11px] text-slate-500 italic mt-2 text-center">
+              Or grab the dice and shake to roll
+              {!allowLazyRolls && " — must shake!"}
+            </p>
           </div>
         </div>
+        {showCockedAnim && <CockedAnimation />}
+        {lameAnim && <LameAnimation rejected={lameAnim.rejected} />}
       </div>
-      {showCockedAnim && <CockedAnimation />}
-      {lameAnim && <LameAnimation rejected={lameAnim.rejected} />}
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          height: 4px;
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.2);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #37F2D1;
+          border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #2dd9bd;
+        }
+      `}</style>
     </div>
-    </>
   );
 });
 
