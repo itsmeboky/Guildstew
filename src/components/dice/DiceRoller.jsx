@@ -23,6 +23,69 @@ const diceTypes = [
   { name: "d20", sides: 20 },
 ];
 
+const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
+const easeOutBack = (t) => {
+  const c1 = 1.70158, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+};
+
+// Apply vertex gradient: top vertices get primary color, bottom get secondary
+function applyVertexGradient(model, primaryHex, secondaryHex, isThemedSkin) {
+  const primary = new THREE.Color(primaryHex);
+  const secondary = new THREE.Color(secondaryHex);
+
+  let minY = Infinity, maxY = -Infinity;
+  model.traverse((child) => {
+    if (child.isMesh && child.geometry) {
+      const pos = child.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  });
+  const yRange = maxY - minY || 1;
+
+  model.traverse((child) => {
+    if (child.isMesh && child.material) {
+      const mat = child.material;
+
+      if (isThemedSkin) {
+        // Themed skins keep textures clean — no tinting
+        mat.color = new THREE.Color(0xffffff);
+        if (child.geometry.attributes.color) {
+          child.geometry.deleteAttribute("color");
+        }
+        mat.vertexColors = false;
+        mat.needsUpdate = true;
+        return;
+      }
+
+      // Apply vertex gradient
+      const geometry = child.geometry;
+      const pos = geometry.attributes.position;
+      const colors = new Float32Array(pos.count * 3);
+      const tmpColor = new THREE.Color();
+
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        const t = (y - minY) / yRange;
+        tmpColor.copy(secondary).lerp(primary, t);
+        colors[i * 3] = tmpColor.r;
+        colors[i * 3 + 1] = tmpColor.g;
+        colors[i * 3 + 2] = tmpColor.b;
+      }
+
+      geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      mat.vertexColors = true;
+      mat.color = new THREE.Color(0xffffff); // White base so vertex colors multiply cleanly
+      mat.needsUpdate = true;
+    }
+  });
+}
+
 function Particles({ type = "default" }) {
   // Configuration based on type
   const config = {
@@ -242,7 +305,7 @@ const STOCK_SKIN = {
 function createFallbackD20() {
   const geometry = new THREE.IcosahedronGeometry(1.3);
   const material = new THREE.MeshStandardMaterial({
-    color: 0x2a3441,
+    color: 0xffffff,
     metalness: 0.3,
     roughness: 0.4,
     flatShading: true,
@@ -250,6 +313,41 @@ function createFallbackD20() {
   const mesh = new THREE.Mesh(geometry, material);
   return mesh;
 }
+
+const RevealOverlay = ({ value, color }) => {
+  const [scale, setScale] = useState(0);
+  useEffect(() => {
+    let raf;
+    const start = performance.now();
+    const animate = () => {
+      const t = Math.min((performance.now() - start) / 600, 1);
+      const easeT = t < 0.4
+        ? easeOutBack(t / 0.4) * 1.3
+        : 1.3 - (1.3 - 1) * easeOutCubic((t - 0.4) / 0.6);
+      setScale(easeT);
+      if (t < 1) raf = requestAnimationFrame(animate);
+    };
+    animate();
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  return (
+    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
+      <div style={{
+        transform: `scale(${scale})`,
+        color,
+        fontFamily: "'Cream', 'Cinzel', serif",
+        fontSize: 120,
+        fontWeight: 900,
+        lineHeight: 1,
+        textShadow: `0 0 40px ${color}, 0 0 80px ${color}66, 0 4px 20px rgba(0,0,0,0.6)`,
+        filter: "drop-shadow(0 8px 20px rgba(0,0,0,0.5))",
+      }}>
+        {value}
+      </div>
+    </div>
+  );
+};
 
 const DiceRoller = forwardRef((props, ref) => {
   const {
@@ -261,6 +359,7 @@ const DiceRoller = forwardRef((props, ref) => {
     initialDice = "d20",
     primaryColor = "#FF5722",
     secondaryColor = "#8B5CF6",
+    isThemedSkin = false,
     forcedResult: forcedResultProp = null,
   } = props;
   const [selectedDice, setSelectedDice] = useState(initialDice);
@@ -270,8 +369,9 @@ const DiceRoller = forwardRef((props, ref) => {
   const [rollHistory, setRollHistory] = useState([]);
   const [showParticles, setShowParticles] = useState(false);
   const [particleType, setParticleType] = useState("default"); // default, crit-success, crit-fail
-  const [internalForcedResult, setInternalForcedResult] = useState(null); 
-  
+  const [internalForcedResult, setInternalForcedResult] = useState(null);
+  const [revealAnim, setRevealAnim] = useState(null); // { value, color }
+
   // Use prop if available, otherwise internal state
   const forcedResult = forcedResultProp !== null ? forcedResultProp : internalForcedResult;
 
@@ -312,6 +412,7 @@ const DiceRoller = forwardRef((props, ref) => {
           defaultTexture: defaultTextureRef.current,
           textureCache: textureCacheRef.current,
         });
+        applyVertexGradient(diceRef.current, primaryColor, secondaryColor, isThemedSkin);
       }
     });
   }, []);
@@ -430,7 +531,7 @@ const DiceRoller = forwardRef((props, ref) => {
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setClearColor(0x000000, 0);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.8;
+    renderer.toneMappingExposure = 1.2;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
@@ -445,48 +546,28 @@ const DiceRoller = forwardRef((props, ref) => {
     };
     window.addEventListener('resize', handleResize);
 
-    const pColor = new THREE.Color(primaryColor);
-    const sColor = new THREE.Color(secondaryColor);
-
-    // Lights - Adjusted for Tint and Proximity
-    // Ambient light for base color tint
-    const ambientLight = new THREE.AmbientLight(sColor, 2.0); 
+    // Neutral lighting — dice color now comes from vertex colors
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
-    // Hemisphere light for gradient
-    const hemiLight = new THREE.HemisphereLight(pColor, sColor, 1.5);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444466, 0.8);
     hemiLight.position.set(0, 10, 0);
     scene.add(hemiLight);
 
-    // Point lights CLOSER to the dice for intense local color
-    const ringRadius = 2.5; // Closer
-    const numLights = 6;
-    const ringLights = [];
-    for (let i = 0; i < numLights; i++) {
-      const angle = (i / numLights) * Math.PI * 2;
-      const lightColor = i % 2 === 0 ? pColor : sColor;
-      
-      const pointLight = new THREE.PointLight(lightColor, 5.0, 10); // Less intensity, closer decay
-      pointLight.position.set(
-        Math.cos(angle) * ringRadius,
-        2, // Lower height
-        Math.sin(angle) * ringRadius
-      );
-      scene.add(pointLight);
-      ringLights.push(pointLight);
-    }
-
-    // Soft directional light for definition
-    const keyLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    keyLight.position.set(5, 10, 5);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
+    keyLight.position.set(5, 8, 5);
     scene.add(keyLight);
 
-    // Store lights
-    scene.userData = { ambientLight, hemiLight, keyLight, ringLights };
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
+    fillLight.position.set(-5, 3, -3);
+    scene.add(fillLight);
 
-    const bottomFill = new THREE.PointLight(0xffffff, 1.5, 20);
-    bottomFill.position.set(0, -3, 0);
-    scene.add(bottomFill);
+    // Subtle accent in secondary color for atmosphere only — NOT driving dice color
+    const accentLight = new THREE.PointLight(secondaryColor, 0.6, 8);
+    accentLight.position.set(-3, 2, 3);
+    scene.add(accentLight);
+
+    scene.userData = { ambientLight, hemiLight, keyLight, fillLight, accentLight };
 
     const shadowGeometry = new THREE.CircleGeometry(1.5, 32);
     const shadowMaterial = new THREE.MeshBasicMaterial({
@@ -503,8 +584,6 @@ const DiceRoller = forwardRef((props, ref) => {
       createDice(selectedDice);
     }
 
-    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
-
     const animate = () => {
       animationRef.current = requestAnimationFrame(animate);
       const renderer = rendererRef.current;
@@ -517,69 +596,115 @@ const DiceRoller = forwardRef((props, ref) => {
       if (rollingRef.current && roll && diceMesh) {
         const now = performance.now();
         const elapsed = now - roll.startTime;
-        const t = Math.min(1, elapsed / roll.duration);
-        const k = easeOutCubic(t);
 
-        // spin progress
-        const spinProgress =
-          t < 0.7
-            ? t / 0.7
-            : 0.7 +
-              ((k - easeOutCubic(0.7)) * 0.3) / (1 - easeOutCubic(0.7));
-        const normalizedSpin = Math.min(1, spinProgress);
+        // PHASE 1: Anticipation — shake/wiggle in place
+        if (elapsed < roll.anticipationDuration) {
+          const t = elapsed / roll.anticipationDuration;
+          const shakeAmount = 0.08 * Math.sin(t * Math.PI * 8) * (1 - t);
+          diceMesh.rotation.set(
+            roll.startRot.x + shakeAmount,
+            roll.startRot.y + shakeAmount * 0.7,
+            roll.startRot.z + shakeAmount * 0.5
+          );
+          const scaleBoost = 1 + 0.08 * Math.sin(t * Math.PI);
+          diceMesh.scale.setScalar(scaleBoost);
+        }
 
-        const x = THREE.MathUtils.lerp(
-          roll.startRot.x,
-          roll.endRot.x,
-          normalizedSpin
-        );
-        const y = THREE.MathUtils.lerp(
-          roll.startRot.y,
-          roll.endRot.y,
-          normalizedSpin
-        );
-        const z = THREE.MathUtils.lerp(
-          roll.startRot.z,
-          roll.endRot.z,
-          normalizedSpin
-        );
-        diceMesh.rotation.set(x, y, z);
+        // PHASE 2: Tumble — procedural angular velocity with random jitter
+        else if (elapsed < roll.anticipationDuration + roll.tumbleDuration) {
+          const phaseT = (elapsed - roll.anticipationDuration) / roll.tumbleDuration;
+          const eased = easeOutCubic(phaseT);
 
-        const angle = 2 * Math.PI * roll.orbitTurns * t;
-        const radius = roll.maxRadius * (1 - t);
-        const posX = radius * Math.cos(angle);
-        const posZ = radius * Math.sin(angle);
-        const posY = Math.sin(t * Math.PI) * 0.15;
+          if (!roll.tumbleAccumulator) {
+            roll.tumbleAccumulator = { x: roll.startRot.x, y: roll.startRot.y, z: roll.startRot.z };
+            roll.tumbleVelocity = {
+              x: (Math.random() - 0.5) * 0.6,
+              y: (Math.random() - 0.5) * 0.6,
+              z: (Math.random() - 0.5) * 0.6,
+            };
+            roll.lastFrameTime = now;
+          }
 
-        diceMesh.position.set(posX, posY, posZ);
+          const dt = Math.min((now - roll.lastFrameTime) / 1000, 0.05);
+          roll.lastFrameTime = now;
 
-        if (t >= 1) {
+          const decay = 1 - phaseT * 0.3;
+          roll.tumbleVelocity.x += (Math.random() - 0.5) * 0.08;
+          roll.tumbleVelocity.y += (Math.random() - 0.5) * 0.08;
+          roll.tumbleVelocity.z += (Math.random() - 0.5) * 0.05;
+
+          const speedMult = (12 + Math.random() * 4) * (1 - eased * 0.6);
+          roll.tumbleAccumulator.x += roll.tumbleVelocity.x * dt * speedMult * decay;
+          roll.tumbleAccumulator.y += roll.tumbleVelocity.y * dt * speedMult * decay;
+          roll.tumbleAccumulator.z += roll.tumbleVelocity.z * dt * speedMult * decay;
+
+          diceMesh.rotation.set(
+            roll.tumbleAccumulator.x,
+            roll.tumbleAccumulator.y,
+            roll.tumbleAccumulator.z
+          );
+
+          const orbitT = phaseT;
+          const angle = roll.orbitStart + 2 * Math.PI * roll.orbitTurns * orbitT + Math.sin(orbitT * 8) * 0.3;
+          const radius = roll.maxRadius * (1 - easeOutQuint(orbitT));
+          const arcHeight = Math.sin(orbitT * Math.PI) * 0.4 + Math.sin(orbitT * Math.PI * 3) * 0.1;
+          diceMesh.position.set(radius * Math.cos(angle), arcHeight, radius * Math.sin(angle));
+          diceMesh.scale.setScalar(1);
+        }
+
+        // PHASE 3: Settle — snap to final face with overshoot bounce
+        else if (elapsed < roll.totalDuration) {
+          const settleStart = roll.anticipationDuration + roll.tumbleDuration;
+          const settleT = (elapsed - settleStart) / roll.settleDuration;
+          const eased = easeOutBack(Math.min(settleT, 1));
+
+          if (!roll.settleStartRot) {
+            roll.settleStartRot = {
+              x: diceMesh.rotation.x,
+              y: diceMesh.rotation.y,
+              z: diceMesh.rotation.z,
+            };
+          }
+
+          diceMesh.rotation.set(
+            THREE.MathUtils.lerp(roll.settleStartRot.x, roll.finalRot.x, eased),
+            THREE.MathUtils.lerp(roll.settleStartRot.y, roll.finalRot.y, eased),
+            THREE.MathUtils.lerp(roll.settleStartRot.z, roll.finalRot.z, eased)
+          );
+
+          const dropT = Math.min(settleT * 1.5, 1);
+          const bounce = Math.abs(Math.sin(dropT * Math.PI * 2)) * (1 - dropT) * 0.15;
+          diceMesh.position.set(0, bounce, 0);
+        }
+
+        // PHASE 4: Done — trigger result, particles, reveal
+        else {
           rollingRef.current = false;
           diceMesh.position.set(0, 0, 0);
-          const finalRollValue = rollDataRef.current?.rollValue;
+          diceMesh.rotation.set(roll.finalRot.x, roll.finalRot.y, roll.finalRot.z);
+          diceMesh.scale.setScalar(1);
+
+          const finalValue = roll.rollValue;
+          const isCritSuccess = selectedDice === "d20" && finalValue === 20;
+          const isCritFail = selectedDice === "d20" && finalValue === 1;
+
           rollDataRef.current = null;
           setIsRolling(false);
-          
-          // Handle Crit Effects
+
+          let revealColor = "#ffffff";
           let pType = "default";
-          if (selectedDice === "d20") {
-            if (finalRollValue === 20) {
-              pType = "crit-success";
-              playCritSuccessSound();
-            } else if (finalRollValue === 1) {
-              pType = "crit-fail";
-              playCritFailSound();
-            }
-          }
+          if (isCritSuccess) { revealColor = "#FFD700"; pType = "crit-success"; playCritSuccessSound(); }
+          else if (isCritFail) { revealColor = "#DC2626"; pType = "crit-fail"; playCritFailSound(); }
+          else if (finalValue >= (DICE_SIDES[selectedDice] * 0.85)) { revealColor = "#37F2D1"; }
+          else if (finalValue <= (DICE_SIDES[selectedDice] * 0.15)) { revealColor = "#94a3b8"; }
+
+          setRevealAnim({ value: finalValue, color: revealColor });
           setParticleType(pType);
-          
           setShowParticles(true);
-          // All animations last 1 second
-          const duration = 1000;
-          setTimeout(() => setShowParticles(false), duration);
-          
-          if (onRollCompleteRef.current && typeof finalRollValue === "number") {
-            onRollCompleteRef.current(finalRollValue);
+          setTimeout(() => setShowParticles(false), 1200);
+
+          if (onRollCompleteRef.current && typeof finalValue === "number") {
+            onRollCompleteRef.current(finalValue);
           }
         }
       }
@@ -604,27 +729,17 @@ const DiceRoller = forwardRef((props, ref) => {
     };
   }, [isOpen, embedded, modelsReady, selectedDice, forcedResult]); // Re-add forcedResult to dependency array so force re-roll works
 
-  // Update lights when colors change. If the player has a Tavern
-  // dice skin applied, its lighting colors win over the prop-passed
-  // `primaryColor` / `secondaryColor` so the skin drives the look.
   useEffect(() => {
-    if (!sceneRef.current?.userData) return;
-    const skin = activeSkin || null;
-    const pColor = new THREE.Color(skin?.primaryLight || primaryColor);
-    const sColor = new THREE.Color(skin?.secondaryLight || secondaryColor);
-    const { ambientLight, hemiLight, keyLight, ringLights } = sceneRef.current.userData;
-    if (ambientLight) ambientLight.color.set(sColor);
-    if (hemiLight) {
-      hemiLight.color.set(pColor);
-      hemiLight.groundColor.set(sColor);
+    if (sceneRef.current?.userData?.accentLight) {
+      sceneRef.current.userData.accentLight.color.set(secondaryColor);
     }
-    if (keyLight) keyLight.color.set(pColor);
-    if (ringLights) {
-      ringLights.forEach((light, i) => {
-        light.color.set(i % 2 === 0 ? pColor : sColor);
-      });
+    if (diceRef.current && modelsReady) {
+      const customModel = customModelsRef.current[selectedDice];
+      if (customModel?.scene) {
+        applyVertexGradient(diceRef.current, primaryColor, secondaryColor, isThemedSkin);
+      }
     }
-  }, [primaryColor, secondaryColor, activeSkin]);
+  }, [primaryColor, secondaryColor, isThemedSkin, modelsReady, selectedDice]);
 
   // Re-skin the current die whenever the active Tavern dice skin
   // changes (e.g. player applies a new skin from My Collection
@@ -635,7 +750,8 @@ const DiceRoller = forwardRef((props, ref) => {
       defaultTexture: defaultTextureRef.current,
       textureCache: textureCacheRef.current,
     });
-  }, [activeSkin]);
+    applyVertexGradient(diceRef.current, primaryColor, secondaryColor, isThemedSkin);
+  }, [activeSkin, primaryColor, secondaryColor, isThemedSkin]);
 
   useEffect(() => {
     if ((isOpen || embedded) && sceneRef.current && isInitializedRef.current) {
@@ -732,7 +848,7 @@ const DiceRoller = forwardRef((props, ref) => {
             geometry = new THREE.IcosahedronGeometry(1.3);
         }
         const material = new THREE.MeshStandardMaterial({
-          color: 0x2a3441,
+          color: 0xffffff,
           metalness: 0.3,
           roughness: 0.4,
           flatShading: true,
@@ -741,16 +857,33 @@ const DiceRoller = forwardRef((props, ref) => {
       }
     }
 
+    // Deep-clone materials/geometries so each dice instance can be
+    // tinted independently without mutating shared GLB data.
+    mesh.traverse((child) => {
+      if (child.isMesh) {
+        if (child.material) child.material = child.material.clone();
+        if (child.geometry) child.geometry = child.geometry.clone();
+      }
+    });
+
+    // Apply the vertex gradient
+    applyVertexGradient(mesh, primaryColor, secondaryColor, isThemedSkin);
+
     diceRef.current = mesh;
     scene.add(mesh);
 
-    // Re-skin with the active Tavern skin (or stock defaults). Must
-    // run after scene.add so the traversal hits the cloned meshes,
-    // not the original.
+    // Re-skin with the active Tavern skin (or stock defaults). This
+    // builds the material (texture map, metalness, etc.) so it must
+    // run before the final vertex-gradient pass, which sets
+    // vertexColors:true on whatever material the skin produced.
     applyDiceSkinToMesh(mesh, activeSkinRef.current || STOCK_SKIN, {
       defaultTexture: defaultTextureRef.current,
       textureCache: textureCacheRef.current,
     });
+
+    // Re-apply the gradient so vertex colors survive applyDiceSkinToMesh's
+    // material replacement. For themed skins this is a no-op tint reset.
+    applyVertexGradient(mesh, primaryColor, secondaryColor, isThemedSkin);
   };
 
   const handleRoll = () => {
@@ -778,37 +911,56 @@ const DiceRoller = forwardRef((props, ref) => {
     if (diceRef.current) {
       setIsRolling(true);
       const diceMesh = diceRef.current;
-      
+
       // Fallback for snap if missing
-      const safeSnap = snap || { 
-        x: Math.random() * Math.PI * 2, 
-        y: Math.random() * Math.PI * 2, 
-        z: Math.random() * Math.PI * 2 
+      const safeSnap = snap || {
+        x: Math.random() * Math.PI * 2,
+        y: Math.random() * Math.PI * 2,
+        z: Math.random() * Math.PI * 2
       };
-      const startRot = diceMesh.rotation.clone();
 
-      const spinX = 4 + Math.floor(Math.random() * 4);
-      const spinY = 4 + Math.floor(Math.random() * 4);
-      const spinZ = 2 + Math.floor(Math.random() * 3);
+      const isCrit = selectedDice === "d20" && (roll === 20 || roll === 1);
 
-      const endRot = new THREE.Euler(
-        safeSnap.x + Math.PI * 2 * spinX,
-        safeSnap.y + Math.PI * 2 * spinY,
-        safeSnap.z + Math.PI * 2 * spinZ
-      );
+      const anticipationDuration = 280;
+      const tumbleDuration = isCrit ? 900 : 800;
+      const settleDuration = isCrit ? 600 : 350; // Crits get slow-mo settle for drama
+
+      const startRot = {
+        x: diceMesh.rotation.x,
+        y: diceMesh.rotation.y,
+        z: diceMesh.rotation.z,
+      };
+
+      const spinX = 3 + Math.floor(Math.random() * 3);
+      const spinY = 3 + Math.floor(Math.random() * 3);
+      const spinZ = 1 + Math.floor(Math.random() * 2);
+
+      const finalRot = {
+        x: safeSnap.x + Math.PI * 2 * spinX,
+        y: safeSnap.y + Math.PI * 2 * spinY,
+        z: safeSnap.z + Math.PI * 2 * spinZ,
+      };
 
       rollDataRef.current = {
-      startTime: performance.now(),
-      duration: 1000, // Synced with average sound duration
-      startRot,
-      endRot,
-      orbitTurns: 1 + Math.random() * 1,
-      maxRadius: 12.0, // Keep wide area
-      rollValue: roll,
+        startTime: performance.now(),
+        anticipationDuration,
+        tumbleDuration,
+        settleDuration,
+        totalDuration: anticipationDuration + tumbleDuration + settleDuration,
+        startRot,
+        finalRot,
+        orbitStart: Math.random() * Math.PI * 2,
+        orbitTurns: 1.5 + Math.random() * 1.5,
+        maxRadius: 1.4,
+        rollValue: roll,
       };
+
       rollingRef.current = true;
-      
-      playRollSound();
+
+      // Delay the roll sound so it plays AFTER anticipation, when the dice actually starts tumbling
+      setTimeout(() => playRollSound(), anticipationDuration);
+
+      setRevealAnim(null); // Clear previous reveal
     }
 
     const total = roll + modifier;
@@ -842,6 +994,7 @@ const DiceRoller = forwardRef((props, ref) => {
           onClick={!isRolling ? handleRoll : undefined}
         />
         {showParticles && <Particles type={particleType} />}
+        {revealAnim && !isRolling && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
       </div>
     );
   }
@@ -883,6 +1036,7 @@ const DiceRoller = forwardRef((props, ref) => {
                 onClick={!isRolling ? handleRoll : undefined}
               />
               {showParticles && <Particles type={particleType} />}
+              {revealAnim && !isRolling && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
 
               {lastRoll && !isRolling && modifier !== 0 && (
                 <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-6 py-1.5 rounded-full font-bold text-xs bg-[#37F2D1] text-[#1E2430] shadow-lg whitespace-nowrap border border-white/20">
@@ -993,8 +1147,12 @@ const DiceRoller = forwardRef((props, ref) => {
                           <span className="text-[#37F2D1] font-bold text-xs bg-[#37F2D1]/10 px-1.5 py-0.5 rounded">
                             {entry.dice.toUpperCase()}
                           </span>
-                          <span className="text-white font-bold">
-                             {entry.result}
+                          <span className={`font-bold ${
+                            entry.result === 20 && entry.dice === "d20" ? "text-[#FFD700]" :
+                            entry.result === 1 && entry.dice === "d20" ? "text-[#DC2626]" :
+                            "text-white"
+                          }`}>
+                            {entry.result}
                           </span>
                           {entry.modifier !== 0 && (
                             <>
