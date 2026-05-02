@@ -194,7 +194,6 @@ export default function Home() {
           src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/hero/7a4e888b3_BannerHome.png"
           alt="Banner"
           className="absolute inset-0 w-full h-full"
-          imageClassName="object-top"
         />
       </div>
 
@@ -238,7 +237,7 @@ export default function Home() {
                     src={slide.image}
                     alt="Hero"
                     className="absolute inset-0 w-full h-full"
-                    imageClassName={`object-top ${slide.backgroundPosition === 'left center' ? 'object-left' : ''}`}
+                    imageClassName={slide.backgroundPosition === 'left center' ? 'object-left' : ''}
                   />
                   <div className="absolute inset-0" 
                     style={{
