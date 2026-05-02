@@ -23,6 +23,22 @@ const diceTypes = [
   { name: "d20", sides: 20 },
 ];
 
+// Probability that any given roll "cocks" (lands wedged so two faces
+// share the upward-facing claim). Tighter dice cock less often;
+// chunkier dice (d20, d100) cock more.
+const COCK_CHANCE = {
+  d4: 0.005, d6: 0.01, d8: 0.02, d10: 0.03,
+  d12: 0.04, d20: 0.05, d100: 0.05,
+};
+
+const COCKED_SOUNDS = [
+  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/notification/cockdeddice1.mp3",
+  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/notification/cockeddice2.mp3",
+];
+
+const LAZY_SOUND_URL =
+  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/notification/badroll.wav";
+
 const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
 const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
 const easeOutBack = (t) => {
@@ -349,6 +365,110 @@ const RevealOverlay = ({ value, color }) => {
   );
 };
 
+// Phase 1: chicken slides left → right. Phase 2: gold "COCKED!" text
+// fades in at top center with a scale-bounce, then pulses.
+const CockedAnimation = () => {
+  const [phase, setPhase] = useState(1);
+  useEffect(() => {
+    const t = setTimeout(() => setPhase(2), 1100);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <div className="fixed inset-0 pointer-events-none z-[70] overflow-hidden">
+      <style>{`
+        @keyframes chickenRun {
+          0%   { left: -10vw; transform: translateY(0) rotate(-6deg); }
+          25%  { transform: translateY(-30px) rotate(4deg); }
+          50%  { transform: translateY(0) rotate(-4deg); }
+          75%  { transform: translateY(-22px) rotate(6deg); }
+          100% { left: 110vw; transform: translateY(0) rotate(-2deg); }
+        }
+        @keyframes cockedPop {
+          0%   { transform: translate(-50%, 0) scale(0.4); opacity: 0; }
+          60%  { transform: translate(-50%, 0) scale(1.2); opacity: 1; }
+          100% { transform: translate(-50%, 0) scale(1.0); opacity: 1; }
+        }
+        @keyframes cockedPulse {
+          0%, 100% { filter: drop-shadow(0 0 18px #FFD700) drop-shadow(0 0 36px #FFA500); }
+          50%      { filter: drop-shadow(0 0 32px #FFD700) drop-shadow(0 0 64px #FFA500); }
+        }
+      `}</style>
+      {phase === 1 && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            fontSize: 96,
+            animation: "chickenRun 1100ms cubic-bezier(.5,1.6,.55,.85) forwards",
+          }}
+        >
+          🐔
+        </div>
+      )}
+      {phase === 2 && (
+        <div
+          style={{
+            position: "absolute",
+            top: "12vh",
+            left: "50%",
+            color: "#FFD700",
+            fontFamily: "'Cream', 'Cinzel', serif",
+            fontWeight: 900,
+            fontSize: "min(14vw, 160px)",
+            letterSpacing: "0.08em",
+            textShadow: "0 0 30px #FFD700, 0 0 60px #FFA500, 0 6px 18px rgba(0,0,0,0.55)",
+            animation:
+              "cockedPop 480ms cubic-bezier(.34,1.56,.64,1) forwards, cockedPulse 1.4s ease-in-out 480ms infinite",
+          }}
+        >
+          COCKED!
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Wobbling italic "Lame..." text. When `rejected` is true the color
+// flips pink and the copy nudges the player to try again.
+const LameAnimation = ({ rejected = false }) => {
+  return (
+    <div className="fixed inset-0 pointer-events-none z-[70] flex items-start justify-center">
+      <style>{`
+        @keyframes lameWobble {
+          0%   { transform: translate(-2px, 0) rotate(-2deg); }
+          25%  { transform: translate(2px, -2px) rotate(2deg); }
+          50%  { transform: translate(-1px, 1px) rotate(-1deg); }
+          75%  { transform: translate(1px, 0) rotate(1deg); }
+          100% { transform: translate(-2px, 0) rotate(-2deg); }
+        }
+        @keyframes lameFade {
+          0%   { opacity: 0; transform: translateY(-8px); }
+          15%  { opacity: 1; transform: translateY(0); }
+          85%  { opacity: 1; }
+          100% { opacity: 0; }
+        }
+      `}</style>
+      <div
+        style={{
+          marginTop: "14vh",
+          fontStyle: "italic",
+          fontFamily: "'Cream', 'Cinzel', serif",
+          fontWeight: 700,
+          fontSize: "min(9vw, 96px)",
+          color: rejected ? "#fb7185" : "#94a3b8",
+          textShadow: rejected
+            ? "0 0 20px #fb718580, 0 4px 14px rgba(0,0,0,0.5)"
+            : "0 4px 14px rgba(0,0,0,0.45)",
+          animation:
+            "lameFade 1500ms ease-in-out forwards, lameWobble 240ms linear infinite",
+        }}
+      >
+        {rejected ? "Lame... try again." : "Lame..."}
+      </div>
+    </div>
+  );
+};
+
 const DiceRoller = forwardRef((props, ref) => {
   const {
     isOpen,
@@ -371,6 +491,8 @@ const DiceRoller = forwardRef((props, ref) => {
   const [particleType, setParticleType] = useState("default"); // default, crit-success, crit-fail
   const [internalForcedResult, setInternalForcedResult] = useState(null);
   const [revealAnim, setRevealAnim] = useState(null); // { value, color }
+  const [isCocked, setIsCocked] = useState(false);
+  const [showCockedAnim, setShowCockedAnim] = useState(false);
 
   // Use prop if available, otherwise internal state
   const forcedResult = forcedResultProp !== null ? forcedResultProp : internalForcedResult;
@@ -685,11 +807,27 @@ const DiceRoller = forwardRef((props, ref) => {
           diceMesh.scale.setScalar(1);
 
           const finalValue = roll.rollValue;
-          const isCritSuccess = selectedDice === "d20" && finalValue === 20;
-          const isCritFail = selectedDice === "d20" && finalValue === 1;
-
+          const wasCocked = !!roll.willCock;
+          const rollMod = roll.modifier ?? 0;
           rollDataRef.current = null;
           setIsRolling(false);
+
+          // Cocked: chicken + sound, no result counted, no history,
+          // no onRollComplete. Player must roll again.
+          if (wasCocked) {
+            setIsCocked(true);
+            setShowCockedAnim(true);
+            const sound = new Audio(
+              COCKED_SOUNDS[Math.floor(Math.random() * COCKED_SOUNDS.length)]
+            );
+            sound.volume = 0.85;
+            sound.play().catch(() => {});
+            setTimeout(() => setShowCockedAnim(false), 2400);
+            return;
+          }
+
+          const isCritSuccess = selectedDice === "d20" && finalValue === 20;
+          const isCritFail = selectedDice === "d20" && finalValue === 1;
 
           let revealColor = "#ffffff";
           let pType = "default";
@@ -702,6 +840,21 @@ const DiceRoller = forwardRef((props, ref) => {
           setParticleType(pType);
           setShowParticles(true);
           setTimeout(() => setShowParticles(false), 1200);
+
+          const total = finalValue + rollMod;
+          setLastRoll({ roll: finalValue, total });
+          if (!embedded) {
+            setRollHistory((prev) => [
+              {
+                result: finalValue,
+                timestamp: new Date().toLocaleTimeString(),
+                dice: selectedDice,
+                modifier: rollMod,
+                total,
+              },
+              ...prev,
+            ].slice(0, 10));
+          }
 
           if (onRollCompleteRef.current && typeof finalValue === "number") {
             onRollCompleteRef.current(finalValue);
@@ -890,7 +1043,11 @@ const DiceRoller = forwardRef((props, ref) => {
     if (!diceRef.current || isRolling) return;
     const diceType = selectedDice;
     const sides = DICE_SIDES[diceType] || 20;
-    
+
+    // Clear cocked state from a prior roll the moment a new roll starts.
+    setIsCocked(false);
+    setShowCockedAnim(false);
+
     // Use forced result if set (for calibration), otherwise random
     let roll;
     if (forcedResult !== null) {
@@ -921,6 +1078,11 @@ const DiceRoller = forwardRef((props, ref) => {
 
       const isCrit = selectedDice === "d20" && (roll === 20 || roll === 1);
 
+      // Probability check for cocked outcome. Forced rolls (calibration)
+      // never cock — calibrators want a clean snap to the requested face.
+      const baseCockChance = COCK_CHANCE[selectedDice] ?? 0;
+      const willCock = forcedResult === null && Math.random() < baseCockChance;
+
       const anticipationDuration = 280;
       const tumbleDuration = isCrit ? 900 : 800;
       const settleDuration = isCrit ? 600 : 350; // Crits get slow-mo settle for drama
@@ -935,10 +1097,16 @@ const DiceRoller = forwardRef((props, ref) => {
       const spinY = 3 + Math.floor(Math.random() * 3);
       const spinZ = 1 + Math.floor(Math.random() * 2);
 
+      // Cocked rolls land tilted ~30° on X and Z so the dice visually
+      // wedges between two faces instead of snapping flat.
+      const COCK_OFFSET = (30 * Math.PI) / 180;
+      const cockX = willCock ? (Math.random() < 0.5 ? COCK_OFFSET : -COCK_OFFSET) : 0;
+      const cockZ = willCock ? (Math.random() < 0.5 ? COCK_OFFSET : -COCK_OFFSET) : 0;
+
       const finalRot = {
-        x: safeSnap.x + Math.PI * 2 * spinX,
+        x: safeSnap.x + Math.PI * 2 * spinX + cockX,
         y: safeSnap.y + Math.PI * 2 * spinY,
-        z: safeSnap.z + Math.PI * 2 * spinZ,
+        z: safeSnap.z + Math.PI * 2 * spinZ + cockZ,
       };
 
       rollDataRef.current = {
@@ -953,6 +1121,8 @@ const DiceRoller = forwardRef((props, ref) => {
         orbitTurns: 1.5 + Math.random() * 1.5,
         maxRadius: 1.4,
         rollValue: roll,
+        willCock,
+        modifier,
       };
 
       rollingRef.current = true;
@@ -961,22 +1131,6 @@ const DiceRoller = forwardRef((props, ref) => {
       setTimeout(() => playRollSound(), anticipationDuration);
 
       setRevealAnim(null); // Clear previous reveal
-    }
-
-    const total = roll + modifier;
-    setLastRoll({ roll, total });
-
-    if (!embedded) {
-      setRollHistory((prev) => [
-        {
-          result: roll,
-          timestamp: new Date().toLocaleTimeString(),
-          dice: selectedDice,
-          modifier,
-          total,
-        },
-        ...prev,
-      ].slice(0, 10));
     }
   };
 
@@ -994,7 +1148,8 @@ const DiceRoller = forwardRef((props, ref) => {
           onClick={!isRolling ? handleRoll : undefined}
         />
         {showParticles && <Particles type={particleType} />}
-        {revealAnim && !isRolling && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
+        {revealAnim && !isRolling && !isCocked && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
+        {showCockedAnim && <CockedAnimation />}
       </div>
     );
   }
@@ -1036,9 +1191,9 @@ const DiceRoller = forwardRef((props, ref) => {
                 onClick={!isRolling ? handleRoll : undefined}
               />
               {showParticles && <Particles type={particleType} />}
-              {revealAnim && !isRolling && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
+              {revealAnim && !isRolling && !isCocked && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
 
-              {lastRoll && !isRolling && modifier !== 0 && (
+              {lastRoll && !isRolling && !isCocked && modifier !== 0 && (
                 <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-6 py-1.5 rounded-full font-bold text-xs bg-[#37F2D1] text-[#1E2430] shadow-lg whitespace-nowrap border border-white/20">
                   TOTAL: {lastRoll.total}
                 </div>
@@ -1046,7 +1201,7 @@ const DiceRoller = forwardRef((props, ref) => {
             </div>
 
             {/* Rolled Number */}
-            {lastRoll && !isRolling && (
+            {lastRoll && !isRolling && !isCocked && (
               <div className="text-center">
                 <span className="text-6xl font-bold text-white">
                   {lastRoll.roll}
@@ -1060,13 +1215,20 @@ const DiceRoller = forwardRef((props, ref) => {
               </div>
             )}
 
-            {/* Instruction */}
+            {/* Instruction / ROLL button */}
             <div className="text-center">
-              <div className="inline-block px-6 py-2 border-2 border-[#FF5722] rounded-lg">
-                <span className="text-[#FF5722] font-semibold tracking-wide">
-                  {isRolling ? "ROLLING..." : "Click dice to roll"}
-                </span>
-              </div>
+              <button
+                type="button"
+                onClick={!isRolling ? handleRoll : undefined}
+                disabled={isRolling}
+                className={`inline-block px-6 py-2 border-2 rounded-lg font-semibold tracking-wide transition-colors ${
+                  isCocked
+                    ? "border-[#FFD700] text-[#FFD700] hover:bg-[#FFD700]/10"
+                    : "border-[#FF5722] text-[#FF5722] hover:bg-[#FF5722]/10"
+                } ${isRolling ? "opacity-60 cursor-default" : "cursor-pointer"}`}
+              >
+                {isRolling ? "ROLLING..." : isCocked ? "ROLL AGAIN" : "ROLL"}
+              </button>
             </div>
 
             {/* Controls: dice, modifier */}
@@ -1175,6 +1337,7 @@ const DiceRoller = forwardRef((props, ref) => {
           </div>
         </div>
       </div>
+      {showCockedAnim && <CockedAnimation />}
     </div>
   );
 });
