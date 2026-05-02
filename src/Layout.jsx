@@ -671,7 +671,27 @@ export default function Layout({ children, currentPageName }) {
 
           <Link
             to={createPageUrl("TheTavern")}
-            className="bg-[#FF5722] text-white px-6 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 hover:bg-[#FF6B3D] transition-colors border-2 border-white"
+            className="px-6 py-2.5 rounded-full font-bold text-sm flex items-center gap-2"
+            style={{
+              background: "transparent",
+              border: "2px solid var(--theme-primaryAccent, #37F2D1)",
+              color: "var(--theme-primaryAccent, #37F2D1)",
+              transition: "border-color 0.2s, color 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              const secondary = getComputedStyle(document.documentElement)
+                .getPropertyValue("--theme-secondaryAccent")
+                .trim() || "#a855f7";
+              e.currentTarget.style.borderColor = secondary;
+              e.currentTarget.style.color = secondary;
+            }}
+            onMouseLeave={(e) => {
+              const primary = getComputedStyle(document.documentElement)
+                .getPropertyValue("--theme-primaryAccent")
+                .trim() || "#37F2D1";
+              e.currentTarget.style.borderColor = primary;
+              e.currentTarget.style.color = primary;
+            }}
           >
             <Beer className="w-4 h-4" />
             THE TAVERN
