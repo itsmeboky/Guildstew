@@ -548,8 +548,6 @@ const DiceRoller = forwardRef((props, ref) => {
       createDice(selectedDice);
     }
 
-    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
-
     const animate = () => {
       animationRef.current = requestAnimationFrame(animate);
       const renderer = rendererRef.current;
@@ -562,69 +560,115 @@ const DiceRoller = forwardRef((props, ref) => {
       if (rollingRef.current && roll && diceMesh) {
         const now = performance.now();
         const elapsed = now - roll.startTime;
-        const t = Math.min(1, elapsed / roll.duration);
-        const k = easeOutCubic(t);
 
-        // spin progress
-        const spinProgress =
-          t < 0.7
-            ? t / 0.7
-            : 0.7 +
-              ((k - easeOutCubic(0.7)) * 0.3) / (1 - easeOutCubic(0.7));
-        const normalizedSpin = Math.min(1, spinProgress);
+        // PHASE 1: Anticipation — shake/wiggle in place
+        if (elapsed < roll.anticipationDuration) {
+          const t = elapsed / roll.anticipationDuration;
+          const shakeAmount = 0.08 * Math.sin(t * Math.PI * 8) * (1 - t);
+          diceMesh.rotation.set(
+            roll.startRot.x + shakeAmount,
+            roll.startRot.y + shakeAmount * 0.7,
+            roll.startRot.z + shakeAmount * 0.5
+          );
+          const scaleBoost = 1 + 0.08 * Math.sin(t * Math.PI);
+          diceMesh.scale.setScalar(scaleBoost);
+        }
 
-        const x = THREE.MathUtils.lerp(
-          roll.startRot.x,
-          roll.endRot.x,
-          normalizedSpin
-        );
-        const y = THREE.MathUtils.lerp(
-          roll.startRot.y,
-          roll.endRot.y,
-          normalizedSpin
-        );
-        const z = THREE.MathUtils.lerp(
-          roll.startRot.z,
-          roll.endRot.z,
-          normalizedSpin
-        );
-        diceMesh.rotation.set(x, y, z);
+        // PHASE 2: Tumble — procedural angular velocity with random jitter
+        else if (elapsed < roll.anticipationDuration + roll.tumbleDuration) {
+          const phaseT = (elapsed - roll.anticipationDuration) / roll.tumbleDuration;
+          const eased = easeOutCubic(phaseT);
 
-        const angle = 2 * Math.PI * roll.orbitTurns * t;
-        const radius = roll.maxRadius * (1 - t);
-        const posX = radius * Math.cos(angle);
-        const posZ = radius * Math.sin(angle);
-        const posY = Math.sin(t * Math.PI) * 0.15;
+          if (!roll.tumbleAccumulator) {
+            roll.tumbleAccumulator = { x: roll.startRot.x, y: roll.startRot.y, z: roll.startRot.z };
+            roll.tumbleVelocity = {
+              x: (Math.random() - 0.5) * 0.6,
+              y: (Math.random() - 0.5) * 0.6,
+              z: (Math.random() - 0.5) * 0.6,
+            };
+            roll.lastFrameTime = now;
+          }
 
-        diceMesh.position.set(posX, posY, posZ);
+          const dt = Math.min((now - roll.lastFrameTime) / 1000, 0.05);
+          roll.lastFrameTime = now;
 
-        if (t >= 1) {
+          const decay = 1 - phaseT * 0.3;
+          roll.tumbleVelocity.x += (Math.random() - 0.5) * 0.08;
+          roll.tumbleVelocity.y += (Math.random() - 0.5) * 0.08;
+          roll.tumbleVelocity.z += (Math.random() - 0.5) * 0.05;
+
+          const speedMult = (12 + Math.random() * 4) * (1 - eased * 0.6);
+          roll.tumbleAccumulator.x += roll.tumbleVelocity.x * dt * speedMult * decay;
+          roll.tumbleAccumulator.y += roll.tumbleVelocity.y * dt * speedMult * decay;
+          roll.tumbleAccumulator.z += roll.tumbleVelocity.z * dt * speedMult * decay;
+
+          diceMesh.rotation.set(
+            roll.tumbleAccumulator.x,
+            roll.tumbleAccumulator.y,
+            roll.tumbleAccumulator.z
+          );
+
+          const orbitT = phaseT;
+          const angle = roll.orbitStart + 2 * Math.PI * roll.orbitTurns * orbitT + Math.sin(orbitT * 8) * 0.3;
+          const radius = roll.maxRadius * (1 - easeOutQuint(orbitT));
+          const arcHeight = Math.sin(orbitT * Math.PI) * 0.4 + Math.sin(orbitT * Math.PI * 3) * 0.1;
+          diceMesh.position.set(radius * Math.cos(angle), arcHeight, radius * Math.sin(angle));
+          diceMesh.scale.setScalar(1);
+        }
+
+        // PHASE 3: Settle — snap to final face with overshoot bounce
+        else if (elapsed < roll.totalDuration) {
+          const settleStart = roll.anticipationDuration + roll.tumbleDuration;
+          const settleT = (elapsed - settleStart) / roll.settleDuration;
+          const eased = easeOutBack(Math.min(settleT, 1));
+
+          if (!roll.settleStartRot) {
+            roll.settleStartRot = {
+              x: diceMesh.rotation.x,
+              y: diceMesh.rotation.y,
+              z: diceMesh.rotation.z,
+            };
+          }
+
+          diceMesh.rotation.set(
+            THREE.MathUtils.lerp(roll.settleStartRot.x, roll.finalRot.x, eased),
+            THREE.MathUtils.lerp(roll.settleStartRot.y, roll.finalRot.y, eased),
+            THREE.MathUtils.lerp(roll.settleStartRot.z, roll.finalRot.z, eased)
+          );
+
+          const dropT = Math.min(settleT * 1.5, 1);
+          const bounce = Math.abs(Math.sin(dropT * Math.PI * 2)) * (1 - dropT) * 0.15;
+          diceMesh.position.set(0, bounce, 0);
+        }
+
+        // PHASE 4: Done — trigger result, particles, reveal
+        else {
           rollingRef.current = false;
           diceMesh.position.set(0, 0, 0);
-          const finalRollValue = rollDataRef.current?.rollValue;
+          diceMesh.rotation.set(roll.finalRot.x, roll.finalRot.y, roll.finalRot.z);
+          diceMesh.scale.setScalar(1);
+
+          const finalValue = roll.rollValue;
+          const isCritSuccess = selectedDice === "d20" && finalValue === 20;
+          const isCritFail = selectedDice === "d20" && finalValue === 1;
+
           rollDataRef.current = null;
           setIsRolling(false);
-          
-          // Handle Crit Effects
+
+          let revealColor = "#ffffff";
           let pType = "default";
-          if (selectedDice === "d20") {
-            if (finalRollValue === 20) {
-              pType = "crit-success";
-              playCritSuccessSound();
-            } else if (finalRollValue === 1) {
-              pType = "crit-fail";
-              playCritFailSound();
-            }
-          }
+          if (isCritSuccess) { revealColor = "#FFD700"; pType = "crit-success"; playCritSuccessSound(); }
+          else if (isCritFail) { revealColor = "#DC2626"; pType = "crit-fail"; playCritFailSound(); }
+          else if (finalValue >= (DICE_SIDES[selectedDice] * 0.85)) { revealColor = "#37F2D1"; }
+          else if (finalValue <= (DICE_SIDES[selectedDice] * 0.15)) { revealColor = "#94a3b8"; }
+
+          setRevealAnim({ value: finalValue, color: revealColor });
           setParticleType(pType);
-          
           setShowParticles(true);
-          // All animations last 1 second
-          const duration = 1000;
-          setTimeout(() => setShowParticles(false), duration);
-          
-          if (onRollCompleteRef.current && typeof finalRollValue === "number") {
-            onRollCompleteRef.current(finalRollValue);
+          setTimeout(() => setShowParticles(false), 1200);
+
+          if (onRollCompleteRef.current && typeof finalValue === "number") {
+            onRollCompleteRef.current(finalValue);
           }
         }
       }
