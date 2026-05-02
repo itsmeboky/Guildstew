@@ -305,7 +305,7 @@ const STOCK_SKIN = {
 function createFallbackD20() {
   const geometry = new THREE.IcosahedronGeometry(1.3);
   const material = new THREE.MeshStandardMaterial({
-    color: 0x2a3441,
+    color: 0xffffff,
     metalness: 0.3,
     roughness: 0.4,
     flatShading: true,
@@ -767,7 +767,7 @@ const DiceRoller = forwardRef((props, ref) => {
             geometry = new THREE.IcosahedronGeometry(1.3);
         }
         const material = new THREE.MeshStandardMaterial({
-          color: 0x2a3441,
+          color: 0xffffff,
           metalness: 0.3,
           roughness: 0.4,
           flatShading: true,
@@ -775,6 +775,18 @@ const DiceRoller = forwardRef((props, ref) => {
         mesh = new THREE.Mesh(geometry, material);
       }
     }
+
+    // Deep-clone materials/geometries so each dice instance can be
+    // tinted independently without mutating shared GLB data.
+    mesh.traverse((child) => {
+      if (child.isMesh) {
+        if (child.material) child.material = child.material.clone();
+        if (child.geometry) child.geometry = child.geometry.clone();
+      }
+    });
+
+    // Apply the vertex gradient
+    applyVertexGradient(mesh, primaryColor, secondaryColor, isThemedSkin);
 
     diceRef.current = mesh;
     scene.add(mesh);
