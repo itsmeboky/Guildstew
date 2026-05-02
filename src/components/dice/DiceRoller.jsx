@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
 import { X } from "lucide-react";
 import * as THREE from "three";
+import * as CANNON from "cannon-es";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DICE_SIDES } from "./diceConfig";
 import { FACE_ROTATIONS } from "./faceRotations";
@@ -23,12 +24,22 @@ const diceTypes = [
   { name: "d20", sides: 20 },
 ];
 
-// Probability that any given roll "cocks" (lands wedged so two faces
-// share the upward-facing claim). Tighter dice cock less often;
-// chunkier dice (d20, d100) cock more.
-const COCK_CHANCE = {
-  d4: 0.005, d6: 0.01, d8: 0.02, d10: 0.03,
-  d12: 0.04, d20: 0.05, d100: 0.05,
+// Per-dice-type cocked rates for the physics path: how often the
+// hidden simulation deliberately seeks a tilted-but-on-target
+// landing instead of a clean one. d20 ~5%, smaller numbers for
+// chunkier dice scaling per dice type. Lazy rolls remain on the
+// scripted keyframe path and use COCK_CHANCE_LAZY below.
+const COCK_RATES = {
+  d4: 0.08, d6: 0.07, d8: 0.06, d10: 0.06, d12: 0.05, d20: 0.05, d100: 0.05,
+};
+
+// Lazy rolls bypass physics (they're scripted) so they keep a
+// pre-roll probability check. Same shape as the original
+// COCK_CHANCE table from the keyframe era, multiplied 5× to match
+// the "lazy rolls cock more often" intent.
+const COCK_CHANCE_LAZY = {
+  d4: 0.025, d6: 0.05, d8: 0.10, d10: 0.15,
+  d12: 0.20, d20: 0.25, d100: 0.25,
 };
 
 const COCKED_SOUNDS = [
@@ -303,6 +314,261 @@ function Particles({ type = "default" }) {
   );
 }
 
+// ─── Physics arena helpers (cannon-es) ───
+// Single source of truth for arena geometry — used both for the
+// visible world and the hidden simulation world. Identical setup
+// is required for the hidden simulation to faithfully predict the
+// visible roll.
+const ARENA = {
+  halfSize: 3,    // 6×6 footprint
+  floorY: -1,
+  wallHeight: 5,
+  wallThickness: 0.5,
+  gravity: -30,
+  friction: 0.4,
+  restitution: 0.4,
+  defaultRestitution: 0.5,
+};
+
+function buildPhysicsWorld() {
+  const world = new CANNON.World();
+  world.gravity.set(0, ARENA.gravity, 0);
+  world.broadphase = new CANNON.SAPBroadphase(world);
+  world.allowSleep = true;
+  world.defaultContactMaterial.friction = ARENA.friction;
+  world.defaultContactMaterial.restitution = ARENA.defaultRestitution;
+
+  const diceMat = new CANNON.Material("dice");
+  const arenaMat = new CANNON.Material("arena");
+  world.addContactMaterial(
+    new CANNON.ContactMaterial(diceMat, arenaMat, {
+      friction: ARENA.friction,
+      restitution: ARENA.restitution,
+    })
+  );
+
+  const floor = new CANNON.Body({
+    mass: 0,
+    material: arenaMat,
+    shape: new CANNON.Plane(),
+  });
+  floor.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+  floor.position.set(0, ARENA.floorY, 0);
+  world.addBody(floor);
+
+  const wallY = ARENA.floorY + ARENA.wallHeight / 2;
+  const halfA = ARENA.halfSize;
+  const wt = ARENA.wallThickness;
+  const wallShape = new CANNON.Box(
+    new CANNON.Vec3(halfA + wt, ARENA.wallHeight / 2, wt / 2)
+  );
+  const sideShape = new CANNON.Box(
+    new CANNON.Vec3(wt / 2, ARENA.wallHeight / 2, halfA + wt)
+  );
+  const walls = [];
+  [
+    [wallShape, [0, wallY, -halfA - wt / 2]],
+    [wallShape, [0, wallY, halfA + wt / 2]],
+    [sideShape, [-halfA - wt / 2, wallY, 0]],
+    [sideShape, [halfA + wt / 2, wallY, 0]],
+  ].forEach(([shape, pos]) => {
+    const b = new CANNON.Body({ mass: 0, material: arenaMat, shape });
+    b.position.set(pos[0], pos[1], pos[2]);
+    world.addBody(b);
+    walls.push(b);
+  });
+
+  return { world, diceMat, arenaMat, floor, walls };
+}
+
+function buildDiceBody(diceMat, halfExtents) {
+  return new CANNON.Body({
+    mass: 1,
+    material: diceMat,
+    shape: new CANNON.Box(halfExtents),
+    linearDamping: 0.1,
+    angularDamping: 0.1,
+    allowSleep: true,
+    sleepSpeedLimit: 0.15,
+    sleepTimeLimit: 0.4,
+  });
+}
+
+// Build a face-map for a dice type: for each face value, compute the
+// body-local direction that should point world-up when that face is
+// shown. After a roll settles, we transform each direction by the
+// body's quaternion and pick the one most aligned with world-up — its
+// value is the result.
+function buildFaceMap(diceType) {
+  const rotations = FACE_ROTATIONS[diceType];
+  if (!rotations) return [];
+  const obj = new THREE.Object3D();
+  const map = [];
+  for (const [valueStr, euler] of Object.entries(rotations)) {
+    obj.rotation.copy(euler);
+    obj.updateMatrix();
+    const invQ = obj.quaternion.clone().invert();
+    const localUp = new THREE.Vector3(0, 1, 0).applyQuaternion(invQ).normalize();
+    map.push({ value: parseInt(valueStr, 10), dir: localUp });
+  }
+  return map;
+}
+
+// Given a body's quaternion, find which face is most aligned with
+// world-up. Returns { value, dot } — dot ∈ [-1, 1], higher = cleaner.
+function detectFaceUp(quaternion, faceMap) {
+  if (!faceMap || faceMap.length === 0) return { value: null, dot: -1 };
+  const q = new THREE.Quaternion(
+    quaternion.x, quaternion.y, quaternion.z, quaternion.w
+  );
+  const tmp = new THREE.Vector3();
+  let bestVal = null;
+  let bestDot = -2;
+  for (const entry of faceMap) {
+    tmp.copy(entry.dir).applyQuaternion(q);
+    const dot = tmp.y;
+    if (dot > bestDot) { bestDot = dot; bestVal = entry.value; }
+  }
+  return { value: bestVal, dot: bestDot };
+}
+
+// Hidden simulation: try up to maxRetries random impulses until one
+// settles with the requested value face-up within [minDot, maxDot].
+// Returns the impulse + angular velocity that worked, or null.
+function findMatchingRoll({
+  targetValue,
+  faceMap,
+  halfExtents,
+  startPos,
+  startVelocity = null,
+  startAngVel = null,
+  impulseScale = 1,
+  maxRetries = 50,
+  maxSteps = 300,
+  minDot = 0.92,
+  maxDot = 1.01,
+}) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const { world, diceMat } = buildPhysicsWorld();
+    const body = buildDiceBody(diceMat, halfExtents);
+    body.position.set(startPos.x, startPos.y, startPos.z);
+    world.addBody(body);
+
+    // Random impulse — biased toward horizontal motion with slight
+    // upward, magnitude 10..15. Random angular vel ~50 per axis.
+    // If startVelocity is provided (mouse release), bias around it.
+    const angle = Math.random() * Math.PI * 2;
+    const horiz = (10 + Math.random() * 5) * impulseScale;
+    let impulse;
+    if (startVelocity) {
+      // Direction biased by release vector + small randomness.
+      const jitter = 0.4;
+      impulse = new CANNON.Vec3(
+        startVelocity.x + (Math.random() - 0.5) * horiz * jitter,
+        Math.max(2, Math.abs(startVelocity.y) + 2 + Math.random() * 2),
+        startVelocity.z + (Math.random() - 0.5) * horiz * jitter
+      );
+    } else {
+      impulse = new CANNON.Vec3(
+        Math.cos(angle) * horiz,
+        (2 + Math.random() * 3) * impulseScale,
+        Math.sin(angle) * horiz
+      );
+    }
+    const angVel = startAngVel
+      ? new CANNON.Vec3(
+          startAngVel.x + (Math.random() - 0.5) * 30,
+          startAngVel.y + (Math.random() - 0.5) * 30,
+          startAngVel.z + (Math.random() - 0.5) * 30
+        )
+      : new CANNON.Vec3(
+          (Math.random() - 0.5) * 50 * impulseScale,
+          (Math.random() - 0.5) * 50 * impulseScale,
+          (Math.random() - 0.5) * 50 * impulseScale
+        );
+    body.quaternion.setFromEuler(
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2
+    );
+    const initQ = {
+      x: body.quaternion.x, y: body.quaternion.y,
+      z: body.quaternion.z, w: body.quaternion.w,
+    };
+    body.applyImpulse(impulse, new CANNON.Vec3(0, 0, 0));
+    body.angularVelocity.copy(angVel);
+
+    let settled = false;
+    for (let i = 0; i < maxSteps; i++) {
+      world.step(1 / 120);
+      if (body.sleepState === CANNON.Body.SLEEPING) { settled = true; break; }
+    }
+    if (!settled) continue;
+
+    const { value, dot } = detectFaceUp(body.quaternion, faceMap);
+    if (value === targetValue && dot >= minDot && dot <= maxDot) {
+      return {
+        impulse: { x: impulse.x, y: impulse.y, z: impulse.z },
+        angVel: { x: angVel.x, y: angVel.y, z: angVel.z },
+        startPos: { x: startPos.x, y: startPos.y, z: startPos.z },
+        initQuat: initQ,
+        attempts: attempt + 1,
+        finalDot: dot,
+      };
+    }
+  }
+  return null;
+}
+
+// Darken a hex color by a factor (0..1). Returns a CSS hex.
+function darkenHex(hex, factor) {
+  const c = new THREE.Color(hex);
+  c.multiplyScalar(Math.max(0, 1 - factor));
+  return `#${c.getHexString()}`;
+}
+
+// Procedural table texture: vertical primary→darker-primary gradient
+// with a faint hex grid in secondary color (8% opacity, ~32px hex).
+function buildTableTexture(primary, secondary) {
+  const size = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d");
+
+  const grad = ctx.createLinearGradient(0, 0, 0, size);
+  grad.addColorStop(0, primary);
+  grad.addColorStop(1, darkenHex(primary, 0.55));
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  ctx.globalAlpha = 0.08;
+  ctx.strokeStyle = secondary;
+  ctx.lineWidth = 1.25;
+  const hexR = 32;
+  const hexW = Math.sqrt(3) * hexR;
+  const hexH = 2 * hexR;
+  const rowH = hexH * 0.75;
+  for (let row = -1, y = 0; y < size + hexH; row++, y = row * rowH) {
+    const xOff = row % 2 === 0 ? 0 : hexW / 2;
+    for (let x = -hexW; x < size + hexW; x += hexW) {
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI / 3) * i + Math.PI / 6;
+        const px = x + xOff + Math.cos(a) * hexR;
+        const py = y + Math.sin(a) * hexR;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
 // Baseline "skin" used when the player has no Tavern dice skin
 // applied. Mirrors the original hard-coded Guildstew look so the
 // apply-skin path is the single source of truth for the material
@@ -530,6 +796,24 @@ const DiceRoller = forwardRef((props, ref) => {
   const modelsLoadedRef = useRef(false);
   const [modelsReady, setModelsReady] = useState(false);
 
+  // Physics (cannon-es) — active in fullscreen/modal mode only.
+  // Embedded mode keeps the lightweight keyframe path.
+  const worldRef = useRef(null);
+  const diceBodyRef = useRef(null);
+  const diceMaterialRef = useRef(null);
+  const wallBodiesRef = useRef([]);
+  const wallMeshesRef = useRef([]);
+  const tableMeshRef = useRef(null);
+  const lastPhysicsTimeRef = useRef(0);
+  const cameraOriginRef = useRef(null);
+  const cameraShakeRef = useRef(null);
+  const motionTrailRef = useRef(null);
+  const particleGroupsRef = useRef([]);
+  const faceMapRef = useRef({});
+  const audioCtxRef = useRef(null);
+  const cockedDepthRef = useRef(0);
+  const physicsRollRef = useRef(null);
+
   // Active Tavern dice skin (null = use stock Guildstew material).
   // Kept in a ref so createDice() can read it without needing the
   // hook value captured in its closure.
@@ -751,16 +1035,102 @@ const DiceRoller = forwardRef((props, ref) => {
 
     scene.userData = { ambientLight, hemiLight, keyLight, fillLight, accentLight };
 
-    const shadowGeometry = new THREE.CircleGeometry(1.5, 32);
-    const shadowMaterial = new THREE.MeshBasicMaterial({
-      color: 0x000000,
-      transparent: true,
-      opacity: 0.3,
-    });
-    const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
-    shadowMesh.rotation.x = -Math.PI / 2;
-    shadowMesh.position.y = -1.2;
-    scene.add(shadowMesh);
+    if (fullscreen) {
+      // ─── Physics world (modal/fullscreen mode only) ───
+      const { world, diceMat, walls } = buildPhysicsWorld();
+      diceMaterialRef.current = diceMat;
+      wallBodiesRef.current = walls;
+      worldRef.current = world;
+      lastPhysicsTimeRef.current = performance.now();
+      cameraOriginRef.current = camera.position.clone();
+
+      // Premium table surface — 6×6 with gradient + hex pattern.
+      const tableSize = (ARENA.halfSize + ARENA.wallThickness) * 2;
+      const tableGeometry = new THREE.PlaneGeometry(tableSize, tableSize);
+      const tableTex = buildTableTexture(primaryColor, secondaryColor);
+      const tableMaterial = new THREE.MeshBasicMaterial({
+        map: tableTex,
+        transparent: true,
+        opacity: 1,
+      });
+      const tableMesh = new THREE.Mesh(tableGeometry, tableMaterial);
+      tableMesh.rotation.x = -Math.PI / 2;
+      tableMesh.position.y = ARENA.floorY + 0.001;
+      scene.add(tableMesh);
+      tableMeshRef.current = tableMesh;
+
+      // Visual walls — thin glowing slabs at the arena boundaries,
+      // parked above (y=8) until a roll triggers the thunk-down.
+      const wallW = (ARENA.halfSize + ARENA.wallThickness) * 2;
+      const wallH = ARENA.wallHeight;
+      const wallT = 0.05;
+      const wallY = 0;
+      const parkedY = 8;
+      const sides = [
+        { pos: [0, parkedY, -ARENA.halfSize - ARENA.wallThickness / 2], scale: [wallW, wallH, wallT] },
+        { pos: [0, parkedY, ARENA.halfSize + ARENA.wallThickness / 2], scale: [wallW, wallH, wallT] },
+        { pos: [-ARENA.halfSize - ARENA.wallThickness / 2, parkedY, 0], scale: [wallT, wallH, wallW] },
+        { pos: [ARENA.halfSize + ARENA.wallThickness / 2, parkedY, 0], scale: [wallT, wallH, wallW] },
+      ];
+      const wallMeshes = sides.map((side) => {
+        const geom = new THREE.BoxGeometry(side.scale[0], side.scale[1], side.scale[2]);
+        const mat = new THREE.MeshBasicMaterial({
+          color: new THREE.Color(primaryColor),
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+        });
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.position.set(side.pos[0], side.pos[1], side.pos[2]);
+        mesh.userData = { restY: wallY, parkedY };
+        scene.add(mesh);
+        return mesh;
+      });
+      wallMeshesRef.current = wallMeshes;
+
+      // Contact reactions — sound + camera shake + dust particles
+      // whenever the dice hits the floor or any wall during a roll.
+      world.addEventListener("postStep", () => {
+        const body = diceBodyRef.current;
+        if (!body) return;
+        const v = body.velocity.length();
+        if (v < 2) return;
+        for (const c of world.contacts) {
+          if (c.bi !== body && c.bj !== body) continue;
+          const other = c.bi === body ? c.bj : c.bi;
+          const isFloor = other.shapes[0] instanceof CANNON.Plane;
+          const now = performance.now();
+          if (body.userLastContactAt && now - body.userLastContactAt < 60) continue;
+          body.userLastContactAt = now;
+
+          const vNorm = Math.min(v / 14, 1);
+          if (isFloor) {
+            playThunk(0.15 + 0.3 * vNorm, 75);
+          } else {
+            playThunk(0.2 + 0.4 * vNorm, 110);
+          }
+          shakeCamera(2 * vNorm, 80);
+
+          const cp = c.bi === body ? c.ri : c.rj;
+          const wp = new CANNON.Vec3();
+          (c.bi === body ? c.bi : c.bj).pointToWorldFrame(cp, wp);
+          spawnDustPuff(wp.x, wp.y, wp.z);
+          break;
+        }
+      });
+    } else {
+      // Embedded mode keeps the lightweight shadow disc.
+      const shadowGeometry = new THREE.CircleGeometry(1.5, 32);
+      const shadowMaterial = new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        transparent: true,
+        opacity: 0.3,
+      });
+      const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
+      shadowMesh.rotation.x = -Math.PI / 2;
+      shadowMesh.position.y = -1.2;
+      scene.add(shadowMesh);
+    }
 
     if (modelsReady) {
       createDice(selectedDice);
@@ -774,6 +1144,35 @@ const DiceRoller = forwardRef((props, ref) => {
       const diceMesh = diceRef.current;
       if (!renderer || !camera || !scene) return;
 
+      // Step physics (modal/fullscreen mode only).
+      const world = worldRef.current;
+      if (world) {
+        const now = performance.now();
+        const dt = Math.min((now - lastPhysicsTimeRef.current) / 1000, 1 / 30);
+        lastPhysicsTimeRef.current = now;
+        world.step(1 / 60, dt, 3);
+      }
+
+      // Camera shake — additive offset on top of the resting camera.
+      if (cameraOriginRef.current) {
+        const shake = cameraShakeRef.current;
+        if (shake) {
+          const t = (performance.now() - shake.start) / shake.duration;
+          if (t >= 1) {
+            camera.position.copy(cameraOriginRef.current);
+            cameraShakeRef.current = null;
+          } else {
+            const decay = 1 - t;
+            const i = shake.intensity * decay;
+            camera.position.set(
+              cameraOriginRef.current.x + (Math.random() - 0.5) * i,
+              cameraOriginRef.current.y + (Math.random() - 0.5) * i,
+              cameraOriginRef.current.z + (Math.random() - 0.5) * i
+            );
+          }
+        }
+      }
+
       // While the dice is being held, lerp it toward the cursor
       // target each frame. This runs only when not currently rolling.
       const drag = dragStateRef.current;
@@ -785,6 +1184,89 @@ const DiceRoller = forwardRef((props, ref) => {
         // Slight wiggle so a held dice feels alive.
         diceMesh.rotation.x += 0.02 + drag.velocityX * 0.001;
         diceMesh.rotation.z += 0.02 + drag.velocityY * 0.001;
+        // Keep physics body parked at the held position so when the
+        // user lets go the body's start state matches the mesh.
+        if (diceBodyRef.current) {
+          diceBodyRef.current.position.set(
+            diceMesh.position.x, diceMesh.position.y, diceMesh.position.z
+          );
+          diceBodyRef.current.velocity.set(0, 0, 0);
+          diceBodyRef.current.angularVelocity.set(0, 0, 0);
+          diceBodyRef.current.sleep();
+        }
+      }
+
+      // Sync dice mesh to physics body when:
+      //  - we have a body (modal mode), AND
+      //  - no scripted keyframe roll is in flight, AND
+      //  - the dice is not currently being dragged.
+      const body = diceBodyRef.current;
+      if (body && diceMesh && !rollingRef.current && !drag.isDragging) {
+        diceMesh.position.set(body.position.x, body.position.y, body.position.z);
+        diceMesh.quaternion.set(
+          body.quaternion.x, body.quaternion.y,
+          body.quaternion.z, body.quaternion.w
+        );
+      }
+
+      // Motion blur — faint trailing ghost while moving fast.
+      if (body && diceMesh && sceneRef.current) {
+        const speed = body.velocity.length();
+        if (speed > 5 && !rollingRef.current) {
+          if (!motionTrailRef.current) {
+            const ghost = diceMesh.clone(true);
+            ghost.traverse((c) => {
+              if (c.isMesh && c.material) {
+                c.material = c.material.clone();
+                c.material.transparent = true;
+                c.material.opacity = 0.25;
+                c.material.depthWrite = false;
+              }
+            });
+            sceneRef.current.add(ghost);
+            motionTrailRef.current = ghost;
+          }
+          const ghost = motionTrailRef.current;
+          const offset = 0.18;
+          ghost.position.set(
+            body.position.x - (body.velocity.x / speed) * offset,
+            body.position.y - (body.velocity.y / speed) * offset,
+            body.position.z - (body.velocity.z / speed) * offset
+          );
+          ghost.scale.copy(diceMesh.scale);
+          ghost.quaternion.copy(diceMesh.quaternion);
+          ghost.visible = true;
+        } else if (motionTrailRef.current) {
+          motionTrailRef.current.visible = false;
+        }
+      }
+
+      // Animate dust-puff particle groups.
+      if (particleGroupsRef.current.length > 0) {
+        const now2 = performance.now();
+        const remaining = [];
+        for (const g of particleGroupsRef.current) {
+          const t = (now2 - g.start) / g.duration;
+          if (t >= 1) {
+            for (const m of g.meshes) {
+              sceneRef.current.remove(m);
+              m.geometry.dispose();
+              m.material.dispose();
+            }
+            continue;
+          }
+          const dtp = 1 / 60;
+          for (const m of g.meshes) {
+            m.position.x += m.userData.vel.x * dtp;
+            m.position.y += m.userData.vel.y * dtp;
+            m.position.z += m.userData.vel.z * dtp;
+            m.userData.vel.y -= 1.5 * dtp;
+            m.material.opacity = 0.7 * (1 - t);
+            m.scale.setScalar(1 + t * 0.6);
+          }
+          remaining.push(g);
+        }
+        particleGroupsRef.current = remaining;
       }
 
       const roll = rollDataRef.current;
@@ -801,8 +1283,10 @@ const DiceRoller = forwardRef((props, ref) => {
             roll.startRot.y + shakeAmount * 0.7,
             roll.startRot.z + shakeAmount * 0.5
           );
-          const scaleBoost = 1 + 0.08 * Math.sin(t * Math.PI);
-          diceMesh.scale.setScalar(scaleBoost);
+          // NOTE: do NOT touch diceMesh.scale here — createDice
+          // auto-fits the GLB to ~2.5 world units and any
+          // scale.setScalar(...) call would wipe that out and shrink
+          // the dice for the rest of the session.
         }
 
         // PHASE 2: Tumble — procedural angular velocity with random jitter
@@ -853,7 +1337,7 @@ const DiceRoller = forwardRef((props, ref) => {
           const sx = (roll.startPos?.x ?? 0) * (1 - blend);
           const sz = (roll.startPos?.z ?? 0) * (1 - blend);
           diceMesh.position.set(sx + radius * Math.cos(angle), arcHeight, sz + radius * Math.sin(angle));
-          diceMesh.scale.setScalar(1);
+          // NOTE: see PHASE 1 — never set scale here either.
         }
 
         // PHASE 3: Settle — snap to final face with overshoot bounce
@@ -886,7 +1370,20 @@ const DiceRoller = forwardRef((props, ref) => {
           rollingRef.current = false;
           diceMesh.position.set(0, 0, 0);
           diceMesh.rotation.set(roll.finalRot.x, roll.finalRot.y, roll.finalRot.z);
-          diceMesh.scale.setScalar(1);
+          // NOTE: see PHASE 1 — never set scale here either.
+
+          // Re-park the physics body to match the keyframe end pose so
+          // the body→mesh sync that resumes next frame doesn't yank
+          // the dice. Asleep + zero-velocity = stable rest state.
+          if (diceBodyRef.current) {
+            const b = diceBodyRef.current;
+            const half = b.userHalfExtents || new CANNON.Vec3(1, 1, 1);
+            b.position.set(0, ARENA.floorY + half.y, 0);
+            b.quaternion.setFromEuler(roll.finalRot.x, roll.finalRot.y, roll.finalRot.z);
+            b.velocity.set(0, 0, 0);
+            b.angularVelocity.set(0, 0, 0);
+            b.sleep();
+          }
 
           const finalValue = roll.rollValue;
           const wasCocked = !!roll.willCock;
@@ -899,14 +1396,7 @@ const DiceRoller = forwardRef((props, ref) => {
           // Cocked: chicken + sound, no result counted, no history,
           // no onRollComplete. Player must roll again.
           if (wasCocked) {
-            setIsCocked(true);
-            setShowCockedAnim(true);
-            const sound = new Audio(
-              COCKED_SOUNDS[Math.floor(Math.random() * COCKED_SOUNDS.length)]
-            );
-            sound.volume = 0.85;
-            sound.play().catch(() => {});
-            setTimeout(() => setShowCockedAnim(false), 2400);
+            triggerCockedOverlay();
             return;
           }
 
@@ -1084,13 +1574,21 @@ const DiceRoller = forwardRef((props, ref) => {
         document.body.style.cursor = "";
         const lazy = drag.accumulatedShake <= 250;
         // Hand the dice's current world position to handleRoll so
-        // the roll animation begins where the player let go.
+        // the roll animation (or physics impulse) begins where the
+        // player let go.
         const dice = diceRef.current;
         const startPos = dice
           ? { x: dice.position.x, y: dice.position.y, z: dice.position.z }
           : null;
+        // Release velocity (px/s) → world space. The camera looks at
+        // origin from (10,10,10), so screen-right ≈ world +X and
+        // screen-up ≈ world -Z (i.e. flicking forward sends the dice
+        // away from the camera). Y is added in rollWithPhysics.
+        const releaseVelocity = !lazy
+          ? { x: drag.velocityX, y: 0, z: -drag.velocityY }
+          : null;
         if (handleRollRef.current) {
-          handleRollRef.current({ lazy, startPos });
+          handleRollRef.current({ lazy, startPos, releaseVelocity });
         }
       };
 
@@ -1124,6 +1622,18 @@ const DiceRoller = forwardRef((props, ref) => {
           container.removeChild(renderer.domElement);
         }
       }
+      // Tear down physics world.
+      if (worldRef.current) {
+        const w = worldRef.current;
+        [...w.bodies].forEach((b) => w.removeBody(b));
+        worldRef.current = null;
+      }
+      diceBodyRef.current = null;
+      wallBodiesRef.current = [];
+      wallMeshesRef.current = [];
+      tableMeshRef.current = null;
+      motionTrailRef.current = null;
+      particleGroupsRef.current = [];
     };
   }, [isOpen, embedded, modelsReady, selectedDice, forcedResult]); // Re-add forcedResult to dependency array so force re-roll works
 
@@ -1196,12 +1706,176 @@ const DiceRoller = forwardRef((props, ref) => {
     sound.play().catch(() => {});
   };
 
+  // Synth a "thunk" via WebAudio — short low-freq sine with a click
+  // on top, so we don't need to ship/host an asset for every device.
+  const ensureAudioCtx = () => {
+    if (audioCtxRef.current) return audioCtxRef.current;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    audioCtxRef.current = new Ctx();
+    return audioCtxRef.current;
+  };
+  const playThunk = (volume = 0.5, freq = 90) => {
+    const ctx = ensureAudioCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq * 1.6, t);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.6, t + 0.18);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(volume, t + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.25);
+
+    const click = ctx.createOscillator();
+    click.type = "triangle";
+    click.frequency.setValueAtTime(180, t);
+    const clickGain = ctx.createGain();
+    clickGain.gain.setValueAtTime(volume * 0.6, t);
+    clickGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    click.connect(clickGain);
+    clickGain.connect(ctx.destination);
+    click.start(t);
+    click.stop(t + 0.06);
+  };
+
+  // Camera micro-shake: drives offsets on top of cameraOriginRef.
+  const shakeCamera = (intensity, duration) => {
+    const camera = cameraRef.current;
+    const origin = cameraOriginRef.current;
+    if (!camera || !origin) return;
+    cameraShakeRef.current = {
+      start: performance.now(),
+      duration,
+      intensity: intensity * 0.05,
+    };
+  };
+
+  // 3D dust puff at world position — 6-10 small fading sprites.
+  const spawnDustPuff = (x, y, z) => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const count = 6 + Math.floor(Math.random() * 5);
+    const group = { meshes: [], start: performance.now(), duration: 400 };
+    for (let i = 0; i < count; i++) {
+      const geom = new THREE.SphereGeometry(0.04 + Math.random() * 0.03, 6, 6);
+      const mat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(0xd9c9b0),
+        transparent: true,
+        opacity: 0.7,
+        depthWrite: false,
+      });
+      const m = new THREE.Mesh(geom, mat);
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * 0.05;
+      m.position.set(x + Math.cos(a) * r, y + 0.02, z + Math.sin(a) * r);
+      m.userData.vel = {
+        x: Math.cos(a) * (0.5 + Math.random() * 0.7),
+        y: 0.6 + Math.random() * 0.6,
+        z: Math.sin(a) * (0.5 + Math.random() * 0.7),
+      };
+      scene.add(m);
+      group.meshes.push(m);
+    }
+    particleGroupsRef.current.push(group);
+  };
+
+  // Wall thunk-down: drop each wall sequentially (180ms each, 40ms
+  // stagger). Returns a promise resolved when all four landed.
+  const animateWallsDown = () => {
+    const meshes = wallMeshesRef.current;
+    if (!meshes || meshes.length === 0) return Promise.resolve();
+    const flashMs = 80;
+    const dropMs = 180;
+    const stagger = 40;
+    const settledOpacity = 0.15;
+    const flashColor = new THREE.Color(primaryColor);
+    const settleColor = new THREE.Color(secondaryColor);
+    return new Promise((resolve) => {
+      let landedCount = 0;
+      meshes.forEach((mesh, i) => {
+        const startDelay = i * stagger;
+        const startY = mesh.userData.parkedY;
+        const restY = mesh.userData.restY;
+        mesh.material.color.copy(flashColor);
+        mesh.material.opacity = 0;
+        mesh.position.y = startY;
+        const t0 = performance.now() + startDelay;
+        const drop = () => {
+          const now = performance.now();
+          if (now < t0) { requestAnimationFrame(drop); return; }
+          const elapsed = now - t0;
+          const t = Math.min(elapsed / dropMs, 1);
+          const eased = easeOutCubic(t);
+          mesh.position.y = startY + (restY - startY) * eased;
+          mesh.material.opacity = eased;
+          if (t < 1) {
+            requestAnimationFrame(drop);
+          } else {
+            playThunk(0.5, 80 + Math.random() * 30);
+            shakeCamera(3, 100);
+            mesh.material.opacity = 1;
+            const flashStart = performance.now();
+            const settle = () => {
+              const f = Math.min((performance.now() - flashStart) / flashMs, 1);
+              mesh.material.opacity = 1 - (1 - settledOpacity) * f;
+              mesh.material.color.copy(flashColor).lerp(settleColor, f);
+              if (f < 1) {
+                requestAnimationFrame(settle);
+              } else {
+                landedCount += 1;
+                if (landedCount === meshes.length) resolve();
+              }
+            };
+            settle();
+          }
+        };
+        drop();
+      });
+    });
+  };
+
+  const animateWallsUp = () => {
+    const meshes = wallMeshesRef.current;
+    if (!meshes || meshes.length === 0) return;
+    const liftMs = 250;
+    meshes.forEach((mesh) => {
+      const startY = mesh.position.y;
+      const startOpacity = mesh.material.opacity;
+      const targetY = mesh.userData.parkedY;
+      const t0 = performance.now();
+      const lift = () => {
+        const t = Math.min((performance.now() - t0) / liftMs, 1);
+        const e = easeOutCubic(t);
+        mesh.position.y = startY + (targetY - startY) * e;
+        mesh.material.opacity = startOpacity * (1 - e);
+        if (t < 1) requestAnimationFrame(lift);
+      };
+      lift();
+    });
+  };
+
   const createDice = (diceType) => {
     if (!sceneRef.current) return;
     const scene = sceneRef.current;
 
     if (diceRef.current) {
       scene.remove(diceRef.current);
+    }
+    // Drop any prior physics body so we can rebuild for the new dice type.
+    if (worldRef.current && diceBodyRef.current) {
+      worldRef.current.removeBody(diceBodyRef.current);
+      diceBodyRef.current = null;
+    }
+    // Drop any motion-trail ghost — it's tied to the previous mesh.
+    if (motionTrailRef.current) {
+      scene.remove(motionTrailRef.current);
+      motionTrailRef.current = null;
     }
 
     let mesh;
@@ -1288,12 +1962,193 @@ const DiceRoller = forwardRef((props, ref) => {
     // Re-apply the gradient so vertex colors survive applyDiceSkinToMesh's
     // material replacement. For themed skins this is a no-op tint reset.
     applyVertexGradient(mesh, primaryColor, secondaryColor, isThemedSkin);
+
+    // ─── Physics body ───
+    // Box approximation of the visual mesh — ~85% of the bounding box
+    // half-extents so a d20 (etc.) settles cleanly face-up on the floor.
+    if (worldRef.current) {
+      const box = new THREE.Box3().setFromObject(mesh);
+      const size = box.getSize(new THREE.Vector3());
+      const half = new CANNON.Vec3(
+        Math.max(size.x * 0.5 * 0.85, 0.1),
+        Math.max(size.y * 0.5 * 0.85, 0.1),
+        Math.max(size.z * 0.5 * 0.85, 0.1)
+      );
+      const body = buildDiceBody(diceMaterialRef.current, half);
+      body.position.set(0, ARENA.floorY + half.y, 0);
+      body.sleep();
+      worldRef.current.addBody(body);
+      diceBodyRef.current = body;
+      diceBodyRef.current.userHalfExtents = half;
+    }
+
+    // Cache face map (body-local up-direction per face value).
+    if (!faceMapRef.current[diceType]) {
+      faceMapRef.current[diceType] = buildFaceMap(diceType);
+    }
+  };
+
+  // Trigger the cocked overlay (chicken + COCKED!) and a re-roll prompt.
+  const triggerCockedOverlay = () => {
+    setIsCocked(true);
+    setShowCockedAnim(true);
+    const sound = new Audio(
+      COCKED_SOUNDS[Math.floor(Math.random() * COCKED_SOUNDS.length)]
+    );
+    sound.volume = 0.85;
+    sound.play().catch(() => {});
+    setTimeout(() => setShowCockedAnim(false), 2400);
+  };
+
+  // Centralized "roll resolved cleanly" handler used by the physics
+  // path. The keyframe path (lazy rolls only) inlines its own version
+  // because it needs to handle the lazy/strict overlay sequencing.
+  const finalizePhysicsResult = (finalValue, rollMod) => {
+    setIsRolling(false);
+    rollingRef.current = false;
+    cockedDepthRef.current = 0;
+
+    const isCritSuccess = selectedDice === "d20" && finalValue === 20;
+    const isCritFail = selectedDice === "d20" && finalValue === 1;
+
+    let revealColor = "#ffffff";
+    let pType = "default";
+    if (isCritSuccess) {
+      revealColor = "#FFD700"; pType = "crit-success";
+      playCritSuccessSound();
+      shakeCamera(5, 200);
+    } else if (isCritFail) {
+      revealColor = "#DC2626"; pType = "crit-fail";
+      playCritFailSound();
+      shakeCamera(5, 200);
+    } else if (finalValue >= (DICE_SIDES[selectedDice] * 0.85)) {
+      revealColor = "#37F2D1";
+    } else if (finalValue <= (DICE_SIDES[selectedDice] * 0.15)) {
+      revealColor = "#94a3b8";
+    }
+
+    setRevealAnim({ value: finalValue, color: revealColor });
+    setParticleType(pType);
+    setShowParticles(true);
+    setTimeout(() => setShowParticles(false), 1200);
+
+    const total = finalValue + rollMod;
+    setLastRoll({ roll: finalValue, total });
+    if (!embedded) {
+      setRollHistory((prev) => [
+        {
+          result: finalValue,
+          timestamp: new Date().toLocaleTimeString(),
+          dice: selectedDice,
+          modifier: rollMod,
+          total,
+        },
+        ...prev,
+      ].slice(0, 10));
+    }
+
+    if (onRollCompleteRef.current && typeof finalValue === "number") {
+      onRollCompleteRef.current(finalValue);
+    }
+  };
+
+  // Physics-driven roll. Hidden simulation predicts outcome → replay
+  // matching impulse on the visible body so the player watches a real
+  // tumble that lands on the predetermined value. Returns true if the
+  // physics path took the roll, false to signal fallback to keyframe.
+  const rollWithPhysics = (targetValue, rollMod, opts = {}) => {
+    const body = diceBodyRef.current;
+    const world = worldRef.current;
+    const diceType = selectedDice;
+    const faceMap = faceMapRef.current[diceType];
+    if (!body || !world || !faceMap || faceMap.length === 0) return false;
+
+    const half = body.userHalfExtents;
+    // Throw-start position: prefer the mouse-release point so the roll
+    // begins where the player let go of the dice.
+    const startPos = opts.startPos
+      ? { x: opts.startPos.x, y: Math.max(opts.startPos.y, 1.2), z: opts.startPos.z }
+      : { x: 0, y: 2.2, z: 0 };
+
+    // Optionally bias the impulse direction by the release velocity
+    // (mouse-pickup case). cannon-es applyImpulse takes a vector with
+    // direct mass-scaled units; release dx/dt is in px/s — we map it
+    // into rough world impulse magnitude with a small constant.
+    const v = opts.releaseVelocity || null;
+    const startVelocity = v
+      ? { x: v.x * 0.012, y: 4 + Math.abs(v.y) * 0.006, z: v.z * 0.012 }
+      : null;
+
+    // ~5% (per dice type) of rolls deliberately seek a tilted-but-
+    // on-target landing instead of a clean one. Forced rolls
+    // (calibration) never cock.
+    const wantCocked = forcedResult === null
+      && Math.random() < (COCK_RATES[diceType] ?? 0.05);
+    let match = null;
+    if (wantCocked) {
+      match = findMatchingRoll({
+        targetValue, faceMap, halfExtents: half, startPos,
+        startVelocity, minDot: 0.75, maxDot: 0.92, maxRetries: 30,
+      });
+    }
+    if (!match) {
+      match = findMatchingRoll({
+        targetValue, faceMap, halfExtents: half, startPos,
+        startVelocity, minDot: 0.92,
+      });
+    }
+    if (!match) return false; // vanishingly rare
+
+    physicsRollRef.current = { targetValue, rollMod, startTime: performance.now() };
+
+    // Walls thunk down; impulse fires only after all four have landed.
+    animateWallsDown().then(() => {
+      body.wakeUp();
+      body.position.set(startPos.x, startPos.y, startPos.z);
+      body.velocity.set(0, 0, 0);
+      body.angularVelocity.set(0, 0, 0);
+      body.quaternion.set(
+        match.initQuat.x, match.initQuat.y,
+        match.initQuat.z, match.initQuat.w
+      );
+      body.applyImpulse(
+        new CANNON.Vec3(match.impulse.x, match.impulse.y, match.impulse.z),
+        new CANNON.Vec3(0, 0, 0)
+      );
+      body.angularVelocity.set(match.angVel.x, match.angVel.y, match.angVel.z);
+      playRollSound();
+
+      const onSleep = () => {
+        body.removeEventListener("sleep", onSleep);
+        animateWallsUp();
+        // Classify the actual settled orientation.
+        const { dot } = detectFaceUp(body.quaternion, faceMap);
+        if (dot > 0.92) {
+          setTimeout(() => finalizePhysicsResult(targetValue, rollMod), 120);
+        } else {
+          // Cocked! Trigger chicken + COCKED! overlay; player rolls again.
+          cockedDepthRef.current += 1;
+          setIsRolling(false);
+          rollingRef.current = false;
+          if (cockedDepthRef.current > 3) {
+            // Bail rather than recurse forever.
+            cockedDepthRef.current = 0;
+            setTimeout(() => finalizePhysicsResult(targetValue, rollMod), 120);
+            return;
+          }
+          setTimeout(() => triggerCockedOverlay(), 200);
+        }
+      };
+      body.addEventListener("sleep", onSleep);
+    });
+    return true;
   };
 
   const handleRoll = (opts = {}) => {
     if (!diceRef.current || isRolling) return;
     const lazy = !!opts.lazy;
-    const startPos = opts.startPos || null; // optional world-space throw start
+    const startPos = opts.startPos || null;
+    const releaseVelocity = opts.releaseVelocity || null;
     const diceType = selectedDice;
     const sides = DICE_SIDES[diceType] || 20;
 
@@ -1314,89 +2169,95 @@ const DiceRoller = forwardRef((props, ref) => {
       roll = Math.floor(Math.random() * sides) + 1;
     }
 
+    setRevealAnim(null);
+
+    // ─── Physics path (regular non-lazy roll, fullscreen mode) ───
+    // This is the "premium tabletop" path: real cannon-es simulation
+    // matches the predetermined value. Cocked outcomes emerge from the
+    // physics dot product (no pre-roll probability needed).
+    if (!lazy && !embedded && worldRef.current && diceBodyRef.current) {
+      setIsRolling(true);
+      const ok = rollWithPhysics(roll, modifier, { startPos, releaseVelocity });
+      if (ok) return;
+      // Hidden simulation produced no match → fall through to keyframe.
+      setIsRolling(false);
+    }
+
+    // ─── Keyframe path (lazy rolls + embedded mode + physics fallback) ───
     const customFaceMap = customFaceRotationsRef.current[selectedDice];
     const defaultFaceMap = FACE_ROTATIONS[selectedDice];
-    const faceMap = customFaceMap || defaultFaceMap;
     const customSnap = customFaceMap?.[roll];
     const defaultSnap = defaultFaceMap?.[roll];
     const snap = customSnap
       ? { x: customSnap.x, y: customSnap.y, z: customSnap.z }
       : defaultSnap;
 
-    if (diceRef.current) {
-      setIsRolling(true);
-      const diceMesh = diceRef.current;
+    setIsRolling(true);
+    const diceMesh = diceRef.current;
 
-      // Fallback for snap if missing
-      const safeSnap = snap || {
-        x: Math.random() * Math.PI * 2,
-        y: Math.random() * Math.PI * 2,
-        z: Math.random() * Math.PI * 2
-      };
+    const safeSnap = snap || {
+      x: Math.random() * Math.PI * 2,
+      y: Math.random() * Math.PI * 2,
+      z: Math.random() * Math.PI * 2
+    };
 
-      const isCrit = selectedDice === "d20" && (roll === 20 || roll === 1);
+    const isCrit = selectedDice === "d20" && (roll === 20 || roll === 1);
 
-      // Probability check for cocked outcome. Forced rolls (calibration)
-      // never cock — calibrators want a clean snap to the requested face.
-      // Lazy rolls cock 5x more often (capped at 50%).
-      const baseCockChance = COCK_CHANCE[selectedDice] ?? 0;
-      const cockChance = lazy ? Math.min(0.5, baseCockChance * 5) : baseCockChance;
-      const willCock = forcedResult === null && Math.random() < cockChance;
+    // Cocked check only applies to the lazy/scripted path now.
+    // Physics rolls handle cocked detection naturally (see rollWithPhysics).
+    // Forced rolls (calibration) never cock.
+    const baseCockChance = lazy ? (COCK_CHANCE_LAZY[selectedDice] ?? 0) : 0;
+    const willCock = lazy && forcedResult === null && Math.random() < baseCockChance;
 
-      const anticipationDuration = lazy ? 80 : 280;
-      const tumbleDuration = lazy ? 700 : (isCrit ? 900 : 800);
-      const settleDuration = lazy ? 250 : (isCrit ? 600 : 350); // Crits get slow-mo settle for drama
+    const anticipationDuration = lazy ? 80 : 280;
+    const tumbleDuration = lazy ? 700 : (isCrit ? 900 : 800);
+    const settleDuration = lazy ? 250 : (isCrit ? 600 : 350);
 
-      const startRot = {
-        x: diceMesh.rotation.x,
-        y: diceMesh.rotation.y,
-        z: diceMesh.rotation.z,
-      };
+    const startRot = {
+      x: diceMesh.rotation.x,
+      y: diceMesh.rotation.y,
+      z: diceMesh.rotation.z,
+    };
 
-      const spinX = 3 + Math.floor(Math.random() * 3);
-      const spinY = 3 + Math.floor(Math.random() * 3);
-      const spinZ = 1 + Math.floor(Math.random() * 2);
+    const spinX = 3 + Math.floor(Math.random() * 3);
+    const spinY = 3 + Math.floor(Math.random() * 3);
+    const spinZ = 1 + Math.floor(Math.random() * 2);
 
-      // Cocked rolls land tilted ~30° on X and Z so the dice visually
-      // wedges between two faces instead of snapping flat.
-      const COCK_OFFSET = (30 * Math.PI) / 180;
-      const cockX = willCock ? (Math.random() < 0.5 ? COCK_OFFSET : -COCK_OFFSET) : 0;
-      const cockZ = willCock ? (Math.random() < 0.5 ? COCK_OFFSET : -COCK_OFFSET) : 0;
+    const COCK_OFFSET = (30 * Math.PI) / 180;
+    const cockX = willCock ? (Math.random() < 0.5 ? COCK_OFFSET : -COCK_OFFSET) : 0;
+    const cockZ = willCock ? (Math.random() < 0.5 ? COCK_OFFSET : -COCK_OFFSET) : 0;
 
-      const finalRot = {
-        x: safeSnap.x + Math.PI * 2 * spinX + cockX,
-        y: safeSnap.y + Math.PI * 2 * spinY,
-        z: safeSnap.z + Math.PI * 2 * spinZ + cockZ,
-      };
+    const finalRot = {
+      x: safeSnap.x + Math.PI * 2 * spinX + cockX,
+      y: safeSnap.y + Math.PI * 2 * spinY,
+      z: safeSnap.z + Math.PI * 2 * spinZ + cockZ,
+    };
 
-      rollDataRef.current = {
-        startTime: performance.now(),
-        anticipationDuration,
-        tumbleDuration,
-        settleDuration,
-        totalDuration: anticipationDuration + tumbleDuration + settleDuration,
-        startRot,
-        startPos: startPos || { x: 0, y: 0, z: 0 },
-        finalRot,
-        orbitStart: Math.random() * Math.PI * 2,
-        orbitTurns: lazy ? 0.4 : (1.5 + Math.random() * 1.5),
-        maxRadius: lazy ? 0 : 1.8 + Math.random() * 0.8,
-        throwHeight: lazy ? 0.3 : 1.6 + Math.random() * 0.8,
-        tumbleVelMult: lazy ? 0.4 : 1.0,
-        rollValue: roll,
-        willCock,
-        modifier,
-        lazy,
-        lazyAllowed: lazyAllowedSnap,
-      };
+    rollDataRef.current = {
+      startTime: performance.now(),
+      anticipationDuration,
+      tumbleDuration,
+      settleDuration,
+      totalDuration: anticipationDuration + tumbleDuration + settleDuration,
+      startRot,
+      startPos: startPos || { x: 0, y: 0, z: 0 },
+      finalRot,
+      orbitStart: Math.random() * Math.PI * 2,
+      orbitTurns: lazy ? 0.4 : (1.5 + Math.random() * 1.5),
+      maxRadius: lazy ? 0 : 1.8 + Math.random() * 0.8,
+      throwHeight: lazy ? 0.3 : 1.6 + Math.random() * 0.8,
+      tumbleVelMult: lazy ? 0.4 : 1.0,
+      rollValue: roll,
+      willCock,
+      modifier,
+      lazy,
+      lazyAllowed: lazyAllowedSnap,
+    };
 
-      rollingRef.current = true;
+    rollingRef.current = true;
 
-      // Delay the roll sound so it plays AFTER anticipation, when the dice actually starts tumbling
-      setTimeout(() => playRollSound(), anticipationDuration);
-
-      setRevealAnim(null); // Clear previous reveal
-    }
+    // Delay the roll sound so it plays AFTER anticipation, when the dice actually starts tumbling
+    setTimeout(() => playRollSound(), anticipationDuration);
   };
 
   if (!isOpen && !embedded) return null;
