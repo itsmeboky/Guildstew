@@ -29,12 +29,12 @@ export default function Campaigns() {
 
   return (
     <div className="relative min-h-screen">
-      <div 
-        className="h-96 bg-cover bg-center relative"
-        style={{ 
+      <div
+        className="h-96 bg-cover bg-top relative"
+        style={{
           backgroundImage: 'url(https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/3893844b8_Plaaay1.png)',
           backgroundSize: 'cover',
-          backgroundPosition: 'center'
+          backgroundPosition: 'top'
         }}
       >
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#1E2430]" />

@@ -485,7 +485,7 @@ function FactionProfileTemplate({ entry, metadata }) {
       <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg overflow-hidden">
         {banner && (
           <div className="h-32 overflow-hidden">
-            <img src={banner} className="w-full h-full object-cover" alt="" />
+            <img src={banner} className="w-full h-full object-cover object-top" alt="" />
           </div>
         )}
         <div className="p-6">
@@ -575,7 +575,7 @@ function LocationTemplate({ entry, metadata }) {
       <div className="bg-[#1a1f2e] border border-slate-700/50 rounded-lg overflow-hidden">
         {cover && (
           <div className="h-48 md:h-60 overflow-hidden relative">
-            <img src={cover} className="w-full h-full object-cover" alt="" />
+            <img src={cover} className="w-full h-full object-cover object-top" alt="" />
             <div className="absolute inset-0 bg-gradient-to-t from-[#1a1f2e] via-transparent to-transparent" />
           </div>
         )}
