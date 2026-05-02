@@ -195,6 +195,7 @@ export default function Home() {
           alt="Banner"
           className="absolute inset-0 w-full h-full"
         />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/30 to-white" />
       </div>
 
       {/* pt-44 (~176px) keeps the hero row clear of the nav and
