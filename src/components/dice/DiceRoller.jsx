@@ -23,6 +23,69 @@ const diceTypes = [
   { name: "d20", sides: 20 },
 ];
 
+const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
+const easeOutBack = (t) => {
+  const c1 = 1.70158, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+};
+
+// Apply vertex gradient: top vertices get primary color, bottom get secondary
+function applyVertexGradient(model, primaryHex, secondaryHex, isThemedSkin) {
+  const primary = new THREE.Color(primaryHex);
+  const secondary = new THREE.Color(secondaryHex);
+
+  let minY = Infinity, maxY = -Infinity;
+  model.traverse((child) => {
+    if (child.isMesh && child.geometry) {
+      const pos = child.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  });
+  const yRange = maxY - minY || 1;
+
+  model.traverse((child) => {
+    if (child.isMesh && child.material) {
+      const mat = child.material;
+
+      if (isThemedSkin) {
+        // Themed skins keep textures clean — no tinting
+        mat.color = new THREE.Color(0xffffff);
+        if (child.geometry.attributes.color) {
+          child.geometry.deleteAttribute("color");
+        }
+        mat.vertexColors = false;
+        mat.needsUpdate = true;
+        return;
+      }
+
+      // Apply vertex gradient
+      const geometry = child.geometry;
+      const pos = geometry.attributes.position;
+      const colors = new Float32Array(pos.count * 3);
+      const tmpColor = new THREE.Color();
+
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        const t = (y - minY) / yRange;
+        tmpColor.copy(secondary).lerp(primary, t);
+        colors[i * 3] = tmpColor.r;
+        colors[i * 3 + 1] = tmpColor.g;
+        colors[i * 3 + 2] = tmpColor.b;
+      }
+
+      geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      mat.vertexColors = true;
+      mat.color = new THREE.Color(0xffffff); // White base so vertex colors multiply cleanly
+      mat.needsUpdate = true;
+    }
+  });
+}
+
 function Particles({ type = "default" }) {
   // Configuration based on type
   const config = {
