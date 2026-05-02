@@ -314,6 +314,41 @@ function createFallbackD20() {
   return mesh;
 }
 
+const RevealOverlay = ({ value, color }) => {
+  const [scale, setScale] = useState(0);
+  useEffect(() => {
+    let raf;
+    const start = performance.now();
+    const animate = () => {
+      const t = Math.min((performance.now() - start) / 600, 1);
+      const easeT = t < 0.4
+        ? easeOutBack(t / 0.4) * 1.3
+        : 1.3 - (1.3 - 1) * easeOutCubic((t - 0.4) / 0.6);
+      setScale(easeT);
+      if (t < 1) raf = requestAnimationFrame(animate);
+    };
+    animate();
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  return (
+    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
+      <div style={{
+        transform: `scale(${scale})`,
+        color,
+        fontFamily: "'Cream', 'Cinzel', serif",
+        fontSize: 120,
+        fontWeight: 900,
+        lineHeight: 1,
+        textShadow: `0 0 40px ${color}, 0 0 80px ${color}66, 0 4px 20px rgba(0,0,0,0.6)`,
+        filter: "drop-shadow(0 8px 20px rgba(0,0,0,0.5))",
+      }}>
+        {value}
+      </div>
+    </div>
+  );
+};
+
 const DiceRoller = forwardRef((props, ref) => {
   const {
     isOpen,
@@ -952,6 +987,7 @@ const DiceRoller = forwardRef((props, ref) => {
           onClick={!isRolling ? handleRoll : undefined}
         />
         {showParticles && <Particles type={particleType} />}
+        {revealAnim && !isRolling && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
       </div>
     );
   }
@@ -993,6 +1029,7 @@ const DiceRoller = forwardRef((props, ref) => {
                 onClick={!isRolling ? handleRoll : undefined}
               />
               {showParticles && <Particles type={particleType} />}
+              {revealAnim && !isRolling && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
 
               {lastRoll && !isRolling && modifier !== 0 && (
                 <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-6 py-1.5 rounded-full font-bold text-xs bg-[#37F2D1] text-[#1E2430] shadow-lg whitespace-nowrap border border-white/20">
