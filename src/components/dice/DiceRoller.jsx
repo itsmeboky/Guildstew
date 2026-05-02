@@ -1140,8 +1140,12 @@ const DiceRoller = forwardRef((props, ref) => {
                           <span className="text-[#37F2D1] font-bold text-xs bg-[#37F2D1]/10 px-1.5 py-0.5 rounded">
                             {entry.dice.toUpperCase()}
                           </span>
-                          <span className="text-white font-bold">
-                             {entry.result}
+                          <span className={`font-bold ${
+                            entry.result === 20 && entry.dice === "d20" ? "text-[#FFD700]" :
+                            entry.result === 1 && entry.dice === "d20" ? "text-[#DC2626]" :
+                            "text-white"
+                          }`}>
+                            {entry.result}
                           </span>
                           {entry.modifier !== 0 && (
                             <>
