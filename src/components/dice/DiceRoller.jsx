@@ -677,10 +677,11 @@ const DiceRoller = forwardRef((props, ref) => {
 
     let camera;
     if (fullscreen) {
-      // Tight FOV + far camera so the dice keeps roughly its
-      // previous apparent size despite the canvas being huge.
-      camera = new THREE.PerspectiveCamera(15, width / height, 0.1, 100);
-      camera.position.set(8, 8, 8);
+      // Wider FOV + closer camera shrinks the resting dice and
+      // softens the perspective compression during the arc, so the
+      // dice doesn't dramatically shrink as it leaves center.
+      camera = new THREE.PerspectiveCamera(28, width / height, 0.1, 100);
+      camera.position.set(5, 5, 5);
     } else {
       camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
       const baseSize = 300;
@@ -1372,8 +1373,8 @@ const DiceRoller = forwardRef((props, ref) => {
         finalRot,
         orbitStart: Math.random() * Math.PI * 2,
         orbitTurns: lazy ? 0.4 : (1.5 + Math.random() * 1.5),
-        maxRadius: lazy ? 0 : 1.4,
-        throwHeight: lazy ? 0.3 : 1.0,
+        maxRadius: lazy ? 0 : 1.8 + Math.random() * 0.8,
+        throwHeight: lazy ? 0.3 : 1.6 + Math.random() * 0.8,
         tumbleVelMult: lazy ? 0.4 : 1.0,
         rollValue: roll,
         willCock,
