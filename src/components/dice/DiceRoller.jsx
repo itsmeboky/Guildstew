@@ -1452,6 +1452,11 @@ const DiceRoller = forwardRef((props, ref) => {
               <div className="w-2 h-2 bg-[#37F2D1] rounded-full animate-pulse" />
               <h2 className="text-white font-bold tracking-wider">DICE ROLLER</h2>
             </div>
+            {!allowLazyRolls && (
+              <span className="text-amber-400 font-bold text-[10px] tracking-widest bg-amber-400/10 border border-amber-400/30 px-2 py-1 rounded">
+                STRICT ROLLS
+              </span>
+            )}
           </div>
 
           <div className="relative flex flex-col flex-1 min-h-0 gap-4 overflow-hidden">
