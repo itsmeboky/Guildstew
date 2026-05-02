@@ -2498,7 +2498,9 @@ const DiceRoller = forwardRef((props, ref) => {
 
               <div className="flex-1 min-w-0 overflow-x-auto custom-scrollbar">
                 <div className="flex items-stretch gap-1.5 justify-end">
-                  {rollHistory.slice(0, 5).map((entry, idx) => {
+                  {/* Newest is index 0 in state; reverse for display so
+                      history reads left=oldest → right=newest (latest). */}
+                  {rollHistory.slice(0, 10).slice().reverse().map((entry, idx) => {
                     const isCritS = entry.result === 20 && entry.dice === "d20";
                     const isCritF = entry.result === 1 && entry.dice === "d20";
                     return (
@@ -2509,10 +2511,12 @@ const DiceRoller = forwardRef((props, ref) => {
                             ? "border-[#FFD700]/60 bg-[#FFD700]/10"
                             : isCritF
                               ? "border-[#DC2626]/60 bg-[#DC2626]/10"
-                              : "border-white/10 bg-black/30"
+                              : entry.lazy
+                                ? "border-amber-400/40 bg-amber-400/5"
+                                : "border-white/10 bg-black/30"
                         }`}
                         style={{ minWidth: 40 }}
-                        title={entry.timestamp}
+                        title={`${entry.timestamp}${entry.lazy ? " (lazy)" : ""}`}
                       >
                         <span className={`font-bold text-sm leading-none ${
                           isCritS ? "text-[#FFD700]" :
