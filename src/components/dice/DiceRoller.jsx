@@ -481,6 +481,7 @@ const DiceRoller = forwardRef((props, ref) => {
     secondaryColor = "#8B5CF6",
     isThemedSkin = false,
     forcedResult: forcedResultProp = null,
+    allowLazyRolls = true,
   } = props;
   const [selectedDice, setSelectedDice] = useState(initialDice);
   const [modifier, setModifier] = useState(0);
@@ -493,6 +494,7 @@ const DiceRoller = forwardRef((props, ref) => {
   const [revealAnim, setRevealAnim] = useState(null); // { value, color }
   const [isCocked, setIsCocked] = useState(false);
   const [showCockedAnim, setShowCockedAnim] = useState(false);
+  const [lameAnim, setLameAnim] = useState(null); // { rejected: boolean }
 
   // Use prop if available, otherwise internal state
   const forcedResult = forcedResultProp !== null ? forcedResultProp : internalForcedResult;
@@ -546,7 +548,8 @@ const DiceRoller = forwardRef((props, ref) => {
   }, [onRollComplete]);
 
   useImperativeHandle(ref, () => ({
-    roll: handleRoll
+    roll: () => handleRoll(),
+    lazyRoll: () => handleRoll({ lazy: true }),
   }));
 
   useEffect(() => {
@@ -737,12 +740,14 @@ const DiceRoller = forwardRef((props, ref) => {
           const phaseT = (elapsed - roll.anticipationDuration) / roll.tumbleDuration;
           const eased = easeOutCubic(phaseT);
 
+          const velMult = roll.tumbleVelMult ?? 1.0;
+
           if (!roll.tumbleAccumulator) {
             roll.tumbleAccumulator = { x: roll.startRot.x, y: roll.startRot.y, z: roll.startRot.z };
             roll.tumbleVelocity = {
-              x: (Math.random() - 0.5) * 0.6,
-              y: (Math.random() - 0.5) * 0.6,
-              z: (Math.random() - 0.5) * 0.6,
+              x: (Math.random() - 0.5) * 0.6 * velMult,
+              y: (Math.random() - 0.5) * 0.6 * velMult,
+              z: (Math.random() - 0.5) * 0.6 * velMult,
             };
             roll.lastFrameTime = now;
           }
@@ -751,11 +756,11 @@ const DiceRoller = forwardRef((props, ref) => {
           roll.lastFrameTime = now;
 
           const decay = 1 - phaseT * 0.3;
-          roll.tumbleVelocity.x += (Math.random() - 0.5) * 0.08;
-          roll.tumbleVelocity.y += (Math.random() - 0.5) * 0.08;
-          roll.tumbleVelocity.z += (Math.random() - 0.5) * 0.05;
+          roll.tumbleVelocity.x += (Math.random() - 0.5) * 0.08 * velMult;
+          roll.tumbleVelocity.y += (Math.random() - 0.5) * 0.08 * velMult;
+          roll.tumbleVelocity.z += (Math.random() - 0.5) * 0.05 * velMult;
 
-          const speedMult = (12 + Math.random() * 4) * (1 - eased * 0.6);
+          const speedMult = (12 + Math.random() * 4) * (1 - eased * 0.6) * velMult;
           roll.tumbleAccumulator.x += roll.tumbleVelocity.x * dt * speedMult * decay;
           roll.tumbleAccumulator.y += roll.tumbleVelocity.y * dt * speedMult * decay;
           roll.tumbleAccumulator.z += roll.tumbleVelocity.z * dt * speedMult * decay;
@@ -769,8 +774,15 @@ const DiceRoller = forwardRef((props, ref) => {
           const orbitT = phaseT;
           const angle = roll.orbitStart + 2 * Math.PI * roll.orbitTurns * orbitT + Math.sin(orbitT * 8) * 0.3;
           const radius = roll.maxRadius * (1 - easeOutQuint(orbitT));
-          const arcHeight = Math.sin(orbitT * Math.PI) * 0.4 + Math.sin(orbitT * Math.PI * 3) * 0.1;
-          diceMesh.position.set(radius * Math.cos(angle), arcHeight, radius * Math.sin(angle));
+          const heightFactor = roll.throwHeight ?? 1.0;
+          const arcHeight = (Math.sin(orbitT * Math.PI) * 0.4 + Math.sin(orbitT * Math.PI * 3) * 0.1) * heightFactor;
+          // Lerp the throw-start position out to (0, arc, 0) over the
+          // tumble so dice picked up at an offset start point still
+          // land back near center.
+          const blend = easeOutQuint(orbitT);
+          const sx = (roll.startPos?.x ?? 0) * (1 - blend);
+          const sz = (roll.startPos?.z ?? 0) * (1 - blend);
+          diceMesh.position.set(sx + radius * Math.cos(angle), arcHeight, sz + radius * Math.sin(angle));
           diceMesh.scale.setScalar(1);
         }
 
@@ -808,6 +820,8 @@ const DiceRoller = forwardRef((props, ref) => {
 
           const finalValue = roll.rollValue;
           const wasCocked = !!roll.willCock;
+          const wasLazy = !!roll.lazy;
+          const lazyAllowed = roll.lazyAllowed !== false;
           const rollMod = roll.modifier ?? 0;
           rollDataRef.current = null;
           setIsRolling(false);
@@ -823,6 +837,45 @@ const DiceRoller = forwardRef((props, ref) => {
             sound.volume = 0.85;
             sound.play().catch(() => {});
             setTimeout(() => setShowCockedAnim(false), 2400);
+            return;
+          }
+
+          // Lazy roll: always plays the sad sound + Lame... overlay.
+          // In strict mode (allowLazyRolls=false) it doesn't count.
+          // In permissive mode the result still counts but we delay
+          // the reveal so the Lame... animation gets center stage.
+          if (wasLazy) {
+            playLazySound();
+            if (!lazyAllowed) {
+              setLameAnim({ rejected: true });
+              setTimeout(() => setLameAnim(null), 1600);
+              return;
+            }
+            setLameAnim({ rejected: false });
+            setTimeout(() => setLameAnim(null), 1600);
+            // Defer the result reveal/history so the Lame... overlay
+            // plays before the number drops.
+            setTimeout(() => {
+              const total = finalValue + rollMod;
+              setRevealAnim({ value: finalValue, color: "#94a3b8" });
+              setLastRoll({ roll: finalValue, total });
+              if (!embedded) {
+                setRollHistory((prev) => [
+                  {
+                    result: finalValue,
+                    timestamp: new Date().toLocaleTimeString(),
+                    dice: selectedDice,
+                    modifier: rollMod,
+                    total,
+                    lazy: true,
+                  },
+                  ...prev,
+                ].slice(0, 10));
+              }
+              if (onRollCompleteRef.current && typeof finalValue === "number") {
+                onRollCompleteRef.current(finalValue);
+              }
+            }, 800);
             return;
           }
 
@@ -945,6 +998,12 @@ const DiceRoller = forwardRef((props, ref) => {
     sound.play().catch(() => {});
   };
 
+  const playLazySound = () => {
+    const sound = new Audio(LAZY_SOUND_URL);
+    sound.volume = 0.7;
+    sound.play().catch(() => {});
+  };
+
   const createDice = (diceType) => {
     if (!sceneRef.current) return;
     const scene = sceneRef.current;
@@ -1039,14 +1098,21 @@ const DiceRoller = forwardRef((props, ref) => {
     applyVertexGradient(mesh, primaryColor, secondaryColor, isThemedSkin);
   };
 
-  const handleRoll = () => {
+  const handleRoll = (opts = {}) => {
     if (!diceRef.current || isRolling) return;
+    const lazy = !!opts.lazy;
+    const startPos = opts.startPos || null; // optional world-space throw start
     const diceType = selectedDice;
     const sides = DICE_SIDES[diceType] || 20;
 
-    // Clear cocked state from a prior roll the moment a new roll starts.
+    // Clear cocked / lame state from a prior roll the moment a new roll starts.
     setIsCocked(false);
     setShowCockedAnim(false);
+    setLameAnim(null);
+
+    // Snapshot allowLazyRolls into rollData so toggling the prop
+    // mid-flight doesn't corrupt this roll's outcome.
+    const lazyAllowedSnap = !!allowLazyRolls;
 
     // Use forced result if set (for calibration), otherwise random
     let roll;
@@ -1080,12 +1146,14 @@ const DiceRoller = forwardRef((props, ref) => {
 
       // Probability check for cocked outcome. Forced rolls (calibration)
       // never cock — calibrators want a clean snap to the requested face.
+      // Lazy rolls cock 5x more often (capped at 50%).
       const baseCockChance = COCK_CHANCE[selectedDice] ?? 0;
-      const willCock = forcedResult === null && Math.random() < baseCockChance;
+      const cockChance = lazy ? Math.min(0.5, baseCockChance * 5) : baseCockChance;
+      const willCock = forcedResult === null && Math.random() < cockChance;
 
-      const anticipationDuration = 280;
-      const tumbleDuration = isCrit ? 900 : 800;
-      const settleDuration = isCrit ? 600 : 350; // Crits get slow-mo settle for drama
+      const anticipationDuration = lazy ? 80 : 280;
+      const tumbleDuration = lazy ? 700 : (isCrit ? 900 : 800);
+      const settleDuration = lazy ? 250 : (isCrit ? 600 : 350); // Crits get slow-mo settle for drama
 
       const startRot = {
         x: diceMesh.rotation.x,
@@ -1116,13 +1184,18 @@ const DiceRoller = forwardRef((props, ref) => {
         settleDuration,
         totalDuration: anticipationDuration + tumbleDuration + settleDuration,
         startRot,
+        startPos: startPos || { x: 0, y: 0, z: 0 },
         finalRot,
         orbitStart: Math.random() * Math.PI * 2,
-        orbitTurns: 1.5 + Math.random() * 1.5,
-        maxRadius: 1.4,
+        orbitTurns: lazy ? 0.4 : (1.5 + Math.random() * 1.5),
+        maxRadius: lazy ? 0 : 1.4,
+        throwHeight: lazy ? 0.3 : 1.0,
+        tumbleVelMult: lazy ? 0.4 : 1.0,
         rollValue: roll,
         willCock,
         modifier,
+        lazy,
+        lazyAllowed: lazyAllowedSnap,
       };
 
       rollingRef.current = true;
@@ -1145,11 +1218,12 @@ const DiceRoller = forwardRef((props, ref) => {
         <div
           ref={containerRef}
           className="cursor-pointer overflow-visible w-full h-full"
-          onClick={!isRolling ? handleRoll : undefined}
+          onClick={!isRolling ? () => handleRoll() : undefined}
         />
         {showParticles && <Particles type={particleType} />}
         {revealAnim && !isRolling && !isCocked && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
         {showCockedAnim && <CockedAnimation />}
+        {lameAnim && <LameAnimation rejected={lameAnim.rejected} />}
       </div>
     );
   }
@@ -1188,7 +1262,7 @@ const DiceRoller = forwardRef((props, ref) => {
                 ref={containerRef}
                 className="cursor-pointer overflow-visible"
                 style={{ width: 400, height: 400 }}
-                onClick={!isRolling ? handleRoll : undefined}
+                onClick={!isRolling ? () => handleRoll() : undefined}
               />
               {showParticles && <Particles type={particleType} />}
               {revealAnim && !isRolling && !isCocked && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
@@ -1216,10 +1290,10 @@ const DiceRoller = forwardRef((props, ref) => {
             )}
 
             {/* Instruction / ROLL button */}
-            <div className="text-center">
+            <div className="text-center flex items-center justify-center gap-2">
               <button
                 type="button"
-                onClick={!isRolling ? handleRoll : undefined}
+                onClick={!isRolling ? () => handleRoll() : undefined}
                 disabled={isRolling}
                 className={`inline-block px-6 py-2 border-2 rounded-lg font-semibold tracking-wide transition-colors ${
                   isCocked
@@ -1228,6 +1302,17 @@ const DiceRoller = forwardRef((props, ref) => {
                 } ${isRolling ? "opacity-60 cursor-default" : "cursor-pointer"}`}
               >
                 {isRolling ? "ROLLING..." : isCocked ? "ROLL AGAIN" : "ROLL"}
+              </button>
+              {/* TEMP debug — removed in step 6 once shake-to-roll lands */}
+              <button
+                type="button"
+                onClick={!isRolling ? () => handleRoll({ lazy: true }) : undefined}
+                disabled={isRolling}
+                className={`inline-block px-4 py-2 border-2 border-amber-400 text-amber-400 rounded-lg text-xs font-semibold tracking-wide transition-colors hover:bg-amber-400/10 ${
+                  isRolling ? "opacity-60 cursor-default" : "cursor-pointer"
+                }`}
+              >
+                LAZY ROLL
               </button>
             </div>
 
@@ -1316,6 +1401,11 @@ const DiceRoller = forwardRef((props, ref) => {
                           }`}>
                             {entry.result}
                           </span>
+                          {entry.lazy && (
+                            <span className="text-amber-400 font-bold text-[10px] bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded tracking-wider">
+                              LAZY
+                            </span>
+                          )}
                           {entry.modifier !== 0 && (
                             <>
                               <span className="text-gray-500 text-xs">
@@ -1338,6 +1428,7 @@ const DiceRoller = forwardRef((props, ref) => {
         </div>
       </div>
       {showCockedAnim && <CockedAnimation />}
+      {lameAnim && <LameAnimation rejected={lameAnim.rejected} />}
     </div>
   );
 });
