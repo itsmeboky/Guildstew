@@ -324,6 +324,7 @@ const DiceRoller = forwardRef((props, ref) => {
     initialDice = "d20",
     primaryColor = "#FF5722",
     secondaryColor = "#8B5CF6",
+    isThemedSkin = false,
     forcedResult: forcedResultProp = null,
   } = props;
   const [selectedDice, setSelectedDice] = useState(initialDice);
@@ -333,8 +334,9 @@ const DiceRoller = forwardRef((props, ref) => {
   const [rollHistory, setRollHistory] = useState([]);
   const [showParticles, setShowParticles] = useState(false);
   const [particleType, setParticleType] = useState("default"); // default, crit-success, crit-fail
-  const [internalForcedResult, setInternalForcedResult] = useState(null); 
-  
+  const [internalForcedResult, setInternalForcedResult] = useState(null);
+  const [revealAnim, setRevealAnim] = useState(null); // { value, color }
+
   // Use prop if available, otherwise internal state
   const forcedResult = forcedResultProp !== null ? forcedResultProp : internalForcedResult;
 
