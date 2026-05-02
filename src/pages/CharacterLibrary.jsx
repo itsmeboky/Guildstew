@@ -9,7 +9,7 @@ import { useDisplayName } from "@/hooks/useDisplayName";
 import { useSheetModifications } from "@/hooks/useSheetModifications";
 import SheetModSections from "@/components/homebrew/SheetModSections";
 import { supabase } from "@/api/supabaseClient";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,

@@ -2,7 +2,7 @@ import React from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import CampaignCarousel from "@/components/campaigns/CampaignCarousel";
-import { CardSkeleton } from "@/components/ui/Skeleton";
+import { CardSkeleton } from "@/components/ui/skeleton";
 
 export default function Campaigns() {
   const { data: user } = useQuery({
