@@ -324,7 +324,10 @@ const ARENA = {
   floorY: -1,
   wallHeight: 5,
   wallThickness: 0.5,
-  gravity: -30,
+  // Top-down camera compresses vertical motion visually, so we bump
+  // gravity past the original -30 to keep throws feeling weighty
+  // rather than floaty.
+  gravity: -40,
   friction: 0.4,
   restitution: 0.4,
   defaultRestitution: 0.5,
@@ -1144,6 +1147,10 @@ const DiceRoller = forwardRef((props, ref) => {
         return mesh;
       });
       wallMeshesRef.current = wallMeshes;
+      // Re-opening the modal must always start with parked walls.
+      wallsStateRef.current = "parked";
+      wallsDropPromiseRef.current = null;
+      pendingReleaseRef.current = null;
 
       // Contact reactions — sound + camera shake + dust particles
       // whenever the dice hits the floor or any wall during a roll.
@@ -2435,7 +2442,7 @@ const DiceRoller = forwardRef((props, ref) => {
 
           {/* Arena — fills bulk of modal, contains the canvas + overlays */}
           <div
-            className="relative flex-1 min-h-0 overflow-hidden bg-[#1B2535]"
+            className="relative flex-1 min-h-0 overflow-hidden bg-[#1E2430]"
           >
             <div
               ref={containerRef}
