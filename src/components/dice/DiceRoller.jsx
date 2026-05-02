@@ -412,6 +412,7 @@ const DiceRoller = forwardRef((props, ref) => {
           defaultTexture: defaultTextureRef.current,
           textureCache: textureCacheRef.current,
         });
+        applyVertexGradient(diceRef.current, primaryColor, secondaryColor, isThemedSkin);
       }
     });
   }, []);
@@ -749,7 +750,8 @@ const DiceRoller = forwardRef((props, ref) => {
       defaultTexture: defaultTextureRef.current,
       textureCache: textureCacheRef.current,
     });
-  }, [activeSkin]);
+    applyVertexGradient(diceRef.current, primaryColor, secondaryColor, isThemedSkin);
+  }, [activeSkin, primaryColor, secondaryColor, isThemedSkin]);
 
   useEffect(() => {
     if ((isOpen || embedded) && sceneRef.current && isInitializedRef.current) {
@@ -870,13 +872,18 @@ const DiceRoller = forwardRef((props, ref) => {
     diceRef.current = mesh;
     scene.add(mesh);
 
-    // Re-skin with the active Tavern skin (or stock defaults). Must
-    // run after scene.add so the traversal hits the cloned meshes,
-    // not the original.
+    // Re-skin with the active Tavern skin (or stock defaults). This
+    // builds the material (texture map, metalness, etc.) so it must
+    // run before the final vertex-gradient pass, which sets
+    // vertexColors:true on whatever material the skin produced.
     applyDiceSkinToMesh(mesh, activeSkinRef.current || STOCK_SKIN, {
       defaultTexture: defaultTextureRef.current,
       textureCache: textureCacheRef.current,
     });
+
+    // Re-apply the gradient so vertex colors survive applyDiceSkinToMesh's
+    // material replacement. For themed skins this is a no-op tint reset.
+    applyVertexGradient(mesh, primaryColor, secondaryColor, isThemedSkin);
   };
 
   const handleRoll = () => {
