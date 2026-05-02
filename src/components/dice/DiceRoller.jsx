@@ -508,6 +508,22 @@ const DiceRoller = forwardRef((props, ref) => {
   const isInitializedRef = useRef(false);
   const rollingRef = useRef(false);
   const rollDataRef = useRef(null);
+  // Mouse-pickup / shake-to-roll state. Initialised here so the
+  // animate loop and pointer event handlers (set up in the init
+  // effect below) can both read/write the same object.
+  const dragStateRef = useRef({
+    isDown: false,
+    isDragging: false,
+    lastX: 0,
+    lastY: 0,
+    lastT: 0,
+    accumulatedShake: 0,
+    velocityX: 0,
+    velocityY: 0,
+    targetX: 0,
+    targetZ: 0,
+  });
+  const handleRollRef = useRef(null);
   const customModelsRef = useRef({});
   const customFaceRotationsRef = useRef({});
   const customTransformsRef = useRef({});
@@ -547,10 +563,24 @@ const DiceRoller = forwardRef((props, ref) => {
     onRollCompleteRef.current = onRollComplete;
   }, [onRollComplete]);
 
+  // Keep latest state visible to pointer event handlers that were
+  // bound once at init time.
+  const isRollingRef = useRef(false);
+  const isCockedRef = useRef(false);
+  useEffect(() => { isRollingRef.current = isRolling; }, [isRolling]);
+  useEffect(() => { isCockedRef.current = isCocked; }, [isCocked]);
+
   useImperativeHandle(ref, () => ({
     roll: () => handleRoll(),
     lazyRoll: () => handleRoll({ lazy: true }),
   }));
+
+  // Keep handleRollRef pointing at the latest closure so the
+  // pointer-event handlers (bound once at init) always trigger
+  // the current handleRoll.
+  useEffect(() => {
+    handleRollRef.current = handleRoll;
+  });
 
   useEffect(() => {
     if (initialDice) setSelectedDice(initialDice);
@@ -670,10 +700,12 @@ const DiceRoller = forwardRef((props, ref) => {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(renderer.domElement);
     if (fullscreen) {
-      // The wrapper div has pointer-events:none so the modal stays
-      // clickable; the canvas itself needs pointer-events:auto so
-      // it can accept dice clicks / pointer drags.
-      renderer.domElement.style.pointerEvents = "auto";
+      // The fullscreen canvas has pointer-events:none so clicks pass
+      // straight through to the modal beneath it. We pick up dice
+      // grabs at the window level via raycasting (see the pointer
+      // event block below) and only intercept when the ray actually
+      // hits the dice mesh.
+      renderer.domElement.style.pointerEvents = "none";
       renderer.domElement.style.display = "block";
     }
     rendererRef.current = renderer;
@@ -733,6 +765,19 @@ const DiceRoller = forwardRef((props, ref) => {
       const scene = sceneRef.current;
       const diceMesh = diceRef.current;
       if (!renderer || !camera || !scene) return;
+
+      // While the dice is being held, lerp it toward the cursor
+      // target each frame. This runs only when not currently rolling.
+      const drag = dragStateRef.current;
+      if (drag.isDragging && diceMesh && !rollingRef.current) {
+        const lerp = 0.25;
+        diceMesh.position.x += (drag.targetX - diceMesh.position.x) * lerp;
+        diceMesh.position.y += (1.5 - diceMesh.position.y) * lerp;
+        diceMesh.position.z += (drag.targetZ - diceMesh.position.z) * lerp;
+        // Slight wiggle so a held dice feels alive.
+        diceMesh.rotation.x += 0.02 + drag.velocityX * 0.001;
+        diceMesh.rotation.z += 0.02 + drag.velocityY * 0.001;
+      }
 
       const roll = rollDataRef.current;
       if (rollingRef.current && roll && diceMesh) {
@@ -936,10 +981,132 @@ const DiceRoller = forwardRef((props, ref) => {
     };
     animate();
 
+    // Mouse pickup + shake-to-roll. Only wired for the fullscreen
+    // (modal) canvas; embedded mode keeps its simple click-to-roll.
+    // We listen at the window level because the canvas is
+    // pointer-events:none — we raycast on pointerdown and only
+    // intercept (preventDefault, capture, etc.) when the ray hits
+    // the dice mesh.
+    let detachPointer = () => {};
+    if (fullscreen) {
+      const canvas = renderer.domElement;
+      const raycaster = new THREE.Raycaster();
+      const ndc = new THREE.Vector2();
+      const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1.5);
+      const tmp = new THREE.Vector3();
+
+      const setNdc = (clientX, clientY) => {
+        const rect = canvas.getBoundingClientRect();
+        ndc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+        ndc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      };
+
+      const projectToWorld = (clientX, clientY, target) => {
+        setNdc(clientX, clientY);
+        raycaster.setFromCamera(ndc, cameraRef.current);
+        raycaster.ray.intersectPlane(dragPlane, target);
+      };
+
+      const hitsDice = (clientX, clientY) => {
+        const dice = diceRef.current;
+        if (!dice) return false;
+        setNdc(clientX, clientY);
+        raycaster.setFromCamera(ndc, cameraRef.current);
+        const hits = raycaster.intersectObject(dice, true);
+        return hits.length > 0;
+      };
+
+      const onPointerMoveHover = (e) => {
+        if (dragStateRef.current.isDown) return;
+        if (rollingRef.current || isCockedRef.current) {
+          document.body.style.cursor = "";
+          return;
+        }
+        document.body.style.cursor = hitsDice(e.clientX, e.clientY) ? "grab" : "";
+      };
+
+      const onPointerDown = (e) => {
+        if (rollingRef.current || isCockedRef.current) return;
+        if (!hitsDice(e.clientX, e.clientY)) return;
+        // Hit the dice — start dragging and prevent the click from
+        // bubbling to anything underneath (e.g. modal close button).
+        e.preventDefault();
+        e.stopPropagation();
+        const drag = dragStateRef.current;
+        drag.isDown = true;
+        drag.isDragging = true;
+        drag.lastX = e.clientX;
+        drag.lastY = e.clientY;
+        drag.lastT = performance.now();
+        drag.accumulatedShake = 0;
+        drag.velocityX = 0;
+        drag.velocityY = 0;
+        projectToWorld(e.clientX, e.clientY, tmp);
+        drag.targetX = tmp.x;
+        drag.targetZ = tmp.z;
+        document.body.style.cursor = "grabbing";
+      };
+
+      const onPointerMove = (e) => {
+        const drag = dragStateRef.current;
+        if (!drag.isDown) {
+          onPointerMoveHover(e);
+          return;
+        }
+        const now = performance.now();
+        const dt = Math.max(1, now - drag.lastT);
+        const dx = e.clientX - drag.lastX;
+        const dy = e.clientY - drag.lastY;
+        drag.accumulatedShake += Math.abs(dx) + Math.abs(dy);
+        drag.velocityX = (dx / dt) * 1000;
+        drag.velocityY = (dy / dt) * 1000;
+        drag.lastX = e.clientX;
+        drag.lastY = e.clientY;
+        drag.lastT = now;
+        projectToWorld(e.clientX, e.clientY, tmp);
+        drag.targetX = tmp.x;
+        drag.targetZ = tmp.z;
+      };
+
+      const onPointerUp = () => {
+        const drag = dragStateRef.current;
+        if (!drag.isDown) return;
+        drag.isDown = false;
+        drag.isDragging = false;
+        document.body.style.cursor = "";
+        const lazy = drag.accumulatedShake <= 250;
+        // Hand the dice's current world position to handleRoll so
+        // the roll animation begins where the player let go.
+        const dice = diceRef.current;
+        const startPos = dice
+          ? { x: dice.position.x, y: dice.position.y, z: dice.position.z }
+          : null;
+        if (handleRollRef.current) {
+          handleRollRef.current({ lazy, startPos });
+        }
+      };
+
+      // pointerdown gets `capture: true` so we can intercept clicks
+      // that would otherwise hit modal buttons before they fire.
+      window.addEventListener("pointerdown", onPointerDown, true);
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
+      window.addEventListener("pointercancel", onPointerUp);
+
+      detachPointer = () => {
+        window.removeEventListener("pointerdown", onPointerDown, true);
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
+        window.removeEventListener("pointercancel", onPointerUp);
+        document.body.style.cursor = "";
+      };
+    }
+
     isInitializedRef.current = true;
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      detachPointer();
       isInitializedRef.current = false;
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
       const renderer = rendererRef.current;
@@ -1336,7 +1503,7 @@ const DiceRoller = forwardRef((props, ref) => {
             )}
 
             {/* Instruction / ROLL button */}
-            <div className="text-center flex items-center justify-center gap-2">
+            <div className="text-center flex flex-col items-center gap-2">
               <button
                 type="button"
                 onClick={!isRolling ? () => handleRoll() : undefined}
@@ -1349,17 +1516,11 @@ const DiceRoller = forwardRef((props, ref) => {
               >
                 {isRolling ? "ROLLING..." : isCocked ? "ROLL AGAIN" : "ROLL"}
               </button>
-              {/* TEMP debug — removed in step 6 once shake-to-roll lands */}
-              <button
-                type="button"
-                onClick={!isRolling ? () => handleRoll({ lazy: true }) : undefined}
-                disabled={isRolling}
-                className={`inline-block px-4 py-2 border-2 border-amber-400 text-amber-400 rounded-lg text-xs font-semibold tracking-wide transition-colors hover:bg-amber-400/10 ${
-                  isRolling ? "opacity-60 cursor-default" : "cursor-pointer"
-                }`}
-              >
-                LAZY ROLL
-              </button>
+              <p className="text-[11px] text-slate-400 italic">
+                {allowLazyRolls
+                  ? "Or grab the dice and shake to roll"
+                  : "Or grab the dice and shake to roll — must shake!"}
+              </p>
             </div>
 
             {/* Controls: dice, modifier */}
