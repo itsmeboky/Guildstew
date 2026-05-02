@@ -38,7 +38,7 @@ export default function GamePackHero({
             src={heroUrl}
             onError={() => setImgFailed(true)}
             alt=""
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover object-top"
           />
         ) : (
           <div

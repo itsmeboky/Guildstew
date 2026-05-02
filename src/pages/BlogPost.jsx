@@ -68,7 +68,7 @@ export default function BlogPost() {
     <div className="min-h-screen bg-[#050816] text-white">
       {post.cover_image_url && (
         <div className="relative h-64 md:h-80 overflow-hidden">
-          <img src={post.cover_image_url} alt="" className="w-full h-full object-cover" />
+          <img src={post.cover_image_url} alt="" className="w-full h-full object-cover object-top" />
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#050816]/30 to-[#050816]" />
         </div>
       )}
