@@ -32,7 +32,15 @@ const COLOR_KEYS = [
   "homepageCards",
   "danger",
   "success",
+  "bannerFadeColor",
 ];
+
+// Colors whose CSS variable name doesn't follow the default
+// `--theme-<key>` pattern. The homepage banner reads
+// `--theme-color-bannerFade` for symmetry with `--theme-img-*`.
+const COLOR_VAR_OVERRIDES = {
+  bannerFadeColor: "--theme-color-bannerFade",
+};
 
 const IMAGE_KEYS = [
   "navTexture",
@@ -90,7 +98,8 @@ export function applyTheme(themeData) {
   for (const key of COLOR_KEYS) {
     const value = colors[key];
     if (!value) continue;
-    root.style.setProperty(`--theme-${key}`, String(value));
+    const varName = COLOR_VAR_OVERRIDES[key] || `--theme-${key}`;
+    root.style.setProperty(varName, String(value));
   }
 
   for (const key of IMAGE_KEYS) {
@@ -111,7 +120,9 @@ export function applyTheme(themeData) {
 
 export function clearTheme() {
   const root = document.documentElement;
-  for (const key of COLOR_KEYS) root.style.removeProperty(`--theme-${key}`);
+  for (const key of COLOR_KEYS) {
+    root.style.removeProperty(COLOR_VAR_OVERRIDES[key] || `--theme-${key}`);
+  }
   for (const key of IMAGE_KEYS) root.style.removeProperty(`--theme-img-${key}`);
   root.style.removeProperty("--theme-font-heading");
   root.style.removeProperty("--theme-font-body");

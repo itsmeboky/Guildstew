@@ -226,6 +226,7 @@ export default function ThemeBuilder({ open, onClose }) {
                   <ColorRow
                     key={f.key}
                     label={f.label}
+                    hint={f.hint}
                     value={theme.colors[f.key]}
                     onChange={(v) => setColor(f.key, v)}
                   />
@@ -521,21 +522,24 @@ function Section({ title, children }) {
   );
 }
 
-function ColorRow({ label, value, onChange }) {
+function ColorRow({ label, hint, value, onChange }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <Label className="text-xs text-slate-300 flex-1">{label}</Label>
-      <input
-        type="color"
-        value={value || "#000000"}
-        onChange={(e) => onChange?.(e.target.value)}
-        className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
-      />
-      <Input
-        value={value || ""}
-        onChange={(e) => onChange?.(e.target.value)}
-        className="bg-[#050816] border-slate-700 text-white w-24 text-[11px] font-mono"
-      />
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center justify-between gap-2">
+        <Label className="text-xs text-slate-300 flex-1">{label}</Label>
+        <input
+          type="color"
+          value={value || "#000000"}
+          onChange={(e) => onChange?.(e.target.value)}
+          className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
+        />
+        <Input
+          value={value || ""}
+          onChange={(e) => onChange?.(e.target.value)}
+          className="bg-[#050816] border-slate-700 text-white w-24 text-[11px] font-mono"
+        />
+      </div>
+      {hint && <p className="text-[10px] text-slate-500 leading-snug">{hint}</p>}
     </div>
   );
 }
