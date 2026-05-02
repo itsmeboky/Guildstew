@@ -869,37 +869,56 @@ const DiceRoller = forwardRef((props, ref) => {
     if (diceRef.current) {
       setIsRolling(true);
       const diceMesh = diceRef.current;
-      
+
       // Fallback for snap if missing
-      const safeSnap = snap || { 
-        x: Math.random() * Math.PI * 2, 
-        y: Math.random() * Math.PI * 2, 
-        z: Math.random() * Math.PI * 2 
+      const safeSnap = snap || {
+        x: Math.random() * Math.PI * 2,
+        y: Math.random() * Math.PI * 2,
+        z: Math.random() * Math.PI * 2
       };
-      const startRot = diceMesh.rotation.clone();
 
-      const spinX = 4 + Math.floor(Math.random() * 4);
-      const spinY = 4 + Math.floor(Math.random() * 4);
-      const spinZ = 2 + Math.floor(Math.random() * 3);
+      const isCrit = selectedDice === "d20" && (roll === 20 || roll === 1);
 
-      const endRot = new THREE.Euler(
-        safeSnap.x + Math.PI * 2 * spinX,
-        safeSnap.y + Math.PI * 2 * spinY,
-        safeSnap.z + Math.PI * 2 * spinZ
-      );
+      const anticipationDuration = 280;
+      const tumbleDuration = isCrit ? 900 : 800;
+      const settleDuration = isCrit ? 600 : 350; // Crits get slow-mo settle for drama
+
+      const startRot = {
+        x: diceMesh.rotation.x,
+        y: diceMesh.rotation.y,
+        z: diceMesh.rotation.z,
+      };
+
+      const spinX = 3 + Math.floor(Math.random() * 3);
+      const spinY = 3 + Math.floor(Math.random() * 3);
+      const spinZ = 1 + Math.floor(Math.random() * 2);
+
+      const finalRot = {
+        x: safeSnap.x + Math.PI * 2 * spinX,
+        y: safeSnap.y + Math.PI * 2 * spinY,
+        z: safeSnap.z + Math.PI * 2 * spinZ,
+      };
 
       rollDataRef.current = {
-      startTime: performance.now(),
-      duration: 1000, // Synced with average sound duration
-      startRot,
-      endRot,
-      orbitTurns: 1 + Math.random() * 1,
-      maxRadius: 12.0, // Keep wide area
-      rollValue: roll,
+        startTime: performance.now(),
+        anticipationDuration,
+        tumbleDuration,
+        settleDuration,
+        totalDuration: anticipationDuration + tumbleDuration + settleDuration,
+        startRot,
+        finalRot,
+        orbitStart: Math.random() * Math.PI * 2,
+        orbitTurns: 1.5 + Math.random() * 1.5,
+        maxRadius: 1.4,
+        rollValue: roll,
       };
+
       rollingRef.current = true;
-      
-      playRollSound();
+
+      // Delay the roll sound so it plays AFTER anticipation, when the dice actually starts tumbling
+      setTimeout(() => playRollSound(), anticipationDuration);
+
+      setRevealAnim(null); // Clear previous reveal
     }
 
     const total = roll + modifier;
