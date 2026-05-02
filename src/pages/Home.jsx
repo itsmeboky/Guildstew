@@ -169,7 +169,7 @@ export default function Home() {
   const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + slides.length) % Math.max(1, slides.length));
 
   return (
-    <div className="theme-homepage-bg relative min-h-screen bg-white">
+    <div className="relative min-h-screen bg-white">
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;
@@ -196,7 +196,6 @@ export default function Home() {
           className="absolute inset-0 w-full h-full"
           imageClassName="object-top"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/30 to-white" />
       </div>
 
       {/* pt-44 (~176px) keeps the hero row clear of the nav and

@@ -21,6 +21,7 @@ const BLANK = {
   homepageCards:    "#f8a47c",
   danger:           "#ef4444",
   success:          "#22c55e",
+  bannerFadeColor:  "#ffffff",
 };
 
 export const THEME_PRESETS = {
@@ -44,6 +45,7 @@ export const THEME_PRESETS = {
       homepageCards:    "#e6c98a",
       danger:           "#8b2e2e",
       success:          "#3d6b2e",
+      bannerFadeColor:  "#f4ead5",
     },
   },
   crimson_gold: {
@@ -61,6 +63,7 @@ export const THEME_PRESETS = {
       homepageCards:    "#c7354d",
       danger:           "#ff5b5b",
       success:          "#b8d46b",
+      bannerFadeColor:  "#1a0808",
     },
   },
   forest: {
@@ -78,6 +81,7 @@ export const THEME_PRESETS = {
       homepageCards:    "#6e8a4a",
       danger:           "#c75451",
       success:          "#6ec56f",
+      bannerFadeColor:  "#0f1a14",
     },
   },
   ocean_deep: {
@@ -95,6 +99,7 @@ export const THEME_PRESETS = {
       homepageCards:    "#1e4d70",
       danger:           "#ff6b8f",
       success:          "#37F2D1",
+      bannerFadeColor:  "#0a121c",
     },
   },
   blank: {
@@ -112,6 +117,7 @@ export const THEME_PRESETS = {
       homepageCards:    "#222222",
       danger:           "#ff4444",
       success:          "#44ff88",
+      bannerFadeColor:  "#000000",
     },
   },
 };
@@ -129,7 +135,12 @@ export const THEME_COLOR_FIELDS = [
   { key: "navBackground",    label: "Nav Background" },
   { key: "homepageCards",    label: "Homepage Cards" },
   { key: "danger",           label: "Danger / Error" },
-  { key: "success",           label: "Success" },
+  { key: "success",          label: "Success" },
+  {
+    key: "bannerFadeColor",
+    label: "Banner Fade Color",
+    hint: "Color the homepage banner fades into. Default white matches the page background.",
+  },
 ];
 
 // Optional image overrides. Each slot names a single "opt-in" surface
