@@ -824,6 +824,13 @@ const DiceRoller = forwardRef((props, ref) => {
   const audioCtxRef = useRef(null);
   const cockedDepthRef = useRef(0);
   const physicsRollRef = useRef(null);
+  // Wall arena state — drives both visual animation and the gate
+  // that buffers a dice release while the walls are still landing.
+  // 'parked' = up out of view, 'dropping' = animation in flight,
+  // 'down' = settled around the floor, 'lifting' = receding back up.
+  const wallsStateRef = useRef("parked");
+  const wallsDropPromiseRef = useRef(null);
+  const pendingReleaseRef = useRef(null);
 
   // Active Tavern dice skin (null = use stock Guildstew material).
   // Kept in a ref so createDice() can read it without needing the
@@ -1403,10 +1410,16 @@ const DiceRoller = forwardRef((props, ref) => {
           setIsRolling(false);
 
           // Cocked: chicken + sound, no result counted, no history,
-          // no onRollComplete. Player must roll again.
+          // no onRollComplete. Player must roll again. Keep walls
+          // down so the re-roll fires without re-thunking.
           if (wasCocked) {
             triggerCockedOverlay();
             return;
+          }
+          // Clean keyframe finish — lift the walls so the result
+          // reveal isn't framed inside a closed arena.
+          if (!embedded && wallMeshesRef.current.length > 0) {
+            animateWallsUp();
           }
 
           // Lazy roll: always plays the sad sound + Lame... overlay.
@@ -1549,6 +1562,10 @@ const DiceRoller = forwardRef((props, ref) => {
         drag.targetX = tmp.x;
         drag.targetZ = tmp.z;
         canvas.style.cursor = "grabbing";
+        // Walls thunk down immediately on pickup. If the player
+        // releases before they've landed, onPointerUp queues the
+        // release and the wall-drop promise fires it on land.
+        ensureWallsDown();
       };
 
       const onPointerMove = (e) => {
@@ -1586,15 +1603,21 @@ const DiceRoller = forwardRef((props, ref) => {
         const startPos = dice
           ? { x: dice.position.x, y: dice.position.y, z: dice.position.z }
           : null;
-        // Release velocity (px/s) → world space. The camera looks at
-        // origin from (10,10,10), so screen-right ≈ world +X and
-        // screen-up ≈ world -Z (i.e. flicking forward sends the dice
-        // away from the camera). Y is added in rollWithPhysics.
+        // Release velocity (px/s) → world space. With the top-down
+        // camera, screen-right ≈ world +X and screen-up ≈ world -Z
+        // (i.e. flicking forward sends the dice away from the
+        // camera). Y is added in rollWithPhysics.
         const releaseVelocity = !lazy
           ? { x: drag.velocityX, y: 0, z: -drag.velocityY }
           : null;
-        if (handleRollRef.current) {
-          handleRollRef.current({ lazy, startPos, releaseVelocity });
+        const args = { lazy, startPos, releaseVelocity };
+        // Gate release on walls being fully down. If they're still
+        // dropping, queue the release and the ensureWallsDown promise
+        // (kicked off in onPointerDown) fires the roll on land.
+        if (wallsStateRef.current === "down") {
+          if (handleRollRef.current) handleRollRef.current(args);
+        } else {
+          pendingReleaseRef.current = args;
         }
       };
 
@@ -1794,7 +1817,9 @@ const DiceRoller = forwardRef((props, ref) => {
   };
 
   // Wall thunk-down: drop each wall sequentially (180ms each, 40ms
-  // stagger). Returns a promise resolved when all four landed.
+  // stagger). Returns a promise resolved when all four landed. Use
+  // `ensureWallsDown` rather than calling this directly so the
+  // wallsState lifecycle stays in sync.
   const animateWallsDown = () => {
     const meshes = wallMeshesRef.current;
     if (!meshes || meshes.length === 0) return Promise.resolve();
@@ -1854,6 +1879,7 @@ const DiceRoller = forwardRef((props, ref) => {
     const meshes = wallMeshesRef.current;
     if (!meshes || meshes.length === 0) return;
     const liftMs = 250;
+    wallsStateRef.current = "lifting";
     meshes.forEach((mesh) => {
       const startY = mesh.position.y;
       const startOpacity = mesh.material.opacity;
@@ -1868,6 +1894,35 @@ const DiceRoller = forwardRef((props, ref) => {
       };
       lift();
     });
+    setTimeout(() => {
+      if (wallsStateRef.current === "lifting") wallsStateRef.current = "parked";
+    }, liftMs + 20);
+  };
+
+  // Drop walls if they're not already down. Returns a promise that
+  // resolves once the walls are fully landed. Used by both the dice-
+  // pickup path (so the arena snaps up the moment the player grabs
+  // the die) and the ROLL-button path (so a click triggers the same
+  // walls-then-impulse sequence).
+  const ensureWallsDown = () => {
+    if (wallsStateRef.current === "down") return Promise.resolve();
+    if (wallsStateRef.current === "dropping" && wallsDropPromiseRef.current) {
+      return wallsDropPromiseRef.current;
+    }
+    wallsStateRef.current = "dropping";
+    const p = animateWallsDown().then(() => {
+      wallsStateRef.current = "down";
+      wallsDropPromiseRef.current = null;
+      // Flush any release that was queued while we were still
+      // landing — the player let go before the arena was ready.
+      const queued = pendingReleaseRef.current;
+      if (queued) {
+        pendingReleaseRef.current = null;
+        if (handleRollRef.current) handleRollRef.current(queued);
+      }
+    });
+    wallsDropPromiseRef.current = p;
+    return p;
   };
 
   const createDice = (diceType) => {
@@ -2111,46 +2166,49 @@ const DiceRoller = forwardRef((props, ref) => {
 
     physicsRollRef.current = { targetValue, rollMod, startTime: performance.now() };
 
-    // Walls thunk down; impulse fires only after all four have landed.
-    animateWallsDown().then(() => {
-      body.wakeUp();
-      body.position.set(startPos.x, startPos.y, startPos.z);
-      body.velocity.set(0, 0, 0);
-      body.angularVelocity.set(0, 0, 0);
-      body.quaternion.set(
-        match.initQuat.x, match.initQuat.y,
-        match.initQuat.z, match.initQuat.w
-      );
-      body.applyImpulse(
-        new CANNON.Vec3(match.impulse.x, match.impulse.y, match.impulse.z),
-        new CANNON.Vec3(0, 0, 0)
-      );
-      body.angularVelocity.set(match.angVel.x, match.angVel.y, match.angVel.z);
-      playRollSound();
+    // Walls have already been dropped (on pickup or by handleRoll's
+    // ensureWallsDown). Apply impulse immediately.
+    body.wakeUp();
+    body.position.set(startPos.x, startPos.y, startPos.z);
+    body.velocity.set(0, 0, 0);
+    body.angularVelocity.set(0, 0, 0);
+    body.quaternion.set(
+      match.initQuat.x, match.initQuat.y,
+      match.initQuat.z, match.initQuat.w
+    );
+    body.applyImpulse(
+      new CANNON.Vec3(match.impulse.x, match.impulse.y, match.impulse.z),
+      new CANNON.Vec3(0, 0, 0)
+    );
+    body.angularVelocity.set(match.angVel.x, match.angVel.y, match.angVel.z);
+    playRollSound();
 
-      const onSleep = () => {
-        body.removeEventListener("sleep", onSleep);
+    const onSleep = () => {
+      body.removeEventListener("sleep", onSleep);
+      // Classify the actual settled orientation.
+      const { dot } = detectFaceUp(body.quaternion, faceMap);
+      if (dot > 0.92) {
+        // Clean settle — lift walls so the result reveal isn't boxed in.
         animateWallsUp();
-        // Classify the actual settled orientation.
-        const { dot } = detectFaceUp(body.quaternion, faceMap);
-        if (dot > 0.92) {
+        setTimeout(() => finalizePhysicsResult(targetValue, rollMod), 120);
+      } else {
+        // Cocked! Keep walls down so the auto re-roll can fire its
+        // impulse without an extra thunk-down beat. Trigger
+        // chicken + COCKED! overlay; player rolls again.
+        cockedDepthRef.current += 1;
+        setIsRolling(false);
+        rollingRef.current = false;
+        if (cockedDepthRef.current > 3) {
+          // Bail rather than recurse forever.
+          cockedDepthRef.current = 0;
+          animateWallsUp();
           setTimeout(() => finalizePhysicsResult(targetValue, rollMod), 120);
-        } else {
-          // Cocked! Trigger chicken + COCKED! overlay; player rolls again.
-          cockedDepthRef.current += 1;
-          setIsRolling(false);
-          rollingRef.current = false;
-          if (cockedDepthRef.current > 3) {
-            // Bail rather than recurse forever.
-            cockedDepthRef.current = 0;
-            setTimeout(() => finalizePhysicsResult(targetValue, rollMod), 120);
-            return;
-          }
-          setTimeout(() => triggerCockedOverlay(), 200);
+          return;
         }
-      };
-      body.addEventListener("sleep", onSleep);
-    });
+        setTimeout(() => triggerCockedOverlay(), 200);
+      }
+    };
+    body.addEventListener("sleep", onSleep);
     return true;
   };
 
@@ -2181,16 +2239,21 @@ const DiceRoller = forwardRef((props, ref) => {
 
     setRevealAnim(null);
 
-    // ─── Physics path (regular non-lazy roll, fullscreen mode) ───
+    // ─── Physics path (regular non-lazy roll, modal/arena mode) ───
     // This is the "premium tabletop" path: real cannon-es simulation
     // matches the predetermined value. Cocked outcomes emerge from the
-    // physics dot product (no pre-roll probability needed).
+    // physics dot product (no pre-roll probability needed). Walls
+    // drop first (no-op if they're already down from pickup); the
+    // impulse fires once the arena is up.
     if (!lazy && !embedded && worldRef.current && diceBodyRef.current) {
       setIsRolling(true);
-      const ok = rollWithPhysics(roll, modifier, { startPos, releaseVelocity });
-      if (ok) return;
-      // Hidden simulation produced no match → fall through to keyframe.
-      setIsRolling(false);
+      ensureWallsDown().then(() => {
+        const ok = rollWithPhysics(roll, modifier, { startPos, releaseVelocity });
+        if (!ok) {
+          setIsRolling(false);
+        }
+      });
+      return;
     }
 
     // ─── Keyframe path (lazy rolls + embedded mode + physics fallback) ───
@@ -2203,6 +2266,12 @@ const DiceRoller = forwardRef((props, ref) => {
       : defaultSnap;
 
     setIsRolling(true);
+    // Lazy rolls (and the rare physics-fallback) play their keyframe
+    // flop inside the arena too, so picking up the dice always shows
+    // the walls — even if you don't shake.
+    if (!embedded && wallMeshesRef.current.length > 0) {
+      ensureWallsDown();
+    }
     const diceMesh = diceRef.current;
 
     const safeSnap = snap || {
