@@ -320,7 +320,8 @@ function Particles({ type = "default" }) {
 // is required for the hidden simulation to faithfully predict the
 // visible roll.
 const ARENA = {
-  halfSize: 3,    // 6×6 footprint
+  halfSize: 9,    // 18×18 footprint — gives the dice ~3× more space
+                  // to roll than the original 6×6 arena.
   floorY: -1,
   wallHeight: 5,
   wallThickness: 0.5,
@@ -527,8 +528,15 @@ function findMatchingRoll({
 // secondary-color hex grid overlaid at 10% opacity, radial-gradient
 // masked so the floor edges fade to fully transparent and blend
 // into the modal background instead of showing harsh seams.
-function buildTableTexture(secondary) {
-  const size = 512;
+function buildTableTexture(secondary, floorWorldSize = 6) {
+  // Canvas resolution scales with the arena's world size so a larger
+  // arena keeps the hex grid sharp without ballooning memory. The
+  // hex pixel radius is derived from a fixed *world* radius, so
+  // hexes look identical in physical size regardless of arena scale
+  // — there are just more of them.
+  const HEX_WORLD_R = 0.4;
+  const TARGET_PX_PER_UNIT = 85;
+  const size = Math.min(2048, Math.max(512, Math.round(floorWorldSize * TARGET_PX_PER_UNIT)));
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext("2d");
@@ -541,7 +549,7 @@ function buildTableTexture(secondary) {
   ctx.globalAlpha = 0.1;
   ctx.strokeStyle = secondary;
   ctx.lineWidth = 1.25;
-  const hexR = 32;
+  const hexR = (HEX_WORLD_R / floorWorldSize) * size;
   const hexW = Math.sqrt(3) * hexR;
   const hexH = 2 * hexR;
   const rowH = hexH * 0.75;
@@ -1028,8 +1036,11 @@ const DiceRoller = forwardRef((props, ref) => {
       // the player still sees a hint of dimension on the dice. FOV 30
       // is narrow enough to minimize perspective distortion across
       // the 6×6 arena while still fitting the floor + walls.
+      // Camera y was 12 over the original 6×6 floor; with the 18×18
+      // floor we pull back to ~22 so the larger arena fits the
+      // viewport at roughly the same apparent size.
       camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 100);
-      camera.position.set(0, 12, 0.5);
+      camera.position.set(0, 22, 0.5);
     } else {
       camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
       const baseSize = 300;
@@ -1107,7 +1118,7 @@ const DiceRoller = forwardRef((props, ref) => {
       // Premium table surface — 6×6 with gradient + hex pattern.
       const tableSize = (ARENA.halfSize + ARENA.wallThickness) * 2;
       const tableGeometry = new THREE.PlaneGeometry(tableSize, tableSize);
-      const tableTex = buildTableTexture(secondaryColor);
+      const tableTex = buildTableTexture(secondaryColor, tableSize);
       const tableMaterial = new THREE.MeshBasicMaterial({
         map: tableTex,
         transparent: true,
