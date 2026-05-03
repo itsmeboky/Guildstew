@@ -323,8 +323,12 @@ const ARENA = {
   halfSize: 9,    // 18×18 footprint — gives the dice ~3× more space
                   // to roll than the original 6×6 arena.
   floorY: -1,
-  wallHeight: 5,
-  wallThickness: 0.5,
+  // Walls are tall enough (top at y=floorY+wallHeight = 7) to
+  // contain any throw arc the player can produce, and thick enough
+  // (1.0 wide) that high-velocity dice can't tunnel through them
+  // between solver iterations.
+  wallHeight: 8,
+  wallThickness: 1.0,
   // Top-down camera compresses vertical motion visually, so we bump
   // gravity past the original -30 to keep throws feeling weighty
   // rather than floaty.
@@ -339,6 +343,12 @@ function buildPhysicsWorld() {
   world.gravity.set(0, ARENA.gravity, 0);
   world.broadphase = new CANNON.SAPBroadphase(world);
   world.allowSleep = true;
+  // Default solver runs 10 iterations per step; bump to 20 so a
+  // hard-thrown dice doesn't punch through the wall bodies before
+  // the constraint solver catches the contact.
+  if (world.solver && typeof world.solver.iterations === "number") {
+    world.solver.iterations = 20;
+  }
   world.defaultContactMaterial.friction = ARENA.friction;
   world.defaultContactMaterial.restitution = ARENA.defaultRestitution;
 
@@ -386,7 +396,7 @@ function buildPhysicsWorld() {
 }
 
 function buildDiceBody(diceMat, halfExtents) {
-  return new CANNON.Body({
+  const body = new CANNON.Body({
     mass: 1,
     material: diceMat,
     shape: new CANNON.Box(halfExtents),
@@ -396,6 +406,12 @@ function buildDiceBody(diceMat, halfExtents) {
     sleepSpeedLimit: 0.15,
     sleepTimeLimit: 0.4,
   });
+  // Continuous collision detection kicks in once the dice exceeds
+  // 8 m/s. Without it a hard shake-throw can tunnel straight
+  // through the static wall bodies in a single solver step.
+  body.ccdSpeedThreshold = 8;
+  body.ccdIterations = 1;
+  return body;
 }
 
 // Build a face-map for a dice type: for each face value, compute the
@@ -470,8 +486,12 @@ function findMatchingRoll({
   startVelocity = null,
   startAngVel = null,
   impulseScale = 1,
-  maxRetries = 50,
-  maxSteps = 300,
+  // 50×300 was hitting ~800ms-1.5s on the new (larger) arena
+  // because dice take longer to settle and we were running the
+  // hidden sim 50 attempts deep. 20×200 keeps the hit rate
+  // healthy while bringing typical search to under 250ms.
+  maxRetries = 20,
+  maxSteps = 200,
   minDot = 0.92,
   maxDot = 1.01,
 }) {
@@ -1649,6 +1669,7 @@ const DiceRoller = forwardRef((props, ref) => {
         const drag = dragStateRef.current;
         drag.isDown = true;
         drag.isDragging = true;
+        drag.pointerId = e.pointerId;
         drag.lastX = e.clientX;
         drag.lastY = e.clientY;
         drag.lastT = performance.now();
@@ -1659,6 +1680,12 @@ const DiceRoller = forwardRef((props, ref) => {
         drag.targetX = tmp.x;
         drag.targetZ = tmp.z;
         canvas.style.cursor = "grabbing";
+        // Capture the pointer so pointermove/pointerup keep flowing
+        // to the canvas even after the cursor leaves it. Without this
+        // a player who flicks their wrist past the modal edge stops
+        // generating shake events, and the release falls into the
+        // lazy-flop path because accumulatedShake never grows.
+        try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
         // Walls thunk down immediately on pickup. If the player
         // releases before they've landed, onPointerUp queues the
         // release and the wall-drop promise fires it on land.
@@ -1686,13 +1713,19 @@ const DiceRoller = forwardRef((props, ref) => {
         drag.targetZ = tmp.z;
       };
 
-      const onPointerUp = () => {
+      const onPointerUp = (e) => {
         const drag = dragStateRef.current;
         if (!drag.isDown) return;
         drag.isDown = false;
         drag.isDragging = false;
         canvas.style.cursor = "";
-        const lazy = drag.accumulatedShake <= 250;
+        try {
+          if (drag.pointerId != null && canvas.hasPointerCapture?.(drag.pointerId)) {
+            canvas.releasePointerCapture(drag.pointerId);
+          }
+        } catch (_) {}
+        const SHAKE_THRESHOLD = 250;
+        const lazy = drag.accumulatedShake <= SHAKE_THRESHOLD;
         // Hand the dice's current world position to handleRoll so
         // the roll animation (or physics impulse) begins where the
         // player let go.
@@ -1708,6 +1741,15 @@ const DiceRoller = forwardRef((props, ref) => {
           ? { x: drag.velocityX, y: 0, z: -drag.velocityY }
           : null;
         const args = { lazy, startPos, releaseVelocity };
+        // eslint-disable-next-line no-console
+        console.log("[RELEASE DEBUG]", {
+          accumulatedShake: drag.accumulatedShake,
+          shakeThreshold: SHAKE_THRESHOLD,
+          willRoll: !lazy,
+          path: lazy ? "lazy-flop" : "physics-throw",
+          releaseVelocity: releaseVelocity || { x: 0, y: 0, z: 0 },
+          wallsState: wallsStateRef.current,
+        });
         // Gate release on walls being fully down. If they're still
         // dropping, queue the release and the ensureWallsDown promise
         // (kicked off in onPointerDown) fires the roll on land.
@@ -2243,9 +2285,17 @@ const DiceRoller = forwardRef((props, ref) => {
     // (mouse-pickup case). cannon-es applyImpulse takes a vector with
     // direct mass-scaled units; release dx/dt is in px/s — we map it
     // into rough world impulse magnitude with a small constant.
+    // Convert px/s release velocity → world m/s, but clamp it so a
+    // wild shake can't generate a tunneling impulse (>~17 m/s
+    // exceeds CCD's safety net at the current solver step rate).
     const v = opts.releaseVelocity || null;
+    const clampVel = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
     const startVelocity = v
-      ? { x: v.x * 0.012, y: 4 + Math.abs(v.y) * 0.006, z: v.z * 0.012 }
+      ? {
+          x: clampVel(v.x * 0.012, -14, 14),
+          y: clampVel(4 + Math.abs(v.y) * 0.006, 4, 8),
+          z: clampVel(v.z * 0.012, -14, 14),
+        }
       : null;
 
     // ~5% (per dice type) of rolls deliberately seek a tilted-but-
@@ -2254,10 +2304,11 @@ const DiceRoller = forwardRef((props, ref) => {
     const wantCocked = forcedResult === null
       && Math.random() < (COCK_RATES[diceType] ?? 0.05);
     let match = null;
+    const tSearchStart = performance.now();
     if (wantCocked) {
       match = findMatchingRoll({
         targetValue, faceMap, halfExtents: half, startPos,
-        startVelocity, minDot: 0.75, maxDot: 0.92, maxRetries: 30,
+        startVelocity, minDot: 0.75, maxDot: 0.92, maxRetries: 15,
       });
     }
     if (!match) {
@@ -2266,6 +2317,11 @@ const DiceRoller = forwardRef((props, ref) => {
         startVelocity, minDot: 0.92,
       });
     }
+    // eslint-disable-next-line no-console
+    console.log("[ROLL TIMING] hidden_sim",
+      `${(performance.now() - tSearchStart).toFixed(1)}ms`,
+      { matched: !!match, attempts: match?.attempts ?? null, target: targetValue }
+    );
     if (!match) return false; // vanishingly rare
 
     physicsRollRef.current = { targetValue, rollMod, startTime: performance.now() };
@@ -2405,7 +2461,14 @@ const DiceRoller = forwardRef((props, ref) => {
     // impulse fires once the arena is up.
     if (!lazy && !embedded && worldRef.current && diceBodyRef.current) {
       setIsRolling(true);
+      const tWallStart = performance.now();
+      const wallsAlreadyDown = wallsStateRef.current === "down";
       ensureWallsDown().then(() => {
+        if (!wallsAlreadyDown) {
+          // eslint-disable-next-line no-console
+          console.log("[ROLL TIMING] walls_drop",
+            `${(performance.now() - tWallStart).toFixed(1)}ms`);
+        }
         try {
           const ok = rollWithPhysics(roll, modifier, { startPos, releaseVelocity });
           if (!ok) {
