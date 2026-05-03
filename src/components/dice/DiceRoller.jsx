@@ -415,6 +415,29 @@ function buildFaceMap(diceType) {
     const localUp = new THREE.Vector3(0, 1, 0).applyQuaternion(invQ).normalize();
     map.push({ value: parseInt(valueStr, 10), dir: localUp });
   }
+  // ─── Bug 1 self-test ───
+  // For each face value, set obj.rotation to its calibrated Euler
+  // and run detectFaceUp on the resulting quaternion. The
+  // detection should return that same value. Any mismatch reveals
+  // a math inconsistency between calibration and detection.
+  if (typeof window !== "undefined") {
+    const mismatches = [];
+    for (const [valueStr, euler] of Object.entries(rotations)) {
+      obj.rotation.copy(euler);
+      const expected = parseInt(valueStr, 10);
+      const detected = detectFaceUp(obj.quaternion, map);
+      if (detected.value !== expected) {
+        mismatches.push({ expected, detected: detected.value, dot: Number(detected.dot.toFixed(3)) });
+      }
+    }
+    if (mismatches.length > 0) {
+      // eslint-disable-next-line no-console
+      console.warn(`[FACEMAP SELF-TEST] ${diceType} mismatches`, mismatches);
+    } else {
+      // eslint-disable-next-line no-console
+      console.log(`[FACEMAP SELF-TEST] ${diceType} OK (${map.length} faces)`);
+    }
+  }
   return map;
 }
 
@@ -923,6 +946,21 @@ const DiceRoller = forwardRef((props, ref) => {
   const isCockedRef = useRef(false);
   useEffect(() => { isRollingRef.current = isRolling; }, [isRolling]);
   useEffect(() => { isCockedRef.current = isCocked; }, [isCocked]);
+
+  // Reset roll-related state whenever the modal opens. The component
+  // doesn't unmount on close (it just renders null), so a roll left
+  // mid-flight when the modal closed would otherwise leave isRolling
+  // stuck at true and lock out the ROLL button on next open.
+  useEffect(() => {
+    if (!isOpen) return;
+    setIsRolling(false);
+    rollingRef.current = false;
+    setIsCocked(false);
+    setShowCockedAnim(false);
+    setLameAnim(null);
+    pendingReleaseRef.current = null;
+    cockedDepthRef.current = 0;
+  }, [isOpen]);
 
   useImperativeHandle(ref, () => ({
     roll: () => handleRoll(),
@@ -1724,6 +1762,13 @@ const DiceRoller = forwardRef((props, ref) => {
       tableMeshRef.current = null;
       motionTrailRef.current = null;
       particleGroupsRef.current = [];
+      // The world we just tore down may have had an in-flight roll
+      // (sleep listener pending). Force-clear roll state so the
+      // ROLL button isn't locked out after a mid-roll rebuild.
+      rollingRef.current = false;
+      pendingReleaseRef.current = null;
+      wallsStateRef.current = "parked";
+      wallsDropPromiseRef.current = null;
     };
   }, [isOpen, embedded, modelsReady, selectedDice, forcedResult]); // Re-add forcedResult to dependency array so force re-roll works
 
@@ -2242,10 +2287,64 @@ const DiceRoller = forwardRef((props, ref) => {
     body.angularVelocity.set(match.angVel.x, match.angVel.y, match.angVel.z);
     playRollSound();
 
+    // Watchdog: if the body never sleeps within 8s (e.g. perpetual
+    // micro-jitter, scene torn down mid-flight), force-finalize so
+    // isRolling/rollingRef can't get stuck and lock out the ROLL
+    // button on subsequent clicks.
+    const rollWatchdog = setTimeout(() => {
+      try {
+        body.removeEventListener("sleep", onSleep);
+      } catch (_) {}
+      // eslint-disable-next-line no-console
+      console.warn("[ROLL WATCHDOG] body never slept; forcing finalize");
+      try { animateWallsUp(); } catch (_) {}
+      try {
+        finalizePhysicsResult(targetValue, rollMod);
+      } catch (_) {
+        setIsRolling(false);
+        rollingRef.current = false;
+      }
+    }, 8000);
+
     const onSleep = () => {
       body.removeEventListener("sleep", onSleep);
+      if (rollWatchdog) clearTimeout(rollWatchdog);
       // Classify the actual settled orientation.
-      const { dot } = detectFaceUp(body.quaternion, faceMap);
+      const detection = detectFaceUp(body.quaternion, faceMap);
+      const { dot } = detection;
+      // ─── Bug 1 diagnostic: log everything we know about the
+      // settled orientation so we can compare reported value vs the
+      // visual face-up. Includes per-face dot products in body-up
+      // space so we can spot calibration inversions.
+      try {
+        const qThree = new THREE.Quaternion(
+          body.quaternion.x, body.quaternion.y,
+          body.quaternion.z, body.quaternion.w
+        );
+        const allDots = faceMap.map((f) => {
+          const v = new THREE.Vector3().copy(f.dir).applyQuaternion(qThree);
+          return { value: f.value, dot: Number(v.y.toFixed(3)) };
+        }).sort((a, b) => b.dot - a.dot);
+        // eslint-disable-next-line no-console
+        console.log("[ROLL DEBUG]", {
+          dice: selectedDice,
+          targetValue,
+          reportedValue: targetValue,
+          detectedValue: detection.value,
+          settledDot: Number(dot.toFixed(3)),
+          bodyQuatXYZW: [
+            Number(body.quaternion.x.toFixed(3)),
+            Number(body.quaternion.y.toFixed(3)),
+            Number(body.quaternion.z.toFixed(3)),
+            Number(body.quaternion.w.toFixed(3)),
+          ],
+          topThree: allDots.slice(0, 3),
+          bottomThree: allDots.slice(-3),
+        });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn("[ROLL DEBUG] log failed", e);
+      }
       if (dot > 0.92) {
         // Clean settle — lift walls so the result reveal isn't boxed in.
         animateWallsUp();
@@ -2307,10 +2406,25 @@ const DiceRoller = forwardRef((props, ref) => {
     if (!lazy && !embedded && worldRef.current && diceBodyRef.current) {
       setIsRolling(true);
       ensureWallsDown().then(() => {
-        const ok = rollWithPhysics(roll, modifier, { startPos, releaseVelocity });
-        if (!ok) {
+        try {
+          const ok = rollWithPhysics(roll, modifier, { startPos, releaseVelocity });
+          if (!ok) {
+            setIsRolling(false);
+            rollingRef.current = false;
+          }
+        } catch (err) {
+          // Any thrown error inside the physics setup must clear
+          // isRolling — otherwise the ROLL button stays disabled.
+          // eslint-disable-next-line no-console
+          console.error("[DiceRoller] physics roll setup failed", err);
           setIsRolling(false);
+          rollingRef.current = false;
         }
+      }).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error("[DiceRoller] ensureWallsDown rejected", err);
+        setIsRolling(false);
+        rollingRef.current = false;
       });
       return;
     }
