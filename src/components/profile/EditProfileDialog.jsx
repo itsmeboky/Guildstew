@@ -212,7 +212,7 @@ export default function EditProfileDialog({ open, onClose, user }) {
         avatar_url: avatarUrl,
         profile_color_1: data.color1,
         profile_color_2: data.color2,
-        social_handles: data.socialHandles,
+        social_links: data.socialHandles,
         favorite_genres: data.selectedGenres,
         featured_achievement_ids: data.selectedAchievements
       };
@@ -230,7 +230,7 @@ export default function EditProfileDialog({ open, onClose, user }) {
         country: data.country,
         pronouns: data.pronouns,
         bio: data.bio,
-        social_handles: data.socialHandles,
+        social_links: data.socialHandles,
         favorite_genres: data.selectedGenres,
         profile_color_1: data.color1,
         profile_color_2: data.color2,
