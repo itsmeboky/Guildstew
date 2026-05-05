@@ -351,6 +351,22 @@ const nearWall = (wall, offset = 0.3) => {
     : [w.pos[0] + w.sign * offset, 0.55, (Math.random() - 0.5) * (ARENA.depth - 2)];
 };
 
+function getFaceRotation(diceType, result, configFaceRotations) {
+  const override = configFaceRotations?.[diceType]?.[result];
+  if (override) {
+    const q = new THREE.Quaternion();
+    q.setFromEuler(new THREE.Euler(override.x, override.y, override.z));
+    return [q.x, q.y, q.z, q.w];
+  }
+  const fallback = FACE_ROTATIONS?.[diceType]?.[result];
+  if (fallback) {
+    const q = new THREE.Quaternion();
+    q.setFromEuler(fallback);
+    return [q.x, q.y, q.z, q.w];
+  }
+  return randomAxis();
+}
+
 function buildNormalRoll(result, diceType, shakeIntensity = 0.7, releaseVector = null) {
   // Bounce count: scales with shake, with randomness inside the band.
   // Min shake (0):   range 2-3
