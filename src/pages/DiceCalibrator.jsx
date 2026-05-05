@@ -217,24 +217,19 @@ export default function DiceCalibrator() {
         wrapperRef.current = null;
       }
 
-      const root = gltf.scene.clone();
-      root.position.set(0, 0, 0);
-      root.rotation.set(0, 0, 0);
+      const root = gltf.scene;
 
-      const sizeBox = new THREE.Box3().setFromObject(root);
-      const size = sizeBox.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
-      root.scale.setScalar(2 / maxDim);
-
-      // Center root around its own center of mass so user rotation
-      // pivots through the geometric center, not the GLB origin.
+      // Center the GLB on its geometric center
       const bbox = new THREE.Box3().setFromObject(root);
       const center = bbox.getCenter(new THREE.Vector3());
       root.position.sub(center);
 
+      // Wrap in a Group so rotation pivots around its origin (now the geometric center)
       const wrapper = new THREE.Group();
       wrapper.add(root);
       scene.add(wrapper);
+
+      // The drag handler and save handler must operate on this wrapper, not root
       wrapperRef.current = wrapper;
       reskinCurrent();
     };
