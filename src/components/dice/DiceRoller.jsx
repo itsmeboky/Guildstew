@@ -1,5 +1,12 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { X } from "lucide-react";
+import { FACE_ROTATIONS } from "./faceRotations";
+import { DICE_SIDES } from "./diceConfig";
+import { useActiveDiceSkin } from "@/lib/useActiveDiceSkin";
+import { applyDiceSkinToMesh } from "@/lib/applyDiceSkin";
+import { DEFAULT_MODEL_URLS, DEFAULT_TEXTURE_URL } from "@/config/diceAssets";
 
 // Expose THREE globally so the CDN GLTFLoader script can attach to it.
 // (cdnjs's r128 GLTFLoader is non-module and registers as THREE.GLTFLoader.)
