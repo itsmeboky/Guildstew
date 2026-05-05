@@ -1414,16 +1414,19 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
           else apply(c.material);
         }
       });
-      scene.add(cloned);
-      cloned.visible = false;
+      // Wrap in an outer Group so animation can set scale=1 without
+      // overriding the cached clone's native size-normalization scale (~66x for d20).
+      // This matches the single-dice architecture (dice wrapper > cached clone > GLB scene > mesh).
+      const outerGroup = new THREE.Group();
+      outerGroup.add(cloned);
+      scene.add(outerGroup);
+      outerGroup.visible = false;
       console.log("[spawnDie]", type, {
-        childCount: cloned.children.length,
-        scale: cloned.scale.toArray(),
-        position: cloned.position.toArray(),
+        outerScale: outerGroup.scale.toArray(),
+        innerScale: cloned.scale.toArray(),
         materialCount: collectMaterials(cloned).length,
-        hasParent: !!cloned.parent,
       });
-      return { group: cloned, materials: collectMaterials(cloned) };
+      return { group: outerGroup, materials: collectMaterials(cloned) };
     };
 
     const despawnAllMultiDice = () => {
