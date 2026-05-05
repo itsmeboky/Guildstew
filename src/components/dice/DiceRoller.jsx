@@ -15,6 +15,20 @@ import { DEFAULT_MODEL_URLS, DEFAULT_TEXTURE_URL } from "@/config/diceAssets";
 const _modelCache = {};
 const TARGET_DICE_SIZE = 1.4; // max dimension target after normalization
 
+// Baseline "skin" used when the player has no Tavern dice skin
+// applied. Mirrors the original hard-coded Guildstew look so the
+// apply-skin path is the single source of truth for the material
+// whether or not the player has a skin equipped.
+const STOCK_SKIN = {
+  baseColor: "#2a3441",
+  metalness: 0.3,
+  roughness: 0.4,
+  glowEnabled: false,
+  primaryLight: "#FF5722",
+  secondaryLight: "#8B5CF6",
+  customTextureUrl: null,
+};
+
 const _gltfLoader = new GLTFLoader();
 
 async function loadDiceModel(type, configUploadedModelsRef = null) {
