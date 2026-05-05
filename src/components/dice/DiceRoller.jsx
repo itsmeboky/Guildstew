@@ -728,6 +728,8 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     config = null,
     forcedResult = null,
     onRollComplete = null,
+    autoCloseOnReveal = false,
+    onClose = null,
   } = props;
   const mountRef = useRef(null);
   const sceneRef = useRef({});
@@ -1270,6 +1272,9 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
         if (typeof ev.value === "number") {
           onRollCompleteRef.current?.(ev.value);
         }
+        if (autoCloseOnReveal && onClose) {
+          setTimeout(() => onClose(), 1600);
+        }
         if (ev.diceType === "d20") {
           if (ev.value === 20) playCritSuccessSound();
           else if (ev.value === 1) playCritFailSound();
@@ -1296,7 +1301,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       case "rejected": setIsRolling(false); setShowEKG(false); break;
       case "arenaEffect": if (ev.effect === "dim") setShowEKG(true); break;
     }
-  }, []);
+  }, [autoCloseOnReveal, onClose]);
 
   // ==============================================================
   // ROLL EXECUTION
