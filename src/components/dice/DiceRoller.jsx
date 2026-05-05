@@ -831,99 +831,160 @@ const PARTICLE_EFFECTS = {
   },
 };
 
-class StyledParticles {
+// ============================================================
+// ENGINE PARTICLES — config-driven particle pool
+// Reads behavior from PARTICLE_EFFECTS configs. The same pool services
+// every effect; particles store a reference to their effect config.
+// ============================================================
+class EngineParticles {
   constructor(scene, max = 350) {
-    this.pool = []; this.scene = scene; this.textureCache = {};
+    this.pool = [];
+    this.scene = scene;
+    this.textureCache = {};
     for (let i = 0; i < max; i++) {
       const mat = new THREE.SpriteMaterial({ transparent: true, opacity: 0, depthWrite: false });
       const sprite = new THREE.Sprite(mat);
-      sprite.visible = false; sprite.scale.setScalar(0.15); scene.add(sprite);
-      this.pool.push({ sprite, mat, vel: [0,0,0], life: 0, maxLife: 0, style: null, baseScale: 0.15 });
+      sprite.visible = false;
+      sprite.scale.setScalar(0.15);
+      scene.add(sprite);
+      this.pool.push({
+        sprite, mat,
+        vel: [0, 0, 0],
+        life: 0, maxLife: 0,
+        config: null,
+        baseScale: 0.15,
+        speedMultiplier: 1,
+      });
     }
   }
-  _getTexture(style) {
-    if (this.textureCache[style]) return this.textureCache[style];
-    const c = document.createElement("canvas"); c.width = 64; c.height = 64;
-    const ctx = c.getContext("2d"); ctx.clearRect(0, 0, 64, 64);
-    switch (style) {
-      case "note": {
-        ctx.font = "bold 44px serif"; ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.fillText(["♪","♫","♩","♬"][Math.floor(Math.random()*4)], 32, 30); break;
-      }
-      case "fire": {
-        const g = ctx.createRadialGradient(32,38,3,32,32,26);
-        g.addColorStop(0,"#ffffcc"); g.addColorStop(0.25,"#ffaa00"); g.addColorStop(0.6,"#ff3300"); g.addColorStop(1,"rgba(200,0,0,0)");
-        ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(32,34,18,24,0,0,Math.PI*2); ctx.fill(); break;
-      }
-      case "ember": {
-        const g = ctx.createRadialGradient(32,32,1,32,32,12);
-        g.addColorStop(0,"#ffcc44"); g.addColorStop(0.6,"#ff4400"); g.addColorStop(1,"rgba(80,0,0,0)");
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32,32,12,0,Math.PI*2); ctx.fill(); break;
-      }
-      case "sparkle": {
-        ctx.strokeStyle = "#ffd700"; ctx.lineWidth = 2.5; ctx.lineCap = "round";
-        for (let j = 0; j < 4; j++) {
-          const a = (j/4)*Math.PI*2 - Math.PI/2;
-          ctx.beginPath(); ctx.moveTo(32+Math.cos(a)*4,32+Math.sin(a)*4);
-          ctx.lineTo(32+Math.cos(a)*22,32+Math.sin(a)*22); ctx.stroke();
-        }
-        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(32,32,4,0,Math.PI*2); ctx.fill(); break;
-      }
-      case "rainbow": {
-        const colors = ["#ff0000","#ff8800","#ffff00","#00ff00","#0088ff","#aa00ff"];
-        const col = colors[Math.floor(Math.random()*colors.length)];
-        const g = ctx.createRadialGradient(32,32,3,32,32,20);
-        g.addColorStop(0,"#ffffff"); g.addColorStop(0.4,col); g.addColorStop(1,"rgba(0,0,0,0)");
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32,32,20,0,Math.PI*2); ctx.fill(); break;
-      }
-      default: {
-        const g = ctx.createRadialGradient(32,32,2,32,32,22);
-        g.addColorStop(0,"#ffffff"); g.addColorStop(0.3,"#FF5300"); g.addColorStop(1,"rgba(255,83,0,0)");
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32,32,22,0,Math.PI*2); ctx.fill();
-      }
+
+  // Resolve a texture by key. Some textures (note, rainbow) generate fresh per particle.
+  _getTexture(textureKey) {
+    const factory = PROCEDURAL_TEXTURES[textureKey];
+    if (!factory) return PROCEDURAL_TEXTURES["radial-orange"]();
+    // music-note and rainbow-orb pick random glyphs/colors per call — don't cache
+    if (textureKey === "music-note" || textureKey === "rainbow-orb") {
+      return factory();
     }
-    const tex = new THREE.CanvasTexture(c);
-    if (style !== "note" && style !== "rainbow") this.textureCache[style] = tex;
-    return tex;
+    if (!this.textureCache[textureKey]) {
+      this.textureCache[textureKey] = factory();
+    }
+    return this.textureCache[textureKey];
   }
-  emit(pos, count, style = "impact", speed = 3, life = 600) {
+
+  // Public API — preserves the old (pos, count, style, speed, life) signature.
+  // `style` is a key into PARTICLE_EFFECTS. `speed` and `life` override config defaults.
+  emit(pos, count, style = "impact", speed = 3, life = null) {
+    const config = PARTICLE_EFFECTS[style] || PARTICLE_EFFECTS.impact;
     let spawned = 0;
     for (const p of this.pool) {
       if (p.life > 0 || spawned >= count) continue;
+
+      // Transform: position
       p.sprite.visible = true;
-      p.sprite.position.set(pos[0]||0, pos[1]||0.5, pos[2]||0);
-      p.mat.map = this._getTexture(style); p.mat.needsUpdate = true; p.mat.opacity = 1;
-      p.style = style;
-      const isRising = style === "note" || style === "sparkle";
+      p.sprite.position.set(pos[0] || 0, pos[1] || 0.5, pos[2] || 0);
+
+      // Texture
+      p.mat.map = this._getTexture(config.texture);
+      p.mat.needsUpdate = true;
+      p.mat.opacity = config.visual.opacityStart;
+
+      // Stash the config + params for the update loop
+      p.config = config;
+      p.speedMultiplier = speed;
+      p.baseScale = config.visual.baseScale;
+      p.sprite.scale.setScalar(p.baseScale * config.visual.scaleStart);
+
+      // Initial velocity from config range, scaled by speed
+      // The legacy emit() called speed=3 the "default speed" — preserve that scaling.
+      // Each spawn-velocity range was defined for speed=3, so divide by 3 to normalize.
+      const vScale = speed / 3;
+      const v = config.spawn.velocity;
       p.vel = [
-        (Math.random()-0.5)*speed*(style==="note"?0.4:1),
-        isRising ? Math.random()*speed*0.5+2 : Math.random()*speed*0.8+1,
-        (Math.random()-0.5)*speed*(style==="note"?0.4:1),
+        ((Math.random() - 0.5) * 2) * (v.x.max - v.x.min) * 0.5 * vScale + (v.x.min + v.x.max) * 0.5 * 0,
+        // For y, use the range directly (it's not symmetric around 0)
+        (v.y.min + Math.random() * (v.y.max - v.y.min)) * vScale,
+        ((Math.random() - 0.5) * 2) * (v.z.max - v.z.min) * 0.5 * vScale + (v.z.min + v.z.max) * 0.5 * 0,
       ];
-      p.baseScale = style==="note"?0.4 : style==="fire"?0.28 : style==="sparkle"?0.22 : 0.16;
-      p.sprite.scale.setScalar(p.baseScale);
-      p.life = life; p.maxLife = life; spawned++;
+
+      // Lifetime — explicit override or config default
+      p.life = life ?? config.spawn.lifetime;
+      p.maxLife = p.life;
+
+      spawned++;
     }
   }
+
   update(dt) {
     const ds = dt / 1000;
     for (const p of this.pool) {
       if (p.life <= 0) continue;
-      p.life -= dt; const lr = Math.max(0, p.life / p.maxLife);
-      p.sprite.position.x += p.vel[0]*ds;
-      p.sprite.position.y += p.vel[1]*ds;
-      p.sprite.position.z += p.vel[2]*ds;
-      if (p.style==="note") { p.vel[0]+=Math.sin(p.life*0.008)*0.04; p.vel[1]*=0.998; p.sprite.scale.setScalar(p.baseScale*(0.8+Math.sin(p.life*0.01)*0.2)); }
-      else if (p.style==="fire") { p.vel[1]+=2*ds; p.vel[0]+=(Math.random()-0.5)*0.3; p.sprite.scale.setScalar(p.baseScale*lr); }
-      else if (p.style==="ember") { p.vel[1]-=1.5*ds; p.vel[0]+=(Math.random()-0.5)*0.08; p.sprite.scale.setScalar(p.baseScale*(0.5+lr*0.5)); }
-      else if (p.style==="sparkle") { p.vel[1]*=0.99; p.sprite.scale.setScalar(p.baseScale*(0.7+Math.sin(p.life*0.02)*0.3)*lr); }
-      else if (p.style==="rainbow") { p.vel[1]-=4*ds; p.sprite.scale.setScalar(p.baseScale*lr); }
-      else { p.vel[1]-=9.8*ds; }
-      p.mat.opacity = p.style==="note" ? lr*0.85 : lr;
-      if (p.life<=0) p.sprite.visible = false;
+      p.life -= dt;
+      const lifeRatio = Math.max(0, p.life / p.maxLife);
+      const ageRatio = 1 - lifeRatio;
+      const cfg = p.config;
+      if (!cfg) {
+        // Defensive: if config went missing somehow, treat as default impact
+        p.vel[1] -= 9.8 * ds;
+      } else {
+        // === Apply physics ===
+        p.vel[1] += cfg.physics.accelY * ds;
+        if (cfg.physics.verticalDamping !== 1.0) {
+          p.vel[1] *= cfg.physics.verticalDamping;
+        }
+        // Lateral random jitter
+        if (cfg.physics.lateralJitter > 0) {
+          const j = cfg.physics.lateralJitter;
+          p.vel[0] += (Math.random() - 0.5) * j;
+          p.vel[2] += (Math.random() - 0.5) * j;
+        }
+        // Lateral sine oscillation (driven by life ms)
+        const osc = cfg.physics.lateralOscillation;
+        if (osc.amp > 0) {
+          p.vel[0] += Math.sin(p.life * osc.freq) * osc.amp;
+        }
+      }
+
+      // === Integrate position ===
+      p.sprite.position.x += p.vel[0] * ds;
+      p.sprite.position.y += p.vel[1] * ds;
+      p.sprite.position.z += p.vel[2] * ds;
+
+      // === Visual: scale (lerp start→end + optional oscillation) ===
+      if (cfg) {
+        const scaleLerp = cfg.visual.scaleStart + (cfg.visual.scaleEnd - cfg.visual.scaleStart) * ageRatio;
+        let scaleOsc = 1.0;
+        const sOsc = cfg.visual.scaleOscillation;
+        if (sOsc.amp > 0) {
+          // Match the existing pattern: (centerOffset + sin(life*freq)*amp)
+          // For sparkle: (0.7 + sin*0.3); for note: (0.8 + sin*0.2)
+          // We encode this as: center = 1 - amp; scale = baseScale * (center + sin*amp)
+          const center = 1.0 - sOsc.amp;
+          scaleOsc = (center + Math.sin(p.life * sOsc.freq) * sOsc.amp);
+        }
+        // sparkle multiplies by lifeRatio AND oscillation, so combine
+        const finalScale = p.baseScale * scaleLerp * scaleOsc * (cfg.visual.opacityEnd === 0 && cfg.visual.scaleEnd === 0 ? lifeRatio : 1);
+        // ^ The `lifeRatio` multiplier preserves sparkle's "(0.7+sin*0.3)*lr" behavior
+        //   and rainbow/fire's "lr" fade. impact/note keep scaleStart=scaleEnd=1 so this is a no-op.
+        p.sprite.scale.setScalar(finalScale);
+
+        // === Visual: opacity ===
+        p.mat.opacity = cfg.visual.opacityStart + (cfg.visual.opacityEnd - cfg.visual.opacityStart) * ageRatio;
+      }
+
+      if (p.life <= 0) p.sprite.visible = false;
     }
   }
-  dispose() { for (const p of this.pool) { if(p.mat.map)p.mat.map.dispose(); p.mat.dispose(); this.scene.remove(p.sprite); } }
+
+  dispose() {
+    for (const p of this.pool) {
+      if (p.mat.map) p.mat.map.dispose();
+      p.mat.dispose();
+      this.scene.remove(p.sprite);
+    }
+    Object.values(this.textureCache).forEach(t => t.dispose());
+    this.textureCache = {};
+  }
 }
 
 function applyVertexGradient(model, primaryHex, secondaryHex, isThemedSkin) {
@@ -1226,7 +1287,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     const ghost = new THREE.Mesh(buildDiceGeometry("d20"), ghostMat);
     ghost.visible = false; scene.add(ghost);
 
-    const particles = new StyledParticles(scene, 350);
+    const particles = new EngineParticles(scene, 350);
     particleRef.current = particles;
 
     const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -2.5);
