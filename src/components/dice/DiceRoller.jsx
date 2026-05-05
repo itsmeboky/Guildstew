@@ -865,9 +865,11 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     const skin = activeSkinRef.current;
     const ambColor = skin?.secondaryLight || secondaryColor;
     const keyColor = skin?.primaryLight || primaryColor;
-    const ambientLight = new THREE.AmbientLight(new THREE.Color(ambColor), 0.8);
+    const ambientLight = new THREE.AmbientLight(new THREE.Color(ambColor), 0.6);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x202830, 1.8);
+    scene.add(hemiLight);
     scene.add(ambientLight);
-    const mainLight = new THREE.DirectionalLight(new THREE.Color(keyColor), 2.0);
+    const mainLight = new THREE.DirectionalLight(new THREE.Color(keyColor), 2.2);
     mainLight.position.set(3, 10, 4); mainLight.castShadow = true;
     mainLight.shadow.mapSize.set(1024, 1024);
     Object.assign(mainLight.shadow.camera, { near:1, far:25, left:-5, right:5, top:5, bottom:-5 });
@@ -1192,14 +1194,10 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       renderer.render(scene, camera);
 
       // Update result number overlay position — projects dice 3D pos to screen
-      if (resultOverlayRef.current && dicePosForOverlay) {
-        const v = new THREE.Vector3(dicePosForOverlay.x, dicePosForOverlay.y + 0.5, dicePosForOverlay.z);
-        v.project(camera);
-        const rect = container.getBoundingClientRect();
-        const sx = (v.x * 0.5 + 0.5) * rect.width;
-        const sy = (-v.y * 0.5 + 0.5) * rect.height - 70; // 70px above the dice in screen space
-        resultOverlayRef.current.style.left = `${sx}px`;
-        resultOverlayRef.current.style.top = `${sy}px`;
+      if (resultOverlayRef.current) {
+        resultOverlayRef.current.style.left = "50%";
+        resultOverlayRef.current.style.top = "20px";
+        resultOverlayRef.current.style.transform = "translateX(-50%)";
       }
     };
     rafId = requestAnimationFrame(animate);
