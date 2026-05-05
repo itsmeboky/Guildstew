@@ -730,6 +730,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     onRollComplete = null,
     autoCloseOnReveal = false,
     onClose = null,
+    compact = false,
   } = props;
   const mountRef = useRef(null);
   const sceneRef = useRef({});
@@ -1393,6 +1394,13 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
 
   // Computed
   const lastSides = lastResultDiceType ? DICE_CONFIGS[lastResultDiceType].sides : 20;
+  const modalSize = compact ? 700 : 950;
+  const arenaFrameStyle = {
+    ...S.arenaFrame,
+    width: `min(${modalSize}px, calc(100vw - 48px))`,
+    height: `min(${modalSize}px, calc(100vh - 48px))`,
+    aspectRatio: undefined,
+  };
   const isCritMax = lastResult !== null && lastResult === lastSides;
   const isCritMin = lastResult !== null && lastResult === 1;
   const shakeColor = shakeLevel<0.15?"#ff4444":shakeLevel<0.5?"#ff8844":shakeLevel<0.8?"#ffcc00":"#44ff88";
@@ -1439,7 +1447,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
 
       {/* === Center: Arena === */}
       <main style={S.arenaWrap}>
-        <div style={S.arenaFrame}>
+        <div style={arenaFrameStyle}>
           <div
             ref={mountRef}
             onPointerDown={handlePointerDown}
