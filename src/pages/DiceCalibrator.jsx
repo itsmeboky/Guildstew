@@ -218,20 +218,19 @@ export default function DiceCalibrator() {
 
       const root = gltf.scene;
 
-      // Bounding box (used for both centering AND size normalization below)
-      const bbox = new THREE.Box3().setFromObject(root);
-      const center = bbox.getCenter(new THREE.Vector3());
-      const size = bbox.getSize(new THREE.Vector3());
-
-      // Center on geometric center
-      root.position.sub(center);
-
-      // Normalize to a consistent size so all dice render at the same scale
+      // 1. Scale first — sets root.scale on the model
+      const initialBbox = new THREE.Box3().setFromObject(root);
+      const size = initialBbox.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z) || 1;
       const targetSize = 3.0;
       root.scale.setScalar(targetSize / maxDim);
 
-      // Wrap in Group so rotation pivots around the geometric center
+      // 2. Re-compute bbox AFTER scaling, then center using the NEW center
+      const scaledBbox = new THREE.Box3().setFromObject(root);
+      const center = scaledBbox.getCenter(new THREE.Vector3());
+      root.position.sub(center);
+
+      // 3. Wrap in Group so rotation pivots around the geometric center
       const wrapper = new THREE.Group();
       wrapper.add(root);
       scene.add(wrapper);
