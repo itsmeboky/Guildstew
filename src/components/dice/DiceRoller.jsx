@@ -7,6 +7,26 @@ import { DICE_SIDES } from "./diceConfig";
 import { useActiveDiceSkin } from "@/lib/useActiveDiceSkin";
 import { applyDiceSkinToMesh } from "@/lib/applyDiceSkin";
 import { DEFAULT_MODEL_URLS, DEFAULT_TEXTURE_URL } from "@/config/diceAssets";
+import { supabase } from "@/api/supabaseClient";
+
+// Globally-published dice face calibrations, fetched once from
+// site_config.dice_face_rotations. Shape: { d4:{1:{x,y,z,w},...}, ... }.
+// Falls back to the static FACE_ROTATIONS table when missing.
+let _globalFaceRotations = null;
+const _globalFaceRotationsPromise = (async () => {
+  try {
+    const { data, error } = await supabase
+      .from("site_config")
+      .select("value")
+      .eq("key", "dice_face_rotations")
+      .maybeSingle();
+    if (error) throw error;
+    _globalFaceRotations = data?.value || null;
+  } catch (err) {
+    console.warn("Failed to load global dice face rotations", err);
+    _globalFaceRotations = null;
+  }
+})();
 
 // ============================================================
 // DICE MODEL LOADING (.glb from Supabase)
@@ -383,18 +403,26 @@ const REVEAL_GIFS = {
 };
 
 function getFaceRotation(diceType, result, configFaceRotations) {
+  // 1. Globally-published calibration (quaternion {x,y,z,w}).
+  const global = _globalFaceRotations?.[diceType]?.[result];
+  if (global && Number.isFinite(global.w)) {
+    return [global.x, global.y, global.z, global.w];
+  }
+  // Legacy path: campaign-scoped Euler overrides.
   const override = configFaceRotations?.[diceType]?.[result];
   if (override) {
     const q = new THREE.Quaternion();
     q.setFromEuler(new THREE.Euler(override.x, override.y, override.z));
     return [q.x, q.y, q.z, q.w];
   }
+  // 2. Static defaults (Euler).
   const fallback = FACE_ROTATIONS?.[diceType]?.[result];
   if (fallback) {
     const q = new THREE.Quaternion();
     q.setFromEuler(fallback);
     return [q.x, q.y, q.z, q.w];
   }
+  // 3. Random.
   return randomAxis();
 }
 
