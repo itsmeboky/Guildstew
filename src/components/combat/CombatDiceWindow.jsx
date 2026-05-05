@@ -1585,6 +1585,15 @@ export default function CombatDiceWindow({
     setCurrentDice("d20");
     setPhase("rolling_check");
     onRoll && onRoll({ type: "rolling_check" });
+    setDicePopup({
+      open: true,
+      dice: "d20",
+      forcedResult: isSpectator ? skillCheckRoll?.d20 : null,
+      onComplete: (value) => {
+        setDicePopup(p => ({ ...p, open: false }));
+        onSkillCheckRollComplete(value);
+      },
+    });
   };
 
   const onSkillCheckRollComplete = (roll) => {
