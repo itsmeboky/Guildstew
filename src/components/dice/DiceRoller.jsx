@@ -865,9 +865,9 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     const skin = activeSkinRef.current;
     const ambColor = skin?.secondaryLight || secondaryColor;
     const keyColor = skin?.primaryLight || primaryColor;
-    const ambientLight = new THREE.AmbientLight(new THREE.Color(ambColor), 0.4);
+    const ambientLight = new THREE.AmbientLight(new THREE.Color(ambColor), 0.8);
     scene.add(ambientLight);
-    const mainLight = new THREE.DirectionalLight(new THREE.Color(keyColor), 1.05);
+    const mainLight = new THREE.DirectionalLight(new THREE.Color(keyColor), 2.0);
     mainLight.position.set(3, 10, 4); mainLight.castShadow = true;
     mainLight.shadow.mapSize.set(1024, 1024);
     Object.assign(mainLight.shadow.camera, { near:1, far:25, left:-5, right:5, top:5, bottom:-5 });
@@ -1395,7 +1395,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
 
   // Computed
   const lastSides = lastResultDiceType ? DICE_CONFIGS[lastResultDiceType].sides : 20;
-  const modalSize = compact ? 700 : 950;
+  const modalSize = 500;
   const arenaFrameStyle = {
     ...S.arenaFrame,
     width: `min(${modalSize}px, calc(100vw - 48px))`,
