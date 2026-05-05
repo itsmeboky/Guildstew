@@ -716,6 +716,15 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     sc.diceState.materials = newMats;
   }, [activeSkin, isThemedSkin, primaryColor, secondaryColor]);
 
+  useEffect(() => {
+    const s = sceneRef.current;
+    if (!s) return;
+    const ambColor = activeSkin?.secondaryLight || secondaryColor;
+    const keyColor = activeSkin?.primaryLight || primaryColor;
+    s.ambientLight?.color.set(ambColor);
+    s.mainLight?.color.set(keyColor);
+  }, [primaryColor, secondaryColor, activeSkin]);
+
   const [diceType, setDiceType] = useState("d20");
   const [equippedEffect, setEquippedEffect] = useState("default");
   const [modifier, setModifier] = useState("none");
@@ -788,8 +797,12 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     const camera = new THREE.PerspectiveCamera(34, w / h, 0.1, 100);
     camera.position.set(0, 13, 0); camera.lookAt(0, 0, 0);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-    const mainLight = new THREE.DirectionalLight(0xfff5e6, 1.05);
+    const skin = activeSkinRef.current;
+    const ambColor = skin?.secondaryLight || secondaryColor;
+    const keyColor = skin?.primaryLight || primaryColor;
+    const ambientLight = new THREE.AmbientLight(new THREE.Color(ambColor), 0.4);
+    scene.add(ambientLight);
+    const mainLight = new THREE.DirectionalLight(new THREE.Color(keyColor), 1.05);
     mainLight.position.set(3, 10, 4); mainLight.castShadow = true;
     mainLight.shadow.mapSize.set(1024, 1024);
     Object.assign(mainLight.shadow.camera, { near:1, far:25, left:-5, right:5, top:5, bottom:-5 });
@@ -931,6 +944,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       diceState, // { activeContent, isPlaceholder, materials }
       glowPlane, glowMat, ekgFloor, ekgFloorMat, ekgCanvas, ekgCtx, ekgTexture, ekgWave,
       mouseToWorld, swapDiceModel,
+      ambientLight, mainLight,
     };
 
     // If a model finished preloading before the scene mounted, swap it in now
