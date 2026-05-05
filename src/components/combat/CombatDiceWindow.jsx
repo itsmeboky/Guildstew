@@ -735,6 +735,12 @@ export default function CombatDiceWindow({
         const decisions = {};
         for (const o of opts) decisions[o] = null;
         setPostHitDecisions(decisions);
+      } else {
+        // Auto-advance to the damage roll so the player isn't stranded
+        // on the HIT badge. Brief delay lets the badge register first.
+        setTimeout(() => {
+          handleDamageRoll();
+        }, 900);
       }
     }
 
