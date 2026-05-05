@@ -1231,6 +1231,11 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     const camera = new THREE.PerspectiveCamera(34, w / h, 0.1, 100);
     camera.position.set(0, 13, 0); camera.lookAt(0, 0, 0);
 
+    if (typeof window !== "undefined") {
+      window.__diceScene = scene;
+      window.__diceCamera = camera;
+    }
+
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
     const hemi = new THREE.HemisphereLight(0xffffff, 0x202830, 1.4);
     scene.add(hemi);
@@ -1411,6 +1416,13 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       });
       scene.add(cloned);
       cloned.visible = false;
+      console.log("[spawnDie]", type, {
+        childCount: cloned.children.length,
+        scale: cloned.scale.toArray(),
+        position: cloned.position.toArray(),
+        materialCount: collectMaterials(cloned).length,
+        hasParent: !!cloned.parent,
+      });
       return { group: cloned, materials: collectMaterials(cloned) };
     };
 
@@ -1530,6 +1542,16 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
             die.group.position.set(pos[0], pos[1], pos[2]);
             die.group.quaternion.set(rot[0], rot[1], rot[2], rot[3]);
             die.group.scale.setScalar(scale);
+            if (!die._loggedFirst) {
+              die._loggedFirst = true;
+              console.log("[multi-first-frame]", die.type, {
+                visible: die.group.visible,
+                pos: die.group.position.toArray(),
+                scale: die.group.scale.toArray(),
+                children: die.group.children.length,
+                hasMeshChild: die.group.children.some(c => c.isMesh || c.type === "Mesh" || c.children?.some?.(cc => cc.isMesh)),
+              });
+            }
           }
           // Fire per-die events (wallHit, particles, etc.) — but settled/reveal already filtered
           while (die.eventIndex < tl.events.length && tl.events[die.eventIndex].t <= elapsed) {
@@ -1846,9 +1868,13 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       });
     }
 
+    console.log("[multi-roll] pool ready", pool.length, "dice spawned. Total in scene:", sceneRef.current.scene.children.length);
+    pool.forEach((d, i) => console.log("  pool[" + i + "]:", d.type, "result", d.result, "visible:", d.group.visible, "pos:", d.group.position.toArray()));
+
     // Setup playback for multi mode
     const longestDuration = Math.max(...pool.map(d => d.timeline.duration), 1000);
     timelineRef.current = null; // single-dice timeline disabled
+    if (typeof window !== "undefined") window.__lastMultiPool = pool;
     playbackRef.current = {
       startTime: performance.now(),
       eventIndex: 0,
