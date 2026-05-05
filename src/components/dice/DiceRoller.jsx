@@ -13,6 +13,7 @@ import { DEFAULT_MODEL_URLS, DEFAULT_TEXTURE_URL } from "@/config/diceAssets";
 // ============================================================
 // Module-scoped cache so HMR / re-mounts don't re-fetch
 const _modelCache = {};
+const _textureCache = new Map();
 const TARGET_DICE_SIZE = 1.4; // max dimension target after normalization
 
 // Baseline "skin" used when the player has no Tavern dice skin
