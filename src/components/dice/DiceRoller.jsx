@@ -696,6 +696,26 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const activeSkinRef = useRef(activeSkin);
   useEffect(() => { activeSkinRef.current = activeSkin; }, [activeSkin]);
 
+  useEffect(() => {
+    const sc = sceneRef.current;
+    if (!sc?.diceState?.activeContent) return;
+    if (sc.diceState.isPlaceholder) return;
+    applyDiceSkinToMesh(sc.diceState.activeContent, activeSkin || STOCK_SKIN, {
+      defaultTexture: _defaultTexture,
+      textureCache: _textureCache,
+    });
+    if (isThemedSkin) {
+      applyVertexGradient(sc.diceState.activeContent, primaryColor, secondaryColor, true);
+    }
+    // applyDiceSkinToMesh replaces materials — refresh the materials array + emissive originals
+    const newMats = collectMaterials(sc.diceState.activeContent);
+    newMats.forEach(m => {
+      m.userData._origEmissive = m.emissive ? m.emissive.clone() : new THREE.Color(0x000000);
+      m.userData._origEmissiveIntensity = m.emissiveIntensity ?? 0;
+    });
+    sc.diceState.materials = newMats;
+  }, [activeSkin, isThemedSkin, primaryColor, secondaryColor]);
+
   const [diceType, setDiceType] = useState("d20");
   const [equippedEffect, setEquippedEffect] = useState("default");
   const [modifier, setModifier] = useState("none");
