@@ -596,6 +596,241 @@ function interpolatePath(path, elapsed) {
 // ============================================================
 // PARTICLE SYSTEM
 // ============================================================
+// ============================================================
+// PROCEDURAL TEXTURE FACTORIES
+// Each entry returns a fresh THREE.CanvasTexture by drawing into a 64x64 canvas.
+// In Phase B, user-uploaded URL textures will sit alongside these.
+// ============================================================
+const PROCEDURAL_TEXTURES = {
+  "radial-orange": () => {
+    const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+    const ctx = c.getContext("2d");
+    const g = ctx.createRadialGradient(32,32,2,32,32,22);
+    g.addColorStop(0,"#ffffff"); g.addColorStop(0.3,"#FF5300"); g.addColorStop(1,"rgba(255,83,0,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32,32,22,0,Math.PI*2); ctx.fill();
+    return new THREE.CanvasTexture(c);
+  },
+  "fire-flame": () => {
+    const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+    const ctx = c.getContext("2d");
+    const g = ctx.createRadialGradient(32,38,3,32,32,26);
+    g.addColorStop(0,"#ffffcc"); g.addColorStop(0.25,"#ffaa00"); g.addColorStop(0.6,"#ff3300"); g.addColorStop(1,"rgba(200,0,0,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(32,34,18,24,0,0,Math.PI*2); ctx.fill();
+    return new THREE.CanvasTexture(c);
+  },
+  "ember-spark": () => {
+    const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+    const ctx = c.getContext("2d");
+    const g = ctx.createRadialGradient(32,32,1,32,32,12);
+    g.addColorStop(0,"#ffcc44"); g.addColorStop(0.6,"#ff4400"); g.addColorStop(1,"rgba(80,0,0,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32,32,12,0,Math.PI*2); ctx.fill();
+    return new THREE.CanvasTexture(c);
+  },
+  "sparkle-cross": () => {
+    const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+    const ctx = c.getContext("2d");
+    ctx.strokeStyle = "#ffd700"; ctx.lineWidth = 2.5; ctx.lineCap = "round";
+    for (let j = 0; j < 4; j++) {
+      const a = (j/4)*Math.PI*2 - Math.PI/2;
+      ctx.beginPath();
+      ctx.moveTo(32+Math.cos(a)*4, 32+Math.sin(a)*4);
+      ctx.lineTo(32+Math.cos(a)*22, 32+Math.sin(a)*22);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(32,32,4,0,Math.PI*2); ctx.fill();
+    return new THREE.CanvasTexture(c);
+  },
+  "music-note": () => {
+    const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+    const ctx = c.getContext("2d");
+    ctx.font = "bold 44px serif"; ctx.fillStyle = "#fff";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(["♪","♫","♩","♬"][Math.floor(Math.random()*4)], 32, 30);
+    return new THREE.CanvasTexture(c);
+  },
+  "rainbow-orb": () => {
+    const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+    const ctx = c.getContext("2d");
+    const colors = ["#ff0000","#ff8800","#ffff00","#00ff00","#0088ff","#aa00ff"];
+    const col = colors[Math.floor(Math.random()*colors.length)];
+    const g = ctx.createRadialGradient(32,32,3,32,32,20);
+    g.addColorStop(0,"#ffffff"); g.addColorStop(0.4,col); g.addColorStop(1,"rgba(0,0,0,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32,32,20,0,Math.PI*2); ctx.fill();
+    return new THREE.CanvasTexture(c);
+  },
+};
+
+// ============================================================
+// PARTICLE EFFECTS — DATA-DRIVEN CONFIGS
+// Each effect is a behavior config. The engine reads these at emit time
+// and animates particles accordingly. In Phase B, user-uploaded effects
+// will follow the same schema with `textureUrl` instead of `texture`.
+// ============================================================
+const PARTICLE_EFFECTS = {
+  // Default impact — orange radial burst, falls under gravity
+  impact: {
+    texture: "radial-orange",
+    spawn: {
+      lifetime: 600,
+      velocity: {
+        x: { min: -1, max: 1 },
+        y: { min: 1.0, max: 2.6 },
+        z: { min: -1, max: 1 },
+      },
+    },
+    physics: {
+      accelY: -9.8,
+      verticalDamping: 1.0,
+      lateralJitter: 0,
+      lateralOscillation: { amp: 0, freq: 0 },
+    },
+    visual: {
+      baseScale: 0.16,
+      scaleStart: 1.0,
+      scaleEnd: 1.0,
+      scaleOscillation: { amp: 0, freq: 0 },
+      opacityStart: 1.0,
+      opacityEnd: 0.0,
+      isRising: false,
+    },
+  },
+  // Fire — orange flame, rises with random side jitter
+  fire: {
+    texture: "fire-flame",
+    spawn: {
+      lifetime: 450,
+      velocity: {
+        x: { min: -1, max: 1 },
+        y: { min: 1.0, max: 3.0 },
+        z: { min: -1, max: 1 },
+      },
+    },
+    physics: {
+      accelY: 2.0,
+      verticalDamping: 1.0,
+      lateralJitter: 0.3,
+      lateralOscillation: { amp: 0, freq: 0 },
+    },
+    visual: {
+      baseScale: 0.28,
+      scaleStart: 1.0,
+      scaleEnd: 0.0,
+      scaleOscillation: { amp: 0, freq: 0 },
+      opacityStart: 1.0,
+      opacityEnd: 0.0,
+      isRising: false,
+    },
+  },
+  // Ember — small spark, falls slowly with tiny side drift
+  ember: {
+    texture: "ember-spark",
+    spawn: {
+      lifetime: 1000,
+      velocity: {
+        x: { min: -0.8, max: 0.8 },
+        y: { min: 0.8, max: 2.4 },
+        z: { min: -0.8, max: 0.8 },
+      },
+    },
+    physics: {
+      accelY: -1.5,
+      verticalDamping: 1.0,
+      lateralJitter: 0.08,
+      lateralOscillation: { amp: 0, freq: 0 },
+    },
+    visual: {
+      baseScale: 0.16,
+      scaleStart: 1.0,
+      scaleEnd: 0.5,
+      scaleOscillation: { amp: 0, freq: 0 },
+      opacityStart: 1.0,
+      opacityEnd: 0.0,
+      isRising: false,
+    },
+  },
+  // Sparkle — gold cross, hangs in air with subtle pulse
+  sparkle: {
+    texture: "sparkle-cross",
+    spawn: {
+      lifetime: 600,
+      velocity: {
+        x: { min: -1, max: 1 },
+        y: { min: 2.0, max: 3.5 },
+        z: { min: -1, max: 1 },
+      },
+    },
+    physics: {
+      accelY: 0,
+      verticalDamping: 0.99,
+      lateralJitter: 0,
+      lateralOscillation: { amp: 0, freq: 0 },
+    },
+    visual: {
+      baseScale: 0.22,
+      scaleStart: 1.0,
+      scaleEnd: 1.0,
+      scaleOscillation: { amp: 0.3, freq: 0.02 },
+      opacityStart: 1.0,
+      opacityEnd: 0.0,
+      isRising: true,
+    },
+  },
+  // Note — musical note, rises with sine swirl, slow fade
+  note: {
+    texture: "music-note",
+    spawn: {
+      lifetime: 1400,
+      velocity: {
+        x: { min: -0.4, max: 0.4 },
+        y: { min: 2.0, max: 3.5 },
+        z: { min: -0.4, max: 0.4 },
+      },
+    },
+    physics: {
+      accelY: 0,
+      verticalDamping: 0.998,
+      lateralJitter: 0,
+      lateralOscillation: { amp: 0.04, freq: 0.008 },
+    },
+    visual: {
+      baseScale: 0.4,
+      scaleStart: 1.0,
+      scaleEnd: 1.0,
+      scaleOscillation: { amp: 0.2, freq: 0.01 },
+      opacityStart: 0.85,
+      opacityEnd: 0.0,
+      isRising: true,
+    },
+  },
+  // Rainbow — multicolor orb, falls fast (fresh texture per particle for color variety)
+  rainbow: {
+    texture: "rainbow-orb",
+    spawn: {
+      lifetime: 600,
+      velocity: {
+        x: { min: -1, max: 1 },
+        y: { min: 1.0, max: 2.6 },
+        z: { min: -1, max: 1 },
+      },
+    },
+    physics: {
+      accelY: -4.0,
+      verticalDamping: 1.0,
+      lateralJitter: 0,
+      lateralOscillation: { amp: 0, freq: 0 },
+    },
+    visual: {
+      baseScale: 0.16,
+      scaleStart: 1.0,
+      scaleEnd: 0.0,
+      scaleOscillation: { amp: 0, freq: 0 },
+      opacityStart: 1.0,
+      opacityEnd: 0.0,
+      isRising: false,
+    },
+  },
+};
+
 class StyledParticles {
   constructor(scene, max = 350) {
     this.pool = []; this.scene = scene; this.textureCache = {};
