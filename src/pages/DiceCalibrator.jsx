@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { base44 } from "@/api/base44Client";
+import { supabase } from "@/api/supabaseClient";
 import { toast } from "sonner";
 import { DEFAULT_MODEL_URLS, DEFAULT_TEXTURE_URL, DICE_TYPES } from "@/config/diceAssets";
+
+const SITE_CONFIG_KEY = "dice_face_rotations";
 
 const DICE_SIDES = { d4: 4, d6: 6, d8: 8, d10: 10, d12: 12, d20: 20 };
 const TOTAL_FACES = Object.values(DICE_SIDES).reduce((a, b) => a + b, 0); // 60
@@ -18,7 +20,8 @@ const facesForType = (type) => DICE_SIDES[type] || 6;
 
 function formatLastPublished(ts) {
   if (!ts) return "Never published";
-  const diff = Date.now() - ts;
+  const t = typeof ts === "string" ? new Date(ts).getTime() : ts;
+  const diff = Date.now() - t;
   const sec = Math.floor(diff / 1000);
   if (sec < 60) return `Last published: ${sec}s ago`;
   const min = Math.floor(sec / 60);
@@ -41,36 +44,32 @@ export default function DiceCalibrator() {
   const defaultTextureRef = useRef(null);
 
   const [diceType, setDiceType] = useState("d20");
-  const [savedFaces, setSavedFaces] = useState({}); // { "d20_3": {x,y,z} }
+  const [savedFaces, setSavedFaces] = useState({}); // { "d20_3": {x,y,z,w} }
   const [currentFace, setCurrentFace] = useState(1);
   const [isLoadingModel, setIsLoadingModel] = useState(false);
-  const [campaigns, setCampaigns] = useState([]);
   const [lastPublished, setLastPublished] = useState(null);
   const [isPublishing, setIsPublishing] = useState(false);
 
-  // Hydrate from localStorage
+  // Hydrate published calibrations from site_config
   useEffect(() => {
-    const raw = localStorage.getItem("diceConfig");
-    if (raw) {
-      try {
-        const cfg = JSON.parse(raw);
-        if (cfg.faceRotations) {
-          const flat = {};
-          Object.entries(cfg.faceRotations).forEach(([type, rotations]) => {
-            Object.entries(rotations).forEach(([n, r]) => {
-              flat[`${type}_${n}`] = r;
-            });
-          });
-          setSavedFaces(flat);
-        }
-        if (cfg.lastPublished) setLastPublished(cfg.lastPublished);
-      } catch (_) { /* ignore */ }
-    }
-  }, []);
-
-  // Pull campaigns once for the publish flow
-  useEffect(() => {
-    base44.entities.Campaign.list().then((list) => setCampaigns(list || []));
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from("site_config")
+        .select("value, updated_at")
+        .eq("key", SITE_CONFIG_KEY)
+        .maybeSingle();
+      if (cancelled || error || !data?.value) return;
+      const flat = {};
+      Object.entries(data.value).forEach(([type, rotations]) => {
+        Object.entries(rotations || {}).forEach(([n, r]) => {
+          flat[`${type}_${n}`] = r;
+        });
+      });
+      setSavedFaces(flat);
+      if (data.updated_at) setLastPublished(data.updated_at);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Load default texture once
@@ -219,17 +218,23 @@ export default function DiceCalibrator() {
 
       const root = gltf.scene;
 
-      // Center the GLB on its geometric center
+      // Bounding box (used for both centering AND size normalization below)
       const bbox = new THREE.Box3().setFromObject(root);
       const center = bbox.getCenter(new THREE.Vector3());
+      const size = bbox.getSize(new THREE.Vector3());
+
+      // Center on geometric center
       root.position.sub(center);
 
-      // Wrap in a Group so rotation pivots around its origin (now the geometric center)
+      // Normalize to a consistent size so all dice render at the same scale
+      const maxDim = Math.max(size.x, size.y, size.z) || 1;
+      const targetSize = 3.0;
+      root.scale.setScalar(targetSize / maxDim);
+
+      // Wrap in Group so rotation pivots around the geometric center
       const wrapper = new THREE.Group();
       wrapper.add(root);
       scene.add(wrapper);
-
-      // The drag handler and save handler must operate on this wrapper, not root
       wrapperRef.current = wrapper;
       reskinCurrent();
     };
@@ -290,11 +295,12 @@ export default function DiceCalibrator() {
   const saveFace = () => {
     const wrapper = wrapperRef.current;
     if (!wrapper || allDoneForType) return;
-    const e = new THREE.Euler().setFromQuaternion(wrapper.quaternion, "XYZ");
+    const q = wrapper.quaternion;
     const rot = {
-      x: Number(e.x.toFixed(6)),
-      y: Number(e.y.toFixed(6)),
-      z: Number(e.z.toFixed(6)),
+      x: Number(q.x.toFixed(6)),
+      y: Number(q.y.toFixed(6)),
+      z: Number(q.z.toFixed(6)),
+      w: Number(q.w.toFixed(6)),
     };
     const key = `${diceType}_${currentFace}`;
     setSavedFaces((prev) => ({ ...prev, [key]: rot }));
@@ -341,34 +347,25 @@ export default function DiceCalibrator() {
   const publishLive = async () => {
     setIsPublishing(true);
     try {
-      const faceRotations = {};
+      const bundle = {};
+      DICE_TYPES.forEach((t) => { bundle[t] = {}; });
       Object.entries(savedFaces).forEach(([key, rot]) => {
         const [type, n] = key.split("_");
-        if (!faceRotations[type]) faceRotations[type] = {};
-        faceRotations[type][n] = rot;
+        if (!bundle[type]) bundle[type] = {};
+        bundle[type][n] = rot;
       });
 
-      const existing = JSON.parse(localStorage.getItem("diceConfig") || "{}");
-      const ts = Date.now();
-      const config = {
-        ...existing,
-        faceRotations: { ...(existing.faceRotations || {}), ...faceRotations },
-        lastPublished: ts,
-      };
-      localStorage.setItem("diceConfig", JSON.stringify(config));
-
-      // Push to every campaign so all tables see the calibration.
-      if (campaigns.length > 0) {
-        await Promise.all(
-          campaigns.map((c) =>
-            base44.entities.Campaign.update(c.id, { dice_config: config }),
-          ),
+      const updatedAt = new Date().toISOString();
+      const { error } = await supabase
+        .from("site_config")
+        .upsert(
+          { key: SITE_CONFIG_KEY, value: bundle, updated_at: updatedAt },
+          { onConflict: "key" },
         );
-        toast.success(`Calibrations pushed to ${campaigns.length} campaign(s)`);
-      } else {
-        toast.success("Calibrations saved locally");
-      }
-      setLastPublished(ts);
+      if (error) throw error;
+
+      setLastPublished(updatedAt);
+      toast.success("Calibrations pushed live.");
     } catch (err) {
       console.error(err);
       toast.error("Failed to publish: " + err.message);
