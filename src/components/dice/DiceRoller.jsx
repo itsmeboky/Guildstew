@@ -1423,26 +1423,28 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
           <div style={S.subtitle}>Click & drag in the arena to pick up · shake · release to throw</div>
         </div>
 
-        <div style={S.historyWrap}>
-          <div style={S.historyLabel}>RECENT ROLLS</div>
-          <div style={S.historyChips}>
-            {resultHistory.length === 0 && <div style={S.historyEmpty}>—</div>}
-            {resultHistory.slice().reverse().map((r, i) => {
-              const sides = DICE_CONFIGS[r.type]?.sides ?? 20;
-              const isMax = r.value === sides, isMin = r.value === 1;
-              return (
-                <div key={i} style={{
-                  ...S.chip,
-                  background: isMax ? "rgba(255,215,0,0.12)" : isMin ? "rgba(255,68,68,0.12)" : "rgba(255,255,255,0.04)",
-                  borderColor: isMax ? "rgba(255,215,0,0.45)" : isMin ? "rgba(255,68,68,0.4)" : "rgba(255,255,255,0.08)",
-                }}>
-                  <span style={{ ...S.chipType, color: isMax ? "#e8c34a" : isMin ? "#ff7a7a" : "#7d8494" }}>{r.type}</span>
-                  <span style={{ ...S.chipValue, color: isMax ? "#ffd700" : isMin ? "#ff4444" : "#e8e9ed" }}>{r.value}</span>
-                </div>
-              );
-            })}
+        {!compact && (
+          <div style={S.historyWrap}>
+            <div style={S.historyLabel}>RECENT ROLLS</div>
+            <div style={S.historyChips}>
+              {resultHistory.length === 0 && <div style={S.historyEmpty}>—</div>}
+              {resultHistory.slice().reverse().map((r, i) => {
+                const sides = DICE_CONFIGS[r.type]?.sides ?? 20;
+                const isMax = r.value === sides, isMin = r.value === 1;
+                return (
+                  <div key={i} style={{
+                    ...S.chip,
+                    background: isMax ? "rgba(255,215,0,0.12)" : isMin ? "rgba(255,68,68,0.12)" : "rgba(255,255,255,0.04)",
+                    borderColor: isMax ? "rgba(255,215,0,0.45)" : isMin ? "rgba(255,68,68,0.4)" : "rgba(255,255,255,0.08)",
+                  }}>
+                    <span style={{ ...S.chipType, color: isMax ? "#e8c34a" : isMin ? "#ff7a7a" : "#7d8494" }}>{r.type}</span>
+                    <span style={{ ...S.chipValue, color: isMax ? "#ffd700" : isMin ? "#ff4444" : "#e8e9ed" }}>{r.value}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
       </header>
 
       {/* === Center: Arena === */}
