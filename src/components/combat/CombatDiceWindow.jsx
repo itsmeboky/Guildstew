@@ -1766,6 +1766,15 @@ export default function CombatDiceWindow({
     setCurrentDice("d20");
     setPhase("rolling_save");
     onRoll && onRoll({ type: "rolling_save" });
+    setDicePopup({
+      open: true,
+      dice: "d20",
+      forcedResult: isSpectator ? savingThrowRoll?.d20 : null,
+      onComplete: (value) => {
+        setDicePopup(p => ({ ...p, open: false }));
+        onSavingThrowRollComplete(value);
+      },
+    });
   };
 
   const onSavingThrowRollComplete = (roll) => {
