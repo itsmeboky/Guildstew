@@ -1101,6 +1101,11 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const activeSkinRef = useRef(activeSkin);
   useEffect(() => { activeSkinRef.current = activeSkin; }, [activeSkin]);
 
+  const primaryColorRef = useRef(primaryColor);
+  const secondaryColorRef = useRef(secondaryColor);
+  useEffect(() => { primaryColorRef.current = primaryColor; }, [primaryColor]);
+  useEffect(() => { secondaryColorRef.current = secondaryColor; }, [secondaryColor]);
+
   const forcedResultRef = useRef(forcedResult);
   useEffect(() => { forcedResultRef.current = forcedResult; }, [forcedResult]);
 
@@ -1126,6 +1131,25 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       m.userData._origEmissiveIntensity = m.emissiveIntensity ?? 0;
     });
     sc.diceState.materials = newMats;
+
+    // Also re-apply to any active multi-dice clones (their inner cloned mesh, not the outer wrapper)
+    const pool = sceneRef.current?.multiDicePool;
+    if (Array.isArray(pool)) {
+      for (const die of pool) {
+        if (!die.group) continue;
+        const innerClone = die.group.children[0]; // outerGroup → cloned cached.group
+        if (!innerClone) continue;
+        try {
+          const hasCustomTexture = !!(activeSkin?.customTextureUrl);
+          if (hasCustomTexture && typeof applyDiceSkinToMesh === "function") {
+            applyDiceSkinToMesh(innerClone, activeSkin, primaryColor, secondaryColor);
+          }
+          applyVertexGradient(innerClone, primaryColor, secondaryColor, hasCustomTexture);
+        } catch (err) {
+          console.error("Failed to update multi-dice clone gradient:", err);
+        }
+      }
+    }
   }, [activeSkin, isThemedSkin, primaryColor, secondaryColor]);
 
   const [diceType, setDiceType] = useState("d20");
@@ -1421,6 +1445,19 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       outerGroup.add(cloned);
       scene.add(outerGroup);
       outerGroup.visible = false;
+      // Apply current skin/gradient state to match single-dice behavior
+      try {
+        const skin = activeSkinRef.current;
+        const primary = primaryColorRef.current;
+        const secondary = secondaryColorRef.current;
+        const hasCustomTexture = !!(skin?.customTextureUrl);
+        if (hasCustomTexture && typeof applyDiceSkinToMesh === "function") {
+          applyDiceSkinToMesh(cloned, skin, primary, secondary);
+        }
+        applyVertexGradient(cloned, primary, secondary, hasCustomTexture);
+      } catch (err) {
+        console.error("Failed to apply skin/gradient to multi-dice clone:", err);
+      }
       console.log("[spawnDie]", type, {
         outerScale: outerGroup.scale.toArray(),
         innerScale: cloned.scale.toArray(),
