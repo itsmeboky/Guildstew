@@ -243,6 +243,18 @@ export default function EditProfileDialog({ open, onClose, user }) {
       } else {
         await base44.entities.UserProfile.create({ ...profileData, user_id: user.id });
       }
+
+      // Invalidate cached profile queries so every consumer (Layout, dice popup,
+      // GM panel, character portraits, profile page) refetches the new data
+      queryClient.invalidateQueries({ queryKey: ['currentUserProfile'] });
+      queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      // Catch any per-user query keys (e.g., portraits that fetch by user id)
+      if (user?.id) {
+        queryClient.invalidateQueries({
+          predicate: q => Array.isArray(q.queryKey) && q.queryKey.some(k => k === user.id)
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currentUser'] });
