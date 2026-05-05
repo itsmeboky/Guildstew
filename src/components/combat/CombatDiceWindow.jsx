@@ -1040,6 +1040,15 @@ export default function CombatDiceWindow({
     const diceType = weaponDice.match(/d\d+/)?.[0] || "d8";
     setCurrentDice(diceType);
     setPhase("rolling_damage");
+    setDicePopup({
+      open: true,
+      dice: diceType,
+      forcedResult: isSpectator ? damageRoll?.dice : null,
+      onComplete: (value) => {
+        setDicePopup(p => ({ ...p, open: false }));
+        onDamageRollComplete(value);
+      },
+    });
   };
 
   const onDamageRollComplete = (roll) => {
