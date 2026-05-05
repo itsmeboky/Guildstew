@@ -671,6 +671,15 @@ export default function CombatDiceWindow({
     if (selectedAction?.type === 'spell' && Number(selectedAction.level || 0) > 0) {
       onStat('spells_cast');
     }
+    setDicePopup({
+      open: true,
+      dice: "d20",
+      forcedResult: isSpectator ? attackRoll?.d20 : null,
+      onComplete: (value) => {
+        setDicePopup(p => ({ ...p, open: false }));
+        onAttackRollComplete(value);
+      },
+    });
   };
 
   const onAttackRollComplete = (roll) => {
