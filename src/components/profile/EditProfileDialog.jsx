@@ -212,7 +212,7 @@ export default function EditProfileDialog({ open, onClose, user }) {
         avatar_url: avatarUrl,
         profile_color_1: data.color1,
         profile_color_2: data.color2,
-        social_handles: data.socialHandles,
+        social_links: data.socialHandles,
         favorite_genres: data.selectedGenres,
         featured_achievement_ids: data.selectedAchievements
       };
@@ -230,7 +230,7 @@ export default function EditProfileDialog({ open, onClose, user }) {
         country: data.country,
         pronouns: data.pronouns,
         bio: data.bio,
-        social_handles: data.socialHandles,
+        social_links: data.socialHandles,
         favorite_genres: data.selectedGenres,
         profile_color_1: data.color1,
         profile_color_2: data.color2,
@@ -242,6 +242,18 @@ export default function EditProfileDialog({ open, onClose, user }) {
         await base44.entities.UserProfile.update(profiles[0].id, profileData);
       } else {
         await base44.entities.UserProfile.create({ ...profileData, user_id: user.id });
+      }
+
+      // Invalidate cached profile queries so every consumer (Layout, dice popup,
+      // GM panel, character portraits, profile page) refetches the new data
+      queryClient.invalidateQueries({ queryKey: ['currentUserProfile'] });
+      queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      // Catch any per-user query keys (e.g., portraits that fetch by user id)
+      if (user?.id) {
+        queryClient.invalidateQueries({
+          predicate: q => Array.isArray(q.queryKey) && q.queryKey.some(k => k === user.id)
+        });
       }
     },
     onSuccess: () => {
