@@ -293,14 +293,14 @@ function buildD10Geometry(scale = 0.6) {
 }
 
 function buildDiceGeometry(type) {
-  const c = DICE_CONFIGS[type];
+  const size = DICE_CONFIGS[type]?.size ?? 0.6;
   switch (type) {
-    case "d4":  return new THREE.TetrahedronGeometry(c.size, 0);
-    case "d6":  return new THREE.BoxGeometry(c.size, c.size, c.size);
-    case "d8":  return new THREE.OctahedronGeometry(c.size, 0);
-    case "d10": return buildD10Geometry(c.size);
-    case "d12": return new THREE.DodecahedronGeometry(c.size, 0);
-    case "d20": return new THREE.IcosahedronGeometry(c.size, 0);
+    case "d4":  return new THREE.TetrahedronGeometry(size, 0);
+    case "d6":  return new THREE.BoxGeometry(size, size, size);
+    case "d8":  return new THREE.OctahedronGeometry(size, 0);
+    case "d10": return buildD10Geometry(size);
+    case "d12": return new THREE.DodecahedronGeometry(size, 0);
+    case "d20": return new THREE.IcosahedronGeometry(size, 0);
     default:    return new THREE.IcosahedronGeometry(0.6, 0);
   }
 }
@@ -1231,6 +1231,11 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     const camera = new THREE.PerspectiveCamera(34, w / h, 0.1, 100);
     camera.position.set(0, 13, 0); camera.lookAt(0, 0, 0);
 
+    if (typeof window !== "undefined") {
+      window.__diceScene = scene;
+      window.__diceCamera = camera;
+    }
+
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
     const hemi = new THREE.HemisphereLight(0xffffff, 0x202830, 1.4);
     scene.add(hemi);
@@ -1388,12 +1393,53 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       }
     };
 
+    // Multi-dice pool — each entry: { type, group, materials, timeline, result, eventIndex, settled }
+    const multiDicePool = []; // populated at executeRoll, cleared between rolls
+
+    // Spawn a cloned dice from a cached GLB
+    const spawnDie = (type) => {
+      const cached = _modelCache[type];
+      if (!cached) return null; // model not loaded yet — caller must guard
+      const cloned = cached.group.clone(true);
+      cloned.traverse(c => {
+        if (c.isMesh && c.material) {
+          const apply = (m) => {
+            if (!m) return;
+            if (!m.userData._origEmissive) {
+              m.userData._origEmissive = m.emissive ? m.emissive.clone() : new THREE.Color(0x000000);
+              m.userData._origEmissiveIntensity = m.emissiveIntensity ?? 0;
+            }
+          };
+          if (Array.isArray(c.material)) c.material.forEach(apply);
+          else apply(c.material);
+        }
+      });
+      scene.add(cloned);
+      cloned.visible = false;
+      console.log("[spawnDie]", type, {
+        childCount: cloned.children.length,
+        scale: cloned.scale.toArray(),
+        position: cloned.position.toArray(),
+        materialCount: collectMaterials(cloned).length,
+        hasParent: !!cloned.parent,
+      });
+      return { group: cloned, materials: collectMaterials(cloned) };
+    };
+
+    const despawnAllMultiDice = () => {
+      for (const d of multiDicePool) {
+        if (d.group?.parent) d.group.parent.remove(d.group);
+      }
+      multiDicePool.length = 0;
+    };
+
     sceneRef.current = {
       renderer, scene, camera, dice, ghost, ghostMat,
       diceState, // { activeContent, isPlaceholder, materials }
       glowPlane, glowMat, ekgFloor, ekgFloorMat, ekgCanvas, ekgCtx, ekgTexture, ekgWave,
       mouseToWorld, swapDiceModel,
       mainLight,
+      spawnDie, despawnAllMultiDice, multiDicePool,
     };
 
     // If a model finished preloading before the scene mounted, swap it in now
@@ -1484,7 +1530,45 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
 
       // Playback
       let dicePosForOverlay = null;
-      if (pb.playing && tl && pb.startTime !== null) {
+      if (pb.playing && pb.multi) {
+        const elapsed = now - pb.startTime;
+        const pool = sceneRef.current.multiDicePool;
+        for (const die of pool) {
+          const tl = die.timeline;
+          if (!tl || tl.path.length === 0) continue;
+          if (elapsed >= tl.path[0].t && die.group) {
+            die.group.visible = true;
+            const { pos, rot, scale } = interpolatePath(tl.path, elapsed);
+            die.group.position.set(pos[0], pos[1], pos[2]);
+            die.group.quaternion.set(rot[0], rot[1], rot[2], rot[3]);
+            die.group.scale.setScalar(scale);
+            if (!die._loggedFirst) {
+              die._loggedFirst = true;
+              console.log("[multi-first-frame]", die.type, {
+                visible: die.group.visible,
+                pos: die.group.position.toArray(),
+                scale: die.group.scale.toArray(),
+                children: die.group.children.length,
+                hasMeshChild: die.group.children.some(c => c.isMesh || c.type === "Mesh" || c.children?.some?.(cc => cc.isMesh)),
+              });
+            }
+          }
+          // Fire per-die events (wallHit, particles, etc.) — but settled/reveal already filtered
+          while (die.eventIndex < tl.events.length && tl.events[die.eventIndex].t <= elapsed) {
+            handleEvent(tl.events[die.eventIndex]);
+            die.eventIndex++;
+          }
+        }
+        if (elapsed >= pb.longestDuration) {
+          pb.playing = false;
+          // Aggregate results
+          const total = pool.reduce((s, d) => s + d.result, 0);
+          setLastResult(total);
+          setLastResultDiceType("multi"); // tag so UI can render aggregate
+          setIsRolling(false);
+          setResultHistory(prev => [...prev.slice(-9), { type: "multi", value: total }]);
+        }
+      } else if (pb.playing && tl && pb.startTime !== null) {
         const elapsed = now - pb.startTime;
         if (tl.path.length > 0 && elapsed >= tl.path[0].t) {
           dice.visible = true;
@@ -1595,6 +1679,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       if (diceState.activeContent && diceState.activeContent.parent) {
         diceState.activeContent.parent.remove(diceState.activeContent);
       }
+      despawnAllMultiDice();
       cancelAnimationFrame(rafId);
       ro.disconnect();
       particles.dispose();
@@ -1698,51 +1783,112 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   // ==============================================================
   const executeRoll = useCallback((shakeIntensity = 0.7, releaseVector = null, forceLazy = false) => {
     if (playbackRef.current.playing) return;
-    const type = diceTypeRef.current;
-    const sides = DICE_CONFIGS[type].sides;
-    const result = forcedResultRef.current != null
-      ? Math.min(Math.max(1, forcedResultRef.current), sides)
-      : Math.floor(Math.random() * sides) + 1;
-    setLastResult(null); setLastResultDiceType(null); setOverlayText(null); setEventLog([]); setIsRolling(true); setShowEKG(false);
 
-    const isLazy = forceLazy || shakeIntensity < 0.15;
-    let timeline;
-    if (isLazy) {
-      timeline = buildLazyRoll(result, type, config?.faceRotations);
-      if (strictMode) {
-        timeline.events = timeline.events.filter(e => e.type !== "reveal");
-        timeline.events.push({ t: timeline.duration - 100, type: "overlay", text: "REJECTED — Roll properly!", style: "reject" });
-        timeline.events.push({ t: timeline.duration, type: "rejected" });
-        timeline.events.sort((a, b) => a.t - b.t);
+    const totalDice = Object.values(diceCounts).reduce((s, n) => s + n, 0);
+    if (totalDice <= 1) {
+      const type = diceTypeRef.current;
+      const sides = DICE_CONFIGS[type]?.sides ?? 20;
+      const result = forcedResultRef.current != null
+        ? Math.min(Math.max(1, forcedResultRef.current), sides)
+        : Math.floor(Math.random() * sides) + 1;
+      setLastResult(null); setLastResultDiceType(null); setOverlayText(null); setEventLog([]); setIsRolling(true); setShowEKG(false);
+
+      const isLazy = forceLazy || shakeIntensity < 0.15;
+      let timeline;
+      if (isLazy) {
+        timeline = buildLazyRoll(result, type, config?.faceRotations);
+        if (strictMode) {
+          timeline.events = timeline.events.filter(e => e.type !== "reveal");
+          timeline.events.push({ t: timeline.duration - 100, type: "overlay", text: "REJECTED — Roll properly!", style: "reject" });
+          timeline.events.push({ t: timeline.duration, type: "rejected" });
+          timeline.events.sort((a, b) => a.t - b.t);
+        }
+      } else if (shakeIntensity > 0.85) {
+        timeline = buildEpicRoll(result, type, releaseVector, config?.faceRotations);
+      } else {
+        timeline = buildNormalRoll(result, type, shakeIntensity, releaseVector, config?.faceRotations);
       }
-    } else if (shakeIntensity > 0.85) {
-      timeline = buildEpicRoll(result, type, releaseVector, config?.faceRotations);
-    } else {
-      timeline = buildNormalRoll(result, type, shakeIntensity, releaseVector, config?.faceRotations);
+
+      // Character state modifier
+      switch (modifier) {
+        case "rage": timeline = applyRage(timeline); break;
+        case "deathSave": timeline = applyDeathSave(timeline); break;
+        case "inspiration": timeline = applyInspiration(timeline); break;
+        case "wildMagic": timeline = applyWildMagic(timeline); break;
+      }
+      // Equipped effect (only fills in trail if state didn't already)
+      timeline = applyEquippedEffect(timeline, equippedEffectRef.current);
+
+      sceneRef.current.dice.visible = false;
+      resetDiceEmissive(sceneRef.current.diceState.materials);
+      for (const w of Object.values(wallMeshesRef.current)) {
+        // Walls stay visible at rest; slam intro will yank them up and slam back down
+        w.mat.opacity = w.restOpacity;
+        w.targetY = w.restY; w.currentY = w.restY;
+        w.mesh.position.y = w.restY; w.flashIntensity = 0;
+        w.mat.emissiveIntensity = 0;
+      }
+      timelineRef.current = timeline;
+      playbackRef.current = { startTime: performance.now(), eventIndex: 0, playing: true };
+      return;
     }
 
-    // Character state modifier
-    switch (modifier) {
-      case "rage": timeline = applyRage(timeline); break;
-      case "deathSave": timeline = applyDeathSave(timeline); break;
-      case "inspiration": timeline = applyInspiration(timeline); break;
-      case "wildMagic": timeline = applyWildMagic(timeline); break;
-    }
-    // Equipped effect (only fills in trail if state didn't already)
-    timeline = applyEquippedEffect(timeline, equippedEffectRef.current);
+    // === MULTI-DICE PATH ===
+    setLastResult(null); setLastResultDiceType(null); setOverlayText(null); setIsRolling(true); setShowEKG(false);
 
+    // Clean any previous multi-dice from prior roll
+    sceneRef.current.despawnAllMultiDice?.();
+    const pool = sceneRef.current.multiDicePool;
+
+    // Hide the single-dice Group during multi mode
     sceneRef.current.dice.visible = false;
-    resetDiceEmissive(sceneRef.current.diceState.materials);
-    for (const w of Object.values(wallMeshesRef.current)) {
-      // Walls stay visible at rest; slam intro will yank them up and slam back down
-      w.mat.opacity = w.restOpacity;
-      w.targetY = w.restY; w.currentY = w.restY;
-      w.mesh.position.y = w.restY; w.flashIntensity = 0;
-      w.mat.emissiveIntensity = 0;
+
+    // Build the array of dice to spawn from the tray
+    const diceList = [];
+    for (const [type, count] of Object.entries(diceCounts)) {
+      for (let i = 0; i < count; i++) diceList.push({ type });
     }
-    timelineRef.current = timeline;
-    playbackRef.current = { startTime: performance.now(), eventIndex: 0, playing: true };
-  }, [strictMode, config, modifier]);
+
+    // Spawn each, build per-dice timeline, push into pool
+    for (let i = 0; i < diceList.length; i++) {
+      const { type } = diceList[i];
+      const spawned = sceneRef.current.spawnDie(type);
+      if (!spawned) continue;
+      const sides = DICE_CONFIGS[type]?.sides ?? 20;
+      const result = Math.floor(Math.random() * sides) + 1;
+      // Build a normal-roll timeline (same as single-dice)
+      let timeline = buildNormalRoll(result, type, 0.7, null);
+      // Filter out "reveal" events — we don't want each dice firing setLastResult
+      timeline.events = timeline.events.filter(e => e.type !== "reveal" && e.type !== "settled");
+      // Apply equipped effect (trail particles only — no state modifiers in multi mode for now)
+      timeline = applyEquippedEffect(timeline, equippedEffectRef.current);
+      pool.push({
+        type, group: spawned.group, materials: spawned.materials,
+        timeline, result, eventIndex: 0, settled: false,
+      });
+    }
+
+    console.log("[multi-roll] pool ready", pool.length, "dice spawned. Total in scene:", sceneRef.current.scene.children.length);
+    pool.forEach((d, i) => console.log("  pool[" + i + "]:", d.type, "result", d.result, "visible:", d.group.visible, "pos:", d.group.position.toArray()));
+
+    // Setup playback for multi mode
+    const longestDuration = Math.max(...pool.map(d => d.timeline.duration), 1000);
+    timelineRef.current = null; // single-dice timeline disabled
+    if (typeof window !== "undefined") window.__lastMultiPool = pool;
+    playbackRef.current = {
+      startTime: performance.now(),
+      eventIndex: 0,
+      playing: true,
+      multi: true,
+      longestDuration,
+    };
+
+    // Reset walls/glow as in single mode
+    for (const w of Object.values(wallMeshesRef.current)) {
+      w.mat.opacity = w.restOpacity; w.targetY = w.restY; w.currentY = w.restY;
+      w.mesh.position.y = w.restY; w.flashIntensity = 0; w.mat.emissiveIntensity = 0;
+    }
+  }, [strictMode, config, modifier, diceCounts]);
 
   useImperativeHandle(ref, () => ({
     roll: () => executeRoll(0.7, null, false),
@@ -1798,7 +1944,9 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   }, [executeRoll]);
 
   // Computed
-  const lastSides = lastResultDiceType ? DICE_CONFIGS[lastResultDiceType].sides : 20;
+  const lastSides = lastResultDiceType && lastResultDiceType !== "multi"
+    ? (DICE_CONFIGS[lastResultDiceType]?.sides ?? 20)
+    : 20;
   const modalSize = 500;
   const arenaFrameStyle = {
     ...S.arenaFrame,
@@ -1806,8 +1954,8 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     height: `min(${modalSize}px, calc(100vh - 48px))`,
     aspectRatio: undefined,
   };
-  const isCritMax = lastResult !== null && lastResult === lastSides;
-  const isCritMin = lastResult !== null && lastResult === 1;
+  const isCritMax = lastResult !== null && lastResultDiceType !== "multi" && lastResult === lastSides;
+  const isCritMin = lastResult !== null && lastResultDiceType !== "multi" && lastResult === 1;
   const shakeColor = shakeLevel<0.15?"#ff4444":shakeLevel<0.5?"#ff8844":shakeLevel<0.8?"#ffcc00":"#44ff88";
 
   // ==============================================================
@@ -1903,7 +2051,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
             {!isRolling && !isHolding && lastResult === null && (
               <div style={S.idleHint}>
                 <div style={S.idleHintIcon}>◇</div>
-                <div>Click & drag to pick up the {DICE_CONFIGS[diceType].label}</div>
+                <div>Click & drag to pick up the {DICE_CONFIGS[diceType]?.label ?? "d20"}</div>
                 <div style={S.idleHintSub}>or use the ROLL button below</div>
               </div>
             )}
@@ -1939,7 +2087,9 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
                   : "0 0 18px rgba(255,255,255,0.4), 0 4px 12px rgba(0,0,0,0.7)",
               }}
             >
-              <div style={S.resultDiceType}>{lastResultDiceType}</div>
+              <div style={S.resultDiceType}>
+                {lastResultDiceType === "multi" ? "TOTAL" : lastResultDiceType}
+              </div>
               <div style={S.resultValue}>{lastResult}</div>
               {isCritMax && <div style={S.resultBadge}>CRIT</div>}
               {isCritMin && <div style={{ ...S.resultBadge, color: "#ff5555", borderColor: "rgba(255,68,68,0.5)" }}>FAIL</div>}

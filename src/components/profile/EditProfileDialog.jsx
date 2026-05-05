@@ -244,12 +244,34 @@ export default function EditProfileDialog({ open, onClose, user }) {
         await base44.entities.UserProfile.create({ ...profileData, user_id: user.id });
       }
 
-      // Invalidate cached profile queries so every consumer (Layout, dice popup,
-      // GM panel, character portraits, profile page) refetches the new data
+      // Build the optimistic next-state for the user profile
+      const optimisticProfile = {
+        ...profileData,
+        id: profiles[0]?.id,
+        user_id: user?.id,
+      };
+
+      // Optimistically write the new profile into every cache entry that
+      // could be holding it. Consumers re-render instantly.
+      queryClient.setQueryData(['currentUserProfile', user?.id], optimisticProfile);
+
+      // Also write it under any other key shape consumers might use
+      queryClient.setQueriesData(
+        { predicate: q => Array.isArray(q.queryKey) && (q.queryKey[0] === 'currentUserProfile' || q.queryKey[0] === 'userProfile' || q.queryKey[0] === 'profile') },
+        (old) => {
+          // If the cached value is a single object matching this user, replace it.
+          // If it's something else (array, etc.), leave it alone — invalidation will refetch.
+          if (old && typeof old === 'object' && !Array.isArray(old) && (old.user_id === user?.id || old.id === profiles[0]?.id)) {
+            return { ...old, ...profileData };
+          }
+          return old;
+        }
+      );
+
+      // Invalidate to confirm against the server in the background
       queryClient.invalidateQueries({ queryKey: ['currentUserProfile'] });
       queryClient.invalidateQueries({ queryKey: ['userProfile'] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
-      // Catch any per-user query keys (e.g., portraits that fetch by user id)
       if (user?.id) {
         queryClient.invalidateQueries({
           predicate: q => Array.isArray(q.queryKey) && q.queryKey.some(k => k === user.id)
