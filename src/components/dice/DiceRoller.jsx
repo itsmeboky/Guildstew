@@ -1598,6 +1598,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
         </div>
 
         {/* Effect equip */}
+        {!compact && (
         <div style={S.controlRow}>
           <div style={S.rowLabel}>
             EFFECT
@@ -1633,6 +1634,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
             </button>
           </div>
         </div>
+        )}
 
         {/* Character state + GM rules — secondary row */}
         <div style={{ ...S.controlRow, gap: 14, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
