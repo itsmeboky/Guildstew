@@ -1642,6 +1642,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
             STATE
             <div style={S.rowSubLabel}>character mod</div>
           </div>
+          {!compact && (
           <div style={S.stateRow}>
             {[
               { id: "none", label: "Normal" },
@@ -1669,6 +1670,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
               );
             })}
           </div>
+          )}
 
           <div style={S.gmTools}>
             <button
