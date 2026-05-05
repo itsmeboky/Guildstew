@@ -578,7 +578,7 @@ class StyledParticles {
 // ============================================================
 // MAIN COMPONENT
 // ============================================================
-export default function DiceChoreographyPrototype() {
+const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const mountRef = useRef(null);
   const sceneRef = useRef({});
   const timelineRef = useRef(null);
@@ -1457,7 +1457,8 @@ export default function DiceChoreographyPrototype() {
       </footer>
     </div>
   );
-}
+});
+export default DiceRoller;
 
 // ============================================================
 // STYLES
