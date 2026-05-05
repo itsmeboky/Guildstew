@@ -1263,6 +1263,13 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
           if (ev.value === 20) playCritSuccessSound();
           else if (ev.value === 1) playCritFailSound();
         }
+        if (ev.diceType === "d20" && ev.value === 20) {
+          setRevealOverlay("crit-success");
+          setTimeout(() => setRevealOverlay(null), 1600);
+        } else if (ev.diceType === "d20" && ev.value === 1) {
+          setRevealOverlay("crit-fail");
+          setTimeout(() => setRevealOverlay(null), 1600);
+        }
         setLastResultDiceType(ev.diceType);
         setIsRolling(false);
         setShowEKG(false);
@@ -1459,6 +1466,24 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
               {isCritMax && <div style={S.resultBadge}>CRIT</div>}
               {isCritMin && <div style={{ ...S.resultBadge, color: "#ff5555", borderColor: "rgba(255,68,68,0.5)" }}>FAIL</div>}
             </div>
+
+            {revealOverlay && (
+              <img
+                src={REVEAL_GIFS[revealOverlay]}
+                alt=""
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: "50%",
+                  transform: "translate(-50%, -50%)",
+                  width: 300,
+                  height: 300,
+                  objectFit: "contain",
+                  pointerEvents: "none",
+                  zIndex: 50,
+                }}
+              />
+            )}
           </div>
 
           {/* Arena corner accents */}
