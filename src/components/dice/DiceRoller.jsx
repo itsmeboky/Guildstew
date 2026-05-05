@@ -649,6 +649,9 @@ function applyVertexGradient(model, primaryHex, secondaryHex, isThemedSkin) {
 // MAIN COMPONENT
 // ============================================================
 const DiceRoller = forwardRef(function DiceRoller(props, ref) {
+  const {
+    isThemedSkin = false,
+  } = props;
   const mountRef = useRef(null);
   const sceneRef = useRef({});
   const timelineRef = useRef(null);
