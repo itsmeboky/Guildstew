@@ -317,6 +317,15 @@ const EFFECTS = {
 };
 const EFFECT_ORDER = ["default", "fire", "sparkle", "notes", "rainbow"];
 
+const EFFECT_CATEGORIES = ["All", "Default", "Class", "Tavern", "Custom"];
+const EFFECT_CATEGORY_MEMBERS = {
+  "All":     ["default", "fire", "sparkle", "notes", "rainbow"],
+  "Default": ["default", "fire", "sparkle", "notes", "rainbow"],
+  "Class":   [],
+  "Tavern":  [],
+  "Custom":  [],
+};
+
 // ============================================================
 // SHAKE DETECTOR
 // ============================================================
@@ -596,99 +605,395 @@ function interpolatePath(path, elapsed) {
 // ============================================================
 // PARTICLE SYSTEM
 // ============================================================
-class StyledParticles {
+// ============================================================
+// PROCEDURAL TEXTURE FACTORIES
+// Each entry returns a fresh THREE.CanvasTexture by drawing into a 64x64 canvas.
+// In Phase B, user-uploaded URL textures will sit alongside these.
+// ============================================================
+const PROCEDURAL_TEXTURES = {
+  "radial-orange": () => {
+    const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+    const ctx = c.getContext("2d");
+    const g = ctx.createRadialGradient(32,32,2,32,32,22);
+    g.addColorStop(0,"#ffffff"); g.addColorStop(0.3,"#FF5300"); g.addColorStop(1,"rgba(255,83,0,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32,32,22,0,Math.PI*2); ctx.fill();
+    return new THREE.CanvasTexture(c);
+  },
+  "fire-flame": () => {
+    const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+    const ctx = c.getContext("2d");
+    const g = ctx.createRadialGradient(32,38,3,32,32,26);
+    g.addColorStop(0,"#ffffcc"); g.addColorStop(0.25,"#ffaa00"); g.addColorStop(0.6,"#ff3300"); g.addColorStop(1,"rgba(200,0,0,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(32,34,18,24,0,0,Math.PI*2); ctx.fill();
+    return new THREE.CanvasTexture(c);
+  },
+  "ember-spark": () => {
+    const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+    const ctx = c.getContext("2d");
+    const g = ctx.createRadialGradient(32,32,1,32,32,12);
+    g.addColorStop(0,"#ffcc44"); g.addColorStop(0.6,"#ff4400"); g.addColorStop(1,"rgba(80,0,0,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32,32,12,0,Math.PI*2); ctx.fill();
+    return new THREE.CanvasTexture(c);
+  },
+  "sparkle-cross": () => {
+    const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+    const ctx = c.getContext("2d");
+    ctx.strokeStyle = "#ffd700"; ctx.lineWidth = 2.5; ctx.lineCap = "round";
+    for (let j = 0; j < 4; j++) {
+      const a = (j/4)*Math.PI*2 - Math.PI/2;
+      ctx.beginPath();
+      ctx.moveTo(32+Math.cos(a)*4, 32+Math.sin(a)*4);
+      ctx.lineTo(32+Math.cos(a)*22, 32+Math.sin(a)*22);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(32,32,4,0,Math.PI*2); ctx.fill();
+    return new THREE.CanvasTexture(c);
+  },
+  "music-note": () => {
+    const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+    const ctx = c.getContext("2d");
+    ctx.font = "bold 44px serif"; ctx.fillStyle = "#fff";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(["♪","♫","♩","♬"][Math.floor(Math.random()*4)], 32, 30);
+    return new THREE.CanvasTexture(c);
+  },
+  "rainbow-orb": () => {
+    const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+    const ctx = c.getContext("2d");
+    const colors = ["#ff0000","#ff8800","#ffff00","#00ff00","#0088ff","#aa00ff"];
+    const col = colors[Math.floor(Math.random()*colors.length)];
+    const g = ctx.createRadialGradient(32,32,3,32,32,20);
+    g.addColorStop(0,"#ffffff"); g.addColorStop(0.4,col); g.addColorStop(1,"rgba(0,0,0,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32,32,20,0,Math.PI*2); ctx.fill();
+    return new THREE.CanvasTexture(c);
+  },
+};
+
+// ============================================================
+// PARTICLE EFFECTS — DATA-DRIVEN CONFIGS
+// Each effect is a behavior config. The engine reads these at emit time
+// and animates particles accordingly. In Phase B, user-uploaded effects
+// will follow the same schema with `textureUrl` instead of `texture`.
+// ============================================================
+const PARTICLE_EFFECTS = {
+  // Default impact — orange radial burst, falls under gravity
+  impact: {
+    texture: "radial-orange",
+    spawn: {
+      lifetime: 600,
+      velocity: {
+        x: { min: -1, max: 1 },
+        y: { min: 1.0, max: 2.6 },
+        z: { min: -1, max: 1 },
+      },
+    },
+    physics: {
+      accelY: -9.8,
+      verticalDamping: 1.0,
+      lateralJitter: 0,
+      lateralOscillation: { amp: 0, freq: 0 },
+    },
+    visual: {
+      baseScale: 0.16,
+      scaleStart: 1.0,
+      scaleEnd: 1.0,
+      scaleOscillation: { amp: 0, freq: 0 },
+      opacityStart: 1.0,
+      opacityEnd: 0.0,
+      isRising: false,
+    },
+  },
+  // Fire — orange flame, rises with random side jitter
+  fire: {
+    texture: "fire-flame",
+    spawn: {
+      lifetime: 450,
+      velocity: {
+        x: { min: -1, max: 1 },
+        y: { min: 1.0, max: 3.0 },
+        z: { min: -1, max: 1 },
+      },
+    },
+    physics: {
+      accelY: 2.0,
+      verticalDamping: 1.0,
+      lateralJitter: 0.3,
+      lateralOscillation: { amp: 0, freq: 0 },
+    },
+    visual: {
+      baseScale: 0.28,
+      scaleStart: 1.0,
+      scaleEnd: 0.0,
+      scaleOscillation: { amp: 0, freq: 0 },
+      opacityStart: 1.0,
+      opacityEnd: 0.0,
+      isRising: false,
+    },
+  },
+  // Ember — small spark, falls slowly with tiny side drift
+  ember: {
+    texture: "ember-spark",
+    spawn: {
+      lifetime: 1000,
+      velocity: {
+        x: { min: -0.8, max: 0.8 },
+        y: { min: 0.8, max: 2.4 },
+        z: { min: -0.8, max: 0.8 },
+      },
+    },
+    physics: {
+      accelY: -1.5,
+      verticalDamping: 1.0,
+      lateralJitter: 0.08,
+      lateralOscillation: { amp: 0, freq: 0 },
+    },
+    visual: {
+      baseScale: 0.16,
+      scaleStart: 1.0,
+      scaleEnd: 0.5,
+      scaleOscillation: { amp: 0, freq: 0 },
+      opacityStart: 1.0,
+      opacityEnd: 0.0,
+      isRising: false,
+    },
+  },
+  // Sparkle — gold cross, hangs in air with subtle pulse
+  sparkle: {
+    texture: "sparkle-cross",
+    spawn: {
+      lifetime: 600,
+      velocity: {
+        x: { min: -1, max: 1 },
+        y: { min: 2.0, max: 3.5 },
+        z: { min: -1, max: 1 },
+      },
+    },
+    physics: {
+      accelY: 0,
+      verticalDamping: 0.99,
+      lateralJitter: 0,
+      lateralOscillation: { amp: 0, freq: 0 },
+    },
+    visual: {
+      baseScale: 0.22,
+      scaleStart: 1.0,
+      scaleEnd: 1.0,
+      scaleOscillation: { amp: 0.3, freq: 0.02 },
+      opacityStart: 1.0,
+      opacityEnd: 0.0,
+      isRising: true,
+    },
+  },
+  // Note — musical note, rises with sine swirl, slow fade
+  note: {
+    texture: "music-note",
+    spawn: {
+      lifetime: 1400,
+      velocity: {
+        x: { min: -0.4, max: 0.4 },
+        y: { min: 2.0, max: 3.5 },
+        z: { min: -0.4, max: 0.4 },
+      },
+    },
+    physics: {
+      accelY: 0,
+      verticalDamping: 0.998,
+      lateralJitter: 0,
+      lateralOscillation: { amp: 0.04, freq: 0.008 },
+    },
+    visual: {
+      baseScale: 0.4,
+      scaleStart: 1.0,
+      scaleEnd: 1.0,
+      scaleOscillation: { amp: 0.2, freq: 0.01 },
+      opacityStart: 0.85,
+      opacityEnd: 0.0,
+      isRising: true,
+    },
+  },
+  // Rainbow — multicolor orb, falls fast (fresh texture per particle for color variety)
+  rainbow: {
+    texture: "rainbow-orb",
+    spawn: {
+      lifetime: 600,
+      velocity: {
+        x: { min: -1, max: 1 },
+        y: { min: 1.0, max: 2.6 },
+        z: { min: -1, max: 1 },
+      },
+    },
+    physics: {
+      accelY: -4.0,
+      verticalDamping: 1.0,
+      lateralJitter: 0,
+      lateralOscillation: { amp: 0, freq: 0 },
+    },
+    visual: {
+      baseScale: 0.16,
+      scaleStart: 1.0,
+      scaleEnd: 0.0,
+      scaleOscillation: { amp: 0, freq: 0 },
+      opacityStart: 1.0,
+      opacityEnd: 0.0,
+      isRising: false,
+    },
+  },
+};
+
+// ============================================================
+// ENGINE PARTICLES — config-driven particle pool
+// Reads behavior from PARTICLE_EFFECTS configs. The same pool services
+// every effect; particles store a reference to their effect config.
+// ============================================================
+class EngineParticles {
   constructor(scene, max = 350) {
-    this.pool = []; this.scene = scene; this.textureCache = {};
+    this.pool = [];
+    this.scene = scene;
+    this.textureCache = {};
     for (let i = 0; i < max; i++) {
       const mat = new THREE.SpriteMaterial({ transparent: true, opacity: 0, depthWrite: false });
       const sprite = new THREE.Sprite(mat);
-      sprite.visible = false; sprite.scale.setScalar(0.15); scene.add(sprite);
-      this.pool.push({ sprite, mat, vel: [0,0,0], life: 0, maxLife: 0, style: null, baseScale: 0.15 });
+      sprite.visible = false;
+      sprite.scale.setScalar(0.15);
+      scene.add(sprite);
+      this.pool.push({
+        sprite, mat,
+        vel: [0, 0, 0],
+        life: 0, maxLife: 0,
+        config: null,
+        baseScale: 0.15,
+        speedMultiplier: 1,
+      });
     }
   }
-  _getTexture(style) {
-    if (this.textureCache[style]) return this.textureCache[style];
-    const c = document.createElement("canvas"); c.width = 64; c.height = 64;
-    const ctx = c.getContext("2d"); ctx.clearRect(0, 0, 64, 64);
-    switch (style) {
-      case "note": {
-        ctx.font = "bold 44px serif"; ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.fillText(["♪","♫","♩","♬"][Math.floor(Math.random()*4)], 32, 30); break;
-      }
-      case "fire": {
-        const g = ctx.createRadialGradient(32,38,3,32,32,26);
-        g.addColorStop(0,"#ffffcc"); g.addColorStop(0.25,"#ffaa00"); g.addColorStop(0.6,"#ff3300"); g.addColorStop(1,"rgba(200,0,0,0)");
-        ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(32,34,18,24,0,0,Math.PI*2); ctx.fill(); break;
-      }
-      case "ember": {
-        const g = ctx.createRadialGradient(32,32,1,32,32,12);
-        g.addColorStop(0,"#ffcc44"); g.addColorStop(0.6,"#ff4400"); g.addColorStop(1,"rgba(80,0,0,0)");
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32,32,12,0,Math.PI*2); ctx.fill(); break;
-      }
-      case "sparkle": {
-        ctx.strokeStyle = "#ffd700"; ctx.lineWidth = 2.5; ctx.lineCap = "round";
-        for (let j = 0; j < 4; j++) {
-          const a = (j/4)*Math.PI*2 - Math.PI/2;
-          ctx.beginPath(); ctx.moveTo(32+Math.cos(a)*4,32+Math.sin(a)*4);
-          ctx.lineTo(32+Math.cos(a)*22,32+Math.sin(a)*22); ctx.stroke();
-        }
-        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(32,32,4,0,Math.PI*2); ctx.fill(); break;
-      }
-      case "rainbow": {
-        const colors = ["#ff0000","#ff8800","#ffff00","#00ff00","#0088ff","#aa00ff"];
-        const col = colors[Math.floor(Math.random()*colors.length)];
-        const g = ctx.createRadialGradient(32,32,3,32,32,20);
-        g.addColorStop(0,"#ffffff"); g.addColorStop(0.4,col); g.addColorStop(1,"rgba(0,0,0,0)");
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32,32,20,0,Math.PI*2); ctx.fill(); break;
-      }
-      default: {
-        const g = ctx.createRadialGradient(32,32,2,32,32,22);
-        g.addColorStop(0,"#ffffff"); g.addColorStop(0.3,"#FF5300"); g.addColorStop(1,"rgba(255,83,0,0)");
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32,32,22,0,Math.PI*2); ctx.fill();
-      }
+
+  // Resolve a texture by key. Some textures (note, rainbow) generate fresh per particle.
+  _getTexture(textureKey) {
+    const factory = PROCEDURAL_TEXTURES[textureKey];
+    if (!factory) return PROCEDURAL_TEXTURES["radial-orange"]();
+    // music-note and rainbow-orb pick random glyphs/colors per call — don't cache
+    if (textureKey === "music-note" || textureKey === "rainbow-orb") {
+      return factory();
     }
-    const tex = new THREE.CanvasTexture(c);
-    if (style !== "note" && style !== "rainbow") this.textureCache[style] = tex;
-    return tex;
+    if (!this.textureCache[textureKey]) {
+      this.textureCache[textureKey] = factory();
+    }
+    return this.textureCache[textureKey];
   }
-  emit(pos, count, style = "impact", speed = 3, life = 600) {
+
+  // Public API — preserves the old (pos, count, style, speed, life) signature.
+  // `style` is a key into PARTICLE_EFFECTS. `speed` and `life` override config defaults.
+  emit(pos, count, style = "impact", speed = 3, life = null) {
+    const config = PARTICLE_EFFECTS[style] || PARTICLE_EFFECTS.impact;
     let spawned = 0;
     for (const p of this.pool) {
       if (p.life > 0 || spawned >= count) continue;
+
+      // Transform: position
       p.sprite.visible = true;
-      p.sprite.position.set(pos[0]||0, pos[1]||0.5, pos[2]||0);
-      p.mat.map = this._getTexture(style); p.mat.needsUpdate = true; p.mat.opacity = 1;
-      p.style = style;
-      const isRising = style === "note" || style === "sparkle";
+      p.sprite.position.set(pos[0] || 0, pos[1] || 0.5, pos[2] || 0);
+
+      // Texture
+      p.mat.map = this._getTexture(config.texture);
+      p.mat.needsUpdate = true;
+      p.mat.opacity = config.visual.opacityStart;
+
+      // Stash the config + params for the update loop
+      p.config = config;
+      p.speedMultiplier = speed;
+      p.baseScale = config.visual.baseScale;
+      p.sprite.scale.setScalar(p.baseScale * config.visual.scaleStart);
+
+      // Initial velocity from config range, scaled by speed
+      // The legacy emit() called speed=3 the "default speed" — preserve that scaling.
+      // Each spawn-velocity range was defined for speed=3, so divide by 3 to normalize.
+      const vScale = speed / 3;
+      const v = config.spawn.velocity;
       p.vel = [
-        (Math.random()-0.5)*speed*(style==="note"?0.4:1),
-        isRising ? Math.random()*speed*0.5+2 : Math.random()*speed*0.8+1,
-        (Math.random()-0.5)*speed*(style==="note"?0.4:1),
+        ((Math.random() - 0.5) * 2) * (v.x.max - v.x.min) * 0.5 * vScale + (v.x.min + v.x.max) * 0.5 * 0,
+        // For y, use the range directly (it's not symmetric around 0)
+        (v.y.min + Math.random() * (v.y.max - v.y.min)) * vScale,
+        ((Math.random() - 0.5) * 2) * (v.z.max - v.z.min) * 0.5 * vScale + (v.z.min + v.z.max) * 0.5 * 0,
       ];
-      p.baseScale = style==="note"?0.4 : style==="fire"?0.28 : style==="sparkle"?0.22 : 0.16;
-      p.sprite.scale.setScalar(p.baseScale);
-      p.life = life; p.maxLife = life; spawned++;
+
+      // Lifetime — explicit override or config default
+      p.life = life ?? config.spawn.lifetime;
+      p.maxLife = p.life;
+
+      spawned++;
     }
   }
+
   update(dt) {
     const ds = dt / 1000;
     for (const p of this.pool) {
       if (p.life <= 0) continue;
-      p.life -= dt; const lr = Math.max(0, p.life / p.maxLife);
-      p.sprite.position.x += p.vel[0]*ds;
-      p.sprite.position.y += p.vel[1]*ds;
-      p.sprite.position.z += p.vel[2]*ds;
-      if (p.style==="note") { p.vel[0]+=Math.sin(p.life*0.008)*0.04; p.vel[1]*=0.998; p.sprite.scale.setScalar(p.baseScale*(0.8+Math.sin(p.life*0.01)*0.2)); }
-      else if (p.style==="fire") { p.vel[1]+=2*ds; p.vel[0]+=(Math.random()-0.5)*0.3; p.sprite.scale.setScalar(p.baseScale*lr); }
-      else if (p.style==="ember") { p.vel[1]-=1.5*ds; p.vel[0]+=(Math.random()-0.5)*0.08; p.sprite.scale.setScalar(p.baseScale*(0.5+lr*0.5)); }
-      else if (p.style==="sparkle") { p.vel[1]*=0.99; p.sprite.scale.setScalar(p.baseScale*(0.7+Math.sin(p.life*0.02)*0.3)*lr); }
-      else if (p.style==="rainbow") { p.vel[1]-=4*ds; p.sprite.scale.setScalar(p.baseScale*lr); }
-      else { p.vel[1]-=9.8*ds; }
-      p.mat.opacity = p.style==="note" ? lr*0.85 : lr;
-      if (p.life<=0) p.sprite.visible = false;
+      p.life -= dt;
+      const lifeRatio = Math.max(0, p.life / p.maxLife);
+      const ageRatio = 1 - lifeRatio;
+      const cfg = p.config;
+      if (!cfg) {
+        // Defensive: if config went missing somehow, treat as default impact
+        p.vel[1] -= 9.8 * ds;
+      } else {
+        // === Apply physics ===
+        p.vel[1] += cfg.physics.accelY * ds;
+        if (cfg.physics.verticalDamping !== 1.0) {
+          p.vel[1] *= cfg.physics.verticalDamping;
+        }
+        // Lateral random jitter
+        if (cfg.physics.lateralJitter > 0) {
+          const j = cfg.physics.lateralJitter;
+          p.vel[0] += (Math.random() - 0.5) * j;
+          p.vel[2] += (Math.random() - 0.5) * j;
+        }
+        // Lateral sine oscillation (driven by life ms)
+        const osc = cfg.physics.lateralOscillation;
+        if (osc.amp > 0) {
+          p.vel[0] += Math.sin(p.life * osc.freq) * osc.amp;
+        }
+      }
+
+      // === Integrate position ===
+      p.sprite.position.x += p.vel[0] * ds;
+      p.sprite.position.y += p.vel[1] * ds;
+      p.sprite.position.z += p.vel[2] * ds;
+
+      // === Visual: scale (lerp start→end + optional oscillation) ===
+      if (cfg) {
+        const scaleLerp = cfg.visual.scaleStart + (cfg.visual.scaleEnd - cfg.visual.scaleStart) * ageRatio;
+        let scaleOsc = 1.0;
+        const sOsc = cfg.visual.scaleOscillation;
+        if (sOsc.amp > 0) {
+          // Match the existing pattern: (centerOffset + sin(life*freq)*amp)
+          // For sparkle: (0.7 + sin*0.3); for note: (0.8 + sin*0.2)
+          // We encode this as: center = 1 - amp; scale = baseScale * (center + sin*amp)
+          const center = 1.0 - sOsc.amp;
+          scaleOsc = (center + Math.sin(p.life * sOsc.freq) * sOsc.amp);
+        }
+        // sparkle multiplies by lifeRatio AND oscillation, so combine
+        const finalScale = p.baseScale * scaleLerp * scaleOsc * (cfg.visual.opacityEnd === 0 && cfg.visual.scaleEnd === 0 ? lifeRatio : 1);
+        // ^ The `lifeRatio` multiplier preserves sparkle's "(0.7+sin*0.3)*lr" behavior
+        //   and rainbow/fire's "lr" fade. impact/note keep scaleStart=scaleEnd=1 so this is a no-op.
+        p.sprite.scale.setScalar(finalScale);
+
+        // === Visual: opacity ===
+        p.mat.opacity = cfg.visual.opacityStart + (cfg.visual.opacityEnd - cfg.visual.opacityStart) * ageRatio;
+      }
+
+      if (p.life <= 0) p.sprite.visible = false;
     }
   }
-  dispose() { for (const p of this.pool) { if(p.mat.map)p.mat.map.dispose(); p.mat.dispose(); this.scene.remove(p.sprite); } }
+
+  dispose() {
+    for (const p of this.pool) {
+      if (p.mat.map) p.mat.map.dispose();
+      p.mat.dispose();
+      this.scene.remove(p.sprite);
+    }
+    Object.values(this.textureCache).forEach(t => t.dispose());
+    this.textureCache = {};
+  }
 }
 
 function applyVertexGradient(model, primaryHex, secondaryHex, isThemedSkin) {
@@ -744,6 +1049,22 @@ function applyVertexGradient(model, primaryHex, secondaryHex, isThemedSkin) {
       mat.needsUpdate = true;
     }
   });
+
+  if (isThemedSkin) return;
+  model.traverse(child => {
+    if (!child.isMesh || !child.material) return;
+    const setup = (m) => {
+      if (!m) return;
+      m.vertexColors = true;
+      if (m.emissive) {
+        m.emissive.set(primaryHex);
+        m.emissiveIntensity = 0.25;
+      }
+      m.needsUpdate = true;
+    };
+    if (Array.isArray(child.material)) child.material.forEach(setup);
+    else setup(child.material);
+  });
 }
 
 // ============================================================
@@ -761,6 +1082,8 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     onClose = null,
     compact = false,
     isOpen = true,
+    modifier = "none",
+    initialDice = null,
   } = props;
   const mountRef = useRef(null);
   const sceneRef = useRef({});
@@ -804,18 +1127,11 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     sc.diceState.materials = newMats;
   }, [activeSkin, isThemedSkin, primaryColor, secondaryColor]);
 
-  useEffect(() => {
-    const s = sceneRef.current;
-    if (!s) return;
-    const ambColor = activeSkin?.secondaryLight || secondaryColor;
-    const keyColor = activeSkin?.primaryLight || primaryColor;
-    s.ambientLight?.color.set(ambColor);
-    s.mainLight?.color.set(keyColor);
-  }, [primaryColor, secondaryColor, activeSkin]);
-
   const [diceType, setDiceType] = useState("d20");
+  const [diceCounts, setDiceCounts] = useState({ d4: 0, d6: 0, d8: 0, d10: 0, d12: 0, d20: 0 });
+  const [multiDiceHint, setMultiDiceHint] = useState(false);
   const [equippedEffect, setEquippedEffect] = useState("default");
-  const [modifier, setModifier] = useState("none");
+  const [effectCategory, setEffectCategory] = useState("All");
   const [lastResult, setLastResult] = useState(null);
   const [lastResultDiceType, setLastResultDiceType] = useState(null);
   const [overlayText, setOverlayText] = useState(null);
@@ -833,10 +1149,33 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const ekgStateRef = useRef({ active: false, cursor: 0 });
   const shakeRef = useRef(0);
 
-  // Keep refs in sync with state for the animation loop
+  // Keep refs in sync with state/props for the animation loop
   useEffect(() => { diceTypeRef.current = diceType; }, [diceType]);
   useEffect(() => { equippedEffectRef.current = equippedEffect; }, [equippedEffect]);
   useEffect(() => { modifierRef.current = modifier; }, [modifier]);
+
+  // Dice tray helpers
+  const incDice = (type) => setDiceCounts(prev => ({ ...prev, [type]: Math.min(10, prev[type] + 1) }));
+  const decDice = (type) => setDiceCounts(prev => ({ ...prev, [type]: Math.max(0, prev[type] - 1) }));
+  const totalDice = Object.values(diceCounts).reduce((s, n) => s + n, 0);
+
+  // Initialize tray from initialDice prop on mount
+  useEffect(() => {
+    if (initialDice) setDiceCounts(prev => ({ ...prev, [initialDice]: 1 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-track displayed model to the first non-zero tray type (DICE_ORDER priority).
+  // Empty tray → leave displayed model as-is so the arena doesn't flicker.
+  useEffect(() => {
+    const activeType = DICE_ORDER.find(t => diceCounts[t] > 0);
+    if (!activeType) return;
+    if (diceTypeRef.current === activeType) return;
+    diceTypeRef.current = activeType;
+    if (sceneRef.current?.swapDiceModel) {
+      sceneRef.current.swapDiceModel(activeType);
+    }
+  }, [diceCounts]);
 
   // Preload all GLB dice models in parallel; swap in active type as soon as it loads
   useEffect(() => {
@@ -891,21 +1230,15 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     const camera = new THREE.PerspectiveCamera(34, w / h, 0.1, 100);
     camera.position.set(0, 13, 0); camera.lookAt(0, 0, 0);
 
-    const skin = activeSkinRef.current;
-    const ambColor = skin?.secondaryLight || secondaryColor;
-    const keyColor = skin?.primaryLight || primaryColor;
-    const ambientLight = new THREE.AmbientLight(new THREE.Color(ambColor), 0.6);
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x202830, 1.8);
-    scene.add(hemiLight);
-    scene.add(ambientLight);
-    const mainLight = new THREE.DirectionalLight(new THREE.Color(keyColor), 2.2);
-    mainLight.position.set(3, 10, 4); mainLight.castShadow = true;
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x202830, 1.4);
+    scene.add(hemi);
+    const mainLight = new THREE.DirectionalLight(0xffffff, 0.7);
+    mainLight.position.set(3, 10, 4);
+    mainLight.castShadow = true;
     mainLight.shadow.mapSize.set(1024, 1024);
     Object.assign(mainLight.shadow.camera, { near:1, far:25, left:-5, right:5, top:5, bottom:-5 });
     scene.add(mainLight);
-    const fillLight = new THREE.DirectionalLight(0x4488ff, 0.22);
-    fillLight.position.set(-4, 6, -3);
-    scene.add(fillLight);
 
     // Floor
     const floorMat = new THREE.MeshStandardMaterial({ color: 0x1B2535, roughness: 0.85, metalness: 0.1 });
@@ -991,7 +1324,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     const ghost = new THREE.Mesh(buildDiceGeometry("d20"), ghostMat);
     ghost.visible = false; scene.add(ghost);
 
-    const particles = new StyledParticles(scene, 350);
+    const particles = new EngineParticles(scene, 350);
     particleRef.current = particles;
 
     const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -2.5);
@@ -1040,7 +1373,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       diceState, // { activeContent, isPlaceholder, materials }
       glowPlane, glowMat, ekgFloor, ekgFloorMat, ekgCanvas, ekgCtx, ekgTexture, ekgWave,
       mouseToWorld, swapDiceModel,
-      ambientLight, mainLight,
+      mainLight,
     };
 
     // If a model finished preloading before the scene mounted, swap it in now
@@ -1366,7 +1699,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     }
 
     // Character state modifier
-    switch (modifierRef.current) {
+    switch (modifier) {
       case "rage": timeline = applyRage(timeline); break;
       case "deathSave": timeline = applyDeathSave(timeline); break;
       case "inspiration": timeline = applyInspiration(timeline); break;
@@ -1386,13 +1719,34 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     }
     timelineRef.current = timeline;
     playbackRef.current = { startTime: performance.now(), eventIndex: 0, playing: true };
-  }, [strictMode, config]);
+  }, [strictMode, config, modifier]);
 
   useImperativeHandle(ref, () => ({
     roll: () => executeRoll(0.7, null, false),
   }), [executeRoll]);
 
-  const handleRollClick = useCallback(() => executeRoll(0.7, null, false), [executeRoll]);
+  const handleRollClick = useCallback(() => {
+    if (totalDice === 0) return;
+    if (totalDice === 1) {
+      const type = Object.keys(diceCounts).find(k => diceCounts[k] > 0);
+      if (type) {
+        diceTypeRef.current = type;
+        setDiceType(type);
+        if (sceneRef.current.swapDiceModel) sceneRef.current.swapDiceModel(type);
+        executeRoll(0.7, null, false);
+      }
+    } else {
+      const type = Object.keys(diceCounts).find(k => diceCounts[k] > 0);
+      if (type) {
+        diceTypeRef.current = type;
+        setDiceType(type);
+        if (sceneRef.current.swapDiceModel) sceneRef.current.swapDiceModel(type);
+        executeRoll(0.7, null, false);
+      }
+      setMultiDiceHint(true);
+      setTimeout(() => setMultiDiceHint(false), 4000);
+    }
+  }, [totalDice, diceCounts, executeRoll]);
 
   // Mouse interactions
   const handlePointerDown = useCallback((e) => {
@@ -1449,8 +1803,32 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       padding: 24,
       overflow: "auto",
     }}>
-      <div style={{ ...S.page, minHeight: "auto", maxWidth: "100%", maxHeight: "100%" }}>
+      <div style={{ ...S.page, position: "relative", minHeight: "auto", maxWidth: "100%", maxHeight: "100%" }}>
       <style>{globalCSS}</style>
+      {onClose && (
+        <button
+          onClick={onClose}
+          aria-label="Close dice roller"
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            width: 36,
+            height: 36,
+            borderRadius: "50%",
+            background: "rgba(255, 83, 0, 0.15)",
+            border: "1px solid rgba(255, 83, 0, 0.4)",
+            color: "#fff",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            zIndex: 100,
+          }}
+        >
+          <X size={18} />
+        </button>
+      )}
 
       {/* === Top Bar: Title + Roll History === */}
       <header style={S.header}>
@@ -1490,30 +1868,6 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       {/* === Center: Arena === */}
       <main style={S.arenaWrap}>
         <div style={arenaFrameStyle}>
-          {onClose && (
-            <button
-              onClick={onClose}
-              aria-label="Close dice roller"
-              style={{
-                position: "absolute",
-                top: 12,
-                right: 12,
-                width: 36,
-                height: 36,
-                borderRadius: "50%",
-                background: "rgba(255, 83, 0, 0.15)",
-                border: "1px solid rgba(255, 83, 0, 0.4)",
-                color: "#fff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                zIndex: 100,
-              }}
-            >
-              <X size={18} />
-            </button>
-          )}
           <div
             ref={mountRef}
             onPointerDown={handlePointerDown}
@@ -1597,43 +1951,150 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
 
       {/* === Bottom: Controls === */}
       <footer style={S.controlsWrap}>
-        {/* Dice type selector */}
+        {/* Roll Tray */}
         {!compact && (
-          <div style={S.controlRow}>
-            <div style={S.rowLabel}>DICE</div>
-            <div style={S.diceSelector}>
-              {DICE_ORDER.map(t => {
-                const active = diceType === t;
-                const isLoaded = !!loadedModels[t];
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "16px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 11, letterSpacing: "0.2em", fontWeight: 700, color: "#8d92a1" }}>ROLL TRAY</div>
+              <div style={{ fontSize: 12, color: totalDice > 0 ? "#fff" : "#5d6573", fontWeight: 600 }}>
+                Total: {totalDice} {totalDice === 1 ? "die" : "dice"}
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
+              {DICE_ORDER.map(type => {
+                const count = diceCounts[type];
+                const active = count > 0;
                 return (
-                  <button
-                    key={t}
-                    onClick={() => !isRolling && setDiceType(t)}
-                    disabled={isRolling}
-                    style={{
-                      ...S.dicePill,
-                      background: active ? "linear-gradient(135deg, rgba(255,83,0,0.25), rgba(255,83,0,0.08))" : "rgba(255,255,255,0.025)",
-                      borderColor: active ? "#FF5300" : "rgba(255,255,255,0.07)",
-                      color: active ? "#fff" : "#8d92a1",
-                      boxShadow: active ? "0 0 20px rgba(255,83,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)" : "none",
-                      opacity: isRolling ? 0.4 : 1,
-                      position: "relative",
-                    }}
-                    title={isLoaded ? `${t} model loaded` : `${t} model loading…`}
-                  >
-                    <span style={{ ...S.diceGlyph, color: active ? "#FF5300" : "#5f6373" }}>◆</span>
-                    <span style={S.diceLabel}>{t}</span>
-                    {!isLoaded && (
-                      <span style={{
-                        position: "absolute", top: 4, right: 6,
-                        width: 6, height: 6, borderRadius: "50%",
-                        background: "#f8a47c", opacity: 0.7,
-                        animation: "pulse 1.4s ease-in-out infinite",
-                      }} />
-                    )}
-                  </button>
+                  <div key={type} style={{
+                    padding: "10px 8px", borderRadius: 12,
+                    background: active
+                      ? "linear-gradient(135deg, rgba(255,83,0,0.18), rgba(255,83,0,0.04))"
+                      : "rgba(255,255,255,0.025)",
+                    border: active ? "1px solid #FF5300" : "1px solid rgba(255,255,255,0.07)",
+                    boxShadow: active ? "0 0 14px rgba(255,83,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05)" : "none",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+                    transition: "all 180ms",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <span style={{ color: active ? "#FF5300" : "#5f6373", fontSize: 12 }}>◆</span>
+                      <span style={{ color: active ? "#fff" : "#8d92a1", fontWeight: 700, fontSize: 13 }}>{type}</span>
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: active ? "#fff" : "#5d6573", lineHeight: 1 }}>{count}</div>
+                    <div style={{ display: "flex", gap: 4, width: "100%" }}>
+                      <button
+                        onClick={() => decDice(type)}
+                        disabled={count === 0}
+                        style={{
+                          flex: 1, padding: "4px 0", fontSize: 14, fontWeight: 700,
+                          borderRadius: 6, border: "1px solid rgba(255,255,255,0.1)",
+                          background: count > 0 ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.015)",
+                          color: count > 0 ? "#fff" : "#3d4350",
+                          cursor: count > 0 ? "pointer" : "not-allowed",
+                        }}
+                      >−</button>
+                      <button
+                        onClick={() => incDice(type)}
+                        disabled={count === 10}
+                        style={{
+                          flex: 1, padding: "4px 0", fontSize: 14, fontWeight: 700,
+                          borderRadius: 6, border: "1px solid rgba(255,83,0,0.4)",
+                          background: count < 10 ? "rgba(255,83,0,0.18)" : "rgba(255,83,0,0.05)",
+                          color: count < 10 ? "#FF5300" : "#5d3520",
+                          cursor: count < 10 ? "pointer" : "not-allowed",
+                        }}
+                      >+</button>
+                    </div>
+                  </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* Effect carousel */}
+        {!compact && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "14px 0" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <div style={{ fontSize: 11, letterSpacing: "0.2em", fontWeight: 700, color: "#8d92a1" }}>EFFECT</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {EFFECT_CATEGORIES.map(cat => {
+                  const active = effectCategory === cat;
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setEffectCategory(cat)}
+                      style={{
+                        padding: "5px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.05em",
+                        borderRadius: 14,
+                        background: active ? "rgba(255,83,0,0.18)" : "rgba(255,255,255,0.025)",
+                        border: active ? "1px solid #FF5300" : "1px solid rgba(255,255,255,0.07)",
+                        color: active ? "#fff" : "#8d92a1",
+                        cursor: "pointer",
+                        transition: "all 150ms",
+                      }}
+                    >{cat}</button>
+                  );
+                })}
+              </div>
+            </div>
+            <div style={{
+              display: "flex", gap: 12,
+              overflowX: "auto", overflowY: "hidden",
+              scrollSnapType: "x mandatory",
+              paddingBottom: 8,
+              scrollbarWidth: "thin",
+            }}>
+              {(() => {
+                const visible = EFFECT_CATEGORY_MEMBERS[effectCategory] || [];
+                if (visible.length === 0) {
+                  return (
+                    <div style={{
+                      flex: "1 0 auto", minHeight: 80, display: "flex", alignItems: "center", justifyContent: "center",
+                      color: "#5d6573", fontStyle: "italic", fontSize: 13,
+                    }}>
+                      No effects in this category yet — coming soon.
+                    </div>
+                  );
+                }
+                return visible.map(key => {
+                  const e = EFFECTS[key];
+                  const active = equippedEffect === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setEquippedEffect(key)}
+                      style={{
+                        flex: "0 0 auto", scrollSnapAlign: "start",
+                        minWidth: 96, padding: "12px 14px",
+                        borderRadius: 12,
+                        background: active ? `linear-gradient(135deg, ${e.color}26, ${e.color}0a)` : "rgba(255,255,255,0.025)",
+                        border: active ? `1px solid ${e.color}` : "1px solid rgba(255,255,255,0.07)",
+                        boxShadow: active ? `0 0 16px ${e.color}40, inset 0 1px 0 rgba(255,255,255,0.05)` : "none",
+                        color: active ? "#fff" : "#8d92a1",
+                        cursor: "pointer", transition: "all 180ms",
+                        display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+                      }}
+                    >
+                      <div style={{ fontSize: 22, color: active ? e.color : "#6a6f80", textShadow: active ? `0 0 12px ${e.color}80` : "none" }}>{e.icon}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600 }}>{e.label}</div>
+                    </button>
+                  );
+                });
+              })()}
+              {/* Tavern card always at the end */}
+              <button style={{
+                flex: "0 0 auto", scrollSnapAlign: "start",
+                minWidth: 96, padding: "12px 14px",
+                borderRadius: 12,
+                background: "rgba(255,255,255,0.025)",
+                border: "1px dashed rgba(255,255,255,0.15)",
+                color: "#8d92a1", cursor: "pointer",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+              }} title="More effects coming from the Tavern">
+                <div style={{ fontSize: 20, color: "#5f6373" }}>+</div>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>Tavern</div>
+                <div style={{ fontSize: 10, opacity: 0.6 }}>more soon</div>
+              </button>
             </div>
           </div>
         )}
@@ -1642,134 +2103,69 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
         <div style={S.rollButtonWrap}>
           <button
             onClick={handleRollClick}
-            disabled={isRolling || isHolding}
+            disabled={isRolling || isHolding || totalDice === 0}
             style={{
               ...S.rollButton,
-              cursor: (isRolling || isHolding) ? "not-allowed" : "pointer",
-              opacity: (isRolling || isHolding) ? 0.5 : 1,
-              background: (isRolling || isHolding)
+              cursor: (isRolling || isHolding || totalDice === 0) ? "not-allowed" : "pointer",
+              opacity: (isRolling || isHolding || totalDice === 0) ? 0.5 : 1,
+              background: (isRolling || isHolding || totalDice === 0)
                 ? "linear-gradient(135deg, rgba(255,83,0,0.25), rgba(255,120,60,0.15))"
                 : "linear-gradient(135deg, #FF5300 0%, #ff7733 100%)",
             }}
           >
             <span style={S.rollButtonInner}>
-              {isRolling ? "ROLLING..." : `ROLL ${DICE_CONFIGS[diceType].label.toUpperCase()}`}
+              {isRolling ? "ROLLING..." : "ROLL ALL"}
             </span>
           </button>
+          {multiDiceHint && (
+            <div style={{
+              fontSize: 11, color: "#f8a47c", fontStyle: "italic", textAlign: "center",
+              marginTop: 6, opacity: 0.85,
+            }}>
+              Multi-dice rolling lands in the next update — rolling the first die for now.
+            </div>
+          )}
           <div style={S.rollHint}>
             shake harder → bigger bounces · shake light → walk of shame
           </div>
         </div>
 
-        {/* Effect equip */}
+        {/* GM tools row */}
         {!compact && (
-        <div style={S.controlRow}>
-          <div style={S.rowLabel}>
-            EFFECT
-            <div style={S.rowSubLabel}>equipped trail</div>
+          <div style={{ ...S.controlRow, gap: 14, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+            <div style={S.gmTools}>
+              <button
+                onClick={() => setStrictMode(!strictMode)}
+                style={{
+                  ...S.strictBtn,
+                  background: strictMode ? "rgba(255,68,68,0.12)" : "rgba(255,255,255,0.025)",
+                  borderColor: strictMode ? "#ff4444" : "rgba(255,255,255,0.07)",
+                  color: strictMode ? "#ff7777" : "#8d92a1",
+                }}
+                title="GM enforcement: lazy rolls get rejected"
+              >
+                <span style={{
+                  ...S.checkbox,
+                  background: strictMode ? "#ff4444" : "transparent",
+                  borderColor: strictMode ? "#ff4444" : "#555",
+                }}>{strictMode ? "✓" : ""}</span>
+                Strict Mode
+              </button>
+              <button
+                onClick={() => setShowEventLog(v => !v)}
+                style={{
+                  ...S.strictBtn,
+                  background: showEventLog ? "rgba(255,83,0,0.1)" : "rgba(255,255,255,0.025)",
+                  borderColor: showEventLog ? "#FF5300" : "rgba(255,255,255,0.07)",
+                  color: showEventLog ? "#FF5300" : "#8d92a1",
+                }}
+                title="Show timeline event log (debug)"
+              >
+                {showEventLog ? "Hide" : "Show"} Log
+              </button>
+            </div>
           </div>
-          <div style={S.effectRow}>
-            {EFFECT_ORDER.map(key => {
-              const e = EFFECTS[key];
-              const active = equippedEffect === key;
-              return (
-                <button
-                  key={key}
-                  onClick={() => setEquippedEffect(key)}
-                  style={{
-                    ...S.effectCard,
-                    background: active ? `linear-gradient(135deg, ${e.color}26, ${e.color}0a)` : "rgba(255,255,255,0.025)",
-                    borderColor: active ? e.color : "rgba(255,255,255,0.07)",
-                    boxShadow: active ? `0 0 18px ${e.color}40, inset 0 1px 0 rgba(255,255,255,0.05)` : "none",
-                  }}
-                >
-                  <div style={{ ...S.effectIcon, color: active ? e.color : "#6a6f80", textShadow: active ? `0 0 12px ${e.color}80` : "none" }}>
-                    {e.icon}
-                  </div>
-                  <div style={{ ...S.effectLabel, color: active ? "#fff" : "#8d92a1" }}>{e.label}</div>
-                </button>
-              );
-            })}
-            {/* Tavern hint card */}
-            <button style={S.tavernCard} title="More effects coming from the Tavern">
-              <div style={S.tavernIcon}>+</div>
-              <div style={S.tavernLabel}>Tavern</div>
-              <div style={S.tavernSub}>more soon</div>
-            </button>
-          </div>
-        </div>
         )}
-
-        {/* Character state + GM rules — secondary row */}
-        <div style={{ ...S.controlRow, gap: 14, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
-          <div style={S.rowLabel}>
-            STATE
-            <div style={S.rowSubLabel}>character mod</div>
-          </div>
-          {!compact && (
-          <div style={S.stateRow}>
-            {[
-              { id: "none", label: "Normal" },
-              { id: "rage", label: "Rage", color: "#ff5530" },
-              { id: "deathSave", label: "Death Save", color: "#ff3333" },
-              { id: "inspiration", label: "Inspiration", color: "#ffcc44" },
-              { id: "wildMagic", label: "Wild Magic", color: "#cc66ff" },
-            ].map(s => {
-              const active = modifier === s.id;
-              const accent = s.color || "#FF5300";
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => setModifier(s.id)}
-                  style={{
-                    ...S.stateChip,
-                    background: active ? `${accent}22` : "rgba(255,255,255,0.025)",
-                    borderColor: active ? accent : "rgba(255,255,255,0.07)",
-                    color: active ? accent : "#8d92a1",
-                    fontWeight: active ? 700 : 500,
-                  }}
-                >
-                  {s.label}
-                </button>
-              );
-            })}
-          </div>
-          )}
-
-          {!compact && (
-          <div style={S.gmTools}>
-            <button
-              onClick={() => setStrictMode(!strictMode)}
-              style={{
-                ...S.strictBtn,
-                background: strictMode ? "rgba(255,68,68,0.12)" : "rgba(255,255,255,0.025)",
-                borderColor: strictMode ? "#ff4444" : "rgba(255,255,255,0.07)",
-                color: strictMode ? "#ff7777" : "#8d92a1",
-              }}
-              title="GM enforcement: lazy rolls get rejected"
-            >
-              <span style={{
-                ...S.checkbox,
-                background: strictMode ? "#ff4444" : "transparent",
-                borderColor: strictMode ? "#ff4444" : "#555",
-              }}>{strictMode ? "✓" : ""}</span>
-              Strict Mode
-            </button>
-            <button
-              onClick={() => setShowEventLog(v => !v)}
-              style={{
-                ...S.strictBtn,
-                background: showEventLog ? "rgba(255,83,0,0.1)" : "rgba(255,255,255,0.025)",
-                borderColor: showEventLog ? "#FF5300" : "rgba(255,255,255,0.07)",
-                color: showEventLog ? "#FF5300" : "#8d92a1",
-              }}
-              title="Show timeline event log (debug)"
-            >
-              {showEventLog ? "Hide" : "Show"} Log
-            </button>
-          </div>
-          )}
-        </div>
 
         {/* Optional event log */}
         {!compact && showEventLog && (
