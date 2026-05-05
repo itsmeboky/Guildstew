@@ -1165,6 +1165,18 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-track displayed model to the first non-zero tray type (DICE_ORDER priority).
+  // Empty tray → leave displayed model as-is so the arena doesn't flicker.
+  useEffect(() => {
+    const activeType = DICE_ORDER.find(t => diceCounts[t] > 0);
+    if (!activeType) return;
+    if (diceTypeRef.current === activeType) return;
+    diceTypeRef.current = activeType;
+    if (sceneRef.current?.swapDiceModel) {
+      sceneRef.current.swapDiceModel(activeType);
+    }
+  }, [diceCounts]);
+
   // Preload all GLB dice models in parallel; swap in active type as soon as it loads
   useEffect(() => {
     let cancelled = false;
