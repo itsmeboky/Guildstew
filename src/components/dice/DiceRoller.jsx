@@ -1253,6 +1253,10 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       }, 500); break;
       case "reveal": {
         setLastResult(ev.value);
+        if (ev.diceType === "d20") {
+          if (ev.value === 20) playCritSuccessSound();
+          else if (ev.value === 1) playCritFailSound();
+        }
         setLastResultDiceType(ev.diceType);
         setIsRolling(false);
         setShowEKG(false);
