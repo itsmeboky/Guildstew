@@ -1745,8 +1745,32 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       padding: 24,
       overflow: "auto",
     }}>
-      <div style={{ ...S.page, minHeight: "auto", maxWidth: "100%", maxHeight: "100%" }}>
+      <div style={{ ...S.page, position: "relative", minHeight: "auto", maxWidth: "100%", maxHeight: "100%" }}>
       <style>{globalCSS}</style>
+      {onClose && (
+        <button
+          onClick={onClose}
+          aria-label="Close dice roller"
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            width: 36,
+            height: 36,
+            borderRadius: "50%",
+            background: "rgba(255, 83, 0, 0.15)",
+            border: "1px solid rgba(255, 83, 0, 0.4)",
+            color: "#fff",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            zIndex: 100,
+          }}
+        >
+          <X size={18} />
+        </button>
+      )}
 
       {/* === Top Bar: Title + Roll History === */}
       <header style={S.header}>
@@ -1786,30 +1810,6 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       {/* === Center: Arena === */}
       <main style={S.arenaWrap}>
         <div style={arenaFrameStyle}>
-          {onClose && (
-            <button
-              onClick={onClose}
-              aria-label="Close dice roller"
-              style={{
-                position: "absolute",
-                top: 12,
-                right: 12,
-                width: 36,
-                height: 36,
-                borderRadius: "50%",
-                background: "rgba(255, 83, 0, 0.15)",
-                border: "1px solid rgba(255, 83, 0, 0.4)",
-                color: "#fff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                zIndex: 100,
-              }}
-            >
-              <X size={18} />
-            </button>
-          )}
           <div
             ref={mountRef}
             onPointerDown={handlePointerDown}
