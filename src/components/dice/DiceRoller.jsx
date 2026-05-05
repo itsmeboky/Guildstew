@@ -11,27 +11,16 @@ import { DEFAULT_MODEL_URLS, DEFAULT_TEXTURE_URL } from "@/config/diceAssets";
 // ============================================================
 // DICE MODEL LOADING (.glb from Supabase)
 // ============================================================
-const DICE_MODEL_URLS = {
-  d4:  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d4.glb",
-  d6:  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d6.glb",
-  d8:  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d8.glb",
-  d10: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d10.glb",
-  d12: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d12.glb",
-  d20: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d20.glb",
-};
-
 // Module-scoped cache so HMR / re-mounts don't re-fetch
 const _modelCache = {};
 const TARGET_DICE_SIZE = 1.4; // max dimension target after normalization
 
 const _gltfLoader = new GLTFLoader();
 
-async function loadDiceModel(type) {
+async function loadDiceModel(type, configUploadedModelsRef = null) {
   if (_modelCache[type]) return _modelCache[type];
-  const loader = await getGLTFLoaderInstance();
-  const gltf = await new Promise((resolve, reject) => {
-    loader.load(DICE_MODEL_URLS[type], resolve, undefined, reject);
-  });
+  const url = configUploadedModelsRef?.[type] || DEFAULT_MODEL_URLS[type];
+  const gltf = await _gltfLoader.loadAsync(url);
   const root = gltf.scene;
 
   // Compute bounding box, center the model so its origin is geometric center
