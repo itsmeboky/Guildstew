@@ -14,7 +14,14 @@ import { DEFAULT_MODEL_URLS, DEFAULT_TEXTURE_URL } from "@/config/diceAssets";
 // Module-scoped cache so HMR / re-mounts don't re-fetch
 const _modelCache = {};
 const _textureCache = new Map();
-const TARGET_DICE_SIZE = 1.4; // max dimension target after normalization
+const TARGET_DICE_SIZE = 1.4;
+
+const _defaultTexture = (() => {
+  const loader = new THREE.TextureLoader();
+  const tex = loader.load(DEFAULT_TEXTURE_URL, t => { t.flipY = false; t.needsUpdate = true; });
+  tex.flipY = false;
+  return tex;
+})(); // max dimension target after normalization
 
 // Baseline "skin" used when the player has no Tavern dice skin
 // applied. Mirrors the original hard-coded Guildstew look so the
@@ -723,7 +730,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
           isThemedSkin,
           primaryColor,
           secondaryColor,
-          defaultTexture: null,
+          defaultTexture: _defaultTexture,
         });
         if (cancelled) return;
         setLoadedModels(prev => ({ ...prev, [type]: true }));
