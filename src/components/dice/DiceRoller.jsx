@@ -32,9 +32,17 @@ const STOCK_SKIN = {
 
 const _gltfLoader = new GLTFLoader();
 
-async function loadDiceModel(type, configUploadedModelsRef = null) {
+async function loadDiceModel(type, opts = {}) {
+  const {
+    configUploadedModels = null,
+    activeSkinRef = null,
+    isThemedSkin: isThemedSkinFlag = false,
+    primaryColor: primaryColorHex = "#FF5722",
+    secondaryColor: secondaryColorHex = "#8B5CF6",
+    defaultTexture = null,
+  } = opts;
   if (_modelCache[type]) return _modelCache[type];
-  const url = configUploadedModelsRef?.[type] || DEFAULT_MODEL_URLS[type];
+  const url = configUploadedModels?.[type] || DEFAULT_MODEL_URLS[type];
   const gltf = await _gltfLoader.loadAsync(url);
   const root = gltf.scene;
 
@@ -51,6 +59,17 @@ async function loadDiceModel(type, configUploadedModelsRef = null) {
   const wrapper = new THREE.Group();
   wrapper.add(root);
   wrapper.scale.setScalar(normalizeScale);
+
+  // Apply active skin (replaces materials based on skin properties)
+  applyDiceSkinToMesh(wrapper, activeSkinRef?.current || STOCK_SKIN, {
+    defaultTexture,
+    textureCache: _textureCache,
+  });
+
+  // Apply themed vertex gradient if enabled
+  if (isThemedSkinFlag) {
+    applyVertexGradient(wrapper, primaryColorHex, secondaryColorHex, true);
+  }
 
   // Configure materials, save originals for restoration after color flashes
   wrapper.traverse(c => {
@@ -650,6 +669,8 @@ function applyVertexGradient(model, primaryHex, secondaryHex, isThemedSkin) {
 // ============================================================
 const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const {
+    primaryColor = "#FF5722",
+    secondaryColor = "#8B5CF6",
     isThemedSkin = false,
   } = props;
   const mountRef = useRef(null);
@@ -697,7 +718,13 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     let cancelled = false;
     const loadOne = async (type) => {
       try {
-        await loadDiceModel(type);
+        await loadDiceModel(type, {
+          activeSkinRef,
+          isThemedSkin,
+          primaryColor,
+          secondaryColor,
+          defaultTexture: null,
+        });
         if (cancelled) return;
         setLoadedModels(prev => ({ ...prev, [type]: true }));
         // If this is the currently-displayed type, swap it in immediately
@@ -710,7 +737,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
         setModelLoadError(`Failed to load ${type}.glb`);
       }
     };
-    Object.keys(DICE_MODEL_URLS).forEach(loadOne);
+    Object.keys(DEFAULT_MODEL_URLS).forEach(loadOne);
     return () => { cancelled = true; };
   }, []);
 
