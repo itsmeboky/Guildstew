@@ -96,7 +96,7 @@ async function loadDiceModel(type, opts = {}) {
 
   // Apply themed vertex gradient if enabled
   if (isThemedSkinFlag) {
-    applyVertexGradient(wrapper, primaryColorHex, secondaryColorHex, true);
+    applyVertexGradient(wrapper, primaryColorHex, secondaryColorHex, false);
   }
 
   // Configure materials, save originals for restoration after color flashes
@@ -1116,7 +1116,8 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       textureCache: _textureCache,
     });
     if (isThemedSkin) {
-      applyVertexGradient(sc.diceState.activeContent, primaryColor, secondaryColor, true);
+      const hasCustomTexture = !!(activeSkin?.customTextureUrl);
+      applyVertexGradient(sc.diceState.activeContent, primaryColor, secondaryColor, hasCustomTexture);
     }
     // applyDiceSkinToMesh replaces materials — refresh the materials array + emissive originals
     const newMats = collectMaterials(sc.diceState.activeContent);
