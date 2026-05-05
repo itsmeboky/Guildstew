@@ -1412,7 +1412,19 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   if (!isOpen) return null;
 
   return (
-    <div style={S.page}>
+    <div style={{
+      position: "fixed",
+      inset: 0,
+      zIndex: 9999,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(0, 0, 0, 0.78)",
+      backdropFilter: "blur(8px)",
+      padding: 24,
+      overflow: "auto",
+    }}>
+      <div style={{ ...S.page, minHeight: "auto", maxWidth: "100%", maxHeight: "100%" }}>
       <style>{globalCSS}</style>
 
       {/* === Top Bar: Title + Roll History === */}
@@ -1755,6 +1767,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
           </div>
         )}
       </footer>
+      </div>
     </div>
   );
 });
