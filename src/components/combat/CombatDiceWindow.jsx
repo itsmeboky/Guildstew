@@ -2254,17 +2254,6 @@ export default function CombatDiceWindow({
               </motion.div>
             ) : (
               <>
-                {(phase === "rolling_attack" ||
-                  phase === "rolling_damage" ||
-                  phase === "rolling_check" ||
-                  phase === "rolling_save") && (
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 pointer-events-none opacity-50 animate-pulse">
-                    <span className="text-white text-sm font-bold bg-black/30 px-3 py-1 rounded-full">
-                      Click to Roll
-                    </span>
-                  </div>
-                )}
-
                 <AnimatePresence>
                   {(phase === "attack_result" ||
                     phase === "damage_result") && (
