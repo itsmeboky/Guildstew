@@ -695,6 +695,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     primaryColor = "#FF5722",
     secondaryColor = "#8B5CF6",
     isThemedSkin = false,
+    config = null,
   } = props;
   const mountRef = useRef(null);
   const sceneRef = useRef({});
@@ -1251,7 +1252,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     const isLazy = forceLazy || shakeIntensity < 0.15;
     let timeline;
     if (isLazy) {
-      timeline = buildLazyRoll(result, type);
+      timeline = buildLazyRoll(result, type, config?.faceRotations);
       if (strictMode) {
         timeline.events = timeline.events.filter(e => e.type !== "reveal");
         timeline.events.push({ t: timeline.duration - 100, type: "overlay", text: "REJECTED — Roll properly!", style: "reject" });
@@ -1259,9 +1260,9 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
         timeline.events.sort((a, b) => a.t - b.t);
       }
     } else if (shakeIntensity > 0.85) {
-      timeline = buildEpicRoll(result, type, releaseVector);
+      timeline = buildEpicRoll(result, type, releaseVector, config?.faceRotations);
     } else {
-      timeline = buildNormalRoll(result, type, shakeIntensity, releaseVector);
+      timeline = buildNormalRoll(result, type, shakeIntensity, releaseVector, config?.faceRotations);
     }
 
     // Character state modifier
@@ -1285,7 +1286,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     }
     timelineRef.current = timeline;
     playbackRef.current = { startTime: performance.now(), eventIndex: 0, playing: true };
-  }, [strictMode]);
+  }, [strictMode, config]);
 
   const handleRollClick = useCallback(() => executeRoll(0.7, null, false), [executeRoll]);
 
