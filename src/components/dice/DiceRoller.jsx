@@ -1354,6 +1354,10 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     playbackRef.current = { startTime: performance.now(), eventIndex: 0, playing: true };
   }, [strictMode, config]);
 
+  useImperativeHandle(ref, () => ({
+    roll: () => executeRoll(0.7, null, false),
+  }), [executeRoll]);
+
   const handleRollClick = useCallback(() => executeRoll(0.7, null, false), [executeRoll]);
 
   // Mouse interactions
