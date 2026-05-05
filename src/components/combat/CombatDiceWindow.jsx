@@ -110,6 +110,12 @@ export default function CombatDiceWindow({
   const [isCrit, setIsCrit] = useState(false);
   const [currentDice, setCurrentDice] = useState("d20");
   const [campaignConfig, setCampaignConfig] = useState(null);
+  const [dicePopup, setDicePopup] = useState({
+    open: false,
+    dice: "d20",
+    forcedResult: null,
+    onComplete: null,
+  });
   const [initiativeRoll, setInitiativeRoll] = useState(null);
   // Post-hit prompt state. postHitOptions is a set of strings the
   // actor qualifies for on this hit ('divine_smite', 'stunning_strike').
