@@ -1534,43 +1534,45 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       {/* === Bottom: Controls === */}
       <footer style={S.controlsWrap}>
         {/* Dice type selector */}
-        <div style={S.controlRow}>
-          <div style={S.rowLabel}>DICE</div>
-          <div style={S.diceSelector}>
-            {DICE_ORDER.map(t => {
-              const active = diceType === t;
-              const isLoaded = !!loadedModels[t];
-              return (
-                <button
-                  key={t}
-                  onClick={() => !isRolling && setDiceType(t)}
-                  disabled={isRolling}
-                  style={{
-                    ...S.dicePill,
-                    background: active ? "linear-gradient(135deg, rgba(255,83,0,0.25), rgba(255,83,0,0.08))" : "rgba(255,255,255,0.025)",
-                    borderColor: active ? "#FF5300" : "rgba(255,255,255,0.07)",
-                    color: active ? "#fff" : "#8d92a1",
-                    boxShadow: active ? "0 0 20px rgba(255,83,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)" : "none",
-                    opacity: isRolling ? 0.4 : 1,
-                    position: "relative",
-                  }}
-                  title={isLoaded ? `${t} model loaded` : `${t} model loading…`}
-                >
-                  <span style={{ ...S.diceGlyph, color: active ? "#FF5300" : "#5f6373" }}>◆</span>
-                  <span style={S.diceLabel}>{t}</span>
-                  {!isLoaded && (
-                    <span style={{
-                      position: "absolute", top: 4, right: 6,
-                      width: 6, height: 6, borderRadius: "50%",
-                      background: "#f8a47c", opacity: 0.7,
-                      animation: "pulse 1.4s ease-in-out infinite",
-                    }} />
-                  )}
-                </button>
-              );
-            })}
+        {!compact && (
+          <div style={S.controlRow}>
+            <div style={S.rowLabel}>DICE</div>
+            <div style={S.diceSelector}>
+              {DICE_ORDER.map(t => {
+                const active = diceType === t;
+                const isLoaded = !!loadedModels[t];
+                return (
+                  <button
+                    key={t}
+                    onClick={() => !isRolling && setDiceType(t)}
+                    disabled={isRolling}
+                    style={{
+                      ...S.dicePill,
+                      background: active ? "linear-gradient(135deg, rgba(255,83,0,0.25), rgba(255,83,0,0.08))" : "rgba(255,255,255,0.025)",
+                      borderColor: active ? "#FF5300" : "rgba(255,255,255,0.07)",
+                      color: active ? "#fff" : "#8d92a1",
+                      boxShadow: active ? "0 0 20px rgba(255,83,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)" : "none",
+                      opacity: isRolling ? 0.4 : 1,
+                      position: "relative",
+                    }}
+                    title={isLoaded ? `${t} model loaded` : `${t} model loading…`}
+                  >
+                    <span style={{ ...S.diceGlyph, color: active ? "#FF5300" : "#5f6373" }}>◆</span>
+                    <span style={S.diceLabel}>{t}</span>
+                    {!isLoaded && (
+                      <span style={{
+                        position: "absolute", top: 4, right: 6,
+                        width: 6, height: 6, borderRadius: "50%",
+                        background: "#f8a47c", opacity: 0.7,
+                        animation: "pulse 1.4s ease-in-out infinite",
+                      }} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Roll button */}
         <div style={S.rollButtonWrap}>
