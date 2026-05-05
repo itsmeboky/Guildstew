@@ -110,6 +110,12 @@ export default function CombatDiceWindow({
   const [isCrit, setIsCrit] = useState(false);
   const [currentDice, setCurrentDice] = useState("d20");
   const [campaignConfig, setCampaignConfig] = useState(null);
+  const [dicePopup, setDicePopup] = useState({
+    open: false,
+    dice: "d20",
+    forcedResult: null,
+    onComplete: null,
+  });
   const [initiativeRoll, setInitiativeRoll] = useState(null);
   // Post-hit prompt state. postHitOptions is a set of strings the
   // actor qualifies for on this hit ('divine_smite', 'stunning_strike').
@@ -319,7 +325,6 @@ export default function CombatDiceWindow({
     return abilMod(score);
   }, [actor]);
 
-  const diceRollerRef = useRef(null);
   const prevSpectatorDataRef = useRef(null);
 
   // Prevent background scrolling when modal is open
@@ -416,11 +421,15 @@ export default function CombatDiceWindow({
     ) {
       setCurrentDice("d20");
       setIsRolling(true);
-      setTimeout(() => {
-        if (diceRollerRef.current) {
-          diceRollerRef.current.roll();
-        }
-      }, 100);
+      setDicePopup({
+        open: true,
+        dice: "d20",
+        forcedResult: spectatorData.attackRoll.d20,
+        onComplete: () => {
+          setDicePopup(p => ({ ...p, open: false }));
+          setIsRolling(false);
+        },
+      });
     }
 
     // Damage animation
@@ -433,11 +442,15 @@ export default function CombatDiceWindow({
       const diceType = weaponDice.match(/d\d+/)?.[0] || "d8";
       setCurrentDice(diceType);
       setIsRolling(true);
-      setTimeout(() => {
-        if (diceRollerRef.current) {
-          diceRollerRef.current.roll();
-        }
-      }, 100);
+      setDicePopup({
+        open: true,
+        dice: diceType,
+        forcedResult: spectatorData.damageRoll.dice,
+        onComplete: () => {
+          setDicePopup(p => ({ ...p, open: false }));
+          setIsRolling(false);
+        },
+      });
     }
 
     prevSpectatorDataRef.current = spectatorData;
@@ -665,6 +678,15 @@ export default function CombatDiceWindow({
     if (selectedAction?.type === 'spell' && Number(selectedAction.level || 0) > 0) {
       onStat('spells_cast');
     }
+    setDicePopup({
+      open: true,
+      dice: "d20",
+      forcedResult: isSpectator ? attackRoll?.d20 : null,
+      onComplete: (value) => {
+        setDicePopup(p => ({ ...p, open: false }));
+        onAttackRollComplete(value);
+      },
+    });
   };
 
   const onAttackRollComplete = (roll) => {
@@ -735,6 +757,12 @@ export default function CombatDiceWindow({
         const decisions = {};
         for (const o of opts) decisions[o] = null;
         setPostHitDecisions(decisions);
+      } else {
+        // Auto-advance to the damage roll so the player isn't stranded
+        // on the HIT badge. Brief delay lets the badge register first.
+        setTimeout(() => {
+          handleDamageRoll();
+        }, 900);
       }
     }
 
@@ -1025,6 +1053,15 @@ export default function CombatDiceWindow({
     const diceType = weaponDice.match(/d\d+/)?.[0] || "d8";
     setCurrentDice(diceType);
     setPhase("rolling_damage");
+    setDicePopup({
+      open: true,
+      dice: diceType,
+      forcedResult: isSpectator ? damageRoll?.dice : null,
+      onComplete: (value) => {
+        setDicePopup(p => ({ ...p, open: false }));
+        onDamageRollComplete(value);
+      },
+    });
   };
 
   const onDamageRollComplete = (roll) => {
@@ -1372,15 +1409,22 @@ export default function CombatDiceWindow({
   // → heal_result → DONE.
   const handleHealRoll = () => {
     setIsRolling(true);
-    setCurrentDice("d20"); // visual only; the real roll is computed below
+    const healDice = (spellEffect?.dice || "1d8").match(/d\d+/)?.[0] || "d8";
+    setCurrentDice(healDice); // visual only; the real roll is computed below
     setPhase("rolling_heal");
     onRoll && onRoll({ type: "rolling_heal" });
     if (selectedAction?.type === 'spell' && Number(selectedAction.level || 0) > 0) {
       onStat('spells_cast');
     }
-    // Roll + resolve immediately — the dice animation is just eye
-    // candy on the shared DiceRoller, there's no target d20 for heals.
-    setTimeout(() => onHealRollComplete(), 600);
+    setDicePopup({
+      open: true,
+      dice: healDice,
+      forcedResult: null,
+      onComplete: () => {
+        setDicePopup(p => ({ ...p, open: false }));
+        onHealRollComplete();
+      },
+    });
   };
 
   const onHealRollComplete = () => {
@@ -1524,35 +1568,42 @@ export default function CombatDiceWindow({
   // normal damage_result phase so the existing render paths apply.
   const handleAutoDamage = () => {
     setIsRolling(true);
-    setCurrentDice("d20");
+    const autoDice = (spellEffect?.dice || "1d10").match(/d\d+/)?.[0] || "d10";
+    setCurrentDice(autoDice);
     setPhase("rolling_damage");
     onRoll && onRoll({ type: "rolling_damage" });
-    setTimeout(() => {
-      const baseDice = spellEffect?.dice || "1d10";
-      const scaled = getEffectiveSpellDice(baseDice);
-      const total = rollDiceString(scaled);
-      const result = {
-        total,
-        dice: total,
-        mod: 0,
-        isCrit: false,
-        sneakDice: 0,
-        sneakDamage: 0,
-        diceString: scaled,
-      };
-      setDamageRoll(result);
-      setIsRolling(false);
-      setPhase("damage_result");
+    setDicePopup({
+      open: true,
+      dice: autoDice,
+      forcedResult: null,
+      onComplete: () => {
+        setDicePopup(p => ({ ...p, open: false }));
+        const baseDice = spellEffect?.dice || "1d10";
+        const scaled = getEffectiveSpellDice(baseDice);
+        const total = rollDiceString(scaled);
+        const result = {
+          total,
+          dice: total,
+          mod: 0,
+          isCrit: false,
+          sneakDice: 0,
+          sneakDamage: 0,
+          diceString: scaled,
+        };
+        setDamageRoll(result);
+        setIsRolling(false);
+        setPhase("damage_result");
 
-      if (target?.id && onRoll) {
-        onRoll({
-          type: "damage",
-          value: total,
-          detail: result,
-          targetId: target.id,
-        });
-      }
-    }, 600);
+        if (target?.id && onRoll) {
+          onRoll({
+            type: "damage",
+            value: total,
+            detail: result,
+            targetId: target.id,
+          });
+        }
+      },
+    });
   };
 
   // === Skill Check flow ===
@@ -1561,6 +1612,15 @@ export default function CombatDiceWindow({
     setCurrentDice("d20");
     setPhase("rolling_check");
     onRoll && onRoll({ type: "rolling_check" });
+    setDicePopup({
+      open: true,
+      dice: "d20",
+      forcedResult: isSpectator ? skillCheckRoll?.d20 : null,
+      onComplete: (value) => {
+        setDicePopup(p => ({ ...p, open: false }));
+        onSkillCheckRollComplete(value);
+      },
+    });
   };
 
   const onSkillCheckRollComplete = (roll) => {
@@ -1733,6 +1793,15 @@ export default function CombatDiceWindow({
     setCurrentDice("d20");
     setPhase("rolling_save");
     onRoll && onRoll({ type: "rolling_save" });
+    setDicePopup({
+      open: true,
+      dice: "d20",
+      forcedResult: isSpectator ? savingThrowRoll?.d20 : null,
+      onComplete: (value) => {
+        setDicePopup(p => ({ ...p, open: false }));
+        onSavingThrowRollComplete(value);
+      },
+    });
   };
 
   const onSavingThrowRollComplete = (roll) => {
@@ -1972,6 +2041,7 @@ export default function CombatDiceWindow({
 
   // COMBAT MODE
   return (
+    <>
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -2190,55 +2260,6 @@ export default function CombatDiceWindow({
               </motion.div>
             ) : (
               <>
-                <div className="absolute inset-0 z-10">
-                  <DiceRoller
-                    ref={diceRollerRef}
-                    isOpen={true}
-                    embedded={true}
-                    initialDice={currentDice}
-                    config={campaignConfig}
-                    forcedResult={
-                      isSpectator
-                        ? phase === "attack_result"
-                          ? attackRoll?.d20
-                          : phase === "damage_result"
-                          ? damageRoll?.dice
-                          : null
-                        : null
-                    }
-                    onRollComplete={
-                      isSpectator
-                        ? () => setIsRolling(false)
-                        : phase === "rolling_attack"
-                        ? onAttackRollComplete
-                        : phase === "rolling_damage"
-                        ? onDamageRollComplete
-                        : phase === "rolling_check"
-                        ? onSkillCheckRollComplete
-                        : phase === "rolling_save"
-                        ? onSavingThrowRollComplete
-                        : () => setIsRolling(false)
-                    }
-                    primaryColor={
-                      currentUserProfile?.profile_color_1 || "#FF5722"
-                    }
-                    secondaryColor={
-                      currentUserProfile?.profile_color_2 || "#8B5CF6"
-                    }
-                  />
-                </div>
-
-                {(phase === "rolling_attack" ||
-                  phase === "rolling_damage" ||
-                  phase === "rolling_check" ||
-                  phase === "rolling_save") && (
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 pointer-events-none opacity-50 animate-pulse">
-                    <span className="text-white text-sm font-bold bg-black/30 px-3 py-1 rounded-full">
-                      Click to Roll
-                    </span>
-                  </div>
-                )}
-
                 <AnimatePresence>
                   {(phase === "attack_result" ||
                     phase === "damage_result") && (
@@ -3118,5 +3139,20 @@ export default function CombatDiceWindow({
         )}
       </div>
     </motion.div>
+
+    <DiceRoller
+      isOpen={dicePopup.open}
+      onClose={() => setDicePopup(p => ({ ...p, open: false }))}
+      initialDice={dicePopup.dice}
+      forcedResult={dicePopup.forcedResult}
+      onRollComplete={dicePopup.onComplete}
+      primaryColor={currentUserProfile?.profile_color_1 || "#FF5300"}
+      secondaryColor={currentUserProfile?.profile_color_2 || "#f8a47c"}
+      isThemedSkin={true}
+      config={campaignConfig}
+      compact={true}
+      autoCloseOnReveal={true}
+    />
+    </>
   );
 }
