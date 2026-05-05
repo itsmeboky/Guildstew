@@ -60,7 +60,8 @@ async function loadDiceModel(type, opts = {}) {
   root.position.sub(center); // shift so center is at local 0,0,0
 
   const maxDim = Math.max(size.x, size.y, size.z) || 1;
-  const normalizeScale = TARGET_DICE_SIZE / maxDim;
+  const displayScale = DICE_CONFIGS[type]?.displayScale ?? 1.0;
+  const normalizeScale = (TARGET_DICE_SIZE / maxDim) * displayScale;
 
   // Wrap in a Group so we can apply normalization scale without losing the offset
   const wrapper = new THREE.Group();
@@ -220,12 +221,12 @@ const WALLS = ["north", "south", "east", "west"];
 // DICE TYPE CONFIGS
 // ============================================================
 const DICE_CONFIGS = {
-  d4:  { sides: 4,  label: "d4",  size: 0.65 },
-  d6:  { sides: 6,  label: "d6",  size: 0.8 },
-  d8:  { sides: 8,  label: "d8",  size: 0.65 },
-  d10: { sides: 10, label: "d10", size: 0.6 },
-  d12: { sides: 12, label: "d12", size: 0.6 },
-  d20: { sides: 20, label: "d20", size: 0.6 },
+  d4:  { sides: 4,  label: "d4",  size: 0.65, displayScale: 1.0 },
+  d6:  { sides: 6,  label: "d6",  size: 0.8,  displayScale: 0.8 },
+  d8:  { sides: 8,  label: "d8",  size: 0.65, displayScale: 1.0 },
+  d10: { sides: 10, label: "d10", size: 0.6,  displayScale: 1.0 },
+  d12: { sides: 12, label: "d12", size: 0.6,  displayScale: 1.0 },
+  d20: { sides: 20, label: "d20", size: 0.6,  displayScale: 1.0 },
 };
 const DICE_ORDER = ["d4", "d6", "d8", "d10", "d12", "d20"];
 
