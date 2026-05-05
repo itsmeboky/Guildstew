@@ -2196,44 +2196,6 @@ export default function CombatDiceWindow({
               </motion.div>
             ) : (
               <>
-                <div className="absolute inset-0 z-10">
-                  <DiceRoller
-                    ref={diceRollerRef}
-                    isOpen={true}
-                    embedded={true}
-                    initialDice={currentDice}
-                    config={campaignConfig}
-                    forcedResult={
-                      isSpectator
-                        ? phase === "attack_result"
-                          ? attackRoll?.d20
-                          : phase === "damage_result"
-                          ? damageRoll?.dice
-                          : null
-                        : null
-                    }
-                    onRollComplete={
-                      isSpectator
-                        ? () => setIsRolling(false)
-                        : phase === "rolling_attack"
-                        ? onAttackRollComplete
-                        : phase === "rolling_damage"
-                        ? onDamageRollComplete
-                        : phase === "rolling_check"
-                        ? onSkillCheckRollComplete
-                        : phase === "rolling_save"
-                        ? onSavingThrowRollComplete
-                        : () => setIsRolling(false)
-                    }
-                    primaryColor={
-                      currentUserProfile?.profile_color_1 || "#FF5722"
-                    }
-                    secondaryColor={
-                      currentUserProfile?.profile_color_2 || "#8B5CF6"
-                    }
-                  />
-                </div>
-
                 {(phase === "rolling_attack" ||
                   phase === "rolling_damage" ||
                   phase === "rolling_check" ||
