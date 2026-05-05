@@ -1096,6 +1096,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const diceTypeRef = useRef("d20");
   const equippedEffectRef = useRef("default");
   const modifierRef = useRef("none");
+  const firstDiceCountsChange = useRef(true);
 
   const activeSkin = useActiveDiceSkin();
   const activeSkinRef = useRef(activeSkin);
@@ -1158,6 +1159,20 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   // Dice tray helpers
   const incDice = (type) => setDiceCounts(prev => ({ ...prev, [type]: Math.min(10, prev[type] + 1) }));
   const decDice = (type) => setDiceCounts(prev => ({ ...prev, [type]: Math.max(0, prev[type] - 1) }));
+  const clearTray = useCallback(() => {
+    // Reset tray counts
+    setDiceCounts({ d4: 0, d6: 0, d8: 0, d10: 0, d12: 0, d20: 0 });
+    // Despawn any active multi-dice
+    sceneRef.current?.despawnAllMultiDice?.();
+    // Hide single-dice wrapper if it's still showing
+    if (sceneRef.current?.dice) {
+      sceneRef.current.dice.visible = false;
+    }
+    // Clear result overlays
+    setLastResult(null);
+    setLastResultDiceType(null);
+    if (typeof setLastBreakdown === "function") setLastBreakdown(null);
+  }, []);
   const totalDice = Object.values(diceCounts).reduce((s, n) => s + n, 0);
 
   // Initialize tray from initialDice prop on mount
@@ -1176,6 +1191,34 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     if (sceneRef.current?.swapDiceModel) {
       sceneRef.current.swapDiceModel(activeType);
     }
+  }, [diceCounts]);
+
+  // Auto-cleanup: when tray is edited (after first mount), despawn dice + clear result overlays
+  useEffect(() => {
+    console.log("[tray-change-cleanup] fired. first?", firstDiceCountsChange.current, "isRolling?", isRolling, "playing?", playbackRef.current?.playing);
+    if (firstDiceCountsChange.current) {
+      firstDiceCountsChange.current = false;
+      console.log("[tray-change-cleanup] skipping (first change)");
+      return;
+    }
+    if (isRolling) {
+      console.log("[tray-change-cleanup] skipping (isRolling)");
+      return;
+    }
+    if (playbackRef.current?.playing) {
+      console.log("[tray-change-cleanup] skipping (playback playing)");
+      return;
+    }
+    console.log("[tray-change-cleanup] CLEARING — pool size before:", sceneRef.current?.multiDicePool?.length);
+    sceneRef.current?.despawnAllMultiDice?.();
+    console.log("[tray-change-cleanup] pool size after:", sceneRef.current?.multiDicePool?.length);
+    if (sceneRef.current?.dice && sceneRef.current.dice.visible) {
+      console.log("[tray-change-cleanup] hiding single dice wrapper");
+      sceneRef.current.dice.visible = false;
+    }
+    setLastResult(null);
+    setLastResultDiceType(null);
+    if (typeof setLastBreakdown === "function") setLastBreakdown(null);
   }, [diceCounts]);
 
   // Preload all GLB dice models in parallel; swap in active type as soon as it loads
@@ -1427,10 +1470,15 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     };
 
     const despawnAllMultiDice = () => {
+      console.log("[despawnAllMultiDice] called. pool size:", multiDicePool.length);
       for (const d of multiDicePool) {
-        if (d.group?.parent) d.group.parent.remove(d.group);
+        if (d.group?.parent) {
+          d.group.parent.remove(d.group);
+          console.log("[despawnAllMultiDice] removed", d.type);
+        }
       }
       multiDicePool.length = 0;
+      console.log("[despawnAllMultiDice] complete. pool size:", multiDicePool.length);
     };
 
     sceneRef.current = {
@@ -2129,8 +2177,31 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
           <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "16px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 11, letterSpacing: "0.2em", fontWeight: 700, color: "#8d92a1" }}>ROLL TRAY</div>
-              <div style={{ fontSize: 12, color: totalDice > 0 ? "#fff" : "#5d6573", fontWeight: 600 }}>
-                Total: {totalDice} {totalDice === 1 ? "die" : "dice"}
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <div style={{ fontSize: 12, color: totalDice > 0 ? "#fff" : "#5d6573", fontWeight: 600 }}>
+                  Total: {totalDice} {totalDice === 1 ? "die" : "dice"}
+                </div>
+                <button
+                  onClick={clearTray}
+                  disabled={totalDice === 0 && lastResult === null}
+                  style={{
+                    fontSize: 11,
+                    padding: "5px 12px",
+                    borderRadius: 6,
+                    border: "1px solid rgba(255, 83, 0, 0.3)",
+                    background: "rgba(255, 83, 0, 0.08)",
+                    color: "#FF5300",
+                    fontWeight: 600,
+                    letterSpacing: "0.05em",
+                    cursor: (totalDice === 0 && lastResult === null) ? "not-allowed" : "pointer",
+                    opacity: (totalDice === 0 && lastResult === null) ? 0.4 : 1,
+                    transition: "all 150ms",
+                    marginLeft: 12,
+                  }}
+                  title="Reset tray and clear arena"
+                >
+                  Clear
+                </button>
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
