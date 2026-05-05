@@ -727,6 +727,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     isThemedSkin = false,
     config = null,
     forcedResult = null,
+    onRollComplete = null,
   } = props;
   const mountRef = useRef(null);
   const sceneRef = useRef({});
@@ -746,6 +747,9 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
 
   const forcedResultRef = useRef(forcedResult);
   useEffect(() => { forcedResultRef.current = forcedResult; }, [forcedResult]);
+
+  const onRollCompleteRef = useRef(onRollComplete);
+  useEffect(() => { onRollCompleteRef.current = onRollComplete; }, [onRollComplete]);
 
   useEffect(() => {
     const sc = sceneRef.current;
@@ -1263,6 +1267,9 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       }, 500); break;
       case "reveal": {
         setLastResult(ev.value);
+        if (typeof ev.value === "number") {
+          onRollCompleteRef.current?.(ev.value);
+        }
         if (ev.diceType === "d20") {
           if (ev.value === 20) playCritSuccessSound();
           else if (ev.value === 1) playCritFailSound();
