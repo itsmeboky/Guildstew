@@ -1241,6 +1241,12 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
         break;
       }
       case "particles": particleRef.current?.emit(ev.pos||[0,0.5,0], 12, "impact", (ev.intensity||0.5)*3); break;
+      case "sound": {
+        const v = ev.volume ?? 0.6;
+        if (ev.sound === "diceSettle") playRollSound(v);
+        else if (ev.sound === "wallSlam" || ev.sound === "wallThunk") playRollSound(Math.min(0.5, v * 0.5));
+        break;
+      }
       case "overlay": setOverlayText(ev.text); setTimeout(()=>setOverlayText(null), 2200); break;
       case "settled": setTimeout(()=>{
         for (const w of Object.values(wallMeshesRef.current)) { w.mat.opacity = w.restOpacity; w.targetY = w.restY; }
