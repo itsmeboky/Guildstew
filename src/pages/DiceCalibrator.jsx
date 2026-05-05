@@ -582,28 +582,15 @@ export default function DiceCalibrator() {
     renderer.setPixelRatio(window.devicePixelRatio);
     mount.appendChild(renderer.domElement);
 
-    // Lighting - tinted based on profile
-    const pColor = new THREE.Color(profileColors.primary);
-    const sColor = new THREE.Color(profileColors.secondary);
-
-    const ambient = new THREE.AmbientLight(sColor, 0.6);
+    // Lighting — match live dice system: ambient on secondary, main directional on primary
+    const ambient = new THREE.AmbientLight(new THREE.Color(profileColors.secondary), 0.4);
     scene.add(ambient);
-    
-    const dir = new THREE.DirectionalLight(pColor, 2.0);
-    dir.position.set(5, 10, 7);
+
+    const dir = new THREE.DirectionalLight(new THREE.Color(profileColors.primary), 1.05);
+    dir.position.set(3, 10, 4);
     scene.add(dir);
 
-    // Tinted fill lights - extra vibrant
-    const fill1 = new THREE.DirectionalLight(pColor, 5.0);
-    fill1.position.set(-4, 3, 4);
-    scene.add(fill1);
-
-    const fill2 = new THREE.DirectionalLight(sColor, 5.0);
-    fill2.position.set(4, 3, -4);
-    scene.add(fill2);
-    
-    // Store lights reference for updates
-    scene.userData = { fill1, fill2, ambient, dir };
+    scene.userData = { ambient, dir };
 
     // Create initial dice
     const mesh = createDiceMesh(diceType);
@@ -818,9 +805,7 @@ export default function DiceCalibrator() {
   // Update lights when profile colors change
   useEffect(() => {
     if (sceneRef.current && sceneRef.current.userData) {
-      const { fill1, fill2, ambient, dir } = sceneRef.current.userData;
-      if (fill1) fill1.color.set(profileColors.primary);
-      if (fill2) fill2.color.set(profileColors.secondary);
+      const { ambient, dir } = sceneRef.current.userData;
       if (ambient) ambient.color.set(profileColors.secondary);
       if (dir) dir.color.set(profileColors.primary);
     }
