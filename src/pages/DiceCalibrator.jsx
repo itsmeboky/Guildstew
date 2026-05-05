@@ -4,7 +4,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
-import DiceRoller from "@/components/dice/DiceRoller";
+import { DEFAULT_MODEL_URLS } from "@/config/diceAssets";
 
 const DICE_CONFIG = {
   d4: { sides: 4, scale: 1.3 },
@@ -13,15 +13,6 @@ const DICE_CONFIG = {
   d10: { sides: 10, scale: 1.2 },
   d12: { sides: 12, scale: 1.2 },
   d20: { sides: 20, scale: 1.3 },
-};
-
-const DEFAULT_MODEL_URLS = {
-  d4: "https://static.wixstatic.com/3d/5cdfd8_b214bc92631744fb8844e01f137fe8f1.glb",
-  d6: "https://static.wixstatic.com/3d/5cdfd8_902061e7b0ba49de98cbcf4eee049abe.glb",
-  d8: "https://static.wixstatic.com/3d/5cdfd8_e70348801f264dd29f1a7628cee96ab7.glb",
-  d10: "https://static.wixstatic.com/3d/5cdfd8_56bfac3a10e1410ab3432753f17e298f.glb",
-  d12: "https://static.wixstatic.com/3d/5cdfd8_ffd61fa574db4f3e89b431d00113f7fc.glb",
-  d20: "https://static.wixstatic.com/3d/5cdfd8_a58fd5d20a094dd889d89ec836133320.glb",
 };
 
 export default function DiceCalibrator() {
@@ -45,17 +36,6 @@ export default function DiceCalibrator() {
   const [campaigns, setCampaigns] = useState([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [profileColors, setProfileColors] = useState({ primary: "#FF5722", secondary: "#8B5CF6" });
-  const diceRollerRef = useRef(null);
-
-  // Testing Controls
-  const [testResult, setTestResult] = useState("");
-  const [isTesting, setIsTesting] = useState(false);
-  
-  const handleTestRoll = () => {
-    if (diceRollerRef.current) {
-      diceRollerRef.current.roll();
-    }
-  };
 
   // Fetch user profile colors
   useEffect(() => {
@@ -355,25 +335,29 @@ export default function DiceCalibrator() {
       // Replace the current dice with the loaded model
       if (sceneRef.current && diceRef.current) {
         sceneRef.current.remove(diceRef.current);
-        
-        const model = gltf.scene.clone();
-        model.position.set(0, 0, 0);
-        model.rotation.set(0, 0, 0);
-        
+
+        const root = gltf.scene.clone();
+        root.position.set(0, 0, 0);
+        root.rotation.set(0, 0, 0);
+
         // Scale to fit
-        const box = new THREE.Box3().setFromObject(model);
-        const size = box.getSize(new THREE.Vector3());
+        const sizeBox = new THREE.Box3().setFromObject(root);
+        const size = sizeBox.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
         const scale = 2 / maxDim;
-        model.scale.setScalar(scale);
-        
-        // Center the model
-        box.setFromObject(model);
-        const center = box.getCenter(new THREE.Vector3());
-        model.position.sub(center);
-        
-        sceneRef.current.add(model);
-        diceRef.current = model;
+        root.scale.setScalar(scale);
+
+        // Center root around its own center of mass so user rotation
+        // pivots through the geometric center, not the GLB origin.
+        const bbox = new THREE.Box3().setFromObject(root);
+        const center = bbox.getCenter(new THREE.Vector3());
+        root.position.sub(center);
+
+        const wrapper = new THREE.Group();
+        wrapper.add(root);
+
+        sceneRef.current.add(wrapper);
+        diceRef.current = wrapper;
         updateRotationDisplay();
       }
     } catch (error) {
@@ -648,11 +632,10 @@ export default function DiceCalibrator() {
     const onWheel = (e) => {
       e.preventDefault();
       const zoomSpeed = 0.001;
-      const newZ = camera.position.z + e.deltaY * zoomSpeed * camera.position.z;
-      // Clamp zoom between 2 and 10
-      camera.position.z = Math.max(2, Math.min(10, newZ));
-      camera.position.x = camera.position.z;
-      camera.position.y = camera.position.z;
+      const dy = e.deltaY * zoomSpeed * camera.position.y * 0.1;
+      const newY = camera.position.y + dy;
+      camera.position.y = Math.max(5, Math.min(25, newY));
+      // Keep x and z at 0 — true top-down
       camera.lookAt(0, 0, 0);
     };
 
@@ -691,35 +674,35 @@ export default function DiceCalibrator() {
     
     // Check if we have a custom model for this dice type
     if (customModels[diceType]) {
-      const model = customModels[diceType].scene.clone();
-      
+      const root = customModels[diceType].scene.clone();
+
       // Apply saved transforms if any, or reset
       const transform = modelTransforms[diceType] || { x: 0, y: 0 };
       setPositionX(transform.x);
       setPositionY(transform.y);
-      
-      model.position.set(transform.x, transform.y, 0);
-      model.rotation.set(0, 0, 0);
-      
-      const box = new THREE.Box3().setFromObject(model);
-      const size = box.getSize(new THREE.Vector3());
+
+      root.position.set(0, 0, 0);
+      root.rotation.set(0, 0, 0);
+
+      const sizeBox = new THREE.Box3().setFromObject(root);
+      const size = sizeBox.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
       const scale = 2 / maxDim;
-      model.scale.setScalar(scale);
-      
-      // Only auto-center if no manual transform exists (initial load)
-      // Actually, we should always auto-center geometry relative to 0,0,0 
-      // and then apply the manual offset.
-      box.setFromObject(model);
-      const center = box.getCenter(new THREE.Vector3());
-      model.position.sub(center); // Center geometry
-      
-      // Re-apply manual offset
-      model.position.x += transform.x;
-      model.position.y += transform.y;
-      
-      sceneRef.current.add(model);
-      diceRef.current = model;
+      root.scale.setScalar(scale);
+
+      // Center root around its own center of mass so user rotation
+      // pivots through the geometric center, not the GLB origin.
+      const bbox = new THREE.Box3().setFromObject(root);
+      const center = bbox.getCenter(new THREE.Vector3());
+      root.position.sub(center);
+
+      const wrapper = new THREE.Group();
+      wrapper.add(root);
+      wrapper.position.set(transform.x, transform.y, 0);
+      wrapper.rotation.set(0, 0, 0);
+
+      sceneRef.current.add(wrapper);
+      diceRef.current = wrapper;
     } else {
       setPositionX(0);
       setPositionY(0);
@@ -975,40 +958,6 @@ export default function DiceCalibrator() {
         >
           Reset
         </button>
-      </div>
-
-      {/* Testing Section */}
-      <div className="mt-8 p-6 bg-slate-800/50 rounded-xl border border-white/10 w-full max-w-lg">
-        <h3 className="text-lg font-bold mb-4 text-[#37F2D1] tracking-wider">ANIMATION & SOUND TEST</h3>
-        <div className="flex items-end gap-4 mb-4">
-          <div className="flex-1">
-            <label className="block text-xs text-slate-400 mb-1">Force Result (leave empty for random)</label>
-            <input 
-              type="number" 
-              value={testResult}
-              onChange={(e) => setTestResult(e.target.value)}
-              placeholder="e.g. 20 for Crit"
-              className="w-full bg-black/50 border border-white/20 rounded px-3 py-2 text-white"
-            />
-          </div>
-          <button
-            onClick={handleTestRoll}
-            className="px-4 py-2 h-[42px] rounded bg-[#37F2D1] text-black text-sm font-bold hover:bg-[#2dd9bd] transition-colors"
-          >
-            Force Roll
-          </button>
-        </div>
-
-        <div className="h-64 bg-black/40 rounded-lg overflow-hidden relative border border-white/10">
-            <DiceRoller 
-              ref={diceRollerRef}
-              embedded={true} 
-              initialDice="d20"
-              primaryColor={profileColors.primary}
-              secondaryColor={profileColors.secondary}
-              forcedResult={testResult ? parseInt(testResult) : null}
-            />
-        </div>
       </div>
 
       {/* Saved faces display */}
