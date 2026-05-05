@@ -8,12 +8,6 @@ import { useActiveDiceSkin } from "@/lib/useActiveDiceSkin";
 import { applyDiceSkinToMesh } from "@/lib/applyDiceSkin";
 import { DEFAULT_MODEL_URLS, DEFAULT_TEXTURE_URL } from "@/config/diceAssets";
 
-// Expose THREE globally so the CDN GLTFLoader script can attach to it.
-// (cdnjs's r128 GLTFLoader is non-module and registers as THREE.GLTFLoader.)
-if (typeof window !== "undefined") {
-  window.THREE = window.THREE || THREE;
-}
-
 // ============================================================
 // DICE MODEL LOADING (.glb from Supabase)
 // ============================================================
