@@ -351,6 +351,31 @@ const nearWall = (wall, offset = 0.3) => {
     : [w.pos[0] + w.sign * offset, 0.55, (Math.random() - 0.5) * (ARENA.depth - 2)];
 };
 
+const ROLL_SOUNDS = [
+  "https://static.wixstatic.com/mp3/5cdfd8_e217d9cf6d2740878d9c75447a59650c.wav",
+  "https://static.wixstatic.com/mp3/5cdfd8_51fb8464ed11497ca568fd738696a23a.wav",
+  "https://static.wixstatic.com/mp3/5cdfd8_d530a1fb3ee4434a8291a7cf1e705332.wav",
+  "https://static.wixstatic.com/mp3/5cdfd8_26ff827714844fccaaf4872fc002437e.wav",
+];
+const CRIT_SUCCESS_SOUNDS = [
+  "https://static.wixstatic.com/mp3/5cdfd8_e8c4a95d12884406920d8eb54b0868ee.wav",
+  "https://static.wixstatic.com/mp3/5cdfd8_1d4320bb6ce140e3968f1104c2ef2acf.mp3",
+];
+const CRIT_FAIL_SOUNDS = [
+  "https://static.wixstatic.com/mp3/5cdfd8_277e185148974f8689952c9658c27f54.wav",
+  "https://static.wixstatic.com/mp3/5cdfd8_f4193867f1004b74adaab28c878082ea.wav",
+];
+
+function playFromList(list, volume = 0.6) {
+  const url = list[Math.floor(Math.random() * list.length)];
+  const a = new Audio(url);
+  a.volume = volume;
+  a.play().catch(() => {});
+}
+const playRollSound        = (v = 0.6) => playFromList(ROLL_SOUNDS, v);
+const playCritSuccessSound = (v = 0.8) => playFromList(CRIT_SUCCESS_SOUNDS, v);
+const playCritFailSound    = (v = 0.8) => playFromList(CRIT_FAIL_SOUNDS, v);
+
 function getFaceRotation(diceType, result, configFaceRotations) {
   const override = configFaceRotations?.[diceType]?.[result];
   if (override) {
