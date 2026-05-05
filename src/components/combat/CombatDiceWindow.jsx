@@ -1562,35 +1562,42 @@ export default function CombatDiceWindow({
   // normal damage_result phase so the existing render paths apply.
   const handleAutoDamage = () => {
     setIsRolling(true);
-    setCurrentDice("d20");
+    const autoDice = (spellEffect?.dice || "1d10").match(/d\d+/)?.[0] || "d10";
+    setCurrentDice(autoDice);
     setPhase("rolling_damage");
     onRoll && onRoll({ type: "rolling_damage" });
-    setTimeout(() => {
-      const baseDice = spellEffect?.dice || "1d10";
-      const scaled = getEffectiveSpellDice(baseDice);
-      const total = rollDiceString(scaled);
-      const result = {
-        total,
-        dice: total,
-        mod: 0,
-        isCrit: false,
-        sneakDice: 0,
-        sneakDamage: 0,
-        diceString: scaled,
-      };
-      setDamageRoll(result);
-      setIsRolling(false);
-      setPhase("damage_result");
+    setDicePopup({
+      open: true,
+      dice: autoDice,
+      forcedResult: null,
+      onComplete: () => {
+        setDicePopup(p => ({ ...p, open: false }));
+        const baseDice = spellEffect?.dice || "1d10";
+        const scaled = getEffectiveSpellDice(baseDice);
+        const total = rollDiceString(scaled);
+        const result = {
+          total,
+          dice: total,
+          mod: 0,
+          isCrit: false,
+          sneakDice: 0,
+          sneakDamage: 0,
+          diceString: scaled,
+        };
+        setDamageRoll(result);
+        setIsRolling(false);
+        setPhase("damage_result");
 
-      if (target?.id && onRoll) {
-        onRoll({
-          type: "damage",
-          value: total,
-          detail: result,
-          targetId: target.id,
-        });
-      }
-    }, 600);
+        if (target?.id && onRoll) {
+          onRoll({
+            type: "damage",
+            value: total,
+            detail: result,
+            targetId: target.id,
+          });
+        }
+      },
+    });
   };
 
   // === Skill Check flow ===
