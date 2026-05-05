@@ -664,6 +664,10 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const equippedEffectRef = useRef("default");
   const modifierRef = useRef("none");
 
+  const activeSkin = useActiveDiceSkin();
+  const activeSkinRef = useRef(activeSkin);
+  useEffect(() => { activeSkinRef.current = activeSkin; }, [activeSkin]);
+
   const [diceType, setDiceType] = useState("d20");
   const [equippedEffect, setEquippedEffect] = useState("default");
   const [modifier, setModifier] = useState("none");
