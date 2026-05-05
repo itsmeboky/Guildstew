@@ -1672,6 +1672,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
           </div>
           )}
 
+          {!compact && (
           <div style={S.gmTools}>
             <button
               onClick={() => setStrictMode(!strictMode)}
@@ -1703,10 +1704,11 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
               {showEventLog ? "Hide" : "Show"} Log
             </button>
           </div>
+          )}
         </div>
 
         {/* Optional event log */}
-        {showEventLog && (
+        {!compact && showEventLog && (
           <div style={S.eventLogWrap}>
             <div style={S.eventLogLabel}>TIMELINE EVENTS</div>
             <div style={S.eventLog}>
