@@ -355,25 +355,29 @@ export default function DiceCalibrator() {
       // Replace the current dice with the loaded model
       if (sceneRef.current && diceRef.current) {
         sceneRef.current.remove(diceRef.current);
-        
-        const model = gltf.scene.clone();
-        model.position.set(0, 0, 0);
-        model.rotation.set(0, 0, 0);
-        
+
+        const root = gltf.scene.clone();
+        root.position.set(0, 0, 0);
+        root.rotation.set(0, 0, 0);
+
         // Scale to fit
-        const box = new THREE.Box3().setFromObject(model);
+        const box = new THREE.Box3().setFromObject(root);
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
         const scale = 2 / maxDim;
-        model.scale.setScalar(scale);
-        
-        // Center the model
-        box.setFromObject(model);
+        root.scale.setScalar(scale);
+
+        // Shift root so its geometric center coincides with the root's local origin
+        box.setFromObject(root);
         const center = box.getCenter(new THREE.Vector3());
-        model.position.sub(center);
-        
-        sceneRef.current.add(model);
-        diceRef.current = model;
+        root.position.sub(center);
+
+        // Wrap so user rotation pivots around the geometric center, not the GLB's native origin
+        const wrapper = new THREE.Group();
+        wrapper.add(root);
+
+        sceneRef.current.add(wrapper);
+        diceRef.current = wrapper;
         updateRotationDisplay();
       }
     } catch (error) {
@@ -571,8 +575,9 @@ export default function DiceCalibrator() {
     scene.background = new THREE.Color("#111119");
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
-    camera.position.set(3, 3, 3);
+    const w = width, h = height;
+    const camera = new THREE.PerspectiveCamera(34, w / h, 0.1, 100);
+    camera.position.set(0, 13, 0);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
@@ -581,28 +586,15 @@ export default function DiceCalibrator() {
     renderer.setPixelRatio(window.devicePixelRatio);
     mount.appendChild(renderer.domElement);
 
-    // Lighting - tinted based on profile
-    const pColor = new THREE.Color(profileColors.primary);
-    const sColor = new THREE.Color(profileColors.secondary);
-
-    const ambient = new THREE.AmbientLight(sColor, 0.6);
+    // Lighting — match live dice system: ambient on secondary, main directional on primary
+    const ambient = new THREE.AmbientLight(new THREE.Color(profileColors.secondary), 0.4);
     scene.add(ambient);
-    
-    const dir = new THREE.DirectionalLight(pColor, 2.0);
-    dir.position.set(5, 10, 7);
+
+    const dir = new THREE.DirectionalLight(new THREE.Color(profileColors.primary), 1.05);
+    dir.position.set(3, 10, 4);
     scene.add(dir);
 
-    // Tinted fill lights - extra vibrant
-    const fill1 = new THREE.DirectionalLight(pColor, 5.0);
-    fill1.position.set(-4, 3, 4);
-    scene.add(fill1);
-
-    const fill2 = new THREE.DirectionalLight(sColor, 5.0);
-    fill2.position.set(4, 3, -4);
-    scene.add(fill2);
-    
-    // Store lights reference for updates
-    scene.userData = { fill1, fill2, ambient, dir };
+    scene.userData = { ambient, dir };
 
     // Create initial dice
     const mesh = createDiceMesh(diceType);
@@ -691,35 +683,35 @@ export default function DiceCalibrator() {
     
     // Check if we have a custom model for this dice type
     if (customModels[diceType]) {
-      const model = customModels[diceType].scene.clone();
-      
+      const root = customModels[diceType].scene.clone();
+
       // Apply saved transforms if any, or reset
       const transform = modelTransforms[diceType] || { x: 0, y: 0 };
       setPositionX(transform.x);
       setPositionY(transform.y);
-      
-      model.position.set(transform.x, transform.y, 0);
-      model.rotation.set(0, 0, 0);
-      
-      const box = new THREE.Box3().setFromObject(model);
+
+      root.position.set(0, 0, 0);
+      root.rotation.set(0, 0, 0);
+
+      const box = new THREE.Box3().setFromObject(root);
       const size = box.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
       const scale = 2 / maxDim;
-      model.scale.setScalar(scale);
-      
-      // Only auto-center if no manual transform exists (initial load)
-      // Actually, we should always auto-center geometry relative to 0,0,0 
-      // and then apply the manual offset.
-      box.setFromObject(model);
+      root.scale.setScalar(scale);
+
+      // Shift root so its geometric center coincides with root's local origin
+      box.setFromObject(root);
       const center = box.getCenter(new THREE.Vector3());
-      model.position.sub(center); // Center geometry
-      
-      // Re-apply manual offset
-      model.position.x += transform.x;
-      model.position.y += transform.y;
-      
-      sceneRef.current.add(model);
-      diceRef.current = model;
+      root.position.sub(center);
+
+      // Wrap so user rotation pivots around the geometric center, not the GLB's native origin.
+      // The wrapper carries the manual pan offset; the root holds the centering shift.
+      const wrapper = new THREE.Group();
+      wrapper.add(root);
+      wrapper.position.set(transform.x, transform.y, 0);
+
+      sceneRef.current.add(wrapper);
+      diceRef.current = wrapper;
     } else {
       setPositionX(0);
       setPositionY(0);
@@ -817,9 +809,7 @@ export default function DiceCalibrator() {
   // Update lights when profile colors change
   useEffect(() => {
     if (sceneRef.current && sceneRef.current.userData) {
-      const { fill1, fill2, ambient, dir } = sceneRef.current.userData;
-      if (fill1) fill1.color.set(profileColors.primary);
-      if (fill2) fill2.color.set(profileColors.secondary);
+      const { ambient, dir } = sceneRef.current.userData;
       if (ambient) ambient.color.set(profileColors.secondary);
       if (dir) dir.color.set(profileColors.primary);
     }

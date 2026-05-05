@@ -1,56 +1,56 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import * as THREE from "three";
-
-// Expose THREE globally so the CDN GLTFLoader script can attach to it.
-// (cdnjs's r128 GLTFLoader is non-module and registers as THREE.GLTFLoader.)
-if (typeof window !== "undefined") {
-  window.THREE = window.THREE || THREE;
-}
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { X } from "lucide-react";
+import { FACE_ROTATIONS } from "./faceRotations";
+import { DICE_SIDES } from "./diceConfig";
+import { useActiveDiceSkin } from "@/lib/useActiveDiceSkin";
+import { applyDiceSkinToMesh } from "@/lib/applyDiceSkin";
+import { DEFAULT_MODEL_URLS, DEFAULT_TEXTURE_URL } from "@/config/diceAssets";
 
 // ============================================================
 // DICE MODEL LOADING (.glb from Supabase)
 // ============================================================
-const DICE_MODEL_URLS = {
-  d4:  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d4.glb",
-  d6:  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d6.glb",
-  d8:  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d8.glb",
-  d10: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d10.glb",
-  d12: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d12.glb",
-  d20: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d20.glb",
-};
-
 // Module-scoped cache so HMR / re-mounts don't re-fetch
 const _modelCache = {};
-const TARGET_DICE_SIZE = 1.4; // max dimension target after normalization
+const _textureCache = new Map();
+const TARGET_DICE_SIZE = 1.4;
 
-// Lazy-load GLTFLoader via CDN script tag. Works in both the claude.ai artifact
-// preview AND production Vite. (For production, you can swap this for a proper
-// `import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"` if preferred.)
-let _gltfLoaderPromise = null;
-function getGLTFLoaderInstance() {
-  if (typeof window === "undefined") return Promise.reject(new Error("No window"));
-  if (window.THREE?.GLTFLoader) return Promise.resolve(new window.THREE.GLTFLoader());
-  if (_gltfLoaderPromise) return _gltfLoaderPromise;
-  _gltfLoaderPromise = new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/loaders/GLTFLoader.js";
-    script.async = true;
-    script.onload = () => {
-      if (window.THREE?.GLTFLoader) resolve(new window.THREE.GLTFLoader());
-      else reject(new Error("GLTFLoader did not attach to THREE after script load"));
-    };
-    script.onerror = () => reject(new Error("Failed to load GLTFLoader from CDN"));
-    document.head.appendChild(script);
-  });
-  return _gltfLoaderPromise;
-}
+const _defaultTexture = (() => {
+  const loader = new THREE.TextureLoader();
+  const tex = loader.load(DEFAULT_TEXTURE_URL, t => { t.flipY = false; t.needsUpdate = true; });
+  tex.flipY = false;
+  return tex;
+})(); // max dimension target after normalization
 
-async function loadDiceModel(type) {
+// Baseline "skin" used when the player has no Tavern dice skin
+// applied. Mirrors the original hard-coded Guildstew look so the
+// apply-skin path is the single source of truth for the material
+// whether or not the player has a skin equipped.
+const STOCK_SKIN = {
+  baseColor: "#2a3441",
+  metalness: 0.3,
+  roughness: 0.4,
+  glowEnabled: false,
+  primaryLight: "#FF5722",
+  secondaryLight: "#8B5CF6",
+  customTextureUrl: null,
+};
+
+const _gltfLoader = new GLTFLoader();
+
+async function loadDiceModel(type, opts = {}) {
+  const {
+    configUploadedModels = null,
+    activeSkinRef = null,
+    isThemedSkin: isThemedSkinFlag = false,
+    primaryColor: primaryColorHex = "#FF5722",
+    secondaryColor: secondaryColorHex = "#8B5CF6",
+    defaultTexture = null,
+  } = opts;
   if (_modelCache[type]) return _modelCache[type];
-  const loader = await getGLTFLoaderInstance();
-  const gltf = await new Promise((resolve, reject) => {
-    loader.load(DICE_MODEL_URLS[type], resolve, undefined, reject);
-  });
+  const url = configUploadedModels?.[type] || DEFAULT_MODEL_URLS[type];
+  const gltf = await _gltfLoader.loadAsync(url);
   const root = gltf.scene;
 
   // Compute bounding box, center the model so its origin is geometric center
@@ -60,12 +60,24 @@ async function loadDiceModel(type) {
   root.position.sub(center); // shift so center is at local 0,0,0
 
   const maxDim = Math.max(size.x, size.y, size.z) || 1;
-  const normalizeScale = TARGET_DICE_SIZE / maxDim;
+  const displayScale = DICE_CONFIGS[type]?.displayScale ?? 1.0;
+  const normalizeScale = (TARGET_DICE_SIZE / maxDim) * displayScale;
 
   // Wrap in a Group so we can apply normalization scale without losing the offset
   const wrapper = new THREE.Group();
   wrapper.add(root);
   wrapper.scale.setScalar(normalizeScale);
+
+  // Apply active skin (replaces materials based on skin properties)
+  applyDiceSkinToMesh(wrapper, activeSkinRef?.current || STOCK_SKIN, {
+    defaultTexture,
+    textureCache: _textureCache,
+  });
+
+  // Apply themed vertex gradient if enabled
+  if (isThemedSkinFlag) {
+    applyVertexGradient(wrapper, primaryColorHex, secondaryColorHex, true);
+  }
 
   // Configure materials, save originals for restoration after color flashes
   wrapper.traverse(c => {
@@ -209,12 +221,12 @@ const WALLS = ["north", "south", "east", "west"];
 // DICE TYPE CONFIGS
 // ============================================================
 const DICE_CONFIGS = {
-  d4:  { sides: 4,  label: "d4",  size: 0.65 },
-  d6:  { sides: 6,  label: "d6",  size: 0.8 },
-  d8:  { sides: 8,  label: "d8",  size: 0.65 },
-  d10: { sides: 10, label: "d10", size: 0.6 },
-  d12: { sides: 12, label: "d12", size: 0.6 },
-  d20: { sides: 20, label: "d20", size: 0.6 },
+  d4:  { sides: 4,  label: "d4",  size: 0.65, displayScale: 1.0 },
+  d6:  { sides: 6,  label: "d6",  size: 0.8,  displayScale: 0.8 },
+  d8:  { sides: 8,  label: "d8",  size: 0.65, displayScale: 1.0 },
+  d10: { sides: 10, label: "d10", size: 0.6,  displayScale: 1.0 },
+  d12: { sides: 12, label: "d12", size: 0.6,  displayScale: 1.0 },
+  d20: { sides: 20, label: "d20", size: 0.6,  displayScale: 1.0 },
 };
 const DICE_ORDER = ["d4", "d6", "d8", "d10", "d12", "d20"];
 
@@ -340,7 +352,53 @@ const nearWall = (wall, offset = 0.3) => {
     : [w.pos[0] + w.sign * offset, 0.55, (Math.random() - 0.5) * (ARENA.depth - 2)];
 };
 
-function buildNormalRoll(result, diceType, shakeIntensity = 0.7, releaseVector = null) {
+const ROLL_SOUNDS = [
+  "https://static.wixstatic.com/mp3/5cdfd8_e217d9cf6d2740878d9c75447a59650c.wav",
+  "https://static.wixstatic.com/mp3/5cdfd8_51fb8464ed11497ca568fd738696a23a.wav",
+  "https://static.wixstatic.com/mp3/5cdfd8_d530a1fb3ee4434a8291a7cf1e705332.wav",
+  "https://static.wixstatic.com/mp3/5cdfd8_26ff827714844fccaaf4872fc002437e.wav",
+];
+const CRIT_SUCCESS_SOUNDS = [
+  "https://static.wixstatic.com/mp3/5cdfd8_e8c4a95d12884406920d8eb54b0868ee.wav",
+  "https://static.wixstatic.com/mp3/5cdfd8_1d4320bb6ce140e3968f1104c2ef2acf.mp3",
+];
+const CRIT_FAIL_SOUNDS = [
+  "https://static.wixstatic.com/mp3/5cdfd8_277e185148974f8689952c9658c27f54.wav",
+  "https://static.wixstatic.com/mp3/5cdfd8_f4193867f1004b74adaab28c878082ea.wav",
+];
+
+function playFromList(list, volume = 0.6) {
+  const url = list[Math.floor(Math.random() * list.length)];
+  const a = new Audio(url);
+  a.volume = volume;
+  a.play().catch(() => {});
+}
+const playRollSound        = (v = 0.6) => playFromList(ROLL_SOUNDS, v);
+const playCritSuccessSound = (v = 0.8) => playFromList(CRIT_SUCCESS_SOUNDS, v);
+const playCritFailSound    = (v = 0.8) => playFromList(CRIT_FAIL_SOUNDS, v);
+
+const REVEAL_GIFS = {
+  "crit-success": "https://static.wixstatic.com/media/5cdfd8_d1ea4fb5b8b84280a211084922fd620c~mv2.gif",
+  "crit-fail":    "https://static.wixstatic.com/media/5cdfd8_a03a4ac66ac74ade9a4a8d335345bda8~mv2.gif",
+};
+
+function getFaceRotation(diceType, result, configFaceRotations) {
+  const override = configFaceRotations?.[diceType]?.[result];
+  if (override) {
+    const q = new THREE.Quaternion();
+    q.setFromEuler(new THREE.Euler(override.x, override.y, override.z));
+    return [q.x, q.y, q.z, q.w];
+  }
+  const fallback = FACE_ROTATIONS?.[diceType]?.[result];
+  if (fallback) {
+    const q = new THREE.Quaternion();
+    q.setFromEuler(fallback);
+    return [q.x, q.y, q.z, q.w];
+  }
+  return randomAxis();
+}
+
+function buildNormalRoll(result, diceType, shakeIntensity = 0.7, releaseVector = null, configFaceRotations = null) {
   // Bounce count: scales with shake, with randomness inside the band.
   // Min shake (0):   range 2-3
   // Mid shake (0.5): range 5-9
@@ -351,7 +409,7 @@ function buildNormalRoll(result, diceType, shakeIntensity = 0.7, releaseVector =
   // Roll duration scales with bounce count so each bounce gets similar stage time
   const rollDur = 600 + bounceCount * 180;
   const totalDur = ROLL_START + rollDur;
-  const targetRot = randomAxis();
+  const targetRot = getFaceRotation(diceType, result, configFaceRotations);
   const path = [];
   const events = [...buildWallIntro()];
 
@@ -400,9 +458,9 @@ function buildNormalRoll(result, diceType, shakeIntensity = 0.7, releaseVector =
   };
 }
 
-function buildLazyRoll(result, diceType) {
+function buildLazyRoll(result, diceType, configFaceRotations = null) {
   const restPos = [(Math.random() - 0.5) * 2, 0.55, (Math.random() - 0.5) * 1.5];
-  const targetRot = randomAxis();
+  const targetRot = getFaceRotation(diceType, result, configFaceRotations);
   const dur = ROLL_START + 1200;
   return {
     id: `roll_${Date.now()}`, diceType, result, duration: dur + 400,
@@ -424,8 +482,8 @@ function buildLazyRoll(result, diceType) {
   };
 }
 
-function buildEpicRoll(result, diceType, releaseVector = null) {
-  const base = buildNormalRoll(result, diceType, 1.0, releaseVector);
+function buildEpicRoll(result, diceType, releaseVector = null, configFaceRotations = null) {
+  const base = buildNormalRoll(result, diceType, 1.0, releaseVector, configFaceRotations);
   return { ...base, duration: base.duration + 500,
     path: base.path.map((kf, i) => ({ ...kf, t: kf.t * 1.12,
       pos: i > 1 && i < base.path.length - 2 ? [kf.pos[0] * 1.3, kf.pos[1] * 1.15, kf.pos[2] * 1.3] : kf.pos,
@@ -605,10 +663,77 @@ class StyledParticles {
   dispose() { for (const p of this.pool) { if(p.mat.map)p.mat.map.dispose(); p.mat.dispose(); this.scene.remove(p.sprite); } }
 }
 
+function applyVertexGradient(model, primaryHex, secondaryHex, isThemedSkin) {
+  const primary = new THREE.Color(primaryHex);
+  const secondary = new THREE.Color(secondaryHex);
+
+  let minY = Infinity, maxY = -Infinity;
+  model.traverse((child) => {
+    if (child.isMesh && child.geometry) {
+      const pos = child.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  });
+  const yRange = maxY - minY || 1;
+
+  model.traverse((child) => {
+    if (child.isMesh && child.material) {
+      const mat = child.material;
+
+      if (isThemedSkin) {
+        // Themed skins keep textures clean — no tinting
+        mat.color = new THREE.Color(0xffffff);
+        if (child.geometry.attributes.color) {
+          child.geometry.deleteAttribute("color");
+        }
+        mat.vertexColors = false;
+        mat.needsUpdate = true;
+        return;
+      }
+
+      // Apply vertex gradient
+      const geometry = child.geometry;
+      const pos = geometry.attributes.position;
+      const colors = new Float32Array(pos.count * 3);
+      const tmpColor = new THREE.Color();
+
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        const t = (y - minY) / yRange;
+        tmpColor.copy(secondary).lerp(primary, t);
+        colors[i * 3] = tmpColor.r;
+        colors[i * 3 + 1] = tmpColor.g;
+        colors[i * 3 + 2] = tmpColor.b;
+      }
+
+      geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      mat.vertexColors = true;
+      mat.color = new THREE.Color(0xffffff); // White base so vertex colors multiply cleanly
+      mat.needsUpdate = true;
+    }
+  });
+}
+
 // ============================================================
 // MAIN COMPONENT
 // ============================================================
-export default function DiceChoreographyPrototype() {
+const DiceRoller = forwardRef(function DiceRoller(props, ref) {
+  const {
+    primaryColor = "#FF5722",
+    secondaryColor = "#8B5CF6",
+    isThemedSkin = false,
+    config = null,
+    forcedResult = null,
+    onRollComplete = null,
+    autoCloseOnReveal = false,
+    onClose = null,
+    compact = false,
+    isOpen = true,
+  } = props;
   const mountRef = useRef(null);
   const sceneRef = useRef({});
   const timelineRef = useRef(null);
@@ -621,12 +746,52 @@ export default function DiceChoreographyPrototype() {
   const equippedEffectRef = useRef("default");
   const modifierRef = useRef("none");
 
+  const activeSkin = useActiveDiceSkin();
+  const activeSkinRef = useRef(activeSkin);
+  useEffect(() => { activeSkinRef.current = activeSkin; }, [activeSkin]);
+
+  const forcedResultRef = useRef(forcedResult);
+  useEffect(() => { forcedResultRef.current = forcedResult; }, [forcedResult]);
+
+  const onRollCompleteRef = useRef(onRollComplete);
+  useEffect(() => { onRollCompleteRef.current = onRollComplete; }, [onRollComplete]);
+
+  useEffect(() => {
+    const sc = sceneRef.current;
+    if (!sc?.diceState?.activeContent) return;
+    if (sc.diceState.isPlaceholder) return;
+    applyDiceSkinToMesh(sc.diceState.activeContent, activeSkin || STOCK_SKIN, {
+      defaultTexture: _defaultTexture,
+      textureCache: _textureCache,
+    });
+    if (isThemedSkin) {
+      applyVertexGradient(sc.diceState.activeContent, primaryColor, secondaryColor, true);
+    }
+    // applyDiceSkinToMesh replaces materials — refresh the materials array + emissive originals
+    const newMats = collectMaterials(sc.diceState.activeContent);
+    newMats.forEach(m => {
+      m.userData._origEmissive = m.emissive ? m.emissive.clone() : new THREE.Color(0x000000);
+      m.userData._origEmissiveIntensity = m.emissiveIntensity ?? 0;
+    });
+    sc.diceState.materials = newMats;
+  }, [activeSkin, isThemedSkin, primaryColor, secondaryColor]);
+
+  useEffect(() => {
+    const s = sceneRef.current;
+    if (!s) return;
+    const ambColor = activeSkin?.secondaryLight || secondaryColor;
+    const keyColor = activeSkin?.primaryLight || primaryColor;
+    s.ambientLight?.color.set(ambColor);
+    s.mainLight?.color.set(keyColor);
+  }, [primaryColor, secondaryColor, activeSkin]);
+
   const [diceType, setDiceType] = useState("d20");
   const [equippedEffect, setEquippedEffect] = useState("default");
   const [modifier, setModifier] = useState("none");
   const [lastResult, setLastResult] = useState(null);
   const [lastResultDiceType, setLastResultDiceType] = useState(null);
   const [overlayText, setOverlayText] = useState(null);
+  const [revealOverlay, setRevealOverlay] = useState(null);
   const [eventLog, setEventLog] = useState([]);
   const [isRolling, setIsRolling] = useState(false);
   const [isHolding, setIsHolding] = useState(false);
@@ -650,7 +815,14 @@ export default function DiceChoreographyPrototype() {
     let cancelled = false;
     const loadOne = async (type) => {
       try {
-        await loadDiceModel(type);
+        await loadDiceModel(type, {
+          configUploadedModels: config?.uploadedModels,
+          activeSkinRef,
+          isThemedSkin,
+          primaryColor,
+          secondaryColor,
+          defaultTexture: _defaultTexture,
+        });
         if (cancelled) return;
         setLoadedModels(prev => ({ ...prev, [type]: true }));
         // If this is the currently-displayed type, swap it in immediately
@@ -663,9 +835,13 @@ export default function DiceChoreographyPrototype() {
         setModelLoadError(`Failed to load ${type}.glb`);
       }
     };
-    Object.keys(DICE_MODEL_URLS).forEach(loadOne);
+    Object.keys(DEFAULT_MODEL_URLS).forEach(loadOne);
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    Object.keys(_modelCache).forEach(k => delete _modelCache[k]);
+  }, [config?.uploadedModels]);
 
   // ==============================================================
   // SCENE SETUP — runs once
@@ -687,8 +863,14 @@ export default function DiceChoreographyPrototype() {
     const camera = new THREE.PerspectiveCamera(34, w / h, 0.1, 100);
     camera.position.set(0, 13, 0); camera.lookAt(0, 0, 0);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-    const mainLight = new THREE.DirectionalLight(0xfff5e6, 1.05);
+    const skin = activeSkinRef.current;
+    const ambColor = skin?.secondaryLight || secondaryColor;
+    const keyColor = skin?.primaryLight || primaryColor;
+    const ambientLight = new THREE.AmbientLight(new THREE.Color(ambColor), 0.6);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x202830, 1.8);
+    scene.add(hemiLight);
+    scene.add(ambientLight);
+    const mainLight = new THREE.DirectionalLight(new THREE.Color(keyColor), 2.2);
     mainLight.position.set(3, 10, 4); mainLight.castShadow = true;
     mainLight.shadow.mapSize.set(1024, 1024);
     Object.assign(mainLight.shadow.camera, { near:1, far:25, left:-5, right:5, top:5, bottom:-5 });
@@ -830,6 +1012,7 @@ export default function DiceChoreographyPrototype() {
       diceState, // { activeContent, isPlaceholder, materials }
       glowPlane, glowMat, ekgFloor, ekgFloorMat, ekgCanvas, ekgCtx, ekgTexture, ekgWave,
       mouseToWorld, swapDiceModel,
+      ambientLight, mainLight,
     };
 
     // If a model finished preloading before the scene mounted, swap it in now
@@ -1012,14 +1195,10 @@ export default function DiceChoreographyPrototype() {
       renderer.render(scene, camera);
 
       // Update result number overlay position — projects dice 3D pos to screen
-      if (resultOverlayRef.current && dicePosForOverlay) {
-        const v = new THREE.Vector3(dicePosForOverlay.x, dicePosForOverlay.y + 0.5, dicePosForOverlay.z);
-        v.project(camera);
-        const rect = container.getBoundingClientRect();
-        const sx = (v.x * 0.5 + 0.5) * rect.width;
-        const sy = (-v.y * 0.5 + 0.5) * rect.height - 70; // 70px above the dice in screen space
-        resultOverlayRef.current.style.left = `${sx}px`;
-        resultOverlayRef.current.style.top = `${sy}px`;
+      if (resultOverlayRef.current) {
+        resultOverlayRef.current.style.left = "50%";
+        resultOverlayRef.current.style.top = "20px";
+        resultOverlayRef.current.style.transform = "translateX(-50%)";
       }
     };
     rafId = requestAnimationFrame(animate);
@@ -1084,12 +1263,35 @@ export default function DiceChoreographyPrototype() {
         break;
       }
       case "particles": particleRef.current?.emit(ev.pos||[0,0.5,0], 12, "impact", (ev.intensity||0.5)*3); break;
+      case "sound": {
+        const v = ev.volume ?? 0.6;
+        if (ev.sound === "diceSettle") playRollSound(v);
+        else if (ev.sound === "wallSlam" || ev.sound === "wallThunk") playRollSound(Math.min(0.5, v * 0.5));
+        break;
+      }
       case "overlay": setOverlayText(ev.text); setTimeout(()=>setOverlayText(null), 2200); break;
       case "settled": setTimeout(()=>{
         for (const w of Object.values(wallMeshesRef.current)) { w.mat.opacity = w.restOpacity; w.targetY = w.restY; }
       }, 500); break;
       case "reveal": {
         setLastResult(ev.value);
+        if (typeof ev.value === "number") {
+          onRollCompleteRef.current?.(ev.value);
+        }
+        if (autoCloseOnReveal && onClose) {
+          setTimeout(() => onClose(), 1600);
+        }
+        if (ev.diceType === "d20") {
+          if (ev.value === 20) playCritSuccessSound();
+          else if (ev.value === 1) playCritFailSound();
+        }
+        if (ev.diceType === "d20" && ev.value === 20) {
+          setRevealOverlay("crit-success");
+          setTimeout(() => setRevealOverlay(null), 1600);
+        } else if (ev.diceType === "d20" && ev.value === 1) {
+          setRevealOverlay("crit-fail");
+          setTimeout(() => setRevealOverlay(null), 1600);
+        }
         setLastResultDiceType(ev.diceType);
         setIsRolling(false);
         setShowEKG(false);
@@ -1105,7 +1307,7 @@ export default function DiceChoreographyPrototype() {
       case "rejected": setIsRolling(false); setShowEKG(false); break;
       case "arenaEffect": if (ev.effect === "dim") setShowEKG(true); break;
     }
-  }, []);
+  }, [autoCloseOnReveal, onClose]);
 
   // ==============================================================
   // ROLL EXECUTION
@@ -1114,13 +1316,15 @@ export default function DiceChoreographyPrototype() {
     if (playbackRef.current.playing) return;
     const type = diceTypeRef.current;
     const sides = DICE_CONFIGS[type].sides;
-    const result = Math.floor(Math.random() * sides) + 1;
+    const result = forcedResultRef.current != null
+      ? Math.min(Math.max(1, forcedResultRef.current), sides)
+      : Math.floor(Math.random() * sides) + 1;
     setLastResult(null); setLastResultDiceType(null); setOverlayText(null); setEventLog([]); setIsRolling(true); setShowEKG(false);
 
     const isLazy = forceLazy || shakeIntensity < 0.15;
     let timeline;
     if (isLazy) {
-      timeline = buildLazyRoll(result, type);
+      timeline = buildLazyRoll(result, type, config?.faceRotations);
       if (strictMode) {
         timeline.events = timeline.events.filter(e => e.type !== "reveal");
         timeline.events.push({ t: timeline.duration - 100, type: "overlay", text: "REJECTED — Roll properly!", style: "reject" });
@@ -1128,9 +1332,9 @@ export default function DiceChoreographyPrototype() {
         timeline.events.sort((a, b) => a.t - b.t);
       }
     } else if (shakeIntensity > 0.85) {
-      timeline = buildEpicRoll(result, type, releaseVector);
+      timeline = buildEpicRoll(result, type, releaseVector, config?.faceRotations);
     } else {
-      timeline = buildNormalRoll(result, type, shakeIntensity, releaseVector);
+      timeline = buildNormalRoll(result, type, shakeIntensity, releaseVector, config?.faceRotations);
     }
 
     // Character state modifier
@@ -1154,7 +1358,11 @@ export default function DiceChoreographyPrototype() {
     }
     timelineRef.current = timeline;
     playbackRef.current = { startTime: performance.now(), eventIndex: 0, playing: true };
-  }, [strictMode]);
+  }, [strictMode, config]);
+
+  useImperativeHandle(ref, () => ({
+    roll: () => executeRoll(0.7, null, false),
+  }), [executeRoll]);
 
   const handleRollClick = useCallback(() => executeRoll(0.7, null, false), [executeRoll]);
 
@@ -1186,6 +1394,13 @@ export default function DiceChoreographyPrototype() {
 
   // Computed
   const lastSides = lastResultDiceType ? DICE_CONFIGS[lastResultDiceType].sides : 20;
+  const modalSize = 500;
+  const arenaFrameStyle = {
+    ...S.arenaFrame,
+    width: `min(${modalSize}px, calc(100vw - 48px))`,
+    height: `min(${modalSize}px, calc(100vh - 48px))`,
+    aspectRatio: undefined,
+  };
   const isCritMax = lastResult !== null && lastResult === lastSides;
   const isCritMin = lastResult !== null && lastResult === 1;
   const shakeColor = shakeLevel<0.15?"#ff4444":shakeLevel<0.5?"#ff8844":shakeLevel<0.8?"#ffcc00":"#44ff88";
@@ -1194,7 +1409,19 @@ export default function DiceChoreographyPrototype() {
   // RENDER
   // ==============================================================
   return (
-    <div style={S.page}>
+    <div style={{
+      position: "fixed",
+      inset: 0,
+      zIndex: 9999,
+      display: isOpen ? "flex" : "none",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(0, 0, 0, 0.78)",
+      backdropFilter: "blur(8px)",
+      padding: 24,
+      overflow: "auto",
+    }}>
+      <div style={{ ...S.page, minHeight: "auto", maxWidth: "100%", maxHeight: "100%" }}>
       <style>{globalCSS}</style>
 
       {/* === Top Bar: Title + Roll History === */}
@@ -1208,31 +1435,57 @@ export default function DiceChoreographyPrototype() {
           <div style={S.subtitle}>Click & drag in the arena to pick up · shake · release to throw</div>
         </div>
 
-        <div style={S.historyWrap}>
-          <div style={S.historyLabel}>RECENT ROLLS</div>
-          <div style={S.historyChips}>
-            {resultHistory.length === 0 && <div style={S.historyEmpty}>—</div>}
-            {resultHistory.slice().reverse().map((r, i) => {
-              const sides = DICE_CONFIGS[r.type]?.sides ?? 20;
-              const isMax = r.value === sides, isMin = r.value === 1;
-              return (
-                <div key={i} style={{
-                  ...S.chip,
-                  background: isMax ? "rgba(255,215,0,0.12)" : isMin ? "rgba(255,68,68,0.12)" : "rgba(255,255,255,0.04)",
-                  borderColor: isMax ? "rgba(255,215,0,0.45)" : isMin ? "rgba(255,68,68,0.4)" : "rgba(255,255,255,0.08)",
-                }}>
-                  <span style={{ ...S.chipType, color: isMax ? "#e8c34a" : isMin ? "#ff7a7a" : "#7d8494" }}>{r.type}</span>
-                  <span style={{ ...S.chipValue, color: isMax ? "#ffd700" : isMin ? "#ff4444" : "#e8e9ed" }}>{r.value}</span>
-                </div>
-              );
-            })}
+        {!compact && (
+          <div style={S.historyWrap}>
+            <div style={S.historyLabel}>RECENT ROLLS</div>
+            <div style={S.historyChips}>
+              {resultHistory.length === 0 && <div style={S.historyEmpty}>—</div>}
+              {resultHistory.slice().reverse().map((r, i) => {
+                const sides = DICE_CONFIGS[r.type]?.sides ?? 20;
+                const isMax = r.value === sides, isMin = r.value === 1;
+                return (
+                  <div key={i} style={{
+                    ...S.chip,
+                    background: isMax ? "rgba(255,215,0,0.12)" : isMin ? "rgba(255,68,68,0.12)" : "rgba(255,255,255,0.04)",
+                    borderColor: isMax ? "rgba(255,215,0,0.45)" : isMin ? "rgba(255,68,68,0.4)" : "rgba(255,255,255,0.08)",
+                  }}>
+                    <span style={{ ...S.chipType, color: isMax ? "#e8c34a" : isMin ? "#ff7a7a" : "#7d8494" }}>{r.type}</span>
+                    <span style={{ ...S.chipValue, color: isMax ? "#ffd700" : isMin ? "#ff4444" : "#e8e9ed" }}>{r.value}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
       </header>
 
       {/* === Center: Arena === */}
       <main style={S.arenaWrap}>
-        <div style={S.arenaFrame}>
+        <div style={arenaFrameStyle}>
+          {onClose && (
+            <button
+              onClick={onClose}
+              aria-label="Close dice roller"
+              style={{
+                position: "absolute",
+                top: 12,
+                right: 12,
+                width: 36,
+                height: 36,
+                borderRadius: "50%",
+                background: "rgba(255, 83, 0, 0.15)",
+                border: "1px solid rgba(255, 83, 0, 0.4)",
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                zIndex: 100,
+              }}
+            >
+              <X size={18} />
+            </button>
+          )}
           <div
             ref={mountRef}
             onPointerDown={handlePointerDown}
@@ -1286,6 +1539,24 @@ export default function DiceChoreographyPrototype() {
               {isCritMax && <div style={S.resultBadge}>CRIT</div>}
               {isCritMin && <div style={{ ...S.resultBadge, color: "#ff5555", borderColor: "rgba(255,68,68,0.5)" }}>FAIL</div>}
             </div>
+
+            {revealOverlay && (
+              <img
+                src={REVEAL_GIFS[revealOverlay]}
+                alt=""
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: "50%",
+                  transform: "translate(-50%, -50%)",
+                  width: 300,
+                  height: 300,
+                  objectFit: "contain",
+                  pointerEvents: "none",
+                  zIndex: 50,
+                }}
+              />
+            )}
           </div>
 
           {/* Arena corner accents */}
@@ -1299,43 +1570,45 @@ export default function DiceChoreographyPrototype() {
       {/* === Bottom: Controls === */}
       <footer style={S.controlsWrap}>
         {/* Dice type selector */}
-        <div style={S.controlRow}>
-          <div style={S.rowLabel}>DICE</div>
-          <div style={S.diceSelector}>
-            {DICE_ORDER.map(t => {
-              const active = diceType === t;
-              const isLoaded = !!loadedModels[t];
-              return (
-                <button
-                  key={t}
-                  onClick={() => !isRolling && setDiceType(t)}
-                  disabled={isRolling}
-                  style={{
-                    ...S.dicePill,
-                    background: active ? "linear-gradient(135deg, rgba(255,83,0,0.25), rgba(255,83,0,0.08))" : "rgba(255,255,255,0.025)",
-                    borderColor: active ? "#FF5300" : "rgba(255,255,255,0.07)",
-                    color: active ? "#fff" : "#8d92a1",
-                    boxShadow: active ? "0 0 20px rgba(255,83,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)" : "none",
-                    opacity: isRolling ? 0.4 : 1,
-                    position: "relative",
-                  }}
-                  title={isLoaded ? `${t} model loaded` : `${t} model loading…`}
-                >
-                  <span style={{ ...S.diceGlyph, color: active ? "#FF5300" : "#5f6373" }}>◆</span>
-                  <span style={S.diceLabel}>{t}</span>
-                  {!isLoaded && (
-                    <span style={{
-                      position: "absolute", top: 4, right: 6,
-                      width: 6, height: 6, borderRadius: "50%",
-                      background: "#f8a47c", opacity: 0.7,
-                      animation: "pulse 1.4s ease-in-out infinite",
-                    }} />
-                  )}
-                </button>
-              );
-            })}
+        {!compact && (
+          <div style={S.controlRow}>
+            <div style={S.rowLabel}>DICE</div>
+            <div style={S.diceSelector}>
+              {DICE_ORDER.map(t => {
+                const active = diceType === t;
+                const isLoaded = !!loadedModels[t];
+                return (
+                  <button
+                    key={t}
+                    onClick={() => !isRolling && setDiceType(t)}
+                    disabled={isRolling}
+                    style={{
+                      ...S.dicePill,
+                      background: active ? "linear-gradient(135deg, rgba(255,83,0,0.25), rgba(255,83,0,0.08))" : "rgba(255,255,255,0.025)",
+                      borderColor: active ? "#FF5300" : "rgba(255,255,255,0.07)",
+                      color: active ? "#fff" : "#8d92a1",
+                      boxShadow: active ? "0 0 20px rgba(255,83,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)" : "none",
+                      opacity: isRolling ? 0.4 : 1,
+                      position: "relative",
+                    }}
+                    title={isLoaded ? `${t} model loaded` : `${t} model loading…`}
+                  >
+                    <span style={{ ...S.diceGlyph, color: active ? "#FF5300" : "#5f6373" }}>◆</span>
+                    <span style={S.diceLabel}>{t}</span>
+                    {!isLoaded && (
+                      <span style={{
+                        position: "absolute", top: 4, right: 6,
+                        width: 6, height: 6, borderRadius: "50%",
+                        background: "#f8a47c", opacity: 0.7,
+                        animation: "pulse 1.4s ease-in-out infinite",
+                      }} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Roll button */}
         <div style={S.rollButtonWrap}>
@@ -1361,6 +1634,7 @@ export default function DiceChoreographyPrototype() {
         </div>
 
         {/* Effect equip */}
+        {!compact && (
         <div style={S.controlRow}>
           <div style={S.rowLabel}>
             EFFECT
@@ -1396,6 +1670,7 @@ export default function DiceChoreographyPrototype() {
             </button>
           </div>
         </div>
+        )}
 
         {/* Character state + GM rules — secondary row */}
         <div style={{ ...S.controlRow, gap: 14, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
@@ -1403,6 +1678,7 @@ export default function DiceChoreographyPrototype() {
             STATE
             <div style={S.rowSubLabel}>character mod</div>
           </div>
+          {!compact && (
           <div style={S.stateRow}>
             {[
               { id: "none", label: "Normal" },
@@ -1430,7 +1706,9 @@ export default function DiceChoreographyPrototype() {
               );
             })}
           </div>
+          )}
 
+          {!compact && (
           <div style={S.gmTools}>
             <button
               onClick={() => setStrictMode(!strictMode)}
@@ -1462,10 +1740,11 @@ export default function DiceChoreographyPrototype() {
               {showEventLog ? "Hide" : "Show"} Log
             </button>
           </div>
+          )}
         </div>
 
         {/* Optional event log */}
-        {showEventLog && (
+        {!compact && showEventLog && (
           <div style={S.eventLogWrap}>
             <div style={S.eventLogLabel}>TIMELINE EVENTS</div>
             <div style={S.eventLog}>
@@ -1485,9 +1764,11 @@ export default function DiceChoreographyPrototype() {
           </div>
         )}
       </footer>
+      </div>
     </div>
   );
-}
+});
+export default DiceRoller;
 
 // ============================================================
 // STYLES
