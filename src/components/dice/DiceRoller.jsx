@@ -23,6 +23,22 @@ const diceTypes = [
   { name: "d20", sides: 20 },
 ];
 
+// Probability that any given roll "cocks" (lands wedged so two faces
+// share the upward-facing claim). Tighter dice cock less often;
+// chunkier dice (d20, d100) cock more.
+const COCK_CHANCE = {
+  d4: 0.005, d6: 0.01, d8: 0.02, d10: 0.03,
+  d12: 0.04, d20: 0.05, d100: 0.05,
+};
+
+const COCKED_SOUNDS = [
+  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/notification/cockdeddice1.mp3",
+  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/notification/cockeddice2.mp3",
+];
+
+const LAZY_SOUND_URL =
+  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/notification/badroll.wav";
+
 const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
 const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
 const easeOutBack = (t) => {
@@ -349,6 +365,110 @@ const RevealOverlay = ({ value, color }) => {
   );
 };
 
+// Phase 1: chicken slides left → right. Phase 2: gold "COCKED!" text
+// fades in at top center with a scale-bounce, then pulses.
+const CockedAnimation = () => {
+  const [phase, setPhase] = useState(1);
+  useEffect(() => {
+    const t = setTimeout(() => setPhase(2), 1100);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <div className="fixed inset-0 pointer-events-none z-[70] overflow-hidden">
+      <style>{`
+        @keyframes chickenRun {
+          0%   { left: -10vw; transform: translateY(0) rotate(-6deg); }
+          25%  { transform: translateY(-30px) rotate(4deg); }
+          50%  { transform: translateY(0) rotate(-4deg); }
+          75%  { transform: translateY(-22px) rotate(6deg); }
+          100% { left: 110vw; transform: translateY(0) rotate(-2deg); }
+        }
+        @keyframes cockedPop {
+          0%   { transform: translate(-50%, 0) scale(0.4); opacity: 0; }
+          60%  { transform: translate(-50%, 0) scale(1.2); opacity: 1; }
+          100% { transform: translate(-50%, 0) scale(1.0); opacity: 1; }
+        }
+        @keyframes cockedPulse {
+          0%, 100% { filter: drop-shadow(0 0 18px #FFD700) drop-shadow(0 0 36px #FFA500); }
+          50%      { filter: drop-shadow(0 0 32px #FFD700) drop-shadow(0 0 64px #FFA500); }
+        }
+      `}</style>
+      {phase === 1 && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            fontSize: 96,
+            animation: "chickenRun 1100ms cubic-bezier(.5,1.6,.55,.85) forwards",
+          }}
+        >
+          🐔
+        </div>
+      )}
+      {phase === 2 && (
+        <div
+          style={{
+            position: "absolute",
+            top: "12vh",
+            left: "50%",
+            color: "#FFD700",
+            fontFamily: "'Cream', 'Cinzel', serif",
+            fontWeight: 900,
+            fontSize: "min(14vw, 160px)",
+            letterSpacing: "0.08em",
+            textShadow: "0 0 30px #FFD700, 0 0 60px #FFA500, 0 6px 18px rgba(0,0,0,0.55)",
+            animation:
+              "cockedPop 480ms cubic-bezier(.34,1.56,.64,1) forwards, cockedPulse 1.4s ease-in-out 480ms infinite",
+          }}
+        >
+          COCKED!
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Wobbling italic "Lame..." text. When `rejected` is true the color
+// flips pink and the copy nudges the player to try again.
+const LameAnimation = ({ rejected = false }) => {
+  return (
+    <div className="fixed inset-0 pointer-events-none z-[70] flex items-start justify-center">
+      <style>{`
+        @keyframes lameWobble {
+          0%   { transform: translate(-2px, 0) rotate(-2deg); }
+          25%  { transform: translate(2px, -2px) rotate(2deg); }
+          50%  { transform: translate(-1px, 1px) rotate(-1deg); }
+          75%  { transform: translate(1px, 0) rotate(1deg); }
+          100% { transform: translate(-2px, 0) rotate(-2deg); }
+        }
+        @keyframes lameFade {
+          0%   { opacity: 0; transform: translateY(-8px); }
+          15%  { opacity: 1; transform: translateY(0); }
+          85%  { opacity: 1; }
+          100% { opacity: 0; }
+        }
+      `}</style>
+      <div
+        style={{
+          marginTop: "14vh",
+          fontStyle: "italic",
+          fontFamily: "'Cream', 'Cinzel', serif",
+          fontWeight: 700,
+          fontSize: "min(9vw, 96px)",
+          color: rejected ? "#fb7185" : "#94a3b8",
+          textShadow: rejected
+            ? "0 0 20px #fb718580, 0 4px 14px rgba(0,0,0,0.5)"
+            : "0 4px 14px rgba(0,0,0,0.45)",
+          animation:
+            "lameFade 1500ms ease-in-out forwards, lameWobble 240ms linear infinite",
+        }}
+      >
+        {rejected ? "Lame... try again." : "Lame..."}
+      </div>
+    </div>
+  );
+};
+
 const DiceRoller = forwardRef((props, ref) => {
   const {
     isOpen,
@@ -361,6 +481,7 @@ const DiceRoller = forwardRef((props, ref) => {
     secondaryColor = "#8B5CF6",
     isThemedSkin = false,
     forcedResult: forcedResultProp = null,
+    allowLazyRolls = true,
   } = props;
   const [selectedDice, setSelectedDice] = useState(initialDice);
   const [modifier, setModifier] = useState(0);
@@ -371,6 +492,9 @@ const DiceRoller = forwardRef((props, ref) => {
   const [particleType, setParticleType] = useState("default"); // default, crit-success, crit-fail
   const [internalForcedResult, setInternalForcedResult] = useState(null);
   const [revealAnim, setRevealAnim] = useState(null); // { value, color }
+  const [isCocked, setIsCocked] = useState(false);
+  const [showCockedAnim, setShowCockedAnim] = useState(false);
+  const [lameAnim, setLameAnim] = useState(null); // { rejected: boolean }
 
   // Use prop if available, otherwise internal state
   const forcedResult = forcedResultProp !== null ? forcedResultProp : internalForcedResult;
@@ -384,6 +508,22 @@ const DiceRoller = forwardRef((props, ref) => {
   const isInitializedRef = useRef(false);
   const rollingRef = useRef(false);
   const rollDataRef = useRef(null);
+  // Mouse-pickup / shake-to-roll state. Initialised here so the
+  // animate loop and pointer event handlers (set up in the init
+  // effect below) can both read/write the same object.
+  const dragStateRef = useRef({
+    isDown: false,
+    isDragging: false,
+    lastX: 0,
+    lastY: 0,
+    lastT: 0,
+    accumulatedShake: 0,
+    velocityX: 0,
+    velocityY: 0,
+    targetX: 0,
+    targetZ: 0,
+  });
+  const handleRollRef = useRef(null);
   const customModelsRef = useRef({});
   const customFaceRotationsRef = useRef({});
   const customTransformsRef = useRef({});
@@ -423,9 +563,24 @@ const DiceRoller = forwardRef((props, ref) => {
     onRollCompleteRef.current = onRollComplete;
   }, [onRollComplete]);
 
+  // Keep latest state visible to pointer event handlers that were
+  // bound once at init time.
+  const isRollingRef = useRef(false);
+  const isCockedRef = useRef(false);
+  useEffect(() => { isRollingRef.current = isRolling; }, [isRolling]);
+  useEffect(() => { isCockedRef.current = isCocked; }, [isCocked]);
+
   useImperativeHandle(ref, () => ({
-    roll: handleRoll
+    roll: () => handleRoll(),
+    lazyRoll: () => handleRoll({ lazy: true }),
   }));
+
+  // Keep handleRollRef pointing at the latest closure so the
+  // pointer-event handlers (bound once at init) always trigger
+  // the current handleRoll.
+  useEffect(() => {
+    handleRollRef.current = handleRoll;
+  });
 
   useEffect(() => {
     if (initialDice) setSelectedDice(initialDice);
@@ -509,20 +664,38 @@ const DiceRoller = forwardRef((props, ref) => {
       return;
 
     const container = containerRef.current;
-    // Use container dimensions if available, otherwise fallback (though full screen logic should handle this via resize normally, simplified here for immediate render)
-    const width = container.clientWidth || 300;
-    const height = container.clientHeight || 300;
+    // Modal mode renders the canvas fullscreen (the modal content
+    // sits on top, with a "landing zone" placeholder where the dice
+    // used to live). Embedded mode keeps using its host container's
+    // dimensions so it can sit inline (e.g. CombatDiceWindow).
+    const fullscreen = !embedded;
+    const width = fullscreen ? window.innerWidth : (container.clientWidth || 300);
+    const height = fullscreen ? window.innerHeight : (container.clientHeight || 300);
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
-    // Scale camera distance based on container size to keep dice visual size constant
-    const baseSize = 300;
-    const scale = Math.max(width, height) / baseSize;
-    const distance = 3 * scale;
-    
-    camera.position.set(distance, distance, distance);
+    let camera;
+    if (fullscreen) {
+      // Camera tuned for two goals at once:
+      //  1. Resting dice fills ~30-40% of screen height. With dice
+      //     auto-fit to ~2.5 world units and camera at (10,10,10)
+      //     (distance 17.32), a 24° FOV gives a visible scene height
+      //     of 2·17.32·tan(12°) ≈ 7.36 → dice is 2.5/7.36 ≈ 34%.
+      //  2. Minimal perspective shrinkage during the throw arc. With
+      //     orbit radius up to 2.6 along the camera axis, the
+      //     far/near distance ratio is 17.72/14.63 ≈ 1.21 (vs ~1.54
+      //     at the previous (5,5,5) setting), so the dice stays
+      //     visually clear all the way around the orbit.
+      camera = new THREE.PerspectiveCamera(24, width / height, 0.1, 100);
+      camera.position.set(10, 10, 10);
+    } else {
+      camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
+      const baseSize = 300;
+      const scale = Math.max(width, height) / baseSize;
+      const distance = 3 * scale;
+      camera.position.set(distance, distance, distance);
+    }
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
@@ -534,12 +707,21 @@ const DiceRoller = forwardRef((props, ref) => {
     renderer.toneMappingExposure = 1.2;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(renderer.domElement);
+    if (fullscreen) {
+      // The fullscreen canvas has pointer-events:none so clicks pass
+      // straight through to the modal beneath it. We pick up dice
+      // grabs at the window level via raycasting (see the pointer
+      // event block below) and only intercept when the ray actually
+      // hits the dice mesh.
+      renderer.domElement.style.pointerEvents = "none";
+      renderer.domElement.style.display = "block";
+    }
     rendererRef.current = renderer;
 
     const handleResize = () => {
-      if (!container || !camera || !renderer) return;
-      const newWidth = container.clientWidth;
-      const newHeight = container.clientHeight;
+      if (!camera || !renderer) return;
+      const newWidth = fullscreen ? window.innerWidth : container.clientWidth;
+      const newHeight = fullscreen ? window.innerHeight : container.clientHeight;
       camera.aspect = newWidth / newHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(newWidth, newHeight);
@@ -592,6 +774,19 @@ const DiceRoller = forwardRef((props, ref) => {
       const diceMesh = diceRef.current;
       if (!renderer || !camera || !scene) return;
 
+      // While the dice is being held, lerp it toward the cursor
+      // target each frame. This runs only when not currently rolling.
+      const drag = dragStateRef.current;
+      if (drag.isDragging && diceMesh && !rollingRef.current) {
+        const lerp = 0.25;
+        diceMesh.position.x += (drag.targetX - diceMesh.position.x) * lerp;
+        diceMesh.position.y += (1.5 - diceMesh.position.y) * lerp;
+        diceMesh.position.z += (drag.targetZ - diceMesh.position.z) * lerp;
+        // Slight wiggle so a held dice feels alive.
+        diceMesh.rotation.x += 0.02 + drag.velocityX * 0.001;
+        diceMesh.rotation.z += 0.02 + drag.velocityY * 0.001;
+      }
+
       const roll = rollDataRef.current;
       if (rollingRef.current && roll && diceMesh) {
         const now = performance.now();
@@ -615,12 +810,14 @@ const DiceRoller = forwardRef((props, ref) => {
           const phaseT = (elapsed - roll.anticipationDuration) / roll.tumbleDuration;
           const eased = easeOutCubic(phaseT);
 
+          const velMult = roll.tumbleVelMult ?? 1.0;
+
           if (!roll.tumbleAccumulator) {
             roll.tumbleAccumulator = { x: roll.startRot.x, y: roll.startRot.y, z: roll.startRot.z };
             roll.tumbleVelocity = {
-              x: (Math.random() - 0.5) * 0.6,
-              y: (Math.random() - 0.5) * 0.6,
-              z: (Math.random() - 0.5) * 0.6,
+              x: (Math.random() - 0.5) * 0.6 * velMult,
+              y: (Math.random() - 0.5) * 0.6 * velMult,
+              z: (Math.random() - 0.5) * 0.6 * velMult,
             };
             roll.lastFrameTime = now;
           }
@@ -629,11 +826,11 @@ const DiceRoller = forwardRef((props, ref) => {
           roll.lastFrameTime = now;
 
           const decay = 1 - phaseT * 0.3;
-          roll.tumbleVelocity.x += (Math.random() - 0.5) * 0.08;
-          roll.tumbleVelocity.y += (Math.random() - 0.5) * 0.08;
-          roll.tumbleVelocity.z += (Math.random() - 0.5) * 0.05;
+          roll.tumbleVelocity.x += (Math.random() - 0.5) * 0.08 * velMult;
+          roll.tumbleVelocity.y += (Math.random() - 0.5) * 0.08 * velMult;
+          roll.tumbleVelocity.z += (Math.random() - 0.5) * 0.05 * velMult;
 
-          const speedMult = (12 + Math.random() * 4) * (1 - eased * 0.6);
+          const speedMult = (12 + Math.random() * 4) * (1 - eased * 0.6) * velMult;
           roll.tumbleAccumulator.x += roll.tumbleVelocity.x * dt * speedMult * decay;
           roll.tumbleAccumulator.y += roll.tumbleVelocity.y * dt * speedMult * decay;
           roll.tumbleAccumulator.z += roll.tumbleVelocity.z * dt * speedMult * decay;
@@ -647,8 +844,15 @@ const DiceRoller = forwardRef((props, ref) => {
           const orbitT = phaseT;
           const angle = roll.orbitStart + 2 * Math.PI * roll.orbitTurns * orbitT + Math.sin(orbitT * 8) * 0.3;
           const radius = roll.maxRadius * (1 - easeOutQuint(orbitT));
-          const arcHeight = Math.sin(orbitT * Math.PI) * 0.4 + Math.sin(orbitT * Math.PI * 3) * 0.1;
-          diceMesh.position.set(radius * Math.cos(angle), arcHeight, radius * Math.sin(angle));
+          const heightFactor = roll.throwHeight ?? 1.0;
+          const arcHeight = (Math.sin(orbitT * Math.PI) * 0.4 + Math.sin(orbitT * Math.PI * 3) * 0.1) * heightFactor;
+          // Lerp the throw-start position out to (0, arc, 0) over the
+          // tumble so dice picked up at an offset start point still
+          // land back near center.
+          const blend = easeOutQuint(orbitT);
+          const sx = (roll.startPos?.x ?? 0) * (1 - blend);
+          const sz = (roll.startPos?.z ?? 0) * (1 - blend);
+          diceMesh.position.set(sx + radius * Math.cos(angle), arcHeight, sz + radius * Math.sin(angle));
           diceMesh.scale.setScalar(1);
         }
 
@@ -685,11 +889,68 @@ const DiceRoller = forwardRef((props, ref) => {
           diceMesh.scale.setScalar(1);
 
           const finalValue = roll.rollValue;
-          const isCritSuccess = selectedDice === "d20" && finalValue === 20;
-          const isCritFail = selectedDice === "d20" && finalValue === 1;
-
+          const wasCocked = !!roll.willCock;
+          const wasLazy = !!roll.lazy;
+          const lazyAllowed = roll.lazyAllowed !== false;
+          const rollMod = roll.modifier ?? 0;
           rollDataRef.current = null;
           setIsRolling(false);
+
+          // Cocked: chicken + sound, no result counted, no history,
+          // no onRollComplete. Player must roll again.
+          if (wasCocked) {
+            setIsCocked(true);
+            setShowCockedAnim(true);
+            const sound = new Audio(
+              COCKED_SOUNDS[Math.floor(Math.random() * COCKED_SOUNDS.length)]
+            );
+            sound.volume = 0.85;
+            sound.play().catch(() => {});
+            setTimeout(() => setShowCockedAnim(false), 2400);
+            return;
+          }
+
+          // Lazy roll: always plays the sad sound + Lame... overlay.
+          // In strict mode (allowLazyRolls=false) it doesn't count.
+          // In permissive mode the result still counts but we delay
+          // the reveal so the Lame... animation gets center stage.
+          if (wasLazy) {
+            playLazySound();
+            if (!lazyAllowed) {
+              setLameAnim({ rejected: true });
+              setTimeout(() => setLameAnim(null), 1600);
+              return;
+            }
+            setLameAnim({ rejected: false });
+            setTimeout(() => setLameAnim(null), 1600);
+            // Defer the result reveal/history so the Lame... overlay
+            // plays before the number drops.
+            setTimeout(() => {
+              const total = finalValue + rollMod;
+              setRevealAnim({ value: finalValue, color: "#94a3b8" });
+              setLastRoll({ roll: finalValue, total });
+              if (!embedded) {
+                setRollHistory((prev) => [
+                  {
+                    result: finalValue,
+                    timestamp: new Date().toLocaleTimeString(),
+                    dice: selectedDice,
+                    modifier: rollMod,
+                    total,
+                    lazy: true,
+                  },
+                  ...prev,
+                ].slice(0, 10));
+              }
+              if (onRollCompleteRef.current && typeof finalValue === "number") {
+                onRollCompleteRef.current(finalValue);
+              }
+            }, 800);
+            return;
+          }
+
+          const isCritSuccess = selectedDice === "d20" && finalValue === 20;
+          const isCritFail = selectedDice === "d20" && finalValue === 1;
 
           let revealColor = "#ffffff";
           let pType = "default";
@@ -703,6 +964,21 @@ const DiceRoller = forwardRef((props, ref) => {
           setShowParticles(true);
           setTimeout(() => setShowParticles(false), 1200);
 
+          const total = finalValue + rollMod;
+          setLastRoll({ roll: finalValue, total });
+          if (!embedded) {
+            setRollHistory((prev) => [
+              {
+                result: finalValue,
+                timestamp: new Date().toLocaleTimeString(),
+                dice: selectedDice,
+                modifier: rollMod,
+                total,
+              },
+              ...prev,
+            ].slice(0, 10));
+          }
+
           if (onRollCompleteRef.current && typeof finalValue === "number") {
             onRollCompleteRef.current(finalValue);
           }
@@ -713,10 +989,132 @@ const DiceRoller = forwardRef((props, ref) => {
     };
     animate();
 
+    // Mouse pickup + shake-to-roll. Only wired for the fullscreen
+    // (modal) canvas; embedded mode keeps its simple click-to-roll.
+    // We listen at the window level because the canvas is
+    // pointer-events:none — we raycast on pointerdown and only
+    // intercept (preventDefault, capture, etc.) when the ray hits
+    // the dice mesh.
+    let detachPointer = () => {};
+    if (fullscreen) {
+      const canvas = renderer.domElement;
+      const raycaster = new THREE.Raycaster();
+      const ndc = new THREE.Vector2();
+      const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1.5);
+      const tmp = new THREE.Vector3();
+
+      const setNdc = (clientX, clientY) => {
+        const rect = canvas.getBoundingClientRect();
+        ndc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+        ndc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      };
+
+      const projectToWorld = (clientX, clientY, target) => {
+        setNdc(clientX, clientY);
+        raycaster.setFromCamera(ndc, cameraRef.current);
+        raycaster.ray.intersectPlane(dragPlane, target);
+      };
+
+      const hitsDice = (clientX, clientY) => {
+        const dice = diceRef.current;
+        if (!dice) return false;
+        setNdc(clientX, clientY);
+        raycaster.setFromCamera(ndc, cameraRef.current);
+        const hits = raycaster.intersectObject(dice, true);
+        return hits.length > 0;
+      };
+
+      const onPointerMoveHover = (e) => {
+        if (dragStateRef.current.isDown) return;
+        if (rollingRef.current || isCockedRef.current) {
+          document.body.style.cursor = "";
+          return;
+        }
+        document.body.style.cursor = hitsDice(e.clientX, e.clientY) ? "grab" : "";
+      };
+
+      const onPointerDown = (e) => {
+        if (rollingRef.current || isCockedRef.current) return;
+        if (!hitsDice(e.clientX, e.clientY)) return;
+        // Hit the dice — start dragging and prevent the click from
+        // bubbling to anything underneath (e.g. modal close button).
+        e.preventDefault();
+        e.stopPropagation();
+        const drag = dragStateRef.current;
+        drag.isDown = true;
+        drag.isDragging = true;
+        drag.lastX = e.clientX;
+        drag.lastY = e.clientY;
+        drag.lastT = performance.now();
+        drag.accumulatedShake = 0;
+        drag.velocityX = 0;
+        drag.velocityY = 0;
+        projectToWorld(e.clientX, e.clientY, tmp);
+        drag.targetX = tmp.x;
+        drag.targetZ = tmp.z;
+        document.body.style.cursor = "grabbing";
+      };
+
+      const onPointerMove = (e) => {
+        const drag = dragStateRef.current;
+        if (!drag.isDown) {
+          onPointerMoveHover(e);
+          return;
+        }
+        const now = performance.now();
+        const dt = Math.max(1, now - drag.lastT);
+        const dx = e.clientX - drag.lastX;
+        const dy = e.clientY - drag.lastY;
+        drag.accumulatedShake += Math.abs(dx) + Math.abs(dy);
+        drag.velocityX = (dx / dt) * 1000;
+        drag.velocityY = (dy / dt) * 1000;
+        drag.lastX = e.clientX;
+        drag.lastY = e.clientY;
+        drag.lastT = now;
+        projectToWorld(e.clientX, e.clientY, tmp);
+        drag.targetX = tmp.x;
+        drag.targetZ = tmp.z;
+      };
+
+      const onPointerUp = () => {
+        const drag = dragStateRef.current;
+        if (!drag.isDown) return;
+        drag.isDown = false;
+        drag.isDragging = false;
+        document.body.style.cursor = "";
+        const lazy = drag.accumulatedShake <= 250;
+        // Hand the dice's current world position to handleRoll so
+        // the roll animation begins where the player let go.
+        const dice = diceRef.current;
+        const startPos = dice
+          ? { x: dice.position.x, y: dice.position.y, z: dice.position.z }
+          : null;
+        if (handleRollRef.current) {
+          handleRollRef.current({ lazy, startPos });
+        }
+      };
+
+      // pointerdown gets `capture: true` so we can intercept clicks
+      // that would otherwise hit modal buttons before they fire.
+      window.addEventListener("pointerdown", onPointerDown, true);
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
+      window.addEventListener("pointercancel", onPointerUp);
+
+      detachPointer = () => {
+        window.removeEventListener("pointerdown", onPointerDown, true);
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
+        window.removeEventListener("pointercancel", onPointerUp);
+        document.body.style.cursor = "";
+      };
+    }
+
     isInitializedRef.current = true;
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      detachPointer();
       isInitializedRef.current = false;
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
       const renderer = rendererRef.current;
@@ -789,6 +1187,12 @@ const DiceRoller = forwardRef((props, ref) => {
     ];
     const sound = new Audio(sounds[Math.floor(Math.random() * sounds.length)]);
     sound.volume = 0.8;
+    sound.play().catch(() => {});
+  };
+
+  const playLazySound = () => {
+    const sound = new Audio(LAZY_SOUND_URL);
+    sound.volume = 0.7;
     sound.play().catch(() => {});
   };
 
@@ -886,11 +1290,22 @@ const DiceRoller = forwardRef((props, ref) => {
     applyVertexGradient(mesh, primaryColor, secondaryColor, isThemedSkin);
   };
 
-  const handleRoll = () => {
+  const handleRoll = (opts = {}) => {
     if (!diceRef.current || isRolling) return;
+    const lazy = !!opts.lazy;
+    const startPos = opts.startPos || null; // optional world-space throw start
     const diceType = selectedDice;
     const sides = DICE_SIDES[diceType] || 20;
-    
+
+    // Clear cocked / lame state from a prior roll the moment a new roll starts.
+    setIsCocked(false);
+    setShowCockedAnim(false);
+    setLameAnim(null);
+
+    // Snapshot allowLazyRolls into rollData so toggling the prop
+    // mid-flight doesn't corrupt this roll's outcome.
+    const lazyAllowedSnap = !!allowLazyRolls;
+
     // Use forced result if set (for calibration), otherwise random
     let roll;
     if (forcedResult !== null) {
@@ -921,9 +1336,16 @@ const DiceRoller = forwardRef((props, ref) => {
 
       const isCrit = selectedDice === "d20" && (roll === 20 || roll === 1);
 
-      const anticipationDuration = 280;
-      const tumbleDuration = isCrit ? 900 : 800;
-      const settleDuration = isCrit ? 600 : 350; // Crits get slow-mo settle for drama
+      // Probability check for cocked outcome. Forced rolls (calibration)
+      // never cock — calibrators want a clean snap to the requested face.
+      // Lazy rolls cock 5x more often (capped at 50%).
+      const baseCockChance = COCK_CHANCE[selectedDice] ?? 0;
+      const cockChance = lazy ? Math.min(0.5, baseCockChance * 5) : baseCockChance;
+      const willCock = forcedResult === null && Math.random() < cockChance;
+
+      const anticipationDuration = lazy ? 80 : 280;
+      const tumbleDuration = lazy ? 700 : (isCrit ? 900 : 800);
+      const settleDuration = lazy ? 250 : (isCrit ? 600 : 350); // Crits get slow-mo settle for drama
 
       const startRot = {
         x: diceMesh.rotation.x,
@@ -935,10 +1357,16 @@ const DiceRoller = forwardRef((props, ref) => {
       const spinY = 3 + Math.floor(Math.random() * 3);
       const spinZ = 1 + Math.floor(Math.random() * 2);
 
+      // Cocked rolls land tilted ~30° on X and Z so the dice visually
+      // wedges between two faces instead of snapping flat.
+      const COCK_OFFSET = (30 * Math.PI) / 180;
+      const cockX = willCock ? (Math.random() < 0.5 ? COCK_OFFSET : -COCK_OFFSET) : 0;
+      const cockZ = willCock ? (Math.random() < 0.5 ? COCK_OFFSET : -COCK_OFFSET) : 0;
+
       const finalRot = {
-        x: safeSnap.x + Math.PI * 2 * spinX,
+        x: safeSnap.x + Math.PI * 2 * spinX + cockX,
         y: safeSnap.y + Math.PI * 2 * spinY,
-        z: safeSnap.z + Math.PI * 2 * spinZ,
+        z: safeSnap.z + Math.PI * 2 * spinZ + cockZ,
       };
 
       rollDataRef.current = {
@@ -948,11 +1376,18 @@ const DiceRoller = forwardRef((props, ref) => {
         settleDuration,
         totalDuration: anticipationDuration + tumbleDuration + settleDuration,
         startRot,
+        startPos: startPos || { x: 0, y: 0, z: 0 },
         finalRot,
         orbitStart: Math.random() * Math.PI * 2,
-        orbitTurns: 1.5 + Math.random() * 1.5,
-        maxRadius: 1.4,
+        orbitTurns: lazy ? 0.4 : (1.5 + Math.random() * 1.5),
+        maxRadius: lazy ? 0 : 1.8 + Math.random() * 0.8,
+        throwHeight: lazy ? 0.3 : 1.6 + Math.random() * 0.8,
+        tumbleVelMult: lazy ? 0.4 : 1.0,
         rollValue: roll,
+        willCock,
+        modifier,
+        lazy,
+        lazyAllowed: lazyAllowedSnap,
       };
 
       rollingRef.current = true;
@@ -961,22 +1396,6 @@ const DiceRoller = forwardRef((props, ref) => {
       setTimeout(() => playRollSound(), anticipationDuration);
 
       setRevealAnim(null); // Clear previous reveal
-    }
-
-    const total = roll + modifier;
-    setLastRoll({ roll, total });
-
-    if (!embedded) {
-      setRollHistory((prev) => [
-        {
-          result: roll,
-          timestamp: new Date().toLocaleTimeString(),
-          dice: selectedDice,
-          modifier,
-          total,
-        },
-        ...prev,
-      ].slice(0, 10));
     }
   };
 
@@ -991,16 +1410,37 @@ const DiceRoller = forwardRef((props, ref) => {
         <div
           ref={containerRef}
           className="cursor-pointer overflow-visible w-full h-full"
-          onClick={!isRolling ? handleRoll : undefined}
+          onClick={!isRolling ? () => handleRoll() : undefined}
         />
         {showParticles && <Particles type={particleType} />}
-        {revealAnim && !isRolling && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
+        {revealAnim && !isRolling && !isCocked && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
+        {showCockedAnim && <CockedAnimation />}
+        {lameAnim && <LameAnimation rejected={lameAnim.rejected} />}
       </div>
     );
   }
 
   // Modal mode
   return (
+    <>
+      {/* Fullscreen canvas — sits above the modal so dice can fly
+          across the whole screen. The wrapper is pointer-events:none
+          so the modal underneath stays clickable; the canvas itself
+          flips pointer-events back on so the dice can be grabbed. */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 60,
+          pointerEvents: "none",
+        }}
+      >
+        <div
+          ref={containerRef}
+          data-dice-canvas
+          style={{ width: "100%", height: "100%" }}
+        />
+      </div>
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="relative max-w-lg w-full">
         {/* Close Button */}
@@ -1020,25 +1460,40 @@ const DiceRoller = forwardRef((props, ref) => {
               <div className="w-2 h-2 bg-[#37F2D1] rounded-full animate-pulse" />
               <h2 className="text-white font-bold tracking-wider">DICE ROLLER</h2>
             </div>
+            {!allowLazyRolls && (
+              <span className="text-amber-400 font-bold text-[10px] tracking-widest bg-amber-400/10 border border-amber-400/30 px-2 py-1 rounded">
+                STRICT ROLLS
+              </span>
+            )}
           </div>
 
           <div className="relative flex flex-col flex-1 min-h-0 gap-4 overflow-hidden">
 
-            {/* 3D Dice Display */}
+            {/* 3D Dice Display — landing-zone placeholder. The actual
+                canvas is the fullscreen layer above the modal; this
+                dotted circle marks the area where the dice lands. */}
             <div
               className="relative flex justify-center items-center overflow-visible shrink-0 bg-black/20 rounded-2xl border border-white/5"
               style={{ minHeight: "400px" }}
             >
               <div
-                ref={containerRef}
-                className="cursor-pointer overflow-visible"
-                style={{ width: 400, height: 400 }}
-                onClick={!isRolling ? handleRoll : undefined}
-              />
+                className="flex items-center justify-center rounded-full"
+                style={{
+                  width: 220,
+                  height: 220,
+                  border: "2px dashed rgba(255,255,255,0.15)",
+                  color: "rgba(255,255,255,0.35)",
+                  letterSpacing: "0.18em",
+                  fontWeight: 700,
+                  fontSize: 12,
+                }}
+              >
+                LANDING
+              </div>
               {showParticles && <Particles type={particleType} />}
-              {revealAnim && !isRolling && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
+              {revealAnim && !isRolling && !isCocked && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
 
-              {lastRoll && !isRolling && modifier !== 0 && (
+              {lastRoll && !isRolling && !isCocked && modifier !== 0 && (
                 <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-6 py-1.5 rounded-full font-bold text-xs bg-[#37F2D1] text-[#1E2430] shadow-lg whitespace-nowrap border border-white/20">
                   TOTAL: {lastRoll.total}
                 </div>
@@ -1046,7 +1501,7 @@ const DiceRoller = forwardRef((props, ref) => {
             </div>
 
             {/* Rolled Number */}
-            {lastRoll && !isRolling && (
+            {lastRoll && !isRolling && !isCocked && (
               <div className="text-center">
                 <span className="text-6xl font-bold text-white">
                   {lastRoll.roll}
@@ -1060,13 +1515,25 @@ const DiceRoller = forwardRef((props, ref) => {
               </div>
             )}
 
-            {/* Instruction */}
-            <div className="text-center">
-              <div className="inline-block px-6 py-2 border-2 border-[#FF5722] rounded-lg">
-                <span className="text-[#FF5722] font-semibold tracking-wide">
-                  {isRolling ? "ROLLING..." : "Click dice to roll"}
-                </span>
-              </div>
+            {/* Instruction / ROLL button */}
+            <div className="text-center flex flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={!isRolling ? () => handleRoll() : undefined}
+                disabled={isRolling}
+                className={`inline-block px-6 py-2 border-2 rounded-lg font-semibold tracking-wide transition-colors ${
+                  isCocked
+                    ? "border-[#FFD700] text-[#FFD700] hover:bg-[#FFD700]/10"
+                    : "border-[#FF5722] text-[#FF5722] hover:bg-[#FF5722]/10"
+                } ${isRolling ? "opacity-60 cursor-default" : "cursor-pointer"}`}
+              >
+                {isRolling ? "ROLLING..." : isCocked ? "ROLL AGAIN" : "ROLL"}
+              </button>
+              <p className="text-[11px] text-slate-400 italic">
+                {allowLazyRolls
+                  ? "Or grab the dice and shake to roll"
+                  : "Or grab the dice and shake to roll — must shake!"}
+              </p>
             </div>
 
             {/* Controls: dice, modifier */}
@@ -1154,6 +1621,11 @@ const DiceRoller = forwardRef((props, ref) => {
                           }`}>
                             {entry.result}
                           </span>
+                          {entry.lazy && (
+                            <span className="text-amber-400 font-bold text-[10px] bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded tracking-wider">
+                              LAZY
+                            </span>
+                          )}
                           {entry.modifier !== 0 && (
                             <>
                               <span className="text-gray-500 text-xs">
@@ -1175,7 +1647,10 @@ const DiceRoller = forwardRef((props, ref) => {
           </div>
         </div>
       </div>
+      {showCockedAnim && <CockedAnimation />}
+      {lameAnim && <LameAnimation rejected={lameAnim.rejected} />}
     </div>
+    </>
   );
 });
 
