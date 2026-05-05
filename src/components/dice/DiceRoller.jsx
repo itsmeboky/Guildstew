@@ -367,7 +367,7 @@ function getFaceRotation(diceType, result, configFaceRotations) {
   return randomAxis();
 }
 
-function buildNormalRoll(result, diceType, shakeIntensity = 0.7, releaseVector = null) {
+function buildNormalRoll(result, diceType, shakeIntensity = 0.7, releaseVector = null, configFaceRotations = null) {
   // Bounce count: scales with shake, with randomness inside the band.
   // Min shake (0):   range 2-3
   // Mid shake (0.5): range 5-9
@@ -378,7 +378,7 @@ function buildNormalRoll(result, diceType, shakeIntensity = 0.7, releaseVector =
   // Roll duration scales with bounce count so each bounce gets similar stage time
   const rollDur = 600 + bounceCount * 180;
   const totalDur = ROLL_START + rollDur;
-  const targetRot = randomAxis();
+  const targetRot = getFaceRotation(diceType, result, configFaceRotations);
   const path = [];
   const events = [...buildWallIntro()];
 
