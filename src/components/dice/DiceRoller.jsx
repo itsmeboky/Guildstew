@@ -427,9 +427,9 @@ function buildNormalRoll(result, diceType, shakeIntensity = 0.7, releaseVector =
   };
 }
 
-function buildLazyRoll(result, diceType) {
+function buildLazyRoll(result, diceType, configFaceRotations = null) {
   const restPos = [(Math.random() - 0.5) * 2, 0.55, (Math.random() - 0.5) * 1.5];
-  const targetRot = randomAxis();
+  const targetRot = getFaceRotation(diceType, result, configFaceRotations);
   const dur = ROLL_START + 1200;
   return {
     id: `roll_${Date.now()}`, diceType, result, duration: dur + 400,
