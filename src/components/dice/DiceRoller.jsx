@@ -376,6 +376,11 @@ const playRollSound        = (v = 0.6) => playFromList(ROLL_SOUNDS, v);
 const playCritSuccessSound = (v = 0.8) => playFromList(CRIT_SUCCESS_SOUNDS, v);
 const playCritFailSound    = (v = 0.8) => playFromList(CRIT_FAIL_SOUNDS, v);
 
+const REVEAL_GIFS = {
+  "crit-success": "https://static.wixstatic.com/media/5cdfd8_d1ea4fb5b8b84280a211084922fd620c~mv2.gif",
+  "crit-fail":    "https://static.wixstatic.com/media/5cdfd8_a03a4ac66ac74ade9a4a8d335345bda8~mv2.gif",
+};
+
 function getFaceRotation(diceType, result, configFaceRotations) {
   const override = configFaceRotations?.[diceType]?.[result];
   if (override) {
@@ -773,6 +778,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const [lastResult, setLastResult] = useState(null);
   const [lastResultDiceType, setLastResultDiceType] = useState(null);
   const [overlayText, setOverlayText] = useState(null);
+  const [revealOverlay, setRevealOverlay] = useState(null);
   const [eventLog, setEventLog] = useState([]);
   const [isRolling, setIsRolling] = useState(false);
   const [isHolding, setIsHolding] = useState(false);
