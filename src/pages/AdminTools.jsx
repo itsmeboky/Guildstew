@@ -21,7 +21,7 @@ const TOOLS = [
     title: "Dice Calibrator",
     description:
       "Set the resting rotation for each face on every die type. The calibrated face is what the live dice system lands on when a roll resolves.",
-    to: "/DiceCalibrator",
+    to: "/dice-calibrator",
     icon: Dice5,
   },
 ];
