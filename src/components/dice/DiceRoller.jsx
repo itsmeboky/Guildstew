@@ -726,6 +726,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     secondaryColor = "#8B5CF6",
     isThemedSkin = false,
     config = null,
+    forcedResult = null,
   } = props;
   const mountRef = useRef(null);
   const sceneRef = useRef({});
@@ -742,6 +743,9 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const activeSkin = useActiveDiceSkin();
   const activeSkinRef = useRef(activeSkin);
   useEffect(() => { activeSkinRef.current = activeSkin; }, [activeSkin]);
+
+  const forcedResultRef = useRef(forcedResult);
+  useEffect(() => { forcedResultRef.current = forcedResult; }, [forcedResult]);
 
   useEffect(() => {
     const sc = sceneRef.current;
@@ -1294,7 +1298,9 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     if (playbackRef.current.playing) return;
     const type = diceTypeRef.current;
     const sides = DICE_CONFIGS[type].sides;
-    const result = Math.floor(Math.random() * sides) + 1;
+    const result = forcedResultRef.current != null
+      ? Math.min(Math.max(1, forcedResultRef.current), sides)
+      : Math.floor(Math.random() * sides) + 1;
     setLastResult(null); setLastResultDiceType(null); setOverlayText(null); setEventLog([]); setIsRolling(true); setShowEKG(false);
 
     const isLazy = forceLazy || shakeIntensity < 0.15;
