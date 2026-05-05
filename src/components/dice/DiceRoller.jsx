@@ -374,6 +374,39 @@ const randomArenaPos = (m = 1.2) => [
   (Math.random() - 0.5) * (ARENA.width - m * 2), 0.55,
   (Math.random() - 0.5) * (ARENA.depth - m * 2),
 ];
+
+// Generates N non-overlapping settle targets within the arena.
+// Divides the arena into a soft grid, picks N unique cells, jitters within each.
+function generateSettleGrid(n) {
+  // Use up to an 8x8 grid (64 cells). With max 60 dice, never exceeds.
+  const cols = Math.min(8, Math.ceil(Math.sqrt(n)) + 1);
+  const rows = cols;
+  const cellW = (ARENA.width - 1.5) / cols;
+  const cellD = (ARENA.depth - 1.5) / rows;
+  const offsetX = -(ARENA.width - 1.5) / 2;
+  const offsetZ = -(ARENA.depth - 1.5) / 2;
+  // Build all cell centers, shuffle, take first n
+  const cells = [];
+  for (let cy = 0; cy < rows; cy++) {
+    for (let cx = 0; cx < cols; cx++) {
+      cells.push([
+        offsetX + cellW * (cx + 0.5),
+        offsetZ + cellD * (cy + 0.5),
+      ]);
+    }
+  }
+  // Fisher-Yates shuffle
+  for (let i = cells.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cells[i], cells[j]] = [cells[j], cells[i]];
+  }
+  // Take n with ±0.35 jitter for organic feel
+  return cells.slice(0, n).map(([x, z]) => [
+    x + (Math.random() - 0.5) * 0.7,
+    0.55,
+    z + (Math.random() - 0.5) * 0.7,
+  ]);
+}
 const nearWall = (wall, offset = 0.3) => {
   const w = WALL_POSITIONS[wall];
   return w.axis === "z"
@@ -1160,6 +1193,9 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const [effectCategory, setEffectCategory] = useState("All");
   const [lastResult, setLastResult] = useState(null);
   const [lastResultDiceType, setLastResultDiceType] = useState(null);
+  const [lastBreakdown, setLastBreakdown] = useState(null);
+  // Shape: { perType: {d4: [3,2,5], d6: [4,1], ...}, total: 28 }
+  const [hoveringResult, setHoveringResult] = useState(false);
   const [overlayText, setOverlayText] = useState(null);
   const [revealOverlay, setRevealOverlay] = useState(null);
   const [eventLog, setEventLog] = useState([]);
@@ -1174,6 +1210,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const [modelLoadError, setModelLoadError] = useState(null);
   const ekgStateRef = useRef({ active: false, cursor: 0 });
   const shakeRef = useRef(0);
+  const firstDiceCountsChange = useRef(true);
 
   // Keep refs in sync with state/props for the animation loop
   useEffect(() => { diceTypeRef.current = diceType; }, [diceType]);
@@ -1297,11 +1334,6 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     // Square arena → camera fully top-down, walls visible as the dice box edge
     const camera = new THREE.PerspectiveCamera(34, w / h, 0.1, 100);
     camera.position.set(0, 13, 0); camera.lookAt(0, 0, 0);
-
-    if (typeof window !== "undefined") {
-      window.__diceScene = scene;
-      window.__diceCamera = camera;
-    }
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
     const hemi = new THREE.HemisphereLight(0xffffff, 0x202830, 1.4);
@@ -1621,6 +1653,8 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       if (pb.playing && pb.multi) {
         const elapsed = now - pb.startTime;
         const pool = sceneRef.current.multiDicePool;
+        const shakeScale = pool.length > 5 ? Math.max(0.2, 5 / pool.length) : 1;
+        // shakeScale: 1 dice = 1.0, 5 dice = 1.0, 10 dice = 0.5, 20 dice = 0.25, 60 dice = 0.083
         for (const die of pool) {
           const tl = die.timeline;
           if (!tl || tl.path.length === 0) continue;
@@ -1630,16 +1664,6 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
             die.group.position.set(pos[0], pos[1], pos[2]);
             die.group.quaternion.set(rot[0], rot[1], rot[2], rot[3]);
             die.group.scale.setScalar(scale);
-            if (!die._loggedFirst) {
-              die._loggedFirst = true;
-              console.log("[multi-first-frame]", die.type, {
-                visible: die.group.visible,
-                pos: die.group.position.toArray(),
-                scale: die.group.scale.toArray(),
-                children: die.group.children.length,
-                hasMeshChild: die.group.children.some(c => c.isMesh || c.type === "Mesh" || c.children?.some?.(cc => cc.isMesh)),
-              });
-            }
           }
           // Fire per-die events (wallHit, particles, etc.) — but settled/reveal already filtered
           while (die.eventIndex < tl.events.length && tl.events[die.eventIndex].t <= elapsed) {
@@ -1647,14 +1671,24 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
             die.eventIndex++;
           }
         }
+        // Throttle camera shake when many dice are rolling — cumulative wall hits would be unwatchable
+        if (shakeRef.current > 0) {
+          shakeRef.current = shakeRef.current * shakeScale;
+        }
         if (elapsed >= pb.longestDuration) {
           pb.playing = false;
           // Aggregate results
-          const total = pool.reduce((s, d) => s + d.result, 0);
-          setLastResult(total);
+          const breakdown = { perType: {}, total: 0 };
+          for (const d of pool) {
+            if (!breakdown.perType[d.type]) breakdown.perType[d.type] = [];
+            breakdown.perType[d.type].push(d.result);
+            breakdown.total += d.result;
+          }
+          setLastBreakdown(breakdown);
+          setLastResult(breakdown.total);
           setLastResultDiceType("multi"); // tag so UI can render aggregate
           setIsRolling(false);
-          setResultHistory(prev => [...prev.slice(-9), { type: "multi", value: total }]);
+          setResultHistory(prev => [...prev.slice(-9), { type: "multi", value: breakdown.total }]);
         }
       } else if (pb.playing && tl && pb.startTime !== null) {
         const elapsed = now - pb.startTime;
@@ -1872,6 +1906,13 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const executeRoll = useCallback((shakeIntensity = 0.7, releaseVector = null, forceLazy = false) => {
     if (playbackRef.current.playing) return;
 
+    // Clean up any previously-rendered multi-dice from a prior roll, regardless of whether
+    // this roll is single or multi. Also hide the single-dice wrapper if it was left visible.
+    sceneRef.current?.despawnAllMultiDice?.();
+    if (sceneRef.current?.dice) {
+      sceneRef.current.dice.visible = false;
+    }
+
     const totalDice = Object.values(diceCounts).reduce((s, n) => s + n, 0);
     if (totalDice <= 1) {
       const type = diceTypeRef.current;
@@ -1879,7 +1920,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       const result = forcedResultRef.current != null
         ? Math.min(Math.max(1, forcedResultRef.current), sides)
         : Math.floor(Math.random() * sides) + 1;
-      setLastResult(null); setLastResultDiceType(null); setOverlayText(null); setEventLog([]); setIsRolling(true); setShowEKG(false);
+      setLastResult(null); setLastResultDiceType(null); setLastBreakdown(null); setOverlayText(null); setEventLog([]); setIsRolling(true); setShowEKG(false);
 
       const isLazy = forceLazy || shakeIntensity < 0.15;
       let timeline;
@@ -1922,7 +1963,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     }
 
     // === MULTI-DICE PATH ===
-    setLastResult(null); setLastResultDiceType(null); setOverlayText(null); setIsRolling(true); setShowEKG(false);
+    setLastResult(null); setLastResultDiceType(null); setLastBreakdown(null); setOverlayText(null); setIsRolling(true); setShowEKG(false);
 
     // Clean any previous multi-dice from prior roll
     sceneRef.current.despawnAllMultiDice?.();
@@ -1937,6 +1978,8 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       for (let i = 0; i < count; i++) diceList.push({ type });
     }
 
+    const settleTargets = generateSettleGrid(diceList.length);
+
     // Spawn each, build per-dice timeline, push into pool
     for (let i = 0; i < diceList.length; i++) {
       const { type } = diceList[i];
@@ -1948,6 +1991,22 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       let timeline = buildNormalRoll(result, type, 0.7, null);
       // Filter out "reveal" events — we don't want each dice firing setLastResult
       timeline.events = timeline.events.filter(e => e.type !== "reveal" && e.type !== "settled");
+      const target = settleTargets[i];
+      // Replace the settled path keyframes with the grid-assigned position
+      if (timeline.path.length >= 2) {
+        timeline.path[timeline.path.length - 2] = {
+          ...timeline.path[timeline.path.length - 2],
+          pos: [target[0], 1.0, target[2]],
+        };
+        timeline.path[timeline.path.length - 1] = {
+          ...timeline.path[timeline.path.length - 1],
+          pos: [target[0], 0.55, target[2]],
+        };
+      }
+      const startOffset = Math.random() * 250 + 50;
+      timeline.path = timeline.path.map(kf => ({ ...kf, t: kf.t + startOffset }));
+      timeline.events = timeline.events.map(ev => ({ ...ev, t: ev.t + startOffset }));
+      timeline.duration += startOffset;
       // Apply equipped effect (trail particles only — no state modifiers in multi mode for now)
       timeline = applyEquippedEffect(timeline, equippedEffectRef.current);
       pool.push({
@@ -1956,13 +2015,9 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       });
     }
 
-    console.log("[multi-roll] pool ready", pool.length, "dice spawned. Total in scene:", sceneRef.current.scene.children.length);
-    pool.forEach((d, i) => console.log("  pool[" + i + "]:", d.type, "result", d.result, "visible:", d.group.visible, "pos:", d.group.position.toArray()));
-
     // Setup playback for multi mode
     const longestDuration = Math.max(...pool.map(d => d.timeline.duration), 1000);
     timelineRef.current = null; // single-dice timeline disabled
-    if (typeof window !== "undefined") window.__lastMultiPool = pool;
     playbackRef.current = {
       startTime: performance.now(),
       eventIndex: 0,
@@ -2164,9 +2219,12 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
             {/* Floating result number — anchored to dice screen position */}
             <div
               ref={resultOverlayRef}
+              onMouseEnter={() => setHoveringResult(true)}
+              onMouseLeave={() => setHoveringResult(false)}
               style={{
                 ...S.resultOverlay,
                 opacity: lastResult !== null ? 1 : 0,
+                cursor: lastResultDiceType === "multi" ? "help" : "default",
                 color: isCritMax ? "#ffd700" : isCritMin ? "#ff3333" : "#ffffff",
                 textShadow: isCritMax
                   ? "0 0 28px rgba(255,215,0,0.85), 0 0 60px rgba(255,215,0,0.5), 0 4px 12px rgba(0,0,0,0.6)"
@@ -2181,6 +2239,46 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
               <div style={S.resultValue}>{lastResult}</div>
               {isCritMax && <div style={S.resultBadge}>CRIT</div>}
               {isCritMin && <div style={{ ...S.resultBadge, color: "#ff5555", borderColor: "rgba(255,68,68,0.5)" }}>FAIL</div>}
+              {hoveringResult && lastResultDiceType === "multi" && lastBreakdown && (
+                <div style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  marginTop: 12,
+                  padding: "10px 14px",
+                  background: "rgba(15, 18, 28, 0.96)",
+                  border: "1px solid rgba(255, 83, 0, 0.4)",
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontFamily: "ui-monospace, 'Cascadia Code', monospace",
+                  color: "#e8e9ed",
+                  whiteSpace: "nowrap",
+                  boxShadow: "0 8px 24px rgba(0, 0, 0, 0.6)",
+                  pointerEvents: "none",
+                  zIndex: 10,
+                }}>
+                  {Object.entries(lastBreakdown.perType).map(([type, rolls]) => (
+                    <div key={type} style={{ marginBottom: 4 }}>
+                      <span style={{ color: "#FF5300", fontWeight: 700 }}>{rolls.length}{type}:</span>
+                      {' '}
+                      {rolls.join(' + ')}
+                      {' = '}
+                      <span style={{ color: "#fff", fontWeight: 700 }}>{rolls.reduce((s, n) => s + n, 0)}</span>
+                    </div>
+                  ))}
+                  <div style={{
+                    marginTop: 6,
+                    paddingTop: 6,
+                    borderTop: "1px solid rgba(255, 83, 0, 0.3)",
+                    color: "#fff",
+                    fontWeight: 700,
+                    letterSpacing: "0.05em",
+                  }}>
+                    TOTAL: {lastBreakdown.total}
+                  </div>
+                </div>
+              )}
             </div>
 
             {revealOverlay && (
