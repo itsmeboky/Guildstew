@@ -1210,7 +1210,6 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const [modelLoadError, setModelLoadError] = useState(null);
   const ekgStateRef = useRef({ active: false, cursor: 0 });
   const shakeRef = useRef(0);
-  const firstDiceCountsChange = useRef(true);
 
   // Keep refs in sync with state/props for the animation loop
   useEffect(() => { diceTypeRef.current = diceType; }, [diceType]);
