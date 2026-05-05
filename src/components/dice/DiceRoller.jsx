@@ -451,8 +451,8 @@ function buildLazyRoll(result, diceType, configFaceRotations = null) {
   };
 }
 
-function buildEpicRoll(result, diceType, releaseVector = null) {
-  const base = buildNormalRoll(result, diceType, 1.0, releaseVector);
+function buildEpicRoll(result, diceType, releaseVector = null, configFaceRotations = null) {
+  const base = buildNormalRoll(result, diceType, 1.0, releaseVector, configFaceRotations);
   return { ...base, duration: base.duration + 500,
     path: base.path.map((kf, i) => ({ ...kf, t: kf.t * 1.12,
       pos: i > 1 && i < base.path.length - 2 ? [kf.pos[0] * 1.3, kf.pos[1] * 1.15, kf.pos[2] * 1.3] : kf.pos,
