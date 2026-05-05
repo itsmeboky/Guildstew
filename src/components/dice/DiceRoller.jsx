@@ -1,1658 +1,1820 @@
-import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
-import { X } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { DICE_SIDES } from "./diceConfig";
-import { FACE_ROTATIONS } from "./faceRotations";
-import { useActiveDiceSkin } from "@/lib/useActiveDiceSkin";
-import { applyDiceSkinToMesh } from "@/lib/applyDiceSkin";
-import { DEFAULT_MODEL_URLS, DEFAULT_TEXTURE_URL } from "@/config/diceAssets";
 
-// Default GLB paths live in `src/config/diceAssets.js` — they point
-// at the shared `campaign-assets/dice/models/*.glb` URLs on Supabase
-// so the default texture + skin preview + DiceRoller all agree on
-// the canonical model + texture URLs.
-
-// The dice types we support for 3D
-const diceTypes = [
-  { name: "d4", sides: 4 },
-  { name: "d6", sides: 6 },
-  { name: "d8", sides: 8 },
-  { name: "d10", sides: 10 },
-  { name: "d12", sides: 12 },
-  { name: "d20", sides: 20 },
-];
-
-// Probability that any given roll "cocks" (lands wedged so two faces
-// share the upward-facing claim). Tighter dice cock less often;
-// chunkier dice (d20, d100) cock more.
-const COCK_CHANCE = {
-  d4: 0.005, d6: 0.01, d8: 0.02, d10: 0.03,
-  d12: 0.04, d20: 0.05, d100: 0.05,
-};
-
-const COCKED_SOUNDS = [
-  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/notification/cockdeddice1.mp3",
-  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/notification/cockeddice2.mp3",
-];
-
-const LAZY_SOUND_URL =
-  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/notification/badroll.wav";
-
-const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
-const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
-const easeOutBack = (t) => {
-  const c1 = 1.70158, c3 = c1 + 1;
-  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
-};
-
-// Apply vertex gradient: top vertices get primary color, bottom get secondary
-function applyVertexGradient(model, primaryHex, secondaryHex, isThemedSkin) {
-  const primary = new THREE.Color(primaryHex);
-  const secondary = new THREE.Color(secondaryHex);
-
-  let minY = Infinity, maxY = -Infinity;
-  model.traverse((child) => {
-    if (child.isMesh && child.geometry) {
-      const pos = child.geometry.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
-        const y = pos.getY(i);
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-      }
-    }
-  });
-  const yRange = maxY - minY || 1;
-
-  model.traverse((child) => {
-    if (child.isMesh && child.material) {
-      const mat = child.material;
-
-      if (isThemedSkin) {
-        // Themed skins keep textures clean — no tinting
-        mat.color = new THREE.Color(0xffffff);
-        if (child.geometry.attributes.color) {
-          child.geometry.deleteAttribute("color");
-        }
-        mat.vertexColors = false;
-        mat.needsUpdate = true;
-        return;
-      }
-
-      // Apply vertex gradient
-      const geometry = child.geometry;
-      const pos = geometry.attributes.position;
-      const colors = new Float32Array(pos.count * 3);
-      const tmpColor = new THREE.Color();
-
-      for (let i = 0; i < pos.count; i++) {
-        const y = pos.getY(i);
-        const t = (y - minY) / yRange;
-        tmpColor.copy(secondary).lerp(primary, t);
-        colors[i * 3] = tmpColor.r;
-        colors[i * 3 + 1] = tmpColor.g;
-        colors[i * 3 + 2] = tmpColor.b;
-      }
-
-      geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-      mat.vertexColors = true;
-      mat.color = new THREE.Color(0xffffff); // White base so vertex colors multiply cleanly
-      mat.needsUpdate = true;
-    }
-  });
+// Expose THREE globally so the CDN GLTFLoader script can attach to it.
+// (cdnjs's r128 GLTFLoader is non-module and registers as THREE.GLTFLoader.)
+if (typeof window !== "undefined") {
+  window.THREE = window.THREE || THREE;
 }
 
-function Particles({ type = "default" }) {
-  // Configuration based on type
-  const config = {
-    default: {
-      glowColor: "rgba(55, 242, 209, 0.8)",
-      ringColor: "#37F2D1",
-      sparkColors: ["#37F2D1", "#00FFFF", "#8B5CF6", "#FFD700", "#FFFFFF"],
-      trailColors: ["#37F2D1", "#8B5CF6", "#FFD700"],
-      emberColors: ["#FFD700", "#FF6B6B", "#37F2D1"],
-      sparkCount: 40,
-    },
-    "crit-success": {
-      glowColor: "rgba(255, 215, 0, 0.9)", // Gold
-      ringColor: "#FFD700",
-      sparkColors: ["#FFD700", "#FFA500", "#FFFFFF", "#FFFF00"],
-      trailColors: ["#FFD700", "#FFA500", "#FFFFFF"],
-      emberColors: ["#FFD700", "#FFA500", "#FFFFFF"],
-      sparkCount: 100, // MOAR
-    },
-    "crit-fail": {
-      glowColor: "rgba(220, 38, 38, 0.9)", // Red
-      ringColor: "#DC2626",
-      sparkColors: ["#DC2626", "#7F1D1D", "#000000", "#450a0a"],
-      trailColors: ["#DC2626", "#000000", "#7F1D1D"],
-      emberColors: ["#DC2626", "#000000", "#991b1b"],
-      sparkCount: 60,
-    }
-  }[type] || { // Fallback
-      glowColor: "rgba(55, 242, 209, 0.8)",
-      ringColor: "#37F2D1",
-      sparkColors: ["#37F2D1", "#00FFFF", "#8B5CF6", "#FFD700", "#FFFFFF"],
-      trailColors: ["#37F2D1", "#8B5CF6", "#FFD700"],
-      emberColors: ["#FFD700", "#FF6B6B", "#37F2D1"],
-      sparkCount: 40,
-  };
+// ============================================================
+// DICE MODEL LOADING (.glb from Supabase)
+// ============================================================
+const DICE_MODEL_URLS = {
+  d4:  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d4.glb",
+  d6:  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d6.glb",
+  d8:  "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d8.glb",
+  d10: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d10.glb",
+  d12: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d12.glb",
+  d20: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dice/models/d20.glb",
+};
 
-  return (
-    <div className="absolute inset-0 pointer-events-none overflow-visible">
-      {/* Central glow pulse */}
-      <div
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
-        style={{
-          width: type === 'crit-success' ? 300 : 200,
-          height: type === 'crit-success' ? 300 : 200,
-          background: `radial-gradient(circle, ${config.glowColor} 0%, transparent 70%)`,
-          animation: "pulseGlow 0.8s ease-out forwards",
-        }}
-      />
+// Module-scoped cache so HMR / re-mounts don't re-fetch
+const _modelCache = {};
+const TARGET_DICE_SIZE = 1.4; // max dimension target after normalization
 
-      {/* Expanding ring */}
-      <div
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
-        style={{
-          borderColor: config.ringColor,
-          width: 20,
-          height: 20,
-          animation: "expandRing 0.6s ease-out forwards",
-          boxShadow: `0 0 20px ${config.ringColor}, inset 0 0 20px ${config.ringColor}`,
-        }}
-      />
-
-      {/* Sparkle dust particles */}
-      {[...Array(config.sparkCount)].map((_, i) => {
-        const angle = (i / config.sparkCount) * Math.PI * 2 + Math.random() * 0.5;
-        const distance = (type === 'crit-success' ? 100 : 60) + Math.random() * 100;
-        const size = (type === 'crit-success' ? 3 : 2) + Math.random() * 4;
-        const delay = Math.random() * 0.15;
-        const duration = 0.5 + Math.random() * 0.4;
-        const color = config.sparkColors[Math.floor(Math.random() * config.sparkColors.length)];
-        const curve = Math.random() * 40 - 20;
-
-        return (
-          <div
-            key={`spark-${i}`}
-            className="absolute rounded-full"
-            style={{
-              left: "50%",
-              top: "50%",
-              width: size,
-              height: size,
-              backgroundColor: color,
-              boxShadow: `0 0 ${size * 3}px ${color}, 0 0 ${
-                size * 6
-              }px ${color}`,
-              animation: `sparkBurst ${duration}s ease-out ${delay}s forwards`,
-              "--tx": `${Math.cos(angle) * distance + curve}px`,
-              "--ty": `${Math.sin(angle) * distance + curve}px`,
-              opacity: 0,
-            }}
-          />
-        );
-      })}
-
-      {/* Swirling magical trails */}
-      {[...Array(12)].map((_, i) => {
-        const startAngle = (i / 12) * Math.PI * 2;
-        const color = config.trailColors[i % config.trailColors.length];
-
-        return (
-          <div
-            key={`trail-${i}`}
-            className="absolute left-1/2 top-1/2"
-            style={{
-              width: 3,
-              height: (type === 'crit-fail' ? 60 : 30) + Math.random() * 20,
-              background: `linear-gradient(to top, ${color}, transparent)`,
-              transformOrigin: "bottom center",
-              animation: `swirlTrail 0.7s ease-out ${i * 0.03}s forwards`,
-              "--startAngle": `${startAngle}rad`,
-              "--endAngle": `${startAngle + Math.PI * (type === 'crit-fail' ? -0.5 : 0.5)}rad`,
-              borderRadius: "50%",
-              opacity: 0,
-            }}
-          />
-        );
-      })}
-
-      {/* DOOM Skull for Crit Fail */}
-      {type === 'crit-fail' && (
-         <img 
-            src="https://static.wixstatic.com/media/5cdfd8_a03a4ac66ac74ade9a4a8d335345bda8~mv2.gif"
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] object-contain pointer-events-none select-none z-50"
-            alt="Critical Fail"
-         />
-      )}
-      
-      {/* Critical Success GIF */}
-       {type === 'crit-success' && (
-         <img 
-            src="https://static.wixstatic.com/media/5cdfd8_d1ea4fb5b8b84280a211084922fd620c~mv2.gif"
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] object-contain pointer-events-none select-none z-50"
-            alt="Critical Success"
-         />
-      )}
-
-      {/* Standard Result Reveal (any other result) */}
-      {type === 'default' && (
-         <img 
-            src="https://static.wixstatic.com/media/5cdfd8_82aaa116dc8f49f08605c0ea770ff50e~mv2.gif"
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[250px] h-[250px] object-contain pointer-events-none select-none z-50 opacity-80 mix-blend-screen"
-            alt="Result Reveal"
-         />
-      )}
-
-      {/* Floating embers */}
-      {[...Array(15)].map((_, i) => {
-        const x = (Math.random() - 0.5) * 120;
-        const size = 2 + Math.random() * 3;
-        const delay = 0.2 + Math.random() * 0.3;
-        const color = config.emberColors[Math.floor(Math.random() * config.emberColors.length)];
-
-        return (
-          <div
-            key={`ember-${i}`}
-            className="absolute rounded-full"
-            style={{
-              left: `calc(50% + ${x}px)`,
-              top: "50%",
-              width: size,
-              height: size,
-              backgroundColor: color,
-              boxShadow: `0 0 ${size * 2}px ${color}`,
-              animation: `floatUp 1s ease-out ${delay}s forwards`,
-              opacity: 0,
-            }}
-          />
-        );
-      })}
-
-      <style>{`
-        @keyframes pulseGlow {
-          0% { transform: translate(-50%, -50%) scale(0.3); opacity: 1; }
-          100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
-        }
-        @keyframes expandRing {
-          0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-          100% { transform: translate(-50%, -50%) scale(8); opacity: 0; }
-        }
-        @keyframes sparkBurst {
-          0% { transform: translate(-50%, -50%) translate(0, 0) scale(1); opacity: 1; }
-          100% { transform: translate(-50%, -50%) translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
-        }
-        @keyframes swirlTrail {
-          0% {
-            transform: translate(-50%, 0) rotate(var(--startAngle)) translateY(-20px);
-            opacity: 0.8;
-          }
-          100% {
-            transform: translate(-50%, 0) rotate(var(--endAngle)) translateY(-80px);
-            opacity: 0;
-          }
-        }
-        @keyframes floatUp {
-          0% { transform: translateY(0) scale(1); opacity: 0.8; }
-          100% { transform: translateY(-80px) scale(0.3); opacity: 0; }
-        }
-      `}</style>
-    </div>
-  );
+// Lazy-load GLTFLoader via CDN script tag. Works in both the claude.ai artifact
+// preview AND production Vite. (For production, you can swap this for a proper
+// `import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"` if preferred.)
+let _gltfLoaderPromise = null;
+function getGLTFLoaderInstance() {
+  if (typeof window === "undefined") return Promise.reject(new Error("No window"));
+  if (window.THREE?.GLTFLoader) return Promise.resolve(new window.THREE.GLTFLoader());
+  if (_gltfLoaderPromise) return _gltfLoaderPromise;
+  _gltfLoaderPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/loaders/GLTFLoader.js";
+    script.async = true;
+    script.onload = () => {
+      if (window.THREE?.GLTFLoader) resolve(new window.THREE.GLTFLoader());
+      else reject(new Error("GLTFLoader did not attach to THREE after script load"));
+    };
+    script.onerror = () => reject(new Error("Failed to load GLTFLoader from CDN"));
+    document.head.appendChild(script);
+  });
+  return _gltfLoaderPromise;
 }
 
-// Baseline "skin" used when the player has no Tavern dice skin
-// applied. Mirrors the original hard-coded Guildstew look so the
-// apply-skin path is the single source of truth for the material
-// whether or not the player has a skin equipped.
-const STOCK_SKIN = {
-  baseColor: "#2a3441",
-  metalness: 0.3,
-  roughness: 0.4,
-  glowEnabled: false,
-  primaryLight: "#FF5722",
-  secondaryLight: "#8B5CF6",
-  customTextureUrl: null,
-};
-
-// Simple D20 fallback (for when GLB fails completely)
-function createFallbackD20() {
-  const geometry = new THREE.IcosahedronGeometry(1.3);
-  const material = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    metalness: 0.3,
-    roughness: 0.4,
-    flatShading: true,
+async function loadDiceModel(type) {
+  if (_modelCache[type]) return _modelCache[type];
+  const loader = await getGLTFLoaderInstance();
+  const gltf = await new Promise((resolve, reject) => {
+    loader.load(DICE_MODEL_URLS[type], resolve, undefined, reject);
   });
-  const mesh = new THREE.Mesh(geometry, material);
-  return mesh;
+  const root = gltf.scene;
+
+  // Compute bounding box, center the model so its origin is geometric center
+  const bbox = new THREE.Box3().setFromObject(root);
+  const center = bbox.getCenter(new THREE.Vector3());
+  const size = bbox.getSize(new THREE.Vector3());
+  root.position.sub(center); // shift so center is at local 0,0,0
+
+  const maxDim = Math.max(size.x, size.y, size.z) || 1;
+  const normalizeScale = TARGET_DICE_SIZE / maxDim;
+
+  // Wrap in a Group so we can apply normalization scale without losing the offset
+  const wrapper = new THREE.Group();
+  wrapper.add(root);
+  wrapper.scale.setScalar(normalizeScale);
+
+  // Configure materials, save originals for restoration after color flashes
+  wrapper.traverse(c => {
+    if (c.isMesh) {
+      c.castShadow = true;
+      c.receiveShadow = false;
+      const apply = (m) => {
+        if (!m) return;
+        m.userData._origEmissive = m.emissive ? m.emissive.clone() : new THREE.Color(0x000000);
+        m.userData._origEmissiveIntensity = m.emissiveIntensity ?? 0;
+      };
+      if (Array.isArray(c.material)) c.material.forEach(apply);
+      else apply(c.material);
+    }
+  });
+
+  _modelCache[type] = { group: wrapper, halfHeight: (size.y * normalizeScale) / 2 };
+  return _modelCache[type];
 }
 
-const RevealOverlay = ({ value, color }) => {
-  const [scale, setScale] = useState(0);
-  useEffect(() => {
-    let raf;
-    const start = performance.now();
-    const animate = () => {
-      const t = Math.min((performance.now() - start) / 600, 1);
-      const easeT = t < 0.4
-        ? easeOutBack(t / 0.4) * 1.3
-        : 1.3 - (1.3 - 1) * easeOutCubic((t - 0.4) / 0.6);
-      setScale(easeT);
-      if (t < 1) raf = requestAnimationFrame(animate);
-    };
-    animate();
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
-  return (
-    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
-      <div style={{
-        transform: `scale(${scale})`,
-        color,
-        fontFamily: "'Cream', 'Cinzel', serif",
-        fontSize: 120,
-        fontWeight: 900,
-        lineHeight: 1,
-        textShadow: `0 0 40px ${color}, 0 0 80px ${color}66, 0 4px 20px rgba(0,0,0,0.6)`,
-        filter: "drop-shadow(0 8px 20px rgba(0,0,0,0.5))",
-      }}>
-        {value}
-      </div>
-    </div>
-  );
-};
-
-// Phase 1: chicken slides left → right. Phase 2: gold "COCKED!" text
-// fades in at top center with a scale-bounce, then pulses.
-const CockedAnimation = () => {
-  const [phase, setPhase] = useState(1);
-  useEffect(() => {
-    const t = setTimeout(() => setPhase(2), 1100);
-    return () => clearTimeout(t);
-  }, []);
-  return (
-    <div className="fixed inset-0 pointer-events-none z-[70] overflow-hidden">
-      <style>{`
-        @keyframes chickenRun {
-          0%   { left: -10vw; transform: translateY(0) rotate(-6deg); }
-          25%  { transform: translateY(-30px) rotate(4deg); }
-          50%  { transform: translateY(0) rotate(-4deg); }
-          75%  { transform: translateY(-22px) rotate(6deg); }
-          100% { left: 110vw; transform: translateY(0) rotate(-2deg); }
-        }
-        @keyframes cockedPop {
-          0%   { transform: translate(-50%, 0) scale(0.4); opacity: 0; }
-          60%  { transform: translate(-50%, 0) scale(1.2); opacity: 1; }
-          100% { transform: translate(-50%, 0) scale(1.0); opacity: 1; }
-        }
-        @keyframes cockedPulse {
-          0%, 100% { filter: drop-shadow(0 0 18px #FFD700) drop-shadow(0 0 36px #FFA500); }
-          50%      { filter: drop-shadow(0 0 32px #FFD700) drop-shadow(0 0 64px #FFA500); }
-        }
-      `}</style>
-      {phase === 1 && (
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            fontSize: 96,
-            animation: "chickenRun 1100ms cubic-bezier(.5,1.6,.55,.85) forwards",
-          }}
-        >
-          🐔
-        </div>
-      )}
-      {phase === 2 && (
-        <div
-          style={{
-            position: "absolute",
-            top: "12vh",
-            left: "50%",
-            color: "#FFD700",
-            fontFamily: "'Cream', 'Cinzel', serif",
-            fontWeight: 900,
-            fontSize: "min(14vw, 160px)",
-            letterSpacing: "0.08em",
-            textShadow: "0 0 30px #FFD700, 0 0 60px #FFA500, 0 6px 18px rgba(0,0,0,0.55)",
-            animation:
-              "cockedPop 480ms cubic-bezier(.34,1.56,.64,1) forwards, cockedPulse 1.4s ease-in-out 480ms infinite",
-          }}
-        >
-          COCKED!
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Wobbling italic "Lame..." text. When `rejected` is true the color
-// flips pink and the copy nudges the player to try again.
-const LameAnimation = ({ rejected = false }) => {
-  return (
-    <div className="fixed inset-0 pointer-events-none z-[70] flex items-start justify-center">
-      <style>{`
-        @keyframes lameWobble {
-          0%   { transform: translate(-2px, 0) rotate(-2deg); }
-          25%  { transform: translate(2px, -2px) rotate(2deg); }
-          50%  { transform: translate(-1px, 1px) rotate(-1deg); }
-          75%  { transform: translate(1px, 0) rotate(1deg); }
-          100% { transform: translate(-2px, 0) rotate(-2deg); }
-        }
-        @keyframes lameFade {
-          0%   { opacity: 0; transform: translateY(-8px); }
-          15%  { opacity: 1; transform: translateY(0); }
-          85%  { opacity: 1; }
-          100% { opacity: 0; }
-        }
-      `}</style>
-      <div
-        style={{
-          marginTop: "14vh",
-          fontStyle: "italic",
-          fontFamily: "'Cream', 'Cinzel', serif",
-          fontWeight: 700,
-          fontSize: "min(9vw, 96px)",
-          color: rejected ? "#fb7185" : "#94a3b8",
-          textShadow: rejected
-            ? "0 0 20px #fb718580, 0 4px 14px rgba(0,0,0,0.5)"
-            : "0 4px 14px rgba(0,0,0,0.45)",
-          animation:
-            "lameFade 1500ms ease-in-out forwards, lameWobble 240ms linear infinite",
-        }}
-      >
-        {rejected ? "Lame... try again." : "Lame..."}
-      </div>
-    </div>
-  );
-};
-
-const DiceRoller = forwardRef((props, ref) => {
-  const {
-    isOpen,
-    onClose,
-    embedded = false,
-    config = null,
-    onRollComplete,
-    initialDice = "d20",
-    primaryColor = "#FF5722",
-    secondaryColor = "#8B5CF6",
-    isThemedSkin = false,
-    forcedResult: forcedResultProp = null,
-    allowLazyRolls = true,
-  } = props;
-  const [selectedDice, setSelectedDice] = useState(initialDice);
-  const [modifier, setModifier] = useState(0);
-  const [lastRoll, setLastRoll] = useState(null);
-  const [isRolling, setIsRolling] = useState(false);
-  const [rollHistory, setRollHistory] = useState([]);
-  const [showParticles, setShowParticles] = useState(false);
-  const [particleType, setParticleType] = useState("default"); // default, crit-success, crit-fail
-  const [internalForcedResult, setInternalForcedResult] = useState(null);
-  const [revealAnim, setRevealAnim] = useState(null); // { value, color }
-  const [isCocked, setIsCocked] = useState(false);
-  const [showCockedAnim, setShowCockedAnim] = useState(false);
-  const [lameAnim, setLameAnim] = useState(null); // { rejected: boolean }
-
-  // Use prop if available, otherwise internal state
-  const forcedResult = forcedResultProp !== null ? forcedResultProp : internalForcedResult;
-
-  const containerRef = useRef(null);
-  const sceneRef = useRef(null);
-  const rendererRef = useRef(null);
-  const cameraRef = useRef(null);
-  const diceRef = useRef(null);
-  const animationRef = useRef(null);
-  const isInitializedRef = useRef(false);
-  const rollingRef = useRef(false);
-  const rollDataRef = useRef(null);
-  // Mouse-pickup / shake-to-roll state. Initialised here so the
-  // animate loop and pointer event handlers (set up in the init
-  // effect below) can both read/write the same object.
-  const dragStateRef = useRef({
-    isDown: false,
-    isDragging: false,
-    lastX: 0,
-    lastY: 0,
-    lastT: 0,
-    accumulatedShake: 0,
-    velocityX: 0,
-    velocityY: 0,
-    targetX: 0,
-    targetZ: 0,
+function collectMaterials(obj3d) {
+  const mats = [];
+  obj3d.traverse(c => {
+    if (c.isMesh && c.material) {
+      if (Array.isArray(c.material)) mats.push(...c.material);
+      else mats.push(c.material);
+    }
   });
-  const handleRollRef = useRef(null);
-  const customModelsRef = useRef({});
-  const customFaceRotationsRef = useRef({});
-  const customTransformsRef = useRef({});
-  const modelsLoadedRef = useRef(false);
-  const [modelsReady, setModelsReady] = useState(false);
+  return mats;
+}
 
-  // Active Tavern dice skin (null = use stock Guildstew material).
-  // Kept in a ref so createDice() can read it without needing the
-  // hook value captured in its closure.
-  const activeSkin = useActiveDiceSkin();
-  const activeSkinRef = useRef(null);
-  const defaultTextureRef = useRef(null);
-  const textureCacheRef = useRef(new Map());
-  useEffect(() => { activeSkinRef.current = activeSkin; }, [activeSkin]);
+function setDiceEmissive(materials, color, intensity) {
+  for (const m of materials) {
+    if (!m.emissive) continue;
+    if (color !== undefined) {
+      if (typeof color === "number") m.emissive.setHex(color);
+      else m.emissive.copy(color);
+    }
+    if (intensity !== undefined) m.emissiveIntensity = intensity;
+  }
+}
 
-  // Preload the shared default dice texture once.
-  useEffect(() => {
-    const loader = new THREE.TextureLoader();
-    loader.load(DEFAULT_TEXTURE_URL, (tex) => {
-      tex.flipY = false;
-      defaultTextureRef.current = tex;
-      // If the die is already on stage, re-skin it so it picks up the
-      // texture once it loads.
-      if (diceRef.current) {
-        applyDiceSkinToMesh(diceRef.current, activeSkinRef.current || STOCK_SKIN, {
-          defaultTexture: defaultTextureRef.current,
-          textureCache: textureCacheRef.current,
-        });
-        applyVertexGradient(diceRef.current, primaryColor, secondaryColor, isThemedSkin);
-      }
-    });
-  }, []);
-  
-  // Keep latest callback in ref to avoid re-init of scene
-  const onRollCompleteRef = useRef(onRollComplete);
-  useEffect(() => {
-    onRollCompleteRef.current = onRollComplete;
-  }, [onRollComplete]);
+function setDiceEmissiveHSL(materials, h, s, l, intensity) {
+  for (const m of materials) {
+    if (!m.emissive) continue;
+    m.emissive.setHSL(h, s, l);
+    if (intensity !== undefined) m.emissiveIntensity = intensity;
+  }
+}
 
-  // Keep latest state visible to pointer event handlers that were
-  // bound once at init time.
-  const isRollingRef = useRef(false);
-  const isCockedRef = useRef(false);
-  useEffect(() => { isRollingRef.current = isRolling; }, [isRolling]);
-  useEffect(() => { isCockedRef.current = isCocked; }, [isCocked]);
+function resetDiceEmissive(materials) {
+  for (const m of materials) {
+    if (!m.emissive) continue;
+    if (m.userData._origEmissive) m.emissive.copy(m.userData._origEmissive);
+    else m.emissive.setHex(0x000000);
+    m.emissiveIntensity = m.userData._origEmissiveIntensity ?? 0;
+  }
+}
 
-  useImperativeHandle(ref, () => ({
-    roll: () => handleRoll(),
-    lazyRoll: () => handleRoll({ lazy: true }),
-  }));
+function decayDiceEmissive(materials, decay = 0.95) {
+  for (const m of materials) {
+    if (!m.emissive) continue;
+    m.emissiveIntensity *= decay;
+    const orig = m.userData._origEmissiveIntensity ?? 0;
+    if (m.emissiveIntensity < orig + 0.01) {
+      m.emissiveIntensity = orig;
+      if (m.userData._origEmissive) m.emissive.copy(m.userData._origEmissive);
+    }
+  }
+}
 
-  // Keep handleRollRef pointing at the latest closure so the
-  // pointer-event handlers (bound once at init) always trigger
-  // the current handleRoll.
-  useEffect(() => {
-    handleRollRef.current = handleRoll;
+// ============================================================
+// EASING
+// ============================================================
+const easings = {
+  linear: t => t,
+  easeInQuad: t => t * t,
+  easeOutQuad: t => 1 - (1 - t) * (1 - t),
+  easeOutCubic: t => 1 - Math.pow(1 - t, 3),
+  easeOutQuart: t => 1 - Math.pow(1 - t, 4),
+  easeOutBack: t => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); },
+  easeOutBounce: t => {
+    const n1 = 7.5625, d1 = 2.75;
+    if (t < 1 / d1) return n1 * t * t;
+    if (t < 2 / d1) return n1 * (t -= 1.5 / d1) * t + 0.75;
+    if (t < 2.5 / d1) return n1 * (t -= 2.25 / d1) * t + 0.9375;
+    return n1 * (t -= 2.625 / d1) * t + 0.984375;
+  },
+  easeInOutQuad: t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2,
+};
+const ease = (name, t) => (easings[name] || easings.linear)(Math.max(0, Math.min(1, t)));
+
+// ============================================================
+// QUATERNION HELPERS
+// ============================================================
+const quatFromEuler = (x, y, z) => {
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z));
+  return [q.x, q.y, q.z, q.w];
+};
+const slerpQuat = (a, b, t) => {
+  const qa = new THREE.Quaternion(...a);
+  const qb = new THREE.Quaternion(...b);
+  qa.slerp(qb, t);
+  return [qa.x, qa.y, qa.z, qa.w];
+};
+const randomAxis = () => quatFromEuler(
+  (Math.random() - 0.5) * Math.PI * 8,
+  (Math.random() - 0.5) * Math.PI * 8,
+  (Math.random() - 0.5) * Math.PI * 8,
+);
+
+// ============================================================
+// ARENA — SQUARE 8x8 IN 3D, RENDERS AS 950x950 PX
+// ============================================================
+const ARENA = { width: 8, depth: 8, wallHeight: 2.0 };
+const WALL_STAGGER = 50;
+const WALL_SLAM_DUR = 120;
+const WALL_ORDER = ["north", "east", "south", "west"];
+const LAST_WALL_LAND = WALL_STAGGER * 3 + WALL_SLAM_DUR;
+const ROLL_START = 50;
+
+function buildWallIntro() {
+  const events = [];
+  WALL_ORDER.forEach((wall, i) => {
+    const dropTime = i * WALL_STAGGER;
+    events.push({ t: dropTime, type: "wallDropSingle", wall });
+    events.push({ t: dropTime + WALL_SLAM_DUR, type: "wallLandSingle", wall });
+    events.push({ t: dropTime + WALL_SLAM_DUR, type: "sound", sound: "wallSlam" });
   });
-
-  useEffect(() => {
-    if (initialDice) setSelectedDice(initialDice);
-  }, [initialDice]);
-
-  // Load GLB models & config
-  useEffect(() => {
-    if (!isOpen && !embedded) return;
-
-    const loadCustomConfig = async () => {
-      let configToLoad = config;
-
-      // localStorage fallback
-      if (!configToLoad) {
-        const savedConfig = localStorage.getItem("diceConfig");
-        if (savedConfig) configToLoad = JSON.parse(savedConfig);
-      }
-
-      // If still nothing, use defaults pointing at your GLBs
-      if (!configToLoad) {
-        configToLoad = { uploadedModels: DEFAULT_MODEL_URLS };
-      }
-
-      // face rotations (optional)
-      if (configToLoad.faceRotations) {
-        customFaceRotationsRef.current = configToLoad.faceRotations;
-      }
-
-      // transforms (optional)
-      if (configToLoad.modelTransforms) {
-        customTransformsRef.current = configToLoad.modelTransforms;
-      }
-
-      // GLB models
-      if (configToLoad.uploadedModels) {
-        const loader = new GLTFLoader();
-        const promises = [];
-
-        for (const [type, url] of Object.entries(configToLoad.uploadedModels)) {
-          if (customModelsRef.current[type]?.url === url) continue;
-
-          const p = new Promise((resolve) => {
-            loader.load(
-              url,
-              (gltf) => {
-                customModelsRef.current[type] = { ...gltf, url };
-                resolve();
-              },
-              undefined,
-              (err) => {
-                console.error(
-                  `Failed to load custom dice model for ${type}:`,
-                  err
-                );
-                resolve();
-              }
-            );
-          });
-          promises.push(p);
-        }
-
-        if (promises.length > 0) {
-          await Promise.all(promises);
-        }
-      }
-
-      modelsLoadedRef.current = true;
-      setModelsReady(true);
-
-      if (sceneRef.current && isInitializedRef.current) {
-        createDice(selectedDice);
-      }
-    };
-
-    loadCustomConfig();
-  }, [isOpen, embedded, config, selectedDice]);
-
-  // Init Three.js
-  useEffect(() => {
-    if ((!isOpen && !embedded) || !containerRef.current || isInitializedRef.current)
-      return;
-
-    const container = containerRef.current;
-    // Modal mode renders the canvas fullscreen (the modal content
-    // sits on top, with a "landing zone" placeholder where the dice
-    // used to live). Embedded mode keeps using its host container's
-    // dimensions so it can sit inline (e.g. CombatDiceWindow).
-    const fullscreen = !embedded;
-    const width = fullscreen ? window.innerWidth : (container.clientWidth || 300);
-    const height = fullscreen ? window.innerHeight : (container.clientHeight || 300);
-
-    const scene = new THREE.Scene();
-    sceneRef.current = scene;
-
-    let camera;
-    if (fullscreen) {
-      // Camera tuned for two goals at once:
-      //  1. Resting dice fills ~30-40% of screen height. With dice
-      //     auto-fit to ~2.5 world units and camera at (10,10,10)
-      //     (distance 17.32), a 24° FOV gives a visible scene height
-      //     of 2·17.32·tan(12°) ≈ 7.36 → dice is 2.5/7.36 ≈ 34%.
-      //  2. Minimal perspective shrinkage during the throw arc. With
-      //     orbit radius up to 2.6 along the camera axis, the
-      //     far/near distance ratio is 17.72/14.63 ≈ 1.21 (vs ~1.54
-      //     at the previous (5,5,5) setting), so the dice stays
-      //     visually clear all the way around the orbit.
-      camera = new THREE.PerspectiveCamera(24, width / height, 0.1, 100);
-      camera.position.set(10, 10, 10);
-    } else {
-      camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
-      const baseSize = 300;
-      const scale = Math.max(width, height) / baseSize;
-      const distance = 3 * scale;
-      camera.position.set(distance, distance, distance);
-    }
-    camera.lookAt(0, 0, 0);
-    cameraRef.current = camera;
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setClearColor(0x000000, 0);
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    container.appendChild(renderer.domElement);
-    if (fullscreen) {
-      // The fullscreen canvas has pointer-events:none so clicks pass
-      // straight through to the modal beneath it. We pick up dice
-      // grabs at the window level via raycasting (see the pointer
-      // event block below) and only intercept when the ray actually
-      // hits the dice mesh.
-      renderer.domElement.style.pointerEvents = "none";
-      renderer.domElement.style.display = "block";
-    }
-    rendererRef.current = renderer;
-
-    const handleResize = () => {
-      if (!camera || !renderer) return;
-      const newWidth = fullscreen ? window.innerWidth : container.clientWidth;
-      const newHeight = fullscreen ? window.innerHeight : container.clientHeight;
-      camera.aspect = newWidth / newHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(newWidth, newHeight);
-    };
-    window.addEventListener('resize', handleResize);
-
-    // Neutral lighting — dice color now comes from vertex colors
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
-
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444466, 0.8);
-    hemiLight.position.set(0, 10, 0);
-    scene.add(hemiLight);
-
-    const keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
-    keyLight.position.set(5, 8, 5);
-    scene.add(keyLight);
-
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
-    fillLight.position.set(-5, 3, -3);
-    scene.add(fillLight);
-
-    // Subtle accent in secondary color for atmosphere only — NOT driving dice color
-    const accentLight = new THREE.PointLight(secondaryColor, 0.6, 8);
-    accentLight.position.set(-3, 2, 3);
-    scene.add(accentLight);
-
-    scene.userData = { ambientLight, hemiLight, keyLight, fillLight, accentLight };
-
-    const shadowGeometry = new THREE.CircleGeometry(1.5, 32);
-    const shadowMaterial = new THREE.MeshBasicMaterial({
-      color: 0x000000,
-      transparent: true,
-      opacity: 0.3,
-    });
-    const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
-    shadowMesh.rotation.x = -Math.PI / 2;
-    shadowMesh.position.y = -1.2;
-    scene.add(shadowMesh);
-
-    if (modelsReady) {
-      createDice(selectedDice);
-    }
-
-    const animate = () => {
-      animationRef.current = requestAnimationFrame(animate);
-      const renderer = rendererRef.current;
-      const camera = cameraRef.current;
-      const scene = sceneRef.current;
-      const diceMesh = diceRef.current;
-      if (!renderer || !camera || !scene) return;
-
-      // While the dice is being held, lerp it toward the cursor
-      // target each frame. This runs only when not currently rolling.
-      const drag = dragStateRef.current;
-      if (drag.isDragging && diceMesh && !rollingRef.current) {
-        const lerp = 0.25;
-        diceMesh.position.x += (drag.targetX - diceMesh.position.x) * lerp;
-        diceMesh.position.y += (1.5 - diceMesh.position.y) * lerp;
-        diceMesh.position.z += (drag.targetZ - diceMesh.position.z) * lerp;
-        // Slight wiggle so a held dice feels alive.
-        diceMesh.rotation.x += 0.02 + drag.velocityX * 0.001;
-        diceMesh.rotation.z += 0.02 + drag.velocityY * 0.001;
-      }
-
-      const roll = rollDataRef.current;
-      if (rollingRef.current && roll && diceMesh) {
-        const now = performance.now();
-        const elapsed = now - roll.startTime;
-
-        // PHASE 1: Anticipation — shake/wiggle in place
-        if (elapsed < roll.anticipationDuration) {
-          const t = elapsed / roll.anticipationDuration;
-          const shakeAmount = 0.08 * Math.sin(t * Math.PI * 8) * (1 - t);
-          diceMesh.rotation.set(
-            roll.startRot.x + shakeAmount,
-            roll.startRot.y + shakeAmount * 0.7,
-            roll.startRot.z + shakeAmount * 0.5
-          );
-          const scaleBoost = 1 + 0.08 * Math.sin(t * Math.PI);
-          diceMesh.scale.setScalar(scaleBoost);
-        }
-
-        // PHASE 2: Tumble — procedural angular velocity with random jitter
-        else if (elapsed < roll.anticipationDuration + roll.tumbleDuration) {
-          const phaseT = (elapsed - roll.anticipationDuration) / roll.tumbleDuration;
-          const eased = easeOutCubic(phaseT);
-
-          const velMult = roll.tumbleVelMult ?? 1.0;
-
-          if (!roll.tumbleAccumulator) {
-            roll.tumbleAccumulator = { x: roll.startRot.x, y: roll.startRot.y, z: roll.startRot.z };
-            roll.tumbleVelocity = {
-              x: (Math.random() - 0.5) * 0.6 * velMult,
-              y: (Math.random() - 0.5) * 0.6 * velMult,
-              z: (Math.random() - 0.5) * 0.6 * velMult,
-            };
-            roll.lastFrameTime = now;
-          }
-
-          const dt = Math.min((now - roll.lastFrameTime) / 1000, 0.05);
-          roll.lastFrameTime = now;
-
-          const decay = 1 - phaseT * 0.3;
-          roll.tumbleVelocity.x += (Math.random() - 0.5) * 0.08 * velMult;
-          roll.tumbleVelocity.y += (Math.random() - 0.5) * 0.08 * velMult;
-          roll.tumbleVelocity.z += (Math.random() - 0.5) * 0.05 * velMult;
-
-          const speedMult = (12 + Math.random() * 4) * (1 - eased * 0.6) * velMult;
-          roll.tumbleAccumulator.x += roll.tumbleVelocity.x * dt * speedMult * decay;
-          roll.tumbleAccumulator.y += roll.tumbleVelocity.y * dt * speedMult * decay;
-          roll.tumbleAccumulator.z += roll.tumbleVelocity.z * dt * speedMult * decay;
-
-          diceMesh.rotation.set(
-            roll.tumbleAccumulator.x,
-            roll.tumbleAccumulator.y,
-            roll.tumbleAccumulator.z
-          );
-
-          const orbitT = phaseT;
-          const angle = roll.orbitStart + 2 * Math.PI * roll.orbitTurns * orbitT + Math.sin(orbitT * 8) * 0.3;
-          const radius = roll.maxRadius * (1 - easeOutQuint(orbitT));
-          const heightFactor = roll.throwHeight ?? 1.0;
-          const arcHeight = (Math.sin(orbitT * Math.PI) * 0.4 + Math.sin(orbitT * Math.PI * 3) * 0.1) * heightFactor;
-          // Lerp the throw-start position out to (0, arc, 0) over the
-          // tumble so dice picked up at an offset start point still
-          // land back near center.
-          const blend = easeOutQuint(orbitT);
-          const sx = (roll.startPos?.x ?? 0) * (1 - blend);
-          const sz = (roll.startPos?.z ?? 0) * (1 - blend);
-          diceMesh.position.set(sx + radius * Math.cos(angle), arcHeight, sz + radius * Math.sin(angle));
-          diceMesh.scale.setScalar(1);
-        }
-
-        // PHASE 3: Settle — snap to final face with overshoot bounce
-        else if (elapsed < roll.totalDuration) {
-          const settleStart = roll.anticipationDuration + roll.tumbleDuration;
-          const settleT = (elapsed - settleStart) / roll.settleDuration;
-          const eased = easeOutBack(Math.min(settleT, 1));
-
-          if (!roll.settleStartRot) {
-            roll.settleStartRot = {
-              x: diceMesh.rotation.x,
-              y: diceMesh.rotation.y,
-              z: diceMesh.rotation.z,
-            };
-          }
-
-          diceMesh.rotation.set(
-            THREE.MathUtils.lerp(roll.settleStartRot.x, roll.finalRot.x, eased),
-            THREE.MathUtils.lerp(roll.settleStartRot.y, roll.finalRot.y, eased),
-            THREE.MathUtils.lerp(roll.settleStartRot.z, roll.finalRot.z, eased)
-          );
-
-          const dropT = Math.min(settleT * 1.5, 1);
-          const bounce = Math.abs(Math.sin(dropT * Math.PI * 2)) * (1 - dropT) * 0.15;
-          diceMesh.position.set(0, bounce, 0);
-        }
-
-        // PHASE 4: Done — trigger result, particles, reveal
-        else {
-          rollingRef.current = false;
-          diceMesh.position.set(0, 0, 0);
-          diceMesh.rotation.set(roll.finalRot.x, roll.finalRot.y, roll.finalRot.z);
-          diceMesh.scale.setScalar(1);
-
-          const finalValue = roll.rollValue;
-          const wasCocked = !!roll.willCock;
-          const wasLazy = !!roll.lazy;
-          const lazyAllowed = roll.lazyAllowed !== false;
-          const rollMod = roll.modifier ?? 0;
-          rollDataRef.current = null;
-          setIsRolling(false);
-
-          // Cocked: chicken + sound, no result counted, no history,
-          // no onRollComplete. Player must roll again.
-          if (wasCocked) {
-            setIsCocked(true);
-            setShowCockedAnim(true);
-            const sound = new Audio(
-              COCKED_SOUNDS[Math.floor(Math.random() * COCKED_SOUNDS.length)]
-            );
-            sound.volume = 0.85;
-            sound.play().catch(() => {});
-            setTimeout(() => setShowCockedAnim(false), 2400);
-            return;
-          }
-
-          // Lazy roll: always plays the sad sound + Lame... overlay.
-          // In strict mode (allowLazyRolls=false) it doesn't count.
-          // In permissive mode the result still counts but we delay
-          // the reveal so the Lame... animation gets center stage.
-          if (wasLazy) {
-            playLazySound();
-            if (!lazyAllowed) {
-              setLameAnim({ rejected: true });
-              setTimeout(() => setLameAnim(null), 1600);
-              return;
-            }
-            setLameAnim({ rejected: false });
-            setTimeout(() => setLameAnim(null), 1600);
-            // Defer the result reveal/history so the Lame... overlay
-            // plays before the number drops.
-            setTimeout(() => {
-              const total = finalValue + rollMod;
-              setRevealAnim({ value: finalValue, color: "#94a3b8" });
-              setLastRoll({ roll: finalValue, total });
-              if (!embedded) {
-                setRollHistory((prev) => [
-                  {
-                    result: finalValue,
-                    timestamp: new Date().toLocaleTimeString(),
-                    dice: selectedDice,
-                    modifier: rollMod,
-                    total,
-                    lazy: true,
-                  },
-                  ...prev,
-                ].slice(0, 10));
-              }
-              if (onRollCompleteRef.current && typeof finalValue === "number") {
-                onRollCompleteRef.current(finalValue);
-              }
-            }, 800);
-            return;
-          }
-
-          const isCritSuccess = selectedDice === "d20" && finalValue === 20;
-          const isCritFail = selectedDice === "d20" && finalValue === 1;
-
-          let revealColor = "#ffffff";
-          let pType = "default";
-          if (isCritSuccess) { revealColor = "#FFD700"; pType = "crit-success"; playCritSuccessSound(); }
-          else if (isCritFail) { revealColor = "#DC2626"; pType = "crit-fail"; playCritFailSound(); }
-          else if (finalValue >= (DICE_SIDES[selectedDice] * 0.85)) { revealColor = "#37F2D1"; }
-          else if (finalValue <= (DICE_SIDES[selectedDice] * 0.15)) { revealColor = "#94a3b8"; }
-
-          setRevealAnim({ value: finalValue, color: revealColor });
-          setParticleType(pType);
-          setShowParticles(true);
-          setTimeout(() => setShowParticles(false), 1200);
-
-          const total = finalValue + rollMod;
-          setLastRoll({ roll: finalValue, total });
-          if (!embedded) {
-            setRollHistory((prev) => [
-              {
-                result: finalValue,
-                timestamp: new Date().toLocaleTimeString(),
-                dice: selectedDice,
-                modifier: rollMod,
-                total,
-              },
-              ...prev,
-            ].slice(0, 10));
-          }
-
-          if (onRollCompleteRef.current && typeof finalValue === "number") {
-            onRollCompleteRef.current(finalValue);
-          }
-        }
-      }
-
-      renderer.render(scene, camera);
-    };
-    animate();
-
-    // Mouse pickup + shake-to-roll. Only wired for the fullscreen
-    // (modal) canvas; embedded mode keeps its simple click-to-roll.
-    // We listen at the window level because the canvas is
-    // pointer-events:none — we raycast on pointerdown and only
-    // intercept (preventDefault, capture, etc.) when the ray hits
-    // the dice mesh.
-    let detachPointer = () => {};
-    if (fullscreen) {
-      const canvas = renderer.domElement;
-      const raycaster = new THREE.Raycaster();
-      const ndc = new THREE.Vector2();
-      const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1.5);
-      const tmp = new THREE.Vector3();
-
-      const setNdc = (clientX, clientY) => {
-        const rect = canvas.getBoundingClientRect();
-        ndc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-        ndc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-      };
-
-      const projectToWorld = (clientX, clientY, target) => {
-        setNdc(clientX, clientY);
-        raycaster.setFromCamera(ndc, cameraRef.current);
-        raycaster.ray.intersectPlane(dragPlane, target);
-      };
-
-      const hitsDice = (clientX, clientY) => {
-        const dice = diceRef.current;
-        if (!dice) return false;
-        setNdc(clientX, clientY);
-        raycaster.setFromCamera(ndc, cameraRef.current);
-        const hits = raycaster.intersectObject(dice, true);
-        return hits.length > 0;
-      };
-
-      const onPointerMoveHover = (e) => {
-        if (dragStateRef.current.isDown) return;
-        if (rollingRef.current || isCockedRef.current) {
-          document.body.style.cursor = "";
-          return;
-        }
-        document.body.style.cursor = hitsDice(e.clientX, e.clientY) ? "grab" : "";
-      };
-
-      const onPointerDown = (e) => {
-        if (rollingRef.current || isCockedRef.current) return;
-        if (!hitsDice(e.clientX, e.clientY)) return;
-        // Hit the dice — start dragging and prevent the click from
-        // bubbling to anything underneath (e.g. modal close button).
-        e.preventDefault();
-        e.stopPropagation();
-        const drag = dragStateRef.current;
-        drag.isDown = true;
-        drag.isDragging = true;
-        drag.lastX = e.clientX;
-        drag.lastY = e.clientY;
-        drag.lastT = performance.now();
-        drag.accumulatedShake = 0;
-        drag.velocityX = 0;
-        drag.velocityY = 0;
-        projectToWorld(e.clientX, e.clientY, tmp);
-        drag.targetX = tmp.x;
-        drag.targetZ = tmp.z;
-        document.body.style.cursor = "grabbing";
-      };
-
-      const onPointerMove = (e) => {
-        const drag = dragStateRef.current;
-        if (!drag.isDown) {
-          onPointerMoveHover(e);
-          return;
-        }
-        const now = performance.now();
-        const dt = Math.max(1, now - drag.lastT);
-        const dx = e.clientX - drag.lastX;
-        const dy = e.clientY - drag.lastY;
-        drag.accumulatedShake += Math.abs(dx) + Math.abs(dy);
-        drag.velocityX = (dx / dt) * 1000;
-        drag.velocityY = (dy / dt) * 1000;
-        drag.lastX = e.clientX;
-        drag.lastY = e.clientY;
-        drag.lastT = now;
-        projectToWorld(e.clientX, e.clientY, tmp);
-        drag.targetX = tmp.x;
-        drag.targetZ = tmp.z;
-      };
-
-      const onPointerUp = () => {
-        const drag = dragStateRef.current;
-        if (!drag.isDown) return;
-        drag.isDown = false;
-        drag.isDragging = false;
-        document.body.style.cursor = "";
-        const lazy = drag.accumulatedShake <= 250;
-        // Hand the dice's current world position to handleRoll so
-        // the roll animation begins where the player let go.
-        const dice = diceRef.current;
-        const startPos = dice
-          ? { x: dice.position.x, y: dice.position.y, z: dice.position.z }
-          : null;
-        if (handleRollRef.current) {
-          handleRollRef.current({ lazy, startPos });
-        }
-      };
-
-      // pointerdown gets `capture: true` so we can intercept clicks
-      // that would otherwise hit modal buttons before they fire.
-      window.addEventListener("pointerdown", onPointerDown, true);
-      window.addEventListener("pointermove", onPointerMove);
-      window.addEventListener("pointerup", onPointerUp);
-      window.addEventListener("pointercancel", onPointerUp);
-
-      detachPointer = () => {
-        window.removeEventListener("pointerdown", onPointerDown, true);
-        window.removeEventListener("pointermove", onPointerMove);
-        window.removeEventListener("pointerup", onPointerUp);
-        window.removeEventListener("pointercancel", onPointerUp);
-        document.body.style.cursor = "";
-      };
-    }
-
-    isInitializedRef.current = true;
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      detachPointer();
-      isInitializedRef.current = false;
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
-      const renderer = rendererRef.current;
-      if (renderer) {
-        renderer.dispose();
-        if (container && renderer.domElement.parentNode === container) {
-          container.removeChild(renderer.domElement);
-        }
-      }
-    };
-  }, [isOpen, embedded, modelsReady, selectedDice, forcedResult]); // Re-add forcedResult to dependency array so force re-roll works
-
-  useEffect(() => {
-    if (sceneRef.current?.userData?.accentLight) {
-      sceneRef.current.userData.accentLight.color.set(secondaryColor);
-    }
-    if (diceRef.current && modelsReady) {
-      const customModel = customModelsRef.current[selectedDice];
-      if (customModel?.scene) {
-        applyVertexGradient(diceRef.current, primaryColor, secondaryColor, isThemedSkin);
-      }
-    }
-  }, [primaryColor, secondaryColor, isThemedSkin, modelsReady, selectedDice]);
-
-  // Re-skin the current die whenever the active Tavern dice skin
-  // changes (e.g. player applies a new skin from My Collection
-  // without closing the roller).
-  useEffect(() => {
-    if (!diceRef.current) return;
-    applyDiceSkinToMesh(diceRef.current, activeSkin || STOCK_SKIN, {
-      defaultTexture: defaultTextureRef.current,
-      textureCache: textureCacheRef.current,
-    });
-    applyVertexGradient(diceRef.current, primaryColor, secondaryColor, isThemedSkin);
-  }, [activeSkin, primaryColor, secondaryColor, isThemedSkin]);
-
-  useEffect(() => {
-    if ((isOpen || embedded) && sceneRef.current && isInitializedRef.current) {
-      createDice(selectedDice);
-    }
-  }, [selectedDice, isOpen, embedded, modelsReady]);
-
-  // Sound Effects
-  const playRollSound = () => {
-    const sounds = [
-      "https://static.wixstatic.com/mp3/5cdfd8_e217d9cf6d2740878d9c75447a59650c.wav",
-      "https://static.wixstatic.com/mp3/5cdfd8_51fb8464ed11497ca568fd738696a23a.wav",
-      "https://static.wixstatic.com/mp3/5cdfd8_d530a1fb3ee4434a8291a7cf1e705332.wav",
-      "https://static.wixstatic.com/mp3/5cdfd8_26ff827714844fccaaf4872fc002437e.wav"
-    ];
-    const sound = new Audio(sounds[Math.floor(Math.random() * sounds.length)]);
-    sound.volume = 0.6;
-    sound.play().catch(() => {});
-  };
-
-  const playCritSuccessSound = () => {
-    const sounds = [
-      "https://static.wixstatic.com/mp3/5cdfd8_e8c4a95d12884406920d8eb54b0868ee.wav",
-      "https://static.wixstatic.com/mp3/5cdfd8_1d4320bb6ce140e3968f1104c2ef2acf.mp3"
-    ];
-    const sound = new Audio(sounds[Math.floor(Math.random() * sounds.length)]);
-    sound.volume = 0.8;
-    sound.play().catch(() => {});
-  };
-
-  const playCritFailSound = () => {
-    const sounds = [
-      "https://static.wixstatic.com/mp3/5cdfd8_277e185148974f8689952c9658c27f54.wav",
-      "https://static.wixstatic.com/mp3/5cdfd8_f4193867f1004b74adaab28c878082ea.wav"
-    ];
-    const sound = new Audio(sounds[Math.floor(Math.random() * sounds.length)]);
-    sound.volume = 0.8;
-    sound.play().catch(() => {});
-  };
-
-  const playLazySound = () => {
-    const sound = new Audio(LAZY_SOUND_URL);
-    sound.volume = 0.7;
-    sound.play().catch(() => {});
-  };
-
-  const createDice = (diceType) => {
-    if (!sceneRef.current) return;
-    const scene = sceneRef.current;
-
-    if (diceRef.current) {
-      scene.remove(diceRef.current);
-    }
-
-    let mesh;
-
-    const customModel = customModelsRef.current[diceType];
-    if (customModel && customModel.scene) {
-      const model = customModel.scene.clone();
-      const transform = customTransformsRef.current[diceType] || { x: 0, y: 0 };
-
-      model.position.set(0, 0, 0);
-      model.rotation.set(0, 0, 0);
-
-      const box = new THREE.Box3().setFromObject(model);
-      const size = box.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const scale = 2 / maxDim;
-      model.scale.setScalar(scale);
-
-      box.setFromObject(model);
-      const center = box.getCenter(new THREE.Vector3());
-      model.position.sub(center);
-
-      model.position.x += transform.x;
-      model.position.y += transform.y;
-
-      mesh = model;
-    } else {
-      // Fallback geometry (should rarely be hit if GLBs exist)
-      if (diceType === "d20") {
-        mesh = createFallbackD20();
-      } else {
-        let geometry;
-        switch (diceType) {
-          case "d4":
-            geometry = new THREE.TetrahedronGeometry(1.3);
-            break;
-          case "d6":
-            geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-            break;
-          case "d8":
-            geometry = new THREE.OctahedronGeometry(1.3);
-            break;
-          case "d10":
-          case "d12":
-            geometry = new THREE.DodecahedronGeometry(1.2);
-            break;
-          default:
-            geometry = new THREE.IcosahedronGeometry(1.3);
-        }
-        const material = new THREE.MeshStandardMaterial({
-          color: 0xffffff,
-          metalness: 0.3,
-          roughness: 0.4,
-          flatShading: true,
-        });
-        mesh = new THREE.Mesh(geometry, material);
-      }
-    }
-
-    // Deep-clone materials/geometries so each dice instance can be
-    // tinted independently without mutating shared GLB data.
-    mesh.traverse((child) => {
-      if (child.isMesh) {
-        if (child.material) child.material = child.material.clone();
-        if (child.geometry) child.geometry = child.geometry.clone();
-      }
-    });
-
-    // Apply the vertex gradient
-    applyVertexGradient(mesh, primaryColor, secondaryColor, isThemedSkin);
-
-    diceRef.current = mesh;
-    scene.add(mesh);
-
-    // Re-skin with the active Tavern skin (or stock defaults). This
-    // builds the material (texture map, metalness, etc.) so it must
-    // run before the final vertex-gradient pass, which sets
-    // vertexColors:true on whatever material the skin produced.
-    applyDiceSkinToMesh(mesh, activeSkinRef.current || STOCK_SKIN, {
-      defaultTexture: defaultTextureRef.current,
-      textureCache: textureCacheRef.current,
-    });
-
-    // Re-apply the gradient so vertex colors survive applyDiceSkinToMesh's
-    // material replacement. For themed skins this is a no-op tint reset.
-    applyVertexGradient(mesh, primaryColor, secondaryColor, isThemedSkin);
-  };
-
-  const handleRoll = (opts = {}) => {
-    if (!diceRef.current || isRolling) return;
-    const lazy = !!opts.lazy;
-    const startPos = opts.startPos || null; // optional world-space throw start
-    const diceType = selectedDice;
-    const sides = DICE_SIDES[diceType] || 20;
-
-    // Clear cocked / lame state from a prior roll the moment a new roll starts.
-    setIsCocked(false);
-    setShowCockedAnim(false);
-    setLameAnim(null);
-
-    // Snapshot allowLazyRolls into rollData so toggling the prop
-    // mid-flight doesn't corrupt this roll's outcome.
-    const lazyAllowedSnap = !!allowLazyRolls;
-
-    // Use forced result if set (for calibration), otherwise random
-    let roll;
-    if (forcedResult !== null) {
-      roll = Math.min(Math.max(1, forcedResult), sides);
-    } else {
-      roll = Math.floor(Math.random() * sides) + 1;
-    }
-
-    const customFaceMap = customFaceRotationsRef.current[selectedDice];
-    const defaultFaceMap = FACE_ROTATIONS[selectedDice];
-    const faceMap = customFaceMap || defaultFaceMap;
-    const customSnap = customFaceMap?.[roll];
-    const defaultSnap = defaultFaceMap?.[roll];
-    const snap = customSnap
-      ? { x: customSnap.x, y: customSnap.y, z: customSnap.z }
-      : defaultSnap;
-
-    if (diceRef.current) {
-      setIsRolling(true);
-      const diceMesh = diceRef.current;
-
-      // Fallback for snap if missing
-      const safeSnap = snap || {
-        x: Math.random() * Math.PI * 2,
-        y: Math.random() * Math.PI * 2,
-        z: Math.random() * Math.PI * 2
-      };
-
-      const isCrit = selectedDice === "d20" && (roll === 20 || roll === 1);
-
-      // Probability check for cocked outcome. Forced rolls (calibration)
-      // never cock — calibrators want a clean snap to the requested face.
-      // Lazy rolls cock 5x more often (capped at 50%).
-      const baseCockChance = COCK_CHANCE[selectedDice] ?? 0;
-      const cockChance = lazy ? Math.min(0.5, baseCockChance * 5) : baseCockChance;
-      const willCock = forcedResult === null && Math.random() < cockChance;
-
-      const anticipationDuration = lazy ? 80 : 280;
-      const tumbleDuration = lazy ? 700 : (isCrit ? 900 : 800);
-      const settleDuration = lazy ? 250 : (isCrit ? 600 : 350); // Crits get slow-mo settle for drama
-
-      const startRot = {
-        x: diceMesh.rotation.x,
-        y: diceMesh.rotation.y,
-        z: diceMesh.rotation.z,
-      };
-
-      const spinX = 3 + Math.floor(Math.random() * 3);
-      const spinY = 3 + Math.floor(Math.random() * 3);
-      const spinZ = 1 + Math.floor(Math.random() * 2);
-
-      // Cocked rolls land tilted ~30° on X and Z so the dice visually
-      // wedges between two faces instead of snapping flat.
-      const COCK_OFFSET = (30 * Math.PI) / 180;
-      const cockX = willCock ? (Math.random() < 0.5 ? COCK_OFFSET : -COCK_OFFSET) : 0;
-      const cockZ = willCock ? (Math.random() < 0.5 ? COCK_OFFSET : -COCK_OFFSET) : 0;
-
-      const finalRot = {
-        x: safeSnap.x + Math.PI * 2 * spinX + cockX,
-        y: safeSnap.y + Math.PI * 2 * spinY,
-        z: safeSnap.z + Math.PI * 2 * spinZ + cockZ,
-      };
-
-      rollDataRef.current = {
-        startTime: performance.now(),
-        anticipationDuration,
-        tumbleDuration,
-        settleDuration,
-        totalDuration: anticipationDuration + tumbleDuration + settleDuration,
-        startRot,
-        startPos: startPos || { x: 0, y: 0, z: 0 },
-        finalRot,
-        orbitStart: Math.random() * Math.PI * 2,
-        orbitTurns: lazy ? 0.4 : (1.5 + Math.random() * 1.5),
-        maxRadius: lazy ? 0 : 1.8 + Math.random() * 0.8,
-        throwHeight: lazy ? 0.3 : 1.6 + Math.random() * 0.8,
-        tumbleVelMult: lazy ? 0.4 : 1.0,
-        rollValue: roll,
-        willCock,
-        modifier,
-        lazy,
-        lazyAllowed: lazyAllowedSnap,
-      };
-
-      rollingRef.current = true;
-
-      // Delay the roll sound so it plays AFTER anticipation, when the dice actually starts tumbling
-      setTimeout(() => playRollSound(), anticipationDuration);
-
-      setRevealAnim(null); // Clear previous reveal
-    }
-  };
-
-  if (!isOpen && !embedded) return null;
-
-  // Embedded mode (no modal chrome)
-  if (embedded) {
-    return (
-      <div
-        className="relative flex justify-center items-center overflow-visible w-full h-full pointer-events-auto"
-      >
-        <div
-          ref={containerRef}
-          className="cursor-pointer overflow-visible w-full h-full"
-          onClick={!isRolling ? () => handleRoll() : undefined}
-        />
-        {showParticles && <Particles type={particleType} />}
-        {revealAnim && !isRolling && !isCocked && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
-        {showCockedAnim && <CockedAnimation />}
-        {lameAnim && <LameAnimation rejected={lameAnim.rejected} />}
-      </div>
-    );
+  return events;
+}
+const WALL_POSITIONS = {
+  north: { pos: [0, 0, -ARENA.depth / 2], axis: "z", sign: 1 },
+  south: { pos: [0, 0, ARENA.depth / 2], axis: "z", sign: -1 },
+  east:  { pos: [ARENA.width / 2, 0, 0], axis: "x", sign: -1 },
+  west:  { pos: [-ARENA.width / 2, 0, 0], axis: "x", sign: 1 },
+};
+const WALLS = ["north", "south", "east", "west"];
+
+// ============================================================
+// DICE TYPE CONFIGS
+// ============================================================
+const DICE_CONFIGS = {
+  d4:  { sides: 4,  label: "d4",  size: 0.65 },
+  d6:  { sides: 6,  label: "d6",  size: 0.8 },
+  d8:  { sides: 8,  label: "d8",  size: 0.65 },
+  d10: { sides: 10, label: "d10", size: 0.6 },
+  d12: { sides: 12, label: "d12", size: 0.6 },
+  d20: { sides: 20, label: "d20", size: 0.6 },
+};
+const DICE_ORDER = ["d4", "d6", "d8", "d10", "d12", "d20"];
+
+// Custom pentagonal trapezohedron for d10 (proper kite-faced shape)
+function buildD10Geometry(scale = 0.6) {
+  const apex = scale * 1.1;
+  const ringR = scale * 0.85;
+  const ringH = scale * 0.22;
+  const verts = [];
+  // 0: top apex
+  verts.push(0, apex, 0);
+  // 1-5: top ring
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    verts.push(Math.cos(a) * ringR, ringH, Math.sin(a) * ringR);
+  }
+  // 6-10: bottom ring (staggered)
+  for (let i = 0; i < 5; i++) {
+    const a = ((i + 0.5) / 5) * Math.PI * 2;
+    verts.push(Math.cos(a) * ringR, -ringH, Math.sin(a) * ringR);
+  }
+  // 11: bottom apex
+  verts.push(0, -apex, 0);
+
+  const indices = [];
+  // Upper kites (CCW from outside)
+  for (let i = 0; i < 5; i++) {
+    const next = (i + 1) % 5;
+    indices.push(0, 1 + next, 6 + i);
+    indices.push(0, 6 + i, 1 + i);
+  }
+  // Lower kites (CCW from outside)
+  for (let i = 0; i < 5; i++) {
+    const next = (i + 1) % 5;
+    indices.push(11, 6 + i, 1 + next);
+    indices.push(11, 1 + next, 6 + next);
   }
 
-  // Modal mode
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function buildDiceGeometry(type) {
+  const c = DICE_CONFIGS[type];
+  switch (type) {
+    case "d4":  return new THREE.TetrahedronGeometry(c.size, 0);
+    case "d6":  return new THREE.BoxGeometry(c.size, c.size, c.size);
+    case "d8":  return new THREE.OctahedronGeometry(c.size, 0);
+    case "d10": return buildD10Geometry(c.size);
+    case "d12": return new THREE.DodecahedronGeometry(c.size, 0);
+    case "d20": return new THREE.IcosahedronGeometry(c.size, 0);
+    default:    return new THREE.IcosahedronGeometry(0.6, 0);
+  }
+}
+
+// ============================================================
+// EFFECT EQUIP — player customization (foundation for tavern store)
+// ============================================================
+const EFFECTS = {
+  default:  { label: "Default",  icon: "◆", trail: null,       color: "#a0a4b0", desc: "Standard impact" },
+  fire:     { label: "Fire",     icon: "🔥", trail: "fire",     color: "#ff7733", desc: "Burning trail" },
+  sparkle:  { label: "Sparkle",  icon: "✦", trail: "sparkle",  color: "#ffd700", desc: "Golden bursts" },
+  notes:    { label: "Notes",    icon: "♪", trail: "notes",    color: "#b88dff", desc: "Floating melody" },
+  rainbow:  { label: "Rainbow",  icon: "❋", trail: "rainbow",  color: "#ff5cae", desc: "Chaotic prism" },
+};
+const EFFECT_ORDER = ["default", "fire", "sparkle", "notes", "rainbow"];
+
+// ============================================================
+// SHAKE DETECTOR
+// ============================================================
+class ShakeDetector {
+  constructor() { this.reset(); }
+  reset() {
+    this.positions = []; this.totalDistance = 0; this.maxSpeed = 0;
+    this.lastPos = null; this.lastTime = null;
+    this.directionChanges = 0; this.lastDir = null;
+  }
+  addSample(x, y, time) {
+    this.positions.push({ x, y, time });
+    if (this.lastPos) {
+      const dx = x - this.lastPos.x, dy = y - this.lastPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dt = (time - this.lastTime) / 1000;
+      if (dt > 0) this.maxSpeed = Math.max(this.maxSpeed, dist / dt);
+      this.totalDistance += dist;
+      const dir = Math.atan2(dy, dx);
+      if (this.lastDir !== null && Math.abs(dir - this.lastDir) > Math.PI * 0.5) this.directionChanges++;
+      this.lastDir = dir;
+    }
+    this.lastPos = { x, y }; this.lastTime = time;
+  }
+  getIntensity() {
+    return Math.min(
+      Math.min(this.totalDistance / 800, 1) * 0.3 +
+      Math.min(this.directionChanges / 8, 1) * 0.5 +
+      Math.min(this.maxSpeed / 1500, 1) * 0.2,
+    1);
+  }
+  getReleaseVector() {
+    if (this.positions.length < 3) return { vx: 0, vy: 0, speed: 0 };
+    const r = this.positions.slice(-4), f = r[0], l = r[r.length - 1];
+    const dt = (l.time - f.time) / 1000;
+    if (dt === 0) return { vx: 0, vy: 0, speed: 0 };
+    const vx = (l.x - f.x) / dt, vy = (l.y - f.y) / dt;
+    return { vx, vy, speed: Math.sqrt(vx * vx + vy * vy) };
+  }
+}
+
+// ============================================================
+// SEQUENCE BUILDERS
+// ============================================================
+const randomArenaPos = (m = 1.2) => [
+  (Math.random() - 0.5) * (ARENA.width - m * 2), 0.55,
+  (Math.random() - 0.5) * (ARENA.depth - m * 2),
+];
+const nearWall = (wall, offset = 0.3) => {
+  const w = WALL_POSITIONS[wall];
+  return w.axis === "z"
+    ? [(Math.random() - 0.5) * (ARENA.width - 2), 0.55, w.pos[2] + w.sign * offset]
+    : [w.pos[0] + w.sign * offset, 0.55, (Math.random() - 0.5) * (ARENA.depth - 2)];
+};
+
+function buildNormalRoll(result, diceType, shakeIntensity = 0.7, releaseVector = null) {
+  // Bounce count: scales with shake, with randomness inside the band.
+  // Min shake (0):   range 2-3
+  // Mid shake (0.5): range 5-9
+  // Max shake (1):   range 10-15
+  const baseBounce = 2.5 + shakeIntensity * 10;
+  const bounceVariance = 1 + shakeIntensity * 1.5;
+  const bounceCount = Math.max(2, Math.floor(baseBounce + (Math.random() * 2 - 1) * bounceVariance));
+  // Roll duration scales with bounce count so each bounce gets similar stage time
+  const rollDur = 600 + bounceCount * 180;
+  const totalDur = ROLL_START + rollDur;
+  const targetRot = randomAxis();
+  const path = [];
+  const events = [...buildWallIntro()];
+
+  let startX = (Math.random() - 0.5) * 2, startZ = (Math.random() - 0.5) * 1.5;
+  if (releaseVector && releaseVector.speed > 100) {
+    const n = releaseVector.speed;
+    startX = -(releaseVector.vx / n) * 2;
+    startZ = (releaseVector.vy / n) * 2;
+  }
+  path.push({ t: ROLL_START, pos: [startX, 4, startZ], rot: randomAxis(), scale: 1 });
+
+  let currentT = ROLL_START + 150;
+  const segDur = (rollDur - 400) / (bounceCount + 1);
+
+  for (let i = 0; i < bounceCount; i++) {
+    const wall = WALLS[Math.floor(Math.random() * 4)];
+    const hitPos = nearWall(wall);
+    const intensity = 0.5 + (1 - i / bounceCount) * 0.5;
+    const peakY = 1.2 + (1 - i / bounceCount) * 2.5;
+    const midT = currentT + segDur * 0.4;
+    path.push({
+      t: midT,
+      pos: [(path[path.length - 1].pos[0] + hitPos[0]) / 2, peakY, (path[path.length - 1].pos[2] + hitPos[2]) / 2],
+      rot: randomAxis(), scale: 1, ease: "easeOutQuad",
+    });
+    currentT += segDur;
+    path.push({ t: currentT, pos: hitPos, rot: randomAxis(), scale: 1, ease: "easeOutCubic" });
+    events.push({ t: currentT, type: "wallHit", wall, intensity });
+    events.push({ t: currentT, type: "sound", sound: "wallThunk", volume: intensity });
+    events.push({ t: currentT, type: "particles", preset: "impact", pos: hitPos, intensity });
+  }
+
+  const restPos = randomArenaPos();
+  const settleT = currentT + segDur * 0.5;
+  path.push({ t: settleT, pos: [restPos[0], 1.0, restPos[2]], rot: randomAxis(), scale: 1, ease: "easeOutQuad" });
+  path.push({ t: totalDur - 200, pos: [restPos[0], 0.55, restPos[2]], rot: targetRot, scale: 1, ease: "easeOutBounce" });
+  path.push({ t: totalDur, pos: [restPos[0], 0.55, restPos[2]], rot: targetRot, scale: 1, ease: "easeOutQuart" });
+  events.push({ t: totalDur - 200, type: "sound", sound: "diceSettle" });
+  events.push({ t: totalDur, type: "settled" });
+  events.push({ t: totalDur + 300, type: "reveal", value: result, diceType });
+
+  return {
+    id: `roll_${Date.now()}`, diceType, result, duration: totalDur + 300,
+    path, events: events.sort((a, b) => a.t - b.t),
+    modifiers: { meshEffect: null, trailParticles: null, cameraShake: 0, arenaGlow: null },
+  };
+}
+
+function buildLazyRoll(result, diceType) {
+  const restPos = [(Math.random() - 0.5) * 2, 0.55, (Math.random() - 0.5) * 1.5];
+  const targetRot = randomAxis();
+  const dur = ROLL_START + 1200;
+  return {
+    id: `roll_${Date.now()}`, diceType, result, duration: dur + 400,
+    path: [
+      { t: ROLL_START, pos: [0, 3, 0], rot: quatFromEuler(0, 0, 0), scale: 1 },
+      { t: ROLL_START + 300, pos: [0, 0.55, 0], rot: quatFromEuler(0.1, 0, 0.05), scale: 1, ease: "easeInQuad" },
+      { t: ROLL_START + 550, pos: [0.15, 0.7, 0.1], rot: quatFromEuler(0.15, 0.1, -0.1), scale: 1, ease: "easeOutQuad" },
+      { t: ROLL_START + 750, pos: [restPos[0], 0.55, restPos[2]], rot: targetRot, scale: 1, ease: "easeOutQuad" },
+      { t: dur, pos: [restPos[0], 0.55, restPos[2]], rot: targetRot, scale: 1 },
+    ],
+    events: [
+      ...buildWallIntro(),
+      { t: ROLL_START + 300, type: "sound", sound: "sadThud" },
+      { t: ROLL_START + 400, type: "overlay", text: "Lame... try again.", style: "shame" },
+      { t: ROLL_START + 750, type: "settled" },
+      { t: dur, type: "reveal", value: result, diceType },
+    ].sort((a, b) => a.t - b.t),
+    modifiers: { meshEffect: null, trailParticles: null, cameraShake: 0, arenaGlow: null },
+  };
+}
+
+function buildEpicRoll(result, diceType, releaseVector = null) {
+  const base = buildNormalRoll(result, diceType, 1.0, releaseVector);
+  return { ...base, duration: base.duration + 500,
+    path: base.path.map((kf, i) => ({ ...kf, t: kf.t * 1.12,
+      pos: i > 1 && i < base.path.length - 2 ? [kf.pos[0] * 1.3, kf.pos[1] * 1.15, kf.pos[2] * 1.3] : kf.pos,
+    })),
+    events: [
+      ...base.events.map(e => ({ ...e, t: e.t * 1.12, intensity: e.intensity ? Math.min(e.intensity * 1.3, 1) : undefined })),
+      { t: ROLL_START + 50, type: "sound", sound: "epicWhoosh" },
+    ].sort((a, b) => a.t - b.t),
+    modifiers: { ...base.modifiers, cameraShake: 0.15 },
+  };
+}
+
+// ============================================================
+// CHARACTER STATE MODIFIERS
+// ============================================================
+function applyRage(tl) {
+  return { ...tl, duration: tl.duration * 0.82,
+    path: tl.path.map(kf => ({ ...kf, t: kf.t * 0.82 })),
+    events: [...tl.events.map(e => ({ ...e, t: e.t * 0.82,
+      intensity: e.intensity ? Math.min(e.intensity * 1.6, 1) : undefined,
+      volume: e.volume ? Math.min(e.volume * 1.4, 1) : undefined,
+    })), { t: 0, type: "meshEffect", effect: "fire" }].sort((a, b) => a.t - b.t),
+    modifiers: { ...tl.modifiers, meshEffect: "fire", trailParticles: "fire", cameraShake: 0.35, arenaGlow: "#ff2200" },
+  };
+}
+function applyDeathSave(tl) {
+  const ekgStart = LAST_WALL_LAND + 50;
+  const heartbeatCount = Math.floor((tl.duration - ekgStart) / 420);
+  const heartbeats = Array.from({ length: heartbeatCount }, (_, i) => ({
+    t: ekgStart + i * 420, type: "sound", sound: "heartbeat"
+  }));
+  const slowPoint = ROLL_START + (tl.duration - ROLL_START) * 0.55;
+  return {
+    ...tl,
+    duration: tl.duration * 1.35,
+    path: tl.path.map(kf => ({ ...kf, t: kf.t > slowPoint ? slowPoint + (kf.t - slowPoint) * 1.6 : kf.t })),
+    events: [
+      ...tl.events.map(e => ({ ...e, t: e.t > slowPoint ? slowPoint + (e.t - slowPoint) * 1.6 : e.t })),
+      { t: ekgStart, type: "arenaEffect", effect: "dim" },
+      ...heartbeats,
+    ].sort((a, b) => a.t - b.t),
+    modifiers: { ...tl.modifiers, meshEffect: "pulse", trailParticles: "embers", arenaGlow: "#330000" },
+  };
+}
+function applyInspiration(tl) {
+  return { ...tl,
+    events: [...tl.events, { t: 0, type: "meshEffect", effect: "sparkle" }].sort((a, b) => a.t - b.t),
+    modifiers: { ...tl.modifiers, meshEffect: "sparkle", trailParticles: "notes", arenaGlow: "#ffcc00" },
+  };
+}
+function applyWildMagic(tl) {
+  return { ...tl,
+    events: [...tl.events, { t: 0, type: "meshEffect", effect: "rainbow" }].sort((a, b) => a.t - b.t),
+    modifiers: { ...tl.modifiers, meshEffect: "rainbow", trailParticles: "rainbow", arenaGlow: "#aa00ff" },
+  };
+}
+
+// Apply equipped effect ONLY if character state didn't already set a trail
+function applyEquippedEffect(tl, effectKey) {
+  if (effectKey === "default" || tl.modifiers.trailParticles) return tl;
+  return { ...tl, modifiers: { ...tl.modifiers, trailParticles: EFFECTS[effectKey].trail } };
+}
+
+// ============================================================
+// PATH INTERPOLATION
+// ============================================================
+function interpolatePath(path, elapsed) {
+  if (!path || !path.length) return { pos: [0, 0.55, 0], rot: [0, 0, 0, 1], scale: 1 };
+  if (elapsed <= path[0].t) return { pos: path[0].pos, rot: path[0].rot, scale: path[0].scale };
+  if (elapsed >= path[path.length - 1].t) { const l = path[path.length - 1]; return { pos: l.pos, rot: l.rot, scale: l.scale }; }
+  let i = 0;
+  while (i < path.length - 1 && path[i + 1].t <= elapsed) i++;
+  const a = path[i], b = path[i + 1];
+  const eased = ease(b.ease || "linear", (elapsed - a.t) / (b.t - a.t));
+  return {
+    pos: a.pos.map((v, j) => v + (b.pos[j] - v) * eased),
+    rot: slerpQuat(a.rot, b.rot, eased),
+    scale: a.scale + (b.scale - a.scale) * eased,
+  };
+}
+
+// ============================================================
+// PARTICLE SYSTEM
+// ============================================================
+class StyledParticles {
+  constructor(scene, max = 350) {
+    this.pool = []; this.scene = scene; this.textureCache = {};
+    for (let i = 0; i < max; i++) {
+      const mat = new THREE.SpriteMaterial({ transparent: true, opacity: 0, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.visible = false; sprite.scale.setScalar(0.15); scene.add(sprite);
+      this.pool.push({ sprite, mat, vel: [0,0,0], life: 0, maxLife: 0, style: null, baseScale: 0.15 });
+    }
+  }
+  _getTexture(style) {
+    if (this.textureCache[style]) return this.textureCache[style];
+    const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+    const ctx = c.getContext("2d"); ctx.clearRect(0, 0, 64, 64);
+    switch (style) {
+      case "note": {
+        ctx.font = "bold 44px serif"; ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(["♪","♫","♩","♬"][Math.floor(Math.random()*4)], 32, 30); break;
+      }
+      case "fire": {
+        const g = ctx.createRadialGradient(32,38,3,32,32,26);
+        g.addColorStop(0,"#ffffcc"); g.addColorStop(0.25,"#ffaa00"); g.addColorStop(0.6,"#ff3300"); g.addColorStop(1,"rgba(200,0,0,0)");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(32,34,18,24,0,0,Math.PI*2); ctx.fill(); break;
+      }
+      case "ember": {
+        const g = ctx.createRadialGradient(32,32,1,32,32,12);
+        g.addColorStop(0,"#ffcc44"); g.addColorStop(0.6,"#ff4400"); g.addColorStop(1,"rgba(80,0,0,0)");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32,32,12,0,Math.PI*2); ctx.fill(); break;
+      }
+      case "sparkle": {
+        ctx.strokeStyle = "#ffd700"; ctx.lineWidth = 2.5; ctx.lineCap = "round";
+        for (let j = 0; j < 4; j++) {
+          const a = (j/4)*Math.PI*2 - Math.PI/2;
+          ctx.beginPath(); ctx.moveTo(32+Math.cos(a)*4,32+Math.sin(a)*4);
+          ctx.lineTo(32+Math.cos(a)*22,32+Math.sin(a)*22); ctx.stroke();
+        }
+        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(32,32,4,0,Math.PI*2); ctx.fill(); break;
+      }
+      case "rainbow": {
+        const colors = ["#ff0000","#ff8800","#ffff00","#00ff00","#0088ff","#aa00ff"];
+        const col = colors[Math.floor(Math.random()*colors.length)];
+        const g = ctx.createRadialGradient(32,32,3,32,32,20);
+        g.addColorStop(0,"#ffffff"); g.addColorStop(0.4,col); g.addColorStop(1,"rgba(0,0,0,0)");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32,32,20,0,Math.PI*2); ctx.fill(); break;
+      }
+      default: {
+        const g = ctx.createRadialGradient(32,32,2,32,32,22);
+        g.addColorStop(0,"#ffffff"); g.addColorStop(0.3,"#FF5300"); g.addColorStop(1,"rgba(255,83,0,0)");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32,32,22,0,Math.PI*2); ctx.fill();
+      }
+    }
+    const tex = new THREE.CanvasTexture(c);
+    if (style !== "note" && style !== "rainbow") this.textureCache[style] = tex;
+    return tex;
+  }
+  emit(pos, count, style = "impact", speed = 3, life = 600) {
+    let spawned = 0;
+    for (const p of this.pool) {
+      if (p.life > 0 || spawned >= count) continue;
+      p.sprite.visible = true;
+      p.sprite.position.set(pos[0]||0, pos[1]||0.5, pos[2]||0);
+      p.mat.map = this._getTexture(style); p.mat.needsUpdate = true; p.mat.opacity = 1;
+      p.style = style;
+      const isRising = style === "note" || style === "sparkle";
+      p.vel = [
+        (Math.random()-0.5)*speed*(style==="note"?0.4:1),
+        isRising ? Math.random()*speed*0.5+2 : Math.random()*speed*0.8+1,
+        (Math.random()-0.5)*speed*(style==="note"?0.4:1),
+      ];
+      p.baseScale = style==="note"?0.4 : style==="fire"?0.28 : style==="sparkle"?0.22 : 0.16;
+      p.sprite.scale.setScalar(p.baseScale);
+      p.life = life; p.maxLife = life; spawned++;
+    }
+  }
+  update(dt) {
+    const ds = dt / 1000;
+    for (const p of this.pool) {
+      if (p.life <= 0) continue;
+      p.life -= dt; const lr = Math.max(0, p.life / p.maxLife);
+      p.sprite.position.x += p.vel[0]*ds;
+      p.sprite.position.y += p.vel[1]*ds;
+      p.sprite.position.z += p.vel[2]*ds;
+      if (p.style==="note") { p.vel[0]+=Math.sin(p.life*0.008)*0.04; p.vel[1]*=0.998; p.sprite.scale.setScalar(p.baseScale*(0.8+Math.sin(p.life*0.01)*0.2)); }
+      else if (p.style==="fire") { p.vel[1]+=2*ds; p.vel[0]+=(Math.random()-0.5)*0.3; p.sprite.scale.setScalar(p.baseScale*lr); }
+      else if (p.style==="ember") { p.vel[1]-=1.5*ds; p.vel[0]+=(Math.random()-0.5)*0.08; p.sprite.scale.setScalar(p.baseScale*(0.5+lr*0.5)); }
+      else if (p.style==="sparkle") { p.vel[1]*=0.99; p.sprite.scale.setScalar(p.baseScale*(0.7+Math.sin(p.life*0.02)*0.3)*lr); }
+      else if (p.style==="rainbow") { p.vel[1]-=4*ds; p.sprite.scale.setScalar(p.baseScale*lr); }
+      else { p.vel[1]-=9.8*ds; }
+      p.mat.opacity = p.style==="note" ? lr*0.85 : lr;
+      if (p.life<=0) p.sprite.visible = false;
+    }
+  }
+  dispose() { for (const p of this.pool) { if(p.mat.map)p.mat.map.dispose(); p.mat.dispose(); this.scene.remove(p.sprite); } }
+}
+
+// ============================================================
+// MAIN COMPONENT
+// ============================================================
+export default function DiceChoreographyPrototype() {
+  const mountRef = useRef(null);
+  const sceneRef = useRef({});
+  const timelineRef = useRef(null);
+  const playbackRef = useRef({ startTime: null, eventIndex: 0, playing: false });
+  const particleRef = useRef(null);
+  const wallMeshesRef = useRef({});
+  const interactionRef = useRef({ isDragging: false, shakeDetector: new ShakeDetector(), currentPos: null, isHolding: false });
+  const resultOverlayRef = useRef(null);
+  const diceTypeRef = useRef("d20");
+  const equippedEffectRef = useRef("default");
+  const modifierRef = useRef("none");
+
+  const [diceType, setDiceType] = useState("d20");
+  const [equippedEffect, setEquippedEffect] = useState("default");
+  const [modifier, setModifier] = useState("none");
+  const [lastResult, setLastResult] = useState(null);
+  const [lastResultDiceType, setLastResultDiceType] = useState(null);
+  const [overlayText, setOverlayText] = useState(null);
+  const [eventLog, setEventLog] = useState([]);
+  const [isRolling, setIsRolling] = useState(false);
+  const [isHolding, setIsHolding] = useState(false);
+  const [shakeLevel, setShakeLevel] = useState(0);
+  const [resultHistory, setResultHistory] = useState([]);
+  const [strictMode, setStrictMode] = useState(false);
+  const [showEKG, setShowEKG] = useState(false);
+  const [showEventLog, setShowEventLog] = useState(false);
+  const [loadedModels, setLoadedModels] = useState({}); // { d4: true, d6: true, ... }
+  const [modelLoadError, setModelLoadError] = useState(null);
+  const ekgStateRef = useRef({ active: false, cursor: 0 });
+  const shakeRef = useRef(0);
+
+  // Keep refs in sync with state for the animation loop
+  useEffect(() => { diceTypeRef.current = diceType; }, [diceType]);
+  useEffect(() => { equippedEffectRef.current = equippedEffect; }, [equippedEffect]);
+  useEffect(() => { modifierRef.current = modifier; }, [modifier]);
+
+  // Preload all GLB dice models in parallel; swap in active type as soon as it loads
+  useEffect(() => {
+    let cancelled = false;
+    const loadOne = async (type) => {
+      try {
+        await loadDiceModel(type);
+        if (cancelled) return;
+        setLoadedModels(prev => ({ ...prev, [type]: true }));
+        // If this is the currently-displayed type, swap it in immediately
+        if (diceTypeRef.current === type && sceneRef.current?.swapDiceModel) {
+          sceneRef.current.swapDiceModel(type);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        console.error(`Failed to load ${type}.glb:`, err);
+        setModelLoadError(`Failed to load ${type}.glb`);
+      }
+    };
+    Object.keys(DICE_MODEL_URLS).forEach(loadOne);
+    return () => { cancelled = true; };
+  }, []);
+
+  // ==============================================================
+  // SCENE SETUP — runs once
+  // ==============================================================
+  useEffect(() => {
+    const container = mountRef.current;
+    if (!container) return;
+    const w = container.clientWidth, h = container.clientHeight;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(w, h); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x0a0e1a, 0.025);
+
+    // Square arena → camera fully top-down, walls visible as the dice box edge
+    const camera = new THREE.PerspectiveCamera(34, w / h, 0.1, 100);
+    camera.position.set(0, 13, 0); camera.lookAt(0, 0, 0);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    const mainLight = new THREE.DirectionalLight(0xfff5e6, 1.05);
+    mainLight.position.set(3, 10, 4); mainLight.castShadow = true;
+    mainLight.shadow.mapSize.set(1024, 1024);
+    Object.assign(mainLight.shadow.camera, { near:1, far:25, left:-5, right:5, top:5, bottom:-5 });
+    scene.add(mainLight);
+    const fillLight = new THREE.DirectionalLight(0x4488ff, 0.22);
+    fillLight.position.set(-4, 6, -3);
+    scene.add(fillLight);
+
+    // Floor
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x1B2535, roughness: 0.85, metalness: 0.1 });
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA.width + 1, ARENA.depth + 1), floorMat);
+    floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+
+    const grid = new THREE.Mesh(
+      new THREE.PlaneGeometry(ARENA.width, ARENA.depth, 12, 12),
+      new THREE.MeshBasicMaterial({ color: 0xFF5300, transparent: true, opacity: 0.06, wireframe: true })
+    );
+    grid.rotation.x = -Math.PI / 2; grid.position.y = 0.01; scene.add(grid);
+
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xff5300, transparent: true, opacity: 0 });
+    const glowPlane = new THREE.Mesh(new THREE.PlaneGeometry(ARENA.width + 2, ARENA.depth + 2), glowMat);
+    glowPlane.rotation.x = -Math.PI / 2; glowPlane.position.y = 0.005; scene.add(glowPlane);
+
+    // EKG floor
+    const ekgCanvas = document.createElement("canvas");
+    ekgCanvas.width = 512; ekgCanvas.height = 512;
+    const ekgCtx = ekgCanvas.getContext("2d");
+    ekgCtx.fillStyle = "rgba(0,0,0,0)"; ekgCtx.fillRect(0, 0, 512, 512);
+    const ekgTexture = new THREE.CanvasTexture(ekgCanvas);
+    ekgTexture.minFilter = THREE.LinearFilter;
+    const ekgFloorMat = new THREE.MeshBasicMaterial({
+      map: ekgTexture, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    const ekgFloor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA.width, ARENA.depth), ekgFloorMat);
+    ekgFloor.rotation.x = -Math.PI / 2; ekgFloor.position.y = 0.02; scene.add(ekgFloor);
+
+    const ekgWave = (px) => {
+      const cycle = 140;
+      const pos = ((px % cycle) + cycle) % cycle;
+      const t = pos / cycle;
+      if (t < 0.32) return 0;
+      if (t < 0.37) return Math.sin((t - 0.32) / 0.05 * Math.PI) * 0.08;
+      if (t < 0.41) return 0;
+      if (t < 0.43) return -0.06;
+      if (t < 0.47) return -0.06 + ((t - 0.43) / 0.04) * 0.55;
+      if (t < 0.51) return 0.49 - ((t - 0.47) / 0.04) * 0.70;
+      if (t < 0.55) return -0.21 + ((t - 0.51) / 0.04) * 0.21;
+      if (t < 0.62) return 0;
+      if (t < 0.72) return Math.sin((t - 0.62) / 0.10 * Math.PI) * 0.12;
+      return 0;
+    };
+    let ekgCursor = 0;
+
+    // Walls
+    const wallMeshes = {};
+    const WALL_THICKNESS = 0.4;
+    const WALL_REST_Y = ARENA.wallHeight / 2;
+    const WALL_REST_OPACITY = 0.88;
+    for (const [name, config] of Object.entries(WALL_POSITIONS)) {
+      const geo = new THREE.BoxGeometry(config.axis==="z"?ARENA.width:WALL_THICKNESS, ARENA.wallHeight, config.axis==="x"?ARENA.depth:WALL_THICKNESS);
+      const mat = new THREE.MeshStandardMaterial({ color:0xFF5300, transparent:true, opacity:WALL_REST_OPACITY, emissive:0xFF5300, emissiveIntensity:0, roughness:0.45, metalness:0.35 });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(config.pos[0], WALL_REST_Y, config.pos[2]); mesh.castShadow = true; scene.add(mesh);
+      wallMeshes[name] = { mesh, mat, flashIntensity:0, targetY: WALL_REST_Y, currentY: WALL_REST_Y, restY: WALL_REST_Y, restOpacity: WALL_REST_OPACITY };
+    }
+    wallMeshesRef.current = wallMeshes;
+
+    // Dice — wrapper Object3D holds either a placeholder polyhedron or the loaded GLB.
+    // The wrapper is what the animation manipulates (position/rotation/scale).
+    const dice = new THREE.Group();
+    dice.position.set(0, 0.55, 0); dice.visible = false; scene.add(dice);
+
+    const placeholderMat = new THREE.MeshStandardMaterial({ color:0xFF5300, roughness:0.35, metalness:0.18, emissive:0x000000, emissiveIntensity:0, side: THREE.DoubleSide });
+    const placeholderGeo = buildDiceGeometry("d20");
+    const placeholderMesh = new THREE.Mesh(placeholderGeo, placeholderMat);
+    placeholderMesh.castShadow = true;
+    placeholderMat.userData._origEmissive = new THREE.Color(0x000000);
+    placeholderMat.userData._origEmissiveIntensity = 0;
+    dice.add(placeholderMesh);
+
+    // Track the active dice content + its materials for color/emissive flashes
+    const diceState = {
+      activeContent: placeholderMesh,
+      isPlaceholder: true,
+      materials: [placeholderMat],
+    };
+
+    // Ghost (preview that follows mouse before release) — uses simple polyhedron always
+    const ghostMat = new THREE.MeshStandardMaterial({ color:0xFF5300, roughness:0.35, metalness:0.15, transparent:true, opacity:0.5, emissive:0xFF5300, emissiveIntensity:0.3, side: THREE.DoubleSide });
+    const ghost = new THREE.Mesh(buildDiceGeometry("d20"), ghostMat);
+    ghost.visible = false; scene.add(ghost);
+
+    const particles = new StyledParticles(scene, 350);
+    particleRef.current = particles;
+
+    const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -2.5);
+    const raycaster = new THREE.Raycaster();
+    const mouseToWorld = (mx, my) => {
+      const rect = container.getBoundingClientRect();
+      raycaster.setFromCamera(new THREE.Vector2(((mx-rect.left)/rect.width)*2-1, -((my-rect.top)/rect.height)*2+1), camera);
+      const t = new THREE.Vector3(); raycaster.ray.intersectPlane(floorPlane, t); return t;
+    };
+
+    // Swap dice content. If a GLB is cached for this type, use it. Otherwise fall back to placeholder polyhedron.
+    const swapDiceModel = (type) => {
+      // Update ghost geometry (always polyhedron)
+      const ghostGeo = buildDiceGeometry(type);
+      ghost.geometry.dispose();
+      ghost.geometry = ghostGeo;
+
+      const cached = _modelCache[type];
+      // Remove current content
+      if (diceState.activeContent && diceState.activeContent.parent === dice) {
+        dice.remove(diceState.activeContent);
+      }
+      if (cached) {
+        // Use loaded GLB. Reuse the cached group directly (we only have one die in the scene at a time).
+        dice.add(cached.group);
+        diceState.activeContent = cached.group;
+        diceState.isPlaceholder = false;
+        diceState.materials = collectMaterials(cached.group);
+        // Reset any leftover emissive state
+        resetDiceEmissive(diceState.materials);
+      } else {
+        // Fall back to placeholder polyhedron with the right shape
+        const newGeo = buildDiceGeometry(type);
+        placeholderMesh.geometry.dispose();
+        placeholderMesh.geometry = newGeo;
+        dice.add(placeholderMesh);
+        diceState.activeContent = placeholderMesh;
+        diceState.isPlaceholder = true;
+        diceState.materials = [placeholderMat];
+        resetDiceEmissive(diceState.materials);
+      }
+    };
+
+    sceneRef.current = {
+      renderer, scene, camera, dice, ghost, ghostMat,
+      diceState, // { activeContent, isPlaceholder, materials }
+      glowPlane, glowMat, ekgFloor, ekgFloorMat, ekgCanvas, ekgCtx, ekgTexture, ekgWave,
+      mouseToWorld, swapDiceModel,
+    };
+
+    // If a model finished preloading before the scene mounted, swap it in now
+    swapDiceModel(diceTypeRef.current);
+
+    const shakeState = { intensity:0, basePos: camera.position.clone() };
+    let lastTime = performance.now(), trailTimer = 0, rafId;
+    const struggle = { wobblePhase: 0, beatPhase: 0, active: false };
+
+    const animate = (now) => {
+      rafId = requestAnimationFrame(animate);
+      const dt = Math.min(now - lastTime, 50); lastTime = now;
+      const pb = playbackRef.current, tl = timelineRef.current;
+      const ekgActive = ekgStateRef.current.active;
+
+      // EKG floor
+      if (ekgActive) {
+        ekgFloorMat.opacity += (0.9 - ekgFloorMat.opacity) * 0.08;
+        struggle.active = true;
+        const cw = 512, ch = 512, midY = ch / 2;
+        ekgCtx.fillStyle = "rgba(0, 0, 0, 0.06)"; ekgCtx.fillRect(0, 0, cw, ch);
+        ekgCtx.strokeStyle = "rgba(255, 30, 30, 0.08)"; ekgCtx.lineWidth = 0.5;
+        for (let gy = 0; gy < ch; gy += 32) { ekgCtx.beginPath(); ekgCtx.moveTo(0, gy); ekgCtx.lineTo(cw, gy); ekgCtx.stroke(); }
+        for (let gx = 0; gx < cw; gx += 32) { ekgCtx.beginPath(); ekgCtx.moveTo(gx, 0); ekgCtx.lineTo(gx, ch); ekgCtx.stroke(); }
+        const speed = 2.5;
+        ekgCtx.strokeStyle = "#ff2222"; ekgCtx.lineWidth = 3;
+        ekgCtx.shadowColor = "#ff0000"; ekgCtx.shadowBlur = 16;
+        ekgCtx.beginPath();
+        for (let i = 0; i < speed + 1; i++) {
+          const px = ekgCursor + i;
+          const screenX = px % cw;
+          const val = ekgWave(px) * (ch * 0.7);
+          if (i === 0 || screenX <= 1) ekgCtx.moveTo(screenX, midY - val);
+          else ekgCtx.lineTo(screenX, midY - val);
+        }
+        ekgCtx.stroke(); ekgCtx.shadowBlur = 0;
+        const clearX = (ekgCursor + speed + 1) % cw;
+        ekgCtx.clearRect(clearX, 0, 40, ch);
+        const dotX = (ekgCursor + speed) % cw;
+        const dotY = midY - ekgWave(ekgCursor + speed) * (ch * 0.7);
+        ekgCtx.beginPath(); ekgCtx.arc(dotX, dotY, 6, 0, Math.PI * 2); ekgCtx.fillStyle = "#ff4444"; ekgCtx.fill();
+        ekgCtx.beginPath(); ekgCtx.arc(dotX, dotY, 12, 0, Math.PI * 2); ekgCtx.fillStyle = "rgba(255,50,50,0.25)"; ekgCtx.fill();
+        ekgCursor += speed;
+        ekgTexture.needsUpdate = true;
+        const beatCycle = 140 / speed;
+        struggle.beatPhase = (struggle.beatPhase + 1) % beatCycle;
+        struggle.wobblePhase += dt * 0.003;
+      } else {
+        ekgFloorMat.opacity *= 0.92;
+        struggle.active = false;
+        if (ekgFloorMat.opacity < 0.01) {
+          ekgCtx.clearRect(0, 0, 512, 512);
+          ekgTexture.needsUpdate = true;
+          ekgCursor = 0;
+        }
+      }
+
+      // Wall lerp
+      for (const w of Object.values(wallMeshesRef.current)) {
+        const dy = w.targetY - w.currentY;
+        if (Math.abs(dy) > 0.01) {
+          const speed = w.targetY < w.currentY ? 0.45 : 0.12;
+          w.currentY += dy * speed;
+          w.mesh.position.y = w.currentY;
+        }
+      }
+
+      // Ghost follows mouse
+      const inter = interactionRef.current;
+      if (inter.isHolding && inter.currentPos) {
+        ghost.visible = true;
+        ghost.position.lerp(new THREE.Vector3(inter.currentPos.x, 2.5, inter.currentPos.z), 0.3);
+        ghost.rotation.x += 0.06; ghost.rotation.y += 0.09;
+        ghostMat.opacity = 0.35 + Math.sin(now * 0.008) * 0.15;
+        // Pre-roll particles based on equipped effect or modifier
+        const mod = modifierRef.current;
+        const equipped = equippedEffectRef.current;
+        let style = null;
+        if (mod === "rage") style = "fire";
+        else if (mod === "deathSave") style = "ember";
+        else if (mod === "inspiration") style = "note";
+        else if (mod === "wildMagic") style = "rainbow";
+        else if (equipped !== "default") style = EFFECTS[equipped].trail;
+        if (style && Math.random() < 0.3) {
+          particleRef.current?.emit([ghost.position.x, ghost.position.y, ghost.position.z], 1, style, 1, 500);
+        }
+      } else { ghost.visible = false; }
+
+      // Playback
+      let dicePosForOverlay = null;
+      if (pb.playing && tl && pb.startTime !== null) {
+        const elapsed = now - pb.startTime;
+        if (tl.path.length > 0 && elapsed >= tl.path[0].t) {
+          dice.visible = true;
+          const { pos, rot, scale } = interpolatePath(tl.path, elapsed);
+          dice.position.set(pos[0], pos[1], pos[2]);
+          dice.quaternion.set(rot[0], rot[1], rot[2], rot[3]);
+          dice.scale.setScalar(scale);
+
+          if (struggle.active && tl.modifiers.meshEffect === "pulse") {
+            const jitterAmt = 0.04 + Math.sin(now * 0.007) * 0.02;
+            dice.position.x += (Math.random() - 0.5) * jitterAmt;
+            dice.position.z += (Math.random() - 0.5) * jitterAmt;
+            const wobbleX = Math.sin(struggle.wobblePhase * 2.3) * 0.08 + Math.sin(struggle.wobblePhase * 5.1) * 0.04;
+            const wobbleZ = Math.cos(struggle.wobblePhase * 1.7) * 0.07 + Math.cos(struggle.wobblePhase * 4.3) * 0.03;
+            const wobbleQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(wobbleX, 0, wobbleZ));
+            dice.quaternion.multiply(wobbleQ);
+            const beatCycle = 140 / 2.5;
+            const beatNorm = struggle.beatPhase / beatCycle;
+            let scalePulse = 1.0;
+            if (beatNorm > 0.44 && beatNorm < 0.54) {
+              const pulseT = (beatNorm - 0.44) / 0.10;
+              scalePulse = 1.0 + Math.sin(pulseT * Math.PI) * 0.12;
+            }
+            dice.scale.setScalar(scale * scalePulse);
+            if (beatNorm > 0.44 && beatNorm < 0.56) {
+              const liftT = (beatNorm - 0.44) / 0.12;
+              dice.position.y += Math.sin(liftT * Math.PI) * 0.15;
+            }
+            // Sickly emissive overlay (preserves GLB albedo/textures)
+            const sickAmount = 0.3 + Math.sin(now * 0.005) * 0.2 + Math.random() * 0.1;
+            setDiceEmissive(sceneRef.current.diceState.materials, 0x88aa66, 0.15 + sickAmount * 0.6);
+          }
+
+          // Trail particles
+          trailTimer += dt;
+          if (tl.modifiers.trailParticles && trailTimer > 45 && elapsed < tl.duration - 500) {
+            trailTimer = 0;
+            const ts = tl.modifiers.trailParticles;
+            const style = ts==="notes"?"note" : ts==="fire"?"fire" : ts==="embers"?"ember" : ts==="rainbow"?"rainbow" : "sparkle";
+            particleRef.current?.emit([pos[0],pos[1],pos[2]], ts==="fire"?3 : ts==="notes"?1 : 2, style, ts==="fire"?2.5 : 1.5, ts==="notes"?1400 : ts==="fire"?450 : 600);
+          }
+
+          dicePosForOverlay = { x: dice.position.x, y: dice.position.y, z: dice.position.z };
+        }
+
+        while (pb.eventIndex < tl.events.length && tl.events[pb.eventIndex].t <= elapsed) {
+          handleEvent(tl.events[pb.eventIndex]); pb.eventIndex++;
+        }
+        if (tl.modifiers.cameraShake > 0) shakeState.intensity = tl.modifiers.cameraShake;
+        if (elapsed >= tl.duration) pb.playing = false;
+      } else if (dice.visible) {
+        // Dice has settled — keep tracking its position for overlay
+        dicePosForOverlay = { x: dice.position.x, y: dice.position.y, z: dice.position.z };
+      }
+
+      // Camera shake
+      if (shakeRef.current > 0) { shakeState.intensity = Math.max(shakeState.intensity, shakeRef.current); shakeRef.current = 0; }
+      if (shakeState.intensity > 0) {
+        camera.position.x = shakeState.basePos.x + (Math.random()-0.5)*shakeState.intensity*0.3;
+        camera.position.z = shakeState.basePos.z + (Math.random()-0.5)*shakeState.intensity*0.2;
+        shakeState.intensity *= 0.96;
+        if (shakeState.intensity < 0.001) { shakeState.intensity = 0; camera.position.copy(shakeState.basePos); }
+      }
+
+      // Wall flash decay
+      for (const w of Object.values(wallMeshesRef.current)) {
+        if (w.flashIntensity > 0) { w.flashIntensity *= 0.88; w.mat.emissiveIntensity = w.flashIntensity; if (w.flashIntensity < 0.01) w.flashIntensity = 0; }
+      }
+
+      // Glow
+      const tgo = tl?.modifiers?.arenaGlow && pb.playing ? 0.12 : 0;
+      glowMat.opacity += (tgo - glowMat.opacity) * 0.05;
+      if (tl?.modifiers?.arenaGlow) glowMat.color.set(tl.modifiers.arenaGlow);
+
+      // Mesh effects (emissive overlay — preserves GLB textures)
+      const diceMats = sceneRef.current.diceState.materials;
+      if (tl?.modifiers?.meshEffect && pb.playing) {
+        switch (tl.modifiers.meshEffect) {
+          case "fire":    setDiceEmissive(diceMats, 0xff2200, 0.3 + Math.sin(now*0.012)*0.15 + Math.random()*0.1); break;
+          case "pulse":   setDiceEmissive(diceMats, 0x880000, 0.1 + Math.abs(Math.sin(now*0.004))*0.5); break;
+          case "sparkle": setDiceEmissive(diceMats, 0xffcc00, 0.2 + Math.sin(now*0.008)*0.3); break;
+          case "rainbow": setDiceEmissiveHSL(diceMats, (now*0.001)%1, 1, 0.35, 0.5); break;
+        }
+      } else if (!pb.playing) {
+        decayDiceEmissive(diceMats, 0.95);
+      }
+
+      particles.update(dt);
+      renderer.render(scene, camera);
+
+      // Update result number overlay position — projects dice 3D pos to screen
+      if (resultOverlayRef.current && dicePosForOverlay) {
+        const v = new THREE.Vector3(dicePosForOverlay.x, dicePosForOverlay.y + 0.5, dicePosForOverlay.z);
+        v.project(camera);
+        const rect = container.getBoundingClientRect();
+        const sx = (v.x * 0.5 + 0.5) * rect.width;
+        const sy = (-v.y * 0.5 + 0.5) * rect.height - 70; // 70px above the dice in screen space
+        resultOverlayRef.current.style.left = `${sx}px`;
+        resultOverlayRef.current.style.top = `${sy}px`;
+      }
+    };
+    rafId = requestAnimationFrame(animate);
+
+    const ro = new ResizeObserver(() => {
+      const w = container.clientWidth, h = container.clientHeight;
+      camera.aspect = w / h; camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    });
+    ro.observe(container);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      ro.disconnect();
+      particles.dispose();
+      renderer.dispose();
+      if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
+    };
+  }, []);
+
+  // Sync EKG state to ref
+  useEffect(() => { ekgStateRef.current.active = showEKG; }, [showEKG]);
+
+  // Swap dice geometry when type changes
+  useEffect(() => {
+    if (sceneRef.current.swapDiceModel) {
+      sceneRef.current.swapDiceModel(diceType);
+    }
+  }, [diceType]);
+
+  const handleEvent = useCallback((ev) => {
+    const logEntry = `[${Math.round(ev.t)}ms] ${ev.type}${ev.wall?` → ${ev.wall}`:""}${ev.effect?` (${ev.effect})`:""}${ev.value!==undefined?` = ${ev.value}`:""}`;
+    setEventLog(prev => [...prev.slice(-18), logEntry]);
+    switch (ev.type) {
+      case "wallDropSingle": {
+        const w = wallMeshesRef.current[ev.wall];
+        if (w) {
+          // Snap the wall up high, then animate it back down — slam intro
+          w.currentY = ARENA.wallHeight * 2.2;
+          w.mesh.position.y = w.currentY;
+          w.mat.opacity = 0.9;
+          w.targetY = w.restY;
+        }
+        break;
+      }
+      case "wallLandSingle": {
+        const w = wallMeshesRef.current[ev.wall];
+        if (w) {
+          w.flashIntensity = 3.5; w.mat.emissiveIntensity = 3.5;
+          const config = WALL_POSITIONS[ev.wall];
+          particleRef.current?.emit(config.pos, 22, "impact", 5, 600);
+          shakeRef.current = 0.32;
+        }
+        break;
+      }
+      case "wallHit": {
+        const w = wallMeshesRef.current[ev.wall];
+        if (w) {
+          w.flashIntensity = (ev.intensity||0.5)*2.5; w.mat.emissiveIntensity = w.flashIntensity;
+          particleRef.current?.emit(w.mesh.position.toArray(), Math.floor(8+(ev.intensity||0.5)*15), "impact", (ev.intensity||0.5)*4, 400);
+        }
+        break;
+      }
+      case "particles": particleRef.current?.emit(ev.pos||[0,0.5,0], 12, "impact", (ev.intensity||0.5)*3); break;
+      case "overlay": setOverlayText(ev.text); setTimeout(()=>setOverlayText(null), 2200); break;
+      case "settled": setTimeout(()=>{
+        for (const w of Object.values(wallMeshesRef.current)) { w.mat.opacity = w.restOpacity; w.targetY = w.restY; }
+      }, 500); break;
+      case "reveal": {
+        setLastResult(ev.value);
+        setLastResultDiceType(ev.diceType);
+        setIsRolling(false);
+        setShowEKG(false);
+        setResultHistory(prev => [...prev.slice(-9), { type: ev.diceType, value: ev.value }]);
+        const sides = DICE_CONFIGS[ev.diceType]?.sides ?? 20;
+        if (ev.value === sides) {
+          for (let i=0;i<4;i++) setTimeout(()=>particleRef.current?.emit([0,1,0],25,"sparkle",5,900),i*120);
+        } else if (ev.value === 1) {
+          particleRef.current?.emit([0,0.5,0],15,"ember",2,1000);
+        }
+        break;
+      }
+      case "rejected": setIsRolling(false); setShowEKG(false); break;
+      case "arenaEffect": if (ev.effect === "dim") setShowEKG(true); break;
+    }
+  }, []);
+
+  // ==============================================================
+  // ROLL EXECUTION
+  // ==============================================================
+  const executeRoll = useCallback((shakeIntensity = 0.7, releaseVector = null, forceLazy = false) => {
+    if (playbackRef.current.playing) return;
+    const type = diceTypeRef.current;
+    const sides = DICE_CONFIGS[type].sides;
+    const result = Math.floor(Math.random() * sides) + 1;
+    setLastResult(null); setLastResultDiceType(null); setOverlayText(null); setEventLog([]); setIsRolling(true); setShowEKG(false);
+
+    const isLazy = forceLazy || shakeIntensity < 0.15;
+    let timeline;
+    if (isLazy) {
+      timeline = buildLazyRoll(result, type);
+      if (strictMode) {
+        timeline.events = timeline.events.filter(e => e.type !== "reveal");
+        timeline.events.push({ t: timeline.duration - 100, type: "overlay", text: "REJECTED — Roll properly!", style: "reject" });
+        timeline.events.push({ t: timeline.duration, type: "rejected" });
+        timeline.events.sort((a, b) => a.t - b.t);
+      }
+    } else if (shakeIntensity > 0.85) {
+      timeline = buildEpicRoll(result, type, releaseVector);
+    } else {
+      timeline = buildNormalRoll(result, type, shakeIntensity, releaseVector);
+    }
+
+    // Character state modifier
+    switch (modifierRef.current) {
+      case "rage": timeline = applyRage(timeline); break;
+      case "deathSave": timeline = applyDeathSave(timeline); break;
+      case "inspiration": timeline = applyInspiration(timeline); break;
+      case "wildMagic": timeline = applyWildMagic(timeline); break;
+    }
+    // Equipped effect (only fills in trail if state didn't already)
+    timeline = applyEquippedEffect(timeline, equippedEffectRef.current);
+
+    sceneRef.current.dice.visible = false;
+    resetDiceEmissive(sceneRef.current.diceState.materials);
+    for (const w of Object.values(wallMeshesRef.current)) {
+      // Walls stay visible at rest; slam intro will yank them up and slam back down
+      w.mat.opacity = w.restOpacity;
+      w.targetY = w.restY; w.currentY = w.restY;
+      w.mesh.position.y = w.restY; w.flashIntensity = 0;
+      w.mat.emissiveIntensity = 0;
+    }
+    timelineRef.current = timeline;
+    playbackRef.current = { startTime: performance.now(), eventIndex: 0, playing: true };
+  }, [strictMode]);
+
+  const handleRollClick = useCallback(() => executeRoll(0.7, null, false), [executeRoll]);
+
+  // Mouse interactions
+  const handlePointerDown = useCallback((e) => {
+    if (playbackRef.current.playing || isRolling) return;
+    const inter = interactionRef.current;
+    inter.shakeDetector.reset(); inter.isDragging = true; inter.isHolding = true;
+    inter.shakeDetector.addSample(e.clientX, e.clientY, performance.now());
+    if (sceneRef.current.mouseToWorld) inter.currentPos = sceneRef.current.mouseToWorld(e.clientX, e.clientY);
+    setIsHolding(true); setShakeLevel(0); setLastResult(null); setLastResultDiceType(null); setOverlayText(null); setShowEKG(false);
+  }, [isRolling]);
+
+  const handlePointerMove = useCallback((e) => {
+    const inter = interactionRef.current;
+    if (!inter.isDragging) return;
+    inter.shakeDetector.addSample(e.clientX, e.clientY, performance.now());
+    if (sceneRef.current.mouseToWorld) inter.currentPos = sceneRef.current.mouseToWorld(e.clientX, e.clientY);
+    setShakeLevel(inter.shakeDetector.getIntensity());
+  }, []);
+
+  const handlePointerUp = useCallback(() => {
+    const inter = interactionRef.current;
+    if (!inter.isDragging) return;
+    inter.isDragging = false; inter.isHolding = false; setIsHolding(false);
+    executeRoll(inter.shakeDetector.getIntensity(), inter.shakeDetector.getReleaseVector(), false);
+    inter.shakeDetector.reset(); setShakeLevel(0);
+  }, [executeRoll]);
+
+  // Computed
+  const lastSides = lastResultDiceType ? DICE_CONFIGS[lastResultDiceType].sides : 20;
+  const isCritMax = lastResult !== null && lastResult === lastSides;
+  const isCritMin = lastResult !== null && lastResult === 1;
+  const shakeColor = shakeLevel<0.15?"#ff4444":shakeLevel<0.5?"#ff8844":shakeLevel<0.8?"#ffcc00":"#44ff88";
+
+  // ==============================================================
+  // RENDER
+  // ==============================================================
   return (
-    <>
-      {/* Fullscreen canvas — sits above the modal so dice can fly
-          across the whole screen. The wrapper is pointer-events:none
-          so the modal underneath stays clickable; the canvas itself
-          flips pointer-events back on so the dice can be grabbed. */}
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 60,
-          pointerEvents: "none",
-        }}
-      >
-        <div
-          ref={containerRef}
-          data-dice-canvas
-          style={{ width: "100%", height: "100%" }}
-        />
-      </div>
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="relative max-w-lg w-full">
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute -top-4 -right-4 w-10 h-10 rounded-full bg-[#FF5722] hover:bg-[#FF6B3D] transition-colors flex items-center justify-center text-white z-10 shadow-lg"
-        >
-          <X className="w-5 h-5" />
-        </button>
+    <div style={S.page}>
+      <style>{globalCSS}</style>
 
-        {/* Frame */}
-        <div className="relative bg-[#1E2430] border border-white/10 rounded-3xl p-6 shadow-2xl flex flex-col h-[800px] max-h-[90vh] w-[500px]">
-          
-          {/* Header */}
-          <div className="flex items-center justify-between mb-4 shrink-0">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-[#37F2D1] rounded-full animate-pulse" />
-              <h2 className="text-white font-bold tracking-wider">DICE ROLLER</h2>
-            </div>
-            {!allowLazyRolls && (
-              <span className="text-amber-400 font-bold text-[10px] tracking-widest bg-amber-400/10 border border-amber-400/30 px-2 py-1 rounded">
-                STRICT ROLLS
-              </span>
-            )}
+      {/* === Top Bar: Title + Roll History === */}
+      <header style={S.header}>
+        <div style={S.titleBlock}>
+          <div style={S.titleLine}>
+            <span style={S.titleMark}>◆</span>
+            <h1 style={S.title}>DICE FORGE</h1>
+            <span style={S.titleSub}>Choreography v3</span>
           </div>
+          <div style={S.subtitle}>Click & drag in the arena to pick up · shake · release to throw</div>
+        </div>
 
-          <div className="relative flex flex-col flex-1 min-h-0 gap-4 overflow-hidden">
-
-            {/* 3D Dice Display — landing-zone placeholder. The actual
-                canvas is the fullscreen layer above the modal; this
-                dotted circle marks the area where the dice lands. */}
-            <div
-              className="relative flex justify-center items-center overflow-visible shrink-0 bg-black/20 rounded-2xl border border-white/5"
-              style={{ minHeight: "400px" }}
-            >
-              <div
-                className="flex items-center justify-center rounded-full"
-                style={{
-                  width: 220,
-                  height: 220,
-                  border: "2px dashed rgba(255,255,255,0.15)",
-                  color: "rgba(255,255,255,0.35)",
-                  letterSpacing: "0.18em",
-                  fontWeight: 700,
-                  fontSize: 12,
-                }}
-              >
-                LANDING
-              </div>
-              {showParticles && <Particles type={particleType} />}
-              {revealAnim && !isRolling && !isCocked && <RevealOverlay value={revealAnim.value} color={revealAnim.color} />}
-
-              {lastRoll && !isRolling && !isCocked && modifier !== 0 && (
-                <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-6 py-1.5 rounded-full font-bold text-xs bg-[#37F2D1] text-[#1E2430] shadow-lg whitespace-nowrap border border-white/20">
-                  TOTAL: {lastRoll.total}
+        <div style={S.historyWrap}>
+          <div style={S.historyLabel}>RECENT ROLLS</div>
+          <div style={S.historyChips}>
+            {resultHistory.length === 0 && <div style={S.historyEmpty}>—</div>}
+            {resultHistory.slice().reverse().map((r, i) => {
+              const sides = DICE_CONFIGS[r.type]?.sides ?? 20;
+              const isMax = r.value === sides, isMin = r.value === 1;
+              return (
+                <div key={i} style={{
+                  ...S.chip,
+                  background: isMax ? "rgba(255,215,0,0.12)" : isMin ? "rgba(255,68,68,0.12)" : "rgba(255,255,255,0.04)",
+                  borderColor: isMax ? "rgba(255,215,0,0.45)" : isMin ? "rgba(255,68,68,0.4)" : "rgba(255,255,255,0.08)",
+                }}>
+                  <span style={{ ...S.chipType, color: isMax ? "#e8c34a" : isMin ? "#ff7a7a" : "#7d8494" }}>{r.type}</span>
+                  <span style={{ ...S.chipValue, color: isMax ? "#ffd700" : isMin ? "#ff4444" : "#e8e9ed" }}>{r.value}</span>
                 </div>
-              )}
-            </div>
-
-            {/* Rolled Number */}
-            {lastRoll && !isRolling && !isCocked && (
-              <div className="text-center">
-                <span className="text-6xl font-bold text-white">
-                  {lastRoll.roll}
-                </span>
-                {modifier !== 0 && (
-                  <span className="text-3xl text-gray-400 ml-2">
-                    {modifier > 0 ? "+" : ""}
-                    {modifier} = {lastRoll.total}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Instruction / ROLL button */}
-            <div className="text-center flex flex-col items-center gap-2">
-              <button
-                type="button"
-                onClick={!isRolling ? () => handleRoll() : undefined}
-                disabled={isRolling}
-                className={`inline-block px-6 py-2 border-2 rounded-lg font-semibold tracking-wide transition-colors ${
-                  isCocked
-                    ? "border-[#FFD700] text-[#FFD700] hover:bg-[#FFD700]/10"
-                    : "border-[#FF5722] text-[#FF5722] hover:bg-[#FF5722]/10"
-                } ${isRolling ? "opacity-60 cursor-default" : "cursor-pointer"}`}
-              >
-                {isRolling ? "ROLLING..." : isCocked ? "ROLL AGAIN" : "ROLL"}
-              </button>
-              <p className="text-[11px] text-slate-400 italic">
-                {allowLazyRolls
-                  ? "Or grab the dice and shake to roll"
-                  : "Or grab the dice and shake to roll — must shake!"}
-              </p>
-            </div>
-
-            {/* Controls: dice, modifier */}
-            <div className="grid grid-cols-2 gap-4 shrink-0">
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 mb-1 block tracking-wider">DICE TYPE</label>
-                <select
-                  value={selectedDice}
-                  onChange={(e) => setSelectedDice(e.target.value)}
-                  className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm font-semibold focus:border-[#37F2D1] transition-colors outline-none appearance-none cursor-pointer hover:bg-black/40"
-                >
-                  {diceTypes.map((dice) => (
-                    <option key={dice.name} value={dice.name}>
-                      {dice.name.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 mb-1 block tracking-wider">
-                  MODIFIER
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    value={modifier}
-                    onChange={(e) =>
-                      setModifier(parseInt(e.target.value) || 0)
-                    }
-                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2.5 text-center text-white font-semibold focus:border-[#37F2D1] transition-colors outline-none"
-                  />
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-bold">+</span>
-                </div>
-              </div>
-            </div>
-
-            {/* History */}
-            {rollHistory.length > 0 && (
-              <div className="flex flex-col min-h-0 flex-1">
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <h3 className="text-[10px] font-bold text-slate-500 tracking-wider">
-                    RECENT ROLLS
-                  </h3>
-                  <button
-                    onClick={() => setRollHistory([])}
-                    className="text-[10px] text-slate-500 hover:text-[#FF5722] transition-colors"
-                  >
-                    CLEAR
-                  </button>
-                </div>
-                <div className="bg-black/20 rounded-lg p-2 overflow-y-auto custom-scrollbar border border-white/5 flex-1 min-h-[100px]">
-                  <style>{`
-                    .custom-scrollbar::-webkit-scrollbar {
-                      width: 4px;
-                    }
-                    .custom-scrollbar::-webkit-scrollbar-track {
-                      background: rgba(0, 0, 0, 0.2);
-                    }
-                    .custom-scrollbar::-webkit-scrollbar-thumb {
-                      background: #37F2D1;
-                      border-radius: 4px;
-                    }
-                    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                      background: #2dd9bd;
-                    }
-                  `}</style>
-                  <div className="space-y-1">
-                    {rollHistory.map((entry, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between text-sm p-2 rounded hover:bg-white/5 transition-colors"
-                      >
-                        <span className="text-xs text-gray-500 font-mono">
-                          {entry.timestamp}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[#37F2D1] font-bold text-xs bg-[#37F2D1]/10 px-1.5 py-0.5 rounded">
-                            {entry.dice.toUpperCase()}
-                          </span>
-                          <span className={`font-bold ${
-                            entry.result === 20 && entry.dice === "d20" ? "text-[#FFD700]" :
-                            entry.result === 1 && entry.dice === "d20" ? "text-[#DC2626]" :
-                            "text-white"
-                          }`}>
-                            {entry.result}
-                          </span>
-                          {entry.lazy && (
-                            <span className="text-amber-400 font-bold text-[10px] bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded tracking-wider">
-                              LAZY
-                            </span>
-                          )}
-                          {entry.modifier !== 0 && (
-                            <>
-                              <span className="text-gray-500 text-xs">
-                                ({entry.modifier > 0 ? "+" : ""}
-                                {entry.modifier})
-                              </span>
-                              <span className="text-white font-bold text-xs bg-white/10 px-1.5 py-0.5 rounded">
-                                = {entry.total}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+              );
+            })}
           </div>
         </div>
-      </div>
-      {showCockedAnim && <CockedAnimation />}
-      {lameAnim && <LameAnimation rejected={lameAnim.rejected} />}
-    </div>
-    </>
-  );
-});
+      </header>
 
-DiceRoller.displayName = "DiceRoller";
-export default DiceRoller;
+      {/* === Center: Arena === */}
+      <main style={S.arenaWrap}>
+        <div style={S.arenaFrame}>
+          <div
+            ref={mountRef}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+            style={{ ...S.arena, cursor: isHolding ? "grabbing" : isRolling ? "default" : "grab" }}
+          >
+            {/* Idle hint */}
+            {!isRolling && !isHolding && lastResult === null && (
+              <div style={S.idleHint}>
+                <div style={S.idleHintIcon}>◇</div>
+                <div>Click & drag to pick up the {DICE_CONFIGS[diceType].label}</div>
+                <div style={S.idleHintSub}>or use the ROLL button below</div>
+              </div>
+            )}
+
+            {/* Shake meter */}
+            {isHolding && (
+              <div style={S.shakeMeterWrap}>
+                <div style={{ ...S.shakeMeterLabel, color: shakeColor }}>
+                  {shakeLevel<0.15?"Shake it!":shakeLevel<0.5?"Keep going...":shakeLevel<0.8?"Nice shake!":"EPIC SHAKE!"}
+                </div>
+                <div style={S.shakeMeterBar}>
+                  <div style={{ ...S.shakeMeterFill, width: `${shakeLevel*100}%` }} />
+                </div>
+              </div>
+            )}
+
+            {/* In-arena overlay text (lazy roll shame, rejection) */}
+            {overlayText && (
+              <div style={S.shameText}>{overlayText}</div>
+            )}
+
+            {/* Floating result number — anchored to dice screen position */}
+            <div
+              ref={resultOverlayRef}
+              style={{
+                ...S.resultOverlay,
+                opacity: lastResult !== null ? 1 : 0,
+                color: isCritMax ? "#ffd700" : isCritMin ? "#ff3333" : "#ffffff",
+                textShadow: isCritMax
+                  ? "0 0 28px rgba(255,215,0,0.85), 0 0 60px rgba(255,215,0,0.5), 0 4px 12px rgba(0,0,0,0.6)"
+                  : isCritMin
+                  ? "0 0 28px rgba(255,40,40,0.7), 0 4px 12px rgba(0,0,0,0.6)"
+                  : "0 0 18px rgba(255,255,255,0.4), 0 4px 12px rgba(0,0,0,0.7)",
+              }}
+            >
+              <div style={S.resultDiceType}>{lastResultDiceType}</div>
+              <div style={S.resultValue}>{lastResult}</div>
+              {isCritMax && <div style={S.resultBadge}>CRIT</div>}
+              {isCritMin && <div style={{ ...S.resultBadge, color: "#ff5555", borderColor: "rgba(255,68,68,0.5)" }}>FAIL</div>}
+            </div>
+          </div>
+
+          {/* Arena corner accents */}
+          <div style={{ ...S.corner, top: -1, left: -1, borderTop: "2px solid #FF5300", borderLeft: "2px solid #FF5300" }} />
+          <div style={{ ...S.corner, top: -1, right: -1, borderTop: "2px solid #FF5300", borderRight: "2px solid #FF5300" }} />
+          <div style={{ ...S.corner, bottom: -1, left: -1, borderBottom: "2px solid #FF5300", borderLeft: "2px solid #FF5300" }} />
+          <div style={{ ...S.corner, bottom: -1, right: -1, borderBottom: "2px solid #FF5300", borderRight: "2px solid #FF5300" }} />
+        </div>
+      </main>
+
+      {/* === Bottom: Controls === */}
+      <footer style={S.controlsWrap}>
+        {/* Dice type selector */}
+        <div style={S.controlRow}>
+          <div style={S.rowLabel}>DICE</div>
+          <div style={S.diceSelector}>
+            {DICE_ORDER.map(t => {
+              const active = diceType === t;
+              const isLoaded = !!loadedModels[t];
+              return (
+                <button
+                  key={t}
+                  onClick={() => !isRolling && setDiceType(t)}
+                  disabled={isRolling}
+                  style={{
+                    ...S.dicePill,
+                    background: active ? "linear-gradient(135deg, rgba(255,83,0,0.25), rgba(255,83,0,0.08))" : "rgba(255,255,255,0.025)",
+                    borderColor: active ? "#FF5300" : "rgba(255,255,255,0.07)",
+                    color: active ? "#fff" : "#8d92a1",
+                    boxShadow: active ? "0 0 20px rgba(255,83,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)" : "none",
+                    opacity: isRolling ? 0.4 : 1,
+                    position: "relative",
+                  }}
+                  title={isLoaded ? `${t} model loaded` : `${t} model loading…`}
+                >
+                  <span style={{ ...S.diceGlyph, color: active ? "#FF5300" : "#5f6373" }}>◆</span>
+                  <span style={S.diceLabel}>{t}</span>
+                  {!isLoaded && (
+                    <span style={{
+                      position: "absolute", top: 4, right: 6,
+                      width: 6, height: 6, borderRadius: "50%",
+                      background: "#f8a47c", opacity: 0.7,
+                      animation: "pulse 1.4s ease-in-out infinite",
+                    }} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Roll button */}
+        <div style={S.rollButtonWrap}>
+          <button
+            onClick={handleRollClick}
+            disabled={isRolling || isHolding}
+            style={{
+              ...S.rollButton,
+              cursor: (isRolling || isHolding) ? "not-allowed" : "pointer",
+              opacity: (isRolling || isHolding) ? 0.5 : 1,
+              background: (isRolling || isHolding)
+                ? "linear-gradient(135deg, rgba(255,83,0,0.25), rgba(255,120,60,0.15))"
+                : "linear-gradient(135deg, #FF5300 0%, #ff7733 100%)",
+            }}
+          >
+            <span style={S.rollButtonInner}>
+              {isRolling ? "ROLLING..." : `ROLL ${DICE_CONFIGS[diceType].label.toUpperCase()}`}
+            </span>
+          </button>
+          <div style={S.rollHint}>
+            shake harder → bigger bounces · shake light → walk of shame
+          </div>
+        </div>
+
+        {/* Effect equip */}
+        <div style={S.controlRow}>
+          <div style={S.rowLabel}>
+            EFFECT
+            <div style={S.rowSubLabel}>equipped trail</div>
+          </div>
+          <div style={S.effectRow}>
+            {EFFECT_ORDER.map(key => {
+              const e = EFFECTS[key];
+              const active = equippedEffect === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setEquippedEffect(key)}
+                  style={{
+                    ...S.effectCard,
+                    background: active ? `linear-gradient(135deg, ${e.color}26, ${e.color}0a)` : "rgba(255,255,255,0.025)",
+                    borderColor: active ? e.color : "rgba(255,255,255,0.07)",
+                    boxShadow: active ? `0 0 18px ${e.color}40, inset 0 1px 0 rgba(255,255,255,0.05)` : "none",
+                  }}
+                >
+                  <div style={{ ...S.effectIcon, color: active ? e.color : "#6a6f80", textShadow: active ? `0 0 12px ${e.color}80` : "none" }}>
+                    {e.icon}
+                  </div>
+                  <div style={{ ...S.effectLabel, color: active ? "#fff" : "#8d92a1" }}>{e.label}</div>
+                </button>
+              );
+            })}
+            {/* Tavern hint card */}
+            <button style={S.tavernCard} title="More effects coming from the Tavern">
+              <div style={S.tavernIcon}>+</div>
+              <div style={S.tavernLabel}>Tavern</div>
+              <div style={S.tavernSub}>more soon</div>
+            </button>
+          </div>
+        </div>
+
+        {/* Character state + GM rules — secondary row */}
+        <div style={{ ...S.controlRow, gap: 14, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+          <div style={S.rowLabel}>
+            STATE
+            <div style={S.rowSubLabel}>character mod</div>
+          </div>
+          <div style={S.stateRow}>
+            {[
+              { id: "none", label: "Normal" },
+              { id: "rage", label: "Rage", color: "#ff5530" },
+              { id: "deathSave", label: "Death Save", color: "#ff3333" },
+              { id: "inspiration", label: "Inspiration", color: "#ffcc44" },
+              { id: "wildMagic", label: "Wild Magic", color: "#cc66ff" },
+            ].map(s => {
+              const active = modifier === s.id;
+              const accent = s.color || "#FF5300";
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setModifier(s.id)}
+                  style={{
+                    ...S.stateChip,
+                    background: active ? `${accent}22` : "rgba(255,255,255,0.025)",
+                    borderColor: active ? accent : "rgba(255,255,255,0.07)",
+                    color: active ? accent : "#8d92a1",
+                    fontWeight: active ? 700 : 500,
+                  }}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={S.gmTools}>
+            <button
+              onClick={() => setStrictMode(!strictMode)}
+              style={{
+                ...S.strictBtn,
+                background: strictMode ? "rgba(255,68,68,0.12)" : "rgba(255,255,255,0.025)",
+                borderColor: strictMode ? "#ff4444" : "rgba(255,255,255,0.07)",
+                color: strictMode ? "#ff7777" : "#8d92a1",
+              }}
+              title="GM enforcement: lazy rolls get rejected"
+            >
+              <span style={{
+                ...S.checkbox,
+                background: strictMode ? "#ff4444" : "transparent",
+                borderColor: strictMode ? "#ff4444" : "#555",
+              }}>{strictMode ? "✓" : ""}</span>
+              Strict Mode
+            </button>
+            <button
+              onClick={() => setShowEventLog(v => !v)}
+              style={{
+                ...S.strictBtn,
+                background: showEventLog ? "rgba(255,83,0,0.1)" : "rgba(255,255,255,0.025)",
+                borderColor: showEventLog ? "#FF5300" : "rgba(255,255,255,0.07)",
+                color: showEventLog ? "#FF5300" : "#8d92a1",
+              }}
+              title="Show timeline event log (debug)"
+            >
+              {showEventLog ? "Hide" : "Show"} Log
+            </button>
+          </div>
+        </div>
+
+        {/* Optional event log */}
+        {showEventLog && (
+          <div style={S.eventLogWrap}>
+            <div style={S.eventLogLabel}>TIMELINE EVENTS</div>
+            <div style={S.eventLog}>
+              {eventLog.length === 0 && <span style={{ opacity: 0.3 }}>Events appear here as the timeline fires...</span>}
+              {eventLog.map((log, i) => (
+                <div key={i} style={{
+                  color:
+                    log.includes("wallHit") ? "#FF5300" :
+                    log.includes("reveal") ? "#ffd700" :
+                    log.includes("overlay") || log.includes("rejected") ? "#ff8844" :
+                    log.includes("settled") ? "#44ff88" :
+                    log.includes("wallLand") ? "#ff7744" :
+                    log.includes("wallDrop") ? "#ff9955" : "#666"
+                }}>{log}</div>
+              ))}
+            </div>
+          </div>
+        )}
+      </footer>
+    </div>
+  );
+}
+
+// ============================================================
+// STYLES
+// ============================================================
+const FONT_DISPLAY = "'Cream', 'Cinzel', 'Stack Sans Notch', Georgia, serif";
+const FONT_BODY = "'Cream', 'Stack Sans Notch', system-ui, -apple-system, sans-serif";
+
+const S = {
+  page: {
+    minHeight: "100vh",
+    background: "radial-gradient(ellipse at top, #1a1f30 0%, #0a0d18 60%, #050710 100%)",
+    color: "#e8e9ed",
+    fontFamily: FONT_BODY,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    padding: "20px 24px 32px",
+    boxSizing: "border-box",
+    userSelect: "none",
+  },
+
+  // Header
+  header: {
+    width: "100%",
+    maxWidth: 980,
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
+    marginBottom: 18,
+  },
+  titleBlock: { display: "flex", flexDirection: "column", gap: 4 },
+  titleLine: { display: "flex", alignItems: "baseline", gap: 12 },
+  titleMark: { color: "#FF5300", fontSize: 22, lineHeight: 1, transform: "translateY(2px)" },
+  title: {
+    margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: "3px",
+    color: "#f5e6d3", fontFamily: FONT_DISPLAY,
+    textShadow: "0 2px 12px rgba(255,83,0,0.15)",
+  },
+  titleSub: {
+    fontSize: 11, color: "#FF5300", fontWeight: 600, letterSpacing: "2px",
+    textTransform: "uppercase", paddingLeft: 8,
+    borderLeft: "1px solid rgba(255,83,0,0.4)",
+  },
+  subtitle: { fontSize: 12, color: "#6a6f80", letterSpacing: "0.3px", paddingLeft: 34 },
+
+  historyWrap: {
+    background: "rgba(15,20,32,0.7)",
+    border: "1px solid rgba(255,83,0,0.12)",
+    borderRadius: 10,
+    padding: "10px 14px",
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+    backdropFilter: "blur(8px)",
+  },
+  historyLabel: {
+    fontSize: 10, fontWeight: 700, letterSpacing: "2px",
+    color: "#FF5300", whiteSpace: "nowrap", opacity: 0.85,
+  },
+  historyChips: {
+    display: "flex", flexDirection: "row-reverse", justifyContent: "flex-end",
+    gap: 6, flex: 1, overflow: "hidden",
+  },
+  historyEmpty: { color: "#444", fontSize: 12, fontStyle: "italic" },
+  chip: {
+    display: "inline-flex", alignItems: "center", gap: 6,
+    padding: "5px 10px", borderRadius: 6,
+    border: "1px solid", minWidth: 56, justifyContent: "center",
+  },
+  chipType: { fontSize: 9, fontWeight: 600, letterSpacing: "0.5px", textTransform: "lowercase" },
+  chipValue: { fontSize: 14, fontWeight: 800, fontFamily: FONT_DISPLAY },
+
+  // Arena
+  arenaWrap: {
+    display: "flex",
+    justifyContent: "center",
+    width: "100%",
+  },
+  arenaFrame: {
+    position: "relative",
+    width: "min(950px, calc(100vw - 48px))",
+    aspectRatio: "1 / 1",
+    background: "#0d111c",
+    border: "1px solid rgba(255,83,0,0.15)",
+    borderRadius: 6,
+    boxShadow:
+      "0 0 0 1px rgba(255,83,0,0.05), " +
+      "0 20px 60px rgba(0,0,0,0.6), " +
+      "inset 0 0 80px rgba(0,0,0,0.4)",
+    overflow: "hidden",
+  },
+  arena: {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+  },
+  corner: {
+    position: "absolute",
+    width: 14, height: 14,
+    pointerEvents: "none",
+    zIndex: 5,
+  },
+  idleHint: {
+    position: "absolute", top: "50%", left: "50%",
+    transform: "translate(-50%, -50%)",
+    color: "rgba(255,255,255,0.18)",
+    fontSize: 13, textAlign: "center",
+    pointerEvents: "none",
+    fontFamily: FONT_BODY,
+  },
+  idleHintIcon: { fontSize: 32, marginBottom: 8, color: "rgba(255,83,0,0.35)" },
+  idleHintSub: { fontSize: 11, opacity: 0.6, marginTop: 4 },
+
+  shakeMeterWrap: {
+    position: "absolute", bottom: 22, left: "50%",
+    transform: "translateX(-50%)", width: 240,
+    zIndex: 10, pointerEvents: "none",
+  },
+  shakeMeterLabel: {
+    fontSize: 11, textAlign: "center", marginBottom: 5,
+    fontWeight: 700, textTransform: "uppercase", letterSpacing: "2px",
+    textShadow: "0 2px 8px rgba(0,0,0,0.6)",
+  },
+  shakeMeterBar: {
+    height: 6, borderRadius: 3,
+    background: "rgba(0,0,0,0.5)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    overflow: "hidden",
+  },
+  shakeMeterFill: {
+    height: "100%", borderRadius: 3,
+    background: "linear-gradient(90deg, #ff4444, #ffcc00, #44ff88)",
+    transition: "width 0.08s ease",
+    boxShadow: "0 0 10px currentColor",
+  },
+
+  shameText: {
+    position: "absolute", top: "50%", left: "50%",
+    transform: "translate(-50%, -50%)",
+    fontSize: 24, fontWeight: 700,
+    color: "#ff8844", fontStyle: "italic",
+    textShadow: "0 0 20px rgba(255,83,0,0.6), 0 4px 12px rgba(0,0,0,0.7)",
+    zIndex: 11, pointerEvents: "none",
+    animation: "shameFade 0.5s ease-out",
+    fontFamily: FONT_DISPLAY,
+  },
+
+  // Result overlay (anchored to dice 3D position)
+  resultOverlay: {
+    position: "absolute",
+    transform: "translate(-50%, -50%)",
+    pointerEvents: "none",
+    zIndex: 10,
+    transition: "opacity 0.25s ease",
+    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+    fontFamily: FONT_DISPLAY,
+  },
+  resultDiceType: {
+    fontSize: 11, fontWeight: 600,
+    color: "rgba(255,255,255,0.55)",
+    letterSpacing: "2px", textTransform: "lowercase",
+    fontFamily: FONT_BODY,
+    textShadow: "0 2px 6px rgba(0,0,0,0.8)",
+  },
+  resultValue: {
+    fontSize: 88, fontWeight: 900, lineHeight: 0.9,
+    fontFamily: FONT_DISPLAY,
+    animation: "resultPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
+  },
+  resultBadge: {
+    fontSize: 10, fontWeight: 800,
+    color: "#ffd700", letterSpacing: "3px",
+    padding: "3px 10px", borderRadius: 3,
+    background: "rgba(0,0,0,0.5)",
+    border: "1px solid rgba(255,215,0,0.5)",
+    marginTop: 4,
+    fontFamily: FONT_BODY,
+  },
+
+  // Controls
+  controlsWrap: {
+    width: "100%", maxWidth: 980,
+    marginTop: 16,
+    background: "rgba(15,20,32,0.7)",
+    border: "1px solid rgba(255,83,0,0.12)",
+    borderRadius: 10,
+    padding: "16px 18px",
+    display: "flex", flexDirection: "column", gap: 14,
+    backdropFilter: "blur(8px)",
+  },
+  controlRow: {
+    display: "flex", alignItems: "center", gap: 12,
+  },
+  rowLabel: {
+    fontSize: 10, fontWeight: 700, letterSpacing: "2px",
+    color: "#FF5300", width: 70, flexShrink: 0,
+    lineHeight: 1.2,
+  },
+  rowSubLabel: {
+    fontSize: 9, color: "#5f6373", fontWeight: 500,
+    letterSpacing: "0.5px", marginTop: 2, textTransform: "lowercase",
+  },
+
+  // Dice selector
+  diceSelector: { display: "flex", gap: 6, flexWrap: "wrap", flex: 1 },
+  dicePill: {
+    display: "inline-flex", alignItems: "center", gap: 6,
+    padding: "8px 14px", borderRadius: 7,
+    border: "1px solid", cursor: "pointer",
+    fontFamily: FONT_BODY,
+    fontSize: 13, fontWeight: 600,
+    transition: "all 0.18s ease",
+  },
+  diceGlyph: { fontSize: 13, lineHeight: 1, transition: "color 0.18s" },
+  diceLabel: { fontWeight: 700, letterSpacing: "0.3px" },
+
+  // Roll button
+  rollButtonWrap: {
+    display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+    paddingTop: 4, paddingBottom: 4,
+  },
+  rollButton: {
+    width: "100%", maxWidth: 480,
+    padding: 0,
+    border: "none",
+    borderRadius: 10,
+    overflow: "hidden",
+    transition: "all 0.2s ease, transform 0.1s",
+    boxShadow: "0 6px 24px rgba(255,83,0,0.35), inset 0 1px 0 rgba(255,255,255,0.2)",
+  },
+  rollButtonInner: {
+    display: "block",
+    padding: "16px 20px",
+    color: "#fff",
+    fontSize: 18, fontWeight: 900, letterSpacing: "5px",
+    fontFamily: FONT_DISPLAY,
+    textShadow: "0 2px 8px rgba(0,0,0,0.4)",
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 50%)",
+  },
+  rollHint: {
+    fontSize: 11, color: "#6a6f80", letterSpacing: "0.4px",
+    fontStyle: "italic", textAlign: "center",
+  },
+
+  // Effect equip
+  effectRow: { display: "flex", gap: 8, flex: 1, flexWrap: "wrap" },
+  effectCard: {
+    display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+    padding: "10px 12px", borderRadius: 8,
+    border: "1px solid", cursor: "pointer",
+    minWidth: 76,
+    transition: "all 0.18s ease",
+    fontFamily: FONT_BODY,
+  },
+  effectIcon: { fontSize: 22, lineHeight: 1, transition: "all 0.18s" },
+  effectLabel: { fontSize: 11, fontWeight: 600, letterSpacing: "0.5px" },
+  tavernCard: {
+    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+    padding: "10px 12px", borderRadius: 8,
+    border: "1px dashed rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.015)",
+    cursor: "pointer", minWidth: 76,
+    color: "#5f6373", fontFamily: FONT_BODY,
+    transition: "all 0.18s ease",
+  },
+  tavernIcon: { fontSize: 22, lineHeight: 1, color: "#7d6f4a" },
+  tavernLabel: { fontSize: 11, fontWeight: 600, letterSpacing: "0.5px", color: "#a09686" },
+  tavernSub: { fontSize: 9, opacity: 0.6, letterSpacing: "0.5px" },
+
+  // Character state
+  stateRow: { display: "flex", gap: 6, flex: 1, flexWrap: "wrap" },
+  stateChip: {
+    padding: "6px 12px", borderRadius: 6,
+    border: "1px solid", cursor: "pointer",
+    fontSize: 11, letterSpacing: "0.5px",
+    fontFamily: FONT_BODY,
+    transition: "all 0.15s ease",
+  },
+
+  gmTools: { display: "flex", gap: 6, flexShrink: 0 },
+  strictBtn: {
+    display: "inline-flex", alignItems: "center", gap: 6,
+    padding: "6px 12px", borderRadius: 6,
+    border: "1px solid", cursor: "pointer",
+    fontSize: 11, fontWeight: 600, letterSpacing: "0.5px",
+    fontFamily: FONT_BODY, transition: "all 0.15s ease",
+  },
+  checkbox: {
+    width: 12, height: 12, borderRadius: 2,
+    border: "1.5px solid",
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    fontSize: 9, color: "#fff",
+  },
+
+  eventLogWrap: { paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.04)" },
+  eventLogLabel: {
+    fontSize: 10, fontWeight: 700, letterSpacing: "2px",
+    color: "#FF5300", marginBottom: 6,
+  },
+  eventLog: {
+    background: "rgba(0,0,0,0.4)",
+    borderRadius: 6, padding: 10,
+    fontSize: 10, fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    maxHeight: 160, overflowY: "auto", lineHeight: 1.7,
+  },
+};
+
+const globalCSS = `
+  @keyframes resultPop {
+    0%   { transform: scale(0.4); opacity: 0; }
+    60%  { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes shameFade {
+    0%   { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.35; transform: scale(1); }
+    50%      { opacity: 0.85; transform: scale(1.3); }
+  }
+  button:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+  button:active:not(:disabled) {
+    transform: translateY(0);
+  }
+`;
