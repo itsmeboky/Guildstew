@@ -1348,12 +1348,31 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
         dice.remove(diceState.activeContent);
       }
       if (cached) {
-        // Use loaded GLB. Reuse the cached group directly (we only have one die in the scene at a time).
-        dice.add(cached.group);
-        diceState.activeContent = cached.group;
+        // Clone the cached group on every add so the cache stays a pristine
+        // template — sharing the same Group instance across scene mounts
+        // leaves it tied to a disposed scene's parent on reopen.
+        const cloned = cached.group.clone(true);
+
+        // Cloned materials are shared by reference; ensure each has its own
+        // _origEmissive userData so emissive flashes can reset cleanly.
+        cloned.traverse(c => {
+          if (c.isMesh && c.material) {
+            const apply = (m) => {
+              if (!m) return;
+              if (!m.userData._origEmissive) {
+                m.userData._origEmissive = m.emissive ? m.emissive.clone() : new THREE.Color(0x000000);
+                m.userData._origEmissiveIntensity = m.emissiveIntensity ?? 0;
+              }
+            };
+            if (Array.isArray(c.material)) c.material.forEach(apply);
+            else apply(c.material);
+          }
+        });
+
+        dice.add(cloned);
+        diceState.activeContent = cloned;
         diceState.isPlaceholder = false;
-        diceState.materials = collectMaterials(cached.group);
-        // Reset any leftover emissive state
+        diceState.materials = collectMaterials(cloned);
         resetDiceEmissive(diceState.materials);
       } else {
         // Fall back to placeholder polyhedron with the right shape
@@ -1572,6 +1591,9 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     ro.observe(container);
 
     return () => {
+      if (diceState.activeContent && diceState.activeContent.parent) {
+        diceState.activeContent.parent.remove(diceState.activeContent);
+      }
       cancelAnimationFrame(rafId);
       ro.disconnect();
       particles.dispose();
