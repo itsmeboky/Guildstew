@@ -1396,15 +1396,22 @@ export default function CombatDiceWindow({
   // → heal_result → DONE.
   const handleHealRoll = () => {
     setIsRolling(true);
-    setCurrentDice("d20"); // visual only; the real roll is computed below
+    const healDice = (spellEffect?.dice || "1d8").match(/d\d+/)?.[0] || "d8";
+    setCurrentDice(healDice); // visual only; the real roll is computed below
     setPhase("rolling_heal");
     onRoll && onRoll({ type: "rolling_heal" });
     if (selectedAction?.type === 'spell' && Number(selectedAction.level || 0) > 0) {
       onStat('spells_cast');
     }
-    // Roll + resolve immediately — the dice animation is just eye
-    // candy on the shared DiceRoller, there's no target d20 for heals.
-    setTimeout(() => onHealRollComplete(), 600);
+    setDicePopup({
+      open: true,
+      dice: healDice,
+      forcedResult: null,
+      onComplete: () => {
+        setDicePopup(p => ({ ...p, open: false }));
+        onHealRollComplete();
+      },
+    });
   };
 
   const onHealRollComplete = () => {
