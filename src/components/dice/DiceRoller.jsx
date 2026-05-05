@@ -813,6 +813,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     const loadOne = async (type) => {
       try {
         await loadDiceModel(type, {
+          configUploadedModels: config?.uploadedModels,
           activeSkinRef,
           isThemedSkin,
           primaryColor,
@@ -834,6 +835,10 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     Object.keys(DEFAULT_MODEL_URLS).forEach(loadOne);
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    Object.keys(_modelCache).forEach(k => delete _modelCache[k]);
+  }, [config?.uploadedModels]);
 
   // ==============================================================
   // SCENE SETUP — runs once
