@@ -1129,16 +1129,10 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const diceTypeRef = useRef("d20");
   const equippedEffectRef = useRef("default");
   const modifierRef = useRef("none");
-  const firstDiceCountsChange = useRef(true);
 
   const activeSkin = useActiveDiceSkin();
   const activeSkinRef = useRef(activeSkin);
   useEffect(() => { activeSkinRef.current = activeSkin; }, [activeSkin]);
-
-  const primaryColorRef = useRef(primaryColor);
-  const secondaryColorRef = useRef(secondaryColor);
-  useEffect(() => { primaryColorRef.current = primaryColor; }, [primaryColor]);
-  useEffect(() => { secondaryColorRef.current = secondaryColor; }, [secondaryColor]);
 
   const forcedResultRef = useRef(forcedResult);
   useEffect(() => { forcedResultRef.current = forcedResult; }, [forcedResult]);
@@ -1165,25 +1159,6 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       m.userData._origEmissiveIntensity = m.emissiveIntensity ?? 0;
     });
     sc.diceState.materials = newMats;
-
-    // Also re-apply to any active multi-dice clones (their inner cloned mesh, not the outer wrapper)
-    const pool = sceneRef.current?.multiDicePool;
-    if (Array.isArray(pool)) {
-      for (const die of pool) {
-        if (!die.group) continue;
-        const innerClone = die.group.children[0]; // outerGroup → cloned cached.group
-        if (!innerClone) continue;
-        try {
-          const hasCustomTexture = !!(activeSkin?.customTextureUrl);
-          if (hasCustomTexture && typeof applyDiceSkinToMesh === "function") {
-            applyDiceSkinToMesh(innerClone, activeSkin, primaryColor, secondaryColor);
-          }
-          applyVertexGradient(innerClone, primaryColor, secondaryColor, hasCustomTexture);
-        } catch (err) {
-          console.error("Failed to update multi-dice clone gradient:", err);
-        }
-      }
-    }
   }, [activeSkin, isThemedSkin, primaryColor, secondaryColor]);
 
   const [diceType, setDiceType] = useState("d20");
@@ -1210,7 +1185,6 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const [modelLoadError, setModelLoadError] = useState(null);
   const ekgStateRef = useRef({ active: false, cursor: 0 });
   const shakeRef = useRef(0);
-  const firstDiceCountsChange = useRef(true);
 
   // Keep refs in sync with state/props for the animation loop
   useEffect(() => { diceTypeRef.current = diceType; }, [diceType]);
@@ -1221,15 +1195,11 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const incDice = (type) => setDiceCounts(prev => ({ ...prev, [type]: Math.min(10, prev[type] + 1) }));
   const decDice = (type) => setDiceCounts(prev => ({ ...prev, [type]: Math.max(0, prev[type] - 1) }));
   const clearTray = useCallback(() => {
-    // Reset tray counts
     setDiceCounts({ d4: 0, d6: 0, d8: 0, d10: 0, d12: 0, d20: 0 });
-    // Despawn any active multi-dice
     sceneRef.current?.despawnAllMultiDice?.();
-    // Hide single-dice wrapper if it's still showing
     if (sceneRef.current?.dice) {
       sceneRef.current.dice.visible = false;
     }
-    // Clear result overlays
     setLastResult(null);
     setLastResultDiceType(null);
     if (typeof setLastBreakdown === "function") setLastBreakdown(null);
@@ -1254,7 +1224,8 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     }
   }, [diceCounts]);
 
-  // Auto-cleanup: when tray is edited (after first mount), despawn dice + clear result overlays
+  const firstDiceCountsChange = useRef(true);
+
   useEffect(() => {
     console.log("[tray-change-cleanup] fired. first?", firstDiceCountsChange.current, "isRolling?", isRolling, "playing?", playbackRef.current?.playing);
     if (firstDiceCountsChange.current) {
@@ -1513,32 +1484,9 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
           else apply(c.material);
         }
       });
-      // Wrap in an outer Group so animation can set scale=1 without
-      // overriding the cached clone's native size-normalization scale (~66x for d20).
-      // This matches the single-dice architecture (dice wrapper > cached clone > GLB scene > mesh).
-      const outerGroup = new THREE.Group();
-      outerGroup.add(cloned);
-      scene.add(outerGroup);
-      outerGroup.visible = false;
-      // Apply current skin/gradient state to match single-dice behavior
-      try {
-        const skin = activeSkinRef.current;
-        const primary = primaryColorRef.current;
-        const secondary = secondaryColorRef.current;
-        const hasCustomTexture = !!(skin?.customTextureUrl);
-        if (hasCustomTexture && typeof applyDiceSkinToMesh === "function") {
-          applyDiceSkinToMesh(cloned, skin, primary, secondary);
-        }
-        applyVertexGradient(cloned, primary, secondary, hasCustomTexture);
-      } catch (err) {
-        console.error("Failed to apply skin/gradient to multi-dice clone:", err);
-      }
-      console.log("[spawnDie]", type, {
-        outerScale: outerGroup.scale.toArray(),
-        innerScale: cloned.scale.toArray(),
-        materialCount: collectMaterials(cloned).length,
-      });
-      return { group: outerGroup, materials: collectMaterials(cloned) };
+      scene.add(cloned);
+      cloned.visible = false;
+      return { group: cloned, materials: collectMaterials(cloned) };
     };
 
     const despawnAllMultiDice = () => {
@@ -1905,13 +1853,6 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   // ==============================================================
   const executeRoll = useCallback((shakeIntensity = 0.7, releaseVector = null, forceLazy = false) => {
     if (playbackRef.current.playing) return;
-
-    // Clean up any previously-rendered multi-dice from a prior roll, regardless of whether
-    // this roll is single or multi. Also hide the single-dice wrapper if it was left visible.
-    sceneRef.current?.despawnAllMultiDice?.();
-    if (sceneRef.current?.dice) {
-      sceneRef.current.dice.visible = false;
-    }
 
     const totalDice = Object.values(diceCounts).reduce((s, n) => s + n, 0);
     if (totalDice <= 1) {
