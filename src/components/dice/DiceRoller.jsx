@@ -317,6 +317,15 @@ const EFFECTS = {
 };
 const EFFECT_ORDER = ["default", "fire", "sparkle", "notes", "rainbow"];
 
+const EFFECT_CATEGORIES = ["All", "Default", "Class", "Tavern", "Custom"];
+const EFFECT_CATEGORY_MEMBERS = {
+  "All":     ["default", "fire", "sparkle", "notes", "rainbow"],
+  "Default": ["default", "fire", "sparkle", "notes", "rainbow"],
+  "Class":   [],
+  "Tavern":  [],
+  "Custom":  [],
+};
+
 // ============================================================
 // SHAKE DETECTOR
 // ============================================================
@@ -1073,6 +1082,8 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     onClose = null,
     compact = false,
     isOpen = true,
+    modifier = "none",
+    initialDice = null,
   } = props;
   const mountRef = useRef(null);
   const sceneRef = useRef({});
@@ -1117,8 +1128,10 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   }, [activeSkin, isThemedSkin, primaryColor, secondaryColor]);
 
   const [diceType, setDiceType] = useState("d20");
+  const [diceCounts, setDiceCounts] = useState({ d4: 0, d6: 0, d8: 0, d10: 0, d12: 0, d20: 0 });
+  const [multiDiceHint, setMultiDiceHint] = useState(false);
   const [equippedEffect, setEquippedEffect] = useState("default");
-  const [modifier, setModifier] = useState("none");
+  const [effectCategory, setEffectCategory] = useState("All");
   const [lastResult, setLastResult] = useState(null);
   const [lastResultDiceType, setLastResultDiceType] = useState(null);
   const [overlayText, setOverlayText] = useState(null);
@@ -1136,10 +1149,21 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const ekgStateRef = useRef({ active: false, cursor: 0 });
   const shakeRef = useRef(0);
 
-  // Keep refs in sync with state for the animation loop
+  // Keep refs in sync with state/props for the animation loop
   useEffect(() => { diceTypeRef.current = diceType; }, [diceType]);
   useEffect(() => { equippedEffectRef.current = equippedEffect; }, [equippedEffect]);
   useEffect(() => { modifierRef.current = modifier; }, [modifier]);
+
+  // Dice tray helpers
+  const incDice = (type) => setDiceCounts(prev => ({ ...prev, [type]: Math.min(10, prev[type] + 1) }));
+  const decDice = (type) => setDiceCounts(prev => ({ ...prev, [type]: Math.max(0, prev[type] - 1) }));
+  const totalDice = Object.values(diceCounts).reduce((s, n) => s + n, 0);
+
+  // Initialize tray from initialDice prop on mount
+  useEffect(() => {
+    if (initialDice) setDiceCounts(prev => ({ ...prev, [initialDice]: 1 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Preload all GLB dice models in parallel; swap in active type as soon as it loads
   useEffect(() => {
@@ -1663,7 +1687,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     }
 
     // Character state modifier
-    switch (modifierRef.current) {
+    switch (modifier) {
       case "rage": timeline = applyRage(timeline); break;
       case "deathSave": timeline = applyDeathSave(timeline); break;
       case "inspiration": timeline = applyInspiration(timeline); break;
@@ -1683,13 +1707,34 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     }
     timelineRef.current = timeline;
     playbackRef.current = { startTime: performance.now(), eventIndex: 0, playing: true };
-  }, [strictMode, config]);
+  }, [strictMode, config, modifier]);
 
   useImperativeHandle(ref, () => ({
     roll: () => executeRoll(0.7, null, false),
   }), [executeRoll]);
 
-  const handleRollClick = useCallback(() => executeRoll(0.7, null, false), [executeRoll]);
+  const handleRollClick = useCallback(() => {
+    if (totalDice === 0) return;
+    if (totalDice === 1) {
+      const type = Object.keys(diceCounts).find(k => diceCounts[k] > 0);
+      if (type) {
+        diceTypeRef.current = type;
+        setDiceType(type);
+        if (sceneRef.current.swapDiceModel) sceneRef.current.swapDiceModel(type);
+        executeRoll(0.7, null, false);
+      }
+    } else {
+      const type = Object.keys(diceCounts).find(k => diceCounts[k] > 0);
+      if (type) {
+        diceTypeRef.current = type;
+        setDiceType(type);
+        if (sceneRef.current.swapDiceModel) sceneRef.current.swapDiceModel(type);
+        executeRoll(0.7, null, false);
+      }
+      setMultiDiceHint(true);
+      setTimeout(() => setMultiDiceHint(false), 4000);
+    }
+  }, [totalDice, diceCounts, executeRoll]);
 
   // Mouse interactions
   const handlePointerDown = useCallback((e) => {
@@ -1894,43 +1939,150 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
 
       {/* === Bottom: Controls === */}
       <footer style={S.controlsWrap}>
-        {/* Dice type selector */}
+        {/* Roll Tray */}
         {!compact && (
-          <div style={S.controlRow}>
-            <div style={S.rowLabel}>DICE</div>
-            <div style={S.diceSelector}>
-              {DICE_ORDER.map(t => {
-                const active = diceType === t;
-                const isLoaded = !!loadedModels[t];
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "16px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 11, letterSpacing: "0.2em", fontWeight: 700, color: "#8d92a1" }}>ROLL TRAY</div>
+              <div style={{ fontSize: 12, color: totalDice > 0 ? "#fff" : "#5d6573", fontWeight: 600 }}>
+                Total: {totalDice} {totalDice === 1 ? "die" : "dice"}
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
+              {DICE_ORDER.map(type => {
+                const count = diceCounts[type];
+                const active = count > 0;
                 return (
-                  <button
-                    key={t}
-                    onClick={() => !isRolling && setDiceType(t)}
-                    disabled={isRolling}
-                    style={{
-                      ...S.dicePill,
-                      background: active ? "linear-gradient(135deg, rgba(255,83,0,0.25), rgba(255,83,0,0.08))" : "rgba(255,255,255,0.025)",
-                      borderColor: active ? "#FF5300" : "rgba(255,255,255,0.07)",
-                      color: active ? "#fff" : "#8d92a1",
-                      boxShadow: active ? "0 0 20px rgba(255,83,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)" : "none",
-                      opacity: isRolling ? 0.4 : 1,
-                      position: "relative",
-                    }}
-                    title={isLoaded ? `${t} model loaded` : `${t} model loading…`}
-                  >
-                    <span style={{ ...S.diceGlyph, color: active ? "#FF5300" : "#5f6373" }}>◆</span>
-                    <span style={S.diceLabel}>{t}</span>
-                    {!isLoaded && (
-                      <span style={{
-                        position: "absolute", top: 4, right: 6,
-                        width: 6, height: 6, borderRadius: "50%",
-                        background: "#f8a47c", opacity: 0.7,
-                        animation: "pulse 1.4s ease-in-out infinite",
-                      }} />
-                    )}
-                  </button>
+                  <div key={type} style={{
+                    padding: "10px 8px", borderRadius: 12,
+                    background: active
+                      ? "linear-gradient(135deg, rgba(255,83,0,0.18), rgba(255,83,0,0.04))"
+                      : "rgba(255,255,255,0.025)",
+                    border: active ? "1px solid #FF5300" : "1px solid rgba(255,255,255,0.07)",
+                    boxShadow: active ? "0 0 14px rgba(255,83,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05)" : "none",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+                    transition: "all 180ms",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <span style={{ color: active ? "#FF5300" : "#5f6373", fontSize: 12 }}>◆</span>
+                      <span style={{ color: active ? "#fff" : "#8d92a1", fontWeight: 700, fontSize: 13 }}>{type}</span>
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: active ? "#fff" : "#5d6573", lineHeight: 1 }}>{count}</div>
+                    <div style={{ display: "flex", gap: 4, width: "100%" }}>
+                      <button
+                        onClick={() => decDice(type)}
+                        disabled={count === 0}
+                        style={{
+                          flex: 1, padding: "4px 0", fontSize: 14, fontWeight: 700,
+                          borderRadius: 6, border: "1px solid rgba(255,255,255,0.1)",
+                          background: count > 0 ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.015)",
+                          color: count > 0 ? "#fff" : "#3d4350",
+                          cursor: count > 0 ? "pointer" : "not-allowed",
+                        }}
+                      >−</button>
+                      <button
+                        onClick={() => incDice(type)}
+                        disabled={count === 10}
+                        style={{
+                          flex: 1, padding: "4px 0", fontSize: 14, fontWeight: 700,
+                          borderRadius: 6, border: "1px solid rgba(255,83,0,0.4)",
+                          background: count < 10 ? "rgba(255,83,0,0.18)" : "rgba(255,83,0,0.05)",
+                          color: count < 10 ? "#FF5300" : "#5d3520",
+                          cursor: count < 10 ? "pointer" : "not-allowed",
+                        }}
+                      >+</button>
+                    </div>
+                  </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* Effect carousel */}
+        {!compact && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "14px 0" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <div style={{ fontSize: 11, letterSpacing: "0.2em", fontWeight: 700, color: "#8d92a1" }}>EFFECT</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {EFFECT_CATEGORIES.map(cat => {
+                  const active = effectCategory === cat;
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setEffectCategory(cat)}
+                      style={{
+                        padding: "5px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.05em",
+                        borderRadius: 14,
+                        background: active ? "rgba(255,83,0,0.18)" : "rgba(255,255,255,0.025)",
+                        border: active ? "1px solid #FF5300" : "1px solid rgba(255,255,255,0.07)",
+                        color: active ? "#fff" : "#8d92a1",
+                        cursor: "pointer",
+                        transition: "all 150ms",
+                      }}
+                    >{cat}</button>
+                  );
+                })}
+              </div>
+            </div>
+            <div style={{
+              display: "flex", gap: 12,
+              overflowX: "auto", overflowY: "hidden",
+              scrollSnapType: "x mandatory",
+              paddingBottom: 8,
+              scrollbarWidth: "thin",
+            }}>
+              {(() => {
+                const visible = EFFECT_CATEGORY_MEMBERS[effectCategory] || [];
+                if (visible.length === 0) {
+                  return (
+                    <div style={{
+                      flex: "1 0 auto", minHeight: 80, display: "flex", alignItems: "center", justifyContent: "center",
+                      color: "#5d6573", fontStyle: "italic", fontSize: 13,
+                    }}>
+                      No effects in this category yet — coming soon.
+                    </div>
+                  );
+                }
+                return visible.map(key => {
+                  const e = EFFECTS[key];
+                  const active = equippedEffect === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setEquippedEffect(key)}
+                      style={{
+                        flex: "0 0 auto", scrollSnapAlign: "start",
+                        minWidth: 96, padding: "12px 14px",
+                        borderRadius: 12,
+                        background: active ? `linear-gradient(135deg, ${e.color}26, ${e.color}0a)` : "rgba(255,255,255,0.025)",
+                        border: active ? `1px solid ${e.color}` : "1px solid rgba(255,255,255,0.07)",
+                        boxShadow: active ? `0 0 16px ${e.color}40, inset 0 1px 0 rgba(255,255,255,0.05)` : "none",
+                        color: active ? "#fff" : "#8d92a1",
+                        cursor: "pointer", transition: "all 180ms",
+                        display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+                      }}
+                    >
+                      <div style={{ fontSize: 22, color: active ? e.color : "#6a6f80", textShadow: active ? `0 0 12px ${e.color}80` : "none" }}>{e.icon}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600 }}>{e.label}</div>
+                    </button>
+                  );
+                });
+              })()}
+              {/* Tavern card always at the end */}
+              <button style={{
+                flex: "0 0 auto", scrollSnapAlign: "start",
+                minWidth: 96, padding: "12px 14px",
+                borderRadius: 12,
+                background: "rgba(255,255,255,0.025)",
+                border: "1px dashed rgba(255,255,255,0.15)",
+                color: "#8d92a1", cursor: "pointer",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+              }} title="More effects coming from the Tavern">
+                <div style={{ fontSize: 20, color: "#5f6373" }}>+</div>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>Tavern</div>
+                <div style={{ fontSize: 10, opacity: 0.6 }}>more soon</div>
+              </button>
             </div>
           </div>
         )}
@@ -1939,134 +2091,69 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
         <div style={S.rollButtonWrap}>
           <button
             onClick={handleRollClick}
-            disabled={isRolling || isHolding}
+            disabled={isRolling || isHolding || totalDice === 0}
             style={{
               ...S.rollButton,
-              cursor: (isRolling || isHolding) ? "not-allowed" : "pointer",
-              opacity: (isRolling || isHolding) ? 0.5 : 1,
-              background: (isRolling || isHolding)
+              cursor: (isRolling || isHolding || totalDice === 0) ? "not-allowed" : "pointer",
+              opacity: (isRolling || isHolding || totalDice === 0) ? 0.5 : 1,
+              background: (isRolling || isHolding || totalDice === 0)
                 ? "linear-gradient(135deg, rgba(255,83,0,0.25), rgba(255,120,60,0.15))"
                 : "linear-gradient(135deg, #FF5300 0%, #ff7733 100%)",
             }}
           >
             <span style={S.rollButtonInner}>
-              {isRolling ? "ROLLING..." : `ROLL ${DICE_CONFIGS[diceType].label.toUpperCase()}`}
+              {isRolling ? "ROLLING..." : "ROLL ALL"}
             </span>
           </button>
+          {multiDiceHint && (
+            <div style={{
+              fontSize: 11, color: "#f8a47c", fontStyle: "italic", textAlign: "center",
+              marginTop: 6, opacity: 0.85,
+            }}>
+              Multi-dice rolling lands in the next update — rolling the first die for now.
+            </div>
+          )}
           <div style={S.rollHint}>
             shake harder → bigger bounces · shake light → walk of shame
           </div>
         </div>
 
-        {/* Effect equip */}
+        {/* GM tools row */}
         {!compact && (
-        <div style={S.controlRow}>
-          <div style={S.rowLabel}>
-            EFFECT
-            <div style={S.rowSubLabel}>equipped trail</div>
+          <div style={{ ...S.controlRow, gap: 14, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+            <div style={S.gmTools}>
+              <button
+                onClick={() => setStrictMode(!strictMode)}
+                style={{
+                  ...S.strictBtn,
+                  background: strictMode ? "rgba(255,68,68,0.12)" : "rgba(255,255,255,0.025)",
+                  borderColor: strictMode ? "#ff4444" : "rgba(255,255,255,0.07)",
+                  color: strictMode ? "#ff7777" : "#8d92a1",
+                }}
+                title="GM enforcement: lazy rolls get rejected"
+              >
+                <span style={{
+                  ...S.checkbox,
+                  background: strictMode ? "#ff4444" : "transparent",
+                  borderColor: strictMode ? "#ff4444" : "#555",
+                }}>{strictMode ? "✓" : ""}</span>
+                Strict Mode
+              </button>
+              <button
+                onClick={() => setShowEventLog(v => !v)}
+                style={{
+                  ...S.strictBtn,
+                  background: showEventLog ? "rgba(255,83,0,0.1)" : "rgba(255,255,255,0.025)",
+                  borderColor: showEventLog ? "#FF5300" : "rgba(255,255,255,0.07)",
+                  color: showEventLog ? "#FF5300" : "#8d92a1",
+                }}
+                title="Show timeline event log (debug)"
+              >
+                {showEventLog ? "Hide" : "Show"} Log
+              </button>
+            </div>
           </div>
-          <div style={S.effectRow}>
-            {EFFECT_ORDER.map(key => {
-              const e = EFFECTS[key];
-              const active = equippedEffect === key;
-              return (
-                <button
-                  key={key}
-                  onClick={() => setEquippedEffect(key)}
-                  style={{
-                    ...S.effectCard,
-                    background: active ? `linear-gradient(135deg, ${e.color}26, ${e.color}0a)` : "rgba(255,255,255,0.025)",
-                    borderColor: active ? e.color : "rgba(255,255,255,0.07)",
-                    boxShadow: active ? `0 0 18px ${e.color}40, inset 0 1px 0 rgba(255,255,255,0.05)` : "none",
-                  }}
-                >
-                  <div style={{ ...S.effectIcon, color: active ? e.color : "#6a6f80", textShadow: active ? `0 0 12px ${e.color}80` : "none" }}>
-                    {e.icon}
-                  </div>
-                  <div style={{ ...S.effectLabel, color: active ? "#fff" : "#8d92a1" }}>{e.label}</div>
-                </button>
-              );
-            })}
-            {/* Tavern hint card */}
-            <button style={S.tavernCard} title="More effects coming from the Tavern">
-              <div style={S.tavernIcon}>+</div>
-              <div style={S.tavernLabel}>Tavern</div>
-              <div style={S.tavernSub}>more soon</div>
-            </button>
-          </div>
-        </div>
         )}
-
-        {/* Character state + GM rules — secondary row */}
-        <div style={{ ...S.controlRow, gap: 14, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
-          <div style={S.rowLabel}>
-            STATE
-            <div style={S.rowSubLabel}>character mod</div>
-          </div>
-          {!compact && (
-          <div style={S.stateRow}>
-            {[
-              { id: "none", label: "Normal" },
-              { id: "rage", label: "Rage", color: "#ff5530" },
-              { id: "deathSave", label: "Death Save", color: "#ff3333" },
-              { id: "inspiration", label: "Inspiration", color: "#ffcc44" },
-              { id: "wildMagic", label: "Wild Magic", color: "#cc66ff" },
-            ].map(s => {
-              const active = modifier === s.id;
-              const accent = s.color || "#FF5300";
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => setModifier(s.id)}
-                  style={{
-                    ...S.stateChip,
-                    background: active ? `${accent}22` : "rgba(255,255,255,0.025)",
-                    borderColor: active ? accent : "rgba(255,255,255,0.07)",
-                    color: active ? accent : "#8d92a1",
-                    fontWeight: active ? 700 : 500,
-                  }}
-                >
-                  {s.label}
-                </button>
-              );
-            })}
-          </div>
-          )}
-
-          {!compact && (
-          <div style={S.gmTools}>
-            <button
-              onClick={() => setStrictMode(!strictMode)}
-              style={{
-                ...S.strictBtn,
-                background: strictMode ? "rgba(255,68,68,0.12)" : "rgba(255,255,255,0.025)",
-                borderColor: strictMode ? "#ff4444" : "rgba(255,255,255,0.07)",
-                color: strictMode ? "#ff7777" : "#8d92a1",
-              }}
-              title="GM enforcement: lazy rolls get rejected"
-            >
-              <span style={{
-                ...S.checkbox,
-                background: strictMode ? "#ff4444" : "transparent",
-                borderColor: strictMode ? "#ff4444" : "#555",
-              }}>{strictMode ? "✓" : ""}</span>
-              Strict Mode
-            </button>
-            <button
-              onClick={() => setShowEventLog(v => !v)}
-              style={{
-                ...S.strictBtn,
-                background: showEventLog ? "rgba(255,83,0,0.1)" : "rgba(255,255,255,0.025)",
-                borderColor: showEventLog ? "#FF5300" : "rgba(255,255,255,0.07)",
-                color: showEventLog ? "#FF5300" : "#8d92a1",
-              }}
-              title="Show timeline event log (debug)"
-            >
-              {showEventLog ? "Hide" : "Show"} Log
-            </button>
-          </div>
-          )}
-        </div>
 
         {/* Optional event log */}
         {!compact && showEventLog && (
