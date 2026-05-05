@@ -1134,6 +1134,11 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const activeSkinRef = useRef(activeSkin);
   useEffect(() => { activeSkinRef.current = activeSkin; }, [activeSkin]);
 
+  const primaryColorRef = useRef(primaryColor);
+  const secondaryColorRef = useRef(secondaryColor);
+  useEffect(() => { primaryColorRef.current = primaryColor; }, [primaryColor]);
+  useEffect(() => { secondaryColorRef.current = secondaryColor; }, [secondaryColor]);
+
   const forcedResultRef = useRef(forcedResult);
   useEffect(() => { forcedResultRef.current = forcedResult; }, [forcedResult]);
 
@@ -1159,6 +1164,26 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       m.userData._origEmissiveIntensity = m.emissiveIntensity ?? 0;
     });
     sc.diceState.materials = newMats;
+
+    const pool = sceneRef.current?.multiDicePool;
+    if (Array.isArray(pool)) {
+      for (const die of pool) {
+        if (!die.group) continue;
+        const innerClone = die.group.children[0];
+        if (!innerClone) continue;
+        try {
+          const hasCustomTexture = !!(activeSkin?.customTextureUrl);
+          if (hasCustomTexture && typeof applyDiceSkinToMesh === "function") {
+            applyDiceSkinToMesh(innerClone, activeSkin, primaryColor, secondaryColor);
+          }
+          if (typeof applyVertexGradient === "function") {
+            applyVertexGradient(innerClone, primaryColor, secondaryColor, hasCustomTexture);
+          }
+        } catch (err) {
+          console.error("Failed to update multi-dice clone gradient:", err);
+        }
+      }
+    }
   }, [activeSkin, isThemedSkin, primaryColor, secondaryColor]);
 
   const [diceType, setDiceType] = useState("d20");
@@ -1484,9 +1509,25 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
           else apply(c.material);
         }
       });
-      scene.add(cloned);
-      cloned.visible = false;
-      return { group: cloned, materials: collectMaterials(cloned) };
+      const outerGroup = new THREE.Group();
+      outerGroup.add(cloned);
+      scene.add(outerGroup);
+      outerGroup.visible = false;
+      try {
+        const skin = activeSkinRef.current;
+        const primary = primaryColorRef.current;
+        const secondary = secondaryColorRef.current;
+        const hasCustomTexture = !!(skin?.customTextureUrl);
+        if (hasCustomTexture && typeof applyDiceSkinToMesh === "function") {
+          applyDiceSkinToMesh(cloned, skin, primary, secondary);
+        }
+        if (typeof applyVertexGradient === "function") {
+          applyVertexGradient(cloned, primary, secondary, hasCustomTexture);
+        }
+      } catch (err) {
+        console.error("Failed to apply skin/gradient to multi-dice clone:", err);
+      }
+      return { group: outerGroup, materials: collectMaterials(cloned) };
     };
 
     const despawnAllMultiDice = () => {
