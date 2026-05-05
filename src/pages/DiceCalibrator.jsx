@@ -355,25 +355,29 @@ export default function DiceCalibrator() {
       // Replace the current dice with the loaded model
       if (sceneRef.current && diceRef.current) {
         sceneRef.current.remove(diceRef.current);
-        
-        const model = gltf.scene.clone();
-        model.position.set(0, 0, 0);
-        model.rotation.set(0, 0, 0);
-        
+
+        const root = gltf.scene.clone();
+        root.position.set(0, 0, 0);
+        root.rotation.set(0, 0, 0);
+
         // Scale to fit
-        const box = new THREE.Box3().setFromObject(model);
+        const box = new THREE.Box3().setFromObject(root);
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
         const scale = 2 / maxDim;
-        model.scale.setScalar(scale);
-        
-        // Center the model
-        box.setFromObject(model);
+        root.scale.setScalar(scale);
+
+        // Shift root so its geometric center coincides with the root's local origin
+        box.setFromObject(root);
         const center = box.getCenter(new THREE.Vector3());
-        model.position.sub(center);
-        
-        sceneRef.current.add(model);
-        diceRef.current = model;
+        root.position.sub(center);
+
+        // Wrap so user rotation pivots around the geometric center, not the GLB's native origin
+        const wrapper = new THREE.Group();
+        wrapper.add(root);
+
+        sceneRef.current.add(wrapper);
+        diceRef.current = wrapper;
         updateRotationDisplay();
       }
     } catch (error) {
@@ -679,35 +683,35 @@ export default function DiceCalibrator() {
     
     // Check if we have a custom model for this dice type
     if (customModels[diceType]) {
-      const model = customModels[diceType].scene.clone();
-      
+      const root = customModels[diceType].scene.clone();
+
       // Apply saved transforms if any, or reset
       const transform = modelTransforms[diceType] || { x: 0, y: 0 };
       setPositionX(transform.x);
       setPositionY(transform.y);
-      
-      model.position.set(transform.x, transform.y, 0);
-      model.rotation.set(0, 0, 0);
-      
-      const box = new THREE.Box3().setFromObject(model);
+
+      root.position.set(0, 0, 0);
+      root.rotation.set(0, 0, 0);
+
+      const box = new THREE.Box3().setFromObject(root);
       const size = box.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
       const scale = 2 / maxDim;
-      model.scale.setScalar(scale);
-      
-      // Only auto-center if no manual transform exists (initial load)
-      // Actually, we should always auto-center geometry relative to 0,0,0 
-      // and then apply the manual offset.
-      box.setFromObject(model);
+      root.scale.setScalar(scale);
+
+      // Shift root so its geometric center coincides with root's local origin
+      box.setFromObject(root);
       const center = box.getCenter(new THREE.Vector3());
-      model.position.sub(center); // Center geometry
-      
-      // Re-apply manual offset
-      model.position.x += transform.x;
-      model.position.y += transform.y;
-      
-      sceneRef.current.add(model);
-      diceRef.current = model;
+      root.position.sub(center);
+
+      // Wrap so user rotation pivots around the geometric center, not the GLB's native origin.
+      // The wrapper carries the manual pan offset; the root holds the centering shift.
+      const wrapper = new THREE.Group();
+      wrapper.add(root);
+      wrapper.position.set(transform.x, transform.y, 0);
+
+      sceneRef.current.add(wrapper);
+      diceRef.current = wrapper;
     } else {
       setPositionX(0);
       setPositionY(0);
