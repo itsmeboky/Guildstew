@@ -1,694 +1,230 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
-import { DEFAULT_MODEL_URLS } from "@/config/diceAssets";
+import { DEFAULT_MODEL_URLS, DEFAULT_TEXTURE_URL, DICE_TYPES } from "@/config/diceAssets";
 
-const DICE_CONFIG = {
-  d4: { sides: 4, scale: 1.3 },
-  d6: { sides: 6, scale: 1.5 },
-  d8: { sides: 8, scale: 1.3 },
-  d10: { sides: 10, scale: 1.2 },
-  d12: { sides: 12, scale: 1.2 },
-  d20: { sides: 20, scale: 1.3 },
-};
+const DICE_SIDES = { d4: 4, d6: 6, d8: 8, d10: 10, d12: 12, d20: 20 };
+const TOTAL_FACES = Object.values(DICE_SIDES).reduce((a, b) => a + b, 0); // 60
+
+const ORANGE = "#FF5300";
+const NAVY_DEEP = "#0a0d1a";
+const NAVY = "#1B2535";
+const GREEN = "#4ade80";
+const TEXT_MUTED = "#8d92a1";
+
+const facesForType = (type) => DICE_SIDES[type] || 6;
+
+function formatLastPublished(ts) {
+  if (!ts) return "Never published";
+  const diff = Date.now() - ts;
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return `Last published: ${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `Last published: ${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `Last published: ${hr}h ago`;
+  const days = Math.floor(hr / 24);
+  return `Last published: ${days} day${days === 1 ? "" : "s"} ago`;
+}
 
 export default function DiceCalibrator() {
   const mountRef = useRef(null);
-  const diceRef = useRef(null);
+  const wrapperRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
+  const rendererRef = useRef(null);
   const isDraggingRef = useRef(false);
   const previousMouseRef = useRef({ x: 0, y: 0 });
-  const [diceType, setDiceType] = useState("d6");
-  const [face, setFace] = useState(1);
-  const [rotationDisplay, setRotationDisplay] = useState({ x: 0, y: 0, z: 0 });
-  const [positionY, setPositionY] = useState(0);
-  const [positionX, setPositionX] = useState(0);
-  const [modelTransforms, setModelTransforms] = useState({}); // { d6: { x: 0, y: 0 }, ... }
-  const [savedFaces, setSavedFaces] = useState({});
-  const [customModels, setCustomModels] = useState({});
-  const [customModelFiles, setCustomModelFiles] = useState({});
+  const loadedModelsRef = useRef({});
+  const defaultTextureRef = useRef(null);
+
+  const [diceType, setDiceType] = useState("d20");
+  const [savedFaces, setSavedFaces] = useState({}); // { "d20_3": {x,y,z} }
+  const [currentFace, setCurrentFace] = useState(1);
   const [isLoadingModel, setIsLoadingModel] = useState(false);
-  const [isSavingToApp, setIsSavingToApp] = useState(false);
   const [campaigns, setCampaigns] = useState([]);
-  const [selectedCampaignId, setSelectedCampaignId] = useState("");
-  const [profileColors, setProfileColors] = useState({ primary: "#FF5722", secondary: "#8B5CF6" });
+  const [lastPublished, setLastPublished] = useState(null);
+  const [isPublishing, setIsPublishing] = useState(false);
 
-  // Fetch user profile colors
+  // Hydrate from localStorage
   useEffect(() => {
-    const fetchColors = async () => {
-      const user = await base44.auth.me();
-      if (user) {
-        const profiles = await base44.entities.UserProfile.filter({ user_id: user.id });
-        if (profiles.length > 0) {
-          setProfileColors({
-            primary: profiles[0].profile_color_1 || "#FF5722",
-            secondary: profiles[0].profile_color_2 || "#8B5CF6"
+    const raw = localStorage.getItem("diceConfig");
+    if (raw) {
+      try {
+        const cfg = JSON.parse(raw);
+        if (cfg.faceRotations) {
+          const flat = {};
+          Object.entries(cfg.faceRotations).forEach(([type, rotations]) => {
+            Object.entries(rotations).forEach(([n, r]) => {
+              flat[`${type}_${n}`] = r;
+            });
           });
+          setSavedFaces(flat);
         }
-      }
-    };
-    fetchColors();
-  }, []);
-
-  // Fetch campaigns for saving config
-  useEffect(() => {
-    base44.entities.Campaign.list().then(campaigns => {
-      setCampaigns(campaigns);
-      if (campaigns.length > 0) setSelectedCampaignId(campaigns[0].id);
-    });
-  }, []);
-
-  // Load default model if no custom model exists for type
-  useEffect(() => {
-    if (!customModels[diceType] && DEFAULT_MODEL_URLS[diceType]) {
-      setIsLoadingModel(true);
-      const loader = new GLTFLoader();
-      loader.load(
-        DEFAULT_MODEL_URLS[diceType],
-        (gltf) => {
-          setCustomModels(prev => ({ ...prev, [diceType]: gltf }));
-          setIsLoadingModel(false);
-        },
-        undefined,
-        (err) => {
-          console.error("Failed to load default model", err);
-          setIsLoadingModel(false);
-        }
-      );
-    }
-  }, [diceType, customModels]);
-
-  // Load saved config on mount
-  useEffect(() => {
-    const savedConfig = localStorage.getItem('diceConfig');
-    if (savedConfig) {
-      const config = JSON.parse(savedConfig);
-      if (config.faceRotations) {
-        // Convert saved rotations back to savedFaces format
-        const faces = {};
-        Object.entries(config.faceRotations).forEach(([type, rotations]) => {
-          Object.entries(rotations).forEach(([faceNum, rot]) => {
-            faces[`${type}_${faceNum}`] = rot;
-          });
-        });
-        setSavedFaces(faces);
-      }
+        if (cfg.lastPublished) setLastPublished(cfg.lastPublished);
+      } catch (_) { /* ignore */ }
     }
   }, []);
 
-  // Create stylized iridescent face texture
-  const createFaceTexture = (number, isTriangle = false) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 512;
-    const ctx = canvas.getContext('2d');
-    
-    // Blue/purple iridescent gradient background
-    const gradient = ctx.createLinearGradient(0, 0, 512, 512);
-    gradient.addColorStop(0, '#1a0a2e');
-    gradient.addColorStop(0.2, '#16213e');
-    gradient.addColorStop(0.4, '#0f3460');
-    gradient.addColorStop(0.6, '#1e5f74');
-    gradient.addColorStop(0.8, '#133b5c');
-    gradient.addColorStop(1, '#1a0a2e');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 512, 512);
-    
-    // Add starry/crystalline sparkle effect
-    for (let i = 0; i < 150; i++) {
-      const x = Math.random() * 512;
-      const y = Math.random() * 512;
-      const size = Math.random() * 2 + 1;
-      const alpha = Math.random() * 0.5 + 0.2;
-      const colors = ['rgba(0, 255, 255,', 'rgba(100, 200, 255,', 'rgba(180, 100, 255,', 'rgba(255, 255, 255,'];
-      const color = colors[Math.floor(Math.random() * colors.length)];
-      ctx.fillStyle = `${color}${alpha})`;
-      ctx.beginPath();
-      ctx.arc(x, y, size, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    
-    // Subtle edge glow
-    ctx.strokeStyle = 'rgba(100, 200, 255, 0.3)';
-    ctx.lineWidth = 6;
-    ctx.strokeRect(10, 10, 492, 492);
-    
-    // Rose gold number with metallic effect
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetX = 3;
-    ctx.shadowOffsetY = 3;
-    
-    const numberGradient = ctx.createLinearGradient(150, 100, 350, 400);
-    numberGradient.addColorStop(0, '#e8b4b8');
-    numberGradient.addColorStop(0.3, '#daa06d');
-    numberGradient.addColorStop(0.5, '#cd7f32');
-    numberGradient.addColorStop(0.7, '#b87333');
-    numberGradient.addColorStop(1, '#e8b4b8');
-    
-    ctx.fillStyle = numberGradient;
-    const fontSize = number >= 10 ? 200 : 260;
-    ctx.font = `bold ${fontSize}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    
-    // Adjust position for triangular faces
-    const yPos = isTriangle ? 300 : 270;
-    ctx.fillText(String(number), 256, yPos);
-    
-    ctx.shadowColor = 'transparent';
-    ctx.strokeStyle = 'rgba(255, 220, 200, 0.5)';
-    ctx.lineWidth = 2;
-    ctx.strokeText(String(number), 254, yPos - 2);
-    
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.needsUpdate = true;
-    return texture;
-  };
+  // Pull campaigns once for the publish flow
+  useEffect(() => {
+    base44.entities.Campaign.list().then((list) => setCampaigns(list || []));
+  }, []);
 
-  // Create number sprite for polyhedra faces
-  const createNumberSprite = (number) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 128;
-    canvas.height = 128;
-    const ctx = canvas.getContext('2d');
-    
-    // Transparent background
-    ctx.clearRect(0, 0, 128, 128);
-    
-    // Rose gold number
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-    ctx.shadowBlur = 4;
-    ctx.shadowOffsetX = 2;
-    ctx.shadowOffsetY = 2;
-    
-    const gradient = ctx.createLinearGradient(30, 20, 100, 100);
-    gradient.addColorStop(0, '#e8b4b8');
-    gradient.addColorStop(0.3, '#daa06d');
-    gradient.addColorStop(0.5, '#cd7f32');
-    gradient.addColorStop(0.7, '#b87333');
-    gradient.addColorStop(1, '#e8b4b8');
-    
-    ctx.fillStyle = gradient;
-    const fontSize = number >= 10 ? 60 : 80;
-    ctx.font = `bold ${fontSize}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(String(number), 64, 64);
-    
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.needsUpdate = true;
-    
-    const spriteMaterial = new THREE.SpriteMaterial({ 
-      map: texture, 
-      transparent: true,
-      depthTest: false
+  // Load default texture once
+  useEffect(() => {
+    const loader = new THREE.TextureLoader();
+    loader.load(DEFAULT_TEXTURE_URL, (tex) => {
+      tex.flipY = false;
+      tex.needsUpdate = true;
+      defaultTextureRef.current = tex;
+      reskinCurrent();
     });
-    const sprite = new THREE.Sprite(spriteMaterial);
-    return sprite;
-  };
+  }, []);
 
-  // Get face centers for different geometries
-  const getFaceCenters = (geometry, type) => {
-    const positions = geometry.attributes.position;
-    const centers = [];
-    
-    if (type === 'd4') {
-      // Tetrahedron: 4 faces, 3 vertices each
-      for (let i = 0; i < 4; i++) {
-        const idx = i * 3;
-        const v1 = new THREE.Vector3(positions.getX(idx), positions.getY(idx), positions.getZ(idx));
-        const v2 = new THREE.Vector3(positions.getX(idx + 1), positions.getY(idx + 1), positions.getZ(idx + 1));
-        const v3 = new THREE.Vector3(positions.getX(idx + 2), positions.getY(idx + 2), positions.getZ(idx + 2));
-        const center = new THREE.Vector3().addVectors(v1, v2).add(v3).divideScalar(3);
-        centers.push(center.normalize().multiplyScalar(0.6));
-      }
-    } else if (type === 'd8') {
-      // Octahedron: 8 faces
-      for (let i = 0; i < 8; i++) {
-        const idx = i * 3;
-        const v1 = new THREE.Vector3(positions.getX(idx), positions.getY(idx), positions.getZ(idx));
-        const v2 = new THREE.Vector3(positions.getX(idx + 1), positions.getY(idx + 1), positions.getZ(idx + 1));
-        const v3 = new THREE.Vector3(positions.getX(idx + 2), positions.getY(idx + 2), positions.getZ(idx + 2));
-        const center = new THREE.Vector3().addVectors(v1, v2).add(v3).divideScalar(3);
-        centers.push(center.normalize().multiplyScalar(0.85));
-      }
-    } else if (type === 'd10' || type === 'd12') {
-      // Dodecahedron: 12 faces (pentagon = 3 triangles each = 36 triangles total for d12)
-      // For simplicity, sample unique face normals
-      const normals = [];
-      const faceCount = type === 'd10' ? 10 : 12;
-      for (let i = 0; i < positions.count; i += 3) {
-        const v1 = new THREE.Vector3(positions.getX(i), positions.getY(i), positions.getZ(i));
-        const v2 = new THREE.Vector3(positions.getX(i + 1), positions.getY(i + 1), positions.getZ(i + 1));
-        const v3 = new THREE.Vector3(positions.getX(i + 2), positions.getY(i + 2), positions.getZ(i + 2));
-        const center = new THREE.Vector3().addVectors(v1, v2).add(v3).divideScalar(3);
-        const normal = center.clone().normalize();
-        
-        // Check if this normal is unique (not already added)
-        let isUnique = true;
-        for (const n of normals) {
-          if (n.distanceTo(normal) < 0.1) {
-            isUnique = false;
-            break;
-          }
-        }
-        if (isUnique && normals.length < faceCount) {
-          normals.push(normal);
-          centers.push(normal.clone().multiplyScalar(0.9));
-        }
-      }
-    } else if (type === 'd20') {
-      // Icosahedron: 20 faces
-      for (let i = 0; i < 20; i++) {
-        const idx = i * 3;
-        const v1 = new THREE.Vector3(positions.getX(idx), positions.getY(idx), positions.getZ(idx));
-        const v2 = new THREE.Vector3(positions.getX(idx + 1), positions.getY(idx + 1), positions.getZ(idx + 1));
-        const v3 = new THREE.Vector3(positions.getX(idx + 2), positions.getY(idx + 2), positions.getZ(idx + 2));
-        const center = new THREE.Vector3().addVectors(v1, v2).add(v3).divideScalar(3);
-        centers.push(center.normalize().multiplyScalar(0.95));
-      }
-    }
-    
-    return centers;
-  };
+  const savedCount = useMemo(() => Object.keys(savedFaces).length, [savedFaces]);
+  const savedCountForType = (type) =>
+    Object.keys(savedFaces).filter((k) => k.startsWith(`${type}_`)).length;
 
-  // Base iridescent material for all dice
-  const createBaseMaterial = () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 512;
-    const ctx = canvas.getContext('2d');
-    
-    // Blue/purple iridescent gradient
-    const gradient = ctx.createLinearGradient(0, 0, 512, 512);
-    gradient.addColorStop(0, '#1a0a2e');
-    gradient.addColorStop(0.2, '#16213e');
-    gradient.addColorStop(0.4, '#0f3460');
-    gradient.addColorStop(0.6, '#1e5f74');
-    gradient.addColorStop(0.8, '#133b5c');
-    gradient.addColorStop(1, '#1a0a2e');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 512, 512);
-    
-    // Sparkles
-    for (let i = 0; i < 200; i++) {
-      const x = Math.random() * 512;
-      const y = Math.random() * 512;
-      const size = Math.random() * 3 + 1;
-      const alpha = Math.random() * 0.6 + 0.2;
-      const colors = ['rgba(0, 255, 255,', 'rgba(100, 200, 255,', 'rgba(180, 100, 255,', 'rgba(255, 255, 255,'];
-      const color = colors[Math.floor(Math.random() * colors.length)];
-      ctx.fillStyle = `${color}${alpha})`;
-      ctx.beginPath();
-      ctx.arc(x, y, size, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    
-    const texture = new THREE.CanvasTexture(canvas);
-    return new THREE.MeshStandardMaterial({
-      map: texture,
-      metalness: 0.7,
-      roughness: 0.3,
-      flatShading: true
-    });
-  };
+  const maxFaces = facesForType(diceType);
+  const allDoneForType = savedCountForType(diceType) >= maxFaces;
 
-  // Load custom GLB model
-  const loadCustomModel = async (file, type) => {
-    setIsLoadingModel(true);
-    const loader = new GLTFLoader();
-    const url = URL.createObjectURL(file);
-    
-    try {
-      const gltf = await new Promise((resolve, reject) => {
-        loader.load(url, resolve, undefined, reject);
-      });
-      
-      // Store the model
-      setCustomModels(prev => ({ ...prev, [type]: gltf }));
-      
-      // Replace the current dice with the loaded model
-      if (sceneRef.current && diceRef.current) {
-        sceneRef.current.remove(diceRef.current);
-
-        const root = gltf.scene.clone();
-        root.position.set(0, 0, 0);
-        root.rotation.set(0, 0, 0);
-
-        // Scale to fit
-        const sizeBox = new THREE.Box3().setFromObject(root);
-        const size = sizeBox.getSize(new THREE.Vector3());
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const scale = 2 / maxDim;
-        root.scale.setScalar(scale);
-
-        // Center root around its own center of mass so user rotation
-        // pivots through the geometric center, not the GLB origin.
-        const bbox = new THREE.Box3().setFromObject(root);
-        const center = bbox.getCenter(new THREE.Vector3());
-        root.position.sub(center);
-
-        const wrapper = new THREE.Group();
-        wrapper.add(root);
-
-        sceneRef.current.add(wrapper);
-        diceRef.current = wrapper;
-        updateRotationDisplay();
-      }
-    } catch (error) {
-      console.error("Error loading model:", error);
-      alert("Failed to load model: " + error.message);
-    } finally {
-      setIsLoadingModel(false);
-      URL.revokeObjectURL(url);
-    }
-  };
-
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (file && (file.name.endsWith('.glb') || file.name.endsWith('.gltf'))) {
-      loadCustomModel(file, diceType);
-      // Store the file for later saving
-      setCustomModelFiles(prev => ({ ...prev, [diceType]: file }));
-    } else {
-      alert("Please upload a .glb or .gltf file");
-    }
-    e.target.value = ''; // Reset input
-  };
-
-  // Save models to app (upload and store in localStorage for DiceRoller3D)
-  const saveModelsToApp = async () => {
-    if (Object.keys(customModelFiles).length === 0 && Object.keys(savedFaces).length === 0) {
-      toast.error("No models or face rotations to save");
-      return;
-    }
-
-    setIsSavingToApp(true);
-    try {
-      // Upload each custom model file
-      const uploadedModels = {};
-      for (const [type, file] of Object.entries(customModelFiles)) {
-        const { file_url } = await base44.integrations.Core.UploadFile({ file });
-        uploadedModels[type] = file_url;
-        toast.success(`Uploaded ${type.toUpperCase()} model`);
-      }
-
-      // Generate the faceRotations
-      const allFaceRotations = {};
-      Object.entries(savedFaces).forEach(([key, rotation]) => {
-        const [type, faceNum] = key.split('_');
-        if (!allFaceRotations[type]) allFaceRotations[type] = {};
-        allFaceRotations[type][faceNum] = rotation;
-      });
-
-      // Merge with existing config
-      const existingConfig = JSON.parse(localStorage.getItem('diceConfig') || '{}');
-      const configOutput = {
-        uploadedModels: { ...existingConfig.uploadedModels, ...uploadedModels },
-        faceRotations: { ...existingConfig.faceRotations, ...allFaceRotations },
-        modelTransforms: { ...existingConfig.modelTransforms, ...modelTransforms }
-      };
-
-      // Save to localStorage so DiceRoller3D can use it locally
-      localStorage.setItem('diceConfig', JSON.stringify(configOutput));
-
-      // Save to Campaign if selected
-      if (selectedCampaignId) {
-        await base44.entities.Campaign.update(selectedCampaignId, {
-          dice_config: configOutput
-        });
-        toast.success("Models saved to campaign! Everyone will see them.");
-      } else {
-        toast.success("Dice configuration saved locally!");
-      }
-      
-      console.log("Dice Configuration saved:", configOutput);
-      
-    } catch (error) {
-      console.error("Error saving to app:", error);
-      toast.error("Failed to save: " + error.message);
-    } finally {
-      setIsSavingToApp(false);
-    }
-  };
-
-  const createDiceMesh = (type) => {
-    const config = DICE_CONFIG[type];
-    let geometry;
-    let materials;
-    let mesh;
-    
-    switch (type) {
-      case 'd6': {
-        geometry = new THREE.BoxGeometry(config.scale, config.scale, config.scale);
-        const faceNumbers = [1, 6, 5, 2, 3, 4];
-        materials = faceNumbers.map(num => 
-          new THREE.MeshStandardMaterial({
-            map: createFaceTexture(num),
-            metalness: 0.7,
-            roughness: 0.3
-          })
-        );
-        mesh = new THREE.Mesh(geometry, materials);
-        break;
-      }
-      case 'd4': {
-        geometry = new THREE.TetrahedronGeometry(config.scale);
-        materials = createBaseMaterial();
-        mesh = new THREE.Mesh(geometry, materials);
-        
-        // Add number sprites
-        const centers = getFaceCenters(geometry, type);
-        centers.forEach((center, i) => {
-          const sprite = createNumberSprite(i + 1);
-          sprite.position.copy(center);
-          sprite.scale.set(0.4, 0.4, 1);
-          mesh.add(sprite);
-        });
-        break;
-      }
-      case 'd8': {
-        geometry = new THREE.OctahedronGeometry(config.scale);
-        materials = createBaseMaterial();
-        mesh = new THREE.Mesh(geometry, materials);
-        
-        const centers = getFaceCenters(geometry, type);
-        centers.forEach((center, i) => {
-          const sprite = createNumberSprite(i + 1);
-          sprite.position.copy(center);
-          sprite.scale.set(0.35, 0.35, 1);
-          mesh.add(sprite);
-        });
-        break;
-      }
-      case 'd10': {
-        geometry = new THREE.DodecahedronGeometry(config.scale);
-        materials = createBaseMaterial();
-        mesh = new THREE.Mesh(geometry, materials);
-        
-        const centers = getFaceCenters(geometry, type);
-        // D10 uses 0-9
-        centers.slice(0, 10).forEach((center, i) => {
-          const sprite = createNumberSprite(i);
-          sprite.position.copy(center);
-          sprite.scale.set(0.3, 0.3, 1);
-          mesh.add(sprite);
-        });
-        break;
-      }
-      case 'd12': {
-        geometry = new THREE.DodecahedronGeometry(config.scale);
-        materials = createBaseMaterial();
-        mesh = new THREE.Mesh(geometry, materials);
-        
-        const centers = getFaceCenters(geometry, type);
-        centers.forEach((center, i) => {
-          const sprite = createNumberSprite(i + 1);
-          sprite.position.copy(center);
-          sprite.scale.set(0.3, 0.3, 1);
-          mesh.add(sprite);
-        });
-        break;
-      }
-      case 'd20': {
-        geometry = new THREE.IcosahedronGeometry(config.scale);
-        materials = createBaseMaterial();
-        mesh = new THREE.Mesh(geometry, materials);
-        
-        const centers = getFaceCenters(geometry, type);
-        centers.forEach((center, i) => {
-          const sprite = createNumberSprite(i + 1);
-          sprite.position.copy(center);
-          sprite.scale.set(0.28, 0.28, 1);
-          mesh.add(sprite);
-        });
-        break;
-      }
-      default:
-        geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-        materials = new THREE.MeshStandardMaterial({ color: 0xFF5722 });
-        mesh = new THREE.Mesh(geometry, materials);
-    }
-    
-    // Add edge wireframe for visibility
-    const edges = new THREE.EdgesGeometry(geometry);
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x37F2D1, linewidth: 1, transparent: true, opacity: 0.5 });
-    const wireframe = new THREE.LineSegments(edges, lineMaterial);
-    mesh.add(wireframe);
-    
-    return mesh;
-  };
-
+  // ---- Three.js scene init (one-time)
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
 
-    const width = mount.clientWidth || 300;
-    const height = mount.clientHeight || 300;
+    const width = mount.clientWidth || 580;
+    const height = mount.clientHeight || 580;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#111119");
+    scene.background = new THREE.Color(NAVY_DEEP);
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
-    camera.position.set(3, 3, 3);
+    // Top-down camera matching live system
+    const camera = new THREE.PerspectiveCamera(34, width / height, 0.1, 100);
+    camera.position.set(0, 13, 0);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(window.devicePixelRatio);
     mount.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
 
-    // Lighting - tinted based on profile
-    const pColor = new THREE.Color(profileColors.primary);
-    const sColor = new THREE.Color(profileColors.secondary);
+    // Lighting matching live DiceRoller
+    const ambientLight = new THREE.AmbientLight(new THREE.Color("#8B5CF6"), 0.6);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x202830, 1.8);
+    scene.add(hemiLight);
+    scene.add(ambientLight);
 
-    const ambient = new THREE.AmbientLight(sColor, 0.6);
-    scene.add(ambient);
-    
-    const dir = new THREE.DirectionalLight(pColor, 2.0);
-    dir.position.set(5, 10, 7);
-    scene.add(dir);
+    const mainLight = new THREE.DirectionalLight(new THREE.Color(ORANGE), 2.2);
+    mainLight.position.set(3, 10, 4);
+    scene.add(mainLight);
 
-    // Tinted fill lights - extra vibrant
-    const fill1 = new THREE.DirectionalLight(pColor, 5.0);
-    fill1.position.set(-4, 3, 4);
-    scene.add(fill1);
+    const fillLight = new THREE.DirectionalLight(0x4488ff, 0.22);
+    fillLight.position.set(-4, 6, -3);
+    scene.add(fillLight);
 
-    const fill2 = new THREE.DirectionalLight(sColor, 5.0);
-    fill2.position.set(4, 3, -4);
-    scene.add(fill2);
-    
-    // Store lights reference for updates
-    scene.userData = { fill1, fill2, ambient, dir };
+    scene.userData = { ambientLight, hemiLight, mainLight, fillLight };
 
-    // Create initial dice
-    const mesh = createDiceMesh(diceType);
-    mesh.position.set(0, 0, 0);
-    mesh.rotation.set(0, 0, 0);
-    scene.add(mesh);
-    diceRef.current = mesh;
+    // ---- Drag-to-rotate using quaternion arcball pattern
+    const onMouseDown = (e) => {
+      isDraggingRef.current = true;
+      previousMouseRef.current = { x: e.clientX, y: e.clientY };
+      renderer.domElement.style.cursor = "grabbing";
+    };
+
+    const onMouseMove = (e) => {
+      if (!isDraggingRef.current || !wrapperRef.current) return;
+      const dx = e.clientX - previousMouseRef.current.x;
+      const dy = e.clientY - previousMouseRef.current.y;
+      previousMouseRef.current = { x: e.clientX, y: e.clientY };
+
+      const rotSpeed = 0.01;
+      // Build a delta quaternion in world-space and pre-multiply.
+      // Mouse-x → spin around world Y; mouse-y → tilt around world X.
+      const qx = new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(1, 0, 0),
+        dy * rotSpeed,
+      );
+      const qy = new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(0, 1, 0),
+        dx * rotSpeed,
+      );
+      const delta = qy.multiply(qx);
+      wrapperRef.current.quaternion.premultiply(delta);
+    };
+
+    const onMouseUp = () => {
+      isDraggingRef.current = false;
+      renderer.domElement.style.cursor = "grab";
+    };
+
+    const onWheel = (e) => {
+      e.preventDefault();
+      const dy = e.deltaY * 0.001 * camera.position.y * 0.1;
+      camera.position.y = Math.max(5, Math.min(25, camera.position.y + dy));
+      camera.lookAt(0, 0, 0);
+    };
 
     const onResize = () => {
       if (!mountRef.current) return;
-      const w = mountRef.current.clientWidth || 300;
-      const h = mountRef.current.clientHeight || 300;
+      const w = mountRef.current.clientWidth || 580;
+      const h = mountRef.current.clientHeight || 580;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
     };
 
-    // Mouse drag to rotate
-    const onMouseDown = (e) => {
-      isDraggingRef.current = true;
-      previousMouseRef.current = { x: e.clientX, y: e.clientY };
-    };
-
-    const onMouseMove = (e) => {
-      if (!isDraggingRef.current || !diceRef.current) return;
-      
-      const deltaX = e.clientX - previousMouseRef.current.x;
-      const deltaY = e.clientY - previousMouseRef.current.y;
-      
-      // Rotate dice based on mouse movement
-      diceRef.current.rotation.y += deltaX * 0.01;
-      diceRef.current.rotation.x += deltaY * 0.01;
-      
-      previousMouseRef.current = { x: e.clientX, y: e.clientY };
-      updateRotationDisplay();
-    };
-
-    const onMouseUp = () => {
-      isDraggingRef.current = false;
-    };
-
-    // Scroll to zoom
-    const onWheel = (e) => {
-      e.preventDefault();
-      const zoomSpeed = 0.001;
-      const dy = e.deltaY * zoomSpeed * camera.position.y * 0.1;
-      const newY = camera.position.y + dy;
-      camera.position.y = Math.max(5, Math.min(25, newY));
-      // Keep x and z at 0 — true top-down
-      camera.lookAt(0, 0, 0);
-    };
-
+    renderer.domElement.style.cursor = "grab";
     renderer.domElement.addEventListener("mousedown", onMouseDown);
-    renderer.domElement.addEventListener("mousemove", onMouseMove);
-    renderer.domElement.addEventListener("mouseup", onMouseUp);
-    renderer.domElement.addEventListener("mouseleave", onMouseUp);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
     renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
     window.addEventListener("resize", onResize);
 
+    let raf;
     const animate = () => {
-      requestAnimationFrame(animate);
+      raf = requestAnimationFrame(animate);
       renderer.render(scene, camera);
     };
     animate();
 
     return () => {
+      cancelAnimationFrame(raf);
       renderer.domElement.removeEventListener("mousedown", onMouseDown);
-      renderer.domElement.removeEventListener("mousemove", onMouseMove);
-      renderer.domElement.removeEventListener("mouseup", onMouseUp);
-      renderer.domElement.removeEventListener("mouseleave", onMouseUp);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
       renderer.domElement.removeEventListener("wheel", onWheel);
       window.removeEventListener("resize", onResize);
       renderer.dispose();
-      if (mount.contains(renderer.domElement)) {
-        mount.removeChild(renderer.domElement);
-      }
+      if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };
   }, []);
 
-  // Update dice when type changes
+  // ---- Load (or swap) the GLB whenever diceType changes
   useEffect(() => {
-    if (!sceneRef.current || !diceRef.current) return;
-    
-    sceneRef.current.remove(diceRef.current);
-    
-    // Check if we have a custom model for this dice type
-    if (customModels[diceType]) {
-      const root = customModels[diceType].scene.clone();
+    if (!sceneRef.current) return;
 
-      // Apply saved transforms if any, or reset
-      const transform = modelTransforms[diceType] || { x: 0, y: 0 };
-      setPositionX(transform.x);
-      setPositionY(transform.y);
+    const mountModel = (gltf) => {
+      const scene = sceneRef.current;
+      if (wrapperRef.current) {
+        scene.remove(wrapperRef.current);
+        wrapperRef.current = null;
+      }
 
+      const root = gltf.scene.clone();
       root.position.set(0, 0, 0);
       root.rotation.set(0, 0, 0);
 
       const sizeBox = new THREE.Box3().setFromObject(root);
       const size = sizeBox.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
-      const scale = 2 / maxDim;
-      root.scale.setScalar(scale);
+      root.scale.setScalar(2 / maxDim);
 
       // Center root around its own center of mass so user rotation
       // pivots through the geometric center, not the GLB origin.
@@ -698,339 +234,536 @@ export default function DiceCalibrator() {
 
       const wrapper = new THREE.Group();
       wrapper.add(root);
-      wrapper.position.set(transform.x, transform.y, 0);
-      wrapper.rotation.set(0, 0, 0);
+      scene.add(wrapper);
+      wrapperRef.current = wrapper;
+      reskinCurrent();
+    };
 
-      sceneRef.current.add(wrapper);
-      diceRef.current = wrapper;
-    } else {
-      setPositionX(0);
-      setPositionY(0);
-      const newMesh = createDiceMesh(diceType);
-      newMesh.position.set(0, 0, 0);
-      newMesh.rotation.set(0, 0, 0);
-      sceneRef.current.add(newMesh);
-      diceRef.current = newMesh;
+    if (loadedModelsRef.current[diceType]) {
+      mountModel(loadedModelsRef.current[diceType]);
+      return;
     }
-    
-    setFace(1);
-    setRotationDisplay({ x: 0, y: 0, z: 0 });
-  }, [diceType, customModels]);
 
-  const updateRotationDisplay = () => {
-    const dice = diceRef.current;
-    if (!dice) return;
-    setRotationDisplay({
-      x: Number(dice.rotation.x.toFixed(4)),
-      y: Number(dice.rotation.y.toFixed(4)),
-      z: Number(dice.rotation.z.toFixed(4)),
+    setIsLoadingModel(true);
+    const loader = new GLTFLoader();
+    loader.load(
+      DEFAULT_MODEL_URLS[diceType],
+      (gltf) => {
+        loadedModelsRef.current[diceType] = gltf;
+        mountModel(gltf);
+        setIsLoadingModel(false);
+      },
+      undefined,
+      (err) => {
+        console.error("Failed to load model", err);
+        toast.error(`Failed to load ${diceType.toUpperCase()} model`);
+        setIsLoadingModel(false);
+      },
+    );
+  }, [diceType]);
+
+  // When the dice type changes, jump to the first unsaved face for that type.
+  useEffect(() => {
+    const max = facesForType(diceType);
+    let next = 1;
+    for (let i = 1; i <= max; i++) {
+      if (!savedFaces[`${diceType}_${i}`]) { next = i; break; }
+      if (i === max) next = max;
+    }
+    setCurrentFace(next);
+    if (wrapperRef.current) wrapperRef.current.quaternion.set(0, 0, 0, 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diceType]);
+
+  function reskinCurrent() {
+    const wrapper = wrapperRef.current;
+    const tex = defaultTextureRef.current;
+    if (!wrapper) return;
+    wrapper.traverse((child) => {
+      if (!child.isMesh) return;
+      child.material = new THREE.MeshStandardMaterial({
+        color: tex ? 0xffffff : new THREE.Color("#1a0a2e"),
+        map: tex,
+        metalness: 0.3,
+        roughness: 0.4,
+        flatShading: true,
+      });
+    });
+  }
+
+  // ---- Actions
+  const saveFace = () => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper || allDoneForType) return;
+    const e = new THREE.Euler().setFromQuaternion(wrapper.quaternion, "XYZ");
+    const rot = {
+      x: Number(e.x.toFixed(6)),
+      y: Number(e.y.toFixed(6)),
+      z: Number(e.z.toFixed(6)),
+    };
+    const key = `${diceType}_${currentFace}`;
+    setSavedFaces((prev) => ({ ...prev, [key]: rot }));
+    wrapper.quaternion.set(0, 0, 0, 1);
+
+    const max = facesForType(diceType);
+    let next = currentFace + 1;
+    while (next <= max && savedFaces[`${diceType}_${next}`]) next++;
+    if (next > max) {
+      // find first remaining gap
+      for (let i = 1; i <= max; i++) {
+        if (i === currentFace) continue;
+        if (!savedFaces[`${diceType}_${i}`]) { next = i; break; }
+      }
+    }
+    if (next <= max) setCurrentFace(next);
+  };
+
+  const skipFace = () => {
+    const max = facesForType(diceType);
+    const next = currentFace >= max ? 1 : currentFace + 1;
+    setCurrentFace(next);
+    if (wrapperRef.current) wrapperRef.current.quaternion.set(0, 0, 0, 1);
+  };
+
+  const resetThisFace = () => {
+    const key = `${diceType}_${currentFace}`;
+    setSavedFaces((prev) => {
+      const copy = { ...prev };
+      delete copy[key];
+      return copy;
     });
   };
 
-  // When changing face, reset to neutral orientation
-  const handleFaceChange = (value) => {
-    setFace(value);
-    resetRotation();
-  };
-
-  const rotate = (axis, deltaDegrees) => {
-    const dice = diceRef.current;
-    if (!dice) return;
-    const delta = (deltaDegrees * Math.PI) / 180; // deg → rad
-    dice.rotation[axis] += delta;
-    updateRotationDisplay();
-  };
-
-  const moveY = (delta) => {
-    const dice = diceRef.current;
-    if (!dice) return;
-    const newY = positionY + delta;
-    setPositionY(newY);
-    dice.position.y = newY;
-    updateModelTransform(positionX, newY);
-  };
-
-  const moveX = (delta) => {
-    const dice = diceRef.current;
-    if (!dice) return;
-    const newX = positionX + delta;
-    setPositionX(newX);
-    dice.position.x = newX;
-    updateModelTransform(newX, positionY);
-  };
-
-  const updateModelTransform = (x, y) => {
-    setModelTransforms(prev => ({
-      ...prev,
-      [diceType]: { x, y }
-    }));
-  };
-
-  const saveFace = () => {
-    const dice = diceRef.current;
-    if (!dice) return;
-    const { x, y, z } = dice.rotation;
-    const rx = Number(x.toFixed(6));
-    const ry = Number(y.toFixed(6));
-    const rz = Number(z.toFixed(6));
-
-    const eulerString = `${face}: new THREE.Euler(${rx}, ${ry}, ${rz}),`;
-    console.log(`[${diceType}] Face ${eulerString}`);
-    
-    setSavedFaces(prev => ({
-      ...prev,
-      [`${diceType}_${face}`]: { x: rx, y: ry, z: rz }
-    }));
-  };
-
-  const handleDiceTypeChange = (newType) => {
-    setDiceType(newType);
-    // Don't clear savedFaces, we want to accumulate them across types
-  };
-
   const resetRotation = () => {
-    const dice = diceRef.current;
-    if (!dice) return;
-    dice.rotation.set(0, 0, 0);
-    updateRotationDisplay();
+    if (wrapperRef.current) wrapperRef.current.quaternion.set(0, 0, 0, 1);
   };
 
-  const maxFaces = DICE_CONFIG[diceType]?.sides || 6;
+  const selectFace = (n) => {
+    setCurrentFace(n);
+    if (wrapperRef.current) wrapperRef.current.quaternion.set(0, 0, 0, 1);
+  };
 
-  // Update lights when profile colors change
-  useEffect(() => {
-    if (sceneRef.current && sceneRef.current.userData) {
-      const { fill1, fill2, ambient, dir } = sceneRef.current.userData;
-      if (fill1) fill1.color.set(profileColors.primary);
-      if (fill2) fill2.color.set(profileColors.secondary);
-      if (ambient) ambient.color.set(profileColors.secondary);
-      if (dir) dir.color.set(profileColors.primary);
+  const publishLive = async () => {
+    setIsPublishing(true);
+    try {
+      const faceRotations = {};
+      Object.entries(savedFaces).forEach(([key, rot]) => {
+        const [type, n] = key.split("_");
+        if (!faceRotations[type]) faceRotations[type] = {};
+        faceRotations[type][n] = rot;
+      });
+
+      const existing = JSON.parse(localStorage.getItem("diceConfig") || "{}");
+      const ts = Date.now();
+      const config = {
+        ...existing,
+        faceRotations: { ...(existing.faceRotations || {}), ...faceRotations },
+        lastPublished: ts,
+      };
+      localStorage.setItem("diceConfig", JSON.stringify(config));
+
+      // Push to every campaign so all tables see the calibration.
+      if (campaigns.length > 0) {
+        await Promise.all(
+          campaigns.map((c) =>
+            base44.entities.Campaign.update(c.id, { dice_config: config }),
+          ),
+        );
+        toast.success(`Calibrations pushed to ${campaigns.length} campaign(s)`);
+      } else {
+        toast.success("Calibrations saved locally");
+      }
+      setLastPublished(ts);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to publish: " + err.message);
+    } finally {
+      setIsPublishing(false);
     }
-  }, [profileColors]);
+  };
 
+  // ---- Render
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center p-6 gap-4">
-      <h1 className="text-xl font-bold tracking-[0.25em] text-center">
-        {diceType.toUpperCase()} FACE ALIGNER
-      </h1>
-      <p className="text-xs text-slate-300 max-w-md text-center">
-        Use the rotate buttons to make the CHOSEN FACE point upward. Then hit
-        "Save Face" and copy the logged Euler rotation for that face.
-      </p>
+    <div
+      className="min-h-screen w-full"
+      style={{
+        background: `radial-gradient(circle at 50% 30%, ${NAVY} 0%, ${NAVY_DEEP} 70%)`,
+        color: "#FFFFFF",
+      }}
+    >
+      <style>{`
+        @keyframes calibPulse {
+          0%, 100% { transform: scale(1); }
+          50%      { transform: scale(1.08); }
+        }
+        @keyframes calibPop {
+          0%   { transform: scale(0.6); }
+          60%  { transform: scale(1.12); }
+          100% { transform: scale(1); }
+        }
+        .calib-pulse { animation: calibPulse 1.5s ease-in-out infinite; }
+        .calib-pop   { animation: calibPop 250ms ease-out; }
+      `}</style>
 
-      {/* Dice Type Selector */}
-      <div className="flex gap-2 flex-wrap justify-center">
-        {Object.keys(DICE_CONFIG).map((type) => (
-          <button
-            key={type}
-            onClick={() => handleDiceTypeChange(type)}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-              diceType === type
-                ? 'bg-[#37F2D1] text-black'
-                : 'bg-slate-700 hover:bg-slate-600'
-            }`}
-          >
-            {type.toUpperCase()}
-            {customModels[type] && <span className="ml-1 text-xs">✓</span>}
-          </button>
-        ))}
-      </div>
-
-      {/* Model Upload */}
-      <div className="flex items-center gap-3">
-        <label className="px-4 py-2 rounded-lg bg-[#FF5722] hover:bg-[#FF6B3D] text-white text-sm font-bold cursor-pointer transition-all">
-          {isLoadingModel ? 'Loading...' : `Upload ${diceType.toUpperCase()} Model (.glb)`}
-          <input
-            type="file"
-            accept=".glb,.gltf"
-            onChange={handleFileUpload}
-            className="hidden"
-            disabled={isLoadingModel}
-          />
-        </label>
-        {customModels[diceType] && (
-          <span className="text-xs text-emerald-400">Custom model loaded</span>
-        )}
-      </div>
-
-      <div 
-        className="w-72 h-72 bg-black/60 rounded-2xl border border-white/20 mb-4 cursor-grab active:cursor-grabbing" 
-        ref={mountRef} 
-      />
-      <p className="text-xs text-slate-400 -mt-2 mb-2">Drag to rotate • Scroll to zoom</p>
-
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-sm">Face number:</span>
-        <input
-          type="number"
-          min={1}
-          max={maxFaces}
-          value={face}
-          onChange={(e) => handleFaceChange(Math.min(maxFaces, Math.max(1, Number(e.target.value))))}
-          className="w-16 px-2 py-1 rounded bg-black/70 border border-white/30 text-center text-sm"
-        />
-        <span className="text-xs text-slate-400">/ {maxFaces}</span>
-        <button
-          onClick={resetRotation}
-          className="px-3 py-1 text-xs rounded-full bg-slate-700 hover:bg-slate-600"
-        >
-          Reset
-        </button>
-      </div>
-
-      {/* Position controls */}
-      <div className="flex items-center gap-2 mb-2 flex-wrap">
-        <span className="text-sm">Position:</span>
-        <button onClick={() => moveY(0.1)} className="px-3 py-1 bg-slate-700 rounded hover:bg-slate-600 text-xs">
-          ↑ Up
-        </button>
-        <button onClick={() => moveY(-0.1)} className="px-3 py-1 bg-slate-700 rounded hover:bg-slate-600 text-xs">
-          ↓ Down
-        </button>
-        <button onClick={() => moveX(-0.1)} className="px-3 py-1 bg-slate-700 rounded hover:bg-slate-600 text-xs">
-          ← Left
-        </button>
-        <button onClick={() => moveX(0.1)} className="px-3 py-1 bg-slate-700 rounded hover:bg-slate-600 text-xs">
-          → Right
-        </button>
-        <span className="text-xs text-slate-400">X:{positionX.toFixed(2)} Y:{positionY.toFixed(2)}</span>
-        <button onClick={() => { setPositionY(0); setPositionX(0); if (diceRef.current) { diceRef.current.position.y = 0; diceRef.current.position.x = 0; } }} className="px-2 py-1 bg-slate-600 rounded hover:bg-slate-500 text-xs">
-          Reset
-        </button>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 text-xs">
-        <button onClick={() => rotate("x", 5)} className="px-2 py-1 bg-slate-700 rounded hover:bg-slate-600">
-          X +5°
-        </button>
-        <button onClick={() => rotate("y", 5)} className="px-2 py-1 bg-slate-700 rounded hover:bg-slate-600">
-          Y +5°
-        </button>
-        <button onClick={() => rotate("z", 5)} className="px-2 py-1 bg-slate-700 rounded hover:bg-slate-600">
-          Z +5°
-        </button>
-        <button onClick={() => rotate("x", -5)} className="px-2 py-1 bg-slate-700 rounded hover:bg-slate-600">
-          X -5°
-        </button>
-        <button onClick={() => rotate("y", -5)} className="px-2 py-1 bg-slate-700 rounded hover:bg-slate-600">
-          Y -5°
-        </button>
-        <button onClick={() => rotate("z", -5)} className="px-2 py-1 bg-slate-700 rounded hover:bg-slate-600">
-          Z -5°
-        </button>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 text-xs mt-2">
-        <button onClick={() => rotate("x", 1)} className="px-2 py-1 bg-slate-800 rounded hover:bg-slate-700">
-          X +1°
-        </button>
-        <button onClick={() => rotate("y", 1)} className="px-2 py-1 bg-slate-800 rounded hover:bg-slate-700">
-          Y +1°
-        </button>
-        <button onClick={() => rotate("z", 1)} className="px-2 py-1 bg-slate-800 rounded hover:bg-slate-700">
-          Z +1°
-        </button>
-        <button onClick={() => rotate("x", -1)} className="px-2 py-1 bg-slate-800 rounded hover:bg-slate-700">
-          X -1°
-        </button>
-        <button onClick={() => rotate("y", -1)} className="px-2 py-1 bg-slate-800 rounded hover:bg-slate-700">
-          Y -1°
-        </button>
-        <button onClick={() => rotate("z", -1)} className="px-2 py-1 bg-slate-800 rounded hover:bg-slate-700">
-          Z -1°
-        </button>
-      </div>
-
-      <div className="mt-2 text-xs text-slate-300">
-        Current rotation (radians): x={rotationDisplay.x}, y={rotationDisplay.y}, z={rotationDisplay.z}
-      </div>
-
-      <div className="flex gap-2 mt-3">
-        <button
-          onClick={saveFace}
-          className="px-4 py-2 rounded-full bg-emerald-400 text-black text-xs font-bold hover:bg-emerald-300"
-        >
-          Save Face {face}
-        </button>
-        <button
-          onClick={resetRotation}
-          className="px-4 py-2 rounded-full bg-slate-600 text-white text-xs font-bold hover:bg-slate-500"
-        >
-          Reset
-        </button>
-      </div>
-
-      {/* Saved faces display */}
-      {Object.keys(savedFaces).length > 0 && (
-        <div className="mt-6 p-4 bg-black/40 rounded-lg w-full max-w-lg">
-          <h3 className="text-sm font-bold mb-2">Saved Face Rotations for {diceType.toUpperCase()}:</h3>
-          <pre className="text-xs text-emerald-300 overflow-x-auto whitespace-pre-wrap">
-{`${diceType}: {
-${Object.entries(savedFaces)
-  .filter(([key]) => key.startsWith(diceType))
-  .map(([key, r]) => {
-    const faceNum = key.split('_')[1];
-    return `  ${faceNum}: new THREE.Euler(${r.x}, ${r.y}, ${r.z}),`;
-  })
-  .join('\n')}
-},`}
-          </pre>
-          <button
-            onClick={() => {
-              const code = `${diceType}: {\n${Object.entries(savedFaces)
-                .filter(([key]) => key.startsWith(diceType))
-                .map(([key, r]) => {
-                  const faceNum = key.split('_')[1];
-                  return `  ${faceNum}: new THREE.Euler(${r.x}, ${r.y}, ${r.z}),`;
-                })
-                .join('\n')}\n},`;
-              navigator.clipboard.writeText(code);
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: 32 }}>
+        {/* HEADER */}
+        <header style={{ textAlign: "center" }}>
+          <div style={{ color: ORANGE, fontSize: 14, marginBottom: 6 }}>◆</div>
+          <h1
+            style={{
+              fontWeight: 900,
+              letterSpacing: "0.15em",
+              fontSize: "1.875rem",
+              color: "#FFFFFF",
+              margin: 0,
             }}
-            className="mt-3 px-4 py-2 rounded-full bg-[#37F2D1] text-black text-xs font-bold hover:bg-[#2dd9bd]"
           >
-            Copy to Clipboard
-          </button>
-        </div>
-      )}
-
-      {/* Save All to App Button */}
-      {(Object.keys(customModelFiles).length > 0 || Object.keys(savedFaces).length > 0) && (
-        <div className="mt-6 p-4 bg-gradient-to-r from-[#FF5722]/20 to-[#37F2D1]/20 rounded-lg w-full max-w-lg border border-white/20">
-          <h3 className="text-sm font-bold mb-3 text-center">Save Configuration to App</h3>
-          <div className="text-xs text-slate-300 mb-4 space-y-1">
-            {Object.keys(customModelFiles).length > 0 && (
-              <p>• {Object.keys(customModelFiles).length} custom model(s) ready: {Object.keys(customModelFiles).join(', ')}</p>
-            )}
-            {Object.keys(savedFaces).length > 0 && (
-              <p>• {Object.keys(savedFaces).length} face rotation(s) calibrated</p>
-            )}
-          </div>
-          {campaigns.length > 0 && (
-            <div className="mb-3">
-              <label className="text-xs text-slate-400 mb-1 block">Save to Campaign (Shared)</label>
-              <select
-                value={selectedCampaignId}
-                onChange={(e) => setSelectedCampaignId(e.target.value)}
-                className="w-full bg-[#1E2430] border border-white/20 rounded px-2 py-1 text-sm"
-              >
-                {campaigns.map(c => (
-                  <option key={c.id} value={c.id}>{c.title}</option>
-                ))}
-              </select>
-            </div>
-          )}
-          <button
-            onClick={saveModelsToApp}
-            disabled={isSavingToApp}
-            className="w-full px-6 py-3 rounded-lg bg-gradient-to-r from-[#FF5722] to-[#FF6B3D] text-white font-bold hover:from-[#FF6B3D] hover:to-[#FF8A65] transition-all disabled:opacity-50"
-          >
-            {isSavingToApp ? 'Saving...' : '💾 Save Models & Rotations'}
-          </button>
-          <p className="text-xs text-slate-400 mt-2 text-center">
-            This will upload models and copy the configuration for integration
+            DICE CALIBRATOR
+          </h1>
+          <p style={{ fontSize: "0.875rem", color: TEXT_MUTED, marginTop: 8 }}>
+            Drag the dice. Land the face up. Save. Repeat.
           </p>
+
+          <div
+            style={{
+              marginTop: 16,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 12,
+            }}
+          >
+            <div
+              style={{
+                position: "relative",
+                width: 320,
+                height: 6,
+                borderRadius: 999,
+                background: "rgba(255,255,255,0.06)",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${(savedCount / TOTAL_FACES) * 100}%`,
+                  height: "100%",
+                  background: ORANGE,
+                  transition: "width 250ms ease-out",
+                }}
+              />
+            </div>
+            <span style={{ fontSize: "0.75rem", color: TEXT_MUTED }}>
+              {savedCount}/{TOTAL_FACES} calibrated
+            </span>
+          </div>
+        </header>
+
+        {/* DICE TYPE PILLS */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: 12,
+            marginTop: 32,
+            flexWrap: "wrap",
+          }}
+        >
+          {DICE_TYPES.map((type) => {
+            const active = type === diceType;
+            const count = savedCountForType(type);
+            const max = facesForType(type);
+            const done = count >= max;
+            return (
+              <button
+                key={type}
+                onClick={() => setDiceType(type)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "10px 18px",
+                  borderRadius: 12,
+                  border: active
+                    ? `1px solid ${ORANGE}`
+                    : "1px solid rgba(255,255,255,0.08)",
+                  background: active
+                    ? "linear-gradient(135deg, rgba(255,83,0,0.25), rgba(255,83,0,0.08))"
+                    : "rgba(255,255,255,0.04)",
+                  color: active ? "#FFFFFF" : TEXT_MUTED,
+                  boxShadow: active ? "0 0 20px rgba(255,83,0,0.25)" : "none",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  letterSpacing: "0.05em",
+                  transition: "all 200ms ease",
+                }}
+              >
+                <span style={{ color: active ? ORANGE : TEXT_MUTED, fontSize: 10 }}>◆</span>
+                <span>{type}</span>
+                <span
+                  style={{
+                    fontSize: "0.7rem",
+                    color: done ? GREEN : TEXT_MUTED,
+                    fontWeight: 700,
+                    marginLeft: 4,
+                  }}
+                >
+                  {count}/{max}
+                </span>
+              </button>
+            );
+          })}
         </div>
-      )}
+
+        {/* VIEWPORT */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginTop: 32,
+          }}
+        >
+          <div
+            style={{
+              position: "relative",
+              width: "100%",
+              maxWidth: 580,
+              aspectRatio: "1 / 1",
+              borderRadius: 24,
+              border: `2px solid ${ORANGE}`,
+              background: NAVY_DEEP,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              ref={mountRef}
+              style={{
+                position: "absolute",
+                inset: 0,
+                cursor: "grab",
+              }}
+            />
+            {/* Corner accents */}
+            <CornerAccent style={{ top: 12, left: 12 }} />
+            <CornerAccent style={{ top: 12, right: 12 }} flipX />
+            {/* Instruction overlay */}
+            <div
+              style={{
+                position: "absolute",
+                top: 16,
+                left: 0,
+                right: 0,
+                textAlign: "center",
+                fontSize: "0.75rem",
+                color: "#FFFFFF",
+                opacity: 0.5,
+                pointerEvents: "none",
+                letterSpacing: "0.05em",
+              }}
+            >
+              {isLoadingModel ? "Loading model..." : "Drag to rotate · Scroll to zoom"}
+            </div>
+          </div>
+        </div>
+
+        {/* FACE PROGRESS DOTS */}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "center",
+            gap: 8,
+            marginTop: 24,
+          }}
+        >
+          {Array.from({ length: maxFaces }, (_, i) => i + 1).map((n) => {
+            const saved = !!savedFaces[`${diceType}_${n}`];
+            const isActive = n === currentFace;
+            return (
+              <button
+                key={n}
+                onClick={() => selectFace(n)}
+                title={`Face ${n}`}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: "50%",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "0.7rem",
+                  fontWeight: 700,
+                  background: saved ? GREEN : "transparent",
+                  border: saved
+                    ? `1px solid ${GREEN}`
+                    : "1px solid rgba(255,255,255,0.18)",
+                  color: saved ? "#0a0d1a" : TEXT_MUTED,
+                  outline: isActive ? `2px solid ${ORANGE}` : "none",
+                  outlineOffset: 1,
+                  cursor: "pointer",
+                  transition: "background 250ms ease-out, color 250ms ease-out, filter 150ms ease",
+                  filter: isActive ? "brightness(1.05)" : "brightness(1)",
+                }}
+                className={isActive ? "calib-pulse" : saved ? "calib-pop" : ""}
+                onMouseEnter={(e) => (e.currentTarget.style.filter = "brightness(1.15)")}
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.filter = isActive ? "brightness(1.05)" : "brightness(1)")
+                }
+              >
+                {n}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* PRIMARY ACTION */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 16,
+            marginTop: 32,
+          }}
+        >
+          <button
+            onClick={saveFace}
+            disabled={allDoneForType}
+            style={{
+              width: 280,
+              height: 56,
+              borderRadius: 16,
+              border: "none",
+              background: allDoneForType
+                ? "rgba(74,222,128,0.2)"
+                : "linear-gradient(135deg, #FF5300, #ff7733)",
+              color: allDoneForType ? GREEN : "#FFFFFF",
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              fontSize: "1.125rem",
+              textTransform: "uppercase",
+              cursor: allDoneForType ? "default" : "pointer",
+              boxShadow: allDoneForType ? "none" : "0 8px 24px rgba(255,83,0,0.35)",
+              transition: "transform 150ms ease, box-shadow 150ms ease",
+            }}
+            onMouseEnter={(e) => {
+              if (allDoneForType) return;
+              e.currentTarget.style.transform = "translateY(-1px)";
+              e.currentTarget.style.boxShadow = "0 12px 32px rgba(255,83,0,0.55)";
+            }}
+            onMouseLeave={(e) => {
+              if (allDoneForType) return;
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 8px 24px rgba(255,83,0,0.35)";
+            }}
+          >
+            {allDoneForType ? "✓ All faces saved" : `Save Face ${currentFace}`}
+          </button>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              fontSize: "0.8rem",
+              color: TEXT_MUTED,
+            }}
+          >
+            <SecondaryTextButton onClick={resetThisFace}>Reset this face</SecondaryTextButton>
+            <span style={{ opacity: 0.4 }}>·</span>
+            <SecondaryTextButton onClick={skipFace}>Skip</SecondaryTextButton>
+            <span style={{ opacity: 0.4 }}>·</span>
+            <SecondaryTextButton onClick={resetRotation}>Reset rotation</SecondaryTextButton>
+          </div>
+        </div>
+
+        {/* FOOTER */}
+        <footer
+          style={{
+            marginTop: 48,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ fontSize: "0.75rem", color: TEXT_MUTED }}>
+            {formatLastPublished(lastPublished)}
+          </div>
+          <button
+            onClick={publishLive}
+            disabled={isPublishing}
+            style={{
+              height: 56,
+              padding: "0 28px",
+              borderRadius: 16,
+              border: `2px solid ${ORANGE}`,
+              background: "transparent",
+              color: ORANGE,
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              fontSize: "0.95rem",
+              textTransform: "uppercase",
+              cursor: isPublishing ? "default" : "pointer",
+              transition: "background 150ms ease, color 150ms ease",
+              opacity: isPublishing ? 0.6 : 1,
+            }}
+            onMouseEnter={(e) => {
+              if (isPublishing) return;
+              e.currentTarget.style.background = ORANGE;
+              e.currentTarget.style.color = "#FFFFFF";
+            }}
+            onMouseLeave={(e) => {
+              if (isPublishing) return;
+              e.currentTarget.style.background = "transparent";
+              e.currentTarget.style.color = ORANGE;
+            }}
+          >
+            {isPublishing ? "Publishing..." : "Push Calibrations Live"}
+          </button>
+        </footer>
+      </div>
     </div>
+  );
+}
+
+function SecondaryTextButton({ onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: "transparent",
+        border: "none",
+        color: TEXT_MUTED,
+        cursor: "pointer",
+        fontSize: "0.8rem",
+        padding: "4px 6px",
+        transition: "color 150ms ease",
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.color = "#FFFFFF")}
+      onMouseLeave={(e) => (e.currentTarget.style.color = TEXT_MUTED)}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CornerAccent({ style, flipX }) {
+  return (
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      style={{
+        position: "absolute",
+        opacity: 0.5,
+        pointerEvents: "none",
+        transform: flipX ? "scaleX(-1)" : undefined,
+        ...style,
+      }}
+    >
+      <path d="M2 2 L2 14 M2 2 L14 2" stroke={ORANGE} strokeWidth="2" strokeLinecap="round" />
+    </svg>
   );
 }
