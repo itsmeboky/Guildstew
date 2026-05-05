@@ -7,6 +7,7 @@ import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-route
 import PageNotFound from './lib/PageNotFound';
 import GamePackListing from './pages/GamePackListing';
 import AdminTools from "@/pages/AdminTools";
+import DiceCalibrator from "@/pages/DiceCalibrator";
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { SubscriptionProvider } from '@/lib/SubscriptionContext';
 import { PresenceProvider } from '@/lib/PresenceContext';
@@ -155,6 +156,11 @@ const AuthenticatedApp = () => {
       <Route path="/admin-tools" element={
         <ErrorBoundary resetKeys={routeResetKeys}>
           <AdminTools />
+        </ErrorBoundary>
+      } />
+      <Route path="/dice-calibrator" element={
+        <ErrorBoundary resetKeys={routeResetKeys}>
+          <DiceCalibrator />
         </ErrorBoundary>
       } />
       {Object.entries(Pages).map(([path, Page]) => (
