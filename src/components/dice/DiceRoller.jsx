@@ -24,27 +24,7 @@ const DICE_MODEL_URLS = {
 const _modelCache = {};
 const TARGET_DICE_SIZE = 1.4; // max dimension target after normalization
 
-// Lazy-load GLTFLoader via CDN script tag. Works in both the claude.ai artifact
-// preview AND production Vite. (For production, you can swap this for a proper
-// `import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"` if preferred.)
-let _gltfLoaderPromise = null;
-function getGLTFLoaderInstance() {
-  if (typeof window === "undefined") return Promise.reject(new Error("No window"));
-  if (window.THREE?.GLTFLoader) return Promise.resolve(new window.THREE.GLTFLoader());
-  if (_gltfLoaderPromise) return _gltfLoaderPromise;
-  _gltfLoaderPromise = new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/loaders/GLTFLoader.js";
-    script.async = true;
-    script.onload = () => {
-      if (window.THREE?.GLTFLoader) resolve(new window.THREE.GLTFLoader());
-      else reject(new Error("GLTFLoader did not attach to THREE after script load"));
-    };
-    script.onerror = () => reject(new Error("Failed to load GLTFLoader from CDN"));
-    document.head.appendChild(script);
-  });
-  return _gltfLoaderPromise;
-}
+const _gltfLoader = new GLTFLoader();
 
 async function loadDiceModel(type) {
   if (_modelCache[type]) return _modelCache[type];
