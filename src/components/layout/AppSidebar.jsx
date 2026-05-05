@@ -7,7 +7,7 @@ import {
   Upload, LayoutDashboard, TrendingUp,
   HelpCircle, BookOpen, AlertTriangle,
   User, Settings, CreditCard, Crown, Package, UserCircle2,
-  ChevronDown, Sparkles, Shield,
+  ChevronDown, Sparkles, Shield, LogOut,
 } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -43,7 +43,7 @@ import GuildCrestImage from "@/components/guild/GuildCrestImage";
  *   8. Polish — active-state styling, scrollable middle, pinned bottom
  */
 export default function AppSidebar() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const sub = useSubscription();
   const location = useLocation();
   const [spiceOpen, setSpiceOpen] = useState(false);
@@ -255,6 +255,16 @@ export default function AppSidebar() {
 
           {/* Settings — pinned single button. */}
           <SidebarLink to={createPageUrl("Settings")} icon={Settings} label="Settings" />
+
+          {/* Log out — pinned beneath Settings. */}
+          <button
+            type="button"
+            onClick={() => logout()}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-slate-300 hover:bg-[#2a3441] hover:text-white transition-colors"
+          >
+            <LogOut className="w-[18px] h-[18px]" />
+            <span className="flex-1 text-left">Log out</span>
+          </button>
         </div>
       </aside>
 
