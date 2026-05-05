@@ -571,8 +571,9 @@ export default function DiceCalibrator() {
     scene.background = new THREE.Color("#111119");
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
-    camera.position.set(3, 3, 3);
+    const w = width, h = height;
+    const camera = new THREE.PerspectiveCamera(34, w / h, 0.1, 100);
+    camera.position.set(0, 13, 0);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
