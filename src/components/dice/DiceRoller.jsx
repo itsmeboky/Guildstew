@@ -293,14 +293,14 @@ function buildD10Geometry(scale = 0.6) {
 }
 
 function buildDiceGeometry(type) {
-  const c = DICE_CONFIGS[type];
+  const size = DICE_CONFIGS[type]?.size ?? 0.6;
   switch (type) {
-    case "d4":  return new THREE.TetrahedronGeometry(c.size, 0);
-    case "d6":  return new THREE.BoxGeometry(c.size, c.size, c.size);
-    case "d8":  return new THREE.OctahedronGeometry(c.size, 0);
-    case "d10": return buildD10Geometry(c.size);
-    case "d12": return new THREE.DodecahedronGeometry(c.size, 0);
-    case "d20": return new THREE.IcosahedronGeometry(c.size, 0);
+    case "d4":  return new THREE.TetrahedronGeometry(size, 0);
+    case "d6":  return new THREE.BoxGeometry(size, size, size);
+    case "d8":  return new THREE.OctahedronGeometry(size, 0);
+    case "d10": return buildD10Geometry(size);
+    case "d12": return new THREE.DodecahedronGeometry(size, 0);
+    case "d20": return new THREE.IcosahedronGeometry(size, 0);
     default:    return new THREE.IcosahedronGeometry(0.6, 0);
   }
 }
@@ -1765,7 +1765,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     const totalDice = Object.values(diceCounts).reduce((s, n) => s + n, 0);
     if (totalDice <= 1) {
       const type = diceTypeRef.current;
-      const sides = DICE_CONFIGS[type].sides;
+      const sides = DICE_CONFIGS[type]?.sides ?? 20;
       const result = forcedResultRef.current != null
         ? Math.min(Math.max(1, forcedResultRef.current), sides)
         : Math.floor(Math.random() * sides) + 1;
@@ -1832,7 +1832,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
       const { type } = diceList[i];
       const spawned = sceneRef.current.spawnDie(type);
       if (!spawned) continue;
-      const sides = DICE_CONFIGS[type].sides;
+      const sides = DICE_CONFIGS[type]?.sides ?? 20;
       const result = Math.floor(Math.random() * sides) + 1;
       // Build a normal-roll timeline (same as single-dice)
       let timeline = buildNormalRoll(result, type, 0.7, null);
@@ -1918,7 +1918,9 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   }, [executeRoll]);
 
   // Computed
-  const lastSides = lastResultDiceType ? DICE_CONFIGS[lastResultDiceType].sides : 20;
+  const lastSides = lastResultDiceType && lastResultDiceType !== "multi"
+    ? (DICE_CONFIGS[lastResultDiceType]?.sides ?? 20)
+    : 20;
   const modalSize = 500;
   const arenaFrameStyle = {
     ...S.arenaFrame,
@@ -1926,8 +1928,8 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     height: `min(${modalSize}px, calc(100vh - 48px))`,
     aspectRatio: undefined,
   };
-  const isCritMax = lastResult !== null && lastResult === lastSides;
-  const isCritMin = lastResult !== null && lastResult === 1;
+  const isCritMax = lastResult !== null && lastResultDiceType !== "multi" && lastResult === lastSides;
+  const isCritMin = lastResult !== null && lastResultDiceType !== "multi" && lastResult === 1;
   const shakeColor = shakeLevel<0.15?"#ff4444":shakeLevel<0.5?"#ff8844":shakeLevel<0.8?"#ffcc00":"#44ff88";
 
   // ==============================================================
@@ -2023,7 +2025,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
             {!isRolling && !isHolding && lastResult === null && (
               <div style={S.idleHint}>
                 <div style={S.idleHintIcon}>◇</div>
-                <div>Click & drag to pick up the {DICE_CONFIGS[diceType].label}</div>
+                <div>Click & drag to pick up the {DICE_CONFIGS[diceType]?.label ?? "d20"}</div>
                 <div style={S.idleHintSub}>or use the ROLL button below</div>
               </div>
             )}
