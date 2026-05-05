@@ -984,11 +984,12 @@ export default function Layout({ children, currentPageName }) {
         }}
         initialConversationId={chatConversationId}
       />
-      <DiceRoller 
-        isOpen={isDiceRollerOpen} 
-        onClose={() => setIsDiceRollerOpen(false)} 
+      <DiceRoller
+        isOpen={isDiceRollerOpen}
+        onClose={() => setIsDiceRollerOpen(false)}
         primaryColor={currentUserProfile?.profile_color_1 || "#FF5722"}
         secondaryColor={currentUserProfile?.profile_color_2 || "#8B5CF6"}
+        isThemedSkin={true}
       />
 
       {activeReminder && (
