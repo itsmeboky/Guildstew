@@ -1978,6 +1978,7 @@ export default function CombatDiceWindow({
 
   // COMBAT MODE
   return (
+    <>
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -3086,5 +3087,20 @@ export default function CombatDiceWindow({
         )}
       </div>
     </motion.div>
+
+    <DiceRoller
+      isOpen={dicePopup.open}
+      onClose={() => setDicePopup(p => ({ ...p, open: false }))}
+      initialDice={dicePopup.dice}
+      forcedResult={dicePopup.forcedResult}
+      onRollComplete={dicePopup.onComplete}
+      primaryColor={currentUserProfile?.profile_color_1 || "#FF5300"}
+      secondaryColor={currentUserProfile?.profile_color_2 || "#f8a47c"}
+      isThemedSkin={true}
+      config={campaignConfig}
+      compact={true}
+      autoCloseOnReveal={true}
+    />
+    </>
   );
 }
