@@ -325,7 +325,6 @@ export default function CombatDiceWindow({
     return abilMod(score);
   }, [actor]);
 
-  const diceRollerRef = useRef(null);
   const prevSpectatorDataRef = useRef(null);
 
   // Prevent background scrolling when modal is open
@@ -422,11 +421,15 @@ export default function CombatDiceWindow({
     ) {
       setCurrentDice("d20");
       setIsRolling(true);
-      setTimeout(() => {
-        if (diceRollerRef.current) {
-          diceRollerRef.current.roll();
-        }
-      }, 100);
+      setDicePopup({
+        open: true,
+        dice: "d20",
+        forcedResult: spectatorData.attackRoll.d20,
+        onComplete: () => {
+          setDicePopup(p => ({ ...p, open: false }));
+          setIsRolling(false);
+        },
+      });
     }
 
     // Damage animation
@@ -439,11 +442,15 @@ export default function CombatDiceWindow({
       const diceType = weaponDice.match(/d\d+/)?.[0] || "d8";
       setCurrentDice(diceType);
       setIsRolling(true);
-      setTimeout(() => {
-        if (diceRollerRef.current) {
-          diceRollerRef.current.roll();
-        }
-      }, 100);
+      setDicePopup({
+        open: true,
+        dice: diceType,
+        forcedResult: spectatorData.damageRoll.dice,
+        onComplete: () => {
+          setDicePopup(p => ({ ...p, open: false }));
+          setIsRolling(false);
+        },
+      });
     }
 
     prevSpectatorDataRef.current = spectatorData;
