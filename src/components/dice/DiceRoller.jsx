@@ -731,6 +731,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     autoCloseOnReveal = false,
     onClose = null,
     compact = false,
+    isOpen = true,
   } = props;
   const mountRef = useRef(null);
   const sceneRef = useRef({});
@@ -1408,6 +1409,8 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   // ==============================================================
   // RENDER
   // ==============================================================
+  if (!isOpen) return null;
+
   return (
     <div style={S.page}>
       <style>{globalCSS}</style>
