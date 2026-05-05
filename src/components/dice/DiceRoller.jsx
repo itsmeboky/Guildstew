@@ -1409,14 +1409,12 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   // ==============================================================
   // RENDER
   // ==============================================================
-  if (!isOpen) return null;
-
   return (
     <div style={{
       position: "fixed",
       inset: 0,
       zIndex: 9999,
-      display: "flex",
+      display: isOpen ? "flex" : "none",
       alignItems: "center",
       justifyContent: "center",
       background: "rgba(0, 0, 0, 0.78)",
