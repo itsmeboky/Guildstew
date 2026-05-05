@@ -1185,6 +1185,7 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const [modelLoadError, setModelLoadError] = useState(null);
   const ekgStateRef = useRef({ active: false, cursor: 0 });
   const shakeRef = useRef(0);
+  const firstDiceCountsChange = useRef(true);
 
   // Keep refs in sync with state/props for the animation loop
   useEffect(() => { diceTypeRef.current = diceType; }, [diceType]);
@@ -1212,6 +1213,27 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     if (sceneRef.current?.swapDiceModel) {
       sceneRef.current.swapDiceModel(activeType);
     }
+  }, [diceCounts]);
+
+  // Clear settled dice from the arena when the user changes tray composition
+  // (signals they're prepping for the next roll). Don't fire during an active roll.
+  useEffect(() => {
+    if (firstDiceCountsChange.current) {
+      firstDiceCountsChange.current = false;
+      return;
+    }
+    if (isRolling) return;
+    if (playbackRef.current?.playing) return;
+    // Despawn any settled multi-dice
+    sceneRef.current?.despawnAllMultiDice?.();
+    // Hide the single-dice wrapper if it was left visible from a prior roll
+    if (sceneRef.current?.dice && sceneRef.current.dice.visible) {
+      sceneRef.current.dice.visible = false;
+    }
+    // Clear the result overlay so a stale total doesn't linger
+    setLastResult(null);
+    setLastResultDiceType(null);
+    setLastBreakdown?.(null);
   }, [diceCounts]);
 
   // Preload all GLB dice models in parallel; swap in active type as soon as it loads
@@ -1809,6 +1831,13 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   // ==============================================================
   const executeRoll = useCallback((shakeIntensity = 0.7, releaseVector = null, forceLazy = false) => {
     if (playbackRef.current.playing) return;
+
+    // Clean up any previously-rendered multi-dice from a prior roll, regardless of whether
+    // this roll is single or multi. Also hide the single-dice wrapper if it was left visible.
+    sceneRef.current?.despawnAllMultiDice?.();
+    if (sceneRef.current?.dice) {
+      sceneRef.current.dice.visible = false;
+    }
 
     const totalDice = Object.values(diceCounts).reduce((s, n) => s + n, 0);
     if (totalDice <= 1) {
