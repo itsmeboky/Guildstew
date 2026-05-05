@@ -26,13 +26,11 @@ export async function logCombatEvent(campaignId, content, metadata = {}) {
     const { base44 } = await import("@/api/base44Client");
     return await base44.entities.CampaignLogEntry.create({
       campaign_id: campaignId,
-      type: "combat_log",
+      entry_type: "combat_log",
       content,
       metadata,
       // System-generated entries — no user attribution.
-      user_id: null,
-      user_name: null,
-      user_avatar: null,
+      author_id: null,
     });
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -52,12 +50,10 @@ export async function logSystemEvent(campaignId, content, metadata = {}) {
     const { base44 } = await import("@/api/base44Client");
     return await base44.entities.CampaignLogEntry.create({
       campaign_id: campaignId,
-      type: "system",
+      entry_type: "system",
       content,
       metadata,
-      user_id: null,
-      user_name: null,
-      user_avatar: null,
+      author_id: null,
     });
   } catch (err) {
     // eslint-disable-next-line no-console

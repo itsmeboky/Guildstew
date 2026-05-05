@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import {
   LayoutDashboard, Users, Sword, Trophy, ShoppingBag, DollarSign,
   LifeBuoy, Flag, ScrollText, GamepadIcon, Home, Store, Wallet, FileText, Rocket,
-  MessageSquare, HelpCircle, BookOpen, Calendar, Award, Package,
+  MessageSquare, HelpCircle, BookOpen, Calendar, Award, Package, Wrench,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -123,24 +123,34 @@ export default function Admin() {
               const Icon = t.icon;
               const active = tab === t.id;
               return (
-                <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
-                  className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                    active
-                      ? "bg-[#37F2D1]/15 text-[#37F2D1]"
-                      : "text-slate-400 hover:text-white hover:bg-[#1E2430]"
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="flex-1">{t.label}</span>
-                  {t.id === "tickets" && openTicketCount > 0 && (
-                    <span className="text-[9px] font-black rounded-full px-1.5 py-0.5 bg-[#37F2D1] text-[#050816] min-w-[18px] text-center">
-                      {openTicketCount > 99 ? "99+" : openTicketCount}
-                    </span>
+                <React.Fragment key={t.id}>
+                  <button
+                    onClick={() => setTab(t.id)}
+                    className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                      active
+                        ? "bg-[#37F2D1]/15 text-[#37F2D1]"
+                        : "text-slate-400 hover:text-white hover:bg-[#1E2430]"
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="flex-1">{t.label}</span>
+                    {t.id === "tickets" && openTicketCount > 0 && (
+                      <span className="text-[9px] font-black rounded-full px-1.5 py-0.5 bg-[#37F2D1] text-[#050816] min-w-[18px] text-center">
+                        {openTicketCount > 99 ? "99+" : openTicketCount}
+                      </span>
+                    )}
+                    {t.stub && <span className="text-[9px] text-slate-600 uppercase">soon</span>}
+                  </button>
+                  {t.id === "homepage" && (
+                    <Link
+                      to="/admin-tools"
+                      className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-slate-400 hover:text-white hover:bg-[#1E2430]"
+                    >
+                      <Wrench className="w-4 h-4" />
+                      <span className="flex-1">Admin Tools</span>
+                    </Link>
                   )}
-                  {t.stub && <span className="text-[9px] text-slate-600 uppercase">soon</span>}
-                </button>
+                </React.Fragment>
               );
             })}
           </nav>
