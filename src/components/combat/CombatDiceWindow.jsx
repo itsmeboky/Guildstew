@@ -3031,36 +3031,10 @@ export default function CombatDiceWindow({
       );
     }
     if (phase === "ready") {
-      return (
-        <motion.div
-          initial={{ scale: 0.85, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="flex flex-col items-center gap-3 z-30"
-        >
-          <Swords className="w-20 h-20" style={{ color: "rgba(255,83,0,0.35)" }} />
-          <p
-            className="uppercase"
-            style={{
-              fontSize: 11,
-              letterSpacing: "0.24em",
-              fontWeight: 800,
-              color: "#cbd5e1",
-            }}
-          >
-            {flowType === "skill_check"
-              ? `Ready — ${resolved?.skill || "Skill"} Check`
-              : flowType === "saving_throw"
-              ? `${target?.name || "Target"} — ${(resolved?.save || "DEX").toUpperCase()} Save`
-              : flowType === "heal"
-              ? "Ready to Heal"
-              : flowType === "effect"
-              ? "Ready to Cast"
-              : flowType === "auto_damage"
-              ? "Ready to Strike"
-              : "Ready to Attack"}
-          </p>
-        </motion.div>
-      );
+      // Ready-state visuals live on the dice-zone wrapper as a
+      // pointer-events:none overlay above the DiceRoller, so we
+      // intentionally render nothing from inside the result-burst.
+      return null;
     }
     if (phase.startsWith("rolling_")) {
       // The embedded DiceRoller renders the live dice itself — no
@@ -3666,7 +3640,7 @@ export default function CombatDiceWindow({
           {/* Dice zone */}
           <div className="flex flex-col items-center gap-4 w-full">
             <div
-              className="relative flex items-center justify-center rounded-3xl"
+              className="relative rounded-3xl"
               style={{
                 width: 320,
                 height: 320,
@@ -3678,31 +3652,84 @@ export default function CombatDiceWindow({
                 overflow: "hidden",
               }}
             >
-              {/* DiceRoller is ALWAYS mounted so the ref is always
-                  valid. isOpen toggles its visibility while leaving
-                  the component in the tree for the duration of the
-                  combat window. The phase-aware overlays sit on top
-                  via AnimatePresence and stay pointer-events:none so
-                  they never block the dice surface. */}
-              <DiceRoller
-                isOpen={dicePopup.open}
-                embedded={true}
-                onClose={() => setDicePopup((p) => ({ ...p, open: false }))}
-                initialDice={dicePopup.dice}
-                forcedResult={dicePopup.forcedResult}
-                onRollComplete={(value) => {
-                  if (typeof dicePopup.onComplete === "function") {
-                    dicePopup.onComplete(value);
-                  }
+              {/* DiceRoller is ALWAYS mounted (never gated by phase)
+                  so the dice scene preserves state across phase
+                  transitions. Phase-aware overlays sit on top with
+                  pointer-events:none so they never block the dice. */}
+              <div style={{ position: "absolute", inset: 0 }}>
+                <DiceRoller
+                  isOpen={dicePopup.open}
+                  embedded={true}
+                  onClose={() => setDicePopup((p) => ({ ...p, open: false }))}
+                  initialDice={dicePopup.dice}
+                  forcedResult={dicePopup.forcedResult}
+                  onRollComplete={(value) => {
+                    if (typeof dicePopup.onComplete === "function") {
+                      dicePopup.onComplete(value);
+                    }
+                  }}
+                  primaryColor={currentUserProfile?.profile_color_1 || "#FF5300"}
+                  secondaryColor={currentUserProfile?.profile_color_2 || "#f8a47c"}
+                  isThemedSkin={true}
+                  config={campaignConfig}
+                  compact={true}
+                  autoCloseOnReveal={true}
+                />
+              </div>
+
+              {/* Ready-state overlay */}
+              {phase === "ready" && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    pointerEvents: "none",
+                  }}
+                >
+                  <div style={{ fontSize: 96, color: "rgba(255,255,255,0.06)" }}>
+                    ⚔
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      letterSpacing: "0.32em",
+                      color: "#5A6478",
+                      textTransform: "uppercase",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {flowType === "skill_check"
+                      ? `Ready — ${resolved?.skill || "Skill"} Check`
+                      : flowType === "saving_throw"
+                      ? `${(resolved?.save || "DEX").toUpperCase()} Save`
+                      : flowType === "heal"
+                      ? "Ready to Heal"
+                      : flowType === "effect"
+                      ? "Ready to Cast"
+                      : "Ready"}
+                  </div>
+                </div>
+              )}
+
+              {/* Result overlays — positioned absolute, never block
+                  the underlying DiceRoller surface. */}
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  pointerEvents: "none",
                 }}
-                primaryColor={currentUserProfile?.profile_color_1 || "#FF5300"}
-                secondaryColor={currentUserProfile?.profile_color_2 || "#f8a47c"}
-                isThemedSkin={true}
-                config={campaignConfig}
-                compact={true}
-                autoCloseOnReveal={true}
-              />
-              <AnimatePresence>{renderResultBurst()}</AnimatePresence>
+              >
+                <AnimatePresence>{renderResultBurst()}</AnimatePresence>
+              </div>
             </div>
 
             <div
