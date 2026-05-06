@@ -1934,8 +1934,27 @@ export default function CombatDiceWindow({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex flex-col items-center justify-start overflow-y-auto py-12 px-6"
+        className="fixed inset-0 z-[100] flex flex-col items-center justify-start overflow-y-auto py-12 px-6"
+        style={{
+          background:
+            "radial-gradient(ellipse 80% 60% at 50% 20%, rgba(255, 83, 0, 0.08), transparent 60%), " +
+            "radial-gradient(ellipse 60% 50% at 50% 100%, rgba(55, 242, 209, 0.06), transparent 60%), " +
+            "#050816",
+        }}
       >
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(255, 83, 0, 0.025) 1px, transparent 1px), " +
+              "linear-gradient(90deg, rgba(255, 83, 0, 0.025) 1px, transparent 1px)",
+            backgroundSize: "60px 60px",
+            maskImage:
+              "radial-gradient(ellipse 70% 60% at 50% 50%, black, transparent 80%)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse 70% 60% at 50% 50%, black, transparent 80%)",
+          }}
+        />
         <button
           onClick={onClose}
           className="fixed top-6 right-6 text-slate-400 hover:text-white p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors z-10"
@@ -2029,7 +2048,12 @@ export default function CombatDiceWindow({
           <div className="mt-10">
             <button
               onClick={handleViewTurnOrder}
-              className="bg-[#37F2D1] text-[#1E2430] px-10 py-4 rounded-full text-xl font-black tracking-wide hover:bg-[#2dd9bd] transition-colors shadow-[0_0_30px_rgba(55,242,209,0.4)]"
+              className="text-white px-10 py-4 rounded-2xl text-xl font-black tracking-[0.08em] uppercase transition-transform hover:-translate-y-0.5"
+              style={{
+                background: "linear-gradient(180deg, #FF5300, #cc4200)",
+                boxShadow:
+                  "0 8px 24px rgba(255,83,0,0.4), inset 0 -3px 0 rgba(0,0,0,0.3)",
+              }}
             >
               View Turn Order
             </button>
@@ -2040,1036 +2064,476 @@ export default function CombatDiceWindow({
   }
 
   // COMBAT MODE
-  return (
-    <>
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center overflow-hidden"
-    >
-      <button
-        onClick={onClose}
-        className="absolute top-6 right-6 text-slate-400 hover:text-white p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors"
-      >
-        <X className="w-6 h-6" />
-      </button>
+  // ----------------------------------------------------------------
+  // Visual rewrite — single-target layout with a step indicator at
+  // top, actor card on the left, dice zone in the middle, target
+  // card on the right. All state, handlers, and DiceRoller wiring
+  // are preserved from the previous implementation; only render
+  // output and inline styles changed.
 
-      <div className="w-full max-w-7xl flex-1 flex items-center justify-center gap-12 relative px-4 z-10 pointer-events-none">
-        {/* LEFT: Actor side */}
-        <div className="flex items-center gap-4 pointer-events-auto">
-          {!isSpectator && (
-            <div className="flex flex-col gap-2 items-end">
-              <span className="text-[10px] text-slate-400 font-bold tracking-wider uppercase mb-1">
-                Up Next
-              </span>
-              {getQueueAvatars("left").map((c, i) => (
-                <div
-                  key={i}
-                  className="w-12 h-12 rounded-full border-2 border-slate-700 overflow-hidden bg-[#050816] shadow-lg relative group"
-                >
-                  {c.avatar || c.avatar_url || c.image_url ? (
-                    <img
-                      src={c.avatar || c.avatar_url || c.image_url}
-                      className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity"
-                      alt=""
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-xs text-slate-500 font-bold">
-                      {safeText(c.name)?.[0]}
-                    </div>
-                  )}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/60 text-[8px] text-white text-center leading-tight transition-opacity">
-                    {safeText(c.name)}
-                  </div>
+  const FACTION_HEX = {
+    player: "#37F2D1",
+    enemy: "#FF5300",
+    ally: "#22c55e",
+    neutral: "#60a5fa",
+  };
+  const factionFor = (c) => {
+    if (!c) return "neutral";
+    if (c.type === "monster" || c.type === "npc") {
+      return c.faction === "ally" ? "ally" : "enemy";
+    }
+    return "player";
+  };
+  const factionColor = (c) => FACTION_HEX[factionFor(c)] || FACTION_HEX.neutral;
+
+  const STEP_FLOWS = {
+    attack: [
+      { label: "Ready", phases: ["ready"] },
+      { label: "Attack", phases: ["rolling_attack"] },
+      { label: "Result", phases: ["attack_result"] },
+      { label: "Damage", phases: ["rolling_damage"] },
+      { label: "Applied", phases: ["damage_result"] },
+    ],
+    skill_check: [
+      { label: "Ready", phases: ["ready"] },
+      { label: "Roll", phases: ["rolling_check"] },
+      { label: "Result", phases: ["check_result"] },
+    ],
+    saving_throw: [
+      { label: "Ready", phases: ["ready"] },
+      { label: "Roll", phases: ["rolling_save"] },
+      { label: "Result", phases: ["save_result"] },
+    ],
+    heal: [
+      { label: "Ready", phases: ["ready"] },
+      { label: "Roll", phases: ["rolling_heal"] },
+      { label: "Healed", phases: ["heal_result"] },
+    ],
+    auto_damage: [
+      { label: "Ready", phases: ["ready"] },
+      { label: "Roll", phases: ["rolling_damage"] },
+      { label: "Damage", phases: ["damage_result"] },
+    ],
+    effect: [
+      { label: "Ready", phases: ["ready"] },
+      { label: "Cast", phases: ["effect_applied"] },
+    ],
+  };
+  const stepsForFlow = STEP_FLOWS[flowType] || STEP_FLOWS.attack;
+  const currentStepIndex = (() => {
+    for (let i = stepsForFlow.length - 1; i >= 0; i--) {
+      if (stepsForFlow[i].phases.includes(phase)) return i;
+    }
+    return 0;
+  })();
+
+  const actorColor = factionColor(actor);
+  const targetColor = factionColor(target);
+
+  // Inline sub-component renderers — kept in this file rather than
+  // extracted so the surrounding state stays close.
+  const renderUpNext = (side) => {
+    if (isSpectator) return null;
+    const queue = getQueueAvatars(side);
+    if (!queue.length) return null;
+    const sideStyle = side === "left" ? { left: 24 } : { right: 24 };
+    return (
+      <div
+        className="absolute z-20 flex flex-col items-center gap-2"
+        style={{ top: 100, ...sideStyle }}
+      >
+        <span className="text-[9px] uppercase tracking-[0.24em] text-slate-500 font-bold">
+          Up Next
+        </span>
+        {queue.map((c, i) => {
+          const avatar = c.avatar || c.avatar_url || c.image_url;
+          return (
+            <div
+              key={c.uniqueId || c.id || i}
+              className="relative group rounded-full overflow-hidden bg-[#0b1220] transition-all hover:scale-105"
+              style={{
+                width: 44,
+                height: 44,
+                border: "2px solid rgba(51,65,85,1)",
+                opacity: 0.7,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = "1";
+                e.currentTarget.style.borderColor = "#FF5300";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = "0.7";
+                e.currentTarget.style.borderColor = "rgba(51,65,85,1)";
+              }}
+            >
+              {avatar ? (
+                <img src={avatar} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-500 font-bold">
+                  {safeText(c.name)?.[0]}
                 </div>
-              ))}
+              )}
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/70 text-[8px] text-white text-center leading-tight transition-opacity px-1">
+                {safeText(c.name)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderCombatTitle = () => {
+    const showVs = !!target && flowType !== "skill_check";
+    const showSkill =
+      flowType === "skill_check" && !target && resolved?.skill;
+    return (
+      <div
+        className="flex items-center justify-center gap-3"
+        style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.1 }}
+      >
+        <span style={{ color: actorColor }}>{safeText(actor?.name) || "Actor"}</span>
+        {showVs && (
+          <>
+            <span
+              className="uppercase text-slate-500"
+              style={{ fontSize: 14, letterSpacing: "0.32em", fontWeight: 700 }}
+            >
+              vs
+            </span>
+            <span style={{ color: targetColor }}>
+              {safeText(target?.name) || "Target"}
+            </span>
+          </>
+        )}
+        {flowType === "skill_check" && resolved?.contested && target && (
+          <>
+            <span
+              className="uppercase text-slate-500"
+              style={{ fontSize: 14, letterSpacing: "0.32em", fontWeight: 700 }}
+            >
+              vs
+            </span>
+            <span style={{ color: targetColor }}>{safeText(target.name)}</span>
+          </>
+        )}
+        {showSkill && (
+          <span
+            className="text-slate-300"
+            style={{ fontSize: 16, fontWeight: 600 }}
+          >
+            — {resolved.skill}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const renderStepIndicator = () => (
+    <div
+      className="flex items-center gap-2 rounded-full"
+      style={{
+        background: "rgba(0,0,0,0.3)",
+        border: "1px solid rgba(255,255,255,0.05)",
+        padding: "6px 8px",
+      }}
+    >
+      {stepsForFlow.map((step, i) => {
+        const isCurrent = i === currentStepIndex;
+        const isDone = i < currentStepIndex;
+        const circleStyle = isCurrent
+          ? {
+              background: "#FF5300",
+              border: "1px solid #FF5300",
+              animation: "cdwPulse 1.6s infinite",
+            }
+          : isDone
+          ? {
+              background: "rgba(55,242,209,0.15)",
+              border: "1px solid rgba(55,242,209,0.6)",
+            }
+          : {
+              background: "transparent",
+              border: "1px solid rgba(100,116,139,0.6)",
+            };
+        const labelColor = isCurrent
+          ? "#fff"
+          : isDone
+          ? "#cbd5e1"
+          : "#64748b";
+        return (
+          <React.Fragment key={i}>
+            {i > 0 && (
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 16,
+                  height: 1,
+                  background: i <= currentStepIndex ? "rgba(55,242,209,0.4)" : "#334155",
+                }}
+              />
+            )}
+            <div className="flex items-center gap-1.5">
+              <span
+                style={{
+                  width: 18,
+                  height: 18,
+                  borderRadius: "50%",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  ...circleStyle,
+                }}
+              >
+                {isDone && (
+                  <span
+                    style={{
+                      color: "#37F2D1",
+                      fontSize: 11,
+                      fontWeight: 900,
+                      lineHeight: 1,
+                    }}
+                  >
+                    ✓
+                  </span>
+                )}
+              </span>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  color: labelColor,
+                }}
+              >
+                {step.label}
+              </span>
+            </div>
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+
+  const renderPortrait = (combatant, opts = {}) => {
+    const { isActor = false, size = 200 } = opts;
+    const color = factionColor(combatant);
+    const avatar =
+      combatant?.avatar_url ||
+      combatant?.image_url ||
+      combatant?.profile_avatar_url ||
+      combatant?.avatar;
+    return (
+      <div
+        className="relative bg-[#1a1f2e] overflow-hidden"
+        style={{
+          width: size,
+          height: size,
+          borderRadius: "50%",
+          border: `3px solid ${color}`,
+          boxShadow:
+            "0 0 0 1px rgba(0,0,0,0.4), 0 0 40px " +
+            (color +
+              "4D") +
+            ", inset 0 0 30px rgba(0,0,0,0.5)",
+        }}
+      >
+        {avatar ? (
+          <img
+            src={avatar}
+            alt={safeText(combatant?.name)}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-5xl text-slate-600 font-bold">
+            {isActor ? "?" : "?"}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderHpBar = (combatant, { showNumbers = true } = {}) => {
+    if (!combatant?.hit_points) return null;
+    const max = combatant.hit_points.max || 0;
+    const current = combatant.hit_points.current ?? max;
+    const pct = max > 0 ? Math.min(100, (current / max) * 100) : 0;
+    // Armour class can come in as a number, an object with a value/
+    // total/base shape, or be missing. Coerce to a plain string so we
+    // never end up with "[object Object]" leaking into the UI.
+    const acRaw =
+      combatant?.stats?.armor_class ?? combatant?.armor_class ?? combatant?.ac;
+    const ac =
+      typeof acRaw === "number"
+        ? acRaw
+        : acRaw?.value ?? acRaw?.total ?? acRaw?.base ?? null;
+    return (
+      <div className="flex flex-col items-center gap-1">
+        <div
+          className="relative overflow-hidden rounded-full"
+          style={{
+            width: 180,
+            height: 8,
+            background: "rgba(255,255,255,0.06)",
+          }}
+        >
+          <div
+            className={`h-full rounded-full ${hpBarColor(pct)}`}
+            style={{ width: `${pct}%` }}
+          />
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background:
+                "linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)",
+              animation: "cdwShimmer 2.4s infinite",
+            }}
+          />
+        </div>
+        {showNumbers && (
+          <span
+            className="text-slate-300 font-mono"
+            style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em" }}
+          >
+            {current} / {max} HP{ac ? ` · AC ${ac}` : ""}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const renderCombatantCard = (combatant, role) => {
+    if (!combatant) {
+      return (
+        <div className="flex flex-col items-center gap-3 opacity-50">
+          <div
+            style={{
+              width: 200,
+              height: 200,
+              borderRadius: "50%",
+              border: "3px dashed rgba(100,116,139,0.4)",
+            }}
+          />
+          <div className="text-slate-500 text-xs uppercase tracking-[0.24em]">
+            {role === "actor" ? "No Actor" : "No Target"}
+          </div>
+        </div>
+      );
+    }
+    const isActor = role === "actor";
+    const color = factionColor(combatant);
+    const showHpNumbers =
+      isActor || isGM || combatant.type === "player";
+    return (
+      <div className="relative flex flex-col items-center gap-3">
+        {renderPortrait(combatant, { isActor })}
+        {/* Switch-target lives on the portrait edge — only on the
+            target column, never on the actor. Positioned vertically
+            centered on the 200px portrait. */}
+        {role === "target" && !isSpectator && target && (
+          <button
+            onClick={onSwitchTarget}
+            title="Switch Target"
+            className="absolute flex items-center justify-center transition-transform hover:scale-110"
+            style={{
+              left: -18,
+              top: 100,
+              transform: "translateY(-50%)",
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              background: "#FF5300",
+              border: "3px solid #050816",
+              boxShadow: "0 6px 16px rgba(0,0,0,0.6)",
+              zIndex: 5,
+            }}
+          >
+            <RefreshCw className="w-4 h-4 text-white" />
+          </button>
+        )}
+        <div className="relative flex flex-col items-center gap-2 w-full">
+          {isActor && (
+            <div
+              className="absolute uppercase font-black"
+              style={{
+                top: -10,
+                left: "50%",
+                transform: "translateX(-50%)",
+                background: "#FF5300",
+                color: "#fff",
+                padding: "3px 12px",
+                borderRadius: 9999,
+                fontSize: 9,
+                letterSpacing: "0.18em",
+                fontWeight: 800,
+                border: "2px solid #050816",
+                whiteSpace: "nowrap",
+                zIndex: 5,
+              }}
+            >
+              Acting
             </div>
           )}
-
-          <div className="relative flex flex-col items-center gap-2">
-            <div className="w-48 h-48 rounded-full border-4 border-[#37F2D1] overflow-hidden shadow-[0_0_50px_rgba(55,242,209,0.3)] bg-[#1a1f2e] relative z-10">
-              {actor ? (
-                <img
-                  src={
-                    actor.avatar_url ||
-                    actor.image_url ||
-                    actor.profile_avatar_url
-                  }
-                  alt={safeText(actor.name)}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-4xl text-slate-600">
-                  ?
-                </div>
-              )}
-            </div>
-            {(() => {
-              const isActorPlayer = actor?.type !== 'monster' && actor?.type !== 'npc';
-              const bubble = isActorPlayer
-                ? 'bg-[#37F2D1]/20 text-[#37F2D1] border border-[#37F2D1]'
-                : 'bg-[#FF5722]/20 text-[#FF5722] border border-[#FF5722]';
-              return (
-                <div className={`px-4 py-1 rounded-full text-sm font-bold whitespace-nowrap z-20 ${bubble}`}>
-                  {safeText(actor?.name) || "Actor"}
-                </div>
-              );
-            })()}
-            {/* Actor HP (actor always sees own HP) — color driven by % */}
-            {actor?.hit_points && (() => {
-              const max = actor.hit_points.max || 0;
-              const current = actor.hit_points.current ?? max;
-              const pct = max > 0 ? Math.min(100, (current / max) * 100) : 0;
-              return (
-                <>
-                  <div className="w-32 h-2 bg-gray-800 rounded-full overflow-hidden mt-1 border border-gray-700">
-                    <div
-                      className={`h-full ${hpBarColor(pct)}`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                  <span className="text-[10px] text-gray-400">
-                    {current} / {max} HP
-                  </span>
-                </>
-              );
-            })()}
+          <div
+            className="rounded-full text-center"
+            style={{
+              background: color + "1F",
+              border: `1px solid ${color}`,
+              padding: "6px 18px",
+              fontSize: 14,
+              fontWeight: 700,
+              color: "#fff",
+              maxWidth: 220,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {safeText(combatant.name) || (isActor ? "Actor" : "Target")}
           </div>
-        </div>
-
-        {/* CENTER: Dice + result */}
-        <div className="flex-1 max-w-md flex flex-col items-center justify-center text-center z-20 pointer-events-auto">
-          <h2 className="text-3xl font-black text-white mb-8 tracking-wider drop-shadow-[0_0_10px_rgba(0,0,0,0.8)] flex items-center gap-3">
-            <span className="text-[#37F2D1]">{actor?.name || "You"}</span>
-            {(flowType === "attack" || flowType === "saving_throw" || target) && (
-              <>
-                <span className="text-slate-500 text-xl">
-                  {flowType === "skill_check" && resolved?.contested
-                    ? "VS"
-                    : flowType === "saving_throw"
-                    ? "→"
-                    : "VS"}
-                </span>
-                <span className="text-red-500">{target?.name || (flowType === "skill_check" ? "" : "Target")}</span>
-              </>
-            )}
-            {flowType === "skill_check" && !target && resolved?.skill && (
-              <span className="text-[#37F2D1] text-xl">— {resolved.skill}</span>
-            )}
-          </h2>
-
-          {/* Attack result line */}
-          <div className="h-16 flex items-end justify-center mb-4 relative z-20 mt-12">
-            <AnimatePresence>
-              {(phase === "attack_result" || phase === "damage_result") &&
-                attackRoll && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    className="text-white font-bold text-2xl flex items-center gap-2 bg-black/50 px-6 py-2 rounded-full border border-white/10 backdrop-blur-md shadow-lg"
-                  >
-                    {attackRoll.pair && (
-                      <span className="flex items-center gap-1 mr-1 text-sm">
-                        <span
-                          className={`px-1.5 py-0.5 rounded ${
-                            attackRoll.pair.chosen === 0
-                              ? attackRoll.pair.mode === "advantage"
-                                ? "bg-[#22c55e]/30 text-[#22c55e]"
-                                : "bg-red-500/30 text-red-300"
-                              : "text-slate-600 line-through"
-                          }`}
-                        >
-                          {attackRoll.pair.dice[0]}
-                        </span>
-                        <span className="text-slate-500 text-xs">
-                          {attackRoll.pair.mode === "advantage" ? "ADV" : "DIS"}
-                        </span>
-                        <span
-                          className={`px-1.5 py-0.5 rounded ${
-                            attackRoll.pair.chosen === 1
-                              ? attackRoll.pair.mode === "advantage"
-                                ? "bg-[#22c55e]/30 text-[#22c55e]"
-                                : "bg-red-500/30 text-red-300"
-                              : "text-slate-600 line-through"
-                          }`}
-                        >
-                          {attackRoll.pair.dice[1]}
-                        </span>
-                      </span>
-                    )}
-                    {attackRoll.autoCrit && (
-                      <span className="text-yellow-300 text-[10px] uppercase tracking-widest mr-1">
-                        Auto-crit
-                      </span>
-                    )}
-                    <span
-                      className={
-                        attackRoll.isCrit
-                          ? "text-yellow-400 animate-pulse"
-                          : "text-slate-300"
-                      }
-                    >
-                      {attackRoll.d20 === 20 ? "NAT 20" : attackRoll.d20}
-                    </span>
-                    {!attackRoll.isCrit && attackRoll.mod !== 0 && (
-                      <span className="text-slate-400 text-lg">
-                        {attackRoll.mod > 0 ? "+" : ""}
-                        {attackRoll.mod}
-                      </span>
-                    )}
-                    <span className="mx-1">=</span>
-                    <span
-                      className={
-                        attackRoll.isCrit
-                          ? "text-yellow-400 text-3xl"
-                          : attackRoll.total >= targetAC
-                          ? "text-[#37F2D1]"
-                          : "text-red-500"
-                      }
-                    >
-                      {attackRoll.isCrit ? "CRIT!" : attackRoll.total}
-                    </span>
-                    {!attackRoll.isCrit && (
-                      <span className="text-slate-500 text-sm ml-2 pl-2 border-l border-slate-600">
-                        vs AC {targetAC}
-                      </span>
-                    )}
-                  </motion.div>
-                )}
-            </AnimatePresence>
-          </div>
-
-          {/* Dice container */}
-          <div className="w-[300px] h-[300px] relative flex items-center justify-center mb-4">
-            {phase === "ready" ? (
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="text-slate-600 flex flex-col items-center"
-              >
-                <Swords className="w-32 h-32 opacity-20 mb-4" />
-                <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">
-                  {flowType === "skill_check"
-                    ? `Ready — ${resolved?.skill || "Skill"} Check`
-                    : flowType === "saving_throw"
-                    ? `${target?.name || "Target"} — ${(resolved?.save || "DEX").toUpperCase()} Save`
-                    : "Ready to Attack"}
-                </p>
-              </motion.div>
-            ) : (
-              <>
-                <AnimatePresence>
-                  {(phase === "attack_result" ||
-                    phase === "damage_result") && (
-                    <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
-                      {!damageRoll && (
-                        <motion.div
-                          initial={{ scale: 0, rotate: -45, opacity: 0 }}
-                          animate={{
-                            scale: [0, 1.5, 1],
-                            rotate: [-45, 0, -5],
-                            opacity: 1,
-                          }}
-                          transition={{
-                            type: "spring",
-                            stiffness: 300,
-                            damping: 15,
-                          }}
-                          className={`absolute -right-16 -top-12 text-6xl font-black ${
-                            isHit ? "text-[#37F2D1]" : "text-red-500"
-                          } drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)]`}
-                          style={{
-                            textShadow: isHit
-                              ? "0 0 20px #37F2D1"
-                              : "0 0 20px #ef4444",
-                          }}
-                        >
-                          {isHit ? (isCrit ? "CRITICAL!" : "HIT!") : "MISS"}
-                        </motion.div>
-                      )}
-
-                      {damageRoll && (
-                        <div className="flex flex-col items-center gap-2">
-                          <motion.div
-                            initial={{ scale: 0, y: 50 }}
-                            animate={{ scale: 1, y: 0 }}
-                            transition={{ type: "spring", bounce: 0.5 }}
-                            className="bg-gradient-to-br from-red-600 to-red-800 text-white w-32 h-32 rounded-full flex flex-col items-center justify-center shadow-[0_0_50px_rgba(220,38,38,0.8)] border-4 border-white z-50"
-                          >
-                            <span className="text-5xl font-black drop-shadow-md">
-                              {damageRoll.total}
-                            </span>
-                            <span className="text-xs font-bold uppercase tracking-widest opacity-90">
-                              Damage
-                            </span>
-                            {damageRoll.sneakDice > 0 && (
-                              <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-yellow-300 drop-shadow">
-                                +{damageRoll.sneakDice}d6 Sneak
-                              </span>
-                            )}
-                            {damageRoll.bonusDamage?.label && (
-                              <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-[#fbbf24] drop-shadow">
-                                +{safeText(damageRoll.bonusDamage.dice)} {safeText(damageRoll.bonusDamage.label)}
-                              </span>
-                            )}
-                            {spellEffect?.effect === "damage_condition" && spellEffect.condition && (
-                              <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-purple-200 drop-shadow">
-                                +{safeText(spellEffect.condition)}
-                              </span>
-                            )}
-                          </motion.div>
-                          {damageRoll.gwfRerolls > 0 && Array.isArray(damageRoll.rolledDice) && (
-                            <div className="mt-2 flex flex-wrap items-center justify-center gap-1 bg-black/60 border border-yellow-500/40 rounded-full px-3 py-1 max-w-xs pointer-events-auto">
-                              <span className="text-[9px] font-bold uppercase tracking-widest text-yellow-300 mr-1">
-                                GWF
-                              </span>
-                              {damageRoll.rolledDice.map((d, i) => (
-                                <span key={i} className="text-[10px] font-mono">
-                                  {d.rerolled ? (
-                                    <>
-                                      <span className="line-through text-red-300">{safeText(d.original)}</span>
-                                      <span className="text-yellow-200"> → {safeText(d.value)}</span>
-                                    </>
-                                  ) : (
-                                    <span className="text-slate-300">{safeText(d.value)}</span>
-                                  )}
-                                  {i < damageRoll.rolledDice.length - 1 && (
-                                    <span className="text-slate-600">, </span>
-                                  )}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {phase === "heal_result" && healRoll && (
-                    <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
-                      <motion.div
-                        initial={{ scale: 0, y: 50 }}
-                        animate={{ scale: 1, y: 0 }}
-                        transition={{ type: "spring", bounce: 0.5 }}
-                        className="bg-gradient-to-br from-[#22c55e] to-[#14532d] text-white w-36 h-36 rounded-full flex flex-col items-center justify-center shadow-[0_0_50px_rgba(34,197,94,0.8)] border-4 border-white z-50"
-                      >
-                        <span className="text-xs font-bold uppercase tracking-widest opacity-90">
-                          Healed
-                        </span>
-                        <span className="text-5xl font-black drop-shadow-md">
-                          +{healRoll.total}
-                        </span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider opacity-80">
-                          {healRoll.dice}
-                          {healRoll.mod > 0 ? ` + ${healRoll.mod}` : ""}
-                        </span>
-                      </motion.div>
-                    </div>
-                  )}
-
-                  {phase === "effect_applied" && effectApplied && (
-                    <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
-                      <motion.div
-                        initial={{ scale: 0, y: 50 }}
-                        animate={{ scale: 1, y: 0 }}
-                        transition={{ type: "spring", bounce: 0.5 }}
-                        className={`${
-                          effectApplied.effect === "buff"
-                            ? "bg-gradient-to-br from-[#37F2D1] to-[#0ea5e9]"
-                            : effectApplied.effect === "utility"
-                            ? "bg-gradient-to-br from-slate-500 to-slate-800"
-                            : "bg-gradient-to-br from-[#8B5CF6] to-[#5b21b6]"
-                        } text-white w-56 min-h-[9rem] rounded-[2rem] flex flex-col items-center justify-center shadow-[0_0_50px_rgba(0,0,0,0.75)] border-4 border-white z-50 px-4 py-3`}
-                      >
-                        <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">
-                          Spell Cast
-                        </span>
-                        <span className="text-center text-sm font-black uppercase tracking-wide mt-1 drop-shadow leading-tight">
-                          {effectApplied.label}
-                        </span>
-                      </motion.div>
-                    </div>
-                  )}
-
-                  {phase === "check_result" && skillCheckRoll && !skillCheckRoll.contested && (
-                    <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
-                      <motion.div
-                        initial={{ scale: 0, y: 50 }}
-                        animate={{ scale: 1, y: 0 }}
-                        transition={{ type: "spring", bounce: 0.5 }}
-                        className="bg-gradient-to-br from-[#37F2D1] to-[#0ea5e9] text-[#050816] w-40 h-40 rounded-full flex flex-col items-center justify-center shadow-[0_0_50px_rgba(55,242,209,0.7)] border-4 border-white z-50"
-                      >
-                        <span className="text-xs font-bold uppercase tracking-widest opacity-80">
-                          {skillCheckRoll.skill}
-                        </span>
-                        <span className="text-5xl font-black drop-shadow-md">
-                          {skillCheckRoll.total}
-                        </span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">
-                          {skillCheckRoll.d20}
-                          {skillCheckRoll.mod >= 0 ? " + " : " − "}
-                          {Math.abs(skillCheckRoll.mod)}
-                        </span>
-                      </motion.div>
-                    </div>
-                  )}
-
-                  {phase === "check_result" && skillCheckRoll?.contested && (
-                    <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
-                      <motion.div
-                        initial={{ scale: 0, y: 30 }}
-                        animate={{ scale: 1, y: 0 }}
-                        transition={{ type: "spring", bounce: 0.5 }}
-                        className="flex items-center gap-4 z-50"
-                      >
-                        {/* Actor roll */}
-                        <div
-                          className={`w-32 h-32 rounded-full flex flex-col items-center justify-center shadow-[0_0_40px_rgba(0,0,0,0.7)] border-4 ${
-                            skillCheckRoll.contested.winner === 'actor'
-                              ? 'bg-gradient-to-br from-[#37F2D1] to-[#0ea5e9] text-[#050816] border-white'
-                              : 'bg-gradient-to-br from-slate-700 to-slate-900 text-white/70 border-slate-500'
-                          }`}
-                        >
-                          <span className="text-[9px] font-bold uppercase tracking-widest opacity-80">
-                            {skillCheckRoll.skill}
-                          </span>
-                          <span className="text-4xl font-black drop-shadow-md">
-                            {skillCheckRoll.total}
-                          </span>
-                          <span className="text-[9px] font-bold uppercase tracking-wider opacity-70">
-                            {skillCheckRoll.d20}
-                            {skillCheckRoll.mod >= 0 ? ' + ' : ' − '}
-                            {Math.abs(skillCheckRoll.mod)}
-                          </span>
-                        </div>
-
-                        <span className="text-white text-xs font-black uppercase tracking-widest drop-shadow">VS</span>
-
-                        {/* Target roll */}
-                        <div
-                          className={`w-32 h-32 rounded-full flex flex-col items-center justify-center shadow-[0_0_40px_rgba(0,0,0,0.7)] border-4 ${
-                            skillCheckRoll.contested.winner === 'target'
-                              ? 'bg-gradient-to-br from-red-500 to-red-800 text-white border-white'
-                              : 'bg-gradient-to-br from-slate-700 to-slate-900 text-white/70 border-slate-500'
-                          }`}
-                        >
-                          <span className="text-[9px] font-bold uppercase tracking-widest opacity-80 text-center px-1 truncate max-w-[110px]">
-                            {skillCheckRoll.contested.targetSkill}
-                          </span>
-                          <span className="text-4xl font-black drop-shadow-md">
-                            {skillCheckRoll.contested.targetTotal}
-                          </span>
-                          <span className="text-[9px] font-bold uppercase tracking-wider opacity-70">
-                            {skillCheckRoll.contested.targetD20}
-                            {skillCheckRoll.contested.targetMod >= 0 ? ' + ' : ' − '}
-                            {Math.abs(skillCheckRoll.contested.targetMod)}
-                          </span>
-                        </div>
-                      </motion.div>
-
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.4 }}
-                        className="absolute bottom-6 left-1/2 -translate-x-1/2 text-center z-50"
-                      >
-                        <div
-                          className={`text-sm font-black uppercase tracking-widest px-4 py-1 rounded-full ${
-                            skillCheckRoll.contested.winner === 'actor'
-                              ? 'bg-[#37F2D1]/20 text-[#37F2D1] border border-[#37F2D1]/50'
-                              : 'bg-red-500/20 text-red-300 border border-red-500/50'
-                          }`}
-                        >
-                          {skillCheckRoll.contested.winner === 'actor'
-                            ? `${actor?.name || 'Actor'} wins the contest`
-                            : `${skillCheckRoll.contested.targetName} resists`}
-                        </div>
-                      </motion.div>
-                    </div>
-                  )}
-
-                  {phase === "save_result" && savingThrowRoll && (
-                    <div className="absolute inset-0 pointer-events-none z-20 flex flex-col items-center justify-center gap-2">
-                      <motion.div
-                        initial={{ scale: 0, y: 50 }}
-                        animate={{ scale: 1, y: 0 }}
-                        transition={{ type: "spring", bounce: 0.5 }}
-                        className={`${
-                          savingThrowRoll.success
-                            ? "bg-gradient-to-br from-[#37F2D1] to-[#0ea5e9] text-[#050816]"
-                            : "bg-gradient-to-br from-red-600 to-red-800 text-white"
-                        } w-44 h-44 rounded-full flex flex-col items-center justify-center shadow-[0_0_50px_rgba(0,0,0,0.8)] border-4 border-white z-50`}
-                      >
-                        <span className="text-xs font-bold uppercase tracking-widest opacity-80">
-                          {safeText(savingThrowRoll.ability).toUpperCase()} SAVE
-                        </span>
-                        <span className="text-5xl font-black drop-shadow-md">
-                          {safeText(savingThrowRoll.total)}
-                        </span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
-                          vs DC {safeText(savingThrowRoll.dc)}
-                        </span>
-                        <span className="text-sm font-black uppercase tracking-widest mt-1">
-                          {savingThrowRoll.success ? "SAVED" : "FAILED"}
-                        </span>
-                      </motion.div>
-                      {(() => {
-                        // Tier 3: Evasion — Monk/Rogue level 7+ on a
-                        // DEX save. Success = no damage, fail = half.
-                        const tgt = target;
-                        if (!tgt) return null;
-                        const tgtClass = (tgt.class || tgt.stats?.class || '').toString();
-                        const tgtLvl = tgt.level || tgt.stats?.level || 0;
-                        const hasEvasion =
-                          (/monk/i.test(tgtClass) || /rogue/i.test(tgtClass)) &&
-                          tgtLvl >= 7;
-                        if (!hasEvasion) return null;
-                        if ((savingThrowRoll.ability || '').toLowerCase() !== 'dex') return null;
-                        return (
-                          <div className="bg-black/80 border border-[#37F2D1] rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-[#37F2D1]">
-                            Evasion — {savingThrowRoll.success ? 'No damage!' : 'Half damage!'}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-                </AnimatePresence>
-              </>
-            )}
-          </div>
-
-          {/* Interaction Buttons (actor vs spectator) */}
-          <div className="w-full max-w-xs space-y-3 relative z-30 min-h-[60px]">
-            {isSpectator ? (
-              <div className="bg-black/60 backdrop-blur text-white px-6 py-3 rounded-xl border border-white/10 text-center flex flex-col gap-2">
-                {spectatorData?.action && (
-                  <div className="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-white/10 pb-1 mb-1">
-                    USING {safeText(spectatorData.action.name)}
-                  </div>
-                )}
-                <p className="text-sm font-bold text-[#37F2D1] animate-pulse">
-                  {phase === "ready" && "PREPARING..."}
-                  {phase === "rolling_attack" && "ROLLING ATTACK..."}
-                  {phase === "attack_result" &&
-                    (isHit
-                      ? "ATTACK HIT! WAITING FOR DAMAGE..."
-                      : "ATTACK MISSED")}
-                  {phase === "rolling_damage" && "ROLLING DAMAGE..."}
-                  {phase === "damage_result" && "DAMAGE APPLIED"}
-                  {phase === "rolling_check" && "ROLLING CHECK..."}
-                  {phase === "check_result" && "CHECK COMPLETE"}
-                  {phase === "rolling_save" && "ROLLING SAVE..."}
-                  {phase === "save_result" && "SAVE RESOLVED"}
-                </p>
-              </div>
-            ) : (
-              <>
-                {phase === "ready" && conditionPreview.warnings.length > 0 && (
-                  <div className="w-full flex flex-col gap-1 mb-2">
-                    {conditionPreview.hasAdvantage && (
-                      <div className="w-full text-center text-[11px] font-black uppercase tracking-[0.22em] text-[#22c55e] bg-[#22c55e]/10 border border-[#22c55e]/50 rounded-lg py-1.5">
-                        Rolling with Advantage
-                      </div>
-                    )}
-                    {conditionPreview.hasDisadvantage && (
-                      <div className="w-full text-center text-[11px] font-black uppercase tracking-[0.22em] text-red-400 bg-red-500/10 border border-red-500/50 rounded-lg py-1.5">
-                        Rolling with Disadvantage
-                      </div>
-                    )}
-                    {conditionPreview.isAutoCrit && (
-                      <div className="w-full text-center text-[11px] font-black uppercase tracking-[0.22em] text-yellow-300 bg-yellow-400/10 border border-yellow-400/50 rounded-lg py-1.5">
-                        Auto-crit on melee hit
-                      </div>
-                    )}
-                    {conditionPreview.isAutoFail && flowType === "saving_throw" && (
-                      <div className="w-full text-center text-[11px] font-black uppercase tracking-[0.22em] text-red-300 bg-red-600/20 border border-red-500/60 rounded-lg py-1.5">
-                        Auto-Fail Save
-                      </div>
-                    )}
-                    <div className="flex flex-col gap-0.5 max-h-24 overflow-y-auto rounded-lg bg-black/50 border border-yellow-500/30 px-2 py-1">
-                      {conditionPreview.warnings.map((w, i) => (
-                        <div
-                          key={i}
-                          className="text-[10px] text-yellow-200/90 leading-snug"
-                        >
-                          • {w}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Lucky feat — spend a point to roll a second d20
-                    and pick the better (or worse) result. */}
-                {(() => {
-                  if (isSpectator) return null;
-                  const feats = Array.isArray(actor?.feats) ? actor.feats
-                    : Array.isArray(actor?.features) ? actor.features : [];
-                  const hasLucky = feats.some((f) => {
-                    const n = typeof f === 'string' ? f : f?.name;
-                    return typeof n === 'string' && n.toLowerCase() === 'lucky';
-                  });
-                  if (!hasLucky) return null;
-                  const luckyLeft = actor?.classResources?.luckyPointsRemaining ?? 3;
-                  if (luckyLeft <= 0 || luckyConsumed) return null;
-                  let kind = null;
-                  if (phase === 'attack_result' && attackRoll) kind = 'attack';
-                  else if (phase === 'check_result' && skillCheckRoll) kind = 'skill';
-                  else if (phase === 'save_result' && savingThrowRoll) kind = 'save';
-                  if (!kind) return null;
-                  return (
-                    <div className="w-full bg-gradient-to-r from-[#facc15]/15 to-[#f59e0b]/10 border border-[#facc15]/50 rounded-2xl p-3 flex items-center justify-between gap-2 mb-3">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] uppercase tracking-[0.22em] text-[#facc15] font-black">
-                          ● Lucky ({luckyLeft} left)
-                        </span>
-                        <span className="text-[11px] text-white font-bold">Roll an extra d20, take the better.</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => rollLuckyReroll(kind)}
-                          className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-[#facc15] text-[#050816] hover:bg-[#fde68a]"
-                        >
-                          Spend
-                        </button>
-                        <button
-                          onClick={() => setLuckyConsumed(true)}
-                          className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600"
-                        >
-                          Keep
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Inspiration — DM-granted advantage on a single d20. */}
-                {(() => {
-                  if (isSpectator) return null;
-                  if (!actor?.hasInspiration || inspirationDiceUsed) return null;
-                  let kind = null;
-                  if (phase === 'attack_result' && attackRoll) kind = 'attack';
-                  else if (phase === 'check_result' && skillCheckRoll) kind = 'skill';
-                  else if (phase === 'save_result' && savingThrowRoll) kind = 'save';
-                  if (!kind) return null;
-                  return (
-                    <div className="w-full bg-gradient-to-r from-[#facc15]/20 to-[#eab308]/10 border border-[#facc15]/60 rounded-2xl p-3 flex items-center justify-between gap-2 mb-3">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] uppercase tracking-[0.22em] text-[#facc15] font-black">
-                          ★ Inspiration
-                        </span>
-                        <span className="text-[11px] text-white font-bold">Reroll with advantage?</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => useInspirationAdvantage(kind)}
-                          className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-[#facc15] text-[#050816] hover:bg-[#fde68a]"
-                        >
-                          Use
-                        </button>
-                        <button
-                          onClick={() => setInspirationDiceUsed(true)}
-                          className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600"
-                        >
-                          Save
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Bardic Inspiration prompt — surfaces whenever the
-                    actor has an unspent inspiration die and they've
-                    just completed a d20 roll (attack, skill, save).
-                    Consuming adds the roll to the d20 total and may
-                    flip the outcome. */}
-                {(() => {
-                  const insp = actor?.bardicInspiration;
-                  if (!insp?.die || inspirationConsumed || isSpectator) return null;
-                  let kind = null;
-                  if (phase === 'attack_result' && attackRoll) kind = 'attack';
-                  else if (phase === 'check_result' && skillCheckRoll) kind = 'skill';
-                  else if (phase === 'save_result' && savingThrowRoll) kind = 'save';
-                  if (!kind) return null;
-                  return (
-                    <div className="w-full bg-gradient-to-r from-[#fbbf24]/20 to-[#f59e0b]/10 border border-[#fbbf24]/50 rounded-2xl p-3 flex items-center justify-between gap-2 mb-3">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] uppercase tracking-[0.22em] text-[#fbbf24] font-black flex items-center gap-1">
-                          <Music className="w-3 h-3" /> Bardic Inspiration
-                        </span>
-                        <span className="text-[11px] text-white font-bold">
-                          Use inspiration? +{insp.die}
-                        </span>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => rollBardicInspiration(kind)}
-                          className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-[#fbbf24] text-[#050816] hover:bg-[#fde68a] transition-colors"
-                        >
-                          Use
-                        </button>
-                        <button
-                          onClick={() => setInspirationConsumed(true)}
-                          className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors"
-                        >
-                          Save
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {phase === "ready" && flowType === "attack" && (
-                  <div className="w-full flex flex-col items-center gap-2">
-                    {extraAttackInfo && (
-                      <div className="text-[10px] uppercase tracking-[0.3em] text-[#37F2D1] font-black bg-[#37F2D1]/10 border border-[#37F2D1]/40 rounded-full px-4 py-1">
-                        Attack {extraAttackInfo.current} of {extraAttackInfo.total}
-                      </div>
-                    )}
-                    <button
-                      onClick={handleAttackRoll}
-                      disabled={isRolling || !target}
-                      className="w-full bg-[#FF5722] hover:bg-[#FF6B3D] disabled:opacity-50 disabled:cursor-not-allowed text-white text-2xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(255,87,34,0.4)] border-b-4 border-[#c43e12] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
-                    >
-                      {isRolling ? "ROLLING..." : "ROLL ATTACK"}
-                    </button>
-                  </div>
-                )}
-
-                {phase === "ready" && flowType === "heal" && (
-                  <button
-                    onClick={handleHealRoll}
-                    disabled={isRolling || !target}
-                    className="w-full bg-[#22c55e] hover:bg-[#16a34a] disabled:opacity-50 disabled:cursor-not-allowed text-white text-2xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(34,197,94,0.4)] border-b-4 border-[#14532d] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
-                  >
-                    {isRolling ? "HEALING..." : "ROLL HEALING"}
-                  </button>
-                )}
-
-                {phase === "ready" && flowType === "auto_damage" && (
-                  <button
-                    onClick={handleAutoDamage}
-                    disabled={isRolling || !target}
-                    className="w-full bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-2xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(220,38,38,0.4)] border-b-4 border-red-800 active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
-                  >
-                    {isRolling ? "ROLLING..." : "ROLL DAMAGE"}
-                  </button>
-                )}
-
-                {phase === "ready" && flowType === "effect" && (
-                  <button
-                    onClick={handleApplyEffect}
-                    className="w-full bg-[#8B5CF6] hover:bg-[#7c4dff] text-white text-2xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(139,92,246,0.4)] border-b-4 border-[#5b21b6] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
-                  >
-                    CAST SPELL
-                  </button>
-                )}
-
-                {phase === "ready" && flowType === "skill_check" && (
-                  <button
-                    onClick={handleSkillCheckRoll}
-                    disabled={isRolling}
-                    className="w-full bg-[#37F2D1] hover:bg-[#2dd9bd] disabled:opacity-50 disabled:cursor-not-allowed text-[#050816] text-xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(55,242,209,0.4)] border-b-4 border-[#0f766e] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
-                  >
-                    {isRolling
-                      ? "ROLLING..."
-                      : `ROLL ${(resolved?.skill || "SKILL").toUpperCase()} CHECK`}
-                  </button>
-                )}
-
-                {phase === "ready" && flowType === "saving_throw" && (
-                  <button
-                    onClick={handleSavingThrowRoll}
-                    disabled={isRolling || !target}
-                    className="w-full bg-[#8B5CF6] hover:bg-[#7c4dff] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(139,92,246,0.4)] border-b-4 border-[#5b21b6] active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
-                  >
-                    {isRolling
-                      ? "ROLLING..."
-                      : `ROLL ${(resolved?.save || "SAVE").toUpperCase()} SAVE`}
-                  </button>
-                )}
-
-                {phase === "attack_result" && isHit && (
-                  <div className="flex flex-col gap-3">
-                    {/* Uncanny Dodge — defender-side reaction. Rogue
-                        level 5+ not blinded can halve the damage of
-                        an attack they can see. Appears as a prompt
-                        next to the Divine Smite / Stunning Strike
-                        attacker prompts. */}
-                    {(() => {
-                      const tgt = target;
-                      if (!tgt) return null;
-                      const tgtClass = (tgt.class || tgt.stats?.class || '').toString();
-                      const tgtLvl = tgt.level || tgt.stats?.level || 0;
-                      const isRogue5 = /rogue/i.test(tgtClass) && tgtLvl >= 5;
-                      if (!isRogue5) return null;
-                      const tgtConds = tgt.conditions || [];
-                      if (tgtConds.includes('Blinded')) return null;
-                      return (
-                        <div className="bg-black/40 border border-[#38bdf8]/60 rounded-2xl p-3">
-                          <div className="text-[11px] uppercase tracking-[0.22em] text-[#38bdf8] font-black mb-1">
-                            🛡 Uncanny Dodge — {safeText(tgt.name)}?
-                          </div>
-                          <p className="text-[10px] text-slate-400 mb-2">
-                            Halve this damage (Reaction)?
-                          </p>
-                          <div className="flex gap-2">
-                            <button
-                              disabled={uncannyDodge !== null}
-                              onClick={() => {
-                                setUncannyDodge('use');
-                                if (campaignId) {
-                                  logCombatEvent(
-                                    campaignId,
-                                    `${tgt.name} uses Uncanny Dodge! (Reaction)`,
-                                    { event: 'uncanny_dodge_use', category: 'reaction', target: tgt.name }
-                                  );
-                                }
-                              }}
-                              className={`flex-1 text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg border transition-colors ${
-                                uncannyDodge === 'use'
-                                  ? 'bg-[#38bdf8] text-[#050816] border-[#38bdf8]'
-                                  : uncannyDodge !== null
-                                  ? 'bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed'
-                                  : 'bg-[#38bdf8]/10 text-[#38bdf8] border-[#38bdf8]/60 hover:bg-[#38bdf8]/25'
-                              }`}
-                            >
-                              Use (Reaction)
-                            </button>
-                            <button
-                              disabled={uncannyDodge !== null}
-                              onClick={() => setUncannyDodge('skip')}
-                              className={`flex-1 text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg border transition-colors ${
-                                uncannyDodge === 'skip'
-                                  ? 'bg-slate-600 text-white border-slate-400'
-                                  : uncannyDodge !== null
-                                  ? 'bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed'
-                                  : 'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700'
-                              }`}
-                            >
-                              Skip
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                    {postHitOptions.length > 0 && (
-                      <div className="flex flex-col gap-3 bg-black/40 border border-white/10 rounded-2xl p-3">
-                        {postHitOptions.includes('divine_smite') && (() => {
-                          const decided = postHitDecisions.divine_smite;
-                          const slots = getPaladinSlotsLeft();
-                          return (
-                            <div>
-                              <div className="flex items-center justify-between mb-1.5">
-                                <span className="text-[11px] uppercase tracking-[0.22em] text-[#fbbf24] font-black flex items-center gap-1">
-                                  <Swords className="w-3 h-3" /> Divine Smite?
-                                </span>
-                                {decided !== null && (
-                                  <span className="text-[9px] uppercase tracking-widest text-slate-400">
-                                    {decided === 'skip' ? 'Skipped' : `L${decided} slot spent`}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-[10px] text-slate-400 mb-2">
-                                Expend a spell slot for extra radiant damage.
-                              </p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {slots.map(({ slotLevel, remaining }) => {
-                                  const disabled = remaining <= 0 || decided !== null;
-                                  const selected = decided === slotLevel;
-                                  return (
-                                    <button
-                                      key={slotLevel}
-                                      disabled={disabled}
-                                      onClick={() => handleSmiteChoice(slotLevel)}
-                                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 rounded-lg border transition-colors ${
-                                        selected
-                                          ? 'bg-[#fbbf24] text-[#050816] border-[#fbbf24]'
-                                          : disabled
-                                          ? 'bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed'
-                                          : 'bg-[#fbbf24]/10 text-[#fbbf24] border-[#fbbf24]/60 hover:bg-[#fbbf24]/25'
-                                      }`}
-                                    >
-                                      L{slotLevel} ({remaining})
-                                    </button>
-                                  );
-                                })}
-                                <button
-                                  disabled={decided !== null}
-                                  onClick={() => handleSmiteChoice('skip')}
-                                  className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 rounded-lg border transition-colors ${
-                                    decided === 'skip'
-                                      ? 'bg-slate-600 text-white border-slate-400'
-                                      : decided !== null
-                                      ? 'bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed'
-                                      : 'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700'
-                                  }`}
-                                >
-                                  No Smite
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })()}
-
-                        {postHitOptions.includes('stunning_strike') && (() => {
-                          const decided = postHitDecisions.stunning_strike;
-                          const kiRemaining = actor?.classResources?.kiRemaining ?? 0;
-                          const canSpend = kiRemaining > 0 && decided === null;
-                          return (
-                            <div>
-                              <div className="flex items-center justify-between mb-1.5">
-                                <span className="text-[11px] uppercase tracking-[0.22em] text-[#37F2D1] font-black">
-                                  💥 Stunning Strike? (1 ki)
-                                </span>
-                                {decided !== null && (
-                                  <span className="text-[9px] uppercase tracking-widest text-slate-400">
-                                    {decided === 'skip' ? 'Skipped' : decided === 'saved' ? 'Resisted' : 'Stunned!'}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-[10px] text-slate-400 mb-2">
-                                Target makes CON save or is Stunned until end of your next turn.
-                              </p>
-                              <div className="flex gap-2">
-                                <button
-                                  disabled={!canSpend}
-                                  onClick={() => handleStunningStrike(true)}
-                                  className={`flex-1 text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg border transition-colors ${
-                                    decided === 'saved' || decided === 'stunned'
-                                      ? 'bg-[#37F2D1] text-[#050816] border-[#37F2D1]'
-                                      : canSpend
-                                      ? 'bg-[#37F2D1]/10 text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/25'
-                                      : 'bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed'
-                                  }`}
-                                >
-                                  Spend Ki
-                                </button>
-                                <button
-                                  disabled={decided !== null}
-                                  onClick={() => handleStunningStrike(false)}
-                                  className={`flex-1 text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg border transition-colors ${
-                                    decided === 'skip'
-                                      ? 'bg-slate-600 text-white border-slate-400'
-                                      : decided !== null
-                                      ? 'bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed'
-                                      : 'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700'
-                                  }`}
-                                >
-                                  Skip
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-                    <button
-                      onClick={handleDamageRoll}
-                      className="w-full bg-red-600 hover:bg-red-500 text-white text-2xl font-black py-4 rounded-2xl shadow-[0_10px_30px_rgba(220,38,38,0.4)] border-b-4 border-red-800 active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
-                    >
-                      ROLL DAMAGE
-                    </button>
-                  </div>
-                )}
-
-                {(phase === "damage_result" ||
-                  (phase === "attack_result" && !isHit) ||
-                  phase === "check_result" ||
-                  phase === "save_result" ||
-                  phase === "heal_result" ||
-                  phase === "effect_applied") && (
-                  <div className="flex flex-col gap-3 pt-8">
-                    <button
-                      onClick={() => {
-                        if (onActionComplete) onActionComplete();
-                        else onClose();
-                      }}
-                      className="w-full bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] text-xl font-bold py-4 rounded-2xl shadow-[0_10px_30px_rgba(55,242,209,0.3)]"
-                    >
-                      DONE
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT: Target side — hide entirely for target-less flows (Hide, etc.) */}
-        {!(flowType === "skill_check" && !target) && (
-        <div className="flex items-center gap-4 pointer-events-auto">
-          <div className="relative group flex flex-col items-center gap-2">
-            {!isSpectator && (
-              <button
-                onClick={onSwitchTarget}
-                className="absolute -left-6 top-1/2 -translate-y-1/2 w-12 h-12 bg-[#FF5722] hover:bg-[#FF6B3D] rounded-full z-30 flex items-center justify-center shadow-lg border-4 border-[#050816] transition-transform hover:scale-110"
-                title="Switch Target"
-              >
-                <RefreshCw className="w-6 h-6 text-white" />
-              </button>
-            )}
-
-            <div className="w-48 h-48 rounded-full border-4 border-red-500 overflow-hidden shadow-[0_0_50px_rgba(239,68,68,0.3)] bg-[#1a1f2e] relative z-10">
-              {target ? (
-                <img
-                  src={
-                    target.avatar_url ||
-                    target.image_url ||
-                    target.profile_avatar_url ||
-                    target.avatar
-                  }
-                  alt={safeText(target.name)}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-slate-600 text-6xl font-bold">
-                  ?
-                </div>
-              )}
-            </div>
-            {(() => {
-              const isTargetPlayer = target?.type !== 'monster' && target?.type !== 'npc';
-              const bubble = isTargetPlayer
-                ? 'bg-[#37F2D1]/20 text-[#37F2D1] border border-[#37F2D1]'
-                : 'bg-[#FF5722]/20 text-[#FF5722] border border-[#FF5722]';
-              return (
-                <div className={`px-4 py-1 rounded-full text-sm font-bold whitespace-nowrap z-20 ${bubble}`}>
-                  {safeText(target?.name) || "No Target"}
-                </div>
-              );
-            })()}
-
-            {/* Cover selector — per-attack AC bonus. Shown for attack
-                flows only; persists for the duration of the current
-                dice window. Full cover cancels the attack. */}
-            {!isSpectator && target && flowType === 'attack' && phase === 'ready' && (
+          {combatant.hit_points && renderHpBar(combatant, { showNumbers: showHpNumbers })}
+          {!isActor &&
+            !isSpectator &&
+            target &&
+            flowType === "attack" &&
+            phase === "ready" && (
               <div className="flex flex-wrap items-center justify-center gap-1 mt-1 max-w-[220px]">
                 {[
-                  { key: 'none',           label: 'No Cover' },
-                  { key: 'half',           label: '½ +2' },
-                  { key: 'three_quarters', label: '¾ +5' },
-                  { key: 'full',           label: 'Full' },
+                  { key: "none", label: "No Cover" },
+                  { key: "half", label: "½ +2" },
+                  { key: "three_quarters", label: "¾ +5" },
+                  { key: "full", label: "Full" },
                 ].map(({ key, label }) => {
                   const selected = targetCover === key;
                   return (
                     <button
                       key={key}
                       onClick={() => {
-                        if (key === 'full') {
-                          // Full cover = can't target.
+                        if (key === "full") {
                           if (onClose) onClose();
                           return;
                         }
                         setTargetCover(key);
                       }}
-                      className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors ${
+                      className="font-bold uppercase tracking-wider rounded-md transition-colors"
+                      style={
                         selected
-                          ? 'bg-[#38bdf8] text-[#050816] border-[#38bdf8]'
-                          : 'bg-black/60 border-slate-600 text-slate-300 hover:border-[#38bdf8]/60'
-                      }`}
+                          ? {
+                              background: "#FF5300",
+                              color: "#fff",
+                              border: "1px solid #FF5300",
+                              padding: "4px 10px",
+                              fontSize: 9,
+                            }
+                          : {
+                              background: "rgba(0,0,0,0.4)",
+                              color: "#cbd5e1",
+                              border: "1px solid rgba(255,255,255,0.1)",
+                              padding: "4px 10px",
+                              fontSize: 9,
+                            }
+                      }
                     >
                       {label}
                     </button>
@@ -3077,82 +2541,1217 @@ export default function CombatDiceWindow({
                 })}
               </div>
             )}
-            {targetCover !== 'none' && (
-              <div className="text-[9px] text-[#38bdf8] font-bold uppercase tracking-wider mt-0.5">
-                vs AC {targetAC} (base {baseTargetAC} + {coverAcBonus} cover)
-              </div>
-            )}
-
-            {/* Target HP — same green/yellow/red threshold palette as the
-                actor side. Numbers only for GM or when target is a player. */}
-            {target && target.hit_points && (() => {
-              const max = target.hit_points.max || 0;
-              const current = target.hit_points.current ?? max;
-              const pct = max > 0 ? Math.min(100, (current / max) * 100) : 0;
-              return (
-                <>
-                  <div className="w-32 h-2 bg-gray-800 rounded-full overflow-hidden mt-1 border border-gray-700">
-                    <div
-                      className={`h-full ${hpBarColor(pct)}`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                  {(isGM || target.type === "player") && (
-                    <span className="text-[10px] text-gray-400">
-                      {current} / {max} HP
-                    </span>
-                  )}
-                </>
-              );
-            })()}
-          </div>
-
-          {!isSpectator && (
-            <div className="flex flex-col gap-2 items-start">
-              <span className="text-[10px] text-slate-400 font-bold tracking-wider uppercase mb-1">
-                Up Next
-              </span>
-              {getQueueAvatars("right").map((c, i) => (
-                <div
-                  key={i}
-                  className="w-12 h-12 rounded-full border-2 border-slate-700 overflow-hidden bg-[#050816] shadow-lg relative group"
-                >
-                  {c.avatar || c.avatar_url || c.image_url ? (
-                    <img
-                      src={c.avatar || c.avatar_url || c.image_url}
-                      className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity"
-                      alt=""
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-xs text-slate-500 font-bold">
-                      {safeText(c.name)?.[0]}
-                    </div>
-                  )}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/60 text-[8px] text-white text-center leading-tight transition-opacity">
-                    {safeText(c.name)}
-                  </div>
-                </div>
-              ))}
+          {!isActor && targetCover !== "none" && (
+            <div className="text-[9px] text-[#FF5300] font-bold uppercase tracking-wider">
+              vs AC {targetAC} (base {baseTargetAC} + {coverAcBonus} cover)
             </div>
           )}
         </div>
+      </div>
+    );
+  };
+
+  const renderResultBurst = () => {
+    if (phase === "attack_result" || phase === "damage_result") {
+      if (damageRoll) {
+        return (
+          <div className="flex flex-col items-center gap-3 z-30">
+            <motion.div
+              initial={{ scale: 0, y: 30 }}
+              animate={{ scale: 1, y: 0 }}
+              transition={{ type: "spring", bounce: 0.5 }}
+              className="flex flex-col items-center justify-center"
+              style={{
+                width: 180,
+                height: 180,
+                borderRadius: "50%",
+                background:
+                  "radial-gradient(circle at 30% 30%, #dc2626, #991b1b)",
+                border: "4px solid #fff",
+                boxShadow:
+                  "0 0 60px rgba(220,38,38,0.7), 0 10px 30px rgba(0,0,0,0.6)",
+                color: "#fff",
+              }}
+            >
+              <span
+                style={{ fontSize: 64, fontWeight: 900, lineHeight: 1, textShadow: "0 4px 8px rgba(0,0,0,0.5)" }}
+              >
+                {damageRoll.total}
+              </span>
+              <span
+                className="uppercase"
+                style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.18em", opacity: 0.9, marginTop: 6 }}
+              >
+                Damage
+              </span>
+              {damageRoll.sneakDice > 0 && (
+                <span
+                  className="uppercase mt-1 text-yellow-300"
+                  style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.18em" }}
+                >
+                  +{damageRoll.sneakDice}d6 Sneak
+                </span>
+              )}
+              {damageRoll.bonusDamage?.label && (
+                <span
+                  className="uppercase mt-1"
+                  style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.18em", color: "#fbbf24" }}
+                >
+                  +{safeText(damageRoll.bonusDamage.dice)} {safeText(damageRoll.bonusDamage.label)}
+                </span>
+              )}
+              {spellEffect?.effect === "damage_condition" && spellEffect.condition && (
+                <span
+                  className="uppercase mt-1 text-purple-200"
+                  style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.18em" }}
+                >
+                  +{safeText(spellEffect.condition)}
+                </span>
+              )}
+            </motion.div>
+            {attackRoll && (
+              <div
+                className="font-mono rounded-md"
+                style={{
+                  background: "rgba(0,0,0,0.6)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  color: "#cbd5e1",
+                  fontSize: 12,
+                  padding: "4px 10px",
+                }}
+              >
+                {damageRoll.dice ? `${damageRoll.dice}` : ""}
+                {damageRoll.mod != null
+                  ? ` ${damageRoll.mod >= 0 ? "+" : "−"} ${Math.abs(damageRoll.mod)} mod`
+                  : ""}
+                {damageRoll.total != null ? ` = ${damageRoll.total}` : ""}
+              </div>
+            )}
+            {damageRoll.gwfRerolls > 0 && Array.isArray(damageRoll.rolledDice) && (
+              <div className="mt-1 flex flex-wrap items-center justify-center gap-1 bg-black/60 border border-yellow-500/40 rounded-full px-3 py-1 max-w-xs">
+                <span className="text-[9px] font-bold uppercase tracking-widest text-yellow-300 mr-1">
+                  GWF
+                </span>
+                {damageRoll.rolledDice.map((d, i) => (
+                  <span key={i} className="text-[10px] font-mono">
+                    {d.rerolled ? (
+                      <>
+                        <span className="line-through text-red-300">{safeText(d.original)}</span>
+                        <span className="text-yellow-200"> → {safeText(d.value)}</span>
+                      </>
+                    ) : (
+                      <span className="text-slate-300">{safeText(d.value)}</span>
+                    )}
+                    {i < damageRoll.rolledDice.length - 1 && (
+                      <span className="text-slate-600">, </span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      }
+      // Attack roll result (no damage yet)
+      if (!attackRoll) return null;
+      const hit = isHit;
+      const crit = !!attackRoll.isCrit;
+      const numColor = crit ? "#fbbf24" : hit ? "#37F2D1" : "#ef4444";
+      const glow = crit
+        ? "0 0 32px rgba(251,191,36,0.8)"
+        : hit
+        ? "0 0 32px rgba(55,242,209,0.6)"
+        : "0 0 28px rgba(239,68,68,0.5)";
+      return (
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 220, damping: 18 }}
+          className="flex flex-col items-center gap-2 z-30"
+        >
+          <div
+            style={{
+              fontSize: 96,
+              fontWeight: 900,
+              lineHeight: 1,
+              color: numColor,
+              textShadow: glow,
+            }}
+          >
+            {crit ? "CRIT!" : attackRoll.total}
+          </div>
+          {!crit && (
+            <div
+              className="font-mono rounded-md"
+              style={{
+                background: "rgba(0,0,0,0.6)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                color: "#cbd5e1",
+                fontSize: 14,
+                padding: "4px 10px",
+              }}
+            >
+              {attackRoll.d20}{" "}
+              {attackRoll.mod >= 0 ? "+" : "−"} {Math.abs(attackRoll.mod || 0)}{" "}
+              = {attackRoll.total}
+            </div>
+          )}
+          <div
+            className="uppercase"
+            style={{
+              fontSize: 11,
+              letterSpacing: "0.16em",
+              fontWeight: 800,
+              color: hit ? "#37F2D1" : "#94a3b8",
+            }}
+          >
+            vs AC {targetAC} · {hit ? (crit ? "Critical Hit" : "Hit") : "Miss"}
+          </div>
+          {attackRoll.pair && (
+            <div
+              className="flex items-center gap-1.5 mt-1 px-3 py-1 rounded-full"
+              style={{
+                background: "rgba(0,0,0,0.5)",
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              <span
+                className={`px-1.5 py-0.5 rounded text-xs font-mono ${
+                  attackRoll.pair.chosen === 0
+                    ? attackRoll.pair.mode === "advantage"
+                      ? "bg-[#22c55e]/30 text-[#22c55e]"
+                      : "bg-red-500/30 text-red-300"
+                    : "text-slate-600 line-through"
+                }`}
+              >
+                {attackRoll.pair.dice[0]}
+              </span>
+              <span className="text-[10px] uppercase text-slate-400 tracking-widest">
+                {attackRoll.pair.mode === "advantage" ? "ADV" : "DIS"}
+              </span>
+              <span
+                className={`px-1.5 py-0.5 rounded text-xs font-mono ${
+                  attackRoll.pair.chosen === 1
+                    ? attackRoll.pair.mode === "advantage"
+                      ? "bg-[#22c55e]/30 text-[#22c55e]"
+                      : "bg-red-500/30 text-red-300"
+                    : "text-slate-600 line-through"
+                }`}
+              >
+                {attackRoll.pair.dice[1]}
+              </span>
+            </div>
+          )}
+        </motion.div>
+      );
+    }
+    if (phase === "heal_result" && healRoll) {
+      return (
+        <div className="flex flex-col items-center gap-3 z-30">
+          <motion.div
+            initial={{ scale: 0, y: 30 }}
+            animate={{ scale: 1, y: 0 }}
+            transition={{ type: "spring", bounce: 0.5 }}
+            className="flex flex-col items-center justify-center"
+            style={{
+              width: 180,
+              height: 180,
+              borderRadius: "50%",
+              background:
+                "radial-gradient(circle at 30% 30%, #22c55e, #14532d)",
+              border: "4px solid #fff",
+              boxShadow:
+                "0 0 60px rgba(34,197,94,0.7), 0 10px 30px rgba(0,0,0,0.6)",
+              color: "#fff",
+            }}
+          >
+            <span
+              style={{ fontSize: 64, fontWeight: 900, lineHeight: 1, textShadow: "0 4px 8px rgba(0,0,0,0.5)" }}
+            >
+              +{healRoll.total}
+            </span>
+            <span
+              className="uppercase"
+              style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.18em", opacity: 0.9, marginTop: 6 }}
+            >
+              Healed
+            </span>
+          </motion.div>
+          <div
+            className="font-mono rounded-md"
+            style={{
+              background: "rgba(0,0,0,0.6)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              color: "#cbd5e1",
+              fontSize: 12,
+              padding: "4px 10px",
+            }}
+          >
+            {healRoll.dice}
+            {healRoll.mod > 0 ? ` + ${healRoll.mod}` : ""}
+          </div>
+        </div>
+      );
+    }
+    if (phase === "effect_applied" && effectApplied) {
+      const palette =
+        effectApplied.effect === "buff"
+          ? "linear-gradient(135deg, #37F2D1, #0ea5e9)"
+          : effectApplied.effect === "utility"
+          ? "linear-gradient(135deg, #475569, #0f172a)"
+          : "linear-gradient(135deg, #8B5CF6, #5b21b6)";
+      return (
+        <motion.div
+          initial={{ scale: 0, y: 30 }}
+          animate={{ scale: 1, y: 0 }}
+          transition={{ type: "spring", bounce: 0.5 }}
+          className="flex flex-col items-center justify-center px-6 py-5 z-30"
+          style={{
+            minWidth: 220,
+            minHeight: 140,
+            borderRadius: 24,
+            background: palette,
+            border: "3px solid rgba(255,255,255,0.85)",
+            boxShadow: "0 0 60px rgba(0,0,0,0.6)",
+            color: "#fff",
+          }}
+        >
+          <span
+            className="uppercase"
+            style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.22em", opacity: 0.85 }}
+          >
+            Spell Cast
+          </span>
+          <span
+            className="uppercase text-center mt-1"
+            style={{ fontSize: 16, fontWeight: 900, letterSpacing: "0.04em", lineHeight: 1.2 }}
+          >
+            {effectApplied.label}
+          </span>
+        </motion.div>
+      );
+    }
+    if (phase === "check_result" && skillCheckRoll && !skillCheckRoll.contested) {
+      return (
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 220, damping: 18 }}
+          className="flex flex-col items-center gap-2 z-30"
+        >
+          <div
+            style={{
+              fontSize: 96,
+              fontWeight: 900,
+              lineHeight: 1,
+              color: "#37F2D1",
+              textShadow: "0 0 32px rgba(55,242,209,0.6)",
+            }}
+          >
+            {skillCheckRoll.total}
+          </div>
+          <div
+            className="font-mono rounded-md"
+            style={{
+              background: "rgba(0,0,0,0.6)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              color: "#cbd5e1",
+              fontSize: 14,
+              padding: "4px 10px",
+            }}
+          >
+            {skillCheckRoll.d20} {skillCheckRoll.mod >= 0 ? "+" : "−"}{" "}
+            {Math.abs(skillCheckRoll.mod)} = {skillCheckRoll.total}
+          </div>
+          <div
+            className="uppercase text-slate-300"
+            style={{ fontSize: 11, letterSpacing: "0.16em", fontWeight: 800 }}
+          >
+            {skillCheckRoll.skill}
+          </div>
+        </motion.div>
+      );
+    }
+    if (phase === "check_result" && skillCheckRoll?.contested) {
+      const winnerActor = skillCheckRoll.contested.winner === "actor";
+      return (
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="flex flex-col items-center gap-3 z-30"
+        >
+          <div className="flex items-center gap-4">
+            <div
+              className="flex flex-col items-center justify-center rounded-full"
+              style={{
+                width: 128,
+                height: 128,
+                background: winnerActor
+                  ? "radial-gradient(circle at 30% 30%, #37F2D1, #0ea5e9)"
+                  : "linear-gradient(180deg, #334155, #0f172a)",
+                color: winnerActor ? "#050816" : "rgba(255,255,255,0.7)",
+                border: `4px solid ${winnerActor ? "#fff" : "#475569"}`,
+                boxShadow: "0 0 40px rgba(0,0,0,0.7)",
+              }}
+            >
+              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.2em", opacity: 0.85 }}>
+                {skillCheckRoll.skill}
+              </span>
+              <span style={{ fontSize: 36, fontWeight: 900, lineHeight: 1 }}>
+                {skillCheckRoll.total}
+              </span>
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.16em", opacity: 0.75 }}>
+                {skillCheckRoll.d20} {skillCheckRoll.mod >= 0 ? "+" : "−"} {Math.abs(skillCheckRoll.mod)}
+              </span>
+            </div>
+            <span className="text-white text-xs font-black uppercase tracking-[0.24em]">vs</span>
+            <div
+              className="flex flex-col items-center justify-center rounded-full"
+              style={{
+                width: 128,
+                height: 128,
+                background: !winnerActor
+                  ? "radial-gradient(circle at 30% 30%, #ef4444, #7f1d1d)"
+                  : "linear-gradient(180deg, #334155, #0f172a)",
+                color: !winnerActor ? "#fff" : "rgba(255,255,255,0.7)",
+                border: `4px solid ${!winnerActor ? "#fff" : "#475569"}`,
+                boxShadow: "0 0 40px rgba(0,0,0,0.7)",
+              }}
+            >
+              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.2em", opacity: 0.85 }}>
+                {safeText(skillCheckRoll.contested.targetSkill)}
+              </span>
+              <span style={{ fontSize: 36, fontWeight: 900, lineHeight: 1 }}>
+                {skillCheckRoll.contested.targetTotal}
+              </span>
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.16em", opacity: 0.75 }}>
+                {skillCheckRoll.contested.targetD20}{" "}
+                {skillCheckRoll.contested.targetMod >= 0 ? "+" : "−"}{" "}
+                {Math.abs(skillCheckRoll.contested.targetMod)}
+              </span>
+            </div>
+          </div>
+          <div
+            className="uppercase rounded-full px-4 py-1"
+            style={{
+              fontSize: 11,
+              letterSpacing: "0.2em",
+              fontWeight: 800,
+              background: winnerActor ? "rgba(55,242,209,0.15)" : "rgba(239,68,68,0.15)",
+              border: `1px solid ${winnerActor ? "rgba(55,242,209,0.55)" : "rgba(239,68,68,0.55)"}`,
+              color: winnerActor ? "#37F2D1" : "#fca5a5",
+            }}
+          >
+            {winnerActor
+              ? `${actor?.name || "Actor"} wins the contest`
+              : `${skillCheckRoll.contested.targetName} resists`}
+          </div>
+        </motion.div>
+      );
+    }
+    if (phase === "save_result" && savingThrowRoll) {
+      const success = !!savingThrowRoll.success;
+      const numColor = success ? "#37F2D1" : "#ef4444";
+      const glow = success
+        ? "0 0 32px rgba(55,242,209,0.6)"
+        : "0 0 32px rgba(239,68,68,0.5)";
+      // Tier 3: Evasion notice (Monk/Rogue 7+ on DEX save)
+      const tgt = target;
+      let evasionLabel = null;
+      if (tgt) {
+        const tgtClass = (tgt.class || tgt.stats?.class || "").toString();
+        const tgtLvl = tgt.level || tgt.stats?.level || 0;
+        const hasEvasion =
+          (/monk/i.test(tgtClass) || /rogue/i.test(tgtClass)) && tgtLvl >= 7;
+        if (
+          hasEvasion &&
+          (savingThrowRoll.ability || "").toLowerCase() === "dex"
+        ) {
+          evasionLabel = success ? "No damage!" : "Half damage!";
+        }
+      }
+      return (
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 220, damping: 18 }}
+          className="flex flex-col items-center gap-2 z-30"
+        >
+          <div
+            style={{
+              fontSize: 96,
+              fontWeight: 900,
+              lineHeight: 1,
+              color: numColor,
+              textShadow: glow,
+            }}
+          >
+            {safeText(savingThrowRoll.total)}
+          </div>
+          <div
+            className="font-mono rounded-md"
+            style={{
+              background: "rgba(0,0,0,0.6)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              color: "#cbd5e1",
+              fontSize: 14,
+              padding: "4px 10px",
+            }}
+          >
+            vs DC {safeText(savingThrowRoll.dc)}
+          </div>
+          <div
+            className="uppercase"
+            style={{
+              fontSize: 11,
+              letterSpacing: "0.16em",
+              fontWeight: 800,
+              color: success ? "#37F2D1" : "#fca5a5",
+            }}
+          >
+            {safeText(savingThrowRoll.ability).toUpperCase()} Save · {success ? "Saved" : "Failed"}
+          </div>
+          {evasionLabel && (
+            <div
+              className="rounded-full px-3 py-1 mt-1"
+              style={{
+                background: "rgba(0,0,0,0.7)",
+                border: "1px solid #37F2D1",
+                color: "#37F2D1",
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: "0.22em",
+                textTransform: "uppercase",
+              }}
+            >
+              Evasion — {evasionLabel}
+            </div>
+          )}
+        </motion.div>
+      );
+    }
+    if (phase === "ready") {
+      // Ready-state visuals live on the dice-zone wrapper as a
+      // pointer-events:none overlay above the DiceRoller, so we
+      // intentionally render nothing from inside the result-burst.
+      return null;
+    }
+    if (phase.startsWith("rolling_")) {
+      // The embedded DiceRoller renders the live dice itself — no
+      // additional placeholder text is needed.
+      return null;
+    }
+    return null;
+  };
+
+  const renderPostHitPrompts = () => {
+    if (phase !== "attack_result") return null;
+    if (!isHit) return null;
+
+    const tgt = target;
+    const tgtClass = (tgt?.class || tgt?.stats?.class || "").toString();
+    const tgtLvl = tgt?.level || tgt?.stats?.level || 0;
+    const isRogue5 = tgt && /rogue/i.test(tgtClass) && tgtLvl >= 5;
+    const tgtConds = tgt?.conditions || [];
+    const showUncannyDodge = isRogue5 && !tgtConds.includes("Blinded");
+
+    if (postHitOptions.length === 0 && !showUncannyDodge) return null;
+
+    return (
+      <div className="flex flex-col gap-3 w-full">
+        {showUncannyDodge && (
+          <div
+            className="rounded-xl p-3"
+            style={{
+              background: "rgba(0,0,0,0.6)",
+              border: "1px solid rgba(56,189,248,0.5)",
+            }}
+          >
+            <div className="text-[11px] uppercase tracking-[0.22em] text-[#38bdf8] font-black mb-1">
+              🛡 Uncanny Dodge — {safeText(tgt.name)}?
+            </div>
+            <p className="text-[10px] text-slate-400 mb-2">
+              Halve this damage (Reaction)?
+            </p>
+            <div className="flex gap-2">
+              <button
+                disabled={uncannyDodge !== null}
+                onClick={() => {
+                  setUncannyDodge("use");
+                  if (campaignId) {
+                    logCombatEvent(
+                      campaignId,
+                      `${tgt.name} uses Uncanny Dodge! (Reaction)`,
+                      {
+                        event: "uncanny_dodge_use",
+                        category: "reaction",
+                        target: tgt.name,
+                      }
+                    );
+                  }
+                }}
+                className={`flex-1 text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg border transition-colors ${
+                  uncannyDodge === "use"
+                    ? "bg-[#38bdf8] text-[#050816] border-[#38bdf8]"
+                    : uncannyDodge !== null
+                    ? "bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed"
+                    : "bg-[#38bdf8]/10 text-[#38bdf8] border-[#38bdf8]/60 hover:bg-[#38bdf8]/25"
+                }`}
+              >
+                Use (Reaction)
+              </button>
+              <button
+                disabled={uncannyDodge !== null}
+                onClick={() => setUncannyDodge("skip")}
+                className={`flex-1 text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg border transition-colors ${
+                  uncannyDodge === "skip"
+                    ? "bg-slate-600 text-white border-slate-400"
+                    : uncannyDodge !== null
+                    ? "bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed"
+                    : "bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700"
+                }`}
+              >
+                Skip
+              </button>
+            </div>
+          </div>
+        )}
+
+        {postHitOptions.length > 0 && (
+          <div
+            className="flex flex-col gap-3 rounded-xl p-3"
+            style={{
+              background: "rgba(0,0,0,0.6)",
+              border: "1px solid rgba(255,83,0,0.3)",
+            }}
+          >
+            {postHitOptions.includes("divine_smite") && (() => {
+              const decided = postHitDecisions.divine_smite;
+              const slots = getPaladinSlotsLeft();
+              return (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] uppercase tracking-[0.22em] text-[#fbbf24] font-black flex items-center gap-1">
+                      <Swords className="w-3 h-3" /> Divine Smite?
+                    </span>
+                    {decided !== null && (
+                      <span className="text-[9px] uppercase tracking-widest text-slate-400">
+                        {decided === "skip" ? "Skipped" : `L${decided} slot spent`}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400 mb-2">
+                    Expend a spell slot for extra radiant damage.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {slots.map(({ slotLevel, remaining }) => {
+                      const disabled = remaining <= 0 || decided !== null;
+                      const selected = decided === slotLevel;
+                      return (
+                        <button
+                          key={slotLevel}
+                          disabled={disabled}
+                          onClick={() => handleSmiteChoice(slotLevel)}
+                          className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 rounded-lg border transition-colors ${
+                            selected
+                              ? "bg-[#fbbf24] text-[#050816] border-[#fbbf24]"
+                              : disabled
+                              ? "bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed"
+                              : "bg-[#fbbf24]/10 text-[#fbbf24] border-[#fbbf24]/60 hover:bg-[#fbbf24]/25"
+                          }`}
+                        >
+                          L{slotLevel} ({remaining})
+                        </button>
+                      );
+                    })}
+                    <button
+                      disabled={decided !== null}
+                      onClick={() => handleSmiteChoice("skip")}
+                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 rounded-lg border transition-colors ${
+                        decided === "skip"
+                          ? "bg-slate-600 text-white border-slate-400"
+                          : decided !== null
+                          ? "bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed"
+                          : "bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700"
+                      }`}
+                    >
+                      No Smite
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {postHitOptions.includes("stunning_strike") && (() => {
+              const decided = postHitDecisions.stunning_strike;
+              const kiRemaining = actor?.classResources?.kiRemaining ?? 0;
+              const canSpend = kiRemaining > 0 && decided === null;
+              return (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] uppercase tracking-[0.22em] text-[#37F2D1] font-black">
+                      💥 Stunning Strike? (1 ki)
+                    </span>
+                    {decided !== null && (
+                      <span className="text-[9px] uppercase tracking-widest text-slate-400">
+                        {decided === "skip"
+                          ? "Skipped"
+                          : decided === "saved"
+                          ? "Resisted"
+                          : "Stunned!"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400 mb-2">
+                    Target makes CON save or is Stunned until end of your next turn.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      disabled={!canSpend}
+                      onClick={() => handleStunningStrike(true)}
+                      className={`flex-1 text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg border transition-colors ${
+                        decided === "saved" || decided === "stunned"
+                          ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
+                          : canSpend
+                          ? "bg-[#37F2D1]/10 text-[#37F2D1] border-[#37F2D1]/60 hover:bg-[#37F2D1]/25"
+                          : "bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed"
+                      }`}
+                    >
+                      Spend Ki
+                    </button>
+                    <button
+                      disabled={decided !== null}
+                      onClick={() => handleStunningStrike(false)}
+                      className={`flex-1 text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg border transition-colors ${
+                        decided === "skip"
+                          ? "bg-slate-600 text-white border-slate-400"
+                          : decided !== null
+                          ? "bg-[#0b1220] text-slate-600 border-slate-800 cursor-not-allowed"
+                          : "bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700"
+                      }`}
+                    >
+                      Skip
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
         )}
       </div>
-    </motion.div>
+    );
+  };
 
-    <DiceRoller
-      isOpen={dicePopup.open}
-      onClose={() => setDicePopup(p => ({ ...p, open: false }))}
-      initialDice={dicePopup.dice}
-      forcedResult={dicePopup.forcedResult}
-      onRollComplete={dicePopup.onComplete}
-      primaryColor={currentUserProfile?.profile_color_1 || "#FF5300"}
-      secondaryColor={currentUserProfile?.profile_color_2 || "#f8a47c"}
-      isThemedSkin={true}
-      config={campaignConfig}
-      compact={true}
-      autoCloseOnReveal={true}
-    />
+  const renderD20Prompts = () => {
+    if (isSpectator) return null;
+    const feats = Array.isArray(actor?.feats)
+      ? actor.feats
+      : Array.isArray(actor?.features)
+      ? actor.features
+      : [];
+    const hasLucky = feats.some((f) => {
+      const n = typeof f === "string" ? f : f?.name;
+      return typeof n === "string" && n.toLowerCase() === "lucky";
+    });
+    let kind = null;
+    if (phase === "attack_result" && attackRoll) kind = "attack";
+    else if (phase === "check_result" && skillCheckRoll) kind = "skill";
+    else if (phase === "save_result" && savingThrowRoll) kind = "save";
+    if (!kind) return null;
+
+    const luckyLeft = actor?.classResources?.luckyPointsRemaining ?? 3;
+    const showLucky = hasLucky && luckyLeft > 0 && !luckyConsumed;
+    const showInspiration = !!actor?.hasInspiration && !inspirationDiceUsed;
+    const insp = actor?.bardicInspiration;
+    const showBardic = !!insp?.die && !inspirationConsumed;
+
+    if (!showLucky && !showInspiration && !showBardic) return null;
+
+    return (
+      <div className="flex flex-col gap-2 w-full">
+        {showLucky && (
+          <div className="w-full bg-gradient-to-r from-[#facc15]/15 to-[#f59e0b]/10 border border-[#facc15]/50 rounded-2xl p-3 flex items-center justify-between gap-2">
+            <div className="flex flex-col">
+              <span className="text-[10px] uppercase tracking-[0.22em] text-[#facc15] font-black">
+                ● Lucky ({luckyLeft} left)
+              </span>
+              <span className="text-[11px] text-white font-bold">
+                Roll an extra d20, take the better.
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => rollLuckyReroll(kind)}
+                className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-[#facc15] text-[#050816] hover:bg-[#fde68a]"
+              >
+                Spend
+              </button>
+              <button
+                onClick={() => setLuckyConsumed(true)}
+                className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600"
+              >
+                Keep
+              </button>
+            </div>
+          </div>
+        )}
+        {showInspiration && (
+          <div className="w-full bg-gradient-to-r from-[#facc15]/20 to-[#eab308]/10 border border-[#facc15]/60 rounded-2xl p-3 flex items-center justify-between gap-2">
+            <div className="flex flex-col">
+              <span className="text-[10px] uppercase tracking-[0.22em] text-[#facc15] font-black">
+                ★ Inspiration
+              </span>
+              <span className="text-[11px] text-white font-bold">
+                Reroll with advantage?
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => useInspirationAdvantage(kind)}
+                className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-[#facc15] text-[#050816] hover:bg-[#fde68a]"
+              >
+                Use
+              </button>
+              <button
+                onClick={() => setInspirationDiceUsed(true)}
+                className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        )}
+        {showBardic && (
+          <div className="w-full bg-gradient-to-r from-[#fbbf24]/20 to-[#f59e0b]/10 border border-[#fbbf24]/50 rounded-2xl p-3 flex items-center justify-between gap-2">
+            <div className="flex flex-col">
+              <span className="text-[10px] uppercase tracking-[0.22em] text-[#fbbf24] font-black flex items-center gap-1">
+                <Music className="w-3 h-3" /> Bardic Inspiration
+              </span>
+              <span className="text-[11px] text-white font-bold">
+                Use inspiration? +{insp.die}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => rollBardicInspiration(kind)}
+                className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-[#fbbf24] text-[#050816] hover:bg-[#fde68a] transition-colors"
+              >
+                Use
+              </button>
+              <button
+                onClick={() => setInspirationConsumed(true)}
+                className="text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderConditionPreview = () => {
+    if (phase !== "ready" || !conditionPreview.warnings.length) return null;
+    return (
+      <div className="w-full flex flex-col gap-1">
+        {conditionPreview.hasAdvantage && (
+          <div className="w-full text-center text-[11px] font-black uppercase tracking-[0.22em] text-[#22c55e] bg-[#22c55e]/10 border border-[#22c55e]/50 rounded-lg py-1.5">
+            Rolling with Advantage
+          </div>
+        )}
+        {conditionPreview.hasDisadvantage && (
+          <div className="w-full text-center text-[11px] font-black uppercase tracking-[0.22em] text-red-400 bg-red-500/10 border border-red-500/50 rounded-lg py-1.5">
+            Rolling with Disadvantage
+          </div>
+        )}
+        {conditionPreview.isAutoCrit && (
+          <div className="w-full text-center text-[11px] font-black uppercase tracking-[0.22em] text-yellow-300 bg-yellow-400/10 border border-yellow-400/50 rounded-lg py-1.5">
+            Auto-crit on melee hit
+          </div>
+        )}
+        {conditionPreview.isAutoFail && flowType === "saving_throw" && (
+          <div className="w-full text-center text-[11px] font-black uppercase tracking-[0.22em] text-red-300 bg-red-600/20 border border-red-500/60 rounded-lg py-1.5">
+            Auto-Fail Save
+          </div>
+        )}
+        <div className="flex flex-col gap-0.5 max-h-24 overflow-y-auto rounded-lg bg-black/50 border border-yellow-500/30 px-2 py-1">
+          {conditionPreview.warnings.map((w, i) => (
+            <div key={i} className="text-[10px] text-yellow-200/90 leading-snug">
+              • {w}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // ----------------------------------------------------------------
+  // Action button — phase- and flow-aware. The bug fix is the
+  // explicit `!damageRoll` check on the attack_result branch so we
+  // never lose the ROLL DAMAGE button after a hit.
+  const PRIMARY_ORANGE_STYLE = {
+    background: "linear-gradient(180deg, #FF5300, #cc4200)",
+    boxShadow:
+      "0 8px 24px rgba(255,83,0,0.4), inset 0 -3px 0 rgba(0,0,0,0.3)",
+    color: "#fff",
+  };
+  const PRIMARY_RED_STYLE = {
+    background: "linear-gradient(180deg, #dc2626, #991b1b)",
+    boxShadow:
+      "0 8px 24px rgba(220,38,38,0.4), inset 0 -3px 0 rgba(0,0,0,0.3)",
+    color: "#fff",
+  };
+  const TEAL_DONE_STYLE = {
+    background: "linear-gradient(180deg, #37F2D1, #2dd9bd)",
+    boxShadow:
+      "0 8px 24px rgba(55,242,209,0.35), inset 0 -3px 0 rgba(0,0,0,0.2)",
+    color: "#1B2535",
+  };
+
+  const renderActionButton = () => {
+    if (isSpectator) return null;
+
+    if (phase === "ready") {
+      const handler =
+        flowType === "attack"
+          ? handleAttackRoll
+          : flowType === "heal"
+          ? handleHealRoll
+          : flowType === "auto_damage"
+          ? handleAutoDamage
+          : flowType === "effect"
+          ? handleApplyEffect
+          : flowType === "skill_check"
+          ? handleSkillCheckRoll
+          : flowType === "saving_throw"
+          ? handleSavingThrowRoll
+          : handleAttackRoll;
+      const label =
+        flowType === "attack"
+          ? "Roll Attack"
+          : flowType === "heal"
+          ? "Roll Heal"
+          : flowType === "auto_damage"
+          ? "Roll Damage"
+          : flowType === "effect"
+          ? "Cast Spell"
+          : flowType === "skill_check"
+          ? `Roll ${(resolved?.skill || "Skill").toString()} Check`
+          : flowType === "saving_throw"
+          ? `Roll ${(resolved?.save || "Save").toString().toUpperCase()} Save`
+          : "Roll";
+      const disabled =
+        isRolling ||
+        (flowType !== "skill_check" && flowType !== "effect" && !target);
+      const needsTargetWarning =
+        flowType !== "skill_check" && flowType !== "effect" && !target;
+      return (
+        <div className="flex flex-col items-center gap-2 w-full">
+          {extraAttackInfo && flowType === "attack" && (
+            <div className="text-[10px] uppercase tracking-[0.3em] text-[#37F2D1] font-black bg-[#37F2D1]/10 border border-[#37F2D1]/40 rounded-full px-4 py-1">
+              Attack {extraAttackInfo.current} of {extraAttackInfo.total}
+            </div>
+          )}
+          <button
+            onClick={handler}
+            disabled={disabled}
+            className="w-full uppercase font-black tracking-[0.08em] rounded-2xl transition-transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              ...PRIMARY_ORANGE_STYLE,
+              padding: "18px 24px",
+              fontSize: 18,
+            }}
+          >
+            {isRolling ? "Rolling…" : label}
+          </button>
+          {needsTargetWarning && (
+            <span className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
+              Choose a target
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    if (phase.startsWith("rolling_")) {
+      // Dice zone already shows the live dice during rolls; no extra
+      // "Rolling…" text underneath.
+      return null;
+    }
+
+    // BUG FIX: explicit damageRoll guard so the ROLL DAMAGE button
+    // never disappears between attack_result and damage_result.
+    if (phase === "attack_result" && isHit && !damageRoll) {
+      return (
+        <button
+          onClick={handleDamageRoll}
+          className="w-full uppercase font-black tracking-[0.08em] rounded-2xl transition-transform hover:-translate-y-0.5 active:translate-y-0"
+          style={{
+            ...PRIMARY_RED_STYLE,
+            padding: "18px 24px",
+            fontSize: 18,
+          }}
+        >
+          Roll Damage
+        </button>
+      );
+    }
+
+    if (
+      phase === "damage_result" ||
+      (phase === "attack_result" && !isHit) ||
+      phase === "check_result" ||
+      phase === "save_result" ||
+      phase === "heal_result" ||
+      phase === "effect_applied"
+    ) {
+      return (
+        <button
+          onClick={() => {
+            if (onActionComplete) onActionComplete();
+            else onClose();
+          }}
+          className="w-full uppercase font-black tracking-[0.06em] rounded-2xl transition-transform hover:-translate-y-0.5 active:translate-y-0"
+          style={{
+            ...TEAL_DONE_STYLE,
+            padding: "16px 24px",
+            fontSize: 16,
+          }}
+        >
+          Done
+        </button>
+      );
+    }
+
+    return null;
+  };
+
+  const renderSpectatorReadout = () => {
+    if (!isSpectator) return null;
+    return (
+      <div
+        className="rounded-xl text-center flex flex-col gap-2 w-full"
+        style={{
+          background: "rgba(0,0,0,0.6)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          padding: "14px 18px",
+        }}
+      >
+        {spectatorData?.action && (
+          <div className="text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-white/10 pb-1 mb-1">
+            Using {safeText(spectatorData.action.name)}
+          </div>
+        )}
+        <p className="text-sm font-bold text-[#37F2D1] animate-pulse">
+          {phase === "ready" && "Preparing…"}
+          {phase === "rolling_attack" && "Rolling Attack…"}
+          {phase === "attack_result" &&
+            (isHit
+              ? "Attack hit! Waiting for damage…"
+              : "Attack missed")}
+          {phase === "rolling_damage" && "Rolling Damage…"}
+          {phase === "damage_result" && "Damage applied"}
+          {phase === "rolling_check" && "Rolling Check…"}
+          {phase === "check_result" && "Check complete"}
+          {phase === "rolling_save" && "Rolling Save…"}
+          {phase === "save_result" && "Save resolved"}
+        </p>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <style>{`
+        @keyframes cdwPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(255, 83, 0, 0.5); }
+          50%      { box-shadow: 0 0 0 6px rgba(255, 83, 0, 0); }
+        }
+        @keyframes cdwShimmer {
+          0%   { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+      `}</style>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[100] overflow-hidden"
+        style={{
+          background:
+            "radial-gradient(ellipse 80% 60% at 50% 20%, rgba(255, 83, 0, 0.08), transparent 60%), " +
+            "radial-gradient(ellipse 60% 50% at 50% 100%, rgba(55, 242, 209, 0.06), transparent 60%), " +
+            "#050816",
+        }}
+      >
+        {/* Grid lines, masked to fade at edges */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(255, 83, 0, 0.025) 1px, transparent 1px), " +
+              "linear-gradient(90deg, rgba(255, 83, 0, 0.025) 1px, transparent 1px)",
+            backgroundSize: "60px 60px",
+            maskImage:
+              "radial-gradient(ellipse 70% 60% at 50% 50%, black, transparent 80%)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse 70% 60% at 50% 50%, black, transparent 80%)",
+          }}
+        />
+
+        <button
+          onClick={onClose}
+          className="combat-close absolute top-6 right-6 text-slate-400 hover:text-white p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors z-30"
+        >
+          <X className="w-6 h-6" />
+        </button>
+
+        {renderUpNext("left")}
+        {renderUpNext("right")}
+
+        {/* Header */}
+        <header
+          className="combat-header relative z-10 flex flex-col items-center gap-[18px]"
+          style={{ paddingTop: 20 }}
+        >
+          {renderCombatTitle()}
+          {renderStepIndicator()}
+        </header>
+
+        {/* Stage */}
+        <div
+          className="combat-stage relative z-10"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "280px 1fr 320px",
+            gap: 24,
+            padding: "32px 32px 24px",
+            maxWidth: '1200px',
+            margin: "0 auto",
+            alignItems: "center",
+          }}
+        >
+          {/* Actor */}
+          <div className="flex flex-col items-center">
+            {renderCombatantCard(actor, "actor")}
+          </div>
+
+          {/* Dice zone */}
+          <div className="flex flex-col items-center gap-4 w-full">
+            <div
+              className="relative rounded-3xl"
+              style={{
+                width: 320,
+                height: 320,
+                background:
+                  "radial-gradient(ellipse at center, rgba(255,83,0,0.08), transparent 70%), rgba(15,18,25,0.5)",
+                border: "1px solid rgba(255,83,0,0.15)",
+                boxShadow:
+                  "inset 0 0 40px rgba(0,0,0,0.5), 0 0 60px rgba(0,0,0,0.4)",
+                overflow: "hidden",
+              }}
+            >
+              {/* DiceRoller is ALWAYS mounted (never gated by phase)
+                  so the dice scene preserves state across phase
+                  transitions. Phase-aware overlays sit on top with
+                  pointer-events:none so they never block the dice.
+                  The `key` is intentionally tied to the requested
+                  dice type — DiceRoller's `initialDice` prop only
+                  takes effect on mount, so without the key the tray
+                  stays on d20 forever and damage rolls misbehave. */}
+              <div style={{ position: "absolute", inset: 0 }}>
+                <DiceRoller
+                  key={dicePopup.dice || "d20"}
+                  isOpen={dicePopup.open}
+                  embedded={true}
+                  onClose={() => setDicePopup((p) => ({ ...p, open: false }))}
+                  initialDice={dicePopup.dice}
+                  forcedResult={dicePopup.forcedResult}
+                  onRollComplete={dicePopup.onComplete}
+                  primaryColor={currentUserProfile?.profile_color_1 || "#FF5300"}
+                  secondaryColor={currentUserProfile?.profile_color_2 || "#f8a47c"}
+                  isThemedSkin={true}
+                  config={campaignConfig}
+                  compact={true}
+                  autoCloseOnReveal={true}
+                />
+              </div>
+
+              {/* Ready-state overlay */}
+              {phase === "ready" && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    pointerEvents: "none",
+                  }}
+                >
+                  <div style={{ fontSize: 96, color: "rgba(255,255,255,0.06)" }}>
+                    ⚔
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      letterSpacing: "0.32em",
+                      color: "#5A6478",
+                      textTransform: "uppercase",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {flowType === "skill_check"
+                      ? `Ready — ${resolved?.skill || "Skill"} Check`
+                      : flowType === "saving_throw"
+                      ? `${(resolved?.save || "DEX").toUpperCase()} Save`
+                      : flowType === "heal"
+                      ? "Ready to Heal"
+                      : flowType === "effect"
+                      ? "Ready to Cast"
+                      : "Ready"}
+                  </div>
+                </div>
+              )}
+
+              {/* Result overlays — positioned absolute, never block
+                  the underlying DiceRoller surface. */}
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  pointerEvents: "none",
+                }}
+              >
+                <AnimatePresence>{renderResultBurst()}</AnimatePresence>
+              </div>
+            </div>
+
+            <div
+              className="flex flex-col items-center gap-3"
+              style={{ width: 320 }}
+            >
+              {renderConditionPreview()}
+              {renderD20Prompts()}
+              {renderPostHitPrompts()}
+              {renderSpectatorReadout()}
+              {renderActionButton()}
+            </div>
+          </div>
+
+          {/* Target — hide entirely for target-less skill checks */}
+          <div className="flex flex-col items-center">
+            {!(flowType === "skill_check" && !target) &&
+              renderCombatantCard(target, "target")}
+          </div>
+        </div>
+      </motion.div>
     </>
   );
 }
