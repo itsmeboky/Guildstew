@@ -2359,8 +2359,15 @@ export default function CombatDiceWindow({
     const max = combatant.hit_points.max || 0;
     const current = combatant.hit_points.current ?? max;
     const pct = max > 0 ? Math.min(100, (current / max) * 100) : 0;
+    // Armour class can come in as a number, an object with a value/
+    // total/base shape, or be missing. Coerce to a plain string so we
+    // never end up with "[object Object]" leaking into the UI.
+    const acRaw =
+      combatant?.stats?.armor_class ?? combatant?.armor_class ?? combatant?.ac;
     const ac =
-      combatant?.stats?.armor_class || combatant?.armor_class || null;
+      typeof acRaw === "number"
+        ? acRaw
+        : acRaw?.value ?? acRaw?.total ?? acRaw?.base ?? null;
     return (
       <div className="flex flex-col items-center gap-1">
         <div
@@ -2421,6 +2428,30 @@ export default function CombatDiceWindow({
     return (
       <div className="relative flex flex-col items-center gap-3">
         {renderPortrait(combatant, { isActor })}
+        {/* Switch-target lives on the portrait edge — only on the
+            target column, never on the actor. Positioned vertically
+            centered on the 200px portrait. */}
+        {role === "target" && !isSpectator && target && (
+          <button
+            onClick={onSwitchTarget}
+            title="Switch Target"
+            className="absolute flex items-center justify-center transition-transform hover:scale-110"
+            style={{
+              left: -18,
+              top: 100,
+              transform: "translateY(-50%)",
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              background: "#FF5300",
+              border: "3px solid #050816",
+              boxShadow: "0 6px 16px rgba(0,0,0,0.6)",
+              zIndex: 5,
+            }}
+          >
+            <RefreshCw className="w-4 h-4 text-white" />
+          </button>
+        )}
         <div className="relative flex flex-col items-center gap-2 w-full">
           {isActor && (
             <div
@@ -2514,25 +2545,6 @@ export default function CombatDiceWindow({
             <div className="text-[9px] text-[#FF5300] font-bold uppercase tracking-wider">
               vs AC {targetAC} (base {baseTargetAC} + {coverAcBonus} cover)
             </div>
-          )}
-          {!isActor && !isSpectator && target && (
-            <button
-              onClick={onSwitchTarget}
-              title="Switch Target"
-              className="absolute flex items-center justify-center transition-transform hover:scale-110"
-              style={{
-                left: -18,
-                top: -180,
-                width: 36,
-                height: 36,
-                borderRadius: "50%",
-                background: "#FF5300",
-                border: "3px solid #050816",
-                boxShadow: "0 6px 16px rgba(0,0,0,0.6)",
-              }}
-            >
-              <RefreshCw className="w-4 h-4 text-white" />
-            </button>
           )}
         </div>
       </div>
@@ -3051,14 +3063,9 @@ export default function CombatDiceWindow({
       );
     }
     if (phase.startsWith("rolling_")) {
-      return (
-        <div
-          className="italic"
-          style={{ color: "#64748b", fontSize: 14, letterSpacing: "0.06em" }}
-        >
-          Rolling…
-        </div>
-      );
+      // The embedded DiceRoller renders the live dice itself — no
+      // additional placeholder text is needed.
+      return null;
     }
     return null;
   };
@@ -3494,14 +3501,9 @@ export default function CombatDiceWindow({
     }
 
     if (phase.startsWith("rolling_")) {
-      return (
-        <div
-          className="italic text-center w-full"
-          style={{ color: "#64748b", fontSize: 14, padding: "16px 0" }}
-        >
-          Rolling…
-        </div>
-      );
+      // Dice zone already shows the live dice during rolls; no extra
+      // "Rolling…" text underneath.
+      return null;
     }
 
     // BUG FIX: explicit damageRoll guard so the ROLL DAMAGE button
@@ -3649,9 +3651,9 @@ export default function CombatDiceWindow({
           style={{
             display: "grid",
             gridTemplateColumns: "280px 1fr 320px",
-            gap: 32,
+            gap: 24,
             padding: "32px 32px 24px",
-            maxWidth: 1600,
+            maxWidth: '1200px',
             margin: "0 auto",
             alignItems: "center",
           }}
@@ -3673,8 +3675,33 @@ export default function CombatDiceWindow({
                 border: "1px solid rgba(255,83,0,0.15)",
                 boxShadow:
                   "inset 0 0 40px rgba(0,0,0,0.5), 0 0 60px rgba(0,0,0,0.4)",
+                overflow: "hidden",
               }}
             >
+              {/* DiceRoller is ALWAYS mounted so the ref is always
+                  valid. isOpen toggles its visibility while leaving
+                  the component in the tree for the duration of the
+                  combat window. The phase-aware overlays sit on top
+                  via AnimatePresence and stay pointer-events:none so
+                  they never block the dice surface. */}
+              <DiceRoller
+                isOpen={dicePopup.open}
+                embedded={true}
+                onClose={() => setDicePopup((p) => ({ ...p, open: false }))}
+                initialDice={dicePopup.dice}
+                forcedResult={dicePopup.forcedResult}
+                onRollComplete={(value) => {
+                  if (typeof dicePopup.onComplete === "function") {
+                    dicePopup.onComplete(value);
+                  }
+                }}
+                primaryColor={currentUserProfile?.profile_color_1 || "#FF5300"}
+                secondaryColor={currentUserProfile?.profile_color_2 || "#f8a47c"}
+                isThemedSkin={true}
+                config={campaignConfig}
+                compact={true}
+                autoCloseOnReveal={true}
+              />
               <AnimatePresence>{renderResultBurst()}</AnimatePresence>
             </div>
 
@@ -3697,20 +3724,6 @@ export default function CombatDiceWindow({
           </div>
         </div>
       </motion.div>
-
-      <DiceRoller
-        isOpen={dicePopup.open}
-        onClose={() => setDicePopup((p) => ({ ...p, open: false }))}
-        initialDice={dicePopup.dice}
-        forcedResult={dicePopup.forcedResult}
-        onRollComplete={dicePopup.onComplete}
-        primaryColor={currentUserProfile?.profile_color_1 || "#FF5300"}
-        secondaryColor={currentUserProfile?.profile_color_2 || "#f8a47c"}
-        isThemedSkin={true}
-        config={campaignConfig}
-        compact={true}
-        autoCloseOnReveal={true}
-      />
     </>
   );
 }
