@@ -3652,19 +3652,15 @@ export default function CombatDiceWindow({
                 overflow: "hidden",
               }}
             >
-              {/* DiceRoller is ALWAYS mounted (never gated by phase)
-                  so the dice scene preserves state across phase
-                  transitions. Phase-aware overlays sit on top with
-                  pointer-events:none so they never block the dice.
-                  The `key` is intentionally tied to the requested
-                  dice type — DiceRoller's `initialDice` prop only
-                  takes effect on mount, so without the key the tray
-                  stays on d20 forever and damage rolls misbehave. */}
+              {/* DiceRoller is ALWAYS mounted (never gated by phase
+                  and never re-keyed) so the dice scene stays alive
+                  across phase transitions and the autoCloseOnReveal
+                  timeout from one roll never races a subsequent
+                  roll's open. Phase-aware overlays sit on top with
+                  pointer-events:none so they never block the dice. */}
               <div style={{ position: "absolute", inset: 0 }}>
                 <DiceRoller
-                  key={dicePopup.dice || "d20"}
                   isOpen={dicePopup.open}
-                  embedded={true}
                   onClose={() => setDicePopup((p) => ({ ...p, open: false }))}
                   initialDice={dicePopup.dice}
                   forcedResult={dicePopup.forcedResult}
