@@ -3652,14 +3652,21 @@ export default function CombatDiceWindow({
                 overflow: "hidden",
               }}
             >
-              {/* DiceRoller is ALWAYS mounted (never gated by phase
-                  and never re-keyed) so the dice scene stays alive
-                  across phase transitions and the autoCloseOnReveal
-                  timeout from one roll never races a subsequent
-                  roll's open. Phase-aware overlays sit on top with
-                  pointer-events:none so they never block the dice. */}
+              {/* DiceRoller is mounted unconditionally and re-keyed on
+                  the requested dice type. `initialDice` only takes
+                  effect on mount, so the key change is what swaps the
+                  tray from d20 (attack) to the damage die (d4/d6/d8…).
+                  `autoCloseOnReveal` is left off because every
+                  `dicePopup.onComplete` callback in this component
+                  already closes the popup synchronously — leaving it
+                  on schedules an orphan 1.6s `onClose` timer that can
+                  fire after the next phase has reopened the popup and
+                  close the new roll mid-flight. Phase-aware overlays
+                  sit on top with pointer-events:none so they never
+                  block the dice. */}
               <div style={{ position: "absolute", inset: 0 }}>
                 <DiceRoller
+                  key={dicePopup.dice || "d20"}
                   isOpen={dicePopup.open}
                   onClose={() => setDicePopup((p) => ({ ...p, open: false }))}
                   initialDice={dicePopup.dice}
@@ -3670,7 +3677,6 @@ export default function CombatDiceWindow({
                   isThemedSkin={true}
                   config={campaignConfig}
                   compact={true}
-                  autoCloseOnReveal={true}
                 />
               </div>
 
