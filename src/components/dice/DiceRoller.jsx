@@ -59,6 +59,47 @@ const STOCK_SKIN = {
 
 const _gltfLoader = new GLTFLoader();
 
+// Three's FileLoader cache is off by default. Turning it on globally
+// lets `_gltfLoader.loadAsync(url)` reuse glb bytes across calls — so
+// the campaign-mount preload below and the on-mount load inside
+// DiceRoller hit the same cached payload instead of refetching.
+THREE.Cache.enabled = true;
+
+// Tracks in-flight preload promises so repeat calls (e.g. from a
+// re-rendering campaign mount effect) don't refire the network.
+const _preloadInflight = new Map();
+
+/**
+ * Warm the GLB cache for every dice type before the dice tray spawns.
+ *
+ * Called from campaign route mounts (GMPanel, CampaignPlayerPanel)
+ * once `campaign.dice_config` is available. The fetches run in
+ * parallel in the background while the user reads the campaign UI;
+ * by the time combat starts and DiceRoller mounts, the on-mount
+ * `loadDiceModel` calls hit `THREE.Cache` instead of the network and
+ * the dice render with their correct models on the first frame
+ * instead of falling back to the orange placeholder geometry.
+ *
+ * Idempotent and fire-and-forget: failures are logged and DiceRoller's
+ * own on-mount load effect remains the authoritative loader path.
+ *
+ * @param {object|null} uploadedModels — optional per-die-type URL map
+ *   from `campaign.dice_config.uploadedModels`. Falls back to
+ *   DEFAULT_MODEL_URLS when a type is missing.
+ */
+export function preloadDiceModels(uploadedModels = null) {
+  for (const type of Object.keys(DEFAULT_MODEL_URLS)) {
+    const url = uploadedModels?.[type] || DEFAULT_MODEL_URLS[type];
+    if (!url || _preloadInflight.has(url)) continue;
+    const promise = _gltfLoader.loadAsync(url).catch((err) => {
+      // Don't surface — DiceRoller's own load effect retries on mount
+      // and reports user-visible errors there.
+      console.warn(`[dice preload] ${type} (${url}) failed`, err);
+    });
+    _preloadInflight.set(url, promise);
+  }
+}
+
 async function loadDiceModel(type, opts = {}) {
   const {
     configUploadedModels = null,
