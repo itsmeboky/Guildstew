@@ -15,6 +15,7 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { motion, AnimatePresence } from "framer-motion";
 import CampaignLog from "@/components/gm/CampaignLog";
 import { canEquipToSlot } from "@/components/gm/equipmentRules";
+import EquipmentLayout from "@/game-packs/dnd5e/ui/EquipmentLayout";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
@@ -1498,28 +1499,6 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
     setEquippedItems(newEquipped);
   };
 
-  const equipmentSlots = {
-    left: [
-      { id: 'head', label: 'Head Gear' },
-      { id: 'armor', label: 'Armor' },
-      { id: 'gauntlets', label: 'Gauntlets' },
-      { id: 'belt', label: 'Belt' },
-      { id: 'boots', label: 'Boots' }
-    ],
-    right: [
-      { id: 'cloak', label: 'Cloak' },
-      { id: 'necklace', label: 'Necklace' },
-      { id: 'ring1', label: 'Ring 1' },
-      { id: 'ring2', label: 'Ring 2' },
-      { id: 'implement', label: 'Implement' }
-    ],
-    bottom: [
-      { id: 'weapon1', label: 'Weapon 1' },
-      { id: 'weapon2', label: 'Weapon 2' },
-      { id: 'ranged', label: 'Ranged' }
-    ]
-  };
-
   const getInventorySlots = () => {
     let slots = 20;
     if (!inventory) return slots;
@@ -1563,10 +1542,16 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
             ROLL FOR INITIATIVE
           </button>
 
-          <div className="w-full relative flex gap-3 justify-center mb-2">
-            <img 
-              src={getSilhouetteImage(character)} 
-              alt="" 
+          <EquipmentLayout
+            equippedItems={equippedItems}
+            draggedItem={draggedItem}
+            onDragStart={(item, slotId) => handleDragStart(item, 'slot', slotId)}
+            onDropOnSlot={handleDropOnSlot}
+            onUnequip={unequipItem}
+          >
+            <img
+              src={getSilhouetteImage(character)}
+              alt=""
               className="absolute inset-0 w-full h-full object-contain opacity-20 pointer-events-none"
             />
             {/* Target Selection Overlay */}
@@ -1849,52 +1834,7 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
               }}
             />
 
-            <div className="flex flex-col gap-3 relative z-10">
-              {equipmentSlots.left.map(slot => (
-                <EquipmentSlot 
-                  key={slot.id} 
-                  slotId={slot.id}
-                  label={slot.label} 
-                  item={equippedItems[slot.id]} 
-                  onDrop={() => handleDropOnSlot(slot.id)}
-                  onDragStart={(item) => handleDragStart(item, 'slot', slot.id)}
-                  onUnequip={() => unequipItem(slot.id)}
-                  isValidTarget={draggedItem ? canEquipToSlot(draggedItem.item, slot.id) : undefined}
-                />
-              ))}
-            </div>
-            <div className="w-32 flex-shrink-0 relative z-10"></div>
-            <div className="flex flex-col gap-3 relative z-10">
-              {equipmentSlots.right.map(slot => (
-                <EquipmentSlot 
-                  key={slot.id} 
-                  slotId={slot.id}
-                  label={slot.label} 
-                  item={equippedItems[slot.id]} 
-                  onDrop={() => handleDropOnSlot(slot.id)}
-                  onDragStart={(item) => handleDragStart(item, 'slot', slot.id)}
-                  onUnequip={() => unequipItem(slot.id)}
-                  isValidTarget={draggedItem ? canEquipToSlot(draggedItem.item, slot.id) : undefined}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="w-full flex gap-3 justify-center pt-2 border-t border-[#111827]">
-            {equipmentSlots.bottom.map(slot => (
-              <EquipmentSlot 
-                key={slot.id} 
-                slotId={slot.id}
-                label={slot.label} 
-                size="large" 
-                item={equippedItems[slot.id]} 
-                onDrop={() => handleDropOnSlot(slot.id)}
-                onDragStart={(item) => handleDragStart(item, 'slot', slot.id)}
-                onUnequip={() => unequipItem(slot.id)}
-                isValidTarget={draggedItem ? canEquipToSlot(draggedItem.item, slot.id) : undefined}
-              />
-            ))}
-          </div>
+          </EquipmentLayout>
 
           <div className="w-full pt-3 border-t border-[#111827] mt-2">
             <div className="mb-3">
@@ -2051,61 +1991,6 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
 
 
 
-
-function EquipmentSlot({ label, size = 'normal', item, onDrop, onDragStart, onUnequip, isValidTarget }) {
-  const [showTooltip, setShowTooltip] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const slotSize = size === 'large' ? 'w-16 h-16' : 'w-14 h-14';
-
-  const borderColor = isDragOver && isValidTarget ? 'border-[#37F2D1] bg-[#37F2D1]/20' :
-                      isDragOver && !isValidTarget ? 'border-red-500 bg-red-500/20' :
-                      isValidTarget ? 'border-[#37F2D1] border-dashed bg-[#37F2D1]/5' :
-                      item ? 'border-[#37F2D1]/50 bg-[#111827]' : 
-                      'border-[#111827] hover:border-[#22c5f5]/50';
-
-  const itemImage = item ? (
-    item.image_url || 
-    itemIcons[item.name] || 
-    itemIcons[Object.keys(itemIcons).find(k => k.toLowerCase() === item.name?.toLowerCase())] ||
-    itemIcons[Object.keys(itemIcons).find(k => item.name?.toLowerCase().includes(k.toLowerCase()))]
-  ) : null;
-
-  return (
-    <div className="relative">
-      <div
-        draggable={!!item}
-        onDragStart={() => item && onDragStart && onDragStart(item)}
-        onDragOver={(e) => {
-          e.preventDefault();
-          if (isValidTarget !== undefined) setIsDragOver(true);
-        }}
-        onDragLeave={() => setIsDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsDragOver(false);
-          onDrop && onDrop();
-        }}
-        onMouseEnter={() => setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
-        onDoubleClick={() => item && onUnequip && onUnequip()}
-        className={`${slotSize} rounded-xl bg-[#0b1220] border-2 transition-all shadow-[0_8px_20px_rgba(0,0,0,0.7)] flex items-center justify-center cursor-pointer overflow-hidden ${borderColor} ${isDragOver ? 'scale-105' : ''}`}
-      >
-        {item && itemImage ? (
-          <img src={itemImage} alt={safeText(item.name)} className="w-full h-full object-cover" />
-        ) : item ? (
-          <span className="text-[8px] text-center text-slate-300 px-1 line-clamp-2">{safeText(item.name)}</span>
-        ) : (
-          <span className="text-[8px] text-center text-slate-600 px-1 leading-tight font-medium">{label}</span>
-        )}
-      </div>
-      {showTooltip && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-[#1E2430] text-white px-2 py-1 rounded text-[10px] whitespace-nowrap z-50 shadow-xl border border-[#37F2D1]">
-          {item ? `${label}: ${safeText(item.name)} (double-click to unequip)` : label}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function InventorySlot({ item, draggable, onDragStart }) {
   const imgSrc = item ? (item.image_url || itemIcons[item.name] || itemIcons[Object.keys(itemIcons).find(k => k.toLowerCase() === item.name?.toLowerCase())]) : null;
