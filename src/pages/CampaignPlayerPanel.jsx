@@ -19,6 +19,7 @@ import EquipmentLayout from "@/game-packs/dnd5e/ui/EquipmentLayout";
 import getSilhouetteImage from "@/components/shared/getSilhouetteImage";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
+import { preloadDiceModels } from "@/components/dice/DiceRoller";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
 import {
   blankDeathSaves, applyDeathSaveRoll, applyDownedDamage,
@@ -252,6 +253,13 @@ function CampaignPlayerPanelContent() {
     enabled: !!campaignId,
     refetchInterval: (data) => (data?.combat_active || data?.combat_data?.stage === 'initiative') ? 1000 : 2000
   });
+
+  // Warm the dice GLB cache as soon as the campaign loads, so the
+  // first-ever dice tray of the session renders the player's chosen
+  // models instead of the orange fallback geometry. Idempotent.
+  useEffect(() => {
+    preloadDiceModels(campaign?.dice_config?.uploadedModels);
+  }, [campaign?.dice_config?.uploadedModels]);
 
   // Refetch characters frequently during combat to show HP/Resource updates
   const { data: characters = [] } = useQuery({
