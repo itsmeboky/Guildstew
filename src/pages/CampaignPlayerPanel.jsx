@@ -16,6 +16,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import CampaignLog from "@/components/gm/CampaignLog";
 import { canEquipToSlot } from "@/components/gm/equipmentRules";
 import EquipmentLayout from "@/game-packs/dnd5e/ui/EquipmentLayout";
+import getSilhouetteImage from "@/components/shared/getSilhouetteImage";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
@@ -2650,14 +2651,6 @@ function TurnOrderDisplay({ order, currentTurnIndex, onSelectTarget, selectionMo
       </div>
     </div>
   );
-}
-
-function getSilhouetteImage(character) {
-  if (!character) return 'https://static.wixstatic.com/media/5cdfd8_35e9f29559bd43239470a098001a1fe5~mv2.png';
-  const gender = (character.gender || '').toLowerCase();
-  if (gender.includes('female') || gender === 'f') return 'https://static.wixstatic.com/media/5cdfd8_95e7b63afc9a444e97bbadc37e59b154~mv2.png';
-  if (gender.includes('male') || gender === 'm') return 'https://static.wixstatic.com/media/5cdfd8_8b8fc7ed62dd4c74927bfee94c031e7d~mv2.png';
-  return 'https://static.wixstatic.com/media/5cdfd8_35e9f29559bd43239470a098001a1fe5~mv2.png';
 }
 
 class ErrorBoundary extends React.Component {

@@ -26,6 +26,7 @@ import { computeArmorClass } from "@/components/dnd5e/armorClass";
 import { safeText } from "@/utils/safeRender";
 import MonsterStatBlock from "@/game-packs/dnd5e/ui/MonsterStatBlock";
 import EquipmentLayout from "@/game-packs/dnd5e/ui/EquipmentLayout";
+import getSilhouetteImage from "@/components/shared/getSilhouetteImage";
 
 // Helpers to extract the character's fighting-style names from any of
 // the several shapes a sheet might use. Used by AC (Defense +1) and
@@ -5716,26 +5717,6 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
       </div>
     </div>
   );
-}
-
-function getSilhouetteImage(character) {
-  if (!character) return 'https://static.wixstatic.com/media/5cdfd8_35e9f29559bd43239470a098001a1fe5~mv2.png';
-  
-  if (character.type === 'monster') {
-    return 'https://static.wixstatic.com/media/5cdfd8_c201364be8ad40aa9518230a106c8442~mv2.png';
-  }
-  
-  const gender = (character.gender || character.appearance?.gender || '').toLowerCase();
-  
-  if (gender.includes('female') || gender.includes('woman') || gender === 'f') {
-    return 'https://static.wixstatic.com/media/5cdfd8_95e7b63afc9a444e97bbadc37e59b154~mv2.png';
-  } else if (gender.includes('non-binary') || gender.includes('nonbinary') || gender.includes('enby') || gender.includes('nb') || gender.includes('agender') || gender.includes('genderfluid') || gender.includes('other')) {
-    return 'https://static.wixstatic.com/media/5cdfd8_35e9f29559bd43239470a098001a1fe5~mv2.png';
-  } else if (gender.includes('male') || gender.includes('man') || gender === 'm') {
-    return 'https://static.wixstatic.com/media/5cdfd8_8b8fc7ed62dd4c74927bfee94c031e7d~mv2.png';
-  }
-  
-  return 'https://static.wixstatic.com/media/5cdfd8_35e9f29559bd43239470a098001a1fe5~mv2.png';
 }
 
 function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPossessed, players, onPossessPlayer, monsterInventory, setMonsterInventory, equippedItems, setEquippedItems, onRollInitiative, onManageConditions, onDrinkPotion }) {
