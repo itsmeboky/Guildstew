@@ -4404,16 +4404,26 @@ export default function GMPanel() {
                       // the old top-level fields kept showing 0/0
                       // and AC 10 for every card. Fall through to
                       // the legacy flat shape for older rows.
+                      //
+                      // `hit_points.{current,max}` is the canonical
+                      // shape that combat damage / heal writebacks
+                      // update (see Character.update calls in this
+                      // file). It must be read FIRST: legacy rows
+                      // can carry a stale `hp_current` left over from
+                      // a pre-`{max,current,temporary}` migration,
+                      // and reading that flat field first would
+                      // shadow live damage updates and freeze the
+                      // Adventurers panel at the pre-combat HP.
                       const currentHp =
-                        character?.hp_current
-                        ?? character?.hit_points?.current
+                        character?.hit_points?.current
                         ?? stats?.hit_points?.current
+                        ?? character?.hp_current
                         ?? stats?.hit_points
                         ?? 0;
                       const maxHp =
-                        character?.hp_max
-                        ?? character?.hit_points?.max
+                        character?.hit_points?.max
                         ?? stats?.hit_points?.max
+                        ?? character?.hp_max
                         ?? stats?.hit_points
                         ?? 0;
                       // Effective AC: derive from equipped armor + DEX
