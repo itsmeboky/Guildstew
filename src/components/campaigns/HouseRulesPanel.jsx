@@ -10,7 +10,8 @@ import { RotateCcw, Trash2, Swords, Moon, UserCircle, Sparkles, FlaskConical, Ex
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { base44 } from "@/api/base44Client";
-import { MODIFIABLE_RULES, getRule } from "@/components/dnd5e/dnd5eRules";
+import { getRule } from "@/engine/contentLayer";
+import { MODIFIABLE_RULES } from "@/components/dnd5e/dnd5eRules";
 import CreateHomebrewDialog from "@/components/homebrew/CreateHomebrewDialog";
 
 /**

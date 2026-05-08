@@ -98,13 +98,13 @@ import CampaignSettingsContent from "@/components/session/content/CampaignSettin
 import GMSidebarAchievements from "@/components/gm/GMSidebarAchievements";
 import GMSidebarPlayers from "@/components/gm/GMSidebarPlayers";
 import GMSidebarUpdates from "@/components/gm/GMSidebarUpdates";
+import { getRule } from "@/engine/contentLayer";
 import {
   abilityModifier,
   proficiencyBonus,
   CONCENTRATION,
   applyDamageModifiers,
   attacksPerAction,
-  getRule,
   DEATH_RULES,
   RAGE_DAMAGE_BONUS,
   RAGES_PER_DAY,

@@ -17,6 +17,7 @@ import { hpBarColor } from "@/components/combat/hpColor";
 import { FACTION_STYLES, getFaction } from "@/utils/combatQueue";
 import { getConditionModifiers } from "@/components/combat/conditions";
 import { logCombatEvent } from "@/utils/combatLog";
+import { getRule } from "@/engine/contentLayer";
 import {
   abilityModifier as abilMod,
   proficiencyBonus as profBonus,
@@ -25,7 +26,6 @@ import {
   sneakAttackDice as registrySneakAttackDice,
   cantripScaling as registryCantripScaling,
   CONCENTRATION,
-  getRule,
   MONK_MARTIAL_ARTS_DIE,
   divineSmiteDice,
   spellSaveDC as spellSaveDCFn,
