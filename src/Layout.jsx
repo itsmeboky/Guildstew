@@ -7,7 +7,7 @@ import { Play, Users, Trophy, PieChart, Settings, Beer, LogOut, Plus, Radio, Use
 import AppSidebar from "@/components/layout/AppSidebar";
 import ChatPanel from "@/components/chat/ChatPanel";
 import SessionReminderNotification from "@/components/notifications/SessionReminderNotification";
-import DiceRoller from "@/components/dice/DiceRoller";
+import DiceRoller, { preloadDiceModels } from "@/components/dice/DiceRoller";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
@@ -101,6 +101,20 @@ export default function Layout({ children, currentPageName }) {
     enabled: !!user?.id,
     initialData: null
   });
+
+  // Warm the dice .glb cache as soon as auth resolves. The codebase
+  // currently has no user-level uploadedModels — Tavern dice skins
+  // override material/texture only, not geometry — so this preloads
+  // DEFAULT_MODEL_URLS (passing null lets preloadDiceModels handle
+  // every die type from its default map). The campaign-mount
+  // preloads in GMPanel/CampaignPlayerPanel still run for the rare
+  // campaigns that ship custom uploadedModels; both calls land in
+  // the same module-scoped _modelCache and the second is a no-op
+  // for any URL already in flight or cached.
+  useEffect(() => {
+    if (!user?.id) return;
+    preloadDiceModels(null);
+  }, [user?.id]);
 
   const { data: friendships } = useQuery({
     queryKey: ['friendships', user?.id],

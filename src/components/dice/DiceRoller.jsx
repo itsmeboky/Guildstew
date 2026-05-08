@@ -1161,6 +1161,14 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   } = props;
   const mountRef = useRef(null);
   const sceneRef = useRef({});
+  // Gates the imperative orange-fallback render in `swapDiceModel`.
+  // Starts false on every mount; flips to true after a 200ms timer
+  // so warm-cache .glb loads (which usually arrive within tens of ms)
+  // can swap in the real dice model without the user ever seeing the
+  // placeholder polyhedron flash. After 200ms, fallback rendering is
+  // re-enabled — genuine cold-start / slow-network mounts still get
+  // a placeholder, just one frame later.
+  const fallbackAllowedRef = useRef(false);
   const timelineRef = useRef(null);
   const playbackRef = useRef({ startTime: null, eventIndex: 0, playing: false });
   const particleRef = useRef(null);
@@ -1348,9 +1356,31 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     return () => { cancelled = true; };
   }, []);
 
+  // `_modelCache` is intentionally NOT wiped when `config?.uploadedModels`
+  // changes. The cache is module-scoped and meant to persist across every
+  // DiceRoller mount for the lifetime of the page; an over-broad wipe here
+  // (which is what used to live in this slot) fired on every TanStack
+  // refetch / Realtime tick that produced a new `uploadedModels` object
+  // reference, even when the underlying URLs hadn't changed — and the next
+  // mount went back to fetching every glb from the network. If a campaign
+  // genuinely swaps a die's URL mid-session, `loadDiceModel` overwrites the
+  // cached entry naturally on the next miss, so users see the OLD model
+  // briefly until the new load finishes; that's an acceptable tradeoff
+  // for keeping warm-cache combat instant.
+
+  // 200ms fallback guard — see `fallbackAllowedRef` above. After the
+  // timer fires we re-invoke `swapDiceModel` for the active type so the
+  // placeholder polyhedron shows up on genuinely slow loads.
   useEffect(() => {
-    Object.keys(_modelCache).forEach(k => delete _modelCache[k]);
-  }, [config?.uploadedModels]);
+    const t = setTimeout(() => {
+      fallbackAllowedRef.current = true;
+      const type = diceTypeRef.current;
+      if (type && sceneRef.current?.swapDiceModel) {
+        sceneRef.current.swapDiceModel(type);
+      }
+    }, 200);
+    return () => clearTimeout(t);
+  }, []);
 
   // ==============================================================
   // SCENE SETUP — runs once
@@ -1516,8 +1546,12 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
         diceState.isPlaceholder = false;
         diceState.materials = collectMaterials(cloned);
         resetDiceEmissive(diceState.materials);
-      } else {
-        // Fall back to placeholder polyhedron with the right shape
+      } else if (fallbackAllowedRef.current) {
+        // Fall back to placeholder polyhedron with the right shape.
+        // Gated on `fallbackAllowedRef` so cache hits within the 200ms
+        // post-mount window can swap in the real .glb without the user
+        // ever seeing the orange placeholder. Once the guard expires
+        // the timer effect re-invokes swapDiceModel and we land here.
         const newGeo = buildDiceGeometry(type);
         placeholderMesh.geometry.dispose();
         placeholderMesh.geometry = newGeo;
@@ -1526,6 +1560,13 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
         diceState.isPlaceholder = true;
         diceState.materials = [placeholderMat];
         resetDiceEmissive(diceState.materials);
+      } else {
+        // Within the 200ms guard window with no cached model yet —
+        // intentionally render nothing so the user doesn't see the
+        // placeholder flash before the real dice arrive.
+        diceState.activeContent = null;
+        diceState.isPlaceholder = false;
+        diceState.materials = [];
       }
     };
 
