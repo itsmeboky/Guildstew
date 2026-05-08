@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { RefreshCw, X, Swords, Music } from "lucide-react";
 import DiceRoller from "@/components/dice/DiceRoller";
@@ -3561,7 +3562,14 @@ export default function CombatDiceWindow({
     );
   };
 
-  return (
+  // Portaled to document.body so the modal escapes any transformed /
+  // filtered ancestor's containing block (e.g. body.colorblind-* gets
+  // a `filter: url(#…)` from App.css, framer-motion can leave inline
+  // transform residue on the wrapper itself, etc.). Portaling keeps
+  // `position: fixed` honestly anchored to the viewport on every code
+  // path, so the backdrop actually covers the screen instead of being
+  // clipped to whatever the React-tree ancestor permits.
+  return createPortal(
     <>
       <style>{`
         @keyframes cdwPulse {
@@ -3573,24 +3581,27 @@ export default function CombatDiceWindow({
           100% { transform: translateX(100%); }
         }
       `}</style>
+      {/* Backdrop layer: covers the viewport, applies the radial
+          gradient + slight transparency, centers the constrained
+          panel via flex. Framer-motion fade lives on this layer so
+          the dialog still animates in/out as before. */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        // overflow-y-auto lets short viewports scroll the names header
-        // and FSM indicator into view instead of clipping them at the
-        // top edge; overflow-x-hidden keeps the absolutely-positioned
-        // Up Next side rails from triggering a horizontal scrollbar.
-        className="fixed inset-0 z-[100] overflow-y-auto overflow-x-hidden"
+        className="fixed inset-0 z-[100] overflow-y-auto overflow-x-hidden flex items-start sm:items-center justify-center p-4 sm:p-6"
         style={{
           background:
             "radial-gradient(ellipse 80% 60% at 50% 20%, rgba(255, 83, 0, 0.08), transparent 60%), " +
             "radial-gradient(ellipse 60% 50% at 50% 100%, rgba(55, 242, 209, 0.06), transparent 60%), " +
-            "#050816",
-          paddingBottom: 32,
+            "rgba(5, 8, 22, 0.88)",
+          backdropFilter: "blur(4px)",
+          WebkitBackdropFilter: "blur(4px)",
         }}
       >
-        {/* Grid lines, masked to fade at edges */}
+        {/* Grid lines decorate the backdrop layer, behind the panel,
+            masked to fade at edges. They stay on the backdrop so the
+            panel reads as a solid contained surface. */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
@@ -3605,27 +3616,39 @@ export default function CombatDiceWindow({
           }}
         />
 
-        <button
-          onClick={onClose}
-          className="combat-close absolute top-6 right-6 text-slate-400 hover:text-white p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors z-30"
+        {/* Panel: centered, constrained, rounded. The previous
+            full-screen takeover content moves inside this div. The
+            radial gradient + grid lines stay on the backdrop above so
+            the panel reads as a contained dialog instead of a
+            takeover. The Up Next rails and close button are now
+            anchored to this panel via its `relative` positioning;
+            their visual placement in late-combat states is a Phase 6
+            queue-redesign concern and intentionally untouched here. */}
+        <div
+          className="relative w-full max-w-5xl max-h-[92vh] rounded-2xl border border-white/10 shadow-[0_25px_80px_rgba(0,0,0,0.6)] overflow-y-auto overflow-x-hidden"
+          style={{ background: "#050816" }}
         >
-          <X className="w-6 h-6" />
-        </button>
+          <button
+            onClick={onClose}
+            className="combat-close absolute top-4 right-4 text-slate-400 hover:text-white p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors z-30"
+          >
+            <X className="w-6 h-6" />
+          </button>
 
-        {renderUpNext("left")}
-        {renderUpNext("right")}
+          {renderUpNext("left")}
+          {renderUpNext("right")}
 
-        {/* Header */}
-        <header
-          className="combat-header relative z-10 flex flex-col items-center gap-[18px]"
-          // Bumped from 20px to 56px so the names "vs." banner and the
-          // READY → ATTACK → … step indicator clear the viewport's top
-          // edge with breathing room on every supported height.
-          style={{ paddingTop: 56 }}
-        >
-          {renderCombatTitle()}
-          {renderStepIndicator()}
-        </header>
+          {/* Header */}
+          <header
+            className="combat-header relative z-10 flex flex-col items-center gap-[18px]"
+            // 32px inside the panel — the prior 56 was sized for a
+            // full-viewport takeover and feels too generous now that
+            // the panel has its own top edge with rounded corners.
+            style={{ paddingTop: 32 }}
+          >
+            {renderCombatTitle()}
+            {renderStepIndicator()}
+          </header>
 
         {/* Stage */}
         <div
@@ -3761,7 +3784,9 @@ export default function CombatDiceWindow({
               renderCombatantCard(target, "target")}
           </div>
         </div>
+        </div>
       </motion.div>
-    </>
+    </>,
+    document.body
   );
 }
