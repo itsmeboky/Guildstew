@@ -3577,12 +3577,17 @@ export default function CombatDiceWindow({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] overflow-hidden"
+        // overflow-y-auto lets short viewports scroll the names header
+        // and FSM indicator into view instead of clipping them at the
+        // top edge; overflow-x-hidden keeps the absolutely-positioned
+        // Up Next side rails from triggering a horizontal scrollbar.
+        className="fixed inset-0 z-[100] overflow-y-auto overflow-x-hidden"
         style={{
           background:
             "radial-gradient(ellipse 80% 60% at 50% 20%, rgba(255, 83, 0, 0.08), transparent 60%), " +
             "radial-gradient(ellipse 60% 50% at 50% 100%, rgba(55, 242, 209, 0.06), transparent 60%), " +
             "#050816",
+          paddingBottom: 32,
         }}
       >
         {/* Grid lines, masked to fade at edges */}
@@ -3613,7 +3618,10 @@ export default function CombatDiceWindow({
         {/* Header */}
         <header
           className="combat-header relative z-10 flex flex-col items-center gap-[18px]"
-          style={{ paddingTop: 20 }}
+          // Bumped from 20px to 56px so the names "vs." banner and the
+          // READY → ATTACK → … step indicator clear the viewport's top
+          // edge with breathing room on every supported height.
+          style={{ paddingTop: 56 }}
         >
           {renderCombatTitle()}
           {renderStepIndicator()}
