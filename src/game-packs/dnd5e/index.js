@@ -37,10 +37,6 @@ import * as itemsContent from './content/items';
 
 // ─── UI ───────────────────────────────────────────────
 import CombatActionBar from './ui/CombatActionBar';
-// PlayerLeftPanel was relocated in Phase 1.10 but has zero importers in
-// the current codebase. Wired here for completeness; Phase 1 cleanup
-// decides whether to keep or delete.
-import PlayerLeftPanel from './ui/PlayerLeftPanel';
 import MonsterStatBlock from './ui/MonsterStatBlock';
 import EquipmentLayout from './ui/EquipmentLayout';
 
@@ -96,7 +92,6 @@ const dnd5e = {
     EquipmentLayout,
     InventoryGrid: null,              // Phase 1.13 deferred to Phase 2
     SpellPicker: null,                // Phase 6
-    PlayerLeftPanel,                  // currently orphaned (zero importers)
     flows: {},
   },
 
