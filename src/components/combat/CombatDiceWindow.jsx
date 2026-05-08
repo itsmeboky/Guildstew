@@ -116,6 +116,11 @@ export default function CombatDiceWindow({
     dice: "d20",
     forcedResult: null,
     onComplete: null,
+    // Optional modifier passthrough for DiceRoller's character-state
+    // visual treatments (rage / inspiration / wildMagic / deathSave).
+    // null falls through to the default base timeline — every existing
+    // setDicePopup callsite that doesn't set this stays byte-identical.
+    state: null,
   });
   const [initiativeRoll, setInitiativeRoll] = useState(null);
   // Post-hit prompt state. postHitOptions is a set of strings the
@@ -669,6 +674,24 @@ export default function CombatDiceWindow({
     return opts;
   }, [actor, selectedAction, getPaladinSlotsLeft]);
 
+  // Resolves the active DiceRoller `modifier` for the rolling actor.
+  // Auto-detects character-state visuals from existing tracking
+  // (classResources.isRaging today). Inspiration is handled at its
+  // dedicated reroll callsite — see `useInspirationAdvantage` —
+  // because it's a per-roll opt-in mechanic that fires AFTER the
+  // initial d20, not a passive state on the actor. Wild Magic has no
+  // active-state tracking in production yet (subclass exists in data,
+  // surge detection does not), so it stays "none" until a manual GM
+  // toggle or auto-trigger lands as a separate task.
+  const resolveDiceModifier = React.useCallback(
+    (actorRef = actor) => {
+      if (!actorRef) return "none";
+      if (actorRef?.classResources?.isRaging) return "rage";
+      return "none";
+    },
+    [actor]
+  );
+
   const handleAttackRoll = () => {
     setIsRolling(true);
     setCurrentDice("d20");
@@ -682,6 +705,7 @@ export default function CombatDiceWindow({
     setDicePopup({
       open: true,
       dice: "d20",
+      state: resolveDiceModifier(),
       forcedResult: isSpectator ? attackRoll?.d20 : null,
       onComplete: (value) => {
         setDicePopup(p => ({ ...p, open: false }));
@@ -918,44 +942,56 @@ export default function CombatDiceWindow({
     onRoll && onRoll({ type: 'lucky_reroll', actorId: actor?.id, reroll });
   }, [actor, attackRoll, skillCheckRoll, savingThrowRoll, target, targetCover, luckyConsumed, campaignId, onRoll, onLuckySpend, computePostHitOptions]);
 
-  // DM Inspiration — reroll with advantage. Rolls a fresh d20 and
-  // keeps the higher. Strips hasInspiration via callback so the ★
-  // badge disappears.
+  // DM Inspiration — reroll with advantage. Spawns a real DiceRoller
+  // d20 with `state: "inspiration"` so the player sees the gold
+  // sparkle/notes treatment on the reroll instead of a silent number.
+  // Pre-fix this called Math.random() inline; the visual was missing
+  // entirely. The post-roll body (compare-and-keep, state writes,
+  // campaign log, callbacks) is now invoked from onComplete with the
+  // dice scene's actual d20 value.
   const useInspirationAdvantage = React.useCallback((kind) => {
     if (inspirationDiceUsed) return;
-    const reroll = Math.floor(Math.random() * 20) + 1;
     setInspirationDiceUsed(true);
-    const targetAC = (target?.stats?.armor_class || target?.armor_class || 10) +
-      (COVER?.[targetCover]?.acBonus || 0);
-    if (kind === 'attack' && attackRoll) {
-      const bestD20 = Math.max(attackRoll.d20, reroll);
-      const newTotal = bestD20 + attackRoll.mod;
-      const willHit = bestD20 === 20 || newTotal >= targetAC;
-      setAttackRoll({ ...attackRoll, d20: bestD20, total: newTotal, inspirationReroll: reroll, isCrit: bestD20 === 20 || attackRoll.isCrit });
-      if (willHit) {
-        const opts = computePostHitOptions();
-        if (opts.length > 0) {
-          setPostHitOptions(opts);
-          const decisions = {};
-          for (const o of opts) decisions[o] = null;
-          setPostHitDecisions(decisions);
+    setDicePopup({
+      open: true,
+      dice: "d20",
+      state: "inspiration",
+      forcedResult: null,
+      onComplete: (reroll) => {
+        setDicePopup(p => ({ ...p, open: false }));
+        const targetAC = (target?.stats?.armor_class || target?.armor_class || 10) +
+          (COVER?.[targetCover]?.acBonus || 0);
+        if (kind === 'attack' && attackRoll) {
+          const bestD20 = Math.max(attackRoll.d20, reroll);
+          const newTotal = bestD20 + attackRoll.mod;
+          const willHit = bestD20 === 20 || newTotal >= targetAC;
+          setAttackRoll({ ...attackRoll, d20: bestD20, total: newTotal, inspirationReroll: reroll, isCrit: bestD20 === 20 || attackRoll.isCrit });
+          if (willHit) {
+            const opts = computePostHitOptions();
+            if (opts.length > 0) {
+              setPostHitOptions(opts);
+              const decisions = {};
+              for (const o of opts) decisions[o] = null;
+              setPostHitDecisions(decisions);
+            }
+          }
+        } else if (kind === 'skill' && skillCheckRoll) {
+          const bestD20 = Math.max(skillCheckRoll.d20, reroll);
+          setSkillCheckRoll({ ...skillCheckRoll, d20: bestD20, total: bestD20 + skillCheckRoll.mod });
+        } else if (kind === 'save' && savingThrowRoll) {
+          const bestD20 = Math.max(savingThrowRoll.d20, reroll);
+          const newTotal = bestD20 + savingThrowRoll.mod;
+          setSavingThrowRoll({ ...savingThrowRoll, d20: bestD20, total: newTotal, success: newTotal >= savingThrowRoll.dc });
         }
-      }
-    } else if (kind === 'skill' && skillCheckRoll) {
-      const bestD20 = Math.max(skillCheckRoll.d20, reroll);
-      setSkillCheckRoll({ ...skillCheckRoll, d20: bestD20, total: bestD20 + skillCheckRoll.mod });
-    } else if (kind === 'save' && savingThrowRoll) {
-      const bestD20 = Math.max(savingThrowRoll.d20, reroll);
-      const newTotal = bestD20 + savingThrowRoll.mod;
-      setSavingThrowRoll({ ...savingThrowRoll, d20: bestD20, total: newTotal, success: newTotal >= savingThrowRoll.dc });
-    }
-    if (campaignId) {
-      logCombatEvent(campaignId, `${actor?.name || 'Actor'} uses Inspiration! Advantage on the roll.`, {
-        event: 'inspiration_used', category: 'buff', actor: actor?.name, reroll,
-      });
-    }
-    if (typeof onInspirationUse === 'function') onInspirationUse();
-    onRoll && onRoll({ type: 'inspiration_used', actorId: actor?.id, reroll });
+        if (campaignId) {
+          logCombatEvent(campaignId, `${actor?.name || 'Actor'} uses Inspiration! Advantage on the roll.`, {
+            event: 'inspiration_used', category: 'buff', actor: actor?.name, reroll,
+          });
+        }
+        if (typeof onInspirationUse === 'function') onInspirationUse();
+        onRoll && onRoll({ type: 'inspiration_used', actorId: actor?.id, reroll });
+      },
+    });
   }, [actor, attackRoll, skillCheckRoll, savingThrowRoll, target, targetCover, inspirationDiceUsed, campaignId, onRoll, onInspirationUse, computePostHitOptions]);
 
   const handleSmiteChoice = (slotLevel) => {
@@ -1057,6 +1093,7 @@ export default function CombatDiceWindow({
     setDicePopup({
       open: true,
       dice: diceType,
+      state: resolveDiceModifier(),
       forcedResult: isSpectator ? damageRoll?.dice : null,
       onComplete: (value) => {
         setDicePopup(p => ({ ...p, open: false }));
@@ -1420,6 +1457,7 @@ export default function CombatDiceWindow({
     setDicePopup({
       open: true,
       dice: healDice,
+      state: resolveDiceModifier(),
       forcedResult: null,
       onComplete: () => {
         setDicePopup(p => ({ ...p, open: false }));
@@ -1576,6 +1614,7 @@ export default function CombatDiceWindow({
     setDicePopup({
       open: true,
       dice: autoDice,
+      state: resolveDiceModifier(),
       forcedResult: null,
       onComplete: () => {
         setDicePopup(p => ({ ...p, open: false }));
@@ -1616,6 +1655,7 @@ export default function CombatDiceWindow({
     setDicePopup({
       open: true,
       dice: "d20",
+      state: resolveDiceModifier(),
       forcedResult: isSpectator ? skillCheckRoll?.d20 : null,
       onComplete: (value) => {
         setDicePopup(p => ({ ...p, open: false }));
@@ -1797,6 +1837,7 @@ export default function CombatDiceWindow({
     setDicePopup({
       open: true,
       dice: "d20",
+      state: resolveDiceModifier(),
       forcedResult: isSpectator ? savingThrowRoll?.d20 : null,
       onComplete: (value) => {
         setDicePopup(p => ({ ...p, open: false }));
@@ -3703,6 +3744,7 @@ export default function CombatDiceWindow({
                   initialDice={dicePopup.dice}
                   forcedResult={dicePopup.forcedResult}
                   onRollComplete={dicePopup.onComplete}
+                  modifier={dicePopup.state || "none"}
                   primaryColor={currentUserProfile?.profile_color_1 || "#FF5300"}
                   secondaryColor={currentUserProfile?.profile_color_2 || "#f8a47c"}
                   isThemedSkin={true}
