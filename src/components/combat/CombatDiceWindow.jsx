@@ -52,6 +52,14 @@ export default function CombatDiceWindow({
   isGM = false,
   mode = "combat", // 'combat' or 'initiative'
   campaignId,
+  // When true AND viewer is spectator AND the rolling actor is
+  // GM-controlled (attackerId not prefixed `player-`), the dice
+  // canvas swaps to a "GM is rolling" placeholder so players see
+  // SOMETHING happening but not the math. Final outcome (damage,
+  // HP, log entries) still applies — only the dice animation
+  // hides. Wired from campaign.settings.gm_screen_mode at the
+  // panel mount sites.
+  gmScreenMode = false,
   isOffHand = false,
   onActionComplete,
   isSpectator = false,
@@ -3760,27 +3768,73 @@ export default function CombatDiceWindow({
                   sit on top with pointer-events:none so they never
                   block the dice. */}
               <div style={{ position: "absolute", inset: 0 }}>
-                <DiceRoller
-                  key={dicePopup.dice || "d20"}
-                  isOpen={dicePopup.open}
-                  onClose={() => setDicePopup((p) => ({ ...p, open: false }))}
-                  initialDice={dicePopup.dice}
-                  forcedResult={dicePopup.forcedResult}
-                  onRollComplete={dicePopup.onComplete}
-                  modifier={dicePopup.state || "none"}
-                  // Spectators don't physically interact with the dice
-                  // arena, so the actor's click-to-roll path never
-                  // fires for them. autoRollOnOpen tells DiceRoller to
-                  // execute one roll the moment the popup opens with a
-                  // forcedResult — the watching seat then sees the
-                  // same animation the rolling player saw.
-                  autoRollOnOpen={isSpectator}
-                  primaryColor={currentUserProfile?.profile_color_1 || "#FF5300"}
-                  secondaryColor={currentUserProfile?.profile_color_2 || "#f8a47c"}
-                  isThemedSkin={true}
-                  config={campaignConfig}
-                  compact={true}
-                />
+                {(() => {
+                  // DM Screen Mode — players see a placeholder gif
+                  // instead of the GM's dice canvas. Only fires when
+                  // all three apply:
+                  //   1. campaign.settings.gm_screen_mode is true
+                  //   2. viewer is a spectator (so the rolling actor
+                  //      doesn't see their own dice hidden)
+                  //   3. rolling actor is GM-controlled (attackerId
+                  //      not prefixed `player-`). Player-rolled
+                  //      actions remain visible to GM regardless;
+                  //      there's no PC screen mode.
+                  // Action label, post-roll readout, and DONE button
+                  // logic all stay outside this branch — only the
+                  // dice canvas swaps.
+                  const attackerId = spectatorData?.attackerId || "";
+                  const isGmRolledAction = !!attackerId && !attackerId.startsWith('player-');
+                  const screenModeActive = gmScreenMode && isSpectator && isGmRolledAction;
+                  if (screenModeActive) {
+                    return (
+                      <div
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: "rgba(5, 8, 22, 0.85)",
+                        }}
+                      >
+                        <img
+                          src="https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/UI/DiceWait.gif"
+                          alt="GM is rolling…"
+                          style={{
+                            maxWidth: "70%",
+                            maxHeight: "70%",
+                            objectFit: "contain",
+                            filter: "drop-shadow(0 0 16px rgba(255, 83, 0, 0.4))",
+                          }}
+                        />
+                      </div>
+                    );
+                  }
+                  return (
+                    <DiceRoller
+                      key={dicePopup.dice || "d20"}
+                      isOpen={dicePopup.open}
+                      onClose={() => setDicePopup((p) => ({ ...p, open: false }))}
+                      initialDice={dicePopup.dice}
+                      forcedResult={dicePopup.forcedResult}
+                      onRollComplete={dicePopup.onComplete}
+                      modifier={dicePopup.state || "none"}
+                      // Spectators don't physically interact with the
+                      // dice arena, so the actor's click-to-roll path
+                      // never fires for them. autoRollOnOpen tells
+                      // DiceRoller to execute one roll the moment the
+                      // popup opens with a forcedResult — the watching
+                      // seat then sees the same animation the rolling
+                      // player saw.
+                      autoRollOnOpen={isSpectator}
+                      primaryColor={currentUserProfile?.profile_color_1 || "#FF5300"}
+                      secondaryColor={currentUserProfile?.profile_color_2 || "#f8a47c"}
+                      isThemedSkin={true}
+                      config={campaignConfig}
+                      compact={true}
+                    />
+                  );
+                })()}
               </div>
 
               {/* Ready-state overlay */}

@@ -3197,6 +3197,7 @@ export default function GMPanel() {
               // Spectator Props
               isSpectator={!combatState.isOpen && !!campaign?.combat_data?.active_encounter}
               spectatorData={campaign?.combat_data?.active_encounter}
+              gmScreenMode={!!campaign?.settings?.gm_screen_mode}
               sneakActive={sneakActive}
               extraAttackInfo={
                 totalExtraAttacks > 1

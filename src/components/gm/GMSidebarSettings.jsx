@@ -6,6 +6,7 @@ import { base44 } from "@/api/base44Client";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { TIME_OPTIONS } from "@/utils/sessionTime";
 
 /**
@@ -77,6 +78,22 @@ export default function GMSidebarSettings({ campaignId, campaign, allUserProfile
     mutationFn: (uid) => saveCampaign({ mole_player_id: uid || null }),
     onSuccess: () => toast.success("Mole updated."),
     onError: (err) => toast.error(err?.message || "Couldn't set mole."),
+  });
+
+  // DM Screen Mode — when on, players see a placeholder gif instead
+  // of the GM's dice canvas during GM-rolled actions. Final outcomes
+  // (damage, HP, log entries) still apply when GM clicks DONE; only
+  // the dice math hides. Player-rolled actions remain visible to GM
+  // regardless. Stored on campaign.settings.gm_screen_mode (additive
+  // JSONB key, default false).
+  const gmScreenMode = !!campaign?.settings?.gm_screen_mode;
+  const setGmScreenMode = useMutation({
+    mutationFn: (next) => saveCampaign({
+      settings: { ...(campaign?.settings || {}), gm_screen_mode: next },
+    }),
+    onSuccess: (_, next) =>
+      toast.success(next ? "DM Screen Mode on — your dice are hidden from players." : "DM Screen Mode off — players see your dice again."),
+    onError: (err) => toast.error(err?.message || "Couldn't toggle DM Screen Mode."),
   });
 
   const nameFor = (uid) => {
@@ -232,6 +249,27 @@ export default function GMSidebarSettings({ campaignId, campaign, allUserProfile
           >
             {saveSessionAlert.isPending ? "Saving…" : "Save Session Alert"}
           </button>
+        </div>
+      </div>
+
+      {/* DM Screen Mode */}
+      <div>
+        <label className="text-xs text-slate-400 uppercase tracking-wider block mb-2">
+          Dice Visibility
+        </label>
+        <div className="flex items-start justify-between gap-3 p-3 bg-[#0f1219] border border-slate-700 rounded-lg">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-white font-semibold">DM Screen Mode</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Hide GM dice rolls from players. Action labels and final
+              outcomes still display; only the dice math hides.
+            </p>
+          </div>
+          <Switch
+            checked={gmScreenMode}
+            onCheckedChange={(v) => setGmScreenMode.mutate(v)}
+            disabled={setGmScreenMode.isPending}
+          />
         </div>
       </div>
 
