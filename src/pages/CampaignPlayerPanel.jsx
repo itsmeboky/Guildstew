@@ -1061,7 +1061,7 @@ function CampaignPlayerPanelContent() {
             }}
           />
 
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             {campaign.combat_active && campaign.combat_data && (
               campaign.combat_data.stage === 'initiative' || campaign.combat_data.stage === 'arranging' ? (
                 // Players must not see the GM arranging the turn order.
@@ -1078,19 +1078,30 @@ function CampaignPlayerPanelContent() {
                   </div>
                 </div>
               ) : (
-                <TurnOrderDisplay
-                  order={campaign.combat_data.order || []}
-                  currentTurnIndex={campaign.combat_data.currentTurnIndex || 0}
-                  onSelectTarget={(target) => {
-                    if (combatState.step === 'selecting_target') {
-                      setCombatState(prev => ({ ...prev, target, step: 'rolling', isOpen: true }));
-                    }
-                  }}
-                  selectionMode={combatState.step === 'selecting_target'}
-                  characters={characters}
-                  players={players}
-                  hideInitiative={true}
-                />
+                // Wrap the bar in an explicit width-bounded flex
+                // container so the inner overflow-x-auto scrolls
+                // cleanly within the column. Mirrors the GM-side
+                // wrapper at GMPanel.jsx:4048 (flex justify-between
+                // items-end relative); player-side has no right-
+                // sibling, so justify-start is correct here. min-w-0
+                // closes the grid-track expansion escape hatch where
+                // a flex/min-content child could push the column
+                // wider than its `minmax(0, 1fr)` allotment.
+                <div className="flex justify-start items-end relative w-full min-w-0">
+                  <TurnOrderDisplay
+                    order={campaign.combat_data.order || []}
+                    currentTurnIndex={campaign.combat_data.currentTurnIndex || 0}
+                    onSelectTarget={(target) => {
+                      if (combatState.step === 'selecting_target') {
+                        setCombatState(prev => ({ ...prev, target, step: 'rolling', isOpen: true }));
+                      }
+                    }}
+                    selectionMode={combatState.step === 'selecting_target'}
+                    characters={characters}
+                    players={players}
+                    hideInitiative={true}
+                  />
+                </div>
               )
             )}
             {/* End Turn Button for Players */}
