@@ -3070,10 +3070,17 @@ export default function GMPanel() {
                         // Give the dice window live access to the
                         // actor's classResources + any inspiration
                         // stored on their combat_data.order entry.
+                        // Field set kept symmetric with player-side
+                        // via the Phase-1 commit-2 audit; both flags
+                        // looked up against the same order entry so
+                        // the post-roll prompts behave identically.
                         classResources:
                           campaign?.combat_data?.classResources?.[
                             getCharacterKey(selectedCharacter)
                           ] || {},
+                        hasInspiration: (campaign?.combat_data?.order || [])
+                          .find((c) => (c.uniqueId || c.id) === getCharacterKey(selectedCharacter))
+                          ?.hasInspiration,
                         bardicInspiration: (campaign?.combat_data?.order || [])
                           .find((c) => (c.uniqueId || c.id) === getCharacterKey(selectedCharacter))
                           ?.bardicInspiration,
