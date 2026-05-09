@@ -415,7 +415,28 @@ export default function CombatDiceWindow({
 
   // Spectator sync (follow campaign.combat_data.active_encounter)
   useEffect(() => {
-    if (!isSpectator || !spectatorData) return;
+    if (!isSpectator) return;
+
+    // Encounter cleared (e.g., actor clicked Done after a miss, or
+    // the GM cancelled). Reset the spectator's local roll state so
+    // the NEXT encounter doesn't inherit a stale attackRoll /
+    // damageRoll / phase. Without this, a missed attack's attackRoll
+    // would persist into the next encounter and skew the spectator's
+    // isHit computation (since attackRoll is non-null + targetAC
+    // defaults to 10 on the spectator side, isHit erroneously
+    // resolves true and the spectator UI thinks the previous miss
+    // was a hit).
+    if (!spectatorData) {
+      setPhase("ready");
+      setAttackRoll(null);
+      setDamageRoll(null);
+      setSkillCheckRoll(null);
+      setSavingThrowRoll(null);
+      setRollPair(null);
+      setIsCrit(false);
+      prevSpectatorDataRef.current = null;
+      return;
+    }
 
     if (spectatorData.phase) setPhase(spectatorData.phase);
     if (spectatorData.attackRoll) {

@@ -180,6 +180,11 @@ export default function GroupDiceArena({
           uniqueId: `monster-${m.queueId}`,
           initiative_rolled: true,
           hit_points: hp,
+          // Same AC + stats surfacing as the legacy rollInitiative
+          // path — the actor's hit/miss math otherwise defaults to
+          // AC 10 against any monster from the new arena flow.
+          armor_class: stats.armor_class || stats.ac || 10,
+          stats,
           faction: m.faction || 'enemy',
           originalFaction: m.originalFaction || m.faction || 'enemy',
           charmDuration: m.charmDuration ?? null,
