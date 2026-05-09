@@ -765,29 +765,55 @@ export default function GMPanel() {
     const encounter = campaign?.combat_data?.active_encounter;
     if (encounter?.phase === 'damage_result' && encounter.damageRoll && encounter.timestamp !== lastProcessedDamageRef.current) {
       lastProcessedDamageRef.current = encounter.timestamp;
-      
+
       const damage = encounter.damageRoll.total;
       const targetId = encounter.targetId;
 
       // Apply damage if target is a combat-queue entry (managed by GM).
+      // Two writes are needed:
+      //   1. localStorage combat queue — the canonical HP source the
+      //      Combat Queue panel + the order-rebuild path read from.
+      //   2. combat_data.order — the snapshot the live turn-tracker HP
+      //      bars render from. Without this, player-sourced damage
+      //      lands in localStorage but the visible bar never updates,
+      //      because the order entry's hit_points.current stays put.
+      //      Mirrors the GM-as-actor path's updateOrderCombatant call
+      //      at the equivalent point in the GM's onRoll handler.
       if (targetId.startsWith('monster-')) {
         const queueId = targetId.replace('monster-', '');
         const queue = readCombatQueue(campaignId);
+        let appliedNewCurrent = null;
         if (queue.length > 0) {
           const newQueue = queue.map(m => {
             if (m.queueId === queueId || String(m.queueId) === queueId) {
               const currentHp = m.hit_points?.current !== undefined ? m.hit_points.current : (m.hit_points?.max || 10);
+              const nextCurrent = Math.max(0, currentHp - damage);
+              appliedNewCurrent = { current: nextCurrent, max: m.hit_points?.max || currentHp };
               return {
                 ...m,
                 hit_points: {
                   ...m.hit_points,
-                  current: Math.max(0, currentHp - damage)
+                  current: nextCurrent
                 }
               };
             }
             return m;
           });
           writeCombatQueue(campaignId, newQueue);
+        }
+        if (appliedNewCurrent) {
+          const orderEntry = (campaign?.combat_data?.order || []).find(
+            (c) => (c.uniqueId || c.id) === targetId,
+          );
+          if (orderEntry) {
+            updateOrderCombatant(targetId, {
+              hit_points: {
+                ...(orderEntry.hit_points || {}),
+                current: appliedNewCurrent.current,
+                max: appliedNewCurrent.max,
+              },
+            });
+          }
         }
       }
     }
