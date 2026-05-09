@@ -11,6 +11,7 @@ import LootBox from "@/components/player/LootBox";
 import PlayerSessionSidebar from "@/components/player/PlayerSessionSidebar";
 import PlayerCampaignUpdatesContent from "@/components/player/PlayerCampaignUpdatesContent";
 import PlayerAdventuringPartyContent from "@/components/player/PlayerAdventuringPartyContent";
+import PlayerCampaignArchivesContent from "@/components/player/PlayerCampaignArchivesContent";
 import SessionModal from "@/components/session/SessionModal";
 import MoneyCounter from "@/components/shared/MoneyCounter";
 import { spellIcons, spellDetails as hardcodedSpellDetails, getCharacterSpellSlots, fetchAllSpells } from "@/components/dnd5e/spellData";
@@ -865,9 +866,10 @@ function CampaignPlayerPanelContent() {
         onClose={() => setActiveSection(null)}
         title="Campaign Archives"
       >
-        <p className="text-slate-400 text-sm">
-          Coming soon. Read the full world lore, run knowledge checks on locked entries, post to sections the GM has opened up to players, and track your earned legend titles.
-        </p>
+        <PlayerCampaignArchivesContent
+          campaignId={campaignId}
+          campaign={campaign}
+        />
       </SessionModal>
 
       <SessionModal
