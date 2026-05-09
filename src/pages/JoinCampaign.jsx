@@ -58,7 +58,17 @@ export default function JoinCampaign() {
 
   const { data: characters } = useQuery({
     queryKey: ['userCharacters'],
-    queryFn: () => base44.entities.Character.filter({ created_by: user?.email }),
+    // Library-only — campaign clones (is_campaign_copy = true)
+    // shouldn't show up in the apply-to-campaign picker. The
+    // existing client-side `!c.campaign_id` filter at line ~410
+    // covered most of this, but is_campaign_copy is the canonical
+    // marker now (a clone whose campaign was later deleted would
+    // have campaign_id = null but is_campaign_copy = true; the new
+    // filter excludes those correctly).
+    queryFn: () => base44.entities.Character.filter({
+      created_by: user?.email,
+      is_campaign_copy: false,
+    }),
     enabled: !!user,
     initialData: []
   });
