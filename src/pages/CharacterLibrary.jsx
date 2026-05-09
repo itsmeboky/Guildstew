@@ -183,7 +183,10 @@ export default function CharacterLibrary() {
     // originals. The 20261128 migration backfills is_campaign_copy
     // for every existing campaign-attached row.
     queryFn: () => base44.entities.Character.filter(
-      { created_by: user?.email, is_campaign_copy: false },
+      // is_npc filter from #10a smell #5 — NPC rows the GM may have
+      // created via the legacy creator route shouldn't surface in
+      // the player's library list.
+      { created_by: user?.email, is_campaign_copy: false, is_npc: false },
       '-last_played',
     ),
     enabled: !!user,

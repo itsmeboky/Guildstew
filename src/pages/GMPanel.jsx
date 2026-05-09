@@ -2817,6 +2817,18 @@ export default function GMPanel() {
         onOpenModal={setActiveModal}
         onEndSession={() => setShowEndSessionAlert(true)}
         disconnectedPlayers={disconnectedPlayerSummaries}
+        sectionBadges={{
+          // Pending re-entry: players who readied (or re-readied
+          // after leaving) while the session is active but haven't
+          // been admitted yet. Same computation lives in
+          // GMSidebarPlayers — this is just the count for the
+          // sidebar nav badge.
+          players: campaign?.session_active
+            ? (campaign?.ready_player_ids || []).filter(
+                (uid) => !(campaign?.active_session_players || []).includes(uid),
+              ).length
+            : 0,
+        }}
       />
 
       <SessionModal

@@ -361,13 +361,23 @@ function CampaignPlayerPanelContent() {
         await base44.entities.Character.update(myCharacter.id, { active_session_id: null });
       }
       if (user?.id) {
+        // Remove the player from active_session_players and
+        // ready_player_ids so the lobby auto-redirect doesn't fire
+        // again on next mount, AND mark them disconnected so the
+        // GM's existing disconnect indicator surfaces. To return
+        // they need to ready up again, which puts them in the
+        // pending re-entry list on the GM's Player Management
+        // panel — Admit there pulls them back into
+        // active_session_players.
         const fresh = await base44.entities.Campaign.filter({ id: campaignId }).then((r) => r?.[0]);
-        const list = Array.isArray(fresh?.disconnected_players) ? fresh.disconnected_players : [];
-        if (!list.includes(user.id)) {
-          await base44.entities.Campaign.update(campaignId, {
-            disconnected_players: [...list, user.id],
-          });
-        }
+        const activeList = Array.isArray(fresh?.active_session_players) ? fresh.active_session_players : [];
+        const readyList = Array.isArray(fresh?.ready_player_ids) ? fresh.ready_player_ids : [];
+        const disconnList = Array.isArray(fresh?.disconnected_players) ? fresh.disconnected_players : [];
+        await base44.entities.Campaign.update(campaignId, {
+          active_session_players: activeList.filter((id) => id !== user.id),
+          ready_player_ids: readyList.filter((id) => id !== user.id),
+          disconnected_players: disconnList.includes(user.id) ? disconnList : [...disconnList, user.id],
+        });
       }
       toast.success('You left the session.');
       // Land players on the campaign lobby (CampaignPanel) — that

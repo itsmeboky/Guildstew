@@ -27,6 +27,11 @@ export default function GMSessionSidebar({
   onOpenModal,
   onEndSession,
   disconnectedPlayers = [],
+  // Per-section badge counts. Keyed by section.key. Today only
+  // "players" uses a badge — for late-joiners pending re-entry.
+  // Parent (GMPanel) computes the count and passes it; the sidebar
+  // stays nav-only.
+  sectionBadges = {},
 }) {
   return (
     <aside className="w-56 flex-shrink-0 bg-[#1a1f2e] border-r border-slate-700/50 flex flex-col h-full overflow-hidden">
@@ -59,6 +64,7 @@ export default function GMSessionSidebar({
         {SECTIONS.map((section) => {
           const Icon = section.icon;
           const active = activeModal === section.key;
+          const badge = sectionBadges[section.key];
           return (
             <button
               key={section.key}
@@ -71,7 +77,15 @@ export default function GMSessionSidebar({
               }`}
             >
               <Icon className="w-4 h-4 flex-shrink-0" />
-              <span>{section.label}</span>
+              <span className="flex-1">{section.label}</span>
+              {badge > 0 && (
+                <span
+                  className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-[#37F2D1] text-[#1E2430] text-xs font-bold"
+                  title={`${badge} pending`}
+                >
+                  {badge}
+                </span>
+              )}
             </button>
           );
         })}
