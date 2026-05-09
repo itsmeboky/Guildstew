@@ -4170,7 +4170,22 @@ export default function GMPanel() {
               </div>
             ) : (
             <CombatActionBar
-              character={selectedCharacter ? { ...selectedCharacter, equipment: equippedItems } : null}
+              character={selectedCharacter ? (() => {
+                // Surface order-entry inspiration flags on the
+                // character prop so the action bar's
+                // InspirationButton renders live state. Mirrors the
+                // dice window's actor wiring at line ~3070-3079.
+                const orderEntry = (campaign?.combat_data?.order || [])
+                  .find((c) => (c.uniqueId || c.id) === selectedCharacterKey);
+                return {
+                  ...selectedCharacter,
+                  equipment: equippedItems,
+                  hasInspiration: orderEntry?.hasInspiration,
+                  bardicInspiration: orderEntry?.bardicInspiration,
+                };
+              })() : null}
+              isGM={true}
+              onGrantInspiration={setCombatantInspiration}
               actionsState={actionsState}
               setActionsState={setActionsState}
               attackMode={attackMode}

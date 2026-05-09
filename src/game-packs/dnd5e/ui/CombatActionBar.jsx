@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Heart, Circle, Triangle, Music, Zap, ChevronLeft, ChevronRight, Swords, Sword, Sparkles, Plus as PlusIcon, Star } from "lucide-react";
+import { Heart, Circle, Triangle, Music, Lightbulb, Zap, ChevronLeft, ChevronRight, Swords, Sword, Sparkles, Plus as PlusIcon, Star } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { spellIcons, spellDetails as hardcodedSpellDetails } from "@/components/dnd5e/spellData";
 
 const SPELL_ICONS_CI = Object.fromEntries(
@@ -120,9 +121,18 @@ export default function CombatActionBar({
   // handles the effect, resource decrement, and persistence.
   classResources = {},
   onClassAbility,
+  // Inspiration affordance — display-only for non-GMs (the actual
+  // consume happens in the dice window's post-roll prompts via
+  // useInspirationAdvantage / rollBardicInspiration). For GMs, click
+  // toggles standard Inspiration via onGrantInspiration (mirrors the
+  // portrait-hover lightbulb button at GMPanel.jsx). Bardic
+  // Inspiration is read-only here regardless of role — Bards grant
+  // it via their bonus action, GMs don't manage Bardic.
+  isGM = false,
+  onGrantInspiration,
 }) {
   // Internal state if not provided controlled
-  const [localActions, setLocalActions] = useState({ action: true, bonus: true, reaction: true, inspiration: false });
+  const [localActions, setLocalActions] = useState({ action: true, bonus: true, reaction: true });
   const actions = actionsState || localActions;
   const setActions = setActionsState || setLocalActions;
 
@@ -811,17 +821,22 @@ export default function CombatActionBar({
             <ActionButton active={actions.action} color="green" icon={Circle} />
             <ActionButton active={actions.bonus} color="orange" icon={Triangle} />
             <ActionButton active={actions.reaction} color="purple" icon={Zap} />
-            {/* Inspiration was a manually-toggleable Music ActionButton
-                here, but `actions.inspiration` was dead UI — its only
-                writer was the toggle's own onClick, no code read it.
-                Bardic Inspiration consumes via the dice window's
-                post-roll prompt (rollBardicInspiration in
-                CombatDiceWindow.jsx); DM Inspiration consumes via the
-                advantage-reroll prompt (useInspirationAdvantage). The
-                proper source-aware indicator (lightbulb / music note
-                driven by the actor's hasInspiration /
-                bardicInspiration flags) lands in commit 2 of this
-                hotfix. */}
+            <InspirationButton
+              hasStandard={!!character?.hasInspiration}
+              bardic={character?.bardicInspiration || null}
+              isGM={isGM}
+              onGmToggle={() => {
+                // GM-side click toggles standard Inspiration on the
+                // current combatant. Mirrors the portrait-hover
+                // lightbulb at GMPanel.jsx. Bardic Inspiration is
+                // never grant/cleared from this button (Bards manage
+                // Bardic via their bonus action only).
+                if (!isGM || !onGrantInspiration || !character) return;
+                const key = character.uniqueId || character.id;
+                if (!key) return;
+                onGrantInspiration(key, !character.hasInspiration);
+              }}
+            />
           </div>
         </div>
       </div>
@@ -1354,6 +1369,62 @@ function StatHump({ label, value, short }) {
       <span className="text-[9px] tracking-[0.22em] uppercase text-slate-400">{label}</span>
       <span className="mt-1 text-xl font-semibold leading-none">{value}</span>
     </div>
+  );
+}
+
+/**
+ * Source-aware Inspiration indicator slot. Sits in the action-economy
+ * row alongside Action / Bonus / Reaction. Reads from the combatant's
+ * order-entry flags (hasInspiration + bardicInspiration), wrapped in
+ * AnimatePresence so the lightbulb → music swap (or empty → either)
+ * animates with the same spring flourish the portrait badge uses
+ * (commit 845011c). Click is GM-only — toggles standard Inspiration
+ * via onGmToggle. Non-GM viewers see a display-only indicator; the
+ * actual consume happens in the dice window's post-roll prompts.
+ */
+function InspirationButton({ hasStandard, bardic, isGM, onGmToggle }) {
+  const hasBardic = !!bardic?.die;
+  const hasAny = hasStandard || hasBardic;
+  const Icon = hasBardic ? Music : Lightbulb;
+  const stateKey = hasBardic ? 'bardic' : hasStandard ? 'standard' : 'none';
+  const tooltip = hasBardic
+    ? `Bardic Inspiration (${bardic.die}${bardic.fromName ? ` from ${bardic.fromName}` : ''}) — adds the die to your roll's result.`
+    : hasStandard
+      ? 'Inspiration — granted by GM. Use to gain advantage on a roll.'
+      : isGM
+        ? 'Click to grant Inspiration to this combatant.'
+        : 'No inspiration available.';
+  const interactive = isGM && typeof onGmToggle === 'function';
+  const clickable = interactive;
+
+  return (
+    <button
+      type="button"
+      onClick={clickable ? onGmToggle : undefined}
+      disabled={!clickable}
+      title={tooltip}
+      className={`w-10 h-10 rounded-[12px] border flex items-center justify-center transition-all ${
+        hasAny
+          ? 'bg-[#050816] text-yellow-400 border-yellow-400 shadow-[0_0_15px_rgba(0,0,0,0.3)]'
+          : 'bg-[#050816] border-[#111827] opacity-50'
+      } ${clickable ? 'cursor-pointer hover:border-yellow-300' : 'cursor-default'}`}
+    >
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.span
+          key={stateKey}
+          initial={{ scale: 0.4, opacity: 0, rotate: -20 }}
+          animate={{ scale: 1, opacity: 1, rotate: 0 }}
+          exit={{ scale: 0.7, opacity: 0 }}
+          transition={{ type: 'spring', stiffness: 420, damping: 14 }}
+          className="flex items-center justify-center"
+        >
+          <Icon
+            className={`w-3.5 h-3.5 ${hasAny ? 'text-yellow-400 fill-current drop-shadow-[0_0_6px_rgba(250,204,21,0.7)]' : 'text-slate-500'}`}
+            strokeWidth={hasAny ? 2.5 : 2}
+          />
+        </motion.span>
+      </AnimatePresence>
+    </button>
   );
 }
 

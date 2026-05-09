@@ -1117,7 +1117,20 @@ function CampaignPlayerPanelContent() {
 
             {!combatState.isOpen && campaign?.combat_data?.stage !== 'initiative' && (
               <CombatActionBar
-                character={myCharacter ? { ...myCharacter, equipment: equippedItems } : null}
+                character={myCharacter ? (() => {
+                  // Surface order-entry inspiration flags on the
+                  // character prop so the action bar's
+                  // InspirationButton can render the live state.
+                  // Mirrors the dice window's actor IIFE wiring.
+                  const orderEntry = (campaign?.combat_data?.order || [])
+                    .find((c) => (c.uniqueId || c.id) === myCharacterKey);
+                  return {
+                    ...myCharacter,
+                    equipment: equippedItems,
+                    hasInspiration: orderEntry?.hasInspiration,
+                    bardicInspiration: orderEntry?.bardicInspiration,
+                  };
+                })() : null}
                 actionsState={actionsState}
                 setActionsState={setActionsState}
                 attackMode={attackMode}
