@@ -995,6 +995,24 @@ function CampaignPlayerPanelContent() {
               });
             }
           }}
+          onPlayerAttacked={() => {
+            // RAW: hiding breaks the moment you attack. Drop the
+            // character from hiddenCharacters; the existing
+            // sneakActive auto-clear effect (line ~509) flips the
+            // Sneak toggle off because isMeHidden goes false.
+            // Sneak Attack damage on THIS attack already applied via
+            // the existing handler; future attacks this turn won't
+            // qualify, which is correct (sneak attack is once per
+            // round in 5e RAW too).
+            if (myCharacterKey) {
+              setHiddenCharacters((prev) => {
+                if (!prev.has(myCharacterKey)) return prev;
+                const next = new Set(prev);
+                next.delete(myCharacterKey);
+                return next;
+              });
+            }
+          }}
           onLootDrop={async (item, lootIndex) => {
               // 1. Add to character
               const newInventory = [...(myCharacter.inventory || []), item];
@@ -1592,7 +1610,7 @@ function CampaignPlayerPanelContent() {
 
 // --- Shared Components (Copied/Adapted from GMPanel) ---
 
-function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equippedItems, setEquippedItems, inventory, onLootDrop, draggedItem, setDraggedItem, combatState, setCombatState, campaignData, campaignId, setActionsState, updateCombatEncounter, myConditions = [], activeConditions = {}, concentrationByCharacter = {}, myCharacterKey, onHideSuccess }) {
+function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equippedItems, setEquippedItems, inventory, onLootDrop, draggedItem, setDraggedItem, combatState, setCombatState, campaignData, campaignId, setActionsState, updateCombatEncounter, myConditions = [], activeConditions = {}, concentrationByCharacter = {}, myCharacterKey, onHideSuccess, onPlayerAttacked }) {
   const queryClient = useQueryClient();
   const [showInventoryOrganizer, setShowInventoryOrganizer] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
@@ -1830,6 +1848,13 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
                       // dice — smell #2 from hotfix #6's recon.
                       if (data.type === 'attack_result') {
                          updates = { phase: 'attack_result', attackRoll: data.roll, state: data.state || null };
+                         // RAW: hiding breaks the moment you attack.
+                         // Notify parent to drop us from
+                         // hiddenCharacters; sneakActive auto-clears
+                         // via the existing isMeHidden effect. Spell
+                         // casting + other reveal triggers aren't
+                         // wired here yet — separate followup.
+                         onPlayerAttacked && onPlayerAttacked();
                       } else if (data.type === 'damage') {
                          updates = { phase: 'damage_result', damageRoll: { total: data.value, ...data.detail }, state: data.state || null };
                       } else if (data.type === 'rolling_attack') {
