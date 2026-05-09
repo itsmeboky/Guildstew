@@ -8,8 +8,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, Zap, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { loadCampaignBans, findCharacterIncompatibilities } from "@/lib/campaignBans";
 import { getSpellSlots, getPactSlots } from "@/components/dnd5e/spellData";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -120,6 +122,13 @@ export default function CharacterCreator() {
   // stamp mod_dependencies + campaign_origin instead of taking the
   // existing GM NPC-create branch below.
   const isApplyFlow = urlParams.get('forApply') === '1';
+  // Mandatory edit-pass mode (set by the lobby's library picker
+  // when the picked character violates a campaign ban). The player
+  // gets a top-of-page alert listing every violation and the save
+  // button stays disabled until none are left. See the
+  // `editIncompatibilityViolations` memo + the `incompatibilityGate`
+  // disable on the save Button below.
+  const editIncompatibilities = urlParams.get('editIncompatibilities') === '1';
   
   const [currentStep, setCurrentStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState([]);
@@ -165,6 +174,30 @@ export default function CharacterCreator() {
   });
 
   const previousClassRef = useRef(characterData.class);
+
+  // Mandatory edit-pass: load the campaign's ban list and recompute
+  // violations live as the player edits. Only runs in
+  // editIncompatibilities mode (lobby library picker routes here
+  // when findCharacterIncompatibilities found violations on the
+  // source library row). The save button gates on
+  // `incompatibilityGate` further below.
+  const { data: campaignBansForEdit } = useQuery({
+    queryKey: ['campaignBans', campaignId, 'editPass'],
+    enabled: editIncompatibilities && !!campaignId,
+    queryFn: () => loadCampaignBans(campaignId),
+  });
+
+  // Live violation list from the wizard's current characterData.
+  // findCharacterIncompatibilities walks race / class / subclass /
+  // spells / features / items. As the player edits a banned field,
+  // that field drops out of the list and the gate clears
+  // automatically on the next render.
+  const editIncompatibilityViolations = React.useMemo(() => {
+    if (!editIncompatibilities || !campaignBansForEdit) return [];
+    return findCharacterIncompatibilities(campaignBansForEdit, characterData) || [];
+  }, [editIncompatibilities, campaignBansForEdit, characterData]);
+
+  const incompatibilityGate = editIncompatibilities && editIncompatibilityViolations.length > 0;
 
   const { data: existingCharacter } = useQuery({
     queryKey: ['character', editCharacterId, campaignId],
@@ -330,13 +363,35 @@ export default function CharacterCreator() {
           mod_dependencies: mergedDeps,
           required_mods: requiredMods,
           campaign_origin: campaignName,
-          // Apply-flow saves are always campaign clones — the player
-          // doesn't have a library original they're cloning FROM, but
-          // the row is still campaign-scoped and should not surface
-          // in the library list. source_character_id stays null
-          // because there's no original to point back at.
           is_campaign_copy: true,
         };
+
+        // Mandatory edit-pass mode: the lobby's library picker
+        // passed `edit=<libraryId>` so the wizard could pre-load
+        // the library character's data into the form, but on save
+        // we MUST clone — not update the library row — otherwise
+        // the player's library original gets mutated by the
+        // edits, defeating the clone-on-attach foundation from
+        // #10a. Force CREATE with source_character_id pointing
+        // back at the library row, and strip identity / session-
+        // lock fields the spread might carry across.
+        if (editIncompatibilities && editCharacterId) {
+          const cloneStats = {
+            ...stats,
+            id: undefined,
+            created_at: undefined,
+            updated_at: undefined,
+            last_played: null,
+            active_session_id: null,
+            source_character_id: editCharacterId,
+          };
+          return base44.entities.Character.create(cloneStats);
+        }
+
+        // Standard apply flow — Update if editing an existing
+        // campaign character, Create otherwise. source_character_id
+        // stays null because the player created from scratch and
+        // there's no library original to point back at.
         return editCharacterId
           ? base44.entities.Character.update(editCharacterId, stats)
           : base44.entities.Character.create(stats);
@@ -754,6 +809,27 @@ const handleSubmit = () => {
             transition={{ duration: 0.3 }}
             className="mb-6"
           >
+            {editIncompatibilities && editIncompatibilityViolations.length > 0 && (
+              <Alert className="mb-4 bg-amber-950/40 border-amber-700/60 text-amber-100">
+                <AlertTriangle className="h-4 w-4 text-amber-400" />
+                <AlertTitle className="text-amber-100">Adjustments needed</AlertTitle>
+                <AlertDescription className="text-amber-200/90">
+                  <p className="mb-2">
+                    This character relies on content the campaign has banned. Edit the highlighted fields
+                    to continue — the save button stays disabled until every conflict is resolved.
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-sm">
+                    {editIncompatibilityViolations.map((conflict, i) => (
+                      <li key={`${conflict.field}-${conflict.banned_name}-${i}`}>
+                        <span className="font-semibold capitalize">{conflict.field}:</span>{' '}
+                        <span className="font-mono">{conflict.banned_name}</span>
+                        {conflict.reason ? <> — {conflict.reason}</> : ' is banned in this campaign'}
+                      </li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
             <CurrentStepComponent
               characterData={characterData}
               updateCharacterData={updateCharacterData}
@@ -781,11 +857,18 @@ const handleSubmit = () => {
           {currentStep === STEPS.length - 1 ? (
             <Button
               onClick={handleSubmit}
-              disabled={createMutation.isPending || !canProceed}
+              disabled={createMutation.isPending || !canProceed || incompatibilityGate}
+              title={
+                incompatibilityGate
+                  ? 'Resolve every banned-content conflict above before saving'
+                  : undefined
+              }
               className="bg-gradient-to-r from-[#FF5722] to-[#FF6B3D] hover:from-[#FF6B3D] hover:to-[#FF5722] text-white disabled:opacity-50 shadow-lg shadow-[#FF5722]/30"
             >
-              {createMutation.isPending 
-                ? (editCharacterId ? 'Updating...' : campaignId ? 'Creating NPC...' : 'Creating...') 
+              {createMutation.isPending
+                ? (editCharacterId ? 'Updating...' : campaignId ? 'Creating NPC...' : 'Creating...')
+                : incompatibilityGate
+                ? `Resolve ${editIncompatibilityViolations.length} conflict${editIncompatibilityViolations.length === 1 ? '' : 's'}`
                 : (editCharacterId ? 'Update Character' : campaignId ? 'Create NPC' : 'Create Character')
               }
             </Button>
