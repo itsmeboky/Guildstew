@@ -52,7 +52,7 @@ export function collectFightingStyles(character) {
 }
 
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import CampaignLog from "@/components/gm/CampaignLog";
 import CharacterSelector from "@/components/gm/CharacterSelector";
 import CombatQueue from "@/components/gm/CombatQueue";
@@ -7027,19 +7027,36 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
                               for the bardic case + the non-GM read-only
                               standard case. See commit 2 of the
                               inspiration-redesign hotfix. */}
-                          {combatant.bardicInspiration ? (
-                            <div
-                              className="absolute -top-1 -left-1 z-30 rounded-full w-5 h-5 flex items-center justify-center shadow-[0_0_8px_rgba(252,211,77,0.8)]"
-                              style={{
-                                backgroundColor: '#fbbf24',
-                                color: '#1f1303',
-                                border: '1.5px solid #fde68a',
-                              }}
-                              title={`Bardic Inspiration (${combatant.bardicInspiration.die}${combatant.bardicInspiration.fromName ? ` from ${combatant.bardicInspiration.fromName}` : ''}) — adds the die to a roll's result.`}
-                            >
-                              <Music className="w-3 h-3" strokeWidth={3} />
-                            </div>
-                          ) : combatant.hasInspiration && !isGM ? (
+                          {/* AnimatePresence wraps the bardic badge so the
+                              icon swap (no inspiration → bardic, or
+                              standard → bardic) plays a one-shot scale +
+                              fade flourish: feels like the Bard just lit
+                              the recipient up. Spring physics on
+                              entrance, gentle scale-down on exit when the
+                              die gets consumed. Spectator dice prompts +
+                              the post-roll consume flow are unchanged. */}
+                          <AnimatePresence>
+                            {combatant.bardicInspiration && (
+                              <motion.div
+                                key={`bardic-${combatant.uniqueId || combatant.id}`}
+                                initial={{ scale: 0.4, opacity: 0, rotate: -20 }}
+                                animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                                exit={{ scale: 0.7, opacity: 0 }}
+                                transition={{ type: 'spring', stiffness: 420, damping: 14 }}
+                                className="absolute -top-1 -left-1 z-30 rounded-full w-5 h-5 flex items-center justify-center shadow-[0_0_12px_rgba(252,211,77,0.95)]"
+                                style={{
+                                  backgroundColor: '#fbbf24',
+                                  color: '#1f1303',
+                                  border: '1.5px solid #fde68a',
+                                }}
+                                title={`Bardic Inspiration (${combatant.bardicInspiration.die}${combatant.bardicInspiration.fromName ? ` from ${combatant.bardicInspiration.fromName}` : ''}) — adds the die to a roll's result.`}
+                              >
+                                <Music className="w-3 h-3" strokeWidth={3} />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                          {!combatant.bardicInspiration && combatant.hasInspiration && !isGM ? (
                             // Non-GM viewers (other players) see the
                             // standard-Inspiration lightbulb here; GMs
                             // see it on the top-right grant button
