@@ -811,7 +811,17 @@ export default function CombatActionBar({
             <ActionButton active={actions.action} color="green" icon={Circle} />
             <ActionButton active={actions.bonus} color="orange" icon={Triangle} />
             <ActionButton active={actions.reaction} color="purple" icon={Zap} />
-            <ActionButton active={actions.inspiration} onClick={() => setActions(p => ({...p, inspiration: !p.inspiration}))} color="yellow" icon={Music} />
+            {/* Inspiration was a manually-toggleable Music ActionButton
+                here, but `actions.inspiration` was dead UI — its only
+                writer was the toggle's own onClick, no code read it.
+                Bardic Inspiration consumes via the dice window's
+                post-roll prompt (rollBardicInspiration in
+                CombatDiceWindow.jsx); DM Inspiration consumes via the
+                advantage-reroll prompt (useInspirationAdvantage). The
+                proper source-aware indicator (lightbulb / music note
+                driven by the actor's hasInspiration /
+                bardicInspiration flags) lands in commit 2 of this
+                hotfix. */}
           </div>
         </div>
       </div>
