@@ -1782,15 +1782,20 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
                     }
                   : character
                     ? (() => {
-                        // Mirror GMPanel.jsx:3070-3079 — surface the
-                        // combat_data.order entry's inspiration flags
-                        // (hasInspiration, bardicInspiration) on the
-                        // actor so CombatDiceWindow's post-roll
-                        // prompts render. Without these the player
-                        // had no way to consume DM Inspiration or
-                        // Bardic Inspiration even when granted; the
-                        // dice window's `showInspiration` /
-                        // `showBardic` guards both check actor flags.
+                        // Mirrors the GM-side actor wiring at
+                        // GMPanel.jsx:3066-3081 — surface live
+                        // order-entry + combat_data state on the
+                        // actor so CombatDiceWindow's reads land.
+                        // Field set kept symmetric with GM via the
+                        // Phase-1 commit-2 audit:
+                        //   - hasInspiration (post-roll advantage prompt)
+                        //   - bardicInspiration (post-roll bonus die prompt)
+                        //   - conditions (roll-modifier guards)
+                        //   - classResources (rage / ki / paladin
+                        //     smites / lucky points etc.; was missing
+                        //     player-side and silently caused the
+                        //     dice window to read undefined for
+                        //     class-resource counts.)
                         const orderEntry = (campaignData?.combat_data?.order || [])
                           .find((c) => (c.uniqueId || c.id) === myCharacterKey);
                         return {
@@ -1798,6 +1803,7 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
                           conditions: myConditions,
                           hasInspiration: orderEntry?.hasInspiration,
                           bardicInspiration: orderEntry?.bardicInspiration,
+                          classResources: campaignData?.combat_data?.classResources?.[myCharacterKey] || {},
                         };
                       })()
                     : null
