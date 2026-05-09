@@ -3196,14 +3196,18 @@ export default function GMPanel() {
                   const currentEncounter = campaign.combat_data.active_encounter;
                   let updates = {};
 
+                  // `state` carries the rolling actor's character-state
+                  // visual modifier (rage / deathSave / inspiration /
+                  // wildMagic) into active_encounter so player
+                  // spectators see the matching DiceRoller treatment.
                   if (data.type === 'attack_result') { // Custom event we'll add to DiceWindow
-                     updates = { phase: 'attack_result', attackRoll: data.roll };
+                     updates = { phase: 'attack_result', attackRoll: data.roll, state: data.state || null };
                   } else if (data.type === 'damage') {
-                     updates = { phase: 'damage_result', damageRoll: { total: data.value, ...data.detail } };
+                     updates = { phase: 'damage_result', damageRoll: { total: data.value, ...data.detail }, state: data.state || null };
                   } else if (data.type === 'rolling_attack') {
-                     updates = { phase: 'rolling_attack' };
+                     updates = { phase: 'rolling_attack', state: data.state || null };
                   } else if (data.type === 'rolling_damage') {
-                     updates = { phase: 'rolling_damage' };
+                     updates = { phase: 'rolling_damage', state: data.state || null };
                   }
 
                   if (Object.keys(updates).length > 0) {

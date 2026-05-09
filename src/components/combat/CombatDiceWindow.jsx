@@ -430,6 +430,12 @@ export default function CombatDiceWindow({
       setDicePopup({
         open: true,
         dice: "d20",
+        // Mirror the rolling actor's character-state visual treatment
+        // (rage glow, death-save EKG, inspiration sparkle, etc.) so
+        // the spectator sees the same dice as the rolling player.
+        // Defaults to "none" when the writer didn't send state — keeps
+        // pre-fix encounters byte-identical.
+        state: spectatorData.state || "none",
         forcedResult: spectatorData.attackRoll.d20,
         onComplete: () => {
           setDicePopup(p => ({ ...p, open: false }));
@@ -451,6 +457,7 @@ export default function CombatDiceWindow({
       setDicePopup({
         open: true,
         dice: diceType,
+        state: spectatorData.state || "none",
         forcedResult: spectatorData.damageRoll.dice,
         onComplete: () => {
           setDicePopup(p => ({ ...p, open: false }));
@@ -696,7 +703,12 @@ export default function CombatDiceWindow({
     setIsRolling(true);
     setCurrentDice("d20");
     setPhase("rolling_attack");
-    onRoll && onRoll({ type: "rolling_attack" });
+    // Thread state into the rolling event so the parent's onRoll
+    // handler can persist it onto combat_data.active_encounter,
+    // which the spectator's effect above reads back to render the
+    // matching DiceRoller modifier (rage / deathSave / inspiration /
+    // wildMagic).
+    onRoll && onRoll({ type: "rolling_attack", state: resolveDiceModifier() });
     // P.I.E. — track non-cantrip spell casts. Cantrips have level 0
     // / undefined; leveled spells fire spells_cast.
     if (selectedAction?.type === 'spell' && Number(selectedAction.level || 0) > 0) {
@@ -759,7 +771,7 @@ export default function CombatDiceWindow({
     setRollPair(pair);
     setIsRolling(false);
     setPhase("attack_result");
-    onRoll && onRoll({ type: "attack_result", roll: result });
+    onRoll && onRoll({ type: "attack_result", roll: result, state: resolveDiceModifier() });
 
     // P.I.E. — fire-and-forget stat tracking. Parent already
     // scopes onStat to the actor's character + campaign.
@@ -1073,7 +1085,7 @@ export default function CombatDiceWindow({
 
   const handleDamageRoll = () => {
     setIsRolling(true);
-    onRoll && onRoll({ type: "rolling_damage" });
+    onRoll && onRoll({ type: "rolling_damage", state: resolveDiceModifier() });
 
     const weapon = selectedAction?.weapon;
     // Unarmed damage die: Monk uses their scaling Martial Arts die, everyone
@@ -1380,6 +1392,7 @@ export default function CombatDiceWindow({
         value: totalDamage,
         detail: result,
         targetId: target.id,
+        state: resolveDiceModifier(),
       });
     }
 
@@ -1610,7 +1623,7 @@ export default function CombatDiceWindow({
     const autoDice = (spellEffect?.dice || "1d10").match(/d\d+/)?.[0] || "d10";
     setCurrentDice(autoDice);
     setPhase("rolling_damage");
-    onRoll && onRoll({ type: "rolling_damage" });
+    onRoll && onRoll({ type: "rolling_damage", state: resolveDiceModifier() });
     setDicePopup({
       open: true,
       dice: autoDice,
