@@ -1766,7 +1766,25 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
                       conditions: activeConditions[campaignData.combat_data.active_encounter.attackerId] || [],
                     }
                   : character
-                    ? { ...character, conditions: myConditions }
+                    ? (() => {
+                        // Mirror GMPanel.jsx:3070-3079 — surface the
+                        // combat_data.order entry's inspiration flags
+                        // (hasInspiration, bardicInspiration) on the
+                        // actor so CombatDiceWindow's post-roll
+                        // prompts render. Without these the player
+                        // had no way to consume DM Inspiration or
+                        // Bardic Inspiration even when granted; the
+                        // dice window's `showInspiration` /
+                        // `showBardic` guards both check actor flags.
+                        const orderEntry = (campaignData?.combat_data?.order || [])
+                          .find((c) => (c.uniqueId || c.id) === myCharacterKey);
+                        return {
+                          ...character,
+                          conditions: myConditions,
+                          hasInspiration: orderEntry?.hasInspiration,
+                          bardicInspiration: orderEntry?.bardicInspiration,
+                        };
+                      })()
                     : null
               }
               target={
