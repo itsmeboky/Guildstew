@@ -5792,6 +5792,7 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
 }
 
 function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPossessed, players, onPossessPlayer, monsterInventory, setMonsterInventory, equippedItems, setEquippedItems, onRollInitiative, onManageConditions, onDrinkPotion }) {
+  const queryClient = useQueryClient();
   const [showQuickEquip, setShowQuickEquip] = useState(false);
   const [draggedItem, setDraggedItem] = useState(null);
 
