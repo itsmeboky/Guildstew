@@ -126,6 +126,7 @@ import {
 } from "@/components/combat/classResources";
 import { toast } from "sonner";
 import { useTurnContext } from "@/components/combat/useTurnContext";
+import { buildEncounterUpdate } from "@/lib/combat/buildEncounterUpdate";
 
 const basicActionIcons = [
   { name: "Non-Lethal", url: "https://static.wixstatic.com/media/5cdfd8_2717bd75c7c8435197830d28dc91d0c4~mv2.png", toggleable: true },
@@ -3224,24 +3225,13 @@ export default function GMPanel() {
                 setCombatState(prev => ({ ...prev, isOpen: false, step: 'selecting_target' }));
               }}
               onRoll={(data) => {
-                // Sync roll to DB for spectators
+                // Sync roll to DB for spectators. Encounter-update
+                // shape lives in src/lib/combat/buildEncounterUpdate.js
+                // so this branch list stays in lockstep with the
+                // player-side onRoll at CampaignPlayerPanel.jsx.
                 if (campaign?.combat_data?.active_encounter) {
                   const currentEncounter = campaign.combat_data.active_encounter;
-                  let updates = {};
-
-                  // `state` carries the rolling actor's character-state
-                  // visual modifier (rage / deathSave / inspiration /
-                  // wildMagic) into active_encounter so player
-                  // spectators see the matching DiceRoller treatment.
-                  if (data.type === 'attack_result') { // Custom event we'll add to DiceWindow
-                     updates = { phase: 'attack_result', attackRoll: data.roll, state: data.state || null };
-                  } else if (data.type === 'damage') {
-                     updates = { phase: 'damage_result', damageRoll: { total: data.value, ...data.detail }, state: data.state || null };
-                  } else if (data.type === 'rolling_attack') {
-                     updates = { phase: 'rolling_attack', state: data.state || null };
-                  } else if (data.type === 'rolling_damage') {
-                     updates = { phase: 'rolling_damage', state: data.state || null };
-                  }
+                  const updates = buildEncounterUpdate(data) || {};
 
                   if (Object.keys(updates).length > 0) {
                     base44.entities.Campaign.update(campaignId, {
