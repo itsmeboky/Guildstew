@@ -175,7 +175,17 @@ export default function CharacterLibrary() {
 
   const { data: characters, isLoading: charactersLoading } = useQuery({
     queryKey: ['allCharacters'],
-    queryFn: () => base44.entities.Character.filter({ created_by: user?.email }, '-last_played'),
+    // Library shows only the player's library originals — campaign
+    // clones (is_campaign_copy = true, set on attach by the lobby-gate
+    // flow in #10b) live with their campaigns and shouldn't surface
+    // here. Pre-fix this query returned both library and clones,
+    // making campaign characters look like duplicates of their
+    // originals. The 20261128 migration backfills is_campaign_copy
+    // for every existing campaign-attached row.
+    queryFn: () => base44.entities.Character.filter(
+      { created_by: user?.email, is_campaign_copy: false },
+      '-last_played',
+    ),
     enabled: !!user,
     initialData: []
   });

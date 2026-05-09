@@ -688,7 +688,7 @@ function CampaignPlayerPanelContent() {
 
   // Redirect if session ends
   useEffect(() => {
-    if (campaign && !campaign.is_session_active) {
+    if (campaign && !campaign.session_active) {
       navigate(createPageUrl("CampaignPanel") + `?id=${campaignId}`);
     }
   }, [campaign, campaignId, navigate]);

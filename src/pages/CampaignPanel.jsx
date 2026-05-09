@@ -59,10 +59,10 @@ export default function CampaignPanel() {
 
   // Automatically redirect if session is active AND player is ready
   useEffect(() => {
-    if (campaign?.is_session_active && isReady) {
+    if (campaign?.session_active && isReady) {
       navigate(createPageUrl("CampaignPlayerPanel") + `?id=${campaignId}`);
     }
-  }, [campaign?.is_session_active, isReady, campaignId, navigate]);
+  }, [campaign?.session_active, isReady, campaignId, navigate]);
 
   const toggleReadyMutation = useMutation({
     mutationFn: async () => {
