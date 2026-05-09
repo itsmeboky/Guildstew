@@ -316,9 +316,19 @@ export default function CharacterCreator() {
           .map((id) => ({ mod_id: id, mod_type: 'unknown', mod_name: id }));
         const mergedDeps = [...priorDeps, ...campaignDeps];
         const campaignName = campaignRow?.title || campaignRow?.name || null;
+        // required_mods is the flat list of mod_ids the character
+        // depends on. Lobby-gate compat checks in #10b read this
+        // directly (rather than walking mod_dependencies' rich
+        // objects) for fast set-membership against
+        // campaign_installed_mods. Derive from mergedDeps so the
+        // two stay in sync.
+        const requiredMods = Array.from(new Set(
+          mergedDeps.map((d) => d?.mod_id).filter(Boolean)
+        ));
         stats = {
           ...stats,
           mod_dependencies: mergedDeps,
+          required_mods: requiredMods,
           campaign_origin: campaignName,
           // Apply-flow saves are always campaign clones — the player
           // doesn't have a library original they're cloning FROM, but
