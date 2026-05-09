@@ -243,7 +243,6 @@ export default function GMPanel() {
       session_started_at: new Date().toISOString(),
       active_session_players: campaign.player_ids || [],
       disconnected_players: [],
-      is_session_active: true,
     }).catch(() => {});
   }, [campaignId, campaign?.id, campaign?.session_active]);
 
@@ -796,12 +795,10 @@ export default function GMPanel() {
 
   const endSessionMutation = useMutation({
     mutationFn: async () => {
-      // Reset combat state + the new session-lifecycle columns.
-      // The old flags (is_session_active, ready_player_ids,
-      // combat_data) stay in sync so existing consumers keep
-      // working.
+      // Reset combat state + the session-lifecycle columns.
+      // is_session_active was dropped in 20261128_character_ownership_
+      // model_foundation.sql; session_active is the canonical column.
       await base44.entities.Campaign.update(campaignId, {
-        is_session_active: false,
         last_session_ended_at: new Date().toISOString(),
         ready_player_ids: [],
         combat_active: false,

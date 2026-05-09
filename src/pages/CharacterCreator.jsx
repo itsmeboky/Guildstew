@@ -298,15 +298,34 @@ export default function CharacterCreator() {
             .maybeSingle(),
         ]);
         const modIds = (installed || []).map((m) => m.mod_id).filter(Boolean);
-        const mergedDeps = Array.from(new Set([
-          ...(Array.isArray(stats.mod_dependencies) ? stats.mod_dependencies : []),
-          ...modIds,
-        ]));
+        // Merge by mod_id while keeping the {mod_id, mod_type, mod_name}
+        // object shape every reader (RaceStep, ClassStep, modEngine,
+        // CharacterLibrary, CampaignApplyFlow) expects. Pre-fix this
+        // set-merged plain mod_id strings into an array of objects,
+        // producing mixed-shape data that broke `d.mod_id` dot-access
+        // downstream. mod_type defaults to 'unknown' for entries that
+        // came in via campaign_installed_mods without further context;
+        // entries already on stats from RaceStep/ClassStep keep their
+        // full object shape.
+        const priorDeps = Array.isArray(stats.mod_dependencies)
+          ? stats.mod_dependencies.filter((d) => d && typeof d === 'object' && d.mod_id)
+          : [];
+        const seen = new Set(priorDeps.map((d) => d.mod_id));
+        const campaignDeps = modIds
+          .filter((id) => !seen.has(id))
+          .map((id) => ({ mod_id: id, mod_type: 'unknown', mod_name: id }));
+        const mergedDeps = [...priorDeps, ...campaignDeps];
         const campaignName = campaignRow?.title || campaignRow?.name || null;
         stats = {
           ...stats,
           mod_dependencies: mergedDeps,
           campaign_origin: campaignName,
+          // Apply-flow saves are always campaign clones — the player
+          // doesn't have a library original they're cloning FROM, but
+          // the row is still campaign-scoped and should not surface
+          // in the library list. source_character_id stays null
+          // because there's no original to point back at.
+          is_campaign_copy: true,
         };
         return editCharacterId
           ? base44.entities.Character.update(editCharacterId, stats)
