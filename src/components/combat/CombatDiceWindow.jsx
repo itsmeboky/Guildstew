@@ -18,6 +18,7 @@ import { hpBarColor } from "@/components/combat/hpColor";
 import { FACTION_STYLES, getFaction } from "@/utils/combatQueue";
 import { getConditionModifiers } from "@/components/combat/conditions";
 import { logCombatEvent } from "@/utils/combatLog";
+import { buildInspirationConsume } from "@/lib/combat/buildInspirationConsume";
 import { getRule } from "@/engine/contentLayer";
 import {
   abilityModifier as abilMod,
@@ -887,15 +888,20 @@ export default function CombatDiceWindow({
     }
 
     setInspirationConsumed(true);
+    // Source metadata (event name, log category, attribution shape)
+    // comes from buildInspirationConsume so the bardic + standard
+    // branches don't drift on event-type strings as future
+    // inspiration sources land.
+    const meta = buildInspirationConsume('bardic', insp);
     if (campaignId) {
       logCombatEvent(
         campaignId,
         `${actor?.name || 'Actor'} uses Bardic Inspiration! +${rolled} (new total: ${newTotal})`,
         {
-          event: 'bardic_inspiration_used',
-          category: 'spell',
+          event: meta.eventType,
+          category: meta.logCategory,
           actor: actor?.name,
-          die: insp.die,
+          die: meta.attribution.die,
           roll: rolled,
           newTotal,
         },
@@ -995,13 +1001,17 @@ export default function CombatDiceWindow({
           const newTotal = bestD20 + savingThrowRoll.mod;
           setSavingThrowRoll({ ...savingThrowRoll, d20: bestD20, total: newTotal, success: newTotal >= savingThrowRoll.dc });
         }
+        // Source metadata (event name, log category) from
+        // buildInspirationConsume — keeps the standard + bardic
+        // branches in lockstep on event-type strings.
+        const meta = buildInspirationConsume('standard');
         if (campaignId) {
           logCombatEvent(campaignId, `${actor?.name || 'Actor'} uses Inspiration! Advantage on the roll.`, {
-            event: 'inspiration_used', category: 'buff', actor: actor?.name, reroll,
+            event: meta.eventType, category: meta.logCategory, actor: actor?.name, reroll,
           });
         }
         if (typeof onInspirationUse === 'function') onInspirationUse();
-        onRoll && onRoll({ type: 'inspiration_used', actorId: actor?.id, reroll });
+        onRoll && onRoll({ type: meta.eventType, actorId: actor?.id, reroll });
       },
     });
   }, [actor, attackRoll, skillCheckRoll, savingThrowRoll, target, targetCover, inspirationDiceUsed, campaignId, onRoll, onInspirationUse, computePostHitOptions]);

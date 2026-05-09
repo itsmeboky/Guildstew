@@ -54,6 +54,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
+import { buildEncounterUpdate } from "@/lib/combat/buildEncounterUpdate";
 import {
   classFeatureDescriptions,
   languageDescriptions,
@@ -1876,30 +1877,22 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
                    // Sync our rolls to DB
                    if (campaignData?.combat_data?.active_encounter) {
                       const currentEncounter = campaignData.combat_data.active_encounter;
-                      let updates = {};
-                      
-                      // `state` carries the rolling actor's character-
-                      // state visual modifier (rage / deathSave /
-                      // inspiration / wildMagic) into active_encounter
-                      // so the spectator's CombatDiceWindow effect can
-                      // mirror the same DiceRoller treatment. Without
-                      // this passthrough the spectator only saw default
-                      // dice — smell #2 from hotfix #6's recon.
+                      // Encounter-update shape per data.type lives in
+                      // src/lib/combat/buildEncounterUpdate.js so
+                      // player-side and GM-side handlers stay in
+                      // lockstep. `state` passthrough (rage /
+                      // deathSave / inspiration / wildMagic) is part
+                      // of the helper's per-branch shape.
+                      const updates = buildEncounterUpdate(data) || {};
+
+                      // RAW: hiding breaks the moment you attack.
+                      // Notify parent to drop us from
+                      // hiddenCharacters; sneakActive auto-clears
+                      // via the existing isMeHidden effect. Lives
+                      // outside the encounter-update helper because
+                      // it's local UI state, not encounter shape.
                       if (data.type === 'attack_result') {
-                         updates = { phase: 'attack_result', attackRoll: data.roll, state: data.state || null };
-                         // RAW: hiding breaks the moment you attack.
-                         // Notify parent to drop us from
-                         // hiddenCharacters; sneakActive auto-clears
-                         // via the existing isMeHidden effect. Spell
-                         // casting + other reveal triggers aren't
-                         // wired here yet — separate followup.
-                         onPlayerAttacked && onPlayerAttacked();
-                      } else if (data.type === 'damage') {
-                         updates = { phase: 'damage_result', damageRoll: { total: data.value, ...data.detail }, state: data.state || null };
-                      } else if (data.type === 'rolling_attack') {
-                         updates = { phase: 'rolling_attack', state: data.state || null };
-                      } else if (data.type === 'rolling_damage') {
-                         updates = { phase: 'rolling_damage', state: data.state || null };
+                        onPlayerAttacked && onPlayerAttacked();
                       }
 
                       if (Object.keys(updates).length > 0) {
