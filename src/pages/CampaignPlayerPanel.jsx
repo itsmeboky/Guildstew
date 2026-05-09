@@ -56,6 +56,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
 import { buildEncounterUpdate } from "@/lib/combat/buildEncounterUpdate";
+import { useCampaignRealtime } from "@/lib/useCampaignRealtime";
 import {
   classFeatureDescriptions,
   languageDescriptions,
@@ -257,8 +258,11 @@ function CampaignPlayerPanelContent() {
     queryKey: ['campaign', campaignId],
     queryFn: () => base44.entities.Campaign.filter({ id: campaignId }).then(campaigns => campaigns[0]),
     enabled: !!campaignId,
-    refetchInterval: (data) => (data?.combat_active || data?.combat_data?.stage === 'initiative') ? 1000 : 2000
+    // Realtime carries live updates via useCampaignRealtime below.
+    // Polling stays as a slow resilience fallback (alpha bug 5).
+    refetchInterval: 5000,
   });
+  useCampaignRealtime(campaignId);
 
   // Warm the dice GLB cache as soon as the campaign loads, so the
   // first-ever dice tray of the session renders the player's chosen

@@ -129,6 +129,7 @@ import {
 import { toast } from "sonner";
 import { useTurnContext } from "@/components/combat/useTurnContext";
 import { buildEncounterUpdate } from "@/lib/combat/buildEncounterUpdate";
+import { useCampaignRealtime } from "@/lib/useCampaignRealtime";
 
 const basicActionIcons = [
   { name: "Non-Lethal", url: "https://static.wixstatic.com/media/5cdfd8_2717bd75c7c8435197830d28dc91d0c4~mv2.png", toggleable: true },
@@ -218,8 +219,16 @@ export default function GMPanel() {
     queryKey: ['campaign', campaignId],
     queryFn: () => base44.entities.Campaign.filter({ id: campaignId }).then(campaigns => campaigns[0]),
     enabled: !!campaignId,
-    refetchInterval: (data) => (data?.combat_active || data?.combat_data?.stage === 'initiative') ? 1000 : 2000
+    // Realtime carries live updates via useCampaignRealtime below.
+    // Polling stays as a slow resilience fallback so a missed
+    // socket event or a brief disconnect re-syncs within a few
+    // seconds instead of waiting for the next manual interaction.
+    refetchInterval: 5000,
   });
+  // Push live campaign UPDATEs into the cache directly. Drops
+  // spectator dice sync latency from the ~1s polling floor to
+  // sub-100ms (alpha bug 5).
+  useCampaignRealtime(campaignId);
 
   // Warm the dice GLB cache as soon as the campaign loads, so the
   // first-ever dice tray of the session renders the player's chosen
