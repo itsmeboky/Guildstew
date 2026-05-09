@@ -6,7 +6,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Play, LogOut, Loader2 } from "lucide-react";
 import LazyImage from "@/components/ui/LazyImage";
-import CharacterPickerModal from "@/components/lobby/CharacterPickerModal";
+import CharacterPickerView from "@/components/lobby/CharacterPickerView";
 
 const CLASS_ICONS = {
   "Barbarian": "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/a6652f2d8_Barbarian1.png",
@@ -73,7 +73,10 @@ export default function CampaignPanel() {
     ) || null;
   }, [characters, user, campaignId]);
 
-  const [pickerOpen, setPickerOpen] = useState(false);
+  // GM check — defensive. CampaignPanel is the player-side route
+  // (GMs use CampaignGMPanel / GMPanel) but a GM landing here for
+  // any reason should not be gated by the character picker.
+  const isGM = !!campaign?.game_master_id && campaign.game_master_id === user?.id;
 
   // Automatically redirect if session is active AND player is ready
   useEffect(() => {
@@ -127,6 +130,39 @@ export default function CampaignPanel() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#1E2430] text-white">
         <Loader2 className="w-8 h-8 animate-spin text-[#37F2D1]" />
+      </div>
+    );
+  }
+
+  // ─── Pre-lobby character gate ──────────────────────────────────
+  // Players without a campaign-copy character for this campaign
+  // never see the lobby. The picker IS the page until they pick
+  // (Library → clone-on-attach) or create (forApply flow). Once
+  // attached, query invalidation refreshes `myCharacter` and the
+  // gate falls through to the lobby render below. GMs are exempt
+  // (they don't have player characters).
+  if (!myCharacter && !isGM) {
+    return (
+      <div className="min-h-screen bg-[#1E2430] text-white relative">
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-15"
+          style={{
+            backgroundImage: `url(${campaign.cover_image_url || 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=1200&h=400&fit=crop'})`,
+          }}
+        />
+        <div className="relative z-10">
+          <div className="px-8 pt-12 pb-4 text-center">
+            <p className="text-sm text-slate-400 uppercase tracking-[0.3em]">Joining</p>
+            <h2 className="text-3xl font-bold text-white mt-1">
+              {campaign.title || campaign.name}
+            </h2>
+          </div>
+          <CharacterPickerView
+            campaignId={campaignId}
+            user={user}
+            campaign={campaign}
+          />
+        </div>
       </div>
     );
   }
@@ -267,36 +303,18 @@ export default function CampaignPanel() {
                 : "#37F2D1";
               const character = player.character;
               const isPlayerReady = campaign.ready_player_ids?.includes(player.user_id);
-              const isOwnSlot = user?.id === player.user_id;
-              const isEmptySlot = !character;
-              const slotIsActionable = isOwnSlot && isEmptySlot;
 
               return (
               <div key={player.user_id} className="relative w-[calc(16.666%-0.75rem)] min-w-[180px] max-w-[220px]">
-                {/* Character Card. Own slot's empty state is a click
-                    target that opens the picker — anyone else's
-                    empty slot stays non-interactive. */}
+                {/* Character Card. Slots are static displays now —
+                    the upstream pre-lobby gate guarantees the
+                    current user has a character before the lobby
+                    renders, so the slot click affordance from the
+                    1b0a688 spine is dead code (removed in
+                    10b-followup-1). */}
                 <div
-                  role={slotIsActionable ? "button" : undefined}
-                  tabIndex={slotIsActionable ? 0 : undefined}
-                  onClick={slotIsActionable ? () => setPickerOpen(true) : undefined}
-                  onKeyDown={
-                    slotIsActionable
-                      ? (e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            setPickerOpen(true);
-                          }
-                        }
-                      : undefined
-                  }
-                  title={slotIsActionable ? "Click to pick or create a character" : undefined}
                   className={`h-[350px] rounded-2xl overflow-hidden bg-[#2A3441] relative transition-all duration-300 ${
                     isPlayerReady ? "ring-2 ring-[#37F2D1] shadow-[0_0_15px_rgba(55,242,209,0.3)]" : ""
-                  } ${
-                    slotIsActionable
-                      ? "cursor-pointer hover:ring-2 hover:ring-[#37F2D1]/60 hover:shadow-[0_0_20px_rgba(55,242,209,0.2)] focus:outline-none focus:ring-2 focus:ring-[#37F2D1]"
-                      : ""
                   }`}
                 >
                   {isPlayerReady && (
@@ -374,15 +392,6 @@ export default function CampaignPanel() {
           </div>
         </div>
       </div>
-
-      {pickerOpen && user && (
-        <CharacterPickerModal
-          campaignId={campaignId}
-          user={user}
-          campaign={campaign}
-          onClose={() => setPickerOpen(false)}
-        />
-      )}
     </div>
   );
 }
