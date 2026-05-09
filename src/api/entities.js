@@ -99,6 +99,8 @@ export const entities = {
   CampaignMap:          createEntity('campaign_maps'),
   CampaignNPC:          createEntity('campaign_npcs'),
   CampaignUpdate:       createEntity('campaign_updates'),
+  CampaignUpdateComment: createEntity('campaign_update_comments'),
+  CampaignUpdateRead:   createEntity('campaign_update_reads'),
   // Per-character notes / companions / relationships. These used
   // to live as JSONB arrays on the character row; they're now top-
   // level tables with their own visibility + directional semantics.
