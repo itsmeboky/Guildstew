@@ -246,9 +246,6 @@ function CampaignPlayerPanelContent() {
   // Spell slot tracker. Keyed by character id → { 1: spent, 2: spent, ... }
   const [spentSlotsByCharacter, setSpentSlotsByCharacter] = useState({});
 
-  // Track previous turn to reset actions
-  const prevTurnIndexRef = React.useRef();
-
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
     queryFn: () => base44.auth.me()
@@ -775,18 +772,28 @@ function CampaignPlayerPanelContent() {
     return allUserProfiles.find(p => p.user_id === user?.id);
   }, [allUserProfiles, user?.id]);
 
-  // Reset actions on new turn
+  // Reset actions on new turn (fire on rising edge of isActorsTurn).
+  // The previous version watched currentTurnIndex, but the GM's
+  // onEndTurn rotates the order array via splice+push and always
+  // resets currentTurnIndex to 0 — so the index never changes and
+  // the effect never re-fired. The player's id check
+  // (currentTurnCombatant.id === user.id) was also wrong: order
+  // entries use `player-${user.id}` as their id, not the bare
+  // user_id. Switching to isActorsTurn rising-edge fixes both: the
+  // identity comparison lives in useTurnContext (which already
+  // handles the player- prefix and the uniqueId fallback), and the
+  // GM-side has been using this same pattern in GMPanel.jsx:2586.
+  // Inspiration intentionally resets to false here to mirror the
+  // existing line-785 shape — the original setter wiped it on every
+  // turn-start so I'm preserving that behavior pending a separate
+  // recon on whether inspiration is meant to persist.
+  const prevWasActorsTurnRef = React.useRef(false);
   useEffect(() => {
-     const currentIndex = campaign?.combat_data?.currentTurnIndex;
-     if (currentIndex !== undefined && currentIndex !== prevTurnIndexRef.current) {
-        const { order } = campaign.combat_data;
-        const currentTurnCombatant = order?.[currentIndex];
-        if (currentTurnCombatant?.id === user?.id || currentTurnCombatant?.id === myCharacter?.id) {
-           setActionsState({ action: true, bonus: true, reaction: true, inspiration: false });
-        }
-        prevTurnIndexRef.current = currentIndex;
+     if (isActorsTurn && !prevWasActorsTurnRef.current) {
+        setActionsState({ action: true, bonus: true, reaction: true, inspiration: false });
      }
-  }, [campaign?.combat_data?.currentTurnIndex, user?.id, myCharacter?.id]);
+     prevWasActorsTurnRef.current = isActorsTurn;
+  }, [isActorsTurn]);
 
   // Initial equip state from character
   useEffect(() => {
