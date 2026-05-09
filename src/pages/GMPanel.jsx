@@ -16,7 +16,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { spellIcons, spellDetails as hardcodedSpellDetails, getCharacterSpellSlots, fetchAllSpells } from "@/components/dnd5e/spellData";
-import { Heart, Music, Circle, Triangle, Crosshair } from "lucide-react";
+import { Heart, Music, Lightbulb, Circle, Triangle, Crosshair } from "lucide-react";
 import LootManager from "@/components/gm/LootManager";
 import GMSessionSidebar from "@/components/gm/GMSessionSidebar";
 import MoneyCounter from "@/components/shared/MoneyCounter";
@@ -6959,7 +6959,7 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
                             damping: 15,
                             delay: index * 0.1
                           }}
-                          className="flex flex-col items-center gap-2 relative"
+                          className="group flex flex-col items-center gap-2 relative"
                         >
                           {selectionMode && (
                             <div className="absolute -top-8 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full animate-bounce shadow-lg z-50">
@@ -6987,38 +6987,76 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
                             </div>
                           )}
 
-                          {/* Bardic Inspiration badge — a small ♪ in the
-                              Bard class tint when the combatant holds an
-                              unspent inspiration die. */}
-                          {combatant.bardicInspiration && (
+                          {/* GM one-click Inspiration grant — top-right
+                              overlay, hover-only. Calls
+                              setCombatantInspiration directly via
+                              onGrantInspiration. Click toggles. Hidden
+                              when bardicInspiration is set because that
+                              comes from the Bard class feature only;
+                              GMs don't manage Bardic. */}
+                          {isGM && onGrantInspiration && !combatant.bardicInspiration && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onGrantInspiration(
+                                  combatant.uniqueId || combatant.id,
+                                  !combatant.hasInspiration,
+                                );
+                              }}
+                              className={`absolute -top-1 -right-1 z-30 rounded-full w-5 h-5 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100 ${combatant.hasInspiration ? 'opacity-100' : ''}`}
+                              style={{
+                                backgroundColor: combatant.hasInspiration ? '#facc15' : 'rgba(15,18,25,0.85)',
+                                color: combatant.hasInspiration ? '#1f1303' : '#facc15',
+                                border: '1.5px solid #fde68a',
+                              }}
+                              title={combatant.hasInspiration ? 'Clear Inspiration' : 'Grant Inspiration'}
+                            >
+                              <Lightbulb className="w-3 h-3" strokeWidth={3} />
+                            </button>
+                          )}
+
+                          {/* Inspiration badge — unified slot, source-aware
+                              icon. Bardic (Music note) wins when both are
+                              present because a Bard's gift is more
+                              recently bestowed and is the bigger flourish.
+                              The standard-Inspiration badge below is
+                              redundant with the GM grant button above
+                              (which renders the lightbulb at full opacity
+                              when granted), so we only render this slot
+                              for the bardic case + the non-GM read-only
+                              standard case. See commit 2 of the
+                              inspiration-redesign hotfix. */}
+                          {combatant.bardicInspiration ? (
                             <div
-                              className="absolute -top-1 -left-1 text-[10px] font-black z-30 rounded-full w-5 h-5 flex items-center justify-center shadow-[0_0_8px_rgba(252,211,77,0.8)]"
+                              className="absolute -top-1 -left-1 z-30 rounded-full w-5 h-5 flex items-center justify-center shadow-[0_0_8px_rgba(252,211,77,0.8)]"
                               style={{
                                 backgroundColor: '#fbbf24',
                                 color: '#1f1303',
                                 border: '1.5px solid #fde68a',
                               }}
-                              title={`Bardic Inspiration (${combatant.bardicInspiration.die})${combatant.bardicInspiration.fromName ? ` — from ${combatant.bardicInspiration.fromName}` : ''}`}
+                              title={`Bardic Inspiration (${combatant.bardicInspiration.die}${combatant.bardicInspiration.fromName ? ` from ${combatant.bardicInspiration.fromName}` : ''}) — adds the die to a roll's result.`}
                             >
-                              ♪
+                              <Music className="w-3 h-3" strokeWidth={3} />
                             </div>
-                          )}
-
-                          {/* Inspiration badge — gold ★ on top-left when
-                              the character has DM inspiration. */}
-                          {combatant.hasInspiration && !combatant.bardicInspiration && (
+                          ) : combatant.hasInspiration && !isGM ? (
+                            // Non-GM viewers (other players) see the
+                            // standard-Inspiration lightbulb here; GMs
+                            // see it on the top-right grant button
+                            // above instead, where they can click to
+                            // toggle.
                             <div
-                              className="absolute -top-1 -left-1 text-[11px] font-black z-30 rounded-full w-5 h-5 flex items-center justify-center shadow-[0_0_10px_rgba(250,204,21,0.9)]"
+                              className="absolute -top-1 -left-1 z-30 rounded-full w-5 h-5 flex items-center justify-center shadow-[0_0_10px_rgba(250,204,21,0.9)]"
                               style={{
                                 backgroundColor: '#facc15',
                                 color: '#1f1303',
                                 border: '1.5px solid #fde68a',
                               }}
-                              title="Inspiration (advantage on one roll)"
+                              title="Inspiration — granted by GM. Use to gain advantage on a roll."
                             >
-                              ★
+                              <Lightbulb className="w-3 h-3" strokeWidth={3} />
                             </div>
-                          )}
+                          ) : null}
 
                           {/* Exhaustion badge — small numbered pip in the
                               bottom-left corner when exhaustion > 0. */}

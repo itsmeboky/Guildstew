@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { RefreshCw, X, Swords, Music } from "lucide-react";
+import { RefreshCw, X, Swords, Music, Lightbulb } from "lucide-react";
 import DiceRoller from "@/components/dice/DiceRoller";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
@@ -3353,8 +3353,8 @@ export default function CombatDiceWindow({
         {showInspiration && (
           <div className="w-full bg-gradient-to-r from-[#facc15]/20 to-[#eab308]/10 border border-[#facc15]/60 rounded-2xl p-3 flex items-center justify-between gap-2">
             <div className="flex flex-col">
-              <span className="text-[10px] uppercase tracking-[0.22em] text-[#facc15] font-black">
-                ★ Inspiration
+              <span className="text-[10px] uppercase tracking-[0.22em] text-[#facc15] font-black flex items-center gap-1">
+                <Lightbulb className="w-3 h-3" /> Inspiration
               </span>
               <span className="text-[11px] text-white font-bold">
                 Reroll with advantage?
