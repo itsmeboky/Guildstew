@@ -839,6 +839,17 @@ function CampaignPlayerPanelContent() {
         characters={characters}
         allUserProfiles={allUserProfiles}
       />
+      <GroupDiceArena
+        mode="dc_check"
+        call={campaign?.combat_data?.dc_check_call}
+        isGM={isGM}
+        currentUserId={user?.id}
+        campaign={campaign}
+        campaignId={campaignId}
+        players={players}
+        characters={characters}
+        allUserProfiles={allUserProfiles}
+      />
       <CampaignConsentDialog
         open={showConsentDialog}
         campaign={campaign}

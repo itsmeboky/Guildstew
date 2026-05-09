@@ -3000,6 +3000,7 @@ export default function GMPanel() {
             equippedItems={equippedItems}
             setEquippedItems={setEquippedItems}
             onRollInitiative={() => setCallPicker('initiative')}
+            onCallDcCheck={() => setCallPicker('dc_check')}
             onManageConditions={() => setShowConditionManager(true)}
             onDrinkPotion={drinkHealingPotion}
           />
@@ -3046,6 +3047,21 @@ export default function GMPanel() {
             <GroupDiceArena
               mode="initiative"
               call={campaign?.combat_data?.initiative_call}
+              isGM={isGM}
+              currentUserId={currentUser?.id}
+              campaign={campaign}
+              campaignId={campaignId}
+              players={players}
+              characters={characters}
+              allUserProfiles={allUserProfiles}
+            />
+
+            {/* Same arena, dc_check dispatch — Commit 3. Both arenas
+                gate on their own call.active so only one renders at
+                a time in practice (one call per campaign). */}
+            <GroupDiceArena
+              mode="dc_check"
+              call={campaign?.combat_data?.dc_check_call}
               isGM={isGM}
               currentUserId={currentUser?.id}
               campaign={campaign}
@@ -5823,7 +5839,7 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
   );
 }
 
-function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPossessed, players, onPossessPlayer, monsterInventory, setMonsterInventory, equippedItems, setEquippedItems, onRollInitiative, onManageConditions, onDrinkPotion }) {
+function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPossessed, players, onPossessPlayer, monsterInventory, setMonsterInventory, equippedItems, setEquippedItems, onRollInitiative, onCallDcCheck, onManageConditions, onDrinkPotion }) {
   const queryClient = useQueryClient();
   const [showQuickEquip, setShowQuickEquip] = useState(false);
   const [draggedItem, setDraggedItem] = useState(null);
@@ -5967,11 +5983,21 @@ function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPosses
           <button
             onClick={onRollInitiative}
             className="w-full flex items-center justify-center gap-2 bg-[#FF5722] hover:bg-[#FF6B3D] text-white rounded-lg py-3 text-sm font-bold transition-colors shadow-lg"
-            title="Open the picker → arena flow (Commit 2). Auto-rolls everyone as a temporary fallback for now."
+            title="Open picker → players roll in shared arena → GM accepts to start combat."
           >
             <Dices className="w-5 h-5" />
             CALL FOR INITIATIVE
           </button>
+
+          {onCallDcCheck && (
+            <button
+              onClick={onCallDcCheck}
+              className="w-full flex items-center justify-center gap-2 bg-[#1a1f2e] hover:bg-[#252b3d] text-[#37F2D1] border border-[#37F2D1]/40 rounded-lg py-2 text-xs font-bold transition-colors"
+              title="Request a skill check or saving throw from one or more players."
+            >
+              CALL FOR DC CHECK
+            </button>
+          )}
 
           <button
             onClick={onManageConditions}
