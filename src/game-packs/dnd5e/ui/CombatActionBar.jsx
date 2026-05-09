@@ -79,6 +79,14 @@ export default function CombatActionBar({
   isHidden = false,
   sneakActive: sneakActiveProp,
   onSneakToggle,
+  // Manual "stop hiding" — fires when the player clicks the Hide
+  // button while already hidden. Lets a hidden character drop
+  // their hidden state without rolling another Stealth check or
+  // making an attack. RAW lets you choose to come out of hiding
+  // (e.g., to ready a held action without giving up your turn).
+  // Optional; if not provided, clicking Hide while hidden re-rolls
+  // Stealth as the pre-fix default.
+  onStopHiding,
   // Non-lethal toggle — parent-controlled so the damage flow can see
   // whether the killing blow should stabilise instead of triggering
   // death saves.
@@ -1057,7 +1065,9 @@ export default function CombatActionBar({
                   isSneakAction && !isHidden
                     ? "Sneak (Hide first)"
                     : isHideAction && isHidden
-                    ? "Hide (currently hidden — click to re-roll)"
+                    ? (onStopHiding
+                        ? "Hidden — click to stop hiding"
+                        : "Hide (currently hidden — click to re-roll)")
                     : action.name
                 }
                 toggleable={isToggleable}
@@ -1074,6 +1084,17 @@ export default function CombatActionBar({
                   }
                 }}
                 onClick={() => {
+                  // Hide click while already hidden = stop hiding
+                  // (manual toggle off). Without this, clicking
+                  // Hide while hidden re-rolled Stealth — there
+                  // was no way to come out of hiding except by
+                  // attacking. Falls through to the normal Hide
+                  // skill check when the parent didn't wire
+                  // onStopHiding.
+                  if (isHideAction && isHidden && onStopHiding) {
+                    onStopHiding();
+                    return;
+                  }
                   if (!isToggleable) {
                     onActionClick && onActionClick({ type: 'basic', name: action.name });
                   }

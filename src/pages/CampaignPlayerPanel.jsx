@@ -1179,6 +1179,21 @@ function CampaignPlayerPanelContent() {
                 isHidden={isMeHidden}
                 sneakActive={sneakActive}
                 onSneakToggle={(next) => setSneakActive(next)}
+                onStopHiding={() => {
+                  // Manual "stop hiding" — drops us from
+                  // hiddenCharacters without rolling Stealth or
+                  // attacking. The existing isMeHidden→sneakActive
+                  // auto-clear effect (line ~509) flips Sneak off
+                  // when isMeHidden goes false.
+                  if (myCharacterKey) {
+                    setHiddenCharacters((prev) => {
+                      if (!prev.has(myCharacterKey)) return prev;
+                      const next = new Set(prev);
+                      next.delete(myCharacterKey);
+                      return next;
+                    });
+                  }
+                }}
                 nonLethalActive={nonLethalActive}
                 onNonLethalToggle={setNonLethalActive}
                 maxSpellSlots={maxSpellSlots}
@@ -1928,6 +1943,16 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
                  setCombatState({ step: 'idle', isOpen: false, action: null, target: null, isOffHand: false });
               }}
               onRoll={async (data) => {
+                // RAW: hiding breaks the moment you attack — hit OR
+                // miss reveals you. Fire OUTSIDE the encounter-sync
+                // gate below so this doesn't depend on
+                // active_encounter being set or on target≠self.
+                // Pre-fix this lived inside both gates and could
+                // no-op on edge cases (alpha bug 4).
+                if (data.type === 'attack_result') {
+                  onPlayerAttacked && onPlayerAttacked();
+                }
+
                 // If we are the actor (not spectator), handle rolls & sync
                 if (campaignData?.combat_data?.active_encounter?.targetId !== `player-${user?.id}`) {
                    // Sync our rolls to DB
@@ -1940,16 +1965,6 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
                       // deathSave / inspiration / wildMagic) is part
                       // of the helper's per-branch shape.
                       const updates = buildEncounterUpdate(data) || {};
-
-                      // RAW: hiding breaks the moment you attack.
-                      // Notify parent to drop us from
-                      // hiddenCharacters; sneakActive auto-clears
-                      // via the existing isMeHidden effect. Lives
-                      // outside the encounter-update helper because
-                      // it's local UI state, not encounter shape.
-                      if (data.type === 'attack_result') {
-                        onPlayerAttacked && onPlayerAttacked();
-                      }
 
                       if (Object.keys(updates).length > 0) {
                         updateCombatEncounter({ ...currentEncounter, ...updates });
