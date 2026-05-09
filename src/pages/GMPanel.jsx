@@ -184,7 +184,7 @@ export default function GMPanel() {
   const [equippedItems, setEquippedItems] = useState({});
   const [initiativeOrder, setInitiativeOrder] = useState([]);
   const [combatActive, setCombatActive] = useState(false);
-  const [actionsState, setActionsState] = useState({ action: true, bonus: true, reaction: true, inspiration: false });
+  const [actionsState, setActionsState] = useState({ action: true, bonus: true, reaction: true });
   const [activeConditions, setActiveConditions] = useState({});
 
   // 1. Auto-select first combatant if the combat queue has items and no
@@ -2563,7 +2563,7 @@ export default function GMPanel() {
   //     attack / take damage / let your turn pass without re-hiding and
   //     you're exposed.
   React.useEffect(() => {
-    setActionsState({ action: true, bonus: true, reaction: true, inspiration: false });
+    setActionsState({ action: true, bonus: true, reaction: true });
     setAttackMode(null);
     setSneakActive(false);
     setRemainingAttacks(0);
