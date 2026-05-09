@@ -2439,6 +2439,14 @@ export default function GMPanel() {
         uniqueId: `monster-${m.queueId}`,
         initiative_rolled: true,
         hit_points: hp,
+        // Surface AC + the original stats block so attack-roll
+        // hit/miss math against this combatant uses the real AC,
+        // not the default-10 fallback. Without these the actor's
+        // CombatDiceWindow read target.armor_class as undefined →
+        // defaulted to 10 → most "misses" registered as hits and
+        // showed the damage prompt. Smell from alpha bug 1.
+        armor_class: stats.armor_class || stats.ac || 10,
+        stats,
         faction: m.faction || 'enemy',
         originalFaction: m.originalFaction || m.faction || 'enemy',
         charmDuration: m.charmDuration ?? null,
