@@ -1841,6 +1841,7 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
               // Spectator Props: We are a spectator if we are not the one actively rolling in local state
               isSpectator={!combatState.isOpen && !!campaignData?.combat_data?.active_encounter}
               spectatorData={campaignData?.combat_data?.active_encounter}
+              gmScreenMode={!!campaignData?.settings?.gm_screen_mode}
 
               onSwitchTarget={() => {
                 if (!campaignData?.combat_data?.active_encounter) {
