@@ -822,10 +822,11 @@ function CampaignPlayerPanelContent() {
 
       <div className="-mt-16 px-6 pb-10 flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden">
         <div className="grid grid-cols-[320px,minmax(0,1fr)] gap-6">
-          <CharacterPanel 
-          character={myCharacter} 
-          user={user} 
+          <CharacterPanel
+          character={myCharacter}
+          user={user}
           guildHall={guildHall}
+          fullSpellsList={fullSpellsList}
           equippedItems={equippedItems}
           setEquippedItems={(newItems) => {
             setEquippedItems(newItems);
@@ -1453,7 +1454,7 @@ function CampaignPlayerPanelContent() {
 
 // --- Shared Components (Copied/Adapted from GMPanel) ---
 
-function CharacterPanel({ character, user, guildHall, equippedItems, setEquippedItems, inventory, onLootDrop, draggedItem, setDraggedItem, combatState, setCombatState, campaignData, myConditions = [], activeConditions = {}, concentrationByCharacter = {}, myCharacterKey, onHideSuccess }) {
+function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equippedItems, setEquippedItems, inventory, onLootDrop, draggedItem, setDraggedItem, combatState, setCombatState, campaignData, myConditions = [], activeConditions = {}, concentrationByCharacter = {}, myCharacterKey, onHideSuccess }) {
   const queryClient = useQueryClient();
   const [showInventoryOrganizer, setShowInventoryOrganizer] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
