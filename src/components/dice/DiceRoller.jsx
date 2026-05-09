@@ -1158,6 +1158,12 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     isOpen = true,
     modifier = "none",
     initialDice = null,
+    // When true, the dice arena auto-rolls once isOpen flips from
+    // false → true and a forcedResult is set. Used by the combat
+    // dice window's spectator path so the watching seat sees the
+    // same animation the rolling actor sees, without needing the
+    // spectator to physically click/shake the arena.
+    autoRollOnOpen = false,
   } = props;
   const mountRef = useRef(null);
   const sceneRef = useRef({});
@@ -2100,6 +2106,33 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   useImperativeHandle(ref, () => ({
     roll: () => executeRoll(0.7, null, false),
   }), [executeRoll]);
+
+  // Auto-roll latch for the spectator path. Watch isOpen + forcedResult
+  // and fire executeRoll exactly once per (open + forced result) edge.
+  // Tracks the last result we've already auto-rolled for so subsequent
+  // re-renders with the same forcedResult don't double-fire.
+  const autoRolledForRef = useRef(null);
+  useEffect(() => {
+    if (!autoRollOnOpen) return;
+    if (!isOpen) {
+      autoRolledForRef.current = null;
+      return;
+    }
+    if (forcedResult == null) return;
+    // Composite key catches "same forcedResult, new arena" cases (e.g.
+    // a damage-then-attack sequence where d20 → d8 → d20 lands on the
+    // same value — the dice-type swap would normally re-mount and reset
+    // this ref via the unmount path, but guarding by value+type is
+    // robust either way).
+    const key = `${diceTypeRef.current || initialDice || "?"}:${forcedResult}`;
+    if (autoRolledForRef.current === key) return;
+    autoRolledForRef.current = key;
+    // Defer one tick so the scene mount + dice tray initialization
+    // settle before the roll kicks off. executeRoll otherwise no-ops
+    // when totalDice resolves to zero on the very first paint.
+    const t = setTimeout(() => executeRoll(0.7, null, false), 60);
+    return () => clearTimeout(t);
+  }, [autoRollOnOpen, isOpen, forcedResult, initialDice, executeRoll]);
 
   const handleRollClick = useCallback(() => {
     if (totalDice === 0) return;
