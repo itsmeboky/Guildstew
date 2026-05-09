@@ -3758,6 +3758,13 @@ export default function CombatDiceWindow({
                   forcedResult={dicePopup.forcedResult}
                   onRollComplete={dicePopup.onComplete}
                   modifier={dicePopup.state || "none"}
+                  // Spectators don't physically interact with the dice
+                  // arena, so the actor's click-to-roll path never
+                  // fires for them. autoRollOnOpen tells DiceRoller to
+                  // execute one roll the moment the popup opens with a
+                  // forcedResult — the watching seat then sees the
+                  // same animation the rolling player saw.
+                  autoRollOnOpen={isSpectator}
                   primaryColor={currentUserProfile?.profile_color_1 || "#FF5300"}
                   secondaryColor={currentUserProfile?.profile_color_2 || "#f8a47c"}
                   isThemedSkin={true}
