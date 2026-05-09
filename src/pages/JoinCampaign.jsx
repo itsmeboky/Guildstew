@@ -68,6 +68,9 @@ export default function JoinCampaign() {
     queryFn: () => base44.entities.Character.filter({
       created_by: user?.email,
       is_campaign_copy: false,
+      // is_npc filter from #10a smell #5 — keeps GM-created NPCs
+      // out of the apply-to-campaign character picker.
+      is_npc: false,
     }),
     enabled: !!user,
     initialData: []
