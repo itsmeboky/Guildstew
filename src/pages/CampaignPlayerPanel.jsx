@@ -1772,6 +1772,23 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
                  } else {
                     setActionsState(prev => ({ ...prev, action: false }));
                  }
+                 // Clear the synced encounter so spectators exit cleanly
+                 // and the dice window's isOpen prop (which considers
+                 // active_encounter) flips off. Mirrors the GM's
+                 // onActionComplete cleanup at GMPanel.jsx:3830-3845.
+                 // Without this, DONE no-op'd visually because isOpen
+                 // stayed true on the active_encounter branch and the
+                 // local combat state never reset.
+                 if (campaignData?.combat_data?.active_encounter) {
+                    const cleared = { ...campaignData.combat_data, active_encounter: null };
+                    queryClient.setQueryData(['campaign', campaignId], (old) =>
+                      old ? { ...old, combat_data: cleared } : old,
+                    );
+                    base44.entities.Campaign
+                      .update(campaignId, { combat_data: cleared })
+                      .catch(err => console.error("Failed to clear encounter", err));
+                 }
+                 setCombatState({ step: 'idle', isOpen: false, action: null, target: null, isOffHand: false });
               }}
               onRoll={async (data) => {
                 // If we are the actor (not spectator), handle rolls & sync
@@ -1781,14 +1798,21 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
                       const currentEncounter = campaignData.combat_data.active_encounter;
                       let updates = {};
                       
+                      // `state` carries the rolling actor's character-
+                      // state visual modifier (rage / deathSave /
+                      // inspiration / wildMagic) into active_encounter
+                      // so the spectator's CombatDiceWindow effect can
+                      // mirror the same DiceRoller treatment. Without
+                      // this passthrough the spectator only saw default
+                      // dice — smell #2 from hotfix #6's recon.
                       if (data.type === 'attack_result') {
-                         updates = { phase: 'attack_result', attackRoll: data.roll };
+                         updates = { phase: 'attack_result', attackRoll: data.roll, state: data.state || null };
                       } else if (data.type === 'damage') {
-                         updates = { phase: 'damage_result', damageRoll: { total: data.value, ...data.detail } };
+                         updates = { phase: 'damage_result', damageRoll: { total: data.value, ...data.detail }, state: data.state || null };
                       } else if (data.type === 'rolling_attack') {
-                         updates = { phase: 'rolling_attack' };
+                         updates = { phase: 'rolling_attack', state: data.state || null };
                       } else if (data.type === 'rolling_damage') {
-                         updates = { phase: 'rolling_damage' };
+                         updates = { phase: 'rolling_damage', state: data.state || null };
                       }
 
                       if (Object.keys(updates).length > 0) {
