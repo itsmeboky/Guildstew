@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { FACE_ROTATIONS } from "./faceRotations";
 import { DICE_SIDES } from "./diceConfig";
 import { useActiveDiceSkin } from "@/lib/useActiveDiceSkin";
+import { useAuth } from "@/lib/AuthContext";
 import { applyDiceSkinToMesh } from "@/lib/applyDiceSkin";
 import { DEFAULT_MODEL_URLS, DEFAULT_TEXTURE_URL } from "@/config/diceAssets";
 import { supabase } from "@/api/supabaseClient";
@@ -1164,6 +1165,12 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     // same animation the rolling actor sees, without needing the
     // spectator to physically click/shake the arena.
     autoRollOnOpen = false,
+    // Slot owner's user_id — drives whose dice cosmetic renders.
+    // When omitted, falls back to the viewer's id (existing
+    // behavior). The GroupDiceArena passes the slot owner's id so
+    // each player's slot renders with that player's cosmetic, not
+    // the viewer's. Phase-3 redesign Commit 2.
+    userId = null,
   } = props;
   const mountRef = useRef(null);
   const sceneRef = useRef({});
@@ -1185,7 +1192,18 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const equippedEffectRef = useRef("default");
   const modifierRef = useRef("none");
 
-  const activeSkin = useActiveDiceSkin();
+  // Per the Phase-3 redesign Commit 2 hook refactor:
+  //   useActiveDiceSkin(id) returns that user's cosmetic
+  //   useActiveDiceSkin() returns null (no implicit viewer default)
+  // To preserve every existing DiceRoller mount's behavior (which
+  // expected the viewer's skin to load automatically) without
+  // migrating every callsite, we fall back to the viewer's id when
+  // the new userId prop is absent. Arena slots pass the slot owner's
+  // id explicitly so each player's slot renders with that owner's
+  // cosmetic.
+  const { user: viewer } = useAuth();
+  const skinSubject = userId || viewer?.id || null;
+  const activeSkin = useActiveDiceSkin(skinSubject);
   const activeSkinRef = useRef(activeSkin);
   useEffect(() => { activeSkinRef.current = activeSkin; }, [activeSkin]);
 

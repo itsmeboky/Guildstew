@@ -8,6 +8,7 @@ import {
   Package, Search, Dices, AlertCircle, Heart, Music, Circle, Triangle, Crosshair, CircleDollarSign
 } from "lucide-react";
 import LootBox from "@/components/player/LootBox";
+import GroupDiceArena from "@/components/combat/GroupDiceArena";
 import PlayerSessionSidebar from "@/components/player/PlayerSessionSidebar";
 import PlayerCampaignUpdatesContent from "@/components/player/PlayerCampaignUpdatesContent";
 import PlayerAdventuringPartyContent from "@/components/player/PlayerAdventuringPartyContent";
@@ -823,6 +824,21 @@ function CampaignPlayerPanelContent() {
 
   return (
     <div className="h-screen w-screen bg-[#020617] text-white flex flex-row overflow-hidden">
+      {/* Phase-3 redesign Commit 2: GroupDiceArena renders only when
+          combat_data.initiative_call.active is true AND the viewer
+          is in selected_user_ids. The component handles its own
+          visibility gating; we mount unconditionally. */}
+      <GroupDiceArena
+        mode="initiative"
+        call={campaign?.combat_data?.initiative_call}
+        isGM={isGM}
+        currentUserId={user?.id}
+        campaign={campaign}
+        campaignId={campaignId}
+        players={players}
+        characters={characters}
+        allUserProfiles={allUserProfiles}
+      />
       <CampaignConsentDialog
         open={showConsentDialog}
         campaign={campaign}
