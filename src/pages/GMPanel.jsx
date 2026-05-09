@@ -73,6 +73,8 @@ import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import { preloadDiceModels } from "@/components/dice/DiceRoller";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
 import CustomCompanionApprovalDialog from "@/components/gm/CustomCompanionApprovalDialog";
+import CallRollPicker from "@/components/gm/CallRollPicker";
+import GroupDiceArena from "@/components/combat/GroupDiceArena";
 import {
   blankDeathSaves, applyDeathSaveRoll, applyDownedDamage, isDying,
 } from "@/components/combat/deathSaves";
@@ -185,6 +187,9 @@ export default function GMPanel() {
   const [equippedItems, setEquippedItems] = useState({});
   const [initiativeOrder, setInitiativeOrder] = useState([]);
   const [combatActive, setCombatActive] = useState(false);
+  // Phase-3 redesign Commit 2: GM-side picker for the GroupDiceArena.
+  // mode determines which combat_data key the picker writes to.
+  const [callPicker, setCallPicker] = useState(null); // null | 'initiative' | 'dc_check'
   const [actionsState, setActionsState] = useState({ action: true, bonus: true, reaction: true });
   const [activeConditions, setActiveConditions] = useState({});
 
@@ -2994,7 +2999,7 @@ export default function GMPanel() {
             setMonsterInventory={setMonsterInventory}
             equippedItems={equippedItems}
             setEquippedItems={setEquippedItems}
-            onRollInitiative={rollInitiative}
+            onRollInitiative={() => setCallPicker('initiative')}
             onManageConditions={() => setShowConditionManager(true)}
             onDrinkPotion={drinkHealingPotion}
           />
@@ -3019,6 +3024,35 @@ export default function GMPanel() {
               characters={characters}
               campaignId={campaignId}
               isGM={isGM}
+            />
+
+            {/* Phase-3 redesign Commit 2: GM picker → write call →
+                arena auto-renders when combat_data.{call}.active is
+                true. Picker dismisses itself on send; arena lives
+                until GM accepts/closes. */}
+            <CallRollPicker
+              open={callPicker !== null}
+              onClose={() => setCallPicker(null)}
+              mode={callPicker || 'initiative'}
+              campaign={campaign}
+              campaignId={campaignId}
+              players={players}
+            />
+
+            {/* Arena visibility gate is inside the component — renders
+                nothing when no call is active or viewer isn't selected.
+                Refresh-resilient by virtue of being driven from
+                campaign.combat_data state rather than local UI state. */}
+            <GroupDiceArena
+              mode="initiative"
+              call={campaign?.combat_data?.initiative_call}
+              isGM={isGM}
+              currentUserId={currentUser?.id}
+              campaign={campaign}
+              campaignId={campaignId}
+              players={players}
+              characters={characters}
+              allUserProfiles={allUserProfiles}
             />
 
             {activeDeathSaveTarget && (
