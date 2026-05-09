@@ -12,6 +12,7 @@ import PlayerSessionSidebar from "@/components/player/PlayerSessionSidebar";
 import PlayerCampaignUpdatesContent from "@/components/player/PlayerCampaignUpdatesContent";
 import PlayerAdventuringPartyContent from "@/components/player/PlayerAdventuringPartyContent";
 import PlayerCampaignArchivesContent from "@/components/player/PlayerCampaignArchivesContent";
+import Achievements from "@/pages/Achievements";
 import SessionModal from "@/components/session/SessionModal";
 import MoneyCounter from "@/components/shared/MoneyCounter";
 import { spellIcons, spellDetails as hardcodedSpellDetails, getCharacterSpellSlots, fetchAllSpells } from "@/components/dnd5e/spellData";
@@ -877,9 +878,7 @@ function CampaignPlayerPanelContent() {
         onClose={() => setActiveSection(null)}
         title="Achievements"
       >
-        <p className="text-slate-400 text-sm">
-          Coming soon. View your earned achievements and progress toward the rest. The engine that grants them runs on combat resolution and on visiting the achievements page; this section is the in-session read surface.
-        </p>
+        <Achievements embedded />
       </SessionModal>
 
       {/* Main content column. Wraps the entire pre-existing player
