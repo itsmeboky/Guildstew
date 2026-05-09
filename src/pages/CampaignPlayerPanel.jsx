@@ -8,7 +8,6 @@ import {
   Package, Search, Dices, AlertCircle, Heart, Music, Circle, Triangle, Crosshair, CircleDollarSign
 } from "lucide-react";
 import LootBox from "@/components/player/LootBox";
-import InitiativeCallResponseModal from "@/components/player/InitiativeCallResponseModal";
 import PlayerSessionSidebar from "@/components/player/PlayerSessionSidebar";
 import PlayerCampaignUpdatesContent from "@/components/player/PlayerCampaignUpdatesContent";
 import PlayerAdventuringPartyContent from "@/components/player/PlayerAdventuringPartyContent";
@@ -824,18 +823,6 @@ function CampaignPlayerPanelContent() {
 
   return (
     <div className="h-screen w-screen bg-[#020617] text-white flex flex-row overflow-hidden">
-      {/* Phase-3-c1: GM-driven initiative call. Modal renders nothing
-          when there's no active call; auto-pops when the GM clicks
-          Send. Players can't dismiss — only the GM's accept/cancel
-          clears it. */}
-      {!isGM && (
-        <InitiativeCallResponseModal
-          campaign={campaign}
-          campaignId={campaignId}
-          user={user}
-          myCharacter={myCharacter}
-        />
-      )}
       <CampaignConsentDialog
         open={showConsentDialog}
         campaign={campaign}

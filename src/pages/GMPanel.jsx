@@ -73,7 +73,6 @@ import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
 import { preloadDiceModels } from "@/components/dice/DiceRoller";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
 import CustomCompanionApprovalDialog from "@/components/gm/CustomCompanionApprovalDialog";
-import CallForInitiativeModal from "@/components/gm/CallForInitiativeModal";
 import {
   blankDeathSaves, applyDeathSaveRoll, applyDownedDamage, isDying,
 } from "@/components/combat/deathSaves";
@@ -186,12 +185,6 @@ export default function GMPanel() {
   const [equippedItems, setEquippedItems] = useState({});
   const [initiativeOrder, setInitiativeOrder] = useState([]);
   const [combatActive, setCombatActive] = useState(false);
-  // Phase-3-c1: GM-side "Call for Initiative" modal — distinct from
-  // the existing auto-roll button. Auto-roll stays for solo / quick
-  // scenes; this flow asks players to roll their own d20s. The modal
-  // auto-opens when an in-flight call exists on mount (so a browser
-  // refresh mid-call drops back into the tracker, not a blank UI).
-  const [showCallInitiative, setShowCallInitiative] = useState(false);
   const [actionsState, setActionsState] = useState({ action: true, bonus: true, reaction: true });
   const [activeConditions, setActiveConditions] = useState({});
 
@@ -746,16 +739,6 @@ export default function GMPanel() {
       }
     }).catch(err => console.error("Failed to sync encounter", err));
   }, [campaign?.combat_active, campaignId, campaign?.combat_data]);
-
-  // Phase-3-c1: auto-open Call for Initiative modal whenever an
-  // in-flight call exists on the campaign — this catches the
-  // browser-refresh-mid-call case and keeps the tracker visible
-  // without the GM having to re-click the button.
-  useEffect(() => {
-    if (campaign?.combat_data?.initiative_call?.active) {
-      setShowCallInitiative(true);
-    }
-  }, [campaign?.combat_data?.initiative_call?.active]);
 
   // When combat state changes significantly, sync it
   useEffect(() => {
@@ -3012,7 +2995,6 @@ export default function GMPanel() {
             equippedItems={equippedItems}
             setEquippedItems={setEquippedItems}
             onRollInitiative={rollInitiative}
-            onCallInitiative={() => setShowCallInitiative(true)}
             onManageConditions={() => setShowConditionManager(true)}
             onDrinkPotion={drinkHealingPotion}
           />
@@ -3037,15 +3019,6 @@ export default function GMPanel() {
               characters={characters}
               campaignId={campaignId}
               isGM={isGM}
-            />
-
-            <CallForInitiativeModal
-              open={showCallInitiative}
-              onClose={() => setShowCallInitiative(false)}
-              campaign={campaign}
-              campaignId={campaignId}
-              players={players}
-              characters={characters}
             />
 
             {activeDeathSaveTarget && (
@@ -5816,7 +5789,7 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
   );
 }
 
-function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPossessed, players, onPossessPlayer, monsterInventory, setMonsterInventory, equippedItems, setEquippedItems, onRollInitiative, onCallInitiative, onManageConditions, onDrinkPotion }) {
+function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPossessed, players, onPossessPlayer, monsterInventory, setMonsterInventory, equippedItems, setEquippedItems, onRollInitiative, onManageConditions, onDrinkPotion }) {
   const queryClient = useQueryClient();
   const [showQuickEquip, setShowQuickEquip] = useState(false);
   const [draggedItem, setDraggedItem] = useState(null);
@@ -5960,21 +5933,11 @@ function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPosses
           <button
             onClick={onRollInitiative}
             className="w-full flex items-center justify-center gap-2 bg-[#FF5722] hover:bg-[#FF6B3D] text-white rounded-lg py-3 text-sm font-bold transition-colors shadow-lg"
-            title="Auto-roll initiative for everyone (solo / quick scenes)"
+            title="Open the picker → arena flow (Commit 2). Auto-rolls everyone as a temporary fallback for now."
           >
             <Dices className="w-5 h-5" />
-            ROLL FOR INITIATIVE
+            CALL FOR INITIATIVE
           </button>
-
-          {onCallInitiative && (
-            <button
-              onClick={onCallInitiative}
-              className="w-full flex items-center justify-center gap-2 bg-[#1a1f2e] hover:bg-[#252b3d] text-[#37F2D1] border border-[#37F2D1]/40 rounded-lg py-2 text-xs font-bold transition-colors"
-              title="Send a roll request to every player; monsters roll privately on accept."
-            >
-              CALL FOR INITIATIVE
-            </button>
-          )}
 
           <button
             onClick={onManageConditions}
