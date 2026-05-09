@@ -2005,8 +2005,15 @@ export default function CombatDiceWindow({
   // a readout + a "View Turn Order" CTA. No dice are rolled on this
   // screen — the GM doesn't click a d20.
   if (mode === "initiative") {
-    // Group by faction so enemies/allies/neutrals/players each get
-    // their own section, sorted by total desc within each.
+    // Faction visibility: GM sees every faction's results live as
+    // they roll. Non-GM viewers (players) see only the player-
+    // characters section with their own + each others' rolls;
+    // enemy / ally / neutral results stay hidden behind a
+    // "Preparing for battle…" placeholder until combat fully
+    // starts and the turn-order bar renders the final order.
+    // (Alpha bug 2 — players were seeing monster initiative
+    // numbers like "Aboleth: 5" before combat began, which leaks
+    // GM information.)
     const factionOrder = ["enemy", "ally", "neutral", "player"];
     const grouped = factionOrder
       .map((factionKey) => ({
@@ -2017,6 +2024,30 @@ export default function CombatDiceWindow({
           .sort((a, b) => (b.initiative || 0) - (a.initiative || 0)),
       }))
       .filter((g) => g.combatants.length > 0);
+
+    // Split into GM-visible and player-visible groups. Players
+    // still see the section header + portrait + name (so the
+    // panel doesn't feel empty / weird) but the initiative number
+    // is replaced with a loader for non-player factions.
+    const visibleGrouped = isGM
+      ? grouped
+      : grouped.map((g) => ({
+          ...g,
+          // Player view: hide the rolled numbers for non-player
+          // factions. Set initiative/initiativeRoll to undefined on
+          // a copy so the render path falls through to "—" / "?"
+          // affordances. The combatants array itself stays intact
+          // so the section still shows portraits + names.
+          combatants: g.factionKey === 'player'
+            ? g.combatants
+            : g.combatants.map((c) => ({
+                ...c,
+                initiative: undefined,
+                initiativeRoll: undefined,
+                initiativeMod: undefined,
+                _rollHidden: true,
+              })),
+        }));
 
     const handleViewTurnOrder = () => {
       if (onViewTurnOrder) onViewTurnOrder();
@@ -2064,7 +2095,7 @@ export default function CombatDiceWindow({
         </p>
 
         <div className="w-full max-w-6xl space-y-8">
-          {grouped.map(({ factionKey, style, combatants }) => (
+          {visibleGrouped.map(({ factionKey, style, combatants }) => (
             <div key={factionKey}>
               <div className="flex items-center gap-3 mb-4">
                 <span
@@ -2116,17 +2147,37 @@ export default function CombatDiceWindow({
                       <h4 className="text-xs font-bold text-white mb-1 truncate max-w-full">
                         {safeText(c.name)}
                       </h4>
-                      <div
-                        className="text-5xl font-black leading-none tracking-tight"
-                        style={{ color: style.hex }}
-                      >
-                        {typeof total === "number" ? total : "—"}
-                      </div>
-                      {typeof raw === "number" && (
-                        <div className="text-[10px] font-mono text-slate-500 mt-1">
-                          {raw}
-                          {modLabel}
+                      {c._rollHidden ? (
+                        // Player view of a non-player faction:
+                        // tasteful pulse + ellipsis instead of
+                        // the actual roll number. GM sees the
+                        // real values; players see this until
+                        // combat starts and the turn order bar
+                        // resolves.
+                        <div className="flex flex-col items-center justify-center min-h-[60px] mt-1">
+                          <div
+                            className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin opacity-70"
+                            style={{ borderColor: style.hex, borderTopColor: 'transparent' }}
+                          />
+                          <div className="text-[9px] uppercase tracking-[0.2em] text-slate-500 mt-2">
+                            Preparing…
+                          </div>
                         </div>
+                      ) : (
+                        <>
+                          <div
+                            className="text-5xl font-black leading-none tracking-tight"
+                            style={{ color: style.hex }}
+                          >
+                            {typeof total === "number" ? total : "—"}
+                          </div>
+                          {typeof raw === "number" && (
+                            <div className="text-[10px] font-mono text-slate-500 mt-1">
+                              {raw}
+                              {modLabel}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   );
