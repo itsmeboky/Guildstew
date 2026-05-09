@@ -1887,11 +1887,28 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
                 }
               }}
               onActionComplete={() => {
-                 if (combatState.isOffHand) {
-                    setActionsState(prev => ({ ...prev, bonus: false }));
-                 } else {
-                    setActionsState(prev => ({ ...prev, action: false }));
-                 }
+                 // Consume the right action-economy slot. The resolved
+                 // cost lives on combatState.action.resolved (set at
+                 // onActionClick time via resolveAction). costOverride
+                 // — used by Rogue Cunning Action's bonus-action
+                 // Hide/Dash/Disengage and Monk Step of the Wind —
+                 // flows through resolveAction so resolved.cost is
+                 // 'bonus' for those. Falling back to 'action' for
+                 // anything that didn't pre-resolve preserves the
+                 // pre-fix default.
+                 // isOffHand is the off-hand bonus-attack flag the GM
+                 // panel sets when chaining a second weapon; OR'd
+                 // with the resolved bonus cost so both paths land
+                 // on the bonus slot. GM-side at GMPanel.jsx:3844
+                 // uses the same resolved.cost source (the player
+                 // path was hardcoding 'action' / 'bonus' on
+                 // isOffHand alone, which broke Cunning Action —
+                 // alpha bug 3).
+                 const resolvedCost = combatState.action?.resolved?.cost;
+                 const effectiveCost = combatState.isOffHand
+                   ? 'bonus'
+                   : (resolvedCost || 'action');
+                 setActionsState(prev => consumeActionCost(prev, effectiveCost));
                  // Clear the synced encounter so spectators exit cleanly
                  // and the dice window's isOpen prop (which considers
                  // active_encounter) flips off. Mirrors the GM's
