@@ -11,6 +11,7 @@ import LootBox from "@/components/player/LootBox";
 import PlayerSessionSidebar from "@/components/player/PlayerSessionSidebar";
 import PlayerCampaignUpdatesContent from "@/components/player/PlayerCampaignUpdatesContent";
 import PlayerAdventuringPartyContent from "@/components/player/PlayerAdventuringPartyContent";
+import PlayerQuickNotesContent from "@/components/player/PlayerQuickNotesContent";
 import PlayerCampaignArchivesContent from "@/components/player/PlayerCampaignArchivesContent";
 import Achievements from "@/pages/Achievements";
 import SessionModal from "@/components/session/SessionModal";
@@ -859,6 +860,18 @@ function CampaignPlayerPanelContent() {
         <PlayerAdventuringPartyContent
           campaignId={campaignId}
           campaign={campaign}
+        />
+      </SessionModal>
+
+      <SessionModal
+        isOpen={activeSection === 'quickNotes'}
+        onClose={() => setActiveSection(null)}
+        title="Quick Notes"
+      >
+        <PlayerQuickNotesContent
+          campaignId={campaignId}
+          user={user}
+          myCharacter={myCharacter}
         />
       </SessionModal>
 

@@ -1,5 +1,5 @@
 import {
-  LogOut, Megaphone, Users, BookOpen, Trophy,
+  LogOut, Megaphone, Users, StickyNote, BookOpen, Trophy,
 } from "lucide-react";
 
 /**
@@ -30,10 +30,11 @@ import {
  * surface but present for one-click access to any section.
  */
 export const PLAYER_SECTIONS = [
-  { key: "campaignUpdates",   icon: Megaphone, label: "Campaign Updates" },
-  { key: "adventuringParty",  icon: Users,     label: "Adventuring Party" },
-  { key: "campaignArchives",  icon: BookOpen,  label: "Campaign Archives" },
-  { key: "achievements",      icon: Trophy,    label: "Achievements" },
+  { key: "campaignUpdates",   icon: Megaphone,  label: "Campaign Updates" },
+  { key: "adventuringParty",  icon: Users,      label: "Adventuring Party" },
+  { key: "quickNotes",        icon: StickyNote, label: "Quick Notes" },
+  { key: "campaignArchives",  icon: BookOpen,   label: "Campaign Archives" },
+  { key: "achievements",      icon: Trophy,     label: "Achievements" },
 ];
 
 export default function PlayerSessionSidebar({
