@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import LootBox from "@/components/player/LootBox";
 import PlayerSessionSidebar from "@/components/player/PlayerSessionSidebar";
+import PlayerCampaignUpdatesContent from "@/components/player/PlayerCampaignUpdatesContent";
 import SessionModal from "@/components/session/SessionModal";
 import MoneyCounter from "@/components/shared/MoneyCounter";
 import { spellIcons, spellDetails as hardcodedSpellDetails, getCharacterSpellSlots, fetchAllSpells } from "@/components/dnd5e/spellData";
@@ -276,6 +277,45 @@ function CampaignPlayerPanelContent() {
     queryFn: () => base44.entities.UserProfile.list(),
     staleTime: 60000
   });
+
+  // #11 commit 2 — unread campaign updates count for the sidebar
+  // bubble badge. Two parallel queries (updates list + reads list)
+  // joined client-side to compute the count. Polls every 30s so a
+  // GM-posted update surfaces on the player's badge without a
+  // refresh. The PlayerCampaignUpdatesContent component handles
+  // the mark-read upsert when the section is opened.
+  const { data: campaignUpdatesForBadge = [] } = useQuery({
+    queryKey: ['campaignUpdates', campaignId],
+    queryFn: () => base44.entities.CampaignUpdate.filter(
+      { campaign_id: campaignId },
+      '-created_at',
+    ),
+    enabled: !!campaignId,
+    initialData: [],
+    refetchInterval: 30000,
+  });
+
+  const { data: campaignUpdateReads = [] } = useQuery({
+    queryKey: ['campaignUpdateReads', campaignId, user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const { data, error } = await supabase
+        .from('campaign_update_reads')
+        .select('campaign_update_id')
+        .eq('user_id', user.id);
+      if (error) return [];
+      return data || [];
+    },
+    enabled: !!user?.id && !!campaignId,
+    initialData: [],
+    refetchInterval: 30000,
+  });
+
+  const unreadUpdatesCount = React.useMemo(() => {
+    if (!campaignUpdatesForBadge.length) return 0;
+    const readSet = new Set(campaignUpdateReads.map((r) => r.campaign_update_id));
+    return campaignUpdatesForBadge.filter((u) => !readSet.has(u.id)).length;
+  }, [campaignUpdatesForBadge, campaignUpdateReads]);
 
   // Characters query moved up to modify refetchInterval
 
@@ -783,10 +823,11 @@ function CampaignPlayerPanelContent() {
           activeSection={activeSection}
           onOpenSection={setActiveSection}
           onLeaveSession={() => setShowLeaveConfirm(true)}
-          // sectionBadges placeholder — wired in commit 2 with the
-          // unread-updates count once the comments + read-tracker
-          // tables land.
-          sectionBadges={{}}
+          // #11 commit 2 — unread campaign updates count drives the
+          // bubble badge on the Campaign Updates nav item. Cleared
+          // automatically by PlayerCampaignUpdatesContent's mount-
+          // time mark-read upsert when the section opens.
+          sectionBadges={{ campaignUpdates: unreadUpdatesCount }}
         />
       )}
 
@@ -799,9 +840,12 @@ function CampaignPlayerPanelContent() {
         onClose={() => setActiveSection(null)}
         title="Campaign Updates"
       >
-        <p className="text-slate-400 text-sm">
-          Coming soon. Read GM-posted updates here, comment under each one, and see a bubble badge on the sidebar nav when there's something new.
-        </p>
+        <PlayerCampaignUpdatesContent
+          campaignId={campaignId}
+          campaign={campaign}
+          user={user}
+          allUserProfiles={allUserProfiles}
+        />
       </SessionModal>
 
       <SessionModal
