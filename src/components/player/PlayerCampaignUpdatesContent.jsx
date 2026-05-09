@@ -4,7 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { supabase } from "@/api/supabaseClient";
 import { Button } from "@/components/ui/button";
 import {
-  Send, Trash2, Pencil, Pin, PinOff, CheckCircle2, X, Megaphone, Check,
+  Send, Trash2, Pencil, Pin, PinOff, CheckCircle2, X, Megaphone, Check, Reply,
 } from "lucide-react";
 import { toast } from "sonner";
 import { timeAgo } from "@/utils/timeAgo";
@@ -143,6 +143,8 @@ function CommentThread({ updateId, user, isGM, profilesById }) {
   const [body, setBody] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [editBody, setEditBody] = useState("");
+  const [replyParentId, setReplyParentId] = useState(null);
+  const [replyBody, setReplyBody] = useState("");
 
   const { data: comments = [] } = useQuery({
     queryKey: ["campaignUpdateComments", updateId],
@@ -154,25 +156,48 @@ function CommentThread({ updateId, user, isGM, profilesById }) {
     initialData: [],
   });
 
-  // Pinned first, then chronological.
-  const sorted = useMemo(() => {
-    const arr = [...comments];
-    arr.sort((a, b) => {
+  // Top-level comments: pinned first, then chronological. Replies
+  // (parent_comment_id set) get bucketed under their parent so the
+  // render flattens to one indent tier — a reply to a reply hoists
+  // up to the original parent's bucket so the thread doesn't
+  // waterfall off the right edge.
+  const { sorted, repliesByParent } = useMemo(() => {
+    const byId = new Map(comments.map((c) => [c.id, c]));
+    const top = [];
+    const replies = new Map();
+    for (const c of comments) {
+      if (!c.parent_comment_id) { top.push(c); continue; }
+      let rootId = c.parent_comment_id;
+      const parent = byId.get(rootId);
+      if (parent?.parent_comment_id) rootId = parent.parent_comment_id;
+      if (!replies.has(rootId)) replies.set(rootId, []);
+      replies.get(rootId).push(c);
+    }
+    top.sort((a, b) => {
       if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
       return new Date(a.created_at) - new Date(b.created_at);
     });
-    return arr;
+    for (const arr of replies.values()) {
+      arr.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    }
+    return { sorted: top, repliesByParent: replies };
   }, [comments]);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["campaignUpdateComments", updateId] });
 
   const create = useMutation({
-    mutationFn: (text) => base44.entities.CampaignUpdateComment.create({
+    mutationFn: ({ text, parent_comment_id = null }) => base44.entities.CampaignUpdateComment.create({
       campaign_update_id: updateId,
       user_id: user?.id,
       body: text,
+      parent_comment_id,
     }),
-    onSuccess: () => { invalidate(); setBody(""); },
+    onSuccess: () => {
+      invalidate();
+      setBody("");
+      setReplyBody("");
+      setReplyParentId(null);
+    },
     onError: (err) => toast.error(err?.message || "Couldn't post comment."),
   });
 
@@ -206,7 +231,13 @@ function CommentThread({ updateId, user, isGM, profilesById }) {
   const send = () => {
     const text = body.trim();
     if (!text) return;
-    create.mutate(text);
+    create.mutate({ text });
+  };
+
+  const sendReply = (parentId) => {
+    const text = replyBody.trim();
+    if (!text) return;
+    create.mutate({ text, parent_comment_id: parentId });
   };
 
   const beginEdit = (c) => {
@@ -224,7 +255,11 @@ function CommentThread({ updateId, user, isGM, profilesById }) {
 
   return (
     <div className="space-y-3 mt-2 pt-4 border-t border-slate-800/60">
-      {sorted.map((c) => {
+      {sorted.flatMap((top) => {
+        const replies = repliesByParent.get(top.id) || [];
+        const items = [top, ...replies];
+        const out = items.map((c) => {
+        const isReply = !!c.parent_comment_id;
         const author = profilesById?.get?.(c.user_id) || {};
         const canEdit = isGM || c.user_id === user?.id;
         const canDelete = isGM || c.user_id === user?.id;
@@ -235,7 +270,7 @@ function CommentThread({ updateId, user, isGM, profilesById }) {
           return (
             <div
               key={c.id}
-              className="bg-[#0f1219] border border-slate-800/30 rounded-lg p-3 ml-8 italic text-xs text-slate-600"
+              className={`bg-[#0f1219] border border-slate-800/30 rounded-lg p-3 italic text-xs text-slate-600 ${isReply ? "ml-12" : "ml-8"}`}
             >
               [comment deleted]
             </div>
@@ -245,7 +280,7 @@ function CommentThread({ updateId, user, isGM, profilesById }) {
         return (
           <div
             key={c.id}
-            className={`bg-[#151922] border rounded-lg p-4 ml-8 ${
+            className={`bg-[#151922] border rounded-lg p-4 ${isReply ? "ml-12" : "ml-8"} ${
               c.is_pinned ? "border-[#37F2D1]/40" : "border-slate-800/50"
             } ${c.is_resolved ? "opacity-60" : ""}`}
           >
@@ -298,6 +333,18 @@ function CommentThread({ updateId, user, isGM, profilesById }) {
               </div>
               {!isEditing && (
                 <div className="flex items-center gap-1 flex-shrink-0">
+                  {!isReply && (
+                    <button
+                      onClick={() => {
+                        setReplyParentId(replyParentId === c.id ? null : c.id);
+                        setReplyBody("");
+                      }}
+                      className="text-slate-500 hover:text-[#37F2D1] p-1 rounded"
+                      title={replyParentId === c.id ? "Cancel reply" : "Reply"}
+                    >
+                      <Reply className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   {canEdit && (
                     <button
                       onClick={() => beginEdit(c)}
@@ -341,6 +388,37 @@ function CommentThread({ updateId, user, isGM, profilesById }) {
             </div>
           </div>
         );
+        });
+        if (replyParentId === top.id) {
+          out.push(
+            <div key={`reply-composer-${top.id}`} className="flex gap-3 ml-12">
+              {viewerProfile.avatar_url ? (
+                <img src={viewerProfile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-slate-700 flex-shrink-0" />
+              )}
+              <div className="flex-1 flex gap-2">
+                <input
+                  value={replyBody}
+                  onChange={(e) => setReplyBody(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(top.id); } }}
+                  placeholder="Reply…"
+                  autoFocus
+                  className="flex-1 bg-[#0f1219] border border-slate-700 rounded-lg px-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#37F2D1]"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => sendReply(top.id)}
+                  disabled={!replyBody.trim() || create.isPending}
+                  className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] font-bold"
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          );
+        }
+        return out;
       })}
 
       <div className="flex gap-3 ml-8 mt-3">
