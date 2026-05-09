@@ -420,8 +420,19 @@ export default function CharacterCreator() {
     },
     onSuccess: () => {
       if (campaignId) {
+        // Apply-flow saves create rows in `characters` (with
+        // is_campaign_copy=true). NPC saves create rows in
+        // `campaign_npcs`. Invalidate BOTH query keys so whichever
+        // one the next page reads has fresh data — most
+        // importantly, ['campaignCharacters', campaignId] backs
+        // the pre-lobby character gate in CampaignPanel
+        // (10b-followup-1). Without this invalidation the gate's
+        // 30s staleTime would let the cached library-only view
+        // persist and players would see the picker again instead
+        // of the lobby.
         queryClient.invalidateQueries({ queryKey: ['campaignNPCs', campaignId] });
-        toast.success("NPC created successfully!");
+        queryClient.invalidateQueries({ queryKey: ['campaignCharacters', campaignId] });
+        toast.success(isApplyFlow ? "Character created!" : "NPC created successfully!");
         navigate(createPageUrl(returnTo || "CampaignNPCs") + `?id=${campaignId}`);
       } else {
         queryClient.invalidateQueries({ queryKey: ['allCharacters'] });
