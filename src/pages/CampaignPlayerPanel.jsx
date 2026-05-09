@@ -227,7 +227,7 @@ function CampaignPlayerPanelContent() {
   const [tradeTarget, setTradeTarget] = useState(null);
 
   // Action Resource State
-  const [actionsState, setActionsState] = useState({ action: true, bonus: true, reaction: true, inspiration: false });
+  const [actionsState, setActionsState] = useState({ action: true, bonus: true, reaction: true });
 
   // 4-state attack mode toggle (mirrors GMPanel) so the
   // CombatActionBar can drive targeting on the player side too.
@@ -790,7 +790,7 @@ function CampaignPlayerPanelContent() {
   const prevWasActorsTurnRef = React.useRef(false);
   useEffect(() => {
      if (isActorsTurn && !prevWasActorsTurnRef.current) {
-        setActionsState({ action: true, bonus: true, reaction: true, inspiration: false });
+        setActionsState({ action: true, bonus: true, reaction: true });
      }
      prevWasActorsTurnRef.current = isActorsTurn;
   }, [isActorsTurn]);
