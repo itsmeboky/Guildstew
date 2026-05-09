@@ -8,6 +8,8 @@ import {
   Package, Search, Dices, AlertCircle, Heart, Music, Circle, Triangle, Crosshair, CircleDollarSign
 } from "lucide-react";
 import LootBox from "@/components/player/LootBox";
+import PlayerSessionSidebar from "@/components/player/PlayerSessionSidebar";
+import SessionModal from "@/components/session/SessionModal";
 import MoneyCounter from "@/components/shared/MoneyCounter";
 import { spellIcons, spellDetails as hardcodedSpellDetails, getCharacterSpellSlots, fetchAllSpells } from "@/components/dnd5e/spellData";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
@@ -288,6 +290,12 @@ function CampaignPlayerPanelContent() {
   // the Campaigns page with a toast — same user can't straddle two
   // sessions at once.
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  // Player sidebar — active section ('campaignUpdates' | 'adventuringParty'
+  // | 'campaignArchives' | 'achievements' | null). Same shape the GM
+  // panel uses for `activeModal`. Section content components mount
+  // via SessionModal further down. #11 commit 1: stub content;
+  // commits 2-5 wire each section's actual content.
+  const [activeSection, setActiveSection] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -755,8 +763,14 @@ function CampaignPlayerPanelContent() {
   const isGM = campaign?.game_master_id === user?.id
     || (Array.isArray(campaign?.co_dm_ids) && campaign.co_dm_ids.includes(user?.id));
 
+  // Player sidebar visibility: only show when this user is a player
+  // in an active session (matches the previous Leave Session button's
+  // visibility predicate). GMs landing here for any reason — same
+  // tolerance the rest of the panel has — see no sidebar.
+  const showPlayerSidebar = !isGM && campaign?.session_active;
+
   return (
-    <div className="h-screen w-screen bg-[#020617] text-white flex flex-col overflow-hidden">
+    <div className="h-screen w-screen bg-[#020617] text-white flex flex-row overflow-hidden">
       <CampaignConsentDialog
         open={showConsentDialog}
         campaign={campaign}
@@ -764,15 +778,68 @@ function CampaignPlayerPanelContent() {
         onAccept={() => queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] })}
       />
 
-      {!isGM && campaign?.session_active && (
-        <button
-          type="button"
-          onClick={() => setShowLeaveConfirm(true)}
-          className="fixed top-4 right-4 z-40 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold uppercase tracking-wider rounded-lg px-4 py-2 shadow-lg shadow-amber-900/50"
-        >
-          Leave Session
-        </button>
+      {showPlayerSidebar && (
+        <PlayerSessionSidebar
+          activeSection={activeSection}
+          onOpenSection={setActiveSection}
+          onLeaveSession={() => setShowLeaveConfirm(true)}
+          // sectionBadges placeholder — wired in commit 2 with the
+          // unread-updates count once the comments + read-tracker
+          // tables land.
+          sectionBadges={{}}
+        />
       )}
+
+      {/* #11 section modals — section content goes here. Commits
+          2-5 swap the placeholder children for real components.
+          Reuses the existing SessionModal which the GM panel
+          already uses for its sidebar sections. */}
+      <SessionModal
+        isOpen={activeSection === 'campaignUpdates'}
+        onClose={() => setActiveSection(null)}
+        title="Campaign Updates"
+      >
+        <p className="text-slate-400 text-sm">
+          Coming soon. Read GM-posted updates here, comment under each one, and see a bubble badge on the sidebar nav when there's something new.
+        </p>
+      </SessionModal>
+
+      <SessionModal
+        isOpen={activeSection === 'adventuringParty'}
+        onClose={() => setActiveSection(null)}
+        title="Adventuring Party"
+      >
+        <p className="text-slate-400 text-sm">
+          Coming soon. Your character takes the spotlight here, with the rest of the party as tabs alongside. Quick Notes mirroring lands in the same commit.
+        </p>
+      </SessionModal>
+
+      <SessionModal
+        isOpen={activeSection === 'campaignArchives'}
+        onClose={() => setActiveSection(null)}
+        title="Campaign Archives"
+      >
+        <p className="text-slate-400 text-sm">
+          Coming soon. Read the full world lore, run knowledge checks on locked entries, post to sections the GM has opened up to players, and track your earned legend titles.
+        </p>
+      </SessionModal>
+
+      <SessionModal
+        isOpen={activeSection === 'achievements'}
+        onClose={() => setActiveSection(null)}
+        title="Achievements"
+      >
+        <p className="text-slate-400 text-sm">
+          Coming soon. View your earned achievements and progress toward the rest. The engine that grants them runs on combat resolution and on visiting the achievements page; this section is the in-session read surface.
+        </p>
+      </SessionModal>
+
+      {/* Main content column. Wraps the entire pre-existing player
+          play view so the sidebar can sit alongside it without
+          disturbing internal layout flow. min-w-0 prevents flex-row
+          children from blowing past the viewport when content is
+          wider than its container. */}
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
 
       {showLeaveConfirm && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
@@ -1448,6 +1515,7 @@ function CampaignPlayerPanelContent() {
           })()}
         </AlertDialogContent>
       </AlertDialog>
+      </div> {/* /flex-1 main content column (#11 sidebar wrap) */}
     </div>
   );
 }
