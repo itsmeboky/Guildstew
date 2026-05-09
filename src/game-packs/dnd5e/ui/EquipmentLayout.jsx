@@ -112,8 +112,10 @@ export default function EquipmentLayout({
   isReadOnly = false,
   children,
 }) {
+  // Build the per-slot prop bag without `key` — React's "key prop in
+  // a spread" warning fires when key is part of the spread, so callers
+  // pass key={slot.id} directly and spread the rest.
   const slotProps = (slot, extra) => ({
-    key: slot.id,
     label: slot.label,
     item: equippedItems[slot.id],
     onDrop: isReadOnly ? undefined : () => onDropOnSlot && onDropOnSlot(slot.id),
@@ -129,19 +131,19 @@ export default function EquipmentLayout({
         {children}
         <div className="flex flex-col gap-3 relative z-10">
           {equipmentSlots.left.map(slot => (
-            <EquipmentSlot {...slotProps(slot)} />
+            <EquipmentSlot key={slot.id} {...slotProps(slot)} />
           ))}
         </div>
         <div className="w-32 flex-shrink-0 relative z-10"></div>
         <div className="flex flex-col gap-3 relative z-10">
           {equipmentSlots.right.map(slot => (
-            <EquipmentSlot {...slotProps(slot)} />
+            <EquipmentSlot key={slot.id} {...slotProps(slot)} />
           ))}
         </div>
       </div>
       <div className="w-full flex gap-3 justify-center pt-2 border-t border-[#111827]">
         {equipmentSlots.bottom.map(slot => (
-          <EquipmentSlot {...slotProps(slot, { size: 'large' })} />
+          <EquipmentSlot key={slot.id} {...slotProps(slot, { size: 'large' })} />
         ))}
       </div>
     </>
