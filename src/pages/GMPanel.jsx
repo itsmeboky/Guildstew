@@ -4681,11 +4681,11 @@ export default function GMPanel() {
                               {activeConditions[`companion-${player.user_id}`][0]}
                             </div>
                           )}
-                          <div 
-                            className="h-16 bg-cover bg-center relative"
-                            style={{ 
-                              backgroundImage: character?.companion_image 
-                                ? `url(${character.companion_image})` 
+                          <div
+                            className="h-16 bg-cover bg-top relative"
+                            style={{
+                              backgroundImage: character?.companion_image
+                                ? `url(${character.companion_image})`
                                 : 'none',
                               backgroundColor: '#1a1f2e'
                             }}
@@ -5765,7 +5765,7 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
                               : 'bg-[#0b1220] border-[#111827] hover:border-slate-600'
                           }`}
                         >
-                          <div className="w-10 h-10 rounded-full bg-cover bg-center bg-[#111827]" style={{ backgroundImage: char?.profile_avatar_url ? `url(${char.profile_avatar_url})` : 'none' }} />
+                          <div className="w-10 h-10 rounded-full bg-cover bg-top bg-[#111827]" style={{ backgroundImage: char?.profile_avatar_url ? `url(${char.profile_avatar_url})` : 'none' }} />
                           <div className="text-left min-w-0 flex-1">
                             <p className="text-sm font-bold text-white truncate">{char?.name || player.username}</p>
                             {adjustingHp ? (
@@ -5819,7 +5819,7 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
                                 : 'bg-[#0b1220] border-[#111827] hover:border-slate-600'
                             }`}
                           >
-                            <div className="w-10 h-10 rounded-full bg-cover bg-center bg-[#111827]" style={{ backgroundImage: (monster.image_url || monster.avatar_url) ? `url(${monster.image_url || monster.avatar_url})` : 'none' }} />
+                            <div className="w-10 h-10 rounded-full bg-cover bg-top bg-[#111827]" style={{ backgroundImage: (monster.image_url || monster.avatar_url) ? `url(${monster.image_url || monster.avatar_url})` : 'none' }} />
                             <div className="text-left min-w-0 flex-1">
                               <p className="text-sm font-bold text-white truncate">{safeText(monster.name)}</p>
                               {adjustingHp ? (

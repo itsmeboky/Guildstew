@@ -25,7 +25,7 @@ export default function CompanionCard({ companion, compact = false }) {
       <div className="flex gap-3 p-3">
         <div className="w-20 h-20 rounded bg-[#050816] border border-slate-700 overflow-hidden flex-shrink-0">
           {companion.image ? (
-            <img src={companion.image} alt={companion.name || "Companion"} className="w-full h-full object-cover" />
+            <img src={companion.image} alt={companion.name || "Companion"} className="w-full h-full object-cover object-top" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-slate-600">
               <PawPrint className="w-8 h-8" />
