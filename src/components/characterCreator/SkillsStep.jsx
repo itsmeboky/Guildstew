@@ -10,6 +10,7 @@ import {
   ALL_SKILLS,
   SKILL_ABILITIES,
   CLASS_SKILL_CHOICES,
+  getMulticlassSkillGrant,
 } from '@/components/dnd5e/dnd5eRules';
 import InfoTip from "@/components/characterCreator/InfoTip";
 import { tipFor } from "@/components/characterCreator/creatorTips";
@@ -43,6 +44,13 @@ const skillAbilityMap = SKILL_ABILITIES;
 export default function SkillsStep({ characterData, updateCharacterData }) {
   const [selectedSkills, setSelectedSkills] = useState(characterData.skills || {});
   const [expertise, setExpertise] = useState(characterData.expertise || []);
+  // Multiclass skill picks live in their own keyed map so the source
+  // of each proficiency is recoverable on re-edit and on multiclass
+  // removal. Shape: { [className]: ["Stealth", ...] }. Per RAW only
+  // Bard / Ranger / Rogue grant a skill on multiclass entry.
+  const [multiclassSkills, setMulticlassSkills] = useState(
+    characterData.multiclassSkills || {},
+  );
   const [showRecommendations, setShowRecommendations] = useState(false);
 
   const backgroundSkills = getBackgroundSkills(characterData.background);
@@ -92,7 +100,12 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
     prevFixedRef.current = next;
   }, [characterData.race, characterData.subrace, backgroundSkills, fixedRacialSkills]);
 
-  // Sync to characterData whenever skills or expertise change
+  // Sync to characterData whenever skills, expertise, or
+  // multiclass picks change. The multiclass picks are persisted as
+  // their own field so editor reload can rehydrate the picker; the
+  // main `skills` map mirrors them so downstream consumers (sheet
+  // render, proficiency display, etc.) don't need to know about
+  // attribution.
   useEffect(() => {
     const proficiencies = Object.entries(selectedSkills)
       .filter(([, on]) => on)
@@ -100,29 +113,104 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
     updateCharacterData({
       skills: selectedSkills,
       expertise,
+      multiclassSkills,
       skill_proficiencies: proficiencies,
     });
-  }, [selectedSkills, expertise]);
+  }, [selectedSkills, expertise, multiclassSkills]);
+
+  // Set of skills owned by SOME multiclass picker — used to lock
+  // them out of the main grid (the grid would otherwise let the
+  // user toggle a skill the multiclass picker is "responsible" for,
+  // dropping the picker out of sync).
+  const multiclassOwnedSkills = React.useMemo(() => {
+    const s = new Set();
+    for (const arr of Object.values(multiclassSkills || {})) {
+      if (Array.isArray(arr)) arr.forEach((skill) => s.add(skill));
+    }
+    return s;
+  }, [multiclassSkills]);
+
+  // Multiclass entries that actually grant a skill on entry. Filter
+  // out blank / no-grant rows up front so the picker section just
+  // iterates a clean list.
+  const multiclassGrants = React.useMemo(() => {
+    const entries = Array.isArray(characterData.multiclasses)
+      ? characterData.multiclasses
+      : [];
+    return entries
+      .filter((mc) => mc?.class)
+      .map((mc) => ({ class: mc.class, grant: getMulticlassSkillGrant(mc.class) }))
+      .filter(({ grant }) => grant);
+  }, [characterData.multiclasses]);
+
+  // Garbage-collect picks for multiclass classes the player removed
+  // upstream (in ClassFeaturesStep). Without this, an old pick for
+  // a now-removed Rogue dip would leak into both the picker state
+  // and the saved character. Skills removed from multiclassSkills
+  // are also unselected from the main grid unless another source
+  // grants them.
+  useEffect(() => {
+    const liveClasses = new Set(multiclassGrants.map((g) => g.class));
+    const stale = Object.keys(multiclassSkills || {}).filter((cls) => !liveClasses.has(cls));
+    if (stale.length === 0) return;
+    setMulticlassSkills((current) => {
+      const next = { ...current };
+      const orphanedSkills = [];
+      for (const cls of stale) {
+        if (Array.isArray(next[cls])) orphanedSkills.push(...next[cls]);
+        delete next[cls];
+      }
+      // Only orphan a skill from selectedSkills if no other picker
+      // / source still owns it. background + fixed-racial wins keep
+      // the prof; primary-class re-pick claims it; another live
+      // multiclass picker re-claims it.
+      if (orphanedSkills.length > 0) {
+        const survivingMulticlass = new Set();
+        for (const cls of Object.keys(next)) {
+          if (Array.isArray(next[cls])) next[cls].forEach((s) => survivingMulticlass.add(s));
+        }
+        setSelectedSkills((sel) => {
+          const updated = { ...sel };
+          for (const s of orphanedSkills) {
+            if (
+              backgroundSkills.includes(s)
+              || fixedRacialSkills.includes(s)
+              || survivingMulticlass.has(s)
+            ) continue;
+            delete updated[s];
+          }
+          return updated;
+        });
+      }
+      return next;
+    });
+  }, [multiclassGrants, backgroundSkills, fixedRacialSkills]);
 
   const availableClassSkills = classSkillOptions[characterData.class] || [];
 
-  // Count only skills selected from class list (not background/fixed-racial).
+  // Count only skills selected from class list, excluding free
+  // grants (background, fixed-racial) and multiclass-owned picks
+  // — without the multiclass exclusion, a Bard 1 / Rogue 1 who
+  // picks Stealth via the Rogue picker would also see Stealth
+  // satisfy the Bard primary count (Bard's `from` is "any").
   const selectedFromClassList = Object.entries(selectedSkills)
     .filter(([skill, selected]) =>
       selected
       && !backgroundSkills.includes(skill)
       && !fixedRacialSkills.includes(skill)
+      && !multiclassOwnedSkills.has(skill)
       && availableClassSkills.includes(skill),
     )
     .length;
 
   // Count skills selected that aren't from background / class list /
-  // fixed racial — those are the racial-choice slots.
+  // fixed racial / multiclass — those are the racial-choice slots.
   const selectedFromRacialBonus = Object.entries(selectedSkills)
     .filter(([skill, selected]) =>
       selected
       && !backgroundSkills.includes(skill)
       && !fixedRacialSkills.includes(skill)
+      && !multiclassOwnedSkills.has(skill)
       && !availableClassSkills.includes(skill),
     )
     .length;
@@ -132,6 +220,7 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
   const handleSkillToggle = (skill) => {
     if (backgroundSkills.includes(skill)) return; // Can't deselect background skills
     if (fixedRacialSkills.includes(skill)) return; // Racial fixed skills are locked
+    if (multiclassOwnedSkills.has(skill)) return; // Owned by a multiclass picker
 
     const isCurrentlySelected = selectedSkills[skill];
     const isClassSkill = availableClassSkills.includes(skill);
@@ -280,11 +369,14 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
           const isBackgroundSkill = backgroundSkills.includes(skill);
           const isClassSkill = availableClassSkills.includes(skill);
           const isFixedRacialSkill = fixedRacialSkills.includes(skill);
+          const isMulticlassSkill = multiclassOwnedSkills.has(skill);
           const racialPickAllowed = !racialFromList || racialFromList.includes(skill);
 
-          // Determine if this skill can be selected as a fresh pick
+          // Determine if this skill can be selected as a fresh pick.
+          // Multiclass-owned skills are read-only here — the
+          // dedicated multiclass picker below owns the toggle.
           let canSelect = false;
-          if (!isProficient && !isFixedRacialSkill) {
+          if (!isProficient && !isFixedRacialSkill && !isMulticlassSkill) {
             if (isClassSkill && selectedFromClassList < classSkillCount) {
               canSelect = true;
             } else if (!isClassSkill && selectedFromRacialBonus < racialBonusSkills && racialPickAllowed) {
@@ -307,7 +399,7 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
                     ? 'border-[#1E2430] hover:border-[#37F2D1]/50 cursor-pointer'
                     : 'border-[#1E2430] opacity-50'
               }`}
-              onClick={() => (canSelect || (isProficient && !isFixedRacialSkill && !isBackgroundSkill)) && handleSkillToggle(skill)}
+              onClick={() => (canSelect || (isProficient && !isFixedRacialSkill && !isBackgroundSkill && !isMulticlassSkill)) && handleSkillToggle(skill)}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -321,7 +413,12 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
                         <Lock className="w-3 h-3" /> Racial
                       </Badge>
                     )}
-                    {!isClassSkill && isProficient && !isBackgroundSkill && !isFixedRacialSkill && (
+                    {isMulticlassSkill && !isFixedRacialSkill && !isBackgroundSkill && (
+                      <Badge className="bg-purple-500 text-white text-xs flex items-center gap-1">
+                        <Lock className="w-3 h-3" /> Multiclass
+                      </Badge>
+                    )}
+                    {!isClassSkill && isProficient && !isBackgroundSkill && !isFixedRacialSkill && !isMulticlassSkill && (
                       <Badge className="bg-yellow-400 text-[#1E2430] text-xs">Racial</Badge>
                     )}
                   </div>
@@ -363,6 +460,26 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
         })}
       </div>
 
+      {multiclassGrants.length > 0 && (
+        <div className="space-y-3">
+          {multiclassGrants.map(({ class: mcClass, grant }) => (
+            <MulticlassSkillPicker
+              key={mcClass}
+              className={mcClass}
+              grant={grant}
+              myPicks={multiclassSkills[mcClass] || []}
+              backgroundSkills={backgroundSkills}
+              fixedRacialSkills={fixedRacialSkills}
+              selectedSkills={selectedSkills}
+              multiclassSkills={multiclassSkills}
+              setMulticlassSkills={setMulticlassSkills}
+              setSelectedSkills={setSelectedSkills}
+              skillAbilityMap={skillAbilityMap}
+            />
+          ))}
+        </div>
+      )}
+
       {expertiseCount > 0 && (
         <div className="bg-yellow-400/10 border border-yellow-400/30 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
@@ -373,6 +490,140 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
             Choose {expertiseCount} skill{expertiseCount > 1 ? 's' : ''} to gain expertise in.
             Expertise doubles your proficiency bonus for those skills.
           </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Compact picker for the per-class multiclass skill grant. Renders
+ * the grant's `from` list as toggleable chips; chips for skills the
+ * character already has from another source (background, fixed
+ * racial, primary class picks, OTHER multiclass entries) are
+ * disabled to enforce the no-double-dip rule.
+ *
+ * Special case: if every skill on the grant list is already known,
+ * the picker shows a graceful "all granted elsewhere" notice and
+ * doesn't block step advancement — getSkillsCompletion caps the
+ * required count at the number of available picks.
+ */
+function MulticlassSkillPicker({
+  className,
+  grant,
+  myPicks,
+  backgroundSkills,
+  fixedRacialSkills,
+  selectedSkills,
+  multiclassSkills,
+  setMulticlassSkills,
+  setSelectedSkills,
+  skillAbilityMap,
+}) {
+  const grantList = grant.from === "any"
+    ? ALL_SKILLS
+    : Array.isArray(grant.from)
+    ? grant.from
+    : [];
+
+  const ownedByOtherMulticlass = React.useMemo(() => {
+    const s = new Set();
+    for (const [cls, picks] of Object.entries(multiclassSkills || {})) {
+      if (cls === className || !Array.isArray(picks)) continue;
+      picks.forEach((skill) => s.add(skill));
+    }
+    return s;
+  }, [multiclassSkills, className]);
+
+  // What's blocking each grant-list skill from being picked here
+  // (or null if the slot is open / already mine). Used both for the
+  // chip's disabled state and for the tooltip wording.
+  const disabledReason = (skill) => {
+    if (myPicks.includes(skill)) return null;
+    if (backgroundSkills.includes(skill)) return "Already proficient from background";
+    if (fixedRacialSkills.includes(skill)) return "Already proficient from race";
+    if (ownedByOtherMulticlass.has(skill)) return "Already picked from another multiclass entry";
+    if (selectedSkills[skill]) return "Already proficient from primary class";
+    return null;
+  };
+
+  const availableForPick = grantList.filter((s) => disabledReason(s) === null || myPicks.includes(s));
+
+  const togglePick = (skill) => {
+    const isMine = myPicks.includes(skill);
+    if (!isMine) {
+      // Block double-dip on add.
+      if (disabledReason(skill)) return;
+      // Block over-count on add.
+      if (myPicks.length >= grant.count) return;
+    }
+    const nextPicks = isMine
+      ? myPicks.filter((s) => s !== skill)
+      : [...myPicks, skill];
+    setMulticlassSkills((current) => ({ ...current, [className]: nextPicks }));
+    setSelectedSkills((current) => {
+      const updated = { ...current };
+      if (isMine) {
+        // Only drop the proficiency if no OTHER source claims it.
+        const stillClaimed =
+          backgroundSkills.includes(skill)
+          || fixedRacialSkills.includes(skill)
+          || ownedByOtherMulticlass.has(skill);
+        if (!stillClaimed) delete updated[skill];
+      } else {
+        updated[skill] = true;
+      }
+      return updated;
+    });
+  };
+
+  const noOptionsLeft = availableForPick.length === 0;
+
+  return (
+    <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4">
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
+        <Badge className="bg-purple-500 text-white text-xs">Multiclass: {className}</Badge>
+        <h3 className="text-purple-200 font-bold text-sm">
+          Pick {grant.count} skill{grant.count > 1 ? "s" : ""}
+          {grant.from === "any"
+            ? " (any skill)"
+            : ` from the ${className} list`}
+        </h3>
+        <span className={`ml-auto text-xs font-bold ${myPicks.length === Math.min(grant.count, availableForPick.length) ? "text-[#37F2D1]" : "text-[#FF5722]"}`}>
+          {myPicks.length}/{Math.min(grant.count, availableForPick.length)}
+        </span>
+      </div>
+
+      {noOptionsLeft ? (
+        <p className="text-xs text-white/60 italic">
+          All skills on the {className} list are already granted from other sources — the multiclass skill is wasted, but it doesn't block your character.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {grantList.map((skill) => {
+            const isMine = myPicks.includes(skill);
+            const reason = disabledReason(skill);
+            const blocked = reason !== null && !isMine;
+            return (
+              <button
+                key={skill}
+                type="button"
+                onClick={() => togglePick(skill)}
+                disabled={blocked}
+                title={blocked ? reason : undefined}
+                className={`text-xs font-bold rounded-full px-3 py-1.5 border transition-colors ${
+                  isMine
+                    ? "bg-purple-500 text-white border-purple-300"
+                    : blocked
+                    ? "bg-[#1E2430] text-white/30 border-[#1E2430] cursor-not-allowed"
+                    : "bg-[#0b1220] text-white border-purple-500/40 hover:border-purple-300 cursor-pointer"
+                }`}
+              >
+                {skill}
+                <span className="ml-1.5 text-[9px] uppercase opacity-60">{skillAbilityMap[skill]}</span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
