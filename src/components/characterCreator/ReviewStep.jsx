@@ -4,6 +4,7 @@ import { User } from "lucide-react";
 import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
 import { spellDetails } from "@/components/dnd5e/spellData";
 import { abilityModifier, proficiencyBonus, CLASS_HIT_DICE } from '@/components/dnd5e/dnd5eRules';
+import { calculateMaxHP } from "@/components/dnd5e/characterCalculations";
 import { safeText } from "@/utils/safeRender";
 import CompanionCard from "@/components/characters/CompanionCard";
 
@@ -115,7 +116,12 @@ export default function ReviewStep({ characterData }) {
   const profBonus = proficiencyBonus(characterData.level);
   const hitDie = CLASS_HIT_DICE[characterData.class] || 10;
   const conMod = abilityModifier(characterData.attributes.con);
-  const maxHP = hitDie + conMod;
+  const maxHP = calculateMaxHP({
+    class: characterData.class,
+    level: characterData.level,
+    conScore: characterData.attributes.con,
+    multiclasses: characterData.multiclasses,
+  });
   const ac = 10 + abilityModifier(characterData.attributes.dex);
 
   const primaryClassLevel = characterData.level - (characterData.multiclasses || []).reduce((sum, mc) => sum + (mc.level || 0), 0);
