@@ -205,3 +205,42 @@ export function isAdminEmail(email) {
   if (e === "itsmeboky@aetherianstudios.com") return true;
   return e.endsWith("@aetherianstudios.com") || e.endsWith("@guildstew.com");
 }
+
+// Soft-delete sets `deleted_at` + `deleted_by`. RLS gates the UPDATE
+// to author (own row) or admin (any row) — both policies already
+// exist on forum_threads / forum_replies, so no extra check here.
+export async function softDeleteThread({ threadId, userId }) {
+  if (!threadId || !userId) throw new Error("threadId and userId required");
+  const { error } = await supabase
+    .from("forum_threads")
+    .update({ deleted_at: new Date().toISOString(), deleted_by: userId })
+    .eq("id", threadId);
+  if (error) throw error;
+}
+
+export async function softDeleteReply({ replyId, userId }) {
+  if (!replyId || !userId) throw new Error("replyId and userId required");
+  const { error } = await supabase
+    .from("forum_replies")
+    .update({ deleted_at: new Date().toISOString(), deleted_by: userId })
+    .eq("id", replyId);
+  if (error) throw error;
+}
+
+// Permission helpers. Authors may delete their own thread only when
+// it has zero replies — a deleted OP with replies underneath would
+// leave orphans. Admins can delete anything.
+export function canDeleteThread({ thread, user, replyCount }) {
+  if (!thread || !user?.id) return false;
+  if (thread.deleted_at) return false;
+  if (isAdminEmail(user.email)) return true;
+  if (thread.author_id !== user.id) return false;
+  return (replyCount ?? thread.reply_count ?? 0) === 0;
+}
+
+export function canDeleteReply({ reply, user }) {
+  if (!reply || !user?.id) return false;
+  if (reply.deleted_at) return false;
+  if (isAdminEmail(user.email)) return true;
+  return reply.author_id === user.id;
+}
