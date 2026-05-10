@@ -79,10 +79,19 @@ export function isLockedInventoryItem(item) {
   return isCipherInventoryItem(item);
 }
 
+// Class → cipher-item lookup. Keys are lowercased so the match
+// survives data drift across character creation flows: legacy
+// rows that store "rogue" / "ROGUE" / "Rogue " all resolve to
+// the same item. Exact PascalCase still wins; this just stops
+// silent misses.
 const CLASS_ITEMS = {
-  Rogue: getCipherItem(CANT_CYPHER_ID),
-  Druid: getCipherItem(DRUIDIC_FIELD_GUIDE_ID),
+  rogue: getCipherItem(CANT_CYPHER_ID),
+  druid: getCipherItem(DRUIDIC_FIELD_GUIDE_ID),
 };
+
+function normaliseClass(cls) {
+  return typeof cls === "string" ? cls.trim().toLowerCase() : "";
+}
 
 /**
  * Returns the cipher items a character should own based on their
@@ -93,10 +102,10 @@ const CLASS_ITEMS = {
 export function cipherItemsForCharacter(character) {
   if (!character) return [];
   const classes = new Set();
-  if (character.class) classes.add(character.class);
+  if (character.class) classes.add(normaliseClass(character.class));
   if (Array.isArray(character.multiclasses)) {
     for (const mc of character.multiclasses) {
-      if (mc?.class) classes.add(mc.class);
+      if (mc?.class) classes.add(normaliseClass(mc.class));
     }
   }
   const items = [];
