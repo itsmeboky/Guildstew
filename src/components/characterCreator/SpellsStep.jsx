@@ -9,6 +9,8 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
+import InfoTip from "@/components/characterCreator/InfoTip";
+import { tipFor } from "@/components/characterCreator/creatorTips";
 import {
   spellsByClass,
   recommendedSpells,
@@ -181,7 +183,18 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
       <div className="bg-[#2A3441] rounded-xl p-6 mb-6 border-2 border-[#1E2430]">
         <div className="flex justify-between items-start">
           <div>
-            <h2 className="text-2xl font-bold text-[#FFC6AA] mb-3">Spellcasting</h2>
+            <h2 className="text-2xl font-bold text-[#FFC6AA] mb-3 flex items-center gap-2">
+              Spellcasting
+              <InfoTip width="w-80">{tipFor("spell_prepared_vs_known")}</InfoTip>
+            </h2>
+            <div className="flex items-center gap-4 mb-3 text-xs text-white/70 flex-wrap">
+              <span className="inline-flex items-center gap-1">
+                Cantrips <InfoTip>{tipFor("spell_cantrip")}</InfoTip>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                Spell Slots <InfoTip>{tipFor("spell_slots")}</InfoTip>
+              </span>
+            </div>
             <p className="text-white mb-2">
               {spellcastingClass ? (
                 <>

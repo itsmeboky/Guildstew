@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Dices, HelpCircle, X, Sparkles, Calculator, Minus, Plus } from "lucide-react";
 import { getRacialAbilityBonuses } from "@/components/dnd5e/raceData";
 import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
+import InfoTip from "@/components/characterCreator/InfoTip";
+import { tipFor } from "@/components/characterCreator/creatorTips";
 
 // Point Buy (RAW): scores 8..15, total budget 27. Cost to RAISE
 // from N to N+1 is 1pt for 9..13 and 2pt for 14..15.
@@ -298,36 +300,48 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
 
       {/* Method Selection */}
       <div className="flex gap-3 mb-6 justify-center items-center flex-wrap">
-        <Button
-          onClick={() => setMethod("manual")}
-          variant={method === "manual" ? "default" : "outline"}
-          className={method === "manual" ? "bg-[#FF5722] hover:bg-[#FF6B3D] text-white" : "bg-[#2A3441] text-white border-[#1E2430] hover:bg-[#1E2430]"}
-        >
-          Manual Entry
-        </Button>
-        <Button
-          onClick={() => { setMethod("standard"); setAssignedScores({}); }}
-          variant={method === "standard" ? "default" : "outline"}
-          className={method === "standard" ? "bg-[#FF5722] hover:bg-[#FF6B3D] text-white" : "bg-[#2A3441] text-white border-[#1E2430] hover:bg-[#1E2430]"}
-        >
-          Standard Array
-        </Button>
-        <Button
-          onClick={switchToPointBuy}
-          variant={method === "point_buy" ? "default" : "outline"}
-          className={method === "point_buy" ? "bg-[#FF5722] hover:bg-[#FF6B3D] text-white" : "bg-[#2A3441] text-white border-[#1E2430] hover:bg-[#1E2430]"}
-        >
-          <Calculator className="w-4 h-4 mr-2" />
-          Point Buy
-        </Button>
-        <Button
-          onClick={() => { setMethod("roll"); rollAbilityScores(); }}
-          variant={method === "roll" ? "default" : "outline"}
-          className={method === "roll" ? "bg-[#FF5722] hover:bg-[#FF6B3D] text-white" : "bg-[#2A3441] text-white border-[#1E2430] hover:bg-[#1E2430]"}
-        >
-          <Dices className="w-4 h-4 mr-2" />
-          Roll 4d6
-        </Button>
+        <div className="inline-flex items-center gap-1">
+          <Button
+            onClick={() => setMethod("manual")}
+            variant={method === "manual" ? "default" : "outline"}
+            className={method === "manual" ? "bg-[#FF5722] hover:bg-[#FF6B3D] text-white" : "bg-[#2A3441] text-white border-[#1E2430] hover:bg-[#1E2430]"}
+          >
+            Manual Entry
+          </Button>
+          <InfoTip>{tipFor("method_manual")}</InfoTip>
+        </div>
+        <div className="inline-flex items-center gap-1">
+          <Button
+            onClick={() => { setMethod("standard"); setAssignedScores({}); }}
+            variant={method === "standard" ? "default" : "outline"}
+            className={method === "standard" ? "bg-[#FF5722] hover:bg-[#FF6B3D] text-white" : "bg-[#2A3441] text-white border-[#1E2430] hover:bg-[#1E2430]"}
+          >
+            Standard Array
+          </Button>
+          <InfoTip>{tipFor("method_standard_array")}</InfoTip>
+        </div>
+        <div className="inline-flex items-center gap-1">
+          <Button
+            onClick={switchToPointBuy}
+            variant={method === "point_buy" ? "default" : "outline"}
+            className={method === "point_buy" ? "bg-[#FF5722] hover:bg-[#FF6B3D] text-white" : "bg-[#2A3441] text-white border-[#1E2430] hover:bg-[#1E2430]"}
+          >
+            <Calculator className="w-4 h-4 mr-2" />
+            Point Buy
+          </Button>
+          <InfoTip>{tipFor("method_point_buy")}</InfoTip>
+        </div>
+        <div className="inline-flex items-center gap-1">
+          <Button
+            onClick={() => { setMethod("roll"); rollAbilityScores(); }}
+            variant={method === "roll" ? "default" : "outline"}
+            className={method === "roll" ? "bg-[#FF5722] hover:bg-[#FF6B3D] text-white" : "bg-[#2A3441] text-white border-[#1E2430] hover:bg-[#1E2430]"}
+          >
+            <Dices className="w-4 h-4 mr-2" />
+            Roll 4d6
+          </Button>
+          <InfoTip>{tipFor("method_roll")}</InfoTip>
+        </div>
         <Button
           onClick={() => setShowHelp(!showHelp)}
           variant="outline"

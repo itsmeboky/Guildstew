@@ -6,6 +6,8 @@ import { Plus, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
 import SubclassPicker from "@/components/characterCreator/SubclassPicker";
+import InfoTip from "@/components/characterCreator/InfoTip";
+import { tipFor } from "@/components/characterCreator/creatorTips";
 
 // Canonical "choose your specialization" feature names per class.
 // When a feature's name lands in this set, render the arrow-pattern
@@ -98,9 +100,10 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
           while others require you to make choices (like picking a subclass or fighting style).
         </p>
         {characterData.level >= 2 && (
-          <p className="text-white">
-            💡 <span className="font-bold">Multiclassing:</span> At level 2+, you can multiclass into another class to gain abilities from multiple sources. 
+          <p className="text-white flex items-start gap-2 flex-wrap">
+            💡 <span className="font-bold">Multiclassing:</span> At level 2+, you can multiclass into another class to gain abilities from multiple sources.
             Each level you gain can be put into any of your classes.
+            <InfoTip>{tipFor("multiclass_prereqs")}</InfoTip>
           </p>
         )}
       </div>
@@ -206,7 +209,10 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
       {canMulticlass && (
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-[#5B4B9E]">Multiclassing</h3>
+            <h3 className="text-xl font-bold text-[#5B4B9E] flex items-center gap-2">
+              Multiclassing
+              <InfoTip>{tipFor("multiclass_prereqs")}</InfoTip>
+            </h3>
             <Button
               onClick={handleAddMulticlass}
               disabled={primaryClassLevel <= 1}
