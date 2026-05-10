@@ -24,7 +24,7 @@ import {
 } from "@/components/dnd5e/characterCalculations";
 import GamePackPicker from "@/components/characters/GamePackPicker";
 import { useUserGamePacks } from "@/lib/useUserGamePacks";
-import { getGamePack } from "@/config/gamePacks";
+import { getGamePack, getUpcomingGamePacks } from "@/config/gamePacks";
 
 export default function CreateCharacterDialog({ open, onClose }) {
   const navigate = useNavigate();
@@ -39,17 +39,19 @@ export default function CreateCharacterDialog({ open, onClose }) {
   // and bail. The picker stays out of sight for current alpha
   // users — zero UX change until a second pack ships.
   const ownedPacks = useUserGamePacks();
-  const [chosenPack, setChosenPack] = useState(
-    ownedPacks.length === 1 ? ownedPacks[0] : null,
-  );
+  // Auto-skip the picker only when there's a single owned pack AND
+  // no `coming_soon` packs to preview. With dnd5e_2024 staged as
+  // coming_soon (Layer 4), this branch keeps the picker visible
+  // even for single-pack-owners so they can see what's coming.
+  const upcomingPacks = getUpcomingGamePacks(ownedPacks);
+  const shouldAutoPick = ownedPacks.length === 1 && upcomingPacks.length === 0;
+  const [chosenPack, setChosenPack] = useState(shouldAutoPick ? ownedPacks[0] : null);
 
-  // Reset the chosen pack each time the dialog opens so a returning
-  // multi-pack user gets the picker again.
   useEffect(() => {
     if (open) {
-      setChosenPack(ownedPacks.length === 1 ? ownedPacks[0] : null);
+      setChosenPack(shouldAutoPick ? ownedPacks[0] : null);
     }
-  }, [open, ownedPacks]);
+  }, [open, ownedPacks, shouldAutoPick]);
 
   const handlePackSelect = (packId) => {
     const pack = getGamePack(packId);
