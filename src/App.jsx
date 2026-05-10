@@ -8,6 +8,7 @@ import PageNotFound from './lib/PageNotFound';
 import GamePackListing from './pages/GamePackListing';
 import AdminTools from "@/pages/AdminTools";
 import DiceCalibrator from "@/pages/DiceCalibrator";
+import GuildJoin from "@/pages/GuildJoin";
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { SubscriptionProvider } from '@/lib/SubscriptionContext';
 import { PresenceProvider } from '@/lib/PresenceContext';
@@ -64,6 +65,12 @@ const AuthenticatedApp = () => {
         <Route path="/EULA" element={<ErrorBoundary resetKeys={routeResetKeys}><Pages.EULA /></ErrorBoundary>} />
         <Route path="/Cookies" element={<ErrorBoundary resetKeys={routeResetKeys}><Pages.Cookies /></ErrorBoundary>} />
         <Route path="/PrivacySummary" element={<ErrorBoundary resetKeys={routeResetKeys}><Pages.PrivacySummary /></ErrorBoundary>} />
+        {/* Guild invite-link redemption — must be reachable while
+            unauth so the page can render the "Sign in required"
+            state instead of bouncing the visitor to the marketing
+            landing page. The redemption itself still requires auth
+            (the RPC has an auth.uid() guard). */}
+        <Route path="/guild/join" element={<ErrorBoundary resetKeys={routeResetKeys}><GuildJoin /></ErrorBoundary>} />
         <Route path="*" element={<ErrorBoundary resetKeys={routeResetKeys}><Pages.Landing /></ErrorBoundary>} />
       </Routes>
     );
@@ -141,6 +148,15 @@ const AuthenticatedApp = () => {
             {Pages.GuildCrestBuilder ? <Pages.GuildCrestBuilder /> : <PageNotFound />}
           </ErrorBoundary>
         </LayoutWrapper>
+      } />
+      {/* Invite-code redemption landing — bare-shell page with no
+          LayoutWrapper because the user lands here from an external
+          link (chat, email) and the focused single-purpose layout
+          reads more clearly than the full app chrome. */}
+      <Route path="/guild/join" element={
+        <ErrorBoundary resetKeys={routeResetKeys}>
+          <GuildJoin />
+        </ErrorBoundary>
       } />
       <Route path="/campaigns/find" element={
         <LayoutWrapper currentPageName="CampaignsFind">
