@@ -578,16 +578,13 @@ export default function Layout({ children, currentPageName }) {
   ) {
     return <>{children}</>;
   }
-  // CampaignPlayerPanel uses its own shell but still needs the
-  // cipher quick-access overlay so rogues / druids can pull up their
-  // cypher without leaving the panel.
+  // CampaignPlayerPanel intentionally does NOT mount the cipher
+  // quick-access overlay. Combat / character-sheet view has no
+  // symbols to decode — the overlay belongs on world-lore pages,
+  // where rogues / druids actually read GM-authored entries with
+  // embedded symbols. Mounted further down on CampaignWorldLore.
   if (currentPageName === "CampaignPlayerPanel") {
-    return (
-      <>
-        {children}
-        <CipherQuickAccessBar campaignId={campaignId} />
-      </>
-    );
+    return <>{children}</>;
   }
   // Admin dashboard has its own full-screen sidebar shell.
   if (currentPageName === "Admin") {

@@ -1,14 +1,16 @@
 import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Lock, Dices, Languages } from "lucide-react";
+import { Lock, Dices, Languages, RotateCcw, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/api/supabaseClient";
+import { base44 } from "@/api/base44Client";
 import {
   getAbilityModifier, getSkillModifier, canReattempt,
   getComprehensionLevel, speaksLanguage,
 } from "@/utils/languageComprehension";
 import { fontFamilyFor } from "@/utils/languageFonts";
+import { logCombatEvent } from "@/utils/combatLog";
 import { CipherSymbol } from "@/components/shared/CipherSymbol";
 import { THIEVES_CANT_SYMBOLS, CANT_DEFAULT_COLOR } from "@/config/thievesCantSymbols";
 import { DRUIDIC_SYMBOLS, DRUIDIC_DEFAULT_COLOR } from "@/config/druidicSymbols";
@@ -67,7 +69,7 @@ export default function GatedEntryView({
   };
 
   const recordAttempt = useMutation({
-    mutationFn: async ({ revealType, total, dc, passed }) => {
+    mutationFn: async ({ revealType, total, dc, passed, label }) => {
       const { error } = await supabase
         .from("reveal_attempts")
         .upsert(
@@ -84,6 +86,32 @@ export default function GatedEntryView({
           { onConflict: "character_id,target_type,target_id,reveal_type" },
         );
       if (error) throw error;
+
+      // Surface the roll to the GM via the existing campaign log
+      // feed. Fire-and-forget — knowledge checks shouldn't fail
+      // because the log write hiccupped.
+      if (campaign?.id) {
+        const charName = character?.name || "A character";
+        const entryTitle = entry?.title || "lore entry";
+        const verdict = passed ? "PASS" : "FAIL";
+        logCombatEvent(
+          campaign.id,
+          `${charName} rolled ${label || revealType} ${total} vs DC ${dc} — ${verdict} on "${entryTitle}"`,
+          {
+            event: "knowledge_check",
+            category: "misc",
+            character_id: character.id,
+            character_name: charName,
+            entry_id: entry.id,
+            entry_title: entryTitle,
+            reveal_type: revealType,
+            label,
+            roll_total: total,
+            dc,
+            result: passed ? "pass" : "fail",
+          },
+        );
+      }
     },
     onSuccess: () => invalidateAttempts(),
   });
@@ -139,8 +167,8 @@ export default function GatedEntryView({
           const total = roll + modifier;
           const dc = Number(gate.dc) || 15;
           const passed = total >= dc;
-          await recordAttempt.mutateAsync({ revealType, total, dc, passed });
           const label = gate.skill || (gate.ability || "").toUpperCase();
+          await recordAttempt.mutateAsync({ revealType, total, dc, passed, label });
           if (passed) toast.success(`Success — rolled ${total} vs DC ${dc} (${label})`);
           else toast.error(`Failed — rolled ${total} vs DC ${dc} (${label})`);
         }}
@@ -176,6 +204,9 @@ export default function GatedEntryView({
         )}
         {body}
         <Annotations entry={entry} character={character} isGM={isGM} />
+        {isGM && entry?.id && (
+          <GMRevealAttemptsPanel entry={entry} campaignId={campaign?.id} />
+        )}
       </div>
     );
   }
@@ -197,7 +228,11 @@ export default function GatedEntryView({
           const total = roll + modifier;
           const passed = total >= dc;
           await recordAttempt.mutateAsync({
-            revealType: decipherRevealType, total, dc, passed,
+            revealType: decipherRevealType,
+            total,
+            dc,
+            passed,
+            label: `INT decipher (${entryLanguage})`,
           });
           if (passed) toast.success(`Deciphered! Rolled ${total} vs DC ${dc}`);
           else toast.error(`Could not decipher — ${total} vs DC ${dc}`);
@@ -374,41 +409,56 @@ function Annotations({ entry, character, isGM }) {
   const druidic = meta.druidic_message;
   const cantSymbols = Array.isArray(meta.thieves_cant_symbols) ? meta.thieves_cant_symbols : [];
   const druidicSymbols = Array.isArray(meta.druidic_symbols) ? meta.druidic_symbols : [];
-  const knowsCant = isGM || speaksLanguage(character, "Thieves' Cant");
-  const knowsDruidic = isGM || speaksLanguage(character, "Druidic");
 
-  const hasCant = !!cant || cantSymbols.length > 0;
-  const hasDruidic = !!druidic || druidicSymbols.length > 0;
-  if (!hasCant && !hasDruidic) return null;
+  // Raw symbols are PUBLIC — every viewer sees them on the entry.
+  // Decoding (symbol → meaning) happens via the cypher inventory
+  // item (rogue / druid only) or the campaign mapping (GM). The
+  // textual message is the GM's plain-English authoring note and
+  // stays GM-only — auto-translating it for class-eligible players
+  // would bypass the cypher cross-reference, which is the in-fiction
+  // action.
+  const hasCantSymbols = cantSymbols.length > 0;
+  const hasDruidicSymbols = druidicSymbols.length > 0;
+  const showCantBlock = hasCantSymbols || (!!cant && isGM);
+  const showDruidicBlock = hasDruidicSymbols || (!!druidic && isGM);
+  if (!showCantBlock && !showDruidicBlock) return null;
 
   return (
     <>
-      {hasCant && knowsCant && (
+      {showCantBlock && (
         <div className="mt-4 border-l-2 border-amber-500/50 pl-4 py-2 bg-amber-900/10 rounded-r-lg space-y-2">
           <p className="text-xs text-amber-400 font-semibold uppercase tracking-wider">
             🗡️ Thieves&apos; Cant
           </p>
-          <AnnotationSymbols
-            cipherType="thieves_cant"
-            selected={cantSymbols}
-            catalog={THIEVES_CANT_SYMBOLS}
-            defaultColor={meta.thieves_cant_color || CANT_DEFAULT_COLOR}
-          />
-          {cant && <p className="text-sm text-amber-200/80 italic">{cant}</p>}
+          {hasCantSymbols && (
+            <AnnotationSymbols
+              cipherType="thieves_cant"
+              selected={cantSymbols}
+              catalog={THIEVES_CANT_SYMBOLS}
+              defaultColor={CANT_DEFAULT_COLOR}
+            />
+          )}
+          {cant && isGM && (
+            <p className="text-sm text-amber-200/80 italic">{cant}</p>
+          )}
         </div>
       )}
-      {hasDruidic && knowsDruidic && (
+      {showDruidicBlock && (
         <div className="mt-4 border-l-2 border-emerald-500/50 pl-4 py-2 bg-emerald-900/10 rounded-r-lg space-y-2">
           <p className="text-xs text-emerald-400 font-semibold uppercase tracking-wider">
             🌿 Druidic
           </p>
-          <AnnotationSymbols
-            cipherType="druidic"
-            selected={druidicSymbols}
-            catalog={DRUIDIC_SYMBOLS}
-            defaultColor={meta.druidic_color || DRUIDIC_DEFAULT_COLOR}
-          />
-          {druidic && <p className="text-sm text-emerald-200/80 italic">{druidic}</p>}
+          {hasDruidicSymbols && (
+            <AnnotationSymbols
+              cipherType="druidic"
+              selected={druidicSymbols}
+              catalog={DRUIDIC_SYMBOLS}
+              defaultColor={DRUIDIC_DEFAULT_COLOR}
+            />
+          )}
+          {druidic && isGM && (
+            <p className="text-sm text-emerald-200/80 italic">{druidic}</p>
+          )}
         </div>
       )}
     </>
@@ -428,7 +478,12 @@ function AnnotationSymbols({ cipherType, selected, catalog, defaultColor }) {
             <CipherSymbol
               cipherType={cipherType}
               symbol={sym}
-              color={sel.color || defaultColor}
+              // Always render in the cipher's default colour so the
+              // entry view matches the cypher modal exactly. Legacy
+              // `sel.color` (per-entry GM colour pick) is ignored —
+              // the data stays in metadata in case a future feature
+              // brings back per-entry styling.
+              color={defaultColor}
               size={40}
             />
             <span className="text-[9px] text-slate-400 font-semibold text-center leading-tight">
@@ -437,6 +492,145 @@ function AnnotationSymbols({ cipherType, selected, catalog, defaultColor }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/* --------------------- GM reveal attempts panel ------------------- */
+
+/**
+ * GM-only audit + override surface for knowledge-check attempts on
+ * one entry. Lists every per-character attempt (skill gates +
+ * language deciphers) with the rolled value, DC, and result. The
+ * "Reset" button deletes that single reveal_attempts row, which
+ * lets the player attempt the gate again regardless of the
+ * campaign's retry policy — the narrative-justified manual override.
+ */
+function GMRevealAttemptsPanel({ entry, campaignId }) {
+  const queryClient = useQueryClient();
+
+  const { data: attempts = [] } = useQuery({
+    queryKey: ["revealAttempts:gm", entry.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("reveal_attempts")
+        .select("*")
+        .eq("target_type", "lore_entry")
+        .eq("target_id", entry.id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!entry?.id,
+    initialData: [],
+  });
+
+  const characterIds = useMemo(
+    () => Array.from(new Set(attempts.map((a) => a.character_id).filter(Boolean))),
+    [attempts],
+  );
+
+  const { data: characters = [] } = useQuery({
+    queryKey: ["revealAttempts:gm:characters", campaignId, characterIds.join(",")],
+    queryFn: async () => {
+      if (characterIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from("characters")
+        .select("id,name")
+        .in("id", characterIds);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: characterIds.length > 0,
+    initialData: [],
+  });
+
+  const nameById = useMemo(() => {
+    const m = new Map();
+    for (const c of characters) m.set(c.id, c.name);
+    return m;
+  }, [characters]);
+
+  const reset = useMutation({
+    mutationFn: async (row) => {
+      const { error } = await supabase
+        .from("reveal_attempts")
+        .delete()
+        .eq("character_id", row.character_id)
+        .eq("target_type", "lore_entry")
+        .eq("target_id", row.target_id)
+        .eq("reveal_type", row.reveal_type);
+      if (error) throw error;
+      if (campaignId) {
+        const charName = nameById.get(row.character_id) || "A character";
+        const entryTitle = entry?.title || "lore entry";
+        logCombatEvent(
+          campaignId,
+          `GM reset ${charName}'s ${row.reveal_type} on "${entryTitle}" — they may attempt again.`,
+          {
+            event: "knowledge_check_reset",
+            category: "misc",
+            character_id: row.character_id,
+            character_name: charName,
+            entry_id: entry.id,
+            entry_title: entryTitle,
+            reveal_type: row.reveal_type,
+          },
+        );
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["revealAttempts:gm", entry.id] });
+      // Player view reads from a different cache key, so any open
+      // player session for the same entry won't repaint until their
+      // next mount — acceptable for an alpha; a campaign-wide
+      // realtime broadcast would be a separate piece of work.
+      toast.success("Attempt reset.");
+    },
+    onError: (err) => {
+      toast.error(`Reset failed: ${err.message || "unknown error"}`);
+    },
+  });
+
+  if (attempts.length === 0) return null;
+
+  return (
+    <div className="mt-6 border border-slate-700 rounded-lg bg-[#0b1220]/60 p-4">
+      <p className="text-xs uppercase tracking-widest text-slate-400 font-bold mb-3 flex items-center gap-2">
+        <Eye className="w-3 h-3" /> GM · Knowledge Check Attempts
+      </p>
+      <ul className="space-y-2">
+        {attempts.map((a) => {
+          const charName = nameById.get(a.character_id) || "Unknown character";
+          const passed = a.result === "pass";
+          return (
+            <li
+              key={`${a.character_id}-${a.reveal_type}`}
+              className="flex items-center justify-between gap-3 text-xs bg-[#050816] border border-slate-700 rounded px-3 py-2"
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-white font-bold">{charName}</span>
+                <span className="text-slate-500">·</span>
+                <span className="text-slate-300">{a.reveal_type}</span>
+                <span className="text-slate-500">·</span>
+                <span className={passed ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                  {a.rolled_value} vs DC {a.dc} — {passed ? "PASS" : "FAIL"}
+                </span>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={reset.isPending}
+                onClick={() => reset.mutate(a)}
+                title="Delete this attempt so the player can roll again"
+                className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+              >
+                <RotateCcw className="w-3 h-3 mr-1" />
+                Reset
+              </Button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
