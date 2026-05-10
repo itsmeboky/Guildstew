@@ -98,7 +98,7 @@ export default function CommunityHighlightsCard({ user }) {
   const hasPosts = posts.length > 0;
 
   return (
-    <div className="col-span-7 rounded-3xl p-5 h-[320px] relative overflow-hidden">
+    <div className="col-span-5 rounded-3xl p-5 h-[320px] relative overflow-hidden">
       <div className="theme-homepage-card absolute inset-0" />
       <div className="relative z-10 h-full flex flex-col">
         <h3 className="text-xl font-bold text-white mb-3 text-center flex items-center justify-center gap-2">
