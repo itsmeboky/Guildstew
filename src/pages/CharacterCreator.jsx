@@ -34,6 +34,7 @@ import ClassStep from "@/components/characterCreator/ClassStep";
 import ClassStep2024 from "@/components/characterCreator/ClassStep2024";
 import AbilityScoresStep from "@/components/characterCreator/AbilityScoresStep";
 import ClassFeaturesStep from "@/components/characterCreator/ClassFeaturesStep";
+import ClassFeaturesStep2024 from "@/components/characterCreator/ClassFeaturesStep2024";
 import SkillsStep from "@/components/characterCreator/SkillsStep";
 import SpellsStep from "@/components/characterCreator/SpellsStep";
 import EquipmentStep from "@/components/characterCreator/EquipmentStep";
@@ -633,16 +634,17 @@ const handleSubmit = () => {
     }
   };
 
-  // Per-step game-pack dispatch. 2024 currently only ships its own
-  // class step; other steps still use the legacy 2014 components
-  // until commits 3-5 of the bundle land. The dispatcher is keyed
-  // off characterData.gamePack so a 2024 character round-trips
-  // through the right per-step UI on every reopen.
+  // Per-step game-pack dispatch. 2024 currently ships its own class
+  // and class-features steps; other steps still use the legacy 2014
+  // components until commits 4-5 of the bundle land. The dispatcher
+  // is keyed off characterData.gamePack so a 2024 character
+  // round-trips through the right per-step UI on every reopen.
   const _stepDef = STEPS[currentStep];
+  const _is2024 = characterData.gamePack === 'dnd5e_2024';
   const CurrentStepComponent =
-    _stepDef.id === 'class' && characterData.gamePack === 'dnd5e_2024'
-      ? ClassStep2024
-      : _stepDef.component;
+    _is2024 && _stepDef.id === 'class' ? ClassStep2024 :
+    _is2024 && _stepDef.id === 'features' ? ClassFeaturesStep2024 :
+    _stepDef.component;
 
   // Mode selector — first screen before any creator steps render.
   // editCharacterId / campaignId flip us directly into 'full'
