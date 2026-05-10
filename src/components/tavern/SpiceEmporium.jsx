@@ -102,25 +102,16 @@ export default function SpiceEmporium({ open, onClose }) {
       // every downstream flow (spending, earning, cashouts) is
       // exercisable end-to-end.
       const prevBalance = Number(await getWalletBalance(user.id)) || 0;
+      // add_spice branches on p_type='purchase' to bump
+      // lifetime_purchased instead of lifetime_earned, atomically
+      // with the audit row — see add_spice in
+      // 20261213_spice_ledger_atomic_rpcs.sql.
       const newBalance = await addSpice(
         user.id,
         bundle.spice,
         "purchase",
         `Purchased ${bundle.label} (${bundle.spice.toLocaleString()} Spice, $${bundle.price.toFixed(2)})`,
       );
-
-      try {
-        const { supabase } = await import("@/api/supabaseClient");
-        const { data: current } = await supabase
-          .from("spice_wallets")
-          .select("lifetime_purchased")
-          .eq("user_id", user.id)
-          .maybeSingle();
-        await supabase
-          .from("spice_wallets")
-          .update({ lifetime_purchased: (current?.lifetime_purchased || 0) + bundle.spice })
-          .eq("user_id", user.id);
-      } catch { /* lifetime_purchased is analytics-only */ }
 
       return { prevBalance, newBalance };
     },
