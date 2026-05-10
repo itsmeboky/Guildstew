@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Dices, HelpCircle, X, Sparkles, Calculator, Minus, Plus } from "lucide-react";
 import { getRacialAbilityBonuses } from "@/components/dnd5e/raceData";
 import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
+import { applyAsiBumps } from "@/components/characterCreator/asiSelections";
 import InfoTip from "@/components/characterCreator/InfoTip";
 import { tipFor } from "@/components/characterCreator/creatorTips";
 
@@ -114,7 +115,8 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
     });
     updateCharacterData({
       _brewery_ability_picks: nextPicks,
-      attributes: finalScores,
+      baseAttributes: finalScores,
+      attributes: applyAsiBumps(finalScores, characterData.asiSelections),
     });
   };
 
@@ -140,7 +142,10 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
       finalScores[k] = newBaseScores[k] + (racialBonuses[k] || 0);
     });
 
-    updateCharacterData({ attributes: finalScores });
+    updateCharacterData({
+      baseAttributes: finalScores,
+      attributes: applyAsiBumps(finalScores, characterData.asiSelections),
+    });
   };
 
   // Point Buy helpers — operate on baseScores so racial bonuses
@@ -166,7 +171,10 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
     Object.keys(newBaseScores).forEach((k) => {
       finalScores[k] = newBaseScores[k] + (racialBonuses[k] || 0);
     });
-    updateCharacterData({ attributes: finalScores });
+    updateCharacterData({
+      baseAttributes: finalScores,
+      attributes: applyAsiBumps(finalScores, characterData.asiSelections),
+    });
   };
 
   const switchToPointBuy = () => {
@@ -177,7 +185,10 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
     Object.keys(POINT_BUY_DEFAULTS).forEach((k) => {
       finalScores[k] = POINT_BUY_DEFAULTS[k] + (racialBonuses[k] || 0);
     });
-    updateCharacterData({ attributes: finalScores });
+    updateCharacterData({
+      baseAttributes: finalScores,
+      attributes: applyAsiBumps(finalScores, characterData.asiSelections),
+    });
   };
 
   const rollAbilityScores = () => {
@@ -203,7 +214,10 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
       finalScores[k] = newBaseScores[k] + (racialBonuses[k] || 0);
     });
     
-    updateCharacterData({ attributes: finalScores });
+    updateCharacterData({
+      baseAttributes: finalScores,
+      attributes: applyAsiBumps(finalScores, characterData.asiSelections),
+    });
   };
 
   const handleStandardArrayDrop = (abilityKey, score) => {
@@ -241,7 +255,10 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
       finalScores[k] = newBaseScores[k] + (racialBonuses[k] || 0);
     });
     
-    updateCharacterData({ attributes: finalScores });
+    updateCharacterData({
+      baseAttributes: finalScores,
+      attributes: applyAsiBumps(finalScores, characterData.asiSelections),
+    });
   };
 
   const saveStandardArray = () => {

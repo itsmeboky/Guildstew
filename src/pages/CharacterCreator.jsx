@@ -133,6 +133,13 @@ export default function CharacterCreator() {
     level: 1,
     avatar_url: "",
     attributes: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
+    // Pre-ASI scores = base (rolled / point-buy / standard array)
+    // + racial bonuses. The Features step's ASI picker computes
+    // characterData.attributes = applyAsiBumps(baseAttributes,
+    // asiSelections) so downstream HP / skill / save-DC consumers
+    // can keep reading `attributes` and naturally see the effective
+    // post-ASI value.
+    baseAttributes: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
     skills: {},
     spells: { cantrips: [], level1: [] },
     saving_throws: {},
@@ -145,6 +152,13 @@ export default function CharacterCreator() {
     // 1 skill on entry per RAW). Keyed by class name; the SkillsStep
     // picker reads / writes this map alongside the main `skills` map.
     multiclassSkills: {},
+    // Ability Score Improvement / feat selections at each ASI
+    // milestone (PHB p. 15). Keyed by `${className}-${classLevel}`
+    // so a multiclass build's separate ASI tracks don't collide.
+    // Bumps are applied to characterData.attributes by the picker
+    // in ClassFeaturesStep; this map is the audit trail used to
+    // re-apply on reload and to recompute when the player edits.
+    asiSelections: {},
     inventory: [],
     equipment: { weapons: [], armor: {} },
     currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
@@ -218,6 +232,7 @@ export default function CharacterCreator() {
           ...prev,
           ...existingCharacter,
           attributes: existingCharacter.attributes || prev.attributes,
+          baseAttributes: existingCharacter.baseAttributes || existingCharacter.attributes || prev.baseAttributes,
           skills: existingCharacter.skills || prev.skills,
           spells: existingCharacter.spells || prev.spells,
           saving_throws: existingCharacter.saving_throws || prev.saving_throws,
@@ -227,6 +242,7 @@ export default function CharacterCreator() {
           feature_choices: existingCharacter.feature_choices || prev.feature_choices,
           multiclasses: existingCharacter.multiclasses || prev.multiclasses,
           multiclassSkills: existingCharacter.multiclassSkills || prev.multiclassSkills,
+          asiSelections: existingCharacter.asiSelections || prev.asiSelections,
           inventory: existingCharacter.inventory || prev.inventory,
           equipment: existingCharacter.equipment || prev.equipment,
           currency: existingCharacter.currency || prev.currency,
@@ -449,7 +465,14 @@ export default function CharacterCreator() {
       case 'class':
         return characterData.class && characterData.alignment;
       case 'abilities':
-        return Object.values(characterData.attributes).every(val => val >= 3 && val <= 18);
+        // Effective post-racial / post-ASI scores cap at 20 per RAW
+        // (PHB p. 15). The base-score caps (rolled / point-buy /
+        // standard array enforce 3-18 / 8-15 / fixed) live in
+        // AbilityScoresStep itself; this validator only sanity-
+        // checks the effective range so Mountain Dwarf STR 17 base
+        // + 2 racial = 19, or post-ASI scores hitting 19/20, don't
+        // get rejected at the gate.
+        return Object.values(characterData.attributes).every(val => val >= 3 && val <= 20);
       case 'features':
         return true;
       case 'skills':
