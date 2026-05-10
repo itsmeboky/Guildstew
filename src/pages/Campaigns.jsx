@@ -32,7 +32,7 @@ export default function Campaigns() {
       <div
         className="h-96 bg-cover bg-top relative"
         style={{
-          backgroundImage: 'url(https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/3893844b8_Plaaay1.png)',
+          backgroundImage: 'url(https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/KarliahandLadle.png)',
           backgroundSize: 'cover',
           backgroundPosition: 'top'
         }}
