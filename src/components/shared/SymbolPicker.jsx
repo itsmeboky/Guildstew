@@ -9,13 +9,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DruidicSymbol } from "@/components/shared/DruidicSymbol";
 
 /**
- * CSS-mask coloured symbol renderer. Both Thieves' Cant SVGs
- * (externally authored) and the generated Druidic SVGs are
- * transparent-background shapes; CSS `mask` lets us tint them to any
- * colour the GM picks without needing inline SVG or per-variant
- * pre-rendered assets.
+ * CSS-mask coloured symbol renderer for Thieves' Cant. Cant SVGs are
+ * static, hosted on Supabase, and tinted via CSS `mask` so the GM
+ * can pick any colour per entry without per-variant pre-rendered
+ * assets. Druidic uses a different path — see DruidicSymbol — so we
+ * dispatch via cipherType inside the picker.
  */
 export function SymbolImage({ src, color = "#d4a017", size = 32, title = "", className = "" }) {
   return (
@@ -42,6 +43,21 @@ export function SymbolImage({ src, color = "#d4a017", size = 32, title = "", cla
 }
 
 /**
+ * Local dispatch — Cant uses CSS-mask SymbolImage, Druidic uses
+ * inline-SVG DruidicSymbol. Kept inline (vs the shared CipherSymbol
+ * wrapper) so SymbolPicker stays self-contained and avoids a
+ * circular import via CipherSymbol -> SymbolPicker.
+ */
+function PickerSymbol({ cipherType, symbol, color, size }) {
+  if (cipherType === "druidic") {
+    return (
+      <DruidicSymbol id={symbol.id} size={size} color={color} title={symbol.name} />
+    );
+  }
+  return <SymbolImage src={symbol.src} color={color} size={size} title={symbol.name} />;
+}
+
+/**
  * Shared symbol picker used by Thieves' Cant + Druidic annotation
  * editors. Encapsulates: selected-row display, add/remove buttons,
  * modal with category tabs + text search, and a colour row with
@@ -49,7 +65,8 @@ export function SymbolImage({ src, color = "#d4a017", size = 32, title = "", cla
  * this component is purely presentational.
  *
  * Props:
- *   symbols        full catalog (id, name, category, src)
+ *   cipherType     "thieves_cant" | "druidic" — picks the renderer
+ *   symbols        full catalog (id, name, category, src? for Cant)
  *   categories     ordered category strings (drive tab order)
  *   selected       array of { id, color } currently attached to the entry
  *   defaultColor   hex fallback when onColorChange hasn't fired yet
@@ -61,6 +78,7 @@ export function SymbolImage({ src, color = "#d4a017", size = 32, title = "", cla
  *   icon           emoji shown next to the label
  */
 export default function SymbolPicker({
+  cipherType = "thieves_cant",
   symbols,
   categories,
   selected = [],
@@ -103,7 +121,12 @@ export default function SymbolPicker({
                 className="inline-flex items-center gap-1 bg-[#0b1220] border border-slate-700 rounded px-2 py-1"
                 title={sym.name}
               >
-                <SymbolImage src={sym.src} color={sel.color || color} size={22} title={sym.name} />
+                <PickerSymbol
+                  cipherType={cipherType}
+                  symbol={sym}
+                  color={sel.color || color}
+                  size={22}
+                />
                 <span className="text-[10px] text-slate-300 truncate max-w-[110px]">{sym.name}</span>
                 <button
                   type="button"
@@ -160,6 +183,7 @@ export default function SymbolPicker({
       <SymbolPickerModal
         open={open}
         onClose={() => setOpen(false)}
+        cipherType={cipherType}
         symbols={symbols}
         categories={categories}
         selectedIds={new Set(selected.map((s) => s.id))}
@@ -176,7 +200,7 @@ export default function SymbolPicker({
   );
 }
 
-function SymbolPickerModal({ open, onClose, symbols, categories, selectedIds, color, onToggle, label, icon }) {
+function SymbolPickerModal({ open, onClose, cipherType, symbols, categories, selectedIds, color, onToggle, label, icon }) {
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const filtered = useMemo(() => {
@@ -241,7 +265,7 @@ function SymbolPickerModal({ open, onClose, symbols, categories, selectedIds, co
                         : "bg-[#0b1220] border-slate-700 hover:border-[#37F2D1]/60"
                     }`}
                   >
-                    <SymbolImage src={sym.src} color={color} size={48} title={sym.name} />
+                    <PickerSymbol cipherType={cipherType} symbol={sym} color={color} size={48} />
                     <span className="text-[10px] text-slate-300 font-semibold text-center leading-snug">
                       {sym.name}
                     </span>
