@@ -1,38 +1,10 @@
-export const SLOT_RESTRICTIONS = {
-  head: { types: ['light armor', 'medium armor', 'heavy armor'], keywords: ['helm', 'hat', 'hood', 'crown', 'circlet', 'headband'] },
-  armor: { categories: ['armor'], types: ['light armor', 'medium armor', 'heavy armor'], keywords: ['armor', 'mail', 'plate', 'breastplate', 'hide'] },
-  gauntlets: { keywords: ['gloves', 'gauntlet', 'bracer'] },
-  belt: { keywords: ['belt', 'girdle', 'sash'] },
-  boots: { keywords: ['boots', 'shoes', 'slippers', 'greaves'] },
-  cloak: { keywords: ['cloak', 'cape', 'mantle'] },
-  necklace: { keywords: ['necklace', 'amulet', 'pendant', 'periapt', 'medallion'] },
-  ring1: { keywords: ['ring'] },
-  ring2: { keywords: ['ring'] },
-  implement: { keywords: ['wand', 'rod', 'staff', 'orb', 'focus', 'holy symbol', 'arcane focus', 'druidic focus', 'instrument', 'lute', 'flute', 'drum', 'horn', 'bagpipes', 'dulcimer', 'lyre', 'viol', 'shawm'] },
-  weapon1: { categories: ['weapons'], keywords: ['sword', 'axe', 'dagger', 'mace', 'hammer', 'flail', 'glaive', 'halberd', 'lance', 'maul', 'morningstar', 'pike', 'rapier', 'scimitar', 'trident', 'pick', 'whip', 'spear', 'staff', 'javelin', 'club', 'sickle', 'blade'] },
-  weapon2: { categories: ['weapons'], keywords: ['shield', 'sword', 'axe', 'dagger', 'mace', 'hammer', 'flail', 'glaive', 'halberd', 'lance', 'maul', 'morningstar', 'pike', 'rapier', 'scimitar', 'trident', 'pick', 'whip', 'spear', 'staff', 'javelin', 'club', 'sickle', 'blade'] },
-  ranged: { categories: ['weapons'], types: ['simple ranged weapon', 'martial ranged weapon'], keywords: ['bow', 'crossbow', 'sling', 'dart', 'javelin', 'thrown', 'blowgun', 'net'] }
-};
-
-export function canEquipToSlot(item, slotId) {
-  const restrictions = SLOT_RESTRICTIONS[slotId];
-  if (!restrictions) return true; // No restrictions = accept all
-  
-  const itemName = (item.name || '').toLowerCase();
-  const itemType = (item.type || '').toLowerCase();
-  const itemCategory = (item.category || '').toLowerCase();
-  
-  // Check categories
-  if (restrictions.categories?.some(cat => itemCategory === cat)) return true;
-  
-  // Check types
-  if (restrictions.types?.some(t => itemType.includes(t))) return true;
-  
-  // Check keywords in name or type
-  if (restrictions.keywords?.some(kw => itemName.includes(kw) || itemType.includes(kw))) return true;
-  
-  // Special case: shields can go in armor slot too
-  if (slotId === 'armor' && itemType.includes('shield')) return true;
-  
-  return false;
-}
+/**
+ * SHIM — file relocated to src/game-packs/dnd5e/content/items.js as part
+ * of Combat Engine v2 Phase 1.12a. Original was named .jsx but contained
+ * no JSX — pure data + slot-rule helper — so the new file uses the .js
+ * extension. Re-exports preserve all imports working unchanged. Will be
+ * removed in Phase 8 cleanup.
+ *
+ * See: combat_redo_plan_v3.md (Part 8) and Phase 1.2 commit for the pattern.
+ */
+export * from '@/game-packs/dnd5e/content/items';

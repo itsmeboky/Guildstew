@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -14,9 +16,11 @@ import {
 } from "@/components/ui/select";
 import {
   Search, Plus, Edit3, Trash2, Eye, Star, FileText, CheckSquare, Square,
+  Upload, Image as ImageIcon, X as XIcon,
 } from "lucide-react";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
+import { uploadFile } from "@/utils/uploadFile";
 
 /**
  * Admin → Blog.
@@ -25,11 +29,12 @@ import { useAuth } from "@/lib/AuthContext";
  * only write path for the table — the homepage Blog card and the
  * `/blog/:slug` detail page both read from here.
  *
- * "Rich text editor" is intentionally the existing Textarea with a
- * markdown hint — pulling in a dedicated editor (TipTap / Lexical)
- * would bloat the bundle and slow every admin load for a surface
- * that admins touch occasionally. Markdown coverage (headings, bold,
- * italic, links, code blocks, images) is enough for the first pass.
+ * Content authoring uses ReactQuill — already in the dependency
+ * tree (used by CampaignDetails / CampaignMaps) so reusing it here
+ * doesn't add to the bundle. Output is sanitized HTML, persisted as
+ * a TEXT column. The reading view renders HTML directly when the
+ * content starts with a tag and falls back to the legacy
+ * renderBlogMarkdown path for posts authored before this commit.
  */
 
 const CATEGORIES = [
@@ -328,8 +333,10 @@ export default function BlogTab() {
 }
 
 function BlogEditor({ open, post, onClose, onSave }) {
+  const { user } = useAuth();
   const [form, setForm] = useState(() => initForm(post));
   const [slugTouched, setSlugTouched] = useState(false);
+  const quillRef = useRef(null);
 
   React.useEffect(() => {
     if (open) {
@@ -337,6 +344,74 @@ function BlogEditor({ open, post, onClose, onSave }) {
       setSlugTouched(!!post?.slug);
     }
   }, [open, post?.id]);
+
+  // Custom image handler — Quill's default inserts the file as
+  // base64 inline, which bloats the saved content. Instead we
+  // upload to user-assets bucket via the shared uploadFile helper
+  // and insert the public URL.
+  const onInsertImage = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) {
+        toast.error("Please pick an image file.");
+        return;
+      }
+      try {
+        const { file_url } = await uploadFile(file, "user-assets", "blog/inline", {
+          userId: user?.id,
+          uploadType: "blog_image",
+        });
+        const editor = quillRef.current?.getEditor();
+        if (!editor || !file_url) return;
+        const range = editor.getSelection(true) || { index: editor.getLength() };
+        editor.insertEmbed(range.index, "image", file_url, "user");
+        editor.setSelection(range.index + 1, 0);
+      } catch (err) {
+        toast.error(`Image upload failed: ${err?.message || "unknown error"}`);
+      }
+    };
+    input.click();
+  }, [user?.id]);
+
+  const quillModules = useMemo(
+    () => ({
+      toolbar: {
+        container: [
+          [{ header: [1, 2, 3, 4, false] }],
+          ["bold", "italic", "strike"],
+          [{ list: "ordered" }, { list: "bullet" }],
+          ["blockquote", "code-block"],
+          ["link", "image"],
+          [{ color: [] }, { background: [] }],
+          ["clean"],
+        ],
+        handlers: { image: onInsertImage },
+      },
+      clipboard: {
+        // Stop Quill from auto-converting pasted markdown-like
+        // text into Quill's own markdown shorthand, which can
+        // surprise admins who paste HTML or plain text.
+        matchVisual: false,
+      },
+    }),
+    [onInsertImage],
+  );
+
+  const quillFormats = useMemo(
+    () => [
+      "header",
+      "bold", "italic", "strike",
+      "list", "bullet",
+      "blockquote", "code-block",
+      "link", "image",
+      "color", "background",
+    ],
+    [],
+  );
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
@@ -347,7 +422,14 @@ function BlogEditor({ open, post, onClose, onSave }) {
   const save = (publish) => {
     if (!form.title.trim()) { toast.error("Title is required"); return; }
     if (!form.slug.trim()) { toast.error("Slug is required"); return; }
-    if (!form.content.trim()) { toast.error("Content is required"); return; }
+    // Quill produces "<p><br></p>" for an empty editor — strip
+    // tags + entities so the empty-content check actually catches
+    // visually-empty content.
+    const visibleContent = form.content
+      .replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;|&amp;|&lt;|&gt;/g, " ")
+      .trim();
+    if (!visibleContent) { toast.error("Content is required"); return; }
 
     const row = {
       ...(post?.id ? { id: post.id } : {}),
@@ -357,6 +439,8 @@ function BlogEditor({ open, post, onClose, onSave }) {
       summary: form.summary.trim() || null,
       content: form.content,
       cover_image_url: form.cover_image_url.trim() || null,
+      header_image_url: form.header_image_url.trim() || null,
+      decorative_image_url: form.decorative_image_url.trim() || null,
       tags: form.tags,
       is_featured: form.is_featured,
     };
@@ -380,9 +464,28 @@ function BlogEditor({ open, post, onClose, onSave }) {
         <DialogHeader>
           <DialogTitle>{post?.id ? "Edit Post" : "New Post"}</DialogTitle>
           <DialogDescription className="text-slate-400">
-            Markdown is supported in Content (headings, bold, italic, links, code, images).
+            Use the editor toolbar for formatting; the image button uploads inline images to the blog assets bucket.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Light Quill chrome on a dark dialog needs a few overrides
+            so the toolbar doesn't disappear into the background. The
+            `.blog-editor-quill` wrapper scopes these so other Quill
+            instances in the app keep their own styling. */}
+        <style>{`
+          .blog-editor-quill .ql-toolbar.ql-snow {
+            border-color: #334155;
+            background: #f8fafc;
+          }
+          .blog-editor-quill .ql-container.ql-snow {
+            border-color: #334155;
+            min-height: 280px;
+            font-size: 14px;
+          }
+          .blog-editor-quill .ql-editor {
+            min-height: 280px;
+          }
+        `}</style>
 
         <div className="space-y-3">
           <div>
@@ -413,19 +516,48 @@ function BlogEditor({ open, post, onClose, onSave }) {
             <Textarea rows={2} value={form.summary} onChange={(e) => set({ summary: e.target.value })} className="bg-[#050816] border-slate-700 text-white mt-1" />
           </div>
           <div>
-            <Label className="text-xs">Content (Markdown)</Label>
-            <Textarea
-              rows={14}
-              value={form.content}
-              onChange={(e) => set({ content: e.target.value })}
-              className="bg-[#050816] border-slate-700 text-white mt-1 font-mono text-xs leading-relaxed"
-              placeholder="# Heading\n\nBody paragraph. **bold**, *italic*, [link](https://…), `code`, ![alt](image-url)"
-            />
+            <Label className="text-xs">Content</Label>
+            <div className="mt-1 bg-white text-slate-900 rounded border border-slate-700 overflow-hidden blog-editor-quill">
+              <ReactQuill
+                ref={quillRef}
+                theme="snow"
+                value={form.content}
+                onChange={(html) => set({ content: html })}
+                modules={quillModules}
+                formats={quillFormats}
+                placeholder="Write the post — headings, lists, quotes, code, links, and inline images all supported."
+              />
+            </div>
+            <p className="text-[10px] text-slate-500 mt-1">
+              Inline images upload to the blog assets bucket via the toolbar image button. Existing posts authored in markdown still render correctly on the reader.
+            </p>
           </div>
-          <div>
-            <Label className="text-xs">Cover Image URL</Label>
-            <Input value={form.cover_image_url} onChange={(e) => set({ cover_image_url: e.target.value })} className="bg-[#050816] border-slate-700 text-white mt-1" placeholder="https://…" />
-          </div>
+          <BlogImageField
+            label="Cover Image"
+            description="Thumbnail used on blog cards + the home page. Recommended 800×500, 3MB max."
+            value={form.cover_image_url}
+            onChange={(url) => set({ cover_image_url: url })}
+            maxBytes={3 * 1024 * 1024}
+            userId={null}
+          />
+
+          <BlogImageField
+            label="Header Image"
+            description="Full-width banner at the top of the reading view. Recommended 1200×600, 5MB max."
+            value={form.header_image_url}
+            onChange={(url) => set({ header_image_url: url })}
+            maxBytes={5 * 1024 * 1024}
+            userId={null}
+          />
+
+          <BlogImageField
+            label="Decorative Image"
+            description="Optional flair — overlaps the bottom-right of the content box. Recommended 400×400, 2MB max."
+            value={form.decorative_image_url}
+            onChange={(url) => set({ decorative_image_url: url })}
+            maxBytes={2 * 1024 * 1024}
+            userId={null}
+          />
           <div>
             <Label className="text-xs">Tags (comma-separated)</Label>
             <Input
@@ -458,6 +590,112 @@ function BlogEditor({ open, post, onClose, onSave }) {
   );
 }
 
+/**
+ * Image upload field for the blog editor. Uploads through the
+ * shared `uploadFile` helper to the user-assets bucket under
+ * `blog/{header|decorative}/...` so blog images live next to other
+ * user-content uploads with the existing storage quota / RLS.
+ *
+ * Renders three states: empty (drop-zone-style button), uploading
+ * (button shows spinner-text), populated (preview thumbnail with
+ * Remove). Same shape used for header and decorative; pass the
+ * label, description, current URL, and the change handler.
+ *
+ * Pass-through `value`/`onChange` lets the parent form keep using
+ * controlled state without juggling its own upload bookkeeping.
+ */
+function BlogImageField({ label, description, value, onChange, maxBytes }) {
+  const { user } = useAuth();
+  const [uploading, setUploading] = useState(false);
+  const inputRef = React.useRef(null);
+  const folder = label.toLowerCase().replace(/\s+/g, "-");
+
+  const onPick = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please pick an image file.");
+      return;
+    }
+    if (maxBytes && file.size > maxBytes) {
+      toast.error(`Too large — keep under ${Math.round(maxBytes / 1024 / 1024)}MB.`);
+      return;
+    }
+    setUploading(true);
+    try {
+      const { file_url } = await uploadFile(file, "user-assets", `blog/${folder}`, {
+        userId: user?.id,
+        uploadType: "blog_image",
+      });
+      onChange?.(file_url);
+    } catch (err) {
+      toast.error(`Upload failed: ${err?.message || "unknown error"}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div>
+      <Label className="text-xs flex items-center gap-2">
+        {label}
+        {description && (
+          <span className="text-slate-500 font-normal">{description}</span>
+        )}
+      </Label>
+      <div className="mt-1 flex items-start gap-3 flex-wrap">
+        {value ? (
+          <div className="relative inline-block">
+            <img
+              src={value}
+              alt={`${label} preview`}
+              className="h-24 w-auto max-w-[240px] rounded border border-slate-700 object-cover"
+            />
+            <button
+              type="button"
+              onClick={() => onChange?.("")}
+              title="Remove image"
+              className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 hover:bg-red-400 text-white flex items-center justify-center shadow"
+            >
+              <XIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className="inline-flex items-center gap-2 bg-[#050816] border border-dashed border-slate-700 hover:border-[#37F2D1] text-slate-300 hover:text-[#37F2D1] rounded px-4 py-3 text-xs transition-colors disabled:opacity-60"
+          >
+            {uploading ? (
+              <>
+                <Upload className="w-3.5 h-3.5 animate-pulse" /> Uploading…
+              </>
+            ) : (
+              <>
+                <ImageIcon className="w-3.5 h-3.5" /> Upload {label}
+              </>
+            )}
+          </button>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          onChange={onPick}
+          className="hidden"
+        />
+        {value && (
+          <div className="text-[11px] text-slate-500 break-all max-w-[260px] mt-1">
+            {value}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function initForm(post) {
   return {
     title: post?.title || "",
@@ -466,6 +704,8 @@ function initForm(post) {
     summary: post?.summary || "",
     content: post?.content || "",
     cover_image_url: post?.cover_image_url || "",
+    header_image_url: post?.header_image_url || "",
+    decorative_image_url: post?.decorative_image_url || "",
     tags: Array.isArray(post?.tags) ? post.tags : [],
     is_featured: !!post?.is_featured,
   };

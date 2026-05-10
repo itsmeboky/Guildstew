@@ -620,7 +620,15 @@ function getCasterContribution(entry) {
   }
 
   if (HALF_CASTERS.includes(cls)) {
-    // PHB: half casters – sum levels, then half, rounded down
+    // PHB p. 165: half casters contribute "half your levels (rounded
+    // down)" — but Paladin/Ranger only gain the Spellcasting class
+    // feature at level 2. A half-caster at level 1 has no
+    // Spellcasting feature yet and doesn't contribute to the
+    // multiclass slot table at all. Without this floor, a Paladin 1
+    // / Ranger 1 character is incorrectly granted level-1 spell
+    // slots (0.5 + 0.5 = 1 effective caster level) when per RAW
+    // they have no spellcasting at all.
+    if (level < 2) return 0;
     return level / 2;
   }
 

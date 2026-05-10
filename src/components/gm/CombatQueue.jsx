@@ -200,7 +200,7 @@ export default function CombatQueue({
                       <img
                         src={monster.image_url || monster.avatar_url}
                         alt={safeText(monster.name)}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover object-top"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-500">
@@ -507,7 +507,7 @@ function AddMonsterDialog({ monsters, npcs, onAdd, onClose, onCreateNpc }) {
                   className="w-full flex items-center gap-3 p-3 rounded-xl bg-[#0b1220] border border-[#111827] hover:border-[#22c5f5]/50 transition-all text-left"
                 >
                   {creature.image_url || creature.avatar_url ? (
-                    <img src={creature.image_url || creature.avatar_url} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                    <img src={creature.image_url || creature.avatar_url} alt="" className="w-10 h-10 rounded-lg object-cover object-top" />
                   ) : (
                     <div className="w-10 h-10 rounded-lg bg-[#111827] flex items-center justify-center text-slate-600">?</div>
                   )}
@@ -575,7 +575,7 @@ function EditLoadoutDialog({ monster, savedLoadouts, onUpdate, onSaveLoadout, on
         <div className="flex items-center justify-between p-5 border-b border-[#111827]">
           <div className="flex items-center gap-3">
             {monster.image_url || monster.avatar_url ? (
-              <img src={monster.image_url || monster.avatar_url} alt="" className="w-10 h-10 rounded-lg object-cover" />
+              <img src={monster.image_url || monster.avatar_url} alt="" className="w-10 h-10 rounded-lg object-cover object-top" />
             ) : (
               <div className="w-10 h-10 rounded-lg bg-[#111827] flex items-center justify-center text-slate-600">?</div>
             )}

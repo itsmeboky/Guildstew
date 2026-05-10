@@ -209,7 +209,7 @@ async function createTestCampaign(gmUser) {
     status: "active",
     player_ids: FAKE_PLAYERS.map((p) => p.user_id),
     consent_rating: "PG-13",
-    is_session_active: true,
+    session_active: true,
     combat_active: false,
     combat_data: null,
     loot_data: {

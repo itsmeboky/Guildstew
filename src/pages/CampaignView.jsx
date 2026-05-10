@@ -76,7 +76,6 @@ export default function CampaignView() {
         session_started_at: new Date().toISOString(),
         active_session_players: campaign?.player_ids || [],
         disconnected_players: [],
-        is_session_active: true,
       });
     },
     onSuccess: async () => {

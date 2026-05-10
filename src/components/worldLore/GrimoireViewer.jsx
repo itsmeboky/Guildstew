@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sparkles, Search, BookOpen, Edit, Trash2 } from "lucide-react";
+import { Sparkles, Search, BookOpen, Edit, Trash2, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { safeText } from "@/utils/safeRender";
 

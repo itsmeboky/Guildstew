@@ -25,8 +25,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Upload, Code, Eye, RotateCcw, X, Plus, Trash, ChevronUp, ChevronDown } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { uploadFile } from "@/utils/uploadFile";
+import { getRule } from "@/engine/contentLayer";
 import {
-  getRule,
   DAMAGE_TYPES,
   WEAPON_PROPERTIES,
   SPELL_SCHOOLS,

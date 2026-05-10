@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { FACE_ROTATIONS } from "./faceRotations";
 import { DICE_SIDES } from "./diceConfig";
 import { useActiveDiceSkin } from "@/lib/useActiveDiceSkin";
+import { useAuth } from "@/lib/AuthContext";
 import { applyDiceSkinToMesh } from "@/lib/applyDiceSkin";
 import { DEFAULT_MODEL_URLS, DEFAULT_TEXTURE_URL } from "@/config/diceAssets";
 import { supabase } from "@/api/supabaseClient";
@@ -58,6 +59,47 @@ const STOCK_SKIN = {
 };
 
 const _gltfLoader = new GLTFLoader();
+
+// Three's FileLoader cache is off by default. Turning it on globally
+// lets `_gltfLoader.loadAsync(url)` reuse glb bytes across calls — so
+// the campaign-mount preload below and the on-mount load inside
+// DiceRoller hit the same cached payload instead of refetching.
+THREE.Cache.enabled = true;
+
+// Tracks in-flight preload promises so repeat calls (e.g. from a
+// re-rendering campaign mount effect) don't refire the network.
+const _preloadInflight = new Map();
+
+/**
+ * Warm the GLB cache for every dice type before the dice tray spawns.
+ *
+ * Called from campaign route mounts (GMPanel, CampaignPlayerPanel)
+ * once `campaign.dice_config` is available. The fetches run in
+ * parallel in the background while the user reads the campaign UI;
+ * by the time combat starts and DiceRoller mounts, the on-mount
+ * `loadDiceModel` calls hit `THREE.Cache` instead of the network and
+ * the dice render with their correct models on the first frame
+ * instead of falling back to the orange placeholder geometry.
+ *
+ * Idempotent and fire-and-forget: failures are logged and DiceRoller's
+ * own on-mount load effect remains the authoritative loader path.
+ *
+ * @param {object|null} uploadedModels — optional per-die-type URL map
+ *   from `campaign.dice_config.uploadedModels`. Falls back to
+ *   DEFAULT_MODEL_URLS when a type is missing.
+ */
+export function preloadDiceModels(uploadedModels = null) {
+  for (const type of Object.keys(DEFAULT_MODEL_URLS)) {
+    const url = uploadedModels?.[type] || DEFAULT_MODEL_URLS[type];
+    if (!url || _preloadInflight.has(url)) continue;
+    const promise = _gltfLoader.loadAsync(url).catch((err) => {
+      // Don't surface — DiceRoller's own load effect retries on mount
+      // and reports user-visible errors there.
+      console.warn(`[dice preload] ${type} (${url}) failed`, err);
+    });
+    _preloadInflight.set(url, promise);
+  }
+}
 
 async function loadDiceModel(type, opts = {}) {
   const {
@@ -1117,9 +1159,29 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     isOpen = true,
     modifier = "none",
     initialDice = null,
+    // When true, the dice arena auto-rolls once isOpen flips from
+    // false → true and a forcedResult is set. Used by the combat
+    // dice window's spectator path so the watching seat sees the
+    // same animation the rolling actor sees, without needing the
+    // spectator to physically click/shake the arena.
+    autoRollOnOpen = false,
+    // Slot owner's user_id — drives whose dice cosmetic renders.
+    // When omitted, falls back to the viewer's id (existing
+    // behavior). The GroupDiceArena passes the slot owner's id so
+    // each player's slot renders with that player's cosmetic, not
+    // the viewer's. Phase-3 redesign Commit 2.
+    userId = null,
   } = props;
   const mountRef = useRef(null);
   const sceneRef = useRef({});
+  // Gates the imperative orange-fallback render in `swapDiceModel`.
+  // Starts false on every mount; flips to true after a 200ms timer
+  // so warm-cache .glb loads (which usually arrive within tens of ms)
+  // can swap in the real dice model without the user ever seeing the
+  // placeholder polyhedron flash. After 200ms, fallback rendering is
+  // re-enabled — genuine cold-start / slow-network mounts still get
+  // a placeholder, just one frame later.
+  const fallbackAllowedRef = useRef(false);
   const timelineRef = useRef(null);
   const playbackRef = useRef({ startTime: null, eventIndex: 0, playing: false });
   const particleRef = useRef(null);
@@ -1129,9 +1191,19 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const diceTypeRef = useRef("d20");
   const equippedEffectRef = useRef("default");
   const modifierRef = useRef("none");
-  const firstDiceCountsChange = useRef(true);
 
-  const activeSkin = useActiveDiceSkin();
+  // Per the Phase-3 redesign Commit 2 hook refactor:
+  //   useActiveDiceSkin(id) returns that user's cosmetic
+  //   useActiveDiceSkin() returns null (no implicit viewer default)
+  // To preserve every existing DiceRoller mount's behavior (which
+  // expected the viewer's skin to load automatically) without
+  // migrating every callsite, we fall back to the viewer's id when
+  // the new userId prop is absent. Arena slots pass the slot owner's
+  // id explicitly so each player's slot renders with that owner's
+  // cosmetic.
+  const { user: viewer } = useAuth();
+  const skinSubject = userId || viewer?.id || null;
+  const activeSkin = useActiveDiceSkin(skinSubject);
   const activeSkinRef = useRef(activeSkin);
   useEffect(() => { activeSkinRef.current = activeSkin; }, [activeSkin]);
 
@@ -1166,19 +1238,20 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     });
     sc.diceState.materials = newMats;
 
-    // Also re-apply to any active multi-dice clones (their inner cloned mesh, not the outer wrapper)
     const pool = sceneRef.current?.multiDicePool;
     if (Array.isArray(pool)) {
       for (const die of pool) {
         if (!die.group) continue;
-        const innerClone = die.group.children[0]; // outerGroup → cloned cached.group
+        const innerClone = die.group.children[0];
         if (!innerClone) continue;
         try {
           const hasCustomTexture = !!(activeSkin?.customTextureUrl);
           if (hasCustomTexture && typeof applyDiceSkinToMesh === "function") {
             applyDiceSkinToMesh(innerClone, activeSkin, primaryColor, secondaryColor);
           }
-          applyVertexGradient(innerClone, primaryColor, secondaryColor, hasCustomTexture);
+          if (typeof applyVertexGradient === "function") {
+            applyVertexGradient(innerClone, primaryColor, secondaryColor, hasCustomTexture);
+          }
         } catch (err) {
           console.error("Failed to update multi-dice clone gradient:", err);
         }
@@ -1210,7 +1283,6 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const [modelLoadError, setModelLoadError] = useState(null);
   const ekgStateRef = useRef({ active: false, cursor: 0 });
   const shakeRef = useRef(0);
-  const firstDiceCountsChange = useRef(true);
 
   // Keep refs in sync with state/props for the animation loop
   useEffect(() => { diceTypeRef.current = diceType; }, [diceType]);
@@ -1221,15 +1293,11 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const incDice = (type) => setDiceCounts(prev => ({ ...prev, [type]: Math.min(10, prev[type] + 1) }));
   const decDice = (type) => setDiceCounts(prev => ({ ...prev, [type]: Math.max(0, prev[type] - 1) }));
   const clearTray = useCallback(() => {
-    // Reset tray counts
     setDiceCounts({ d4: 0, d6: 0, d8: 0, d10: 0, d12: 0, d20: 0 });
-    // Despawn any active multi-dice
     sceneRef.current?.despawnAllMultiDice?.();
-    // Hide single-dice wrapper if it's still showing
     if (sceneRef.current?.dice) {
       sceneRef.current.dice.visible = false;
     }
-    // Clear result overlays
     setLastResult(null);
     setLastResultDiceType(null);
     if (typeof setLastBreakdown === "function") setLastBreakdown(null);
@@ -1254,7 +1322,8 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     }
   }, [diceCounts]);
 
-  // Auto-cleanup: when tray is edited (after first mount), despawn dice + clear result overlays
+  const firstDiceCountsChange = useRef(true);
+
   useEffect(() => {
     console.log("[tray-change-cleanup] fired. first?", firstDiceCountsChange.current, "isRolling?", isRolling, "playing?", playbackRef.current?.playing);
     if (firstDiceCountsChange.current) {
@@ -1311,9 +1380,31 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
     return () => { cancelled = true; };
   }, []);
 
+  // `_modelCache` is intentionally NOT wiped when `config?.uploadedModels`
+  // changes. The cache is module-scoped and meant to persist across every
+  // DiceRoller mount for the lifetime of the page; an over-broad wipe here
+  // (which is what used to live in this slot) fired on every TanStack
+  // refetch / Realtime tick that produced a new `uploadedModels` object
+  // reference, even when the underlying URLs hadn't changed — and the next
+  // mount went back to fetching every glb from the network. If a campaign
+  // genuinely swaps a die's URL mid-session, `loadDiceModel` overwrites the
+  // cached entry naturally on the next miss, so users see the OLD model
+  // briefly until the new load finishes; that's an acceptable tradeoff
+  // for keeping warm-cache combat instant.
+
+  // 200ms fallback guard — see `fallbackAllowedRef` above. After the
+  // timer fires we re-invoke `swapDiceModel` for the active type so the
+  // placeholder polyhedron shows up on genuinely slow loads.
   useEffect(() => {
-    Object.keys(_modelCache).forEach(k => delete _modelCache[k]);
-  }, [config?.uploadedModels]);
+    const t = setTimeout(() => {
+      fallbackAllowedRef.current = true;
+      const type = diceTypeRef.current;
+      if (type && sceneRef.current?.swapDiceModel) {
+        sceneRef.current.swapDiceModel(type);
+      }
+    }, 200);
+    return () => clearTimeout(t);
+  }, []);
 
   // ==============================================================
   // SCENE SETUP — runs once
@@ -1479,8 +1570,12 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
         diceState.isPlaceholder = false;
         diceState.materials = collectMaterials(cloned);
         resetDiceEmissive(diceState.materials);
-      } else {
-        // Fall back to placeholder polyhedron with the right shape
+      } else if (fallbackAllowedRef.current) {
+        // Fall back to placeholder polyhedron with the right shape.
+        // Gated on `fallbackAllowedRef` so cache hits within the 200ms
+        // post-mount window can swap in the real .glb without the user
+        // ever seeing the orange placeholder. Once the guard expires
+        // the timer effect re-invokes swapDiceModel and we land here.
         const newGeo = buildDiceGeometry(type);
         placeholderMesh.geometry.dispose();
         placeholderMesh.geometry = newGeo;
@@ -1489,6 +1584,13 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
         diceState.isPlaceholder = true;
         diceState.materials = [placeholderMat];
         resetDiceEmissive(diceState.materials);
+      } else {
+        // Within the 200ms guard window with no cached model yet —
+        // intentionally render nothing so the user doesn't see the
+        // placeholder flash before the real dice arrive.
+        diceState.activeContent = null;
+        diceState.isPlaceholder = false;
+        diceState.materials = [];
       }
     };
 
@@ -1513,14 +1615,10 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
           else apply(c.material);
         }
       });
-      // Wrap in an outer Group so animation can set scale=1 without
-      // overriding the cached clone's native size-normalization scale (~66x for d20).
-      // This matches the single-dice architecture (dice wrapper > cached clone > GLB scene > mesh).
       const outerGroup = new THREE.Group();
       outerGroup.add(cloned);
       scene.add(outerGroup);
       outerGroup.visible = false;
-      // Apply current skin/gradient state to match single-dice behavior
       try {
         const skin = activeSkinRef.current;
         const primary = primaryColorRef.current;
@@ -1529,15 +1627,12 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
         if (hasCustomTexture && typeof applyDiceSkinToMesh === "function") {
           applyDiceSkinToMesh(cloned, skin, primary, secondary);
         }
-        applyVertexGradient(cloned, primary, secondary, hasCustomTexture);
+        if (typeof applyVertexGradient === "function") {
+          applyVertexGradient(cloned, primary, secondary, hasCustomTexture);
+        }
       } catch (err) {
         console.error("Failed to apply skin/gradient to multi-dice clone:", err);
       }
-      console.log("[spawnDie]", type, {
-        outerScale: outerGroup.scale.toArray(),
-        innerScale: cloned.scale.toArray(),
-        materialCount: collectMaterials(cloned).length,
-      });
       return { group: outerGroup, materials: collectMaterials(cloned) };
     };
 
@@ -1906,13 +2001,6 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   const executeRoll = useCallback((shakeIntensity = 0.7, releaseVector = null, forceLazy = false) => {
     if (playbackRef.current.playing) return;
 
-    // Clean up any previously-rendered multi-dice from a prior roll, regardless of whether
-    // this roll is single or multi. Also hide the single-dice wrapper if it was left visible.
-    sceneRef.current?.despawnAllMultiDice?.();
-    if (sceneRef.current?.dice) {
-      sceneRef.current.dice.visible = false;
-    }
-
     const totalDice = Object.values(diceCounts).reduce((s, n) => s + n, 0);
     if (totalDice <= 1) {
       const type = diceTypeRef.current;
@@ -2036,6 +2124,33 @@ const DiceRoller = forwardRef(function DiceRoller(props, ref) {
   useImperativeHandle(ref, () => ({
     roll: () => executeRoll(0.7, null, false),
   }), [executeRoll]);
+
+  // Auto-roll latch for the spectator path. Watch isOpen + forcedResult
+  // and fire executeRoll exactly once per (open + forced result) edge.
+  // Tracks the last result we've already auto-rolled for so subsequent
+  // re-renders with the same forcedResult don't double-fire.
+  const autoRolledForRef = useRef(null);
+  useEffect(() => {
+    if (!autoRollOnOpen) return;
+    if (!isOpen) {
+      autoRolledForRef.current = null;
+      return;
+    }
+    if (forcedResult == null) return;
+    // Composite key catches "same forcedResult, new arena" cases (e.g.
+    // a damage-then-attack sequence where d20 → d8 → d20 lands on the
+    // same value — the dice-type swap would normally re-mount and reset
+    // this ref via the unmount path, but guarding by value+type is
+    // robust either way).
+    const key = `${diceTypeRef.current || initialDice || "?"}:${forcedResult}`;
+    if (autoRolledForRef.current === key) return;
+    autoRolledForRef.current = key;
+    // Defer one tick so the scene mount + dice tray initialization
+    // settle before the roll kicks off. executeRoll otherwise no-ops
+    // when totalDice resolves to zero on the very first paint.
+    const t = setTimeout(() => executeRoll(0.7, null, false), 60);
+    return () => clearTimeout(t);
+  }, [autoRollOnOpen, isOpen, forcedResult, initialDice, executeRoll]);
 
   const handleRollClick = useCallback(() => {
     if (totalDice === 0) return;

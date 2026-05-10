@@ -196,7 +196,7 @@ function NotePost({ character, note, canEdit, onEdit, onRemove }) {
   );
 }
 
-function NoteForm({ character, initial, onSave, onCancel }) {
+export function NoteForm({ character, initial, onSave, onCancel }) {
   const [title, setTitle] = useState(initial?.title || "");
   const [content, setContent] = useState(initial?.content || "");
   const [visibility, setVisibility] = useState(initial?.visibility || "gm_only");

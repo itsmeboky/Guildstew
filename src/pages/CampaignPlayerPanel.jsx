@@ -821,6 +821,7 @@ function CampaignPlayerPanelContent() {
           combatState={combatState}
           setCombatState={setCombatState}
           campaignData={campaign}
+          fullSpellsList={fullSpellsList}
           myConditions={myConditions}
           activeConditions={activeConditions}
           concentrationByCharacter={concentrationByCharacter}
@@ -855,7 +856,12 @@ function CampaignPlayerPanelContent() {
             }}
           />
 
-          <div className="space-y-4">
+          {/* min-w-0 stops the inner TurnOrderDisplay's `min-w-min`
+              flex from blowing the right grid column past its
+              `minmax(0, 1fr)` budget — without it, the bar shifts
+              right and the late combatants slide off-canvas instead
+              of triggering the inner overflow-x-auto scrollbar. */}
+          <div className="space-y-4 min-w-0">
             {campaign.combat_active && campaign.combat_data && (
               campaign.combat_data.stage === 'initiative' || campaign.combat_data.stage === 'arranging' ? (
                 // Players must not see the GM arranging the turn order.
@@ -1135,9 +1141,9 @@ function CampaignPlayerPanelContent() {
                               SELECT
                             </div>
                           )}
-                          <div 
-                            className="h-24 bg-cover bg-center relative"
-                            style={{ 
+                          <div
+                            className="h-24 bg-cover bg-top relative"
+                            style={{
                               backgroundImage: char?.profile_avatar_url ? `url(${char.profile_avatar_url})` : 'none',
                               backgroundColor: '#1a1f2e'
                             }}
@@ -1433,7 +1439,7 @@ function CampaignPlayerPanelContent() {
 
 // --- Shared Components (Copied/Adapted from GMPanel) ---
 
-function CharacterPanel({ character, user, guildHall, equippedItems, setEquippedItems, inventory, onLootDrop, draggedItem, setDraggedItem, combatState, setCombatState, campaignData, myConditions = [], activeConditions = {}, concentrationByCharacter = {}, myCharacterKey, onHideSuccess }) {
+function CharacterPanel({ character, user, guildHall, equippedItems, setEquippedItems, inventory, onLootDrop, draggedItem, setDraggedItem, combatState, setCombatState, campaignData, myConditions = [], activeConditions = {}, concentrationByCharacter = {}, myCharacterKey, onHideSuccess, fullSpellsList = [] }) {
   const queryClient = useQueryClient();
   const [showInventoryOrganizer, setShowInventoryOrganizer] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);

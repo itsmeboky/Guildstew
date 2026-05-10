@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Play, LogOut, Loader2 } from "lucide-react";
 import LazyImage from "@/components/ui/LazyImage";
+import CharacterPickerView from "@/components/lobby/CharacterPickerView";
 
 const CLASS_ICONS = {
   "Barbarian": "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/a6652f2d8_Barbarian1.png",
@@ -57,12 +58,32 @@ export default function CampaignPanel() {
     return campaign?.ready_player_ids?.includes(user?.id);
   }, [campaign, user]);
 
+  // The current user's attached character for this campaign — used
+  // to gate READY UP. Match either user_id or created_by-email
+  // (legacy rows) AND ensure it's a campaign clone (post-#10a:
+  // is_campaign_copy=true on attach). Apply-flow saves and the
+  // library-import clone-on-attach both stamp this true.
+  const myCharacter = React.useMemo(() => {
+    if (!characters || !user) return null;
+    return characters.find(
+      (c) =>
+        c.is_campaign_copy === true &&
+        c.campaign_id === campaignId &&
+        (c.user_id === user.id || c.created_by === user.email),
+    ) || null;
+  }, [characters, user, campaignId]);
+
+  // GM check — defensive. CampaignPanel is the player-side route
+  // (GMs use CampaignGMPanel / GMPanel) but a GM landing here for
+  // any reason should not be gated by the character picker.
+  const isGM = !!campaign?.game_master_id && campaign.game_master_id === user?.id;
+
   // Automatically redirect if session is active AND player is ready
   useEffect(() => {
-    if (campaign?.is_session_active && isReady) {
+    if (campaign?.session_active && isReady) {
       navigate(createPageUrl("CampaignPlayerPanel") + `?id=${campaignId}`);
     }
-  }, [campaign?.is_session_active, isReady, campaignId, navigate]);
+  }, [campaign?.session_active, isReady, campaignId, navigate]);
 
   const toggleReadyMutation = useMutation({
     mutationFn: async () => {
@@ -109,6 +130,39 @@ export default function CampaignPanel() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#1E2430] text-white">
         <Loader2 className="w-8 h-8 animate-spin text-[#37F2D1]" />
+      </div>
+    );
+  }
+
+  // ─── Pre-lobby character gate ──────────────────────────────────
+  // Players without a campaign-copy character for this campaign
+  // never see the lobby. The picker IS the page until they pick
+  // (Library → clone-on-attach) or create (forApply flow). Once
+  // attached, query invalidation refreshes `myCharacter` and the
+  // gate falls through to the lobby render below. GMs are exempt
+  // (they don't have player characters).
+  if (!myCharacter && !isGM) {
+    return (
+      <div className="min-h-screen bg-[#1E2430] text-white relative">
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-15"
+          style={{
+            backgroundImage: `url(${campaign.cover_image_url || 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=1200&h=400&fit=crop'})`,
+          }}
+        />
+        <div className="relative z-10">
+          <div className="px-8 pt-12 pb-4 text-center">
+            <p className="text-sm text-slate-400 uppercase tracking-[0.3em]">Joining</p>
+            <h2 className="text-3xl font-bold text-white mt-1">
+              {campaign.title || campaign.name}
+            </h2>
+          </div>
+          <CharacterPickerView
+            campaignId={campaignId}
+            user={user}
+            campaign={campaign}
+          />
+        </div>
       </div>
     );
   }
@@ -202,19 +256,34 @@ export default function CampaignPanel() {
               {campaign?.name || campaign?.title}
             </h1>
             <div className="flex items-center justify-center gap-4">
-              <Button 
-                className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] px-12 py-6 text-xl font-bold shadow-[0_0_20px_rgba(55,242,209,0.3)] transition-all hover:scale-105"
-                onClick={() => toggleReadyMutation.mutate()}
-                disabled={toggleReadyMutation.isPending}
+              <Button
+                className={`px-12 py-6 text-xl font-bold transition-all ${
+                  myCharacter
+                    ? "bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] shadow-[0_0_20px_rgba(55,242,209,0.3)] hover:scale-105"
+                    : "bg-slate-600 text-slate-300 cursor-not-allowed opacity-70"
+                }`}
+                onClick={() => myCharacter && toggleReadyMutation.mutate()}
+                disabled={toggleReadyMutation.isPending || !myCharacter}
+                title={
+                  myCharacter
+                    ? (isReady ? "Click to clear ready" : "Signal you're ready to play")
+                    : "Pick or create a character before readying up"
+                }
               >
                 {toggleReadyMutation.isPending ? (
                   <Loader2 className="w-6 h-6 animate-spin" />
+                ) : isReady ? (
+                  "NOT READY"
                 ) : (
                   "READY UP"
                 )}
               </Button>
             </div>
-            <p className="mt-4 text-sm text-gray-400">Click Ready Up to signal you are ready to play.</p>
+            <p className="mt-4 text-sm text-gray-400">
+              {myCharacter
+                ? "Click Ready Up to signal you are ready to play."
+                : "Pick or create a character on your slot below — then ready up."}
+            </p>
           </div>
         </div>
       </div>
@@ -234,11 +303,20 @@ export default function CampaignPanel() {
                 : "#37F2D1";
               const character = player.character;
               const isPlayerReady = campaign.ready_player_ids?.includes(player.user_id);
-              
+
               return (
               <div key={player.user_id} className="relative w-[calc(16.666%-0.75rem)] min-w-[180px] max-w-[220px]">
-                {/* Character Card */}
-                <div className={`h-[350px] rounded-2xl overflow-hidden bg-[#2A3441] relative transition-all duration-300 ${isPlayerReady ? 'ring-2 ring-[#37F2D1] shadow-[0_0_15px_rgba(55,242,209,0.3)]' : ''}`}>
+                {/* Character Card. Slots are static displays now —
+                    the upstream pre-lobby gate guarantees the
+                    current user has a character before the lobby
+                    renders, so the slot click affordance from the
+                    1b0a688 spine is dead code (removed in
+                    10b-followup-1). */}
+                <div
+                  className={`h-[350px] rounded-2xl overflow-hidden bg-[#2A3441] relative transition-all duration-300 ${
+                    isPlayerReady ? "ring-2 ring-[#37F2D1] shadow-[0_0_15px_rgba(55,242,209,0.3)]" : ""
+                  }`}
+                >
                   {isPlayerReady && (
                     <div className="absolute top-2 right-2 z-20 bg-[#37F2D1] text-[#1E2430] text-xs font-bold px-2 py-1 rounded-full shadow-lg flex items-center gap-1">
                       <span className="w-2 h-2 bg-[#1E2430] rounded-full animate-pulse" />

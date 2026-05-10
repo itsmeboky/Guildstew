@@ -1,0 +1,32 @@
+-- ═════════════════════════════════════════════════════════════
+--   Guildstew — world lore player posting toggle (#11 commit 4)
+--
+--   Schema-only stub for the per-section player-posting toggle.
+--   Stored as a key inside the existing campaigns.settings JSONB
+--   so we don't add another column. Shape:
+--     settings.world_lore_player_posting = {
+--       "regions":    true,
+--       "factions":   false,
+--       "history":    true,
+--       ...etc
+--     }
+--   Default (absent / null / false) means "GM-only posting" which
+--   matches today's behavior. The GM-side toggle UI and the
+--   moderation queue that consume this value are deferred to a
+--   later commit; this migration just reserves the shape.
+--
+--   The status column on world_lore_entries already exists from
+--   20261019_world_lore_v1.sql (DEFAULT 'unverified'). That same
+--   column doubles as the moderation gate — entries created by a
+--   non-GM in a player-posting-enabled section should be inserted
+--   with status = 'pending', and a GM approval queue can flip them
+--   to 'approved'. No schema work needed.
+--
+--   Idempotent. Apply via Supabase dashboard SQL editor.
+-- ═════════════════════════════════════════════════════════════
+
+-- No DDL: settings JSONB already exists on campaigns. Documenting
+-- the contract here so the next commit's GM toggle UI has a
+-- known shape to write.
+
+NOTIFY pgrst, 'reload schema';

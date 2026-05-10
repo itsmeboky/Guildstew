@@ -1,5 +1,6 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import DiceRoller from "@/components/dice/DiceRoller";
 
 /**
  * Dramatic full-screen overlay that replaces the normal action bar / dice
@@ -74,6 +75,11 @@ export default function DeathSaveWindow({
 }) {
   const [phase, setPhase] = React.useState("idle"); // idle | rolling | result
   const [rollValue, setRollValue] = React.useState(null);
+  // Drives the embedded <DiceRoller>'s isOpen. We mount the roller while
+  // phase === "rolling" so the 3D dice scene takes over the central area
+  // of the modal during the ramp, then onRollComplete fires the d20 back
+  // into resolveResult and we transition to phase === "result".
+  const [diceOpen, setDiceOpen] = React.useState(false);
   const heartbeatRef = React.useRef(null);
   const timeoutsRef = React.useRef([]);
 
@@ -131,28 +137,15 @@ export default function DeathSaveWindow({
     }
   };
 
-  const handleRoll = () => {
-    if (phase !== "idle" || !canRoll) return;
-    setPhase("rolling");
-
-    // Ramp the heartbeat up for about a second to build tension.
-    const hb = heartbeatRef.current;
-    if (hb && !silent) {
-      hb.playbackRate = 1.0;
-      queueTimeout(() => {
-        if (heartbeatRef.current) heartbeatRef.current.playbackRate = 1.3;
-      }, 350);
-      queueTimeout(() => {
-        if (heartbeatRef.current) heartbeatRef.current.playbackRate = 1.55;
-      }, 700);
-    }
-
-    // After the ramp-up, roll the d20, stop the heartbeat, play the
-    // result sound, and notify the parent so they can persist state.
-    queueTimeout(() => {
-      const d20 = Math.floor(Math.random() * 20) + 1;
+  // Resolves the death save UI, audio, and parent callback once we have
+  // a d20 value. Extracted from the old inline RNG path so both the dice
+  // scene's onRollComplete (the live path) and any future pre-rolled
+  // entry point can share the same resolution logic.
+  const resolveResult = React.useCallback(
+    (d20) => {
       setRollValue(d20);
       setPhase("result");
+      setDiceOpen(false);
       stopHeartbeat();
 
       let resultUrl;
@@ -219,6 +212,39 @@ export default function DeathSaveWindow({
       queueTimeout(() => {
         if (typeof onClose === "function") onClose();
       }, holdMs);
+    },
+    // queueTimeout / stopHeartbeat / tryPlay / makeAudio are stable refs
+    // owned by this component scope; the props (silent, onRoll, onClose)
+    // and the saves object are re-read on each call site.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [silent, onRoll, onClose, combatant, saves.successes, saves.failures]
+  );
+
+  const handleRoll = () => {
+    if (phase !== "idle" || !canRoll) return;
+    setPhase("rolling");
+
+    // Ramp the heartbeat up for about a second to build tension.
+    const hb = heartbeatRef.current;
+    if (hb && !silent) {
+      hb.playbackRate = 1.0;
+      queueTimeout(() => {
+        if (heartbeatRef.current) heartbeatRef.current.playbackRate = 1.3;
+      }, 350);
+      queueTimeout(() => {
+        if (heartbeatRef.current) heartbeatRef.current.playbackRate = 1.55;
+      }, 700);
+    }
+
+    // After the ramp-up, hand control to the real DiceRoller. The d20
+    // result comes back via onRollComplete → resolveResult — no RNG
+    // fallback. modifier="deathSave" wires the existing applyDeathSave
+    // timeline modifier in DiceRoller (EKG floor, dark-red pulse
+    // emissive, slowed second-half, heartbeat events, dark-red arena
+    // glow), so the scene reads as a death save without DeathSaveWindow
+    // having to know any of those details.
+    queueTimeout(() => {
+      setDiceOpen(true);
     }, 1000);
   };
 
@@ -375,13 +401,39 @@ export default function DeathSaveWindow({
             )}
 
             {phase === "rolling" && (
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-white/70 text-sm uppercase tracking-[0.3em]"
+              <motion.div
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.25 }}
+                className="relative w-[320px] h-[320px] rounded-3xl overflow-hidden"
+                style={{
+                  background:
+                    "radial-gradient(ellipse at center, rgba(255,30,30,0.10), transparent 70%), rgba(15,0,0,0.6)",
+                  border: "1px solid rgba(255,40,40,0.25)",
+                  boxShadow:
+                    "inset 0 0 40px rgba(0,0,0,0.55), 0 0 60px rgba(120,0,0,0.4)",
+                }}
               >
-                Rolling…
-              </motion.p>
+                <div style={{ position: "absolute", inset: 0 }}>
+                  <DiceRoller
+                    isOpen={diceOpen}
+                    initialDice="d20"
+                    modifier="deathSave"
+                    onRollComplete={resolveResult}
+                    primaryColor="#7a0a0a"
+                    secondaryColor="#ff4444"
+                    isThemedSkin={true}
+                    compact={true}
+                  />
+                </div>
+                {!diceOpen && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <p className="text-white/70 text-sm uppercase tracking-[0.3em]">
+                      Rolling…
+                    </p>
+                  </div>
+                )}
+              </motion.div>
             )}
 
             {phase === "result" && resultLabel && (
