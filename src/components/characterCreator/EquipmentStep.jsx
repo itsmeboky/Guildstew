@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -8,8 +7,8 @@ import { toast } from "sonner";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { base44 } from "@/api/base44Client";
 import { STARTING_EQUIPMENT } from "@/components/dnd5e/dnd5eRules";
+import { getGamePack } from "@/data/games";
 import { safeText } from "@/utils/safeRender";
 import { isLockedInventoryItem } from "@/config/cipherInventoryItems";
 
@@ -44,14 +43,14 @@ export default function EquipmentStep({ characterData, updateCharacterData }) {
     Array.from({ length: choices.length }, (_, i) => (choices[i]?.[0] ?? "")),
   );
 
-  const { data: allItems = [] } = useQuery({
-    queryKey: ["srdItems"],
-    queryFn: () => base44.entities.Dnd5eItem
-      .list("name")
-      .catch(() => []),
-    staleTime: 5 * 60_000,
-    initialData: [],
-  });
+  // Equipment list comes from the per-game-pack SRD adapter, not
+  // from a Supabase table. The previous Dnd5eItem entity query
+  // silent-failed (`.catch(() => [])`) when the table was missing
+  // / empty, leaving the browser blank.
+  const allItems = useMemo(() => {
+    const gamePackId = characterData.gamePack || "dnd5e_2014";
+    return getGamePack(gamePackId).getEquipment();
+  }, [characterData.gamePack]);
 
   const [showItemBrowser, setShowItemBrowser] = useState(false);
   const [itemSearch, setItemSearch] = useState("");
