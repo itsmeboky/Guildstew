@@ -1540,9 +1540,9 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
   return (
     <div className="relative z-10 rounded-[32px] bg-[#050816]/95 px-6 pt-6 pb-8 shadow-[0_24px_60px_rgba(0,0,0,0.8)] flex flex-col items-center gap-6">
       <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.8)]">
-        <div 
-          className="w-full h-full bg-cover bg-center" 
-          style={{ 
+        <div
+          className="w-full h-full bg-cover bg-top"
+          style={{
             backgroundImage: character 
               ? `url(${character.image_url || character.avatar_url || character.profile_avatar_url || '/images/karliah-avatar.jpg'})` 
               : 'none',
