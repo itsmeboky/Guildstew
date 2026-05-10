@@ -988,21 +988,77 @@ export const ENCOUNTER_MULTIPLIER = {
 // MULTICLASSING RULES
 // ─────────────────────────────────────────────
 
-/** Ability score prerequisites for multiclassing */
+/**
+ * Ability score prerequisites for multiclassing (PHB p. 163).
+ * Stored as an array of "alternative" requirement objects per
+ * class — meeting ANY one alternative satisfies the prereq. Each
+ * alternative is an AND group (every key in it must meet its
+ * minimum). The array shape lets Fighter encode its STR-or-DEX
+ * choice without a special case.
+ *
+ * Examples:
+ *   Fighter:   [{ str: 13 }, { dex: 13 }]      → STR 13 OR DEX 13
+ *   Ranger:    [{ dex: 13, wis: 13 }]          → DEX 13 AND WIS 13
+ *   Sorcerer:  [{ cha: 13 }]                   → CHA 13
+ */
 export const MULTICLASS_REQUIREMENTS = {
-  Barbarian: { str: 13 },
-  Bard:      { cha: 13 },
-  Cleric:    { wis: 13 },
-  Druid:     { wis: 13 },
-  Fighter:   { str: 13 }, // or DEX 13
-  Monk:      { dex: 13, wis: 13 },
-  Paladin:   { str: 13, cha: 13 },
-  Ranger:    { dex: 13, wis: 13 },
-  Rogue:     { dex: 13 },
-  Sorcerer:  { cha: 13 },
-  Warlock:   { cha: 13 },
-  Wizard:    { int: 13 },
+  Barbarian: [{ str: 13 }],
+  Bard:      [{ cha: 13 }],
+  Cleric:    [{ wis: 13 }],
+  Druid:     [{ wis: 13 }],
+  Fighter:   [{ str: 13 }, { dex: 13 }],
+  Monk:      [{ dex: 13, wis: 13 }],
+  Paladin:   [{ str: 13, cha: 13 }],
+  Ranger:    [{ dex: 13, wis: 13 }],
+  Rogue:     [{ dex: 13 }],
+  Sorcerer:  [{ cha: 13 }],
+  Warlock:   [{ cha: 13 }],
+  Wizard:    [{ int: 13 }],
 };
+
+const ABILITY_LABELS = {
+  str: "STR", dex: "DEX", con: "CON", int: "INT", wis: "WIS", cha: "CHA",
+};
+
+function attributeScore(attributes, ability) {
+  if (!attributes) return 0;
+  // Tolerate both lowercase and uppercase keys, plus a stats-nested
+  // shape (used elsewhere in the character creator).
+  const stats = attributes.attributes || attributes;
+  const key = ability.toLowerCase();
+  return Number(stats?.[key] ?? stats?.[key.toUpperCase()] ?? 0);
+}
+
+/**
+ * True if `attributes` satisfies the multiclass prereq for
+ * `className`. Returns false for unknown classes (fail-closed).
+ */
+export function meetsMulticlassPrereqs(className, attributes) {
+  const alts = MULTICLASS_REQUIREMENTS[className];
+  if (!Array.isArray(alts) || alts.length === 0) return false;
+  return alts.some((alt) =>
+    Object.entries(alt).every(
+      ([ability, min]) => attributeScore(attributes, ability) >= min,
+    ),
+  );
+}
+
+/**
+ * Human-readable summary of the prereq for UI tooltips:
+ *   "STR 13 OR DEX 13"
+ *   "DEX 13 AND WIS 13"
+ *   "CHA 13"
+ */
+export function multiclassPrereqDescription(className) {
+  const alts = MULTICLASS_REQUIREMENTS[className];
+  if (!Array.isArray(alts) || alts.length === 0) return "";
+  const altStrings = alts.map((alt) =>
+    Object.entries(alt)
+      .map(([ability, min]) => `${ABILITY_LABELS[ability] || ability.toUpperCase()} ${min}`)
+      .join(" AND "),
+  );
+  return altStrings.join(" OR ");
+}
 
 
 // ─────────────────────────────────────────────
