@@ -13,8 +13,12 @@
  * VITE_SUPABASE_URL (or the hard-coded project URL as a fallback).
  */
 
+// Common is intentionally excluded — it renders in Google Fonts'
+// "Shadows Into Light" (handwritten styling), loaded via the
+// stylesheet link in index.html. fontFamilyFor() short-circuits
+// to that family below.
 export const LANGUAGE_FONTS = [
-  "Abyssal", "Celestial", "Common", "DeepSpeech", "Draconic",
+  "Abyssal", "Celestial", "DeepSpeech", "Draconic",
   "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin",
   "Halfling", "Infernal", "Orc", "Primordial", "Sylvan",
   "Undercommon", "Druidic",
@@ -44,6 +48,9 @@ export function languageFontKey(language) {
  * don't blow out the layout.
  */
 export function fontFamilyFor(language) {
+  if (language === "common" || language === "Common") {
+    return "'Shadows Into Light', cursive";
+  }
   const key = languageFontKey(language);
   return key ? `'DnD-${key}', serif` : "serif";
 }

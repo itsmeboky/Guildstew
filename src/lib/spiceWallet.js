@@ -2,12 +2,18 @@ import { supabase } from "@/api/supabaseClient";
 import { toast } from "sonner";
 
 /**
- * Spice wallet client — reads/writes to the personal and guild
- * wallets and appends every movement to the `spice_transactions`
- * ledger. Credits/debits go through the atomic `add_spice` /
- * `spend_spice` RPCs so concurrent updates can't race. `balance_after`
- * is returned by the RPC and written to the ledger row so the ledger
- * alone can reconstruct the wallet timeline.
+ * Spice wallet client — reads from spice_wallets / guild_spice_wallets
+ * and routes every credit / debit through a SECURITY DEFINER RPC.
+ *
+ * The RPCs (add_spice, spend_spice, add_guild_spice, spend_guild_spice)
+ * each handle the wallet UPDATE *and* the spice_transactions audit-row
+ * INSERT in one atomic body, bypassing RLS. spice_wallets and
+ * spice_transactions have no direct INSERT / UPDATE policies — see
+ * 20261213_spice_ledger_atomic_rpcs.sql.
+ *
+ * Do not add a direct .insert() / .update() to either of those tables
+ * from this file. RLS will reject it, and the wallet would drift from
+ * the ledger.
  */
 
 const EMPTY_WALLET = {
@@ -49,18 +55,11 @@ export async function addSpice(userId, amount, type, description, referenceId = 
   const { data: newBalance, error } = await supabase.rpc("add_spice", {
     p_user_id: userId,
     p_amount: amount,
+    p_type: type,
+    p_description: description ?? null,
+    p_reference_id: referenceId,
   });
   if (error) throw error;
-
-  await supabase.from("spice_transactions").insert({
-    user_id: userId,
-    amount,
-    balance_after: newBalance,
-    transaction_type: type,
-    description,
-    reference_id: referenceId,
-  });
-
   return newBalance;
 }
 
@@ -73,18 +72,11 @@ export async function spendSpice(userId, amount, type, description, referenceId 
     const { data: newBalance, error } = await supabase.rpc("spend_spice", {
       p_user_id: userId,
       p_amount: amount,
+      p_type: type,
+      p_description: description ?? null,
+      p_reference_id: referenceId,
     });
     if (error) throw error;
-
-    await supabase.from("spice_transactions").insert({
-      user_id: userId,
-      amount: -amount,
-      balance_after: newBalance,
-      transaction_type: type,
-      description,
-      reference_id: referenceId,
-    });
-
     return { success: true, balance: newBalance };
   } catch (err) {
     if (err?.message?.includes("Insufficient")) {
@@ -106,46 +98,16 @@ export async function getTransactionHistory(userId, limit = 50) {
   return data || [];
 }
 
-// Guild wallet — read-modify-write pattern. Not as airtight as the
-// personal RPCs but sufficient while guild spending is GM-gated.
-// Swap to a dedicated RPC if contention shows up.
 export async function addGuildSpice(guildId, amount, description) {
   if (!guildId || !amount || amount <= 0) return 0;
 
-  const { data: wallet } = await supabase
-    .from("guild_spice_wallets")
-    .select("balance, lifetime_total")
-    .eq("guild_id", guildId)
-    .maybeSingle();
-
-  let newBalance;
-  if (wallet) {
-    newBalance = (wallet.balance || 0) + amount;
-    await supabase
-      .from("guild_spice_wallets")
-      .update({
-        balance: newBalance,
-        lifetime_total: (wallet.lifetime_total || 0) + amount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("guild_id", guildId);
-  } else {
-    newBalance = amount;
-    await supabase.from("guild_spice_wallets").insert({
-      guild_id: guildId,
-      balance: amount,
-      lifetime_total: amount,
-    });
-  }
-
-  await supabase.from("spice_transactions").insert({
-    guild_id: guildId,
-    amount,
-    balance_after: newBalance,
-    transaction_type: "guild_stipend",
-    description: description || "Guild Spice credit",
+  const { data: newBalance, error } = await supabase.rpc("add_guild_spice", {
+    p_guild_id: guildId,
+    p_amount: amount,
+    p_type: "guild_stipend",
+    p_description: description || "Guild Spice credit",
   });
-
+  if (error) throw error;
   return newBalance;
 }
 
@@ -154,33 +116,24 @@ export async function spendGuildSpice(guildId, amount, description) {
     return { success: false, reason: "invalid" };
   }
 
-  const { data: wallet } = await supabase
-    .from("guild_spice_wallets")
-    .select("balance, spending_restricted")
-    .eq("guild_id", guildId)
-    .maybeSingle();
-
-  if (!wallet || wallet.balance < amount) {
-    toast.error("Not enough Spice in the Guild Wallet!");
-    return { success: false, reason: "insufficient" };
+  // spending_restricted is enforced at the call site via getGuildWalletBalance
+  // (PurchaseConfirmDialog / GuildSettingsDialog already gate the leader-only
+  // path). The RPC itself only checks balance — keeping it permission-agnostic
+  // means the same RPC works for stipend, refund, and other future paths.
+  try {
+    const { data: newBalance, error } = await supabase.rpc("spend_guild_spice", {
+      p_guild_id: guildId,
+      p_amount: amount,
+      p_type: "item_purchase",
+      p_description: description || "Guild Spice spend",
+    });
+    if (error) throw error;
+    return { success: true, balance: newBalance };
+  } catch (err) {
+    if (err?.message?.includes("Insufficient")) {
+      toast.error("Not enough Spice in the Guild Wallet!");
+      return { success: false, reason: "insufficient" };
+    }
+    throw err;
   }
-
-  const newBalance = wallet.balance - amount;
-  await supabase
-    .from("guild_spice_wallets")
-    .update({
-      balance: newBalance,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("guild_id", guildId);
-
-  await supabase.from("spice_transactions").insert({
-    guild_id: guildId,
-    amount: -amount,
-    balance_after: newBalance,
-    transaction_type: "item_purchase",
-    description: description || "Guild Spice spend",
-  });
-
-  return { success: true, balance: newBalance };
 }
