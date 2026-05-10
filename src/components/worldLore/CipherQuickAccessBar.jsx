@@ -51,54 +51,6 @@ export default function CipherQuickAccessBar({ campaignId }) {
   useEnsureCipherItems(activeCharacter, user);
 
   const owned = ownedCipherItems(activeCharacter);
-
-  // TEMP DIAGNOSTIC — hotfix v2 / Commit 2 (audit/CYPHER_BUTTON_RECON.md).
-  // Logs the data the bar uses to decide whether to render. Remove
-  // in Commit 3 once the root cause is locked in. Single console.log
-  // per render so the noise floor is bounded.
-  if (typeof window !== "undefined") {
-    /* eslint-disable no-console */
-    console.log("[cypher-debug]", {
-      campaignId,
-      user_id: user?.id,
-      user_email: user?.email,
-      characters_loaded: characters.length,
-      characters: characters.map((c) => ({
-        id: c.id,
-        name: c.name,
-        class: c.class,
-        multiclasses: c.multiclasses,
-        created_by: c.created_by,
-        user_id: c.user_id,
-        campaign_id: c.campaign_id,
-        inventory_count: Array.isArray(c.inventory) ? c.inventory.length : 0,
-        inventory_names: Array.isArray(c.inventory)
-          ? c.inventory.map((it) => ({ id: it?.id, name: it?.name }))
-          : null,
-      })),
-      activeCharacter_id: activeCharacter?.id || null,
-      activeCharacter_class: activeCharacter?.class || null,
-      activeCharacter_inventory_count: Array.isArray(activeCharacter?.inventory)
-        ? activeCharacter.inventory.length
-        : 0,
-      owned_count: owned.length,
-      owned: owned.map((it) => ({ id: it?.id, name: it?.name, cipher_type: it?.cipher_type })),
-      campaign_gm: campaign?.game_master_id || null,
-      isGM_check: !!campaign && campaign.game_master_id === user?.id,
-      early_return_path:
-        !campaignId
-          ? "no-campaignId"
-          : !activeCharacter
-            ? "no-activeCharacter"
-            : owned.length === 0
-              ? "owned-empty"
-              : !!campaign && campaign.game_master_id === user?.id
-                ? "isGM"
-                : "RENDER",
-    });
-    /* eslint-enable no-console */
-  }
-
   if (!campaignId || !activeCharacter || owned.length === 0) return null;
 
   const isGM = !!campaign && campaign.game_master_id === user?.id;
