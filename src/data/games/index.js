@@ -22,12 +22,16 @@
 import * as dnd5e_2014_equipment from "./dnd5e_2014/equipment.js";
 import * as dnd5e_2024_equipment from "./dnd5e_2024/equipment.js";
 import * as dnd5e_2024_classes from "./dnd5e_2024/classes.js";
+import * as dnd5e_2024_classFeatures from "./dnd5e_2024/classFeatures.js";
+import * as dnd5e_2024_subclassFeatures from "./dnd5e_2024/subclassFeatures.js";
 
-// 2014 classes are still served by the legacy hard-coded data in
-// `src/components/dnd5e/dnd5eRules.js` + `ClassStep.jsx` per the
-// "don't refactor 2014 surgically" rule. The dispatcher in
-// CharacterCreator.jsx uses the existing ClassStep for 2014 and
-// ClassStep2024 (which calls into dnd5e_2024/classes.js) for 2024.
+// 2014 classes / class features are still served by the legacy
+// hard-coded data in `src/game-packs/dnd5e/data/classFeatures.js`
+// + `ClassStep.jsx` + `ClassFeaturesStep.jsx` per the "don't
+// refactor 2014 surgically" rule. The dispatcher in
+// CharacterCreator.jsx uses the existing 2014 steps for
+// `dnd5e_2014` and the 2024-prefixed step components (which call
+// into the 2024 adapter modules below) for `dnd5e_2024`.
 const ADAPTERS = {
   dnd5e_2014: {
     id: "dnd5e_2014",
@@ -37,6 +41,8 @@ const ADAPTERS = {
     id: "dnd5e_2024",
     ...dnd5e_2024_equipment,
     ...dnd5e_2024_classes,
+    ...dnd5e_2024_classFeatures,
+    ...dnd5e_2024_subclassFeatures,
   },
 };
 
