@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Handshake } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { logCombatEvent } from "@/utils/combatLog";
+import { isLockedInventoryItem } from "@/config/cipherInventoryItems";
 
 const CURRENCY_KEYS = ["pp", "gp", "ep", "sp", "cp"];
 const CURRENCY_LABELS = { pp: "PP", gp: "GP", ep: "EP", sp: "SP", cp: "CP" };
@@ -254,6 +255,10 @@ function indexInventory(raw) {
   const items = {};
   const list = [];
   raw.forEach((item, idx) => {
+    // Class-bound items (cipher cypher / field guide) are excluded
+    // from the trade picker — they're personal class features, not
+    // tradeable goods.
+    if (isLockedInventoryItem(item)) return;
     const id = item?.id || `${item?.name || "item"}-${idx}`;
     items[id] = { ...item };
     list.push({ id, item: items[id] });
