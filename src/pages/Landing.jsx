@@ -193,7 +193,7 @@ export default function Landing() {
             the copy legible against the dark overlay. */}
         <p className="text-center text-sm text-white drop-shadow-md">
           Don't have an account?{' '}
-          <Link to="/Signup" className="text-[#37F2D1] font-semibold hover:underline">
+          <Link to="/AlphaGate" className="text-[#37F2D1] font-semibold hover:underline">
             Sign Up
           </Link>
         </p>

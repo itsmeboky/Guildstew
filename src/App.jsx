@@ -56,6 +56,7 @@ const AuthenticatedApp = () => {
     // visitors instead of dumping them into onboarding.
     return (
       <Routes>
+        <Route path="/AlphaGate" element={<Pages.AlphaGate />} />
         <Route path="/Signup" element={<ErrorBoundary resetKeys={routeResetKeys}><Pages.Signup /></ErrorBoundary>} />
         <Route path="/ResetPassword" element={<ErrorBoundary resetKeys={routeResetKeys}><Pages.ResetPassword /></ErrorBoundary>} />
         <Route path="/VerifyEmail" element={<ErrorBoundary resetKeys={routeResetKeys}><Pages.VerifyEmail /></ErrorBoundary>} />
