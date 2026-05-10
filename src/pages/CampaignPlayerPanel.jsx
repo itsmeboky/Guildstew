@@ -1141,9 +1141,9 @@ function CampaignPlayerPanelContent() {
                               SELECT
                             </div>
                           )}
-                          <div 
-                            className="h-24 bg-cover bg-center relative"
-                            style={{ 
+                          <div
+                            className="h-24 bg-cover bg-top relative"
+                            style={{
                               backgroundImage: char?.profile_avatar_url ? `url(${char.profile_avatar_url})` : 'none',
                               backgroundColor: '#1a1f2e'
                             }}
