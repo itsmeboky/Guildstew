@@ -28,13 +28,34 @@ export function missingCipherItemsForCharacter(character) {
 }
 
 /**
+ * Returns true if the viewer owns the character. Matches by either
+ * created_by === viewer.email or user_id === viewer.id — same dual
+ * check the CipherQuickAccessBar uses to find the active character,
+ * so the two paths agree on "is this mine?". If neither field is
+ * populated on the character row we treat it as ownerless and let
+ * the grant proceed (RLS catches misuse downstream).
+ */
+function isOwnedBy(character, viewer) {
+  if (!character || !viewer) return false;
+  const byEmail =
+    character.created_by &&
+    viewer.email &&
+    character.created_by === viewer.email;
+  const byUserId =
+    character.user_id && viewer.id && character.user_id === viewer.id;
+  if (byEmail || byUserId) return true;
+  // Neither field populated → treat as ownerless (legacy data).
+  return !character.created_by && !character.user_id;
+}
+
+/**
  * One-shot hook: when the character loads, ensure rogue/druid
  * characters carry their cipher item. Persists via Character.update
  * and invalidates the cache so downstream views see the new row.
  *
  * Idempotent — short-circuits if nothing is missing. Only fires
- * when the viewer owns the character (created_by match), so other
- * players viewing a teammate's sheet don't trigger spurious writes.
+ * when the viewer owns the character so other players viewing a
+ * teammate's sheet don't trigger spurious writes.
  */
 export function useEnsureCipherItems(character, viewer) {
   const qc = useQueryClient();
@@ -43,8 +64,7 @@ export function useEnsureCipherItems(character, viewer) {
   useEffect(() => {
     if (firedRef.current) return;
     if (!character?.id) return;
-    const ownerEmail = character.created_by;
-    if (ownerEmail && viewer?.email && ownerEmail !== viewer.email) return;
+    if (!isOwnedBy(character, viewer)) return;
 
     const missing = missingCipherItemsForCharacter(character);
     if (missing.length === 0) return;

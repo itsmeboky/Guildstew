@@ -8,14 +8,6 @@ import {
   Package, Search, Dices, AlertCircle, Heart, Music, Circle, Triangle, Crosshair, CircleDollarSign
 } from "lucide-react";
 import LootBox from "@/components/player/LootBox";
-import GroupDiceArena from "@/components/combat/GroupDiceArena";
-import PlayerSessionSidebar from "@/components/player/PlayerSessionSidebar";
-import PlayerCampaignUpdatesContent from "@/components/player/PlayerCampaignUpdatesContent";
-import PlayerAdventuringPartyContent from "@/components/player/PlayerAdventuringPartyContent";
-import PlayerQuickNotesContent from "@/components/player/PlayerQuickNotesContent";
-import PlayerCampaignArchivesContent from "@/components/player/PlayerCampaignArchivesContent";
-import Achievements from "@/pages/Achievements";
-import SessionModal from "@/components/session/SessionModal";
 import MoneyCounter from "@/components/shared/MoneyCounter";
 import { spellIcons, spellDetails as hardcodedSpellDetails, getCharacterSpellSlots, fetchAllSpells } from "@/components/dnd5e/spellData";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
@@ -23,11 +15,8 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { motion, AnimatePresence } from "framer-motion";
 import CampaignLog from "@/components/gm/CampaignLog";
 import { canEquipToSlot } from "@/components/gm/equipmentRules";
-import EquipmentLayout from "@/game-packs/dnd5e/ui/EquipmentLayout";
-import getSilhouetteImage from "@/components/shared/getSilhouetteImage";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
-import { preloadDiceModels } from "@/components/dice/DiceRoller";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
 import {
   blankDeathSaves, applyDeathSaveRoll, applyDownedDamage,
@@ -55,8 +44,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
-import { buildEncounterUpdate } from "@/lib/combat/buildEncounterUpdate";
-import { useCampaignRealtime } from "@/lib/useCampaignRealtime";
 import {
   classFeatureDescriptions,
   languageDescriptions,
@@ -230,7 +217,7 @@ function CampaignPlayerPanelContent() {
   const [tradeTarget, setTradeTarget] = useState(null);
 
   // Action Resource State
-  const [actionsState, setActionsState] = useState({ action: true, bonus: true, reaction: true });
+  const [actionsState, setActionsState] = useState({ action: true, bonus: true, reaction: true, inspiration: false });
 
   // 4-state attack mode toggle (mirrors GMPanel) so the
   // CombatActionBar can drive targeting on the player side too.
@@ -249,6 +236,9 @@ function CampaignPlayerPanelContent() {
   // Spell slot tracker. Keyed by character id → { 1: spent, 2: spent, ... }
   const [spentSlotsByCharacter, setSpentSlotsByCharacter] = useState({});
 
+  // Track previous turn to reset actions
+  const prevTurnIndexRef = React.useRef();
+
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
     queryFn: () => base44.auth.me()
@@ -258,18 +248,8 @@ function CampaignPlayerPanelContent() {
     queryKey: ['campaign', campaignId],
     queryFn: () => base44.entities.Campaign.filter({ id: campaignId }).then(campaigns => campaigns[0]),
     enabled: !!campaignId,
-    // Realtime carries live updates via useCampaignRealtime below.
-    // Polling stays as a slow resilience fallback (alpha bug 5).
-    refetchInterval: 5000,
+    refetchInterval: (data) => (data?.combat_active || data?.combat_data?.stage === 'initiative') ? 1000 : 2000
   });
-  useCampaignRealtime(campaignId);
-
-  // Warm the dice GLB cache as soon as the campaign loads, so the
-  // first-ever dice tray of the session renders the player's chosen
-  // models instead of the orange fallback geometry. Idempotent.
-  useEffect(() => {
-    preloadDiceModels(campaign?.dice_config?.uploadedModels);
-  }, [campaign?.dice_config?.uploadedModels]);
 
   // Refetch characters frequently during combat to show HP/Resource updates
   const { data: characters = [] } = useQuery({
@@ -285,45 +265,6 @@ function CampaignPlayerPanelContent() {
     staleTime: 60000
   });
 
-  // #11 commit 2 — unread campaign updates count for the sidebar
-  // bubble badge. Two parallel queries (updates list + reads list)
-  // joined client-side to compute the count. Polls every 30s so a
-  // GM-posted update surfaces on the player's badge without a
-  // refresh. The PlayerCampaignUpdatesContent component handles
-  // the mark-read upsert when the section is opened.
-  const { data: campaignUpdatesForBadge = [] } = useQuery({
-    queryKey: ['campaignUpdates', campaignId],
-    queryFn: () => base44.entities.CampaignUpdate.filter(
-      { campaign_id: campaignId },
-      '-created_at',
-    ),
-    enabled: !!campaignId,
-    initialData: [],
-    refetchInterval: 30000,
-  });
-
-  const { data: campaignUpdateReads = [] } = useQuery({
-    queryKey: ['campaignUpdateReads', campaignId, user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-      const { data, error } = await supabase
-        .from('campaign_update_reads')
-        .select('campaign_update_id')
-        .eq('user_id', user.id);
-      if (error) return [];
-      return data || [];
-    },
-    enabled: !!user?.id && !!campaignId,
-    initialData: [],
-    refetchInterval: 30000,
-  });
-
-  const unreadUpdatesCount = React.useMemo(() => {
-    if (!campaignUpdatesForBadge.length) return 0;
-    const readSet = new Set(campaignUpdateReads.map((r) => r.campaign_update_id));
-    return campaignUpdatesForBadge.filter((u) => !readSet.has(u.id)).length;
-  }, [campaignUpdatesForBadge, campaignUpdateReads]);
-
   // Characters query moved up to modify refetchInterval
 
   const myCharacter = React.useMemo(() => {
@@ -337,12 +278,6 @@ function CampaignPlayerPanelContent() {
   // the Campaigns page with a toast — same user can't straddle two
   // sessions at once.
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
-  // Player sidebar — active section ('campaignUpdates' | 'adventuringParty'
-  // | 'campaignArchives' | 'achievements' | null). Same shape the GM
-  // panel uses for `activeModal`. Section content components mount
-  // via SessionModal further down. #11 commit 1: stub content;
-  // commits 2-5 wire each section's actual content.
-  const [activeSection, setActiveSection] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -416,23 +351,13 @@ function CampaignPlayerPanelContent() {
         await base44.entities.Character.update(myCharacter.id, { active_session_id: null });
       }
       if (user?.id) {
-        // Remove the player from active_session_players and
-        // ready_player_ids so the lobby auto-redirect doesn't fire
-        // again on next mount, AND mark them disconnected so the
-        // GM's existing disconnect indicator surfaces. To return
-        // they need to ready up again, which puts them in the
-        // pending re-entry list on the GM's Player Management
-        // panel — Admit there pulls them back into
-        // active_session_players.
         const fresh = await base44.entities.Campaign.filter({ id: campaignId }).then((r) => r?.[0]);
-        const activeList = Array.isArray(fresh?.active_session_players) ? fresh.active_session_players : [];
-        const readyList = Array.isArray(fresh?.ready_player_ids) ? fresh.ready_player_ids : [];
-        const disconnList = Array.isArray(fresh?.disconnected_players) ? fresh.disconnected_players : [];
-        await base44.entities.Campaign.update(campaignId, {
-          active_session_players: activeList.filter((id) => id !== user.id),
-          ready_player_ids: readyList.filter((id) => id !== user.id),
-          disconnected_players: disconnList.includes(user.id) ? disconnList : [...disconnList, user.id],
-        });
+        const list = Array.isArray(fresh?.disconnected_players) ? fresh.disconnected_players : [];
+        if (!list.includes(user.id)) {
+          await base44.entities.Campaign.update(campaignId, {
+            disconnected_players: [...list, user.id],
+          });
+        }
       }
       toast.success('You left the session.');
       // Land players on the campaign lobby (CampaignPanel) — that
@@ -753,7 +678,7 @@ function CampaignPlayerPanelContent() {
 
   // Redirect if session ends
   useEffect(() => {
-    if (campaign && !campaign.session_active) {
+    if (campaign && !campaign.is_session_active) {
       navigate(createPageUrl("CampaignPanel") + `?id=${campaignId}`);
     }
   }, [campaign, campaignId, navigate]);
@@ -778,28 +703,18 @@ function CampaignPlayerPanelContent() {
     return allUserProfiles.find(p => p.user_id === user?.id);
   }, [allUserProfiles, user?.id]);
 
-  // Reset actions on new turn (fire on rising edge of isActorsTurn).
-  // The previous version watched currentTurnIndex, but the GM's
-  // onEndTurn rotates the order array via splice+push and always
-  // resets currentTurnIndex to 0 — so the index never changes and
-  // the effect never re-fired. The player's id check
-  // (currentTurnCombatant.id === user.id) was also wrong: order
-  // entries use `player-${user.id}` as their id, not the bare
-  // user_id. Switching to isActorsTurn rising-edge fixes both: the
-  // identity comparison lives in useTurnContext (which already
-  // handles the player- prefix and the uniqueId fallback), and the
-  // GM-side has been using this same pattern in GMPanel.jsx:2586.
-  // Inspiration intentionally resets to false here to mirror the
-  // existing line-785 shape — the original setter wiped it on every
-  // turn-start so I'm preserving that behavior pending a separate
-  // recon on whether inspiration is meant to persist.
-  const prevWasActorsTurnRef = React.useRef(false);
+  // Reset actions on new turn
   useEffect(() => {
-     if (isActorsTurn && !prevWasActorsTurnRef.current) {
-        setActionsState({ action: true, bonus: true, reaction: true });
+     const currentIndex = campaign?.combat_data?.currentTurnIndex;
+     if (currentIndex !== undefined && currentIndex !== prevTurnIndexRef.current) {
+        const { order } = campaign.combat_data;
+        const currentTurnCombatant = order?.[currentIndex];
+        if (currentTurnCombatant?.id === user?.id || currentTurnCombatant?.id === myCharacter?.id) {
+           setActionsState({ action: true, bonus: true, reaction: true, inspiration: false });
+        }
+        prevTurnIndexRef.current = currentIndex;
      }
-     prevWasActorsTurnRef.current = isActorsTurn;
-  }, [isActorsTurn]);
+  }, [campaign?.combat_data?.currentTurnIndex, user?.id, myCharacter?.id]);
 
   // Initial equip state from character
   useEffect(() => {
@@ -820,40 +735,8 @@ function CampaignPlayerPanelContent() {
   const isGM = campaign?.game_master_id === user?.id
     || (Array.isArray(campaign?.co_dm_ids) && campaign.co_dm_ids.includes(user?.id));
 
-  // Player sidebar visibility: only show when this user is a player
-  // in an active session (matches the previous Leave Session button's
-  // visibility predicate). GMs landing here for any reason — same
-  // tolerance the rest of the panel has — see no sidebar.
-  const showPlayerSidebar = !isGM && campaign?.session_active;
-
   return (
-    <div className="h-screen w-screen bg-[#020617] text-white flex flex-row overflow-hidden">
-      {/* Phase-3 redesign Commit 2: GroupDiceArena renders only when
-          combat_data.initiative_call.active is true AND the viewer
-          is in selected_user_ids. The component handles its own
-          visibility gating; we mount unconditionally. */}
-      <GroupDiceArena
-        mode="initiative"
-        call={campaign?.combat_data?.initiative_call}
-        isGM={isGM}
-        currentUserId={user?.id}
-        campaign={campaign}
-        campaignId={campaignId}
-        players={players}
-        characters={characters}
-        allUserProfiles={allUserProfiles}
-      />
-      <GroupDiceArena
-        mode="dc_check"
-        call={campaign?.combat_data?.dc_check_call}
-        isGM={isGM}
-        currentUserId={user?.id}
-        campaign={campaign}
-        campaignId={campaignId}
-        players={players}
-        characters={characters}
-        allUserProfiles={allUserProfiles}
-      />
+    <div className="h-screen w-screen bg-[#020617] text-white flex flex-col overflow-hidden">
       <CampaignConsentDialog
         open={showConsentDialog}
         campaign={campaign}
@@ -861,84 +744,15 @@ function CampaignPlayerPanelContent() {
         onAccept={() => queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] })}
       />
 
-      {showPlayerSidebar && (
-        <PlayerSessionSidebar
-          activeSection={activeSection}
-          onOpenSection={setActiveSection}
-          onLeaveSession={() => setShowLeaveConfirm(true)}
-          // #11 commit 2 — unread campaign updates count drives the
-          // bubble badge on the Campaign Updates nav item. Cleared
-          // automatically by PlayerCampaignUpdatesContent's mount-
-          // time mark-read upsert when the section opens.
-          sectionBadges={{ campaignUpdates: unreadUpdatesCount }}
-        />
+      {!isGM && campaign?.session_active && (
+        <button
+          type="button"
+          onClick={() => setShowLeaveConfirm(true)}
+          className="fixed top-4 right-4 z-40 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold uppercase tracking-wider rounded-lg px-4 py-2 shadow-lg shadow-amber-900/50"
+        >
+          Leave Session
+        </button>
       )}
-
-      {/* #11 section modals — section content goes here. Commits
-          2-5 swap the placeholder children for real components.
-          Reuses the existing SessionModal which the GM panel
-          already uses for its sidebar sections. */}
-      <SessionModal
-        isOpen={activeSection === 'campaignUpdates'}
-        onClose={() => setActiveSection(null)}
-        title="Campaign Updates"
-      >
-        <PlayerCampaignUpdatesContent
-          campaignId={campaignId}
-          campaign={campaign}
-          user={user}
-          allUserProfiles={allUserProfiles}
-        />
-      </SessionModal>
-
-      <SessionModal
-        isOpen={activeSection === 'adventuringParty'}
-        onClose={() => setActiveSection(null)}
-        title="Adventuring Party"
-      >
-        <PlayerAdventuringPartyContent
-          campaignId={campaignId}
-          campaign={campaign}
-        />
-      </SessionModal>
-
-      <SessionModal
-        isOpen={activeSection === 'quickNotes'}
-        onClose={() => setActiveSection(null)}
-        title="Quick Notes"
-      >
-        <PlayerQuickNotesContent
-          campaignId={campaignId}
-          user={user}
-          myCharacter={myCharacter}
-        />
-      </SessionModal>
-
-      <SessionModal
-        isOpen={activeSection === 'campaignArchives'}
-        onClose={() => setActiveSection(null)}
-        title="Campaign Archives"
-      >
-        <PlayerCampaignArchivesContent
-          campaignId={campaignId}
-          campaign={campaign}
-        />
-      </SessionModal>
-
-      <SessionModal
-        isOpen={activeSection === 'achievements'}
-        onClose={() => setActiveSection(null)}
-        title="Achievements"
-      >
-        <Achievements embedded />
-      </SessionModal>
-
-      {/* Main content column. Wraps the entire pre-existing player
-          play view so the sidebar can sit alongside it without
-          disturbing internal layout flow. min-w-0 prevents flex-row
-          children from blowing past the viewport when content is
-          wider than its container. */}
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
 
       {showLeaveConfirm && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
@@ -988,11 +802,10 @@ function CampaignPlayerPanelContent() {
 
       <div className="-mt-16 px-6 pb-10 flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden">
         <div className="grid grid-cols-[320px,minmax(0,1fr)] gap-6">
-          <CharacterPanel
-          character={myCharacter}
-          user={user}
+          <CharacterPanel 
+          character={myCharacter} 
+          user={user} 
           guildHall={guildHall}
-          fullSpellsList={fullSpellsList}
           equippedItems={equippedItems}
           setEquippedItems={(newItems) => {
             setEquippedItems(newItems);
@@ -1008,11 +821,6 @@ function CampaignPlayerPanelContent() {
           combatState={combatState}
           setCombatState={setCombatState}
           campaignData={campaign}
-          campaignId={campaignId}
-          characters={characters}
-          players={players}
-          setActionsState={setActionsState}
-          updateCombatEncounter={updateCombatEncounter}
           myConditions={myConditions}
           activeConditions={activeConditions}
           concentrationByCharacter={concentrationByCharacter}
@@ -1025,24 +833,6 @@ function CampaignPlayerPanelContent() {
               setHiddenCharacters((prev) => {
                 const next = new Set(prev);
                 next.add(myCharacterKey);
-                return next;
-              });
-            }
-          }}
-          onPlayerAttacked={() => {
-            // RAW: hiding breaks the moment you attack. Drop the
-            // character from hiddenCharacters; the existing
-            // sneakActive auto-clear effect (line ~509) flips the
-            // Sneak toggle off because isMeHidden goes false.
-            // Sneak Attack damage on THIS attack already applied via
-            // the existing handler; future attacks this turn won't
-            // qualify, which is correct (sneak attack is once per
-            // round in 5e RAW too).
-            if (myCharacterKey) {
-              setHiddenCharacters((prev) => {
-                if (!prev.has(myCharacterKey)) return prev;
-                const next = new Set(prev);
-                next.delete(myCharacterKey);
                 return next;
               });
             }
@@ -1065,6 +855,11 @@ function CampaignPlayerPanelContent() {
             }}
           />
 
+          {/* min-w-0 stops the inner TurnOrderDisplay's `min-w-min`
+              flex from blowing the right grid column past its
+              `minmax(0, 1fr)` budget — without it, the bar shifts
+              right and the late combatants slide off-canvas instead
+              of triggering the inner overflow-x-auto scrollbar. */}
           <div className="space-y-4 min-w-0">
             {campaign.combat_active && campaign.combat_data && (
               campaign.combat_data.stage === 'initiative' || campaign.combat_data.stage === 'arranging' ? (
@@ -1082,30 +877,19 @@ function CampaignPlayerPanelContent() {
                   </div>
                 </div>
               ) : (
-                // Wrap the bar in an explicit width-bounded flex
-                // container so the inner overflow-x-auto scrolls
-                // cleanly within the column. Mirrors the GM-side
-                // wrapper at GMPanel.jsx:4048 (flex justify-between
-                // items-end relative); player-side has no right-
-                // sibling, so justify-start is correct here. min-w-0
-                // closes the grid-track expansion escape hatch where
-                // a flex/min-content child could push the column
-                // wider than its `minmax(0, 1fr)` allotment.
-                <div className="flex justify-start items-end relative w-full min-w-0">
-                  <TurnOrderDisplay
-                    order={campaign.combat_data.order || []}
-                    currentTurnIndex={campaign.combat_data.currentTurnIndex || 0}
-                    onSelectTarget={(target) => {
-                      if (combatState.step === 'selecting_target') {
-                        setCombatState(prev => ({ ...prev, target, step: 'rolling', isOpen: true }));
-                      }
-                    }}
-                    selectionMode={combatState.step === 'selecting_target'}
-                    characters={characters}
-                    players={players}
-                    hideInitiative={true}
-                  />
-                </div>
+                <TurnOrderDisplay
+                  order={campaign.combat_data.order || []}
+                  currentTurnIndex={campaign.combat_data.currentTurnIndex || 0}
+                  onSelectTarget={(target) => {
+                    if (combatState.step === 'selecting_target') {
+                      setCombatState(prev => ({ ...prev, target, step: 'rolling', isOpen: true }));
+                    }
+                  }}
+                  selectionMode={combatState.step === 'selecting_target'}
+                  characters={characters}
+                  players={players}
+                  hideInitiative={true}
+                />
               )
             )}
             {/* End Turn Button for Players */}
@@ -1162,20 +946,7 @@ function CampaignPlayerPanelContent() {
 
             {!combatState.isOpen && campaign?.combat_data?.stage !== 'initiative' && (
               <CombatActionBar
-                character={myCharacter ? (() => {
-                  // Surface order-entry inspiration flags on the
-                  // character prop so the action bar's
-                  // InspirationButton can render the live state.
-                  // Mirrors the dice window's actor IIFE wiring.
-                  const orderEntry = (campaign?.combat_data?.order || [])
-                    .find((c) => (c.uniqueId || c.id) === myCharacterKey);
-                  return {
-                    ...myCharacter,
-                    equipment: equippedItems,
-                    hasInspiration: orderEntry?.hasInspiration,
-                    bardicInspiration: orderEntry?.bardicInspiration,
-                  };
-                })() : null}
+                character={myCharacter ? { ...myCharacter, equipment: equippedItems } : null}
                 actionsState={actionsState}
                 setActionsState={setActionsState}
                 attackMode={attackMode}
@@ -1183,21 +954,6 @@ function CampaignPlayerPanelContent() {
                 isHidden={isMeHidden}
                 sneakActive={sneakActive}
                 onSneakToggle={(next) => setSneakActive(next)}
-                onStopHiding={() => {
-                  // Manual "stop hiding" — drops us from
-                  // hiddenCharacters without rolling Stealth or
-                  // attacking. The existing isMeHidden→sneakActive
-                  // auto-clear effect (line ~509) flips Sneak off
-                  // when isMeHidden goes false.
-                  if (myCharacterKey) {
-                    setHiddenCharacters((prev) => {
-                      if (!prev.has(myCharacterKey)) return prev;
-                      const next = new Set(prev);
-                      next.delete(myCharacterKey);
-                      return next;
-                    });
-                  }
-                }}
                 nonLethalActive={nonLethalActive}
                 onNonLethalToggle={setNonLethalActive}
                 maxSpellSlots={maxSpellSlots}
@@ -1676,14 +1432,13 @@ function CampaignPlayerPanelContent() {
           })()}
         </AlertDialogContent>
       </AlertDialog>
-      </div> {/* /flex-1 main content column (#11 sidebar wrap) */}
     </div>
   );
 }
 
 // --- Shared Components (Copied/Adapted from GMPanel) ---
 
-function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equippedItems, setEquippedItems, inventory, onLootDrop, draggedItem, setDraggedItem, combatState, setCombatState, campaignData, campaignId, characters = [], players = [], setActionsState, updateCombatEncounter, myConditions = [], activeConditions = {}, concentrationByCharacter = {}, myCharacterKey, onHideSuccess, onPlayerAttacked }) {
+function CharacterPanel({ character, user, guildHall, equippedItems, setEquippedItems, inventory, onLootDrop, draggedItem, setDraggedItem, combatState, setCombatState, campaignData, myConditions = [], activeConditions = {}, concentrationByCharacter = {}, myCharacterKey, onHideSuccess }) {
   const queryClient = useQueryClient();
   const [showInventoryOrganizer, setShowInventoryOrganizer] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
@@ -1748,6 +1503,28 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
     setEquippedItems(newEquipped);
   };
 
+  const equipmentSlots = {
+    left: [
+      { id: 'head', label: 'Head Gear' },
+      { id: 'armor', label: 'Armor' },
+      { id: 'gauntlets', label: 'Gauntlets' },
+      { id: 'belt', label: 'Belt' },
+      { id: 'boots', label: 'Boots' }
+    ],
+    right: [
+      { id: 'cloak', label: 'Cloak' },
+      { id: 'necklace', label: 'Necklace' },
+      { id: 'ring1', label: 'Ring 1' },
+      { id: 'ring2', label: 'Ring 2' },
+      { id: 'implement', label: 'Implement' }
+    ],
+    bottom: [
+      { id: 'weapon1', label: 'Weapon 1' },
+      { id: 'weapon2', label: 'Weapon 2' },
+      { id: 'ranged', label: 'Ranged' }
+    ]
+  };
+
   const getInventorySlots = () => {
     let slots = 20;
     if (!inventory) return slots;
@@ -1791,16 +1568,10 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
             ROLL FOR INITIATIVE
           </button>
 
-          <EquipmentLayout
-            equippedItems={equippedItems}
-            draggedItem={draggedItem}
-            onDragStart={(item, slotId) => handleDragStart(item, 'slot', slotId)}
-            onDropOnSlot={handleDropOnSlot}
-            onUnequip={unequipItem}
-          >
-            <img
-              src={getSilhouetteImage(character)}
-              alt=""
+          <div className="w-full relative flex gap-3 justify-center mb-2">
+            <img 
+              src={getSilhouetteImage(character)} 
+              alt="" 
               className="absolute inset-0 w-full h-full object-contain opacity-20 pointer-events-none"
             />
             {/* Target Selection Overlay */}
@@ -1839,31 +1610,7 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
                       conditions: activeConditions[campaignData.combat_data.active_encounter.attackerId] || [],
                     }
                   : character
-                    ? (() => {
-                        // Mirrors the GM-side actor wiring at
-                        // GMPanel.jsx:3066-3081 — surface live
-                        // order-entry + combat_data state on the
-                        // actor so CombatDiceWindow's reads land.
-                        // Field set kept symmetric with GM via the
-                        // Phase-1 commit-2 audit:
-                        //   - hasInspiration (post-roll advantage prompt)
-                        //   - bardicInspiration (post-roll bonus die prompt)
-                        //   - conditions (roll-modifier guards)
-                        //   - classResources (rage / ki / paladin
-                        //     smites / lucky points etc.; was missing
-                        //     player-side and silently caused the
-                        //     dice window to read undefined for
-                        //     class-resource counts.)
-                        const orderEntry = (campaignData?.combat_data?.order || [])
-                          .find((c) => (c.uniqueId || c.id) === myCharacterKey);
-                        return {
-                          ...character,
-                          conditions: myConditions,
-                          hasInspiration: orderEntry?.hasInspiration,
-                          bardicInspiration: orderEntry?.bardicInspiration,
-                          classResources: campaignData?.combat_data?.classResources?.[myCharacterKey] || {},
-                        };
-                      })()
+                    ? { ...character, conditions: myConditions }
                     : null
               }
               target={
@@ -1898,7 +1645,6 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
               // Spectator Props: We are a spectator if we are not the one actively rolling in local state
               isSpectator={!combatState.isOpen && !!campaignData?.combat_data?.active_encounter}
               spectatorData={campaignData?.combat_data?.active_encounter}
-              gmScreenMode={!!campaignData?.settings?.gm_screen_mode}
 
               onSwitchTarget={() => {
                 if (!campaignData?.combat_data?.active_encounter) {
@@ -1906,69 +1652,29 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
                 }
               }}
               onActionComplete={() => {
-                 // Consume the right action-economy slot. The resolved
-                 // cost lives on combatState.action.resolved (set at
-                 // onActionClick time via resolveAction). costOverride
-                 // — used by Rogue Cunning Action's bonus-action
-                 // Hide/Dash/Disengage and Monk Step of the Wind —
-                 // flows through resolveAction so resolved.cost is
-                 // 'bonus' for those. Falling back to 'action' for
-                 // anything that didn't pre-resolve preserves the
-                 // pre-fix default.
-                 // isOffHand is the off-hand bonus-attack flag the GM
-                 // panel sets when chaining a second weapon; OR'd
-                 // with the resolved bonus cost so both paths land
-                 // on the bonus slot. GM-side at GMPanel.jsx:3844
-                 // uses the same resolved.cost source (the player
-                 // path was hardcoding 'action' / 'bonus' on
-                 // isOffHand alone, which broke Cunning Action —
-                 // alpha bug 3).
-                 const resolvedCost = combatState.action?.resolved?.cost;
-                 const effectiveCost = combatState.isOffHand
-                   ? 'bonus'
-                   : (resolvedCost || 'action');
-                 setActionsState(prev => consumeActionCost(prev, effectiveCost));
-                 // Clear the synced encounter so spectators exit cleanly
-                 // and the dice window's isOpen prop (which considers
-                 // active_encounter) flips off. Mirrors the GM's
-                 // onActionComplete cleanup at GMPanel.jsx:3830-3845.
-                 // Without this, DONE no-op'd visually because isOpen
-                 // stayed true on the active_encounter branch and the
-                 // local combat state never reset.
-                 if (campaignData?.combat_data?.active_encounter) {
-                    const cleared = { ...campaignData.combat_data, active_encounter: null };
-                    queryClient.setQueryData(['campaign', campaignId], (old) =>
-                      old ? { ...old, combat_data: cleared } : old,
-                    );
-                    base44.entities.Campaign
-                      .update(campaignId, { combat_data: cleared })
-                      .catch(err => console.error("Failed to clear encounter", err));
+                 if (combatState.isOffHand) {
+                    setActionsState(prev => ({ ...prev, bonus: false }));
+                 } else {
+                    setActionsState(prev => ({ ...prev, action: false }));
                  }
-                 setCombatState({ step: 'idle', isOpen: false, action: null, target: null, isOffHand: false });
               }}
               onRoll={async (data) => {
-                // RAW: hiding breaks the moment you attack — hit OR
-                // miss reveals you. Fire OUTSIDE the encounter-sync
-                // gate below so this doesn't depend on
-                // active_encounter being set or on target≠self.
-                // Pre-fix this lived inside both gates and could
-                // no-op on edge cases (alpha bug 4).
-                if (data.type === 'attack_result') {
-                  onPlayerAttacked && onPlayerAttacked();
-                }
-
                 // If we are the actor (not spectator), handle rolls & sync
                 if (campaignData?.combat_data?.active_encounter?.targetId !== `player-${user?.id}`) {
                    // Sync our rolls to DB
                    if (campaignData?.combat_data?.active_encounter) {
                       const currentEncounter = campaignData.combat_data.active_encounter;
-                      // Encounter-update shape per data.type lives in
-                      // src/lib/combat/buildEncounterUpdate.js so
-                      // player-side and GM-side handlers stay in
-                      // lockstep. `state` passthrough (rage /
-                      // deathSave / inspiration / wildMagic) is part
-                      // of the helper's per-branch shape.
-                      const updates = buildEncounterUpdate(data) || {};
+                      let updates = {};
+                      
+                      if (data.type === 'attack_result') {
+                         updates = { phase: 'attack_result', attackRoll: data.roll };
+                      } else if (data.type === 'damage') {
+                         updates = { phase: 'damage_result', damageRoll: { total: data.value, ...data.detail } };
+                      } else if (data.type === 'rolling_attack') {
+                         updates = { phase: 'rolling_attack' };
+                      } else if (data.type === 'rolling_damage') {
+                         updates = { phase: 'rolling_damage' };
+                      }
 
                       if (Object.keys(updates).length > 0) {
                         updateCombatEncounter({ ...currentEncounter, ...updates });
@@ -2148,7 +1854,52 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
               }}
             />
 
-          </EquipmentLayout>
+            <div className="flex flex-col gap-3 relative z-10">
+              {equipmentSlots.left.map(slot => (
+                <EquipmentSlot 
+                  key={slot.id} 
+                  slotId={slot.id}
+                  label={slot.label} 
+                  item={equippedItems[slot.id]} 
+                  onDrop={() => handleDropOnSlot(slot.id)}
+                  onDragStart={(item) => handleDragStart(item, 'slot', slot.id)}
+                  onUnequip={() => unequipItem(slot.id)}
+                  isValidTarget={draggedItem ? canEquipToSlot(draggedItem.item, slot.id) : undefined}
+                />
+              ))}
+            </div>
+            <div className="w-32 flex-shrink-0 relative z-10"></div>
+            <div className="flex flex-col gap-3 relative z-10">
+              {equipmentSlots.right.map(slot => (
+                <EquipmentSlot 
+                  key={slot.id} 
+                  slotId={slot.id}
+                  label={slot.label} 
+                  item={equippedItems[slot.id]} 
+                  onDrop={() => handleDropOnSlot(slot.id)}
+                  onDragStart={(item) => handleDragStart(item, 'slot', slot.id)}
+                  onUnequip={() => unequipItem(slot.id)}
+                  isValidTarget={draggedItem ? canEquipToSlot(draggedItem.item, slot.id) : undefined}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="w-full flex gap-3 justify-center pt-2 border-t border-[#111827]">
+            {equipmentSlots.bottom.map(slot => (
+              <EquipmentSlot 
+                key={slot.id} 
+                slotId={slot.id}
+                label={slot.label} 
+                size="large" 
+                item={equippedItems[slot.id]} 
+                onDrop={() => handleDropOnSlot(slot.id)}
+                onDragStart={(item) => handleDragStart(item, 'slot', slot.id)}
+                onUnequip={() => unequipItem(slot.id)}
+                isValidTarget={draggedItem ? canEquipToSlot(draggedItem.item, slot.id) : undefined}
+              />
+            ))}
+          </div>
 
           <div className="w-full pt-3 border-t border-[#111827] mt-2">
             <div className="mb-3">
@@ -2305,6 +2056,61 @@ function CharacterPanel({ character, user, guildHall, fullSpellsList = [], equip
 
 
 
+
+function EquipmentSlot({ label, size = 'normal', item, onDrop, onDragStart, onUnequip, isValidTarget }) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const slotSize = size === 'large' ? 'w-16 h-16' : 'w-14 h-14';
+
+  const borderColor = isDragOver && isValidTarget ? 'border-[#37F2D1] bg-[#37F2D1]/20' :
+                      isDragOver && !isValidTarget ? 'border-red-500 bg-red-500/20' :
+                      isValidTarget ? 'border-[#37F2D1] border-dashed bg-[#37F2D1]/5' :
+                      item ? 'border-[#37F2D1]/50 bg-[#111827]' : 
+                      'border-[#111827] hover:border-[#22c5f5]/50';
+
+  const itemImage = item ? (
+    item.image_url || 
+    itemIcons[item.name] || 
+    itemIcons[Object.keys(itemIcons).find(k => k.toLowerCase() === item.name?.toLowerCase())] ||
+    itemIcons[Object.keys(itemIcons).find(k => item.name?.toLowerCase().includes(k.toLowerCase()))]
+  ) : null;
+
+  return (
+    <div className="relative">
+      <div
+        draggable={!!item}
+        onDragStart={() => item && onDragStart && onDragStart(item)}
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (isValidTarget !== undefined) setIsDragOver(true);
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragOver(false);
+          onDrop && onDrop();
+        }}
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+        onDoubleClick={() => item && onUnequip && onUnequip()}
+        className={`${slotSize} rounded-xl bg-[#0b1220] border-2 transition-all shadow-[0_8px_20px_rgba(0,0,0,0.7)] flex items-center justify-center cursor-pointer overflow-hidden ${borderColor} ${isDragOver ? 'scale-105' : ''}`}
+      >
+        {item && itemImage ? (
+          <img src={itemImage} alt={safeText(item.name)} className="w-full h-full object-cover" />
+        ) : item ? (
+          <span className="text-[8px] text-center text-slate-300 px-1 line-clamp-2">{safeText(item.name)}</span>
+        ) : (
+          <span className="text-[8px] text-center text-slate-600 px-1 leading-tight font-medium">{label}</span>
+        )}
+      </div>
+      {showTooltip && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-[#1E2430] text-white px-2 py-1 rounded text-[10px] whitespace-nowrap z-50 shadow-xl border border-[#37F2D1]">
+          {item ? `${label}: ${safeText(item.name)} (double-click to unequip)` : label}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function InventorySlot({ item, draggable, onDragStart }) {
   const imgSrc = item ? (item.image_url || itemIcons[item.name] || itemIcons[Object.keys(itemIcons).find(k => k.toLowerCase() === item.name?.toLowerCase())]) : null;
@@ -2964,6 +2770,14 @@ function TurnOrderDisplay({ order, currentTurnIndex, onSelectTarget, selectionMo
       </div>
     </div>
   );
+}
+
+function getSilhouetteImage(character) {
+  if (!character) return 'https://static.wixstatic.com/media/5cdfd8_35e9f29559bd43239470a098001a1fe5~mv2.png';
+  const gender = (character.gender || '').toLowerCase();
+  if (gender.includes('female') || gender === 'f') return 'https://static.wixstatic.com/media/5cdfd8_95e7b63afc9a444e97bbadc37e59b154~mv2.png';
+  if (gender.includes('male') || gender === 'm') return 'https://static.wixstatic.com/media/5cdfd8_8b8fc7ed62dd4c74927bfee94c031e7d~mv2.png';
+  return 'https://static.wixstatic.com/media/5cdfd8_35e9f29559bd43239470a098001a1fe5~mv2.png';
 }
 
 class ErrorBoundary extends React.Component {
