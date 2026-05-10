@@ -5,6 +5,11 @@ import { Sparkles, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import {
   spellsByClass,
   recommendedSpells,
   spellDetails as hardcodedSpellDetails,
@@ -278,60 +283,71 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
                       };
 
                       return (
-                        <div
-                          key={spell}
-                          onClick={() => !isDisabled && handleToggle(!isSelected)}
-                          className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-[#2A3441] border-[#37F2D1] border-4'
-                              : 'bg-[#2A3441] border-[#1E2430]'
-                          } ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-[#37F2D1]/50'}`}
-                        >
-                          <div className="flex items-start gap-3 mb-2">
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={handleToggle}
-                              disabled={isDisabled}
-                              className="mt-1 border-white pointer-events-none"
-                            />
-                            {spellIcons[spell] && (
-                              <img
-                                src={spellIcons[spell]}
-                                alt={spell}
-                                className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border-2 border-[#37F2D1]/30"
-                              />
-                            )}
-                            <div className="flex-1">
-                              <h4 className="font-semibold text-[#FFC6AA]">{spell}</h4>
-                              <div className="text-xs text-gray-400 mb-2">
-                                {details.school} • {details.castingTime} • {details.range}
-                              </div>
-                              <p className="text-xs text-white leading-relaxed line-clamp-3">{details.description}</p>
-                              {details.effects && details.effects.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-1">
-                                  {details.effects.map((effect, idx) => (
-                                    <div
-                                      key={idx}
-                                      className="relative"
-                                      onMouseEnter={() => setHoveredEffect(effect)}
-                                      onMouseLeave={() => setHoveredEffect(null)}
-                                    >
-                                      <Badge className="bg-[#FF5722] text-white text-xs cursor-help">
-                                        {effect}
-                                      </Badge>
-                                      {hoveredEffect === effect && effectDescriptions[effect] && (
-                                        <div className="absolute z-10 bottom-full left-0 mb-2 bg-[#1E2430] text-white p-3 rounded-lg text-xs w-64 shadow-lg border-2 border-[#FF5722]">
-                                          <div className="font-bold mb-1">{effect}</div>
-                                          {effectDescriptions[effect]}
+                        <HoverCard key={spell} openDelay={150} closeDelay={100}>
+                          <HoverCardTrigger asChild>
+                            <div
+                              onClick={() => !isDisabled && handleToggle(!isSelected)}
+                              className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'bg-[#2A3441] border-[#37F2D1] border-4'
+                                  : 'bg-[#2A3441] border-[#1E2430]'
+                              } ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-[#37F2D1]/50'}`}
+                            >
+                              <div className="flex items-start gap-3 mb-2">
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={handleToggle}
+                                  disabled={isDisabled}
+                                  className="mt-1 border-white pointer-events-none"
+                                />
+                                {spellIcons[spell] && (
+                                  <img
+                                    src={spellIcons[spell]}
+                                    alt={spell}
+                                    className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border-2 border-[#37F2D1]/30"
+                                  />
+                                )}
+                                <div className="flex-1">
+                                  <h4 className="font-semibold text-[#FFC6AA]">{spell}</h4>
+                                  <div className="text-xs text-gray-400 mb-2">
+                                    {details.school} • {details.castingTime} • {details.range}
+                                  </div>
+                                  <p className="text-xs text-white leading-relaxed line-clamp-3">{details.description}</p>
+                                  {details.effects && details.effects.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-1">
+                                      {details.effects.map((effect, idx) => (
+                                        <div
+                                          key={idx}
+                                          className="relative"
+                                          onMouseEnter={() => setHoveredEffect(effect)}
+                                          onMouseLeave={() => setHoveredEffect(null)}
+                                        >
+                                          <Badge className="bg-[#FF5722] text-white text-xs cursor-help">
+                                            {effect}
+                                          </Badge>
+                                          {hoveredEffect === effect && effectDescriptions[effect] && (
+                                            <div className="absolute z-10 bottom-full left-0 mb-2 bg-[#1E2430] text-white p-3 rounded-lg text-xs w-64 shadow-lg border-2 border-[#FF5722]">
+                                              <div className="font-bold mb-1">{effect}</div>
+                                              {effectDescriptions[effect]}
+                                            </div>
+                                          )}
                                         </div>
-                                      )}
+                                      ))}
                                     </div>
-                                  ))}
+                                  )}
                                 </div>
-                              )}
+                              </div>
                             </div>
-                          </div>
-                        </div>
+                          </HoverCardTrigger>
+                          <HoverCardContent
+                            side="right"
+                            align="start"
+                            sideOffset={8}
+                            className="w-96 max-h-[80vh] overflow-y-auto custom-scrollbar bg-[#1E2430] border-2 border-[#37F2D1]/50 text-white p-4"
+                          >
+                            <SpellFullDetail name={spell} spell={details} />
+                          </HoverCardContent>
+                        </HoverCard>
                       );
                     })
                   )}
@@ -339,6 +355,76 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Full spell detail rendered in the hover popover. Untruncated
+ * description plus all metadata (level, school, casting time, range,
+ * components, duration, at-higher-levels scaling, eligible classes).
+ *
+ * Tolerates the slight shape variance between the API spell rows
+ * (level: number, classes: array, higherLevel: string) and the
+ * hardcoded fallback rows (level: "Cantrip" | string, no higherLevel
+ * / classes). Missing fields drop their row instead of rendering "-".
+ */
+function SpellFullDetail({ name, spell }) {
+  if (!spell) return null;
+  const levelDisplay =
+    spell.level === 0 || spell.level === "Cantrip"
+      ? "Cantrip"
+      : typeof spell.level === "number"
+        ? `Level ${spell.level}`
+        : spell.level;
+  const higher = spell.higherLevel || spell.higher_level || spell.atHigherLevels;
+  const classes = Array.isArray(spell.classes) ? spell.classes : [];
+  const meta = [
+    levelDisplay && spell.school ? `${levelDisplay} ${spell.school}` : (levelDisplay || spell.school),
+    spell.castingTime,
+    spell.range,
+    spell.components,
+    spell.duration,
+  ].filter(Boolean);
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h4 className="text-base font-bold text-[#FFC6AA] leading-tight">{name}</h4>
+        {meta.length > 0 && (
+          <p className="text-[11px] text-gray-400 mt-0.5">{meta.join(" • ")}</p>
+        )}
+      </div>
+
+      {spell.description && (
+        <p className="text-xs text-white/90 leading-relaxed whitespace-pre-line">
+          {spell.description}
+        </p>
+      )}
+
+      {higher && (
+        <div className="border-l-2 border-[#37F2D1]/60 pl-3 py-1">
+          <p className="text-[10px] uppercase tracking-widest text-[#37F2D1] font-bold mb-1">
+            At Higher Levels
+          </p>
+          <p className="text-xs text-white/85 leading-relaxed whitespace-pre-line">{higher}</p>
+        </div>
+      )}
+
+      {classes.length > 0 && (
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-1">
+            Classes
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {classes.map((c) => (
+              <Badge key={c} className="bg-[#1E2430] border border-[#37F2D1]/30 text-[#37F2D1] text-[10px]">
+                {c}
+              </Badge>
+            ))}
+          </div>
         </div>
       )}
     </div>
