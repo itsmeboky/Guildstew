@@ -1,16 +1,24 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { ScrollText, Shuffle, Sparkles, Lock } from "lucide-react";
-import { Link } from "react-router-dom";
-import { createPageUrl } from "@/utils";
-import { useSubscription } from "@/lib/SubscriptionContext";
+import { toast } from "sonner";
 
 /**
  * First-screen selector shown before the character creator steps.
  * Three cards route the player into:
  *   - 'full'  — the existing step-by-step CharacterCreator
- *   - 'quick' — Quick Pick (race/class/background → 6 cards)
- *   - 'ai'    — AI Generate (single prompt)
+ *   - 'quick' — Quick Pick (race/class/background → 6 cards)  [GATED]
+ *   - 'ai'    — AI Generate (single prompt)                   [GATED]
+ *
+ * The two AI-driven flows are gated behind "Coming in 1.0" for
+ * alpha — they need finalized AI provider integration and the
+ * level-N completeness work shipping in Layer 3 commits 2-4
+ * before we surface them to users. The cards stay visible so
+ * users can see what's coming, but click is a no-op.
+ *
+ * Visual treatment matches SpiceEmporium's "Disabled for Alpha"
+ * pattern (e31908d): dashed border, muted color, click toasts a
+ * "Coming in 1.0" notice instead of routing.
  */
 const MODES = [
   {
@@ -26,6 +34,7 @@ const MODES = [
     description: "Pick your race, class, and background — we'll find you six adventurers to choose from.",
     Icon: Shuffle,
     accent: "#fbbf24",
+    alphaDisabled: true,
   },
   {
     id: "ai",
@@ -33,11 +42,14 @@ const MODES = [
     description: "Describe your dream character and we'll build them for you.",
     Icon: Sparkles,
     accent: "#a855f7",
+    alphaDisabled: true,
   },
 ];
 
 export default function ModeSelector({ onSelect }) {
-  const sub = useSubscription();
+  const handleAlphaDisabledClick = () => {
+    toast("Coming in 1.0 — use Full Creator for now.");
+  };
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -50,23 +62,24 @@ export default function ModeSelector({ onSelect }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {MODES.map(({ id, title, description, Icon, accent }) => {
-          const requiresAI = id === 'quick' || id === 'ai';
-          const locked = requiresAI && !sub.canUse('aiGeneration');
+        {MODES.map(({ id, title, description, Icon, accent, alphaDisabled }) => {
           const cardBody = (
             <>
               <div
                 className="w-14 h-14 rounded-xl flex items-center justify-center"
-                style={{ backgroundColor: `${accent}22`, color: accent }}
+                style={{
+                  backgroundColor: alphaDisabled ? "rgba(148,163,184,0.18)" : `${accent}22`,
+                  color: alphaDisabled ? "#94a3b8" : accent,
+                }}
               >
                 <Icon className="w-7 h-7" />
               </div>
-              <h3 className="text-xl font-bold text-white">{title}</h3>
+              <h3 className={`text-xl font-bold ${alphaDisabled ? "text-slate-300" : "text-white"}`}>{title}</h3>
               <p className="text-sm text-slate-400 leading-relaxed">{description}</p>
-              {locked ? (
-                <div className="mt-auto inline-flex items-center gap-1 text-xs font-black uppercase tracking-widest text-amber-300">
+              {alphaDisabled ? (
+                <div className="mt-auto inline-flex items-center gap-1 text-xs font-black uppercase tracking-widest text-slate-400">
                   <Lock className="w-3 h-3" />
-                  Adventurer+ — Upgrade
+                  Coming in 1.0
                 </div>
               ) : (
                 <div
@@ -78,16 +91,17 @@ export default function ModeSelector({ onSelect }) {
               )}
             </>
           );
-          if (locked) {
+          if (alphaDisabled) {
             return (
-              <Link
+              <button
                 key={id}
-                to={`${createPageUrl('Settings')}?tab=subscription`}
-                className="bg-[#1E2430]/80 backdrop-blur-sm border-2 border-amber-500/40 hover:border-amber-400 rounded-2xl p-6 text-left transition-colors flex flex-col gap-3 relative overflow-hidden"
+                type="button"
+                onClick={handleAlphaDisabledClick}
+                title="Coming in 1.0 — use Full Creator for now"
+                className="bg-[#1E2430]/40 backdrop-blur-sm border-2 border-dashed border-slate-700 rounded-2xl p-6 text-left flex flex-col gap-3 cursor-not-allowed opacity-70"
               >
-                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent pointer-events-none" />
                 {cardBody}
-              </Link>
+              </button>
             );
           }
           return (

@@ -141,6 +141,10 @@ export default function CharacterCreator() {
     features: [],
     feature_choices: {},
     multiclasses: [],
+    // Per-class multiclass skill picks (Bard / Ranger / Rogue grant
+    // 1 skill on entry per RAW). Keyed by class name; the SkillsStep
+    // picker reads / writes this map alongside the main `skills` map.
+    multiclassSkills: {},
     inventory: [],
     equipment: { weapons: [], armor: {} },
     currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
@@ -222,6 +226,7 @@ export default function CharacterCreator() {
           features: existingCharacter.features || prev.features,
           feature_choices: existingCharacter.feature_choices || prev.feature_choices,
           multiclasses: existingCharacter.multiclasses || prev.multiclasses,
+          multiclassSkills: existingCharacter.multiclassSkills || prev.multiclassSkills,
           inventory: existingCharacter.inventory || prev.inventory,
           equipment: existingCharacter.equipment || prev.equipment,
           currency: existingCharacter.currency || prev.currency,
@@ -719,11 +724,13 @@ const handleSubmit = () => {
             </h1>
             {!editCharacterId && (
               <Button
-                onClick={() => setQuickCreateOpen(true)}
-                className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] font-bold"
+                onClick={() => toast("Coming in 1.0 — use Full Creator for now.")}
+                disabled
+                title="Coming in 1.0 — use Full Creator for now"
+                className="bg-transparent border-2 border-dashed border-slate-600 text-slate-400 font-bold cursor-not-allowed hover:bg-transparent disabled:opacity-100"
               >
                 <Zap className="w-4 h-4 mr-2" />
-                Quick Create
+                Quick Create — Coming in 1.0
               </Button>
             )}
           </div>
