@@ -15,9 +15,16 @@ import {
 // Derived from the registry so every component reads from one source.
 const allSkills = ALL_SKILLS;
 
-// CLASS_SKILL_CHOICES shape: { Barbarian: { count: 2, from: [...] }, ... }
+// CLASS_SKILL_CHOICES shape: { Barbarian: { count: 2, from: [...] }, ... }.
+// Bard's `from` is the literal string 'any' (RAW: bards pick from any
+// skill). Expand it to the full skill catalog here so downstream
+// `availableClassSkills.includes(skill)` is an array check, not the
+// String.prototype.includes substring lookup that always returned false.
 const classSkillOptions = Object.fromEntries(
-  Object.entries(CLASS_SKILL_CHOICES).map(([cls, v]) => [cls, v.from || []])
+  Object.entries(CLASS_SKILL_CHOICES).map(([cls, v]) => [
+    cls,
+    v.from === 'any' ? ALL_SKILLS : (v.from || []),
+  ])
 );
 const classSkillCounts = Object.fromEntries(
   Object.entries(CLASS_SKILL_CHOICES).map(([cls, v]) => [cls, v.count || 2])
