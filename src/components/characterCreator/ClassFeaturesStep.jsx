@@ -5,6 +5,33 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
+import SubclassPicker from "@/components/characterCreator/SubclassPicker";
+
+// Canonical "choose your specialization" feature names per class.
+// When a feature's name lands in this set, render the arrow-pattern
+// SubclassPicker instead of the legacy Select dropdown. Other
+// choice-required features (Fighting Style, Expertise picks,
+// Eldritch Invocations, etc.) keep the dropdown — those are short
+// flat lists, not paragraph-rich subclass cards.
+const SUBCLASS_FEATURE_NAMES = new Set([
+  "Primal Path",
+  "Bard College",
+  "Divine Domain",
+  "Druid Circle",
+  "Martial Archetype",
+  "Monastic Tradition",
+  "Sacred Oath",
+  "Ranger Archetype",
+  "Ranger Conclave",
+  "Roguish Archetype",
+  "Sorcerous Origin",
+  "Otherworldly Patron",
+  "Arcane Tradition",
+]);
+
+function isSubclassFeature(feature) {
+  return !!feature?.choiceRequired && SUBCLASS_FEATURE_NAMES.has(feature?.name);
+}
 
 export default function ClassFeaturesStep({ characterData, updateCharacterData }) {
   const [multiclasses, setMulticlasses] = useState(characterData.multiclasses || []);
@@ -128,35 +155,47 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
                 </p>
 
                 {hasChoice && feature.choices && (
-                  <div className="mt-5 p-5 bg-[#1E2430]/50 rounded-lg border-2 border-[#FF5722]">
-                    <p className="text-[#FF5722] font-semibold mb-4 text-sm">
-                      ⚠️ You must make a choice for this feature:
-                    </p>
-                    
-                    <Select
-                      value={currentChoice || ""}
-                      onValueChange={(value) => handleFeatureChoice(featureKey, value)}
-                    >
-                      <SelectTrigger className="h-auto min-h-11 w-full">
-                        <SelectValue placeholder="Select option..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {feature.choices.map((choice, cIdx) => {
-                          const choiceName = typeof choice === 'string' ? choice : choice.name;
-                          const choiceDesc = typeof choice === 'object' ? choice.description : null;
-                          return (
-                            <SelectItem
-                              key={cIdx}
-                              value={choiceName}
-                              description={choiceDesc || undefined}
-                            >
-                              {choiceName}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  isSubclassFeature(feature) ? (
+                    <div className="mt-5">
+                      <SubclassPicker
+                        choices={feature.choices}
+                        value={currentChoice || null}
+                        onSelect={(value) => handleFeatureChoice(featureKey, value)}
+                        featureName={feature.name}
+                        levelGained={feature.level}
+                      />
+                    </div>
+                  ) : (
+                    <div className="mt-5 p-5 bg-[#1E2430]/50 rounded-lg border-2 border-[#FF5722]">
+                      <p className="text-[#FF5722] font-semibold mb-4 text-sm">
+                        ⚠️ You must make a choice for this feature:
+                      </p>
+
+                      <Select
+                        value={currentChoice || ""}
+                        onValueChange={(value) => handleFeatureChoice(featureKey, value)}
+                      >
+                        <SelectTrigger className="h-auto min-h-11 w-full">
+                          <SelectValue placeholder="Select option..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {feature.choices.map((choice, cIdx) => {
+                            const choiceName = typeof choice === 'string' ? choice : choice.name;
+                            const choiceDesc = typeof choice === 'object' ? choice.description : null;
+                            return (
+                              <SelectItem
+                                key={cIdx}
+                                value={choiceName}
+                                description={choiceDesc || undefined}
+                              >
+                                {choiceName}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )
                 )}
               </div>
             );
@@ -255,29 +294,41 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
                         </p>
                         
                         {hasChoice && feature.choices && (
-                          <Select
-                            value={currentChoice || ""}
-                            onValueChange={(value) => handleFeatureChoice(featureKey, value)}
-                          >
-                            <SelectTrigger className="h-auto min-h-11 w-full mt-4">
-                              <SelectValue placeholder="Make a choice..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {feature.choices.map((choice, cIdx) => {
-                                const choiceName = typeof choice === 'string' ? choice : choice.name;
-                                const choiceDesc = typeof choice === 'object' ? choice.description : null;
-                                return (
-                                  <SelectItem
-                                    key={cIdx}
-                                    value={choiceName}
-                                    description={choiceDesc || undefined}
-                                  >
-                                    {choiceName}
-                                  </SelectItem>
-                                );
-                              })}
-                            </SelectContent>
-                          </Select>
+                          isSubclassFeature(feature) ? (
+                            <div className="mt-4">
+                              <SubclassPicker
+                                choices={feature.choices}
+                                value={currentChoice || null}
+                                onSelect={(value) => handleFeatureChoice(featureKey, value)}
+                                featureName={feature.name}
+                                levelGained={feature.level}
+                              />
+                            </div>
+                          ) : (
+                            <Select
+                              value={currentChoice || ""}
+                              onValueChange={(value) => handleFeatureChoice(featureKey, value)}
+                            >
+                              <SelectTrigger className="h-auto min-h-11 w-full mt-4">
+                                <SelectValue placeholder="Make a choice..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {feature.choices.map((choice, cIdx) => {
+                                  const choiceName = typeof choice === 'string' ? choice : choice.name;
+                                  const choiceDesc = typeof choice === 'object' ? choice.description : null;
+                                  return (
+                                    <SelectItem
+                                      key={cIdx}
+                                      value={choiceName}
+                                      description={choiceDesc || undefined}
+                                    >
+                                      {choiceName}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                          )
                         )}
                       </div>
                     );
