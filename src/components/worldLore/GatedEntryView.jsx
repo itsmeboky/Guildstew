@@ -436,6 +436,7 @@ function Annotations({ entry, character, isGM }) {
               selected={cantSymbols}
               catalog={THIEVES_CANT_SYMBOLS}
               defaultColor={CANT_DEFAULT_COLOR}
+              isGM={isGM}
             />
           )}
           {cant && isGM && (
@@ -454,6 +455,7 @@ function Annotations({ entry, character, isGM }) {
               selected={druidicSymbols}
               catalog={DRUIDIC_SYMBOLS}
               defaultColor={DRUIDIC_DEFAULT_COLOR}
+              isGM={isGM}
             />
           )}
           {druidic && isGM && (
@@ -465,7 +467,7 @@ function Annotations({ entry, character, isGM }) {
   );
 }
 
-function AnnotationSymbols({ cipherType, selected, catalog, defaultColor }) {
+function AnnotationSymbols({ cipherType, selected, catalog, defaultColor, isGM }) {
   if (!Array.isArray(selected) || selected.length === 0) return null;
   const byId = new Map(catalog.map((s) => [s.id, s]));
   return (
@@ -486,9 +488,15 @@ function AnnotationSymbols({ cipherType, selected, catalog, defaultColor }) {
               color={defaultColor}
               size={40}
             />
-            <span className="text-[9px] text-slate-400 font-semibold text-center leading-tight">
-              {sym.name}
-            </span>
+            {/* Meaning label is GM-only — non-GM viewers see raw
+                symbols and cross-reference via their cypher item.
+                Auto-printing the label would leak the meaning and
+                defeat the cypher mechanic. */}
+            {isGM && (
+              <span className="text-[9px] text-slate-400 font-semibold text-center leading-tight">
+                {sym.name}
+              </span>
+            )}
           </div>
         );
       })}
