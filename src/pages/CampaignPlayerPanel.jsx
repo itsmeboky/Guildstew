@@ -855,7 +855,12 @@ function CampaignPlayerPanelContent() {
             }}
           />
 
-          <div className="space-y-4">
+          {/* min-w-0 stops the inner TurnOrderDisplay's `min-w-min`
+              flex from blowing the right grid column past its
+              `minmax(0, 1fr)` budget — without it, the bar shifts
+              right and the late combatants slide off-canvas instead
+              of triggering the inner overflow-x-auto scrollbar. */}
+          <div className="space-y-4 min-w-0">
             {campaign.combat_active && campaign.combat_data && (
               campaign.combat_data.stage === 'initiative' || campaign.combat_data.stage === 'arranging' ? (
                 // Players must not see the GM arranging the turn order.
