@@ -11,6 +11,8 @@ import {
   SKILL_ABILITIES,
   CLASS_SKILL_CHOICES,
 } from '@/components/dnd5e/dnd5eRules';
+import InfoTip from "@/components/characterCreator/InfoTip";
+import { tipFor } from "@/components/characterCreator/creatorTips";
 
 // Derived from the registry so every component reads from one source.
 const allSkills = ALL_SKILLS;
@@ -199,11 +201,12 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
         </p>
 
         <div className="flex items-center gap-4 mb-4 flex-wrap">
-          <div className="bg-[#2A3441] rounded-lg px-4 py-2">
+          <div className="bg-[#2A3441] rounded-lg px-4 py-2 inline-flex items-center gap-2">
             <span className="text-white/60">Class Skills: </span>
             <span className={`font-bold ${selectedFromClassList === classSkillCount ? 'text-[#37F2D1]' : 'text-[#FF5722]'}`}>
               {selectedFromClassList}/{classSkillCount}
             </span>
+            <InfoTip>{tipFor("skill_class")}</InfoTip>
           </div>
 
           {racialBonusSkills > 0 && (
@@ -216,19 +219,21 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
           )}
 
           {expertiseCount > 0 && (
-            <div className="bg-[#2A3441] rounded-lg px-4 py-2">
+            <div className="bg-[#2A3441] rounded-lg px-4 py-2 inline-flex items-center gap-2">
               <span className="text-white/60">Expertise: </span>
               <span className={`font-bold ${expertise.length === expertiseCount ? 'text-[#37F2D1]' : 'text-[#FF5722]'}`}>
                 {expertise.length}/{expertiseCount}
               </span>
+              <InfoTip>{tipFor("skill_expertise")}</InfoTip>
             </div>
           )}
         </div>
 
         {backgroundSkills.length > 0 && (
           <div className="bg-[#37F2D1]/10 border border-[#37F2D1]/30 rounded-lg p-3 mb-4">
-            <p className="text-sm text-[#37F2D1] font-semibold mb-1">
+            <p className="text-sm text-[#37F2D1] font-semibold mb-1 flex items-center gap-2">
               🎁 Free Skills from {characterData.background}:
+              <InfoTip>{tipFor("skill_free")}</InfoTip>
             </p>
             <div className="flex gap-2 flex-wrap">
               {backgroundSkills.map(skill => (

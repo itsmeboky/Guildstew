@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { motion, AnimatePresence } from "framer-motion";
 import { RACES } from '@/components/dnd5e/dnd5eRules';
 import { getModdedRaces } from '@/lib/modEngine';
+import InfoTip from "@/components/characterCreator/InfoTip";
+import { tipFor } from "@/components/characterCreator/creatorTips";
 import {
   applyBreweryRaceBaseline,
   applyBreweryRaceSubrace,
@@ -449,7 +451,10 @@ export default function RaceStep({ characterData, updateCharacterData, campaignI
         </div>
 
         <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]">
-          <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide">Background</Label>
+          <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide flex items-center gap-2">
+            Background
+            <InfoTip>{tipFor("background")}</InfoTip>
+          </Label>
           <Select
             value={characterData.background}
             onValueChange={(value) => updateCharacterData({ background: value })}
@@ -506,8 +511,9 @@ export default function RaceStep({ characterData, updateCharacterData, campaignI
                 </div>
               )}
               <div className="flex flex-col items-start">
-                <h2 className="text-2xl font-bold text-white">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                   {currentRace.name}
+                  <InfoTip>{tipFor("race")}</InfoTip>
                 </h2>
                 {currentRace._source === "brewery" && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1.5 py-0.5 mt-1">
