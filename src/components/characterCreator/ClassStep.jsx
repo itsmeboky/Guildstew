@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Upload, User, Move, ZoomIn, ZoomOut, Save, Pencil, Sparkles } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
+import InfoTip from "@/components/characterCreator/InfoTip";
+import { tipFor } from "@/components/characterCreator/creatorTips";
 import {
   CLASS_HIT_DICE,
   CLASS_SAVING_THROWS,
@@ -458,6 +460,7 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
               <div className="flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="text-2xl font-bold text-white">{selectedClass.name}</h3>
+                  <InfoTip>{tipFor("class")}</InfoTip>
                   {selectedClass._source === "brewery" && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1.5 py-0.5">
                       <Sparkles className="w-3 h-3" /> Brewery

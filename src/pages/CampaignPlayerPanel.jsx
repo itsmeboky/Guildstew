@@ -821,6 +821,7 @@ function CampaignPlayerPanelContent() {
           combatState={combatState}
           setCombatState={setCombatState}
           campaignData={campaign}
+          fullSpellsList={fullSpellsList}
           myConditions={myConditions}
           activeConditions={activeConditions}
           concentrationByCharacter={concentrationByCharacter}
@@ -1438,7 +1439,7 @@ function CampaignPlayerPanelContent() {
 
 // --- Shared Components (Copied/Adapted from GMPanel) ---
 
-function CharacterPanel({ character, user, guildHall, equippedItems, setEquippedItems, inventory, onLootDrop, draggedItem, setDraggedItem, combatState, setCombatState, campaignData, myConditions = [], activeConditions = {}, concentrationByCharacter = {}, myCharacterKey, onHideSuccess }) {
+function CharacterPanel({ character, user, guildHall, equippedItems, setEquippedItems, inventory, onLootDrop, draggedItem, setDraggedItem, combatState, setCombatState, campaignData, myConditions = [], activeConditions = {}, concentrationByCharacter = {}, myCharacterKey, onHideSuccess, fullSpellsList = [] }) {
   const queryClient = useQueryClient();
   const [showInventoryOrganizer, setShowInventoryOrganizer] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
