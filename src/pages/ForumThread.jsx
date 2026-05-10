@@ -1,19 +1,27 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Heart, Check, Pin, Lock, Eye, MessageCircle,
+  ArrowLeft, Heart, Check, Pin, Lock, Eye, MessageCircle, MoreHorizontal,
 } from "lucide-react";
 import { supabase } from "@/api/supabaseClient";
 import {
   getCategoryBySlug, getThread, listReplies, hasLiked, toggleLike,
+  softDeleteThread, softDeleteReply, canDeleteThread, canDeleteReply,
 } from "@/lib/forumsClient";
 import { useAuth } from "@/lib/AuthContext";
 import { renderBlogMarkdown } from "@/lib/renderBlogMarkdown";
 import { CREAM } from "@/pages/Forums";
 import ReplyForm from "@/components/forums/ReplyForm";
 import { displayName, displayInitial } from "@/utils/displayName";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /**
  * Thread detail — OP at the top, replies below, reply composer at
@@ -116,6 +124,28 @@ export default function ForumThread() {
     onError: () => toast.error("Could not toggle like"),
   });
 
+  // { kind: "thread" | "reply", id, authorId } | null
+  const [pendingDelete, setPendingDelete] = useState(null);
+
+  const deleteMut = useMutation({
+    mutationFn: async (target) => {
+      if (target.kind === "thread") {
+        await softDeleteThread({ threadId: target.id, userId: user.id });
+      } else {
+        await softDeleteReply({ replyId: target.id, userId: user.id });
+      }
+    },
+    onSuccess: (_, target) => {
+      toast.success(target.kind === "thread" ? "Thread deleted" : "Reply deleted");
+      setPendingDelete(null);
+      queryClient.invalidateQueries({ queryKey: ["forumThread"] });
+      queryClient.invalidateQueries({ queryKey: ["forumReplies", thread?.id] });
+      queryClient.invalidateQueries({ queryKey: ["forumThreads"] });
+      queryClient.invalidateQueries({ queryKey: ["forumCategoryStats"] });
+    },
+    onError: (err) => toast.error(err?.message || "Delete failed"),
+  });
+
   // Loading vs missing must be distinguished here. useQuery's `data`
   // is `undefined` while a query is fetching and `null` (per the
   // forumsClient helpers' `data || null` contracts) when the row
@@ -171,6 +201,11 @@ export default function ForumThread() {
           isDev={thread.is_dev_post}
           isOP
           stats={{ replies: thread.reply_count, views: thread.view_count }}
+          deletedAt={thread.deleted_at}
+          deletedBy={thread.deleted_by}
+          authorId={thread.author_id}
+          canDelete={canDeleteThread({ thread, user, replyCount: replies.length })}
+          onDelete={() => setPendingDelete({ kind: "thread", id: thread.id, authorId: thread.author_id })}
         />
 
         {replies.length > 0 && (
@@ -189,11 +224,47 @@ export default function ForumThread() {
             isSolution={r.is_solution}
             likes={r.likes_count || 0}
             liked={likedSet.has(r.id)}
-            onLike={user ? () => likeMut.mutate(r.id) : null}
+            onLike={user && !r.deleted_at ? () => likeMut.mutate(r.id) : null}
+            deletedAt={r.deleted_at}
+            deletedBy={r.deleted_by}
+            authorId={r.author_id}
+            canDelete={canDeleteReply({ reply: r, user })}
+            onDelete={() => setPendingDelete({ kind: "reply", id: r.id, authorId: r.author_id })}
           />
         ))}
 
-        {thread.is_locked ? (
+        <AlertDialog open={!!pendingDelete} onOpenChange={(o) => { if (!o) setPendingDelete(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                Delete this {pendingDelete?.kind === "thread" ? "thread" : "reply"}?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                This cannot be undone. The {pendingDelete?.kind === "thread" ? "thread" : "reply"} will
+                show "[deleted]" in its place; surrounding conversation stays intact.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteMut.isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={deleteMut.isPending}
+                onClick={(e) => { e.preventDefault(); if (pendingDelete) deleteMut.mutate(pendingDelete); }}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              >
+                {deleteMut.isPending ? "Deleting…" : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {thread.deleted_at ? (
+          <div
+            className="rounded-lg border px-4 py-3 text-sm text-center italic"
+            style={{ backgroundColor: CREAM.card, borderColor: CREAM.cardBorder, color: CREAM.textMuted }}
+          >
+            This thread has been deleted — no new replies.
+          </div>
+        ) : thread.is_locked ? (
           <div
             className="rounded-lg border px-4 py-3 text-sm text-center"
             style={{ backgroundColor: CREAM.card, borderColor: CREAM.cardBorder, color: CREAM.textMuted }}
@@ -218,7 +289,16 @@ export default function ForumThread() {
   );
 }
 
-function Post({ author, body, date, isDev, isSolution, isOP, likes, liked, onLike, stats }) {
+function Post({
+  author, body, date, isDev, isSolution, isOP, likes, liked, onLike, stats,
+  deletedAt, deletedBy, authorId, canDelete, onDelete,
+}) {
+  const isDeleted = !!deletedAt;
+  // "by author" when the actor matches the original author, otherwise
+  // "by admin". Author can only delete their own; admin can delete
+  // anyone's — so this comparison is sufficient.
+  const deletedByLabel = deletedBy && authorId && deletedBy === authorId ? "author" : "admin";
+
   return (
     <article
       className="rounded-xl border overflow-hidden"
@@ -257,7 +337,7 @@ function Post({ author, body, date, isDev, isSolution, isOP, likes, liked, onLik
                 OP
               </span>
             )}
-            {isSolution && (
+            {isSolution && !isDeleted && (
               <span className="text-[9px] font-black uppercase tracking-widest rounded px-1.5 py-0.5 inline-flex items-center gap-0.5"
                 style={{ backgroundColor: "#4ADE80", color: "#052e16" }}>
                 <Check className="w-3 h-3" /> Solution
@@ -271,14 +351,42 @@ function Post({ author, body, date, isDev, isSolution, isOP, likes, liked, onLik
             )}
           </p>
         </div>
+        {canDelete && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Post actions"
+                className="p-1 rounded-md hover:bg-black/5 transition-colors flex-shrink-0"
+                style={{ color: CREAM.textMuted }}
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onSelect={() => onDelete?.()}
+                className="text-red-600 focus:text-red-600 focus:bg-red-50"
+              >
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
       <div className="px-4 pb-4">
-        <article
-          className="text-sm leading-relaxed"
-          style={{ color: CREAM.textPrimary }}
-          dangerouslySetInnerHTML={{ __html: renderBlogMarkdown(body || "") }}
-        />
-        {onLike !== undefined && !isOP && (
+        {isDeleted ? (
+          <p className="text-sm italic" style={{ color: CREAM.textMuted }}>
+            [deleted by {deletedByLabel}]
+          </p>
+        ) : (
+          <article
+            className="text-sm leading-relaxed"
+            style={{ color: CREAM.textPrimary }}
+            dangerouslySetInnerHTML={{ __html: renderBlogMarkdown(body || "") }}
+          />
+        )}
+        {onLike !== undefined && !isOP && !isDeleted && (
           <div className="mt-3 pt-3 border-t flex items-center gap-2" style={{ borderColor: CREAM.cardBorder }}>
             <button
               type="button"
