@@ -1,19 +1,46 @@
 /**
  * Minimal Markdown → HTML converter for blog posts + version notes.
  *
- * Scope: the admin-facing editor stores Markdown; the reader surface
- * renders it. Adding a real parser (remark, markdown-it) would bloat
- * the bundle for one surface, so we roll a small sanitizing converter
- * that covers headings, bold, italic, links, images, inline code,
- * code blocks, ordered/unordered lists, and paragraphs.
+ * Scope: legacy admin posts stored Markdown; the reader surface
+ * still renders those. New posts are authored in ReactQuill which
+ * produces HTML directly — those pass through untouched (see
+ * looksLikeHtml below). Adding a real Markdown parser (remark,
+ * markdown-it) would bloat the bundle for legacy content, so we
+ * keep the small sanitizing converter that covers headings, bold,
+ * italic, links, images, inline code, code blocks, ordered/
+ * unordered lists, and paragraphs.
  *
- * HTML is escaped before transformation so user-supplied Markdown
- * can't inject arbitrary tags. The `<a>` / `<img>` helpers only emit
- * attribute-escaped URLs — we don't try to allow raw HTML pass-through.
+ * For Markdown content, HTML is escaped before transformation so
+ * user-supplied Markdown can't inject arbitrary tags. The `<a>` /
+ * `<img>` helpers only emit attribute-escaped URLs.
+ *
+ * For HTML content (ReactQuill output), the admin-only authoring
+ * gate is the trust boundary; Quill's allow-list controls the tag
+ * set. If non-admin authoring lands on this surface later, route
+ * it through DOMPurify before this helper.
  */
+
+/**
+ * True when the source looks like authored HTML (ReactQuill output).
+ * Block-level tag at the very start covers Quill's standard tags
+ * (<p>, <h1>..<h6>, <ul>, <ol>, <blockquote>, <pre>, <figure>,
+ * <div>). Anything else falls through to the Markdown converter.
+ */
+export function looksLikeHtml(source) {
+  if (!source) return false;
+  const trimmed = String(source).trim();
+  if (!trimmed) return false;
+  return /^<(p|h[1-6]|ul|ol|blockquote|pre|figure|div)\b/i.test(trimmed);
+}
 
 export function renderBlogMarkdown(source) {
   if (!source) return "";
+
+  // Authored HTML passes through. Legacy Markdown drops to the
+  // converter below.
+  if (looksLikeHtml(source)) {
+    return String(source);
+  }
 
   const fences = [];
   let text = String(source).replace(/\r\n/g, "\n");

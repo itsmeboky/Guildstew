@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -27,11 +29,12 @@ import { uploadFile } from "@/utils/uploadFile";
  * only write path for the table — the homepage Blog card and the
  * `/blog/:slug` detail page both read from here.
  *
- * "Rich text editor" is intentionally the existing Textarea with a
- * markdown hint — pulling in a dedicated editor (TipTap / Lexical)
- * would bloat the bundle and slow every admin load for a surface
- * that admins touch occasionally. Markdown coverage (headings, bold,
- * italic, links, code blocks, images) is enough for the first pass.
+ * Content authoring uses ReactQuill — already in the dependency
+ * tree (used by CampaignDetails / CampaignMaps) so reusing it here
+ * doesn't add to the bundle. Output is sanitized HTML, persisted as
+ * a TEXT column. The reading view renders HTML directly when the
+ * content starts with a tag and falls back to the legacy
+ * renderBlogMarkdown path for posts authored before this commit.
  */
 
 const CATEGORIES = [
@@ -330,8 +333,10 @@ export default function BlogTab() {
 }
 
 function BlogEditor({ open, post, onClose, onSave }) {
+  const { user } = useAuth();
   const [form, setForm] = useState(() => initForm(post));
   const [slugTouched, setSlugTouched] = useState(false);
+  const quillRef = useRef(null);
 
   React.useEffect(() => {
     if (open) {
@@ -339,6 +344,74 @@ function BlogEditor({ open, post, onClose, onSave }) {
       setSlugTouched(!!post?.slug);
     }
   }, [open, post?.id]);
+
+  // Custom image handler — Quill's default inserts the file as
+  // base64 inline, which bloats the saved content. Instead we
+  // upload to user-assets bucket via the shared uploadFile helper
+  // and insert the public URL.
+  const onInsertImage = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) {
+        toast.error("Please pick an image file.");
+        return;
+      }
+      try {
+        const { file_url } = await uploadFile(file, "user-assets", "blog/inline", {
+          userId: user?.id,
+          uploadType: "blog_image",
+        });
+        const editor = quillRef.current?.getEditor();
+        if (!editor || !file_url) return;
+        const range = editor.getSelection(true) || { index: editor.getLength() };
+        editor.insertEmbed(range.index, "image", file_url, "user");
+        editor.setSelection(range.index + 1, 0);
+      } catch (err) {
+        toast.error(`Image upload failed: ${err?.message || "unknown error"}`);
+      }
+    };
+    input.click();
+  }, [user?.id]);
+
+  const quillModules = useMemo(
+    () => ({
+      toolbar: {
+        container: [
+          [{ header: [1, 2, 3, 4, false] }],
+          ["bold", "italic", "strike"],
+          [{ list: "ordered" }, { list: "bullet" }],
+          ["blockquote", "code-block"],
+          ["link", "image"],
+          [{ color: [] }, { background: [] }],
+          ["clean"],
+        ],
+        handlers: { image: onInsertImage },
+      },
+      clipboard: {
+        // Stop Quill from auto-converting pasted markdown-like
+        // text into Quill's own markdown shorthand, which can
+        // surprise admins who paste HTML or plain text.
+        matchVisual: false,
+      },
+    }),
+    [onInsertImage],
+  );
+
+  const quillFormats = useMemo(
+    () => [
+      "header",
+      "bold", "italic", "strike",
+      "list", "bullet",
+      "blockquote", "code-block",
+      "link", "image",
+      "color", "background",
+    ],
+    [],
+  );
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
@@ -349,7 +422,14 @@ function BlogEditor({ open, post, onClose, onSave }) {
   const save = (publish) => {
     if (!form.title.trim()) { toast.error("Title is required"); return; }
     if (!form.slug.trim()) { toast.error("Slug is required"); return; }
-    if (!form.content.trim()) { toast.error("Content is required"); return; }
+    // Quill produces "<p><br></p>" for an empty editor — strip
+    // tags + entities so the empty-content check actually catches
+    // visually-empty content.
+    const visibleContent = form.content
+      .replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;|&amp;|&lt;|&gt;/g, " ")
+      .trim();
+    if (!visibleContent) { toast.error("Content is required"); return; }
 
     const row = {
       ...(post?.id ? { id: post.id } : {}),
@@ -384,9 +464,28 @@ function BlogEditor({ open, post, onClose, onSave }) {
         <DialogHeader>
           <DialogTitle>{post?.id ? "Edit Post" : "New Post"}</DialogTitle>
           <DialogDescription className="text-slate-400">
-            Markdown is supported in Content (headings, bold, italic, links, code, images).
+            Use the editor toolbar for formatting; the image button uploads inline images to the blog assets bucket.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Light Quill chrome on a dark dialog needs a few overrides
+            so the toolbar doesn't disappear into the background. The
+            `.blog-editor-quill` wrapper scopes these so other Quill
+            instances in the app keep their own styling. */}
+        <style>{`
+          .blog-editor-quill .ql-toolbar.ql-snow {
+            border-color: #334155;
+            background: #f8fafc;
+          }
+          .blog-editor-quill .ql-container.ql-snow {
+            border-color: #334155;
+            min-height: 280px;
+            font-size: 14px;
+          }
+          .blog-editor-quill .ql-editor {
+            min-height: 280px;
+          }
+        `}</style>
 
         <div className="space-y-3">
           <div>
@@ -417,14 +516,21 @@ function BlogEditor({ open, post, onClose, onSave }) {
             <Textarea rows={2} value={form.summary} onChange={(e) => set({ summary: e.target.value })} className="bg-[#050816] border-slate-700 text-white mt-1" />
           </div>
           <div>
-            <Label className="text-xs">Content (Markdown)</Label>
-            <Textarea
-              rows={14}
-              value={form.content}
-              onChange={(e) => set({ content: e.target.value })}
-              className="bg-[#050816] border-slate-700 text-white mt-1 font-mono text-xs leading-relaxed"
-              placeholder="# Heading\n\nBody paragraph. **bold**, *italic*, [link](https://…), `code`, ![alt](image-url)"
-            />
+            <Label className="text-xs">Content</Label>
+            <div className="mt-1 bg-white text-slate-900 rounded border border-slate-700 overflow-hidden blog-editor-quill">
+              <ReactQuill
+                ref={quillRef}
+                theme="snow"
+                value={form.content}
+                onChange={(html) => set({ content: html })}
+                modules={quillModules}
+                formats={quillFormats}
+                placeholder="Write the post — headings, lists, quotes, code, links, and inline images all supported."
+              />
+            </div>
+            <p className="text-[10px] text-slate-500 mt-1">
+              Inline images upload to the blog assets bucket via the toolbar image button. Existing posts authored in markdown still render correctly on the reader.
+            </p>
           </div>
           <div>
             <Label className="text-xs">Cover Image URL <span className="text-slate-500 font-normal">(thumbnail used on blog cards / home page)</span></Label>
