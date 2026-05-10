@@ -1,6 +1,10 @@
-import React, { useMemo } from "react";
-import { Package, Sword, Coins } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Package, Sword, Coins, BookOpen } from "lucide-react";
 import { safeText } from "@/utils/safeRender";
+import { base44 } from "@/api/base44Client";
+import { isCipherInventoryItem, getCipherItem } from "@/config/cipherInventoryItems";
+import CipherModal from "@/components/worldLore/CipherModal";
 
 const CURRENCY_ORDER = [
   { key: "pp", label: "PP", color: "#e5e7eb" },
@@ -13,6 +17,20 @@ const CURRENCY_ORDER = [
 export default function InventoryTab({ character }) {
   const items = Array.isArray(character?.inventory) ? character.inventory : [];
   const currency = character?.currency || {};
+  const [openCipherType, setOpenCipherType] = useState(null);
+
+  // Cipher items query the campaign's mapping at modal-open time.
+  // Loaded only if there's a cipher item in this inventory — no
+  // network call for non-rogue / non-druid characters.
+  const hasAnyCipher = items.some(isCipherInventoryItem);
+  const { data: campaign } = useQuery({
+    queryKey: ["campaign", character?.campaign_id],
+    queryFn: () =>
+      base44.entities.Campaign.filter({ id: character.campaign_id }).then(
+        (r) => r[0],
+      ),
+    enabled: !!character?.campaign_id && hasAnyCipher,
+  });
 
   const { equipped, unequipped } = useMemo(() => {
     const eq = [];
@@ -33,6 +51,11 @@ export default function InventoryTab({ character }) {
     );
   }
 
+  const onCipherItemOpen = (item) => {
+    const cfg = getCipherItem(item.id) || getCipherItem(item.name);
+    if (cfg?.cipher_type) setOpenCipherType(cfg.cipher_type);
+  };
+
   return (
     <div className="space-y-5">
       {equipped.length > 0 && (
@@ -40,7 +63,7 @@ export default function InventoryTab({ character }) {
           <div className="text-[11px] uppercase tracking-widest text-amber-400 font-bold border-b border-amber-500/20 pb-1 mb-2 flex items-center gap-2">
             <Sword className="w-3 h-3" /> Equipped
           </div>
-          <ItemGrid items={equipped} />
+          <ItemGrid items={equipped} onCipherItemOpen={onCipherItemOpen} />
         </section>
       )}
 
@@ -49,7 +72,7 @@ export default function InventoryTab({ character }) {
           <div className="text-[11px] uppercase tracking-widest text-slate-400 font-bold border-b border-slate-700 pb-1 mb-2 flex items-center gap-2">
             <Package className="w-3 h-3" /> Carried
           </div>
-          <ItemGrid items={unequipped} />
+          <ItemGrid items={unequipped} onCipherItemOpen={onCipherItemOpen} />
         </section>
       )}
 
@@ -69,34 +92,57 @@ export default function InventoryTab({ character }) {
           ))}
         </div>
       </section>
+
+      <CipherModal
+        open={!!openCipherType}
+        onClose={() => setOpenCipherType(null)}
+        cipherType={openCipherType}
+        campaign={campaign}
+      />
     </div>
   );
 }
 
-function ItemGrid({ items }) {
+function ItemGrid({ items, onCipherItemOpen }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-      {items.map((item, idx) => (
-        <div
-          key={`${safeText(item.name) || "item"}-${idx}`}
-          className="bg-[#0b1220] border border-[#1e293b] rounded-lg p-2 flex items-center gap-2"
-          title={safeText(item.description || item.desc || "")}
-        >
-          {item.image_url ? (
-            <img src={item.image_url} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
-          ) : (
-            <div className="w-8 h-8 rounded bg-slate-800 flex items-center justify-center flex-shrink-0">
-              <Package className="w-4 h-4 text-slate-500" />
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <div className="text-sm text-white font-bold truncate">{safeText(item.name) || "Unnamed item"}</div>
-            {(item.quantity ?? 1) > 1 && (
-              <div className="text-[10px] text-slate-400">×{safeText(item.quantity)}</div>
+      {items.map((item, idx) => {
+        const cipher = isCipherInventoryItem(item);
+        const Tag = cipher ? "button" : "div";
+        const tagProps = cipher
+          ? {
+              type: "button",
+              onClick: () => onCipherItemOpen?.(item),
+              className:
+                "bg-[#0b1220] border border-[#1e293b] hover:border-[#37F2D1] rounded-lg p-2 flex items-center gap-2 text-left transition cursor-pointer",
+              title: `Open ${safeText(item.name) || "cipher"}`,
+            }
+          : {
+              className:
+                "bg-[#0b1220] border border-[#1e293b] rounded-lg p-2 flex items-center gap-2",
+              title: safeText(item.description || item.desc || ""),
+            };
+        return (
+          <Tag key={`${safeText(item.name) || "item"}-${idx}`} {...tagProps}>
+            {item.image_url ? (
+              <img src={item.image_url} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
+            ) : (
+              <div className="w-8 h-8 rounded bg-slate-800 flex items-center justify-center flex-shrink-0">
+                <Package className="w-4 h-4 text-slate-500" />
+              </div>
             )}
-          </div>
-        </div>
-      ))}
+            <div className="flex-1 min-w-0">
+              <div className="text-sm text-white font-bold truncate flex items-center gap-1">
+                {safeText(item.name) || "Unnamed item"}
+                {cipher && <BookOpen className="w-3 h-3 text-[#37F2D1] flex-shrink-0" />}
+              </div>
+              {(item.quantity ?? 1) > 1 && (
+                <div className="text-[10px] text-slate-400">×{safeText(item.quantity)}</div>
+              )}
+            </div>
+          </Tag>
+        );
+      })}
     </div>
   );
 }
