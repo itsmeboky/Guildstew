@@ -33,6 +33,16 @@ export const BUNDLES = [
   { id: 5, price: 100, spice: 27500, bonus: 2500, pct: "10%", rarity: "veryrare",  label: "Very Rare" },
 ];
 
+// Alpha gate — disables the spice → real-money purchase flow for the
+// alpha period. The "Disabled for Alpha" banner replaces the active
+// pricing row, every purchase button reads "Disabled for Alpha" and
+// is non-interactive, and the purchase mutation rejects loudly if it
+// somehow gets called. Spending paths (Tavern uploads, trades, guild
+// contributions) are unaffected — they consume spice from the
+// wallet, not from the emporium UI. Flip this to false to restore
+// the purchase flow when alpha closes.
+const ALPHA_PURCHASES_DISABLED = true;
+
 export const RARITY = {
   common:    { gradient: "linear-gradient(160deg, #1e222a 0%, #2a2e36 50%, #1e222a 100%)", border: ["#9ca3af","#6b7280"], accent: "#9ca3af", glow: "rgba(156,163,175,0.25)", text: "#e2e8f0" },
   uncommon:  { gradient: "linear-gradient(160deg, #0f2418 0%, #1a3328 50%, #0f2418 100%)", border: ["#22c55e","#16a34a"], accent: "#22c55e", glow: "rgba(34,197,94,0.25)",   text: "#e2e8f0" },
@@ -81,6 +91,9 @@ export default function SpiceEmporium({ open, onClose }) {
 
   const purchase = useMutation({
     mutationFn: async (bundle) => {
+      if (ALPHA_PURCHASES_DISABLED) {
+        throw new Error("Spice purchases are disabled during alpha.");
+      }
       if (!user?.id) throw new Error("Sign in to purchase Spice.");
 
       // TODO(stripe): replace this simulated credit with a real
@@ -228,9 +241,11 @@ export default function SpiceEmporium({ open, onClose }) {
               body. The gold "Trinket's Emporium" title sits inside
               that band, directly under the portrait circle. */}
           <TitleBlock />
+          {ALPHA_PURCHASES_DISABLED && <AlphaDisabledBanner />}
           <PricingRow
             onPurchase={(bundle) => purchase.mutate(bundle)}
             disabled={purchase.isPending}
+            alphaDisabled={ALPHA_PURCHASES_DISABLED}
           />
 
           {/* Virtual Currency Policy link sits between the card
@@ -363,7 +378,7 @@ function TitleBlock() {
  * Pricing row — 5 cards aligned to flex-end. Best Deal floats 28px
  * above the row via translateY so it visually breaks the baseline.
  */
-function PricingRow({ onPurchase, disabled }) {
+function PricingRow({ onPurchase, disabled, alphaDisabled = false }) {
   const [hoveredId, setHoveredId] = React.useState(null);
   return (
     <div
@@ -382,14 +397,15 @@ function PricingRow({ onPurchase, disabled }) {
           onHover={() => setHoveredId(b.id)}
           onLeave={() => setHoveredId((h) => (h === b.id ? null : h))}
           onPurchase={() => onPurchase?.(b)}
-          disabled={disabled}
+          disabled={disabled || alphaDisabled}
+          alphaDisabled={alphaDisabled}
         />
       ))}
     </div>
   );
 }
 
-function PricingCard({ bundle, hovered, onHover, onLeave, onPurchase, disabled }) {
+function PricingCard({ bundle, hovered, onHover, onLeave, onPurchase, disabled, alphaDisabled = false }) {
   const r = RARITY[bundle.rarity];
   const isLegendary = bundle.rarity === "legendary";
   const isBest = !!bundle.best;
@@ -625,32 +641,57 @@ function PricingCard({ bundle, hovered, onHover, onLeave, onPurchase, disabled }
           {bundle.pct} Bonus
         </div>
 
-        {/* 8. Purchase button */}
+        {/* 8. Purchase button — alpha-disabled for the launch
+            window. Click handler stays attached but no-ops when
+            alphaDisabled so even DevTools tampering can't fire
+            the mutation. The mutation itself also rejects on
+            ALPHA_PURCHASES_DISABLED as a second line of defense. */}
         <button
           type="button"
           disabled={disabled}
-          onClick={(e) => { e.stopPropagation(); onPurchase?.(); }}
+          aria-disabled={disabled}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (alphaDisabled) return;
+            onPurchase?.();
+          }}
           style={{
             marginTop: "6px",
             width: "100%",
             padding: isBest ? "9px 14px" : "7px 12px",
             borderRadius: "10px",
-            background: isLegendary
-              ? (hovered ? "#2a1a08" : "linear-gradient(135deg, #1a0f00, #2a1a08)")
-              : (hovered ? `${r.accent}28` : `${r.accent}12`),
-            border: isLegendary ? "none" : `1px solid ${hovered ? `${r.accent}70` : `${r.accent}40`}`,
-            color: isLegendary ? "#fbbf24" : r.accent,
+            background: alphaDisabled
+              ? "rgba(255,255,255,0.04)"
+              : isLegendary
+                ? (hovered ? "#2a1a08" : "linear-gradient(135deg, #1a0f00, #2a1a08)")
+                : (hovered ? `${r.accent}28` : `${r.accent}12`),
+            border: alphaDisabled
+              ? "1px dashed rgba(255,255,255,0.18)"
+              : isLegendary
+                ? "none"
+                : `1px solid ${hovered ? `${r.accent}70` : `${r.accent}40`}`,
+            color: alphaDisabled
+              ? "rgba(255,255,255,0.5)"
+              : isLegendary ? "#fbbf24" : r.accent,
             fontSize: "11px",
             fontWeight: 800,
             letterSpacing: "0.08em",
             textTransform: "uppercase",
             fontFamily: "'Cinzel', serif",
-            cursor: disabled ? "wait" : "pointer",
-            opacity: disabled ? 0.6 : 1,
+            cursor: alphaDisabled
+              ? "not-allowed"
+              : disabled
+                ? "wait"
+                : "pointer",
+            opacity: alphaDisabled ? 1 : disabled ? 0.6 : 1,
             transition: "all 0.2s ease",
           }}
         >
-          {disabled ? "Processing…" : "Purchase"}
+          {alphaDisabled
+            ? "Disabled for Alpha"
+            : disabled
+              ? "Processing…"
+              : "Purchase"}
         </button>
       </div>
     </div>
@@ -905,5 +946,56 @@ function Keyframes() {
         to   { transform: translateX(0);     opacity: 1; }
       }
     `}</style>
+  );
+}
+
+/**
+ * Alpha banner — sits between Trinket's title block and the
+ * pricing row to set expectations BEFORE the player tries to
+ * click a now-dead Purchase button. Warm orange chrome rather
+ * than a red error so it reads as intentional gating, not as a
+ * broken feature. Points the player at the welcome gift +
+ * spending paths so the gifted economy still feels useful.
+ */
+function AlphaDisabledBanner() {
+  return (
+    <div
+      style={{
+        margin: "0 20px 8px",
+        padding: "12px 16px",
+        borderRadius: "12px",
+        background: "linear-gradient(135deg, rgba(251,146,60,0.18), rgba(245,158,11,0.10))",
+        border: "1px solid rgba(251,146,60,0.55)",
+        textAlign: "center",
+        fontFamily: "'Cinzel', serif",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "13px",
+          fontWeight: 800,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "#fb923c",
+        }}
+      >
+        Disabled for Alpha
+      </div>
+      <p
+        style={{
+          fontSize: "11px",
+          lineHeight: 1.5,
+          color: "rgba(255,255,255,0.85)",
+          marginTop: "4px",
+          fontFamily: "'Inter', system-ui, sans-serif",
+          letterSpacing: "0.02em",
+        }}
+      >
+        Spice purchases are off during alpha — but we gifted you
+        <span style={{ color: "#fbbf24", fontWeight: 700 }}> 10,000 spice </span>
+        on signup. Spend it on Tavern uploads, trade with creators, or
+        chip into your guild's pool.
+      </p>
+    </div>
   );
 }
