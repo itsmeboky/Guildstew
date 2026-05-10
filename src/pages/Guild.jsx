@@ -1,15 +1,18 @@
-import React, { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import {
   Crown, Sparkles, ArrowRight,
-  Shield, Package, Wallet,
+  Shield, Package, Wallet, Ticket,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { Band, SectionTitle, CREAM } from "@/components/marketing/MarketingBand";
 import { useSubscription } from "@/lib/SubscriptionContext";
-import { listGuildMembers } from "@/api/billingClient";
+import { listGuildMembers, redeemGuildInviteCode } from "@/api/billingClient";
 import { createPageUrl } from "@/utils";
 import GuildHallHeader from "@/components/guild/GuildHallHeader";
 import GuildMembersSection from "@/components/guild/GuildMembersSection";
@@ -139,7 +142,6 @@ function GuildHub() {
           guild={guild}
           guildOwnerId={guildOwnerId}
           profiles={profiles}
-          inviteCode={guild?.invite_code || ""}
         />
       )}
     </div>
@@ -190,6 +192,13 @@ function GuildJoinCTA() {
           </div>
         </div>
       </header>
+
+      {/* Redeem-by-code band — for visitors arriving with an invite
+          code (or via the /guild?code=XXX share link). Lives at the
+          top so it's the first thing someone with a code sees. */}
+      <Band bg="#FFFFFF">
+        <RedeemInviteCodeForm />
+      </Band>
 
       {/* Benefits band */}
       <Band bg="#FFF8F3">
@@ -274,6 +283,117 @@ function GuildJoinCTA() {
           </p>
         </div>
       </Band>
+    </div>
+  );
+}
+
+// Maps the redeem RPC's `status` envelope to a user-readable
+// message + toast tone. Keeping it in one place so the spec's
+// canaries (invalid / full / already-member / already-in-other) all
+// surface with consistent wording.
+const REDEEM_MESSAGES = {
+  invalid_code:           { tone: "error",   text: "Invite code not recognized." },
+  guild_full:             { tone: "error",   text: "This guild is full (6/6 members)." },
+  already_member:         { tone: "info",    text: "You're already a member of this guild." },
+  already_in_other_guild: { tone: "error",   text: "You're already in another guild — leave it before joining a new one." },
+  not_authenticated:      { tone: "error",   text: "Sign in before redeeming a code." },
+};
+
+function RedeemInviteCodeForm() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryClient = useQueryClient();
+  const sub = useSubscription();
+  const navigate = useNavigate();
+  const [code, setCode] = useState("");
+
+  // Prefill from /guild?code=GLD-XXXX-XXXX share links.
+  useEffect(() => {
+    const fromUrl = searchParams.get("code");
+    if (fromUrl && !code) setCode(fromUrl.toUpperCase());
+    // intentionally only on first render with the param; the user
+    // editing the field afterwards shouldn't snap back to the URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const redeem = useMutation({
+    mutationFn: () => redeemGuildInviteCode(code.trim().toUpperCase()),
+    onSuccess: (result) => {
+      if (result?.status === "joined") {
+        toast.success("Welcome to your new guild!");
+        // Drop the ?code=… off the URL so a refresh after joining
+        // doesn't re-attempt to redeem.
+        if (searchParams.has("code")) {
+          searchParams.delete("code");
+          setSearchParams(searchParams, { replace: true });
+        }
+        // Refresh subscription state so Guild.jsx flips to GuildHub.
+        sub.refresh?.();
+        queryClient.invalidateQueries({ queryKey: ["guildRow"] });
+        queryClient.invalidateQueries({ queryKey: ["guildMembers"] });
+        // Soft nav to /guild — the page itself re-renders into the
+        // hub once SubscriptionContext refreshes.
+        navigate("/guild");
+        return;
+      }
+      const mapped = REDEEM_MESSAGES[result?.status];
+      if (mapped) {
+        if (mapped.tone === "info") toast.info ? toast.info(mapped.text) : toast(mapped.text);
+        else toast.error(mapped.text);
+      } else {
+        toast.error("Could not redeem code.");
+      }
+    },
+    onError: (err) => toast.error(err?.message || "Could not redeem code"),
+  });
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!code.trim()) return;
+    redeem.mutate();
+  };
+
+  return (
+    <div
+      className="rounded-2xl border p-6 md:p-8 max-w-2xl mx-auto"
+      style={{ backgroundColor: CREAM.card, borderColor: CREAM.cardBorder }}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: "#FFF0E8", border: `1px solid ${CREAM.cardBorder}` }}
+        >
+          <Ticket className="w-5 h-5" style={{ color: CREAM.accent }} />
+        </div>
+        <div className="flex-1">
+          <p className="text-[11px] font-black uppercase tracking-[0.3em]" style={{ color: CREAM.accent }}>
+            Have an invite code?
+          </p>
+          <p className="text-lg font-black mt-1" style={{ color: "#1E2430" }}>
+            Join a guild
+          </p>
+          <p className="text-xs mt-1" style={{ color: CREAM.textMuted }}>
+            Paste the code your friend shared (looks like <span className="font-mono">GLD-XXXX-XXXX</span>).
+          </p>
+          <form onSubmit={submit} className="mt-4 flex flex-col sm:flex-row gap-2">
+            <Input
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder="GLD-XXXX-XXXX"
+              className="font-mono tracking-widest bg-white"
+              maxLength={20}
+              disabled={redeem.isPending}
+            />
+            <Button
+              type="submit"
+              disabled={redeem.isPending || !code.trim()}
+              className="font-black uppercase tracking-[0.2em]"
+              style={{ backgroundColor: CREAM.accent, color: CREAM.textPrimary }}
+            >
+              {redeem.isPending ? "Joining…" : "Redeem"}
+            </Button>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

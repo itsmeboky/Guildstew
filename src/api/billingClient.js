@@ -367,3 +367,72 @@ export async function guildRemove({ owner_user_id, member_user_id }) {
 export async function guildLeave({ user_id }) {
   return invokeEdge('guild-leave', { user_id });
 }
+
+// ─── Guild invite codes (shareable join codes) ──────────────────
+//
+// The owner-side helpers below talk to guild_invite_codes directly;
+// RLS gates SELECT/INSERT/UPDATE to the guild owner. Redemption
+// goes through redeem_guild_invite_code() RPC (SECURITY DEFINER) so
+// the joiner can flip their own subscription row without direct
+// write rights to it.
+
+export async function getActiveGuildInviteCode(guildId) {
+  if (!guildId) return null;
+  const { data, error } = await supabase
+    .from('guild_invite_codes')
+    .select('id, code, created_at, use_count')
+    .eq('guild_id', guildId)
+    .is('revoked_at', null)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+// Rotate: revoke the current active code (if any) and insert a
+// fresh one. Two writes in sequence — the partial UNIQUE-by-active
+// pattern means we must clear the old row before the new one can
+// claim the active slot. Code-string collisions on insert are
+// retried with a fresh string.
+export async function rotateGuildInviteCode({ guildId, createdBy, generateCode }) {
+  if (!guildId || !createdBy || typeof generateCode !== 'function') {
+    throw new Error('rotateGuildInviteCode requires guildId, createdBy, generateCode');
+  }
+  const { error: revokeErr } = await supabase
+    .from('guild_invite_codes')
+    .update({ revoked_at: new Date().toISOString() })
+    .eq('guild_id', guildId)
+    .is('revoked_at', null);
+  if (revokeErr) throw revokeErr;
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = generateCode();
+    const { data, error } = await supabase
+      .from('guild_invite_codes')
+      .insert({ guild_id: guildId, code, created_by: createdBy })
+      .select('id, code, created_at, use_count')
+      .maybeSingle();
+    if (!error) return data;
+    // 23505 = unique_violation. Anything else surfaces immediately.
+    if (error.code !== '23505') throw error;
+  }
+  throw new Error('Could not generate a unique invite code — retry.');
+}
+
+export async function revokeGuildInviteCode(guildId) {
+  if (!guildId) throw new Error('revokeGuildInviteCode requires guildId');
+  const { error } = await supabase
+    .from('guild_invite_codes')
+    .update({ revoked_at: new Date().toISOString() })
+    .eq('guild_id', guildId)
+    .is('revoked_at', null);
+  if (error) throw error;
+}
+
+export async function redeemGuildInviteCode(code) {
+  if (!code) throw new Error('redeemGuildInviteCode requires a code');
+  const { data, error } = await supabase.rpc('redeem_guild_invite_code', {
+    p_code: code,
+  });
+  if (error) throw error;
+  return data || { status: 'unknown' };
+}
