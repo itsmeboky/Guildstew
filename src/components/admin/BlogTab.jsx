@@ -14,9 +14,11 @@ import {
 } from "@/components/ui/select";
 import {
   Search, Plus, Edit3, Trash2, Eye, Star, FileText, CheckSquare, Square,
+  Upload, Image as ImageIcon, X as XIcon,
 } from "lucide-react";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
+import { uploadFile } from "@/utils/uploadFile";
 
 /**
  * Admin → Blog.
@@ -357,6 +359,8 @@ function BlogEditor({ open, post, onClose, onSave }) {
       summary: form.summary.trim() || null,
       content: form.content,
       cover_image_url: form.cover_image_url.trim() || null,
+      header_image_url: form.header_image_url.trim() || null,
+      decorative_image_url: form.decorative_image_url.trim() || null,
       tags: form.tags,
       is_featured: form.is_featured,
     };
@@ -423,9 +427,27 @@ function BlogEditor({ open, post, onClose, onSave }) {
             />
           </div>
           <div>
-            <Label className="text-xs">Cover Image URL</Label>
+            <Label className="text-xs">Cover Image URL <span className="text-slate-500 font-normal">(thumbnail used on blog cards / home page)</span></Label>
             <Input value={form.cover_image_url} onChange={(e) => set({ cover_image_url: e.target.value })} className="bg-[#050816] border-slate-700 text-white mt-1" placeholder="https://…" />
           </div>
+
+          <BlogImageField
+            label="Header Image"
+            description="Full-width banner at the top of the reading view. Recommended 1200×600, 5MB max."
+            value={form.header_image_url}
+            onChange={(url) => set({ header_image_url: url })}
+            maxBytes={5 * 1024 * 1024}
+            userId={null}
+          />
+
+          <BlogImageField
+            label="Decorative Image"
+            description="Optional flair — overlaps the bottom-right of the content box. Recommended 400×400, 2MB max."
+            value={form.decorative_image_url}
+            onChange={(url) => set({ decorative_image_url: url })}
+            maxBytes={2 * 1024 * 1024}
+            userId={null}
+          />
           <div>
             <Label className="text-xs">Tags (comma-separated)</Label>
             <Input
@@ -458,6 +480,112 @@ function BlogEditor({ open, post, onClose, onSave }) {
   );
 }
 
+/**
+ * Image upload field for the blog editor. Uploads through the
+ * shared `uploadFile` helper to the user-assets bucket under
+ * `blog/{header|decorative}/...` so blog images live next to other
+ * user-content uploads with the existing storage quota / RLS.
+ *
+ * Renders three states: empty (drop-zone-style button), uploading
+ * (button shows spinner-text), populated (preview thumbnail with
+ * Remove). Same shape used for header and decorative; pass the
+ * label, description, current URL, and the change handler.
+ *
+ * Pass-through `value`/`onChange` lets the parent form keep using
+ * controlled state without juggling its own upload bookkeeping.
+ */
+function BlogImageField({ label, description, value, onChange, maxBytes }) {
+  const { user } = useAuth();
+  const [uploading, setUploading] = useState(false);
+  const inputRef = React.useRef(null);
+  const folder = label.toLowerCase().replace(/\s+/g, "-");
+
+  const onPick = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please pick an image file.");
+      return;
+    }
+    if (maxBytes && file.size > maxBytes) {
+      toast.error(`Too large — keep under ${Math.round(maxBytes / 1024 / 1024)}MB.`);
+      return;
+    }
+    setUploading(true);
+    try {
+      const { file_url } = await uploadFile(file, "user-assets", `blog/${folder}`, {
+        userId: user?.id,
+        uploadType: "blog_image",
+      });
+      onChange?.(file_url);
+    } catch (err) {
+      toast.error(`Upload failed: ${err?.message || "unknown error"}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div>
+      <Label className="text-xs flex items-center gap-2">
+        {label}
+        {description && (
+          <span className="text-slate-500 font-normal">{description}</span>
+        )}
+      </Label>
+      <div className="mt-1 flex items-start gap-3 flex-wrap">
+        {value ? (
+          <div className="relative inline-block">
+            <img
+              src={value}
+              alt={`${label} preview`}
+              className="h-24 w-auto max-w-[240px] rounded border border-slate-700 object-cover"
+            />
+            <button
+              type="button"
+              onClick={() => onChange?.("")}
+              title="Remove image"
+              className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 hover:bg-red-400 text-white flex items-center justify-center shadow"
+            >
+              <XIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className="inline-flex items-center gap-2 bg-[#050816] border border-dashed border-slate-700 hover:border-[#37F2D1] text-slate-300 hover:text-[#37F2D1] rounded px-4 py-3 text-xs transition-colors disabled:opacity-60"
+          >
+            {uploading ? (
+              <>
+                <Upload className="w-3.5 h-3.5 animate-pulse" /> Uploading…
+              </>
+            ) : (
+              <>
+                <ImageIcon className="w-3.5 h-3.5" /> Upload {label}
+              </>
+            )}
+          </button>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          onChange={onPick}
+          className="hidden"
+        />
+        {value && (
+          <div className="text-[11px] text-slate-500 break-all max-w-[260px] mt-1">
+            {value}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function initForm(post) {
   return {
     title: post?.title || "",
@@ -466,6 +594,8 @@ function initForm(post) {
     summary: post?.summary || "",
     content: post?.content || "",
     cover_image_url: post?.cover_image_url || "",
+    header_image_url: post?.header_image_url || "",
+    decorative_image_url: post?.decorative_image_url || "",
     tags: Array.isArray(post?.tags) ? post.tags : [],
     is_featured: !!post?.is_featured,
   };
