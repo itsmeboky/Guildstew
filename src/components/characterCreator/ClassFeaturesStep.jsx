@@ -11,6 +11,7 @@ import { tipFor } from "@/components/characterCreator/creatorTips";
 import {
   meetsMulticlassPrereqs,
   multiclassPrereqDescription,
+  multiclassProficienciesFor,
 } from "@/components/dnd5e/dnd5eRules";
 
 // Canonical "choose your specialization" feature names per class.
@@ -316,6 +317,10 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
               </div>
 
               {mc.class && mc.level && (
+                <MulticlassProficienciesPanel className={mc.class} />
+              )}
+
+              {mc.class && mc.level && (
                 <div className="grid grid-cols-1 gap-3">
                   {(getClassFeaturesForLevel(mc.class, mc.level) || []).map((feature, fIdx) => {
                     const featureKey = `${mc.class}-${feature.level}-${feature.name}`;
@@ -396,6 +401,74 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
             ⚠️ Please make all required feature choices before proceeding
           </p>
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Surfaces the LIMITED proficiencies a character gains by
+ * multiclassing into `className`. Per RAW (PHB p. 164) this is a
+ * subset of the class's primary list — players don't get the full
+ * starting bundle on multiclass entry. Sourced from
+ * MULTICLASS_PROFICIENCIES so the rules table stays the single
+ * source of truth; updating the data here refreshes every UI
+ * surface that reads it.
+ */
+function MulticlassProficienciesPanel({ className }) {
+  const profs = multiclassProficienciesFor(className);
+  const hasArmor = Array.isArray(profs.armor) && profs.armor.length > 0;
+  const hasWeapons = Array.isArray(profs.weapons) && profs.weapons.length > 0;
+  const skillCount = Number(profs.skills) || 0;
+  const hasOther = Array.isArray(profs.other) && profs.other.length > 0;
+  const hasNotes = !!profs.notes;
+  const grantsAnything = hasArmor || hasWeapons || skillCount > 0 || hasOther;
+
+  if (!grantsAnything && !hasNotes) {
+    return (
+      <div className="mb-4 bg-[#1E2430]/80 border border-slate-700 rounded-lg p-3 text-sm text-slate-400">
+        Multiclassing into <span className="font-bold text-white">{className}</span>{" "}
+        grants no additional proficiencies (you keep what you already have).
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-4 bg-[#1E2430]/80 border border-[#37F2D1]/30 rounded-lg p-3">
+      <p className="text-xs uppercase tracking-widest text-[#37F2D1] font-bold mb-2">
+        Multiclass Proficiencies Gained
+      </p>
+      <ul className="text-sm text-white space-y-1">
+        {hasArmor && (
+          <li>
+            <span className="text-slate-400">Armor:</span>{" "}
+            <span className="font-semibold capitalize">{profs.armor.join(", ")}</span>
+          </li>
+        )}
+        {hasWeapons && (
+          <li>
+            <span className="text-slate-400">Weapons:</span>{" "}
+            <span className="font-semibold capitalize">{profs.weapons.join(", ")}</span>
+          </li>
+        )}
+        {skillCount > 0 && (
+          <li>
+            <span className="text-slate-400">Skills:</span>{" "}
+            <span className="font-semibold">
+              {skillCount} from the {className} skill list
+            </span>
+          </li>
+        )}
+        {hasOther &&
+          profs.other.map((item, i) => (
+            <li key={i}>
+              <span className="text-slate-400">Also:</span>{" "}
+              <span className="font-semibold">{item}</span>
+            </li>
+          ))}
+      </ul>
+      {hasNotes && (
+        <p className="mt-2 text-[11px] italic text-slate-400">{profs.notes}</p>
       )}
     </div>
   );
