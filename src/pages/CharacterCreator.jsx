@@ -31,6 +31,7 @@ import {
 
 import RaceStep from "@/components/characterCreator/RaceStep";
 import ClassStep from "@/components/characterCreator/ClassStep";
+import ClassStep2024 from "@/components/characterCreator/ClassStep2024";
 import AbilityScoresStep from "@/components/characterCreator/AbilityScoresStep";
 import ClassFeaturesStep from "@/components/characterCreator/ClassFeaturesStep";
 import SkillsStep from "@/components/characterCreator/SkillsStep";
@@ -94,6 +95,13 @@ export default function CharacterCreator() {
   const editCharacterId = urlParams.get('edit');
   const campaignId = urlParams.get('campaignId');
   const returnTo = urlParams.get('returnTo');
+  // gamePack is the rule system + edition the character is being
+  // built against. Defaults to dnd5e_2014; the picker in
+  // CreateCharacterDialog stamps the URL with the chosen pack id
+  // when the player has multiple owned. Persisted on the saved
+  // character row so subsequent loads dispatch to the right
+  // per-step UI.
+  const urlGamePack = urlParams.get('gamePack') || 'dnd5e_2014';
   // When the apply flow pushes the player into the creator it tags
   // the URL with ?forApply=1 so we save a PC (characters table) and
   // stamp mod_dependencies + campaign_origin instead of taking the
@@ -140,6 +148,8 @@ export default function CharacterCreator() {
     languages: [],
     features: [],
     feature_choices: {},
+    gamePack: urlGamePack,
+    game_pack: urlGamePack,
     multiclasses: [],
     // Per-class multiclass skill picks (Bard / Ranger / Rogue grant
     // 1 skill on entry per RAW). Keyed by class name; the SkillsStep
@@ -213,10 +223,17 @@ export default function CharacterCreator() {
           ...mapped,
         }));
       } else {
-        // Editing a PC: existing logic
+        // Editing a PC: existing logic.
+        // game_pack on the row is the persisted edition; mirror it
+        // into the camelCase `gamePack` the dispatcher reads.
+        const persistedPack =
+          existingCharacter.game_pack === 'dnd5e' ? 'dnd5e_2014'
+            : existingCharacter.game_pack || 'dnd5e_2014';
         setCharacterData(prev => ({
           ...prev,
           ...existingCharacter,
+          gamePack: persistedPack,
+          game_pack: persistedPack,
           attributes: existingCharacter.attributes || prev.attributes,
           skills: existingCharacter.skills || prev.skills,
           spells: existingCharacter.spells || prev.spells,
@@ -526,6 +543,11 @@ const handleSubmit = () => {
     const stats = buildStatsFromCharacterData(characterData);
     stats.created_by = user?.email;
     stats.user_id = user?.id;
+    // Persist the game pack the character was built against. The
+    // dispatcher in this file (and downstream sheet display code)
+    // routes per-step UI on this field; without it, a 2024
+    // character would round-trip as 2014 on reload.
+    stats.game_pack = characterData.gamePack || characterData.game_pack || 'dnd5e_2014';
     createMutation.mutate(stats);
   };
 
@@ -611,7 +633,16 @@ const handleSubmit = () => {
     }
   };
 
-  const CurrentStepComponent = STEPS[currentStep].component;
+  // Per-step game-pack dispatch. 2024 currently only ships its own
+  // class step; other steps still use the legacy 2014 components
+  // until commits 3-5 of the bundle land. The dispatcher is keyed
+  // off characterData.gamePack so a 2024 character round-trips
+  // through the right per-step UI on every reopen.
+  const _stepDef = STEPS[currentStep];
+  const CurrentStepComponent =
+    _stepDef.id === 'class' && characterData.gamePack === 'dnd5e_2024'
+      ? ClassStep2024
+      : _stepDef.component;
 
   // Mode selector — first screen before any creator steps render.
   // editCharacterId / campaignId flip us directly into 'full'
