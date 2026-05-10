@@ -8,6 +8,10 @@ import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
 import SubclassPicker from "@/components/characterCreator/SubclassPicker";
 import InfoTip from "@/components/characterCreator/InfoTip";
 import { tipFor } from "@/components/characterCreator/creatorTips";
+import {
+  meetsMulticlassPrereqs,
+  multiclassPrereqDescription,
+} from "@/components/dnd5e/dnd5eRules";
 
 // Canonical "choose your specialization" feature names per class.
 // When a feature's name lands in this set, render the arrow-pattern
@@ -41,9 +45,22 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
 
   const availableClasses = ["Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk", "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard"];
   const usedClasses = [characterData.class, ...multiclasses.map(mc => mc.class).filter(Boolean)];
-  
+
   const primaryClassLevel = characterData.level - multiclasses.reduce((sum, mc) => sum + (mc.level || 0), 0);
-  const canMulticlass = characterData.level >= 2 && primaryClassLevel >= 1;
+
+  // Multiclass prereq gates (PHB p. 163). Both rules must pass:
+  //   (a) Player meets the prereq for their PRIMARY class.
+  //   (b) Player meets the prereq for the TARGET class being added.
+  // Rule (a) is computed once and shown as a banner — failing it
+  // hides the Add Class button entirely. Rule (b) disables
+  // individual class options in the per-multiclass dropdown so
+  // the player can see what's available without guessing.
+  const attributes = characterData.attributes || {};
+  const primaryPrereqMet = meetsMulticlassPrereqs(characterData.class, attributes);
+  const primaryPrereqDesc = multiclassPrereqDescription(characterData.class);
+
+  const canMulticlass =
+    characterData.level >= 2 && primaryClassLevel >= 1 && primaryPrereqMet;
 
   const primaryFeatures = getClassFeaturesForLevel(characterData.class, primaryClassLevel) || [];
 
@@ -206,6 +223,19 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
         </div>
       </div>
 
+      {characterData.level >= 2 && primaryClassLevel >= 1 && !primaryPrereqMet && (
+        <div className="mb-6 bg-[#2A3441] border-2 border-[#FF5722]/60 rounded-xl p-4">
+          <h3 className="text-[#FF5722] font-bold mb-1 flex items-center gap-2">
+            ⚠️ Multiclass locked — primary class prereq not met
+          </h3>
+          <p className="text-sm text-white/80">
+            To multiclass out of <span className="font-bold">{characterData.class}</span>,
+            your character needs <span className="text-[#FF5722] font-bold">{primaryPrereqDesc}</span>.
+            Adjust your ability scores on the previous step to unlock multiclassing.
+          </p>
+        </div>
+      )}
+
       {canMulticlass && (
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
@@ -237,11 +267,25 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
                   <SelectContent className="bg-[#2A3441] border-[#1E2430]">
                     {availableClasses
                       .filter(c => !usedClasses.includes(c) || c === mc.class)
-                      .map((cls) => (
-                        <SelectItem key={cls} value={cls} className="text-white hover:bg-[#1E2430]">
-                          {cls}
-                        </SelectItem>
-                      ))}
+                      .map((cls) => {
+                        const meets = meetsMulticlassPrereqs(cls, attributes);
+                        const desc = multiclassPrereqDescription(cls);
+                        return (
+                          <SelectItem
+                            key={cls}
+                            value={cls}
+                            disabled={!meets}
+                            description={meets ? desc : `Requires ${desc} — ability scores too low`}
+                            className={
+                              meets
+                                ? "text-white hover:bg-[#1E2430]"
+                                : "text-slate-500 cursor-not-allowed"
+                            }
+                          >
+                            {cls}
+                          </SelectItem>
+                        );
+                      })}
                   </SelectContent>
                 </Select>
 
