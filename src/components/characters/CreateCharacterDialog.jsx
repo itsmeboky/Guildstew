@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
@@ -14,20 +14,51 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/AuthContext";
-import { 
-  calculateMaxHP, 
-  calculateAC, 
-  calculateProficiencyBonus, 
+import {
+  calculateMaxHP,
+  calculateAC,
+  calculateProficiencyBonus,
   calculatePassivePerception,
   getSpeed,
   calculateAbilityModifier
 } from "@/components/dnd5e/characterCalculations";
+import GamePackPicker from "@/components/characters/GamePackPicker";
+import { useUserGamePacks } from "@/lib/useUserGamePacks";
+import { getGamePack } from "@/config/gamePacks";
 
 export default function CreateCharacterDialog({ open, onClose }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+
+  // Game pack gate. With one owned pack (everyone today) we
+  // auto-skip and render the existing D&D 5e mode picker. With
+  // multiple owned packs the player picks the system first; for
+  // anything other than dnd5e there's no creator yet so we toast
+  // and bail. The picker stays out of sight for current alpha
+  // users — zero UX change until a second pack ships.
+  const ownedPacks = useUserGamePacks();
+  const [chosenPack, setChosenPack] = useState(
+    ownedPacks.length === 1 ? ownedPacks[0] : null,
+  );
+
+  // Reset the chosen pack each time the dialog opens so a returning
+  // multi-pack user gets the picker again.
+  useEffect(() => {
+    if (open) {
+      setChosenPack(ownedPacks.length === 1 ? ownedPacks[0] : null);
+    }
+  }, [open, ownedPacks]);
+
+  const handlePackSelect = (packId) => {
+    const pack = getGamePack(packId);
+    if (!pack || pack.status !== "available") {
+      toast.error("That game system isn't available yet.");
+      return;
+    }
+    setChosenPack(packId);
+  };
 
   const createMutation = useMutation({
     mutationFn: (data) => base44.entities.Character.create(data),
@@ -90,12 +121,54 @@ export default function CreateCharacterDialog({ open, onClose }) {
     <>
       <Dialog open={open} onOpenChange={onClose}>
         <DialogContent className="bg-[#2A3441] text-white border-[#37F2D1] max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-3xl text-center mb-2">Create Your Character</DialogTitle>
-            <p className="text-gray-400 text-center">Choose how you'd like to build your D&D character</p>
-          </DialogHeader>
+          {!chosenPack ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="sr-only">Choose Game System</DialogTitle>
+              </DialogHeader>
+              <GamePackPicker ownedPackIds={ownedPacks} onSelect={handlePackSelect} />
+            </>
+          ) : (
+            <DialogPackedContent
+              packId={chosenPack}
+              handleFullCreator={handleFullCreator}
+              handleQuickCreate={handleQuickCreate}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
-          <div className="grid grid-cols-2 gap-6 mt-6">
+      <QuickCreateDialog
+        open={quickCreateOpen}
+        onClose={() => setQuickCreateOpen(false)}
+        onCharacterCreated={handleQuickCreateComplete}
+      />
+    </>
+  );
+}
+
+/**
+ * The mode picker (Full Creator vs Quick Create) for a chosen
+ * game pack. Today only the dnd5e pack reaches this screen, so the
+ * copy still references D&D — when other packs ship, gate the
+ * Quick Create card on whether the pack supports it and swap the
+ * mode-card descriptions per-pack.
+ */
+function DialogPackedContent({ packId, handleFullCreator, handleQuickCreate }) {
+  const pack = getGamePack(packId);
+  const headline = pack ? `Create Your ${pack.short} Character` : "Create Your Character";
+  const subhead = pack
+    ? `Choose how you'd like to build your ${pack.short} character`
+    : "Choose how you'd like to build your D&D character";
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle className="text-3xl text-center mb-2">{headline}</DialogTitle>
+        <p className="text-gray-400 text-center">{subhead}</p>
+      </DialogHeader>
+
+      <div className="grid grid-cols-2 gap-6 mt-6">
             <div
               onClick={handleFullCreator}
               className="bg-[#1E2430] rounded-xl p-6 border-2 border-gray-600 hover:border-[#37F2D1] cursor-pointer transition-all group"
@@ -138,14 +211,6 @@ export default function CreateCharacterDialog({ open, onClose }) {
               </ul>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      <QuickCreateDialog
-        open={quickCreateOpen}
-        onClose={() => setQuickCreateOpen(false)}
-        onCharacterCreated={handleQuickCreateComplete}
-      />
     </>
   );
 }

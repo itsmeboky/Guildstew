@@ -26,7 +26,12 @@ export function buildStatsFromCharacterData(characterData) {
   };
 
   const proficiency_bonus = calculateProficiencyBonus(level);
-  const maxHP = calculateMaxHP(characterData.class, level, attributes.con);
+  const maxHP = calculateMaxHP({
+    class: characterData.class,
+    level,
+    conScore: attributes.con,
+    multiclasses: characterData.multiclasses,
+  });
   const armor_class = calculateAC(attributes.dex);
   const initiative = calculateAbilityModifier(attributes.dex);
   // Brewery races override SRD-lookup basics — speed, size, and
