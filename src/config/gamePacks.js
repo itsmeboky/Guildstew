@@ -2,13 +2,18 @@
 // Guildstew can theoretically run, which the player owns, and which
 // are still on the roadmap.
 //
-// Today every player owns dnd5e by default — no DB-backed
-// entitlements yet. When the entitlement layer ships, replace the
-// hard-coded `currentlyOwned` in useUserGamePacks() with a
-// per-user lookup; the rest of the system (picker UI, routing)
-// already keys off this catalog and won't need changes.
+// Today every player owns dnd5e_2014 by default — no DB-backed
+// entitlements yet. dnd5e_2024 is staged as coming_soon while the
+// 2024 PHB ruleset is wired up (Layer 4 commits 2-4). When the
+// entitlement layer ships, replace the hard-coded `currentlyOwned`
+// in useUserGamePacks() with a per-user lookup; the rest of the
+// system (picker UI, routing) already keys off this catalog.
 
 export const GAME_PACKS = {
+  // Legacy alias for any code / DB row still referencing "dnd5e".
+  // Hidden from the picker (not in GAME_PACK_ORDER) but kept so
+  // existing characters / game_pack_listings rows resolve. New
+  // characters stamp themselves with dnd5e_2014.
   dnd5e: {
     id: "dnd5e",
     name: "Dungeons & Dragons 5e",
@@ -18,7 +23,32 @@ export const GAME_PACKS = {
       "Classic D&D 5th edition. Twelve classes, ability scores, levels 1–20, advantage/disadvantage, the whole familiar toolkit.",
     accent: "#37F2D1",
     icon: "🐉",
+    status: "legacy",
+    creatorRoute: "CharacterCreator",
+    aliasFor: "dnd5e_2014",
+  },
+  dnd5e_2014: {
+    id: "dnd5e_2014",
+    name: "D&D 5e (2014)",
+    short: "D&D 5e 2014",
+    tagline: "Original 2014 PHB ruleset. The classic toolkit.",
+    description:
+      "Twelve classes, nine races, levels 1-20, the 2014 PHB rules everyone learned 5e on. Multiclass, ASIs, the lot.",
+    accent: "#37F2D1",
+    icon: "🐉",
     status: "available",
+    creatorRoute: "CharacterCreator",
+  },
+  dnd5e_2024: {
+    id: "dnd5e_2024",
+    name: "D&D 5e (2024)",
+    short: "D&D 5e 2024",
+    tagline: "2024 PHB ruleset — Species, Origin Feats, Weapon Mastery.",
+    description:
+      "The 2024 redesign: Species (with Half-Elf / Half-Orc folded into heritage), backgrounds grant ASIs + Origin Feats, Weapon Mastery for martials, three spell lists.",
+    accent: "#a855f7",
+    icon: "🐲",
+    status: "coming_soon",
     creatorRoute: "CharacterCreator",
   },
   pathfinder_2e: {
@@ -78,8 +108,13 @@ export const GAME_PACKS = {
   },
 };
 
+// Order in which packs render in the picker. The legacy "dnd5e"
+// entry is intentionally omitted — it exists in GAME_PACKS only as
+// an alias for backward compat (existing characters / DB rows that
+// reference the pre-2014/2024-split slug).
 export const GAME_PACK_ORDER = [
-  "dnd5e",
+  "dnd5e_2014",
+  "dnd5e_2024",
   "pathfinder_2e",
   "world_of_darkness",
   "mork_borg",
@@ -87,14 +122,28 @@ export const GAME_PACK_ORDER = [
   "kids_on_bikes",
 ];
 
+// Resolve the canonical pack id even if the caller hands us a
+// legacy alias — `dnd5e` → `dnd5e_2014`. Keeps character records
+// from the pre-Layer-4 era working.
+export function resolveGamePackId(id) {
+  const pack = GAME_PACKS[id];
+  if (pack?.aliasFor) return pack.aliasFor;
+  if (pack) return pack.id;
+  return "dnd5e_2014";
+}
+
 export function getGamePack(id) {
-  return GAME_PACKS[id] || null;
+  if (!id) return null;
+  const pack = GAME_PACKS[id];
+  if (!pack) return null;
+  if (pack.aliasFor) return GAME_PACKS[pack.aliasFor] || null;
+  return pack;
 }
 
 export function getOwnedGamePacks(ownedIds) {
   return GAME_PACK_ORDER
     .map((id) => GAME_PACKS[id])
-    .filter((p) => p && ownedIds.includes(p.id));
+    .filter((p) => p && ownedIds.includes(p.id) && p.status === "available");
 }
 
 export function getUpcomingGamePacks(ownedIds) {

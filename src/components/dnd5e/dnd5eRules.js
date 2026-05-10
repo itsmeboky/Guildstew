@@ -1631,6 +1631,13 @@ export const FEATS = {
     ],
     description: 'Bonus action shove after Attack. Add shield AC to DEX saves. Reaction: no damage on DEX save success.',
   },
+  Skilled: {
+    prerequisite: null,
+    effects: [
+      { type: 'special', description: 'Gain proficiency in any combination of three skills or tools.' },
+    ],
+    description: 'Gain proficiency in three skills or tools (any combination).',
+  },
   'Skulker': {
     prerequisite: { dex: 13 },
     effects: [
@@ -1648,6 +1655,16 @@ export const FEATS = {
       { type: 'special', description: 'Learn one attack roll cantrip from any class' },
     ],
     description: 'Double spell attack range. Ignore half/three-quarters cover. Learn one attack cantrip.',
+  },
+  'Tavern Brawler': {
+    prerequisite: null,
+    effects: [
+      { type: 'ability_increase', amount: 1, choice: ['str', 'con'] },
+      { type: 'special', description: 'Proficient with improvised weapons.' },
+      { type: 'special', description: 'Unarmed strike damage becomes 1d4.' },
+      { type: 'special', description: 'When you hit with an unarmed strike or improvised weapon on your turn, you can use a bonus action to attempt to grapple the target.' },
+    ],
+    description: '+1 STR or CON. Proficient with improvised weapons. Unarmed strike does 1d4. Bonus-action grapple after a hit with unarmed / improvised.',
   },
   Tough: {
     prerequisite: null,

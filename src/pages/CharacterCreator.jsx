@@ -124,6 +124,12 @@ export default function CharacterCreator() {
 
   const [characterData, setCharacterData] = useState({
     name: "",
+    // Game pack / ruleset edition this character was built under.
+    // Layer 4 introduces dnd5e_2014 (current default) and
+    // dnd5e_2024 (filled in by commits 2-4). Legacy characters
+    // saved without this field default to dnd5e_2014 in the
+    // editCharacter loader below.
+    gamePack: "dnd5e_2014",
     race: "",
     subrace: "",
     class: "",
@@ -231,6 +237,12 @@ export default function CharacterCreator() {
         setCharacterData(prev => ({
           ...prev,
           ...existingCharacter,
+          // Resolve legacy "dnd5e" slug → "dnd5e_2014" so editors
+          // launched against pre-Layer-4 records see the canonical
+          // current id.
+          gamePack: existingCharacter.gamePack === "dnd5e"
+            ? "dnd5e_2014"
+            : (existingCharacter.gamePack || prev.gamePack),
           attributes: existingCharacter.attributes || prev.attributes,
           baseAttributes: existingCharacter.baseAttributes || existingCharacter.attributes || prev.baseAttributes,
           skills: existingCharacter.skills || prev.skills,
