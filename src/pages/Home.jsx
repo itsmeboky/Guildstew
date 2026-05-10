@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import LazyImage from "@/components/ui/LazyImage";
 import { supabase } from "@/api/supabaseClient";
 import CommunityHighlightsCard from "@/components/home/CommunityHighlightsCard";
+import UpcomingSessionsCard from "@/components/home/UpcomingSessionsCard";
 
 const HERO_SLIDES = [
   {
@@ -406,30 +407,10 @@ export default function Home() {
               from the hero section's top padding, not from a gap
               between the hero and these cards. */}
           <div className="grid grid-cols-12 gap-6 mb-8">
-            {/* Newest Game Pack — admin override wins over the
-                auto-derived products[0] card so marketing can
-                hand-pick what's featured. */}
-            <div className="col-span-2 rounded-3xl p-5 h-[320px] flex flex-col relative overflow-hidden">
-              <div className="theme-homepage-card absolute inset-0" />
-              <div className="relative z-10 flex flex-col h-full">
-                <h3 className="text-xl font-bold text-white mb-4 text-center">Newest Game Pack</h3>
-                {newestOverride?.name ? (
-                  <ConfigCard config={newestOverride} />
-                ) : products.length > 0 ? (
-                  <div className="flex-1 flex flex-col min-h-0">
-                    <div className="flex-1 rounded-2xl mb-3 min-h-0 overflow-hidden relative">
-                      <LazyImage
-                        src={products[0].cover_image_url}
-                        alt={products[0].name}
-                        className="absolute inset-0 w-full h-full"
-                      />
-                    </div>
-                    <p className="text-white text-sm font-semibold text-center line-clamp-2">{products[0].name}</p>
-                    <p className="text-white text-lg font-bold text-center mt-1">${products[0].price}</p>
-                  </div>
-                ) : null}
-              </div>
-            </div>
+            {/* Upcoming Sessions — campaigns the player is in,
+                sorted by next scheduled session. Replaced the
+                previous "Newest Game Pack" widget. */}
+            <UpcomingSessionsCard user={user} />
 
             {/* Community Highlights — recent profile posts from
                 the current user's accepted friends. Replaced the
