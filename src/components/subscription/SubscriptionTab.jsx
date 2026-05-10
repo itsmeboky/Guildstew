@@ -1,23 +1,26 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Check, Crown, Loader2, UserPlus, Trash2, LogOut } from "lucide-react";
+import { Check, Crown, Loader2, UserPlus, Trash2, LogOut, Search } from "lucide-react";
 import {
   TIERS,
   startCheckout, openBillingPortal,
   guildInvite, guildAccept, guildDecline, guildRemove, guildLeave,
   listIncomingGuildInvites, listOutgoingGuildInvites,
 } from "@/api/billingClient";
+import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { supabase } from "@/api/supabaseClient";
 import { trackEvent } from "@/utils/analytics";
+import { displayName, displayInitial } from "@/utils/displayName";
 
 /**
  * Subscription tab — renders the four tiers from billingClient.TIERS,
@@ -396,35 +399,90 @@ function GuildPanel({ sub, user, queryClient, setConfirmLeave, setConfirmRemove 
 }
 
 function OwnerSection({ members, outgoingInvites, ownerId, maxSeats, onInviteSent, onRemove }) {
-  const [inviteEmail, setInviteEmail] = useState('');
+  const [search, setSearch] = useState('');
 
-  const inviteByEmail = async () => {
-    const email = inviteEmail.trim().toLowerCase();
-    if (!email) return;
-    // Resolve to a user_id via the user_profiles table — we don't
-    // expose direct email lookups for non-friends, so this only
-    // works when the invitee already has an account.
-    const { data: rows } = await supabase
-      .from('user_profiles')
-      .select('user_id, username')
-      .ilike('email', email)
-      .limit(1);
-    const profile = rows?.[0];
-    if (!profile?.user_id) {
-      toast.error('No user with that email yet.');
-      return;
+  // Friends list — bidirectional pairs in the `friends` table, so a
+  // friendship row can have me as either user_id or friend_id. Only
+  // status='accepted' counts; pending requests aren't invitable.
+  const { data: allFriendships = [] } = useQuery({
+    queryKey: ['allFriendships', ownerId],
+    queryFn: () => base44.entities.Friend.list(),
+    enabled: !!ownerId,
+    initialData: [],
+  });
+
+  const friendIds = useMemo(() => {
+    if (!ownerId) return [];
+    const ids = new Set();
+    for (const f of allFriendships) {
+      if (f?.status !== 'accepted') continue;
+      if (f.user_id === ownerId && f.friend_id) ids.add(f.friend_id);
+      else if (f.friend_id === ownerId && f.user_id) ids.add(f.user_id);
     }
-    try {
-      await guildInvite({ owner_user_id: ownerId, invitee_user_id: profile.user_id });
-      toast.success(`Invited ${profile.username || email} to your guild.`);
-      setInviteEmail('');
+    return Array.from(ids);
+  }, [allFriendships, ownerId]);
+
+  // One round-trip for all friend profiles. Sorted-key cache so two
+  // friends-list orderings don't blow the cache apart.
+  const { data: friendProfiles = [] } = useQuery({
+    queryKey: ['guildInviteFriendProfiles', friendIds.slice().sort().join(',')],
+    queryFn: async () => {
+      if (friendIds.length === 0) return [];
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('user_id, username, full_name, avatar_url')
+        .in('user_id', friendIds);
+      return data || [];
+    },
+    enabled: friendIds.length > 0,
+    initialData: [],
+  });
+
+  const queryClient = useQueryClient();
+  const inviteMutation = useMutation({
+    mutationFn: ({ inviteeId }) => guildInvite({
+      owner_user_id: ownerId,
+      invitee_user_id: inviteeId,
+    }),
+    onSuccess: (_data, { profile }) => {
+      toast.success(`Invited ${displayName(profile, { fallback: 'friend' })} to your guild.`);
       onInviteSent?.();
-    } catch (err) {
-      toast.error(err?.message || 'Invite failed');
+      // Refresh the outgoing list immediately so the friend-row
+      // button flips from "Invite" to "Invite Sent" without a wait.
+      queryClient.invalidateQueries({ queryKey: ['guildInvitesOutgoing', ownerId] });
+    },
+    onError: (err) => toast.error(err?.message || 'Invite failed'),
+  });
+
+  // Sets keyed by user_id for O(1) per-row state lookups. memberSet
+  // covers the owner too; pendingInviteeSet is filtered to status
+  // pending so a previously-declined invite re-allows the button.
+  const memberSet = useMemo(
+    () => new Set((members || []).map((m) => m.user_id).filter(Boolean)),
+    [members],
+  );
+  const pendingInviteeSet = useMemo(() => {
+    const s = new Set();
+    for (const inv of outgoingInvites || []) {
+      if (inv?.status === 'pending' && inv.invitee_user_id) s.add(inv.invitee_user_id);
     }
-  };
+    return s;
+  }, [outgoingInvites]);
 
   const memberCount = (members || []).length || 1;
+  const guildFull = memberCount >= maxSeats;
+
+  const visibleFriends = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const rows = friendProfiles.slice().sort((a, b) =>
+      (displayName(a) || '').localeCompare(displayName(b) || ''),
+    );
+    if (!q) return rows;
+    return rows.filter((p) => {
+      const hay = `${p.username || ''} ${p.full_name || ''}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [friendProfiles, search]);
   return (
     <div className="bg-[#2A3441] rounded-xl p-4 border border-[#111827] space-y-3">
       <div className="flex items-center justify-between">
@@ -474,25 +532,90 @@ function OwnerSection({ members, outgoingInvites, ownerId, maxSeats, onInviteSen
         })}
       </div>
 
-      <div className="flex items-center gap-2 pt-2 border-t border-slate-700">
-        <input
-          type="email"
-          value={inviteEmail}
-          onChange={(e) => setInviteEmail(e.target.value)}
-          placeholder="friend@example.com"
-          className="flex-1 bg-[#0b1220] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
-        />
-        <Button onClick={inviteByEmail} className="bg-[#fbbf24] text-[#050816] font-bold hover:bg-[#fde68a]">
-          <UserPlus className="w-3 h-3 mr-1" />
-          Invite
-        </Button>
-      </div>
-
-      {outgoingInvites.length > 0 && (
-        <div className="text-[11px] text-slate-400">
-          Pending invites: {outgoingInvites.filter((i) => i.status === 'pending').length}
+      <div className="pt-2 border-t border-slate-700 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] uppercase tracking-widest font-black text-slate-400">
+            Invite from friends
+          </p>
+          {outgoingInvites.length > 0 && (
+            <span className="text-[11px] text-slate-400">
+              {pendingInviteeSet.size} pending
+            </span>
+          )}
         </div>
-      )}
+
+        {friendIds.length === 0 ? (
+          <p className="text-[11px] text-slate-500 italic bg-[#0b1220] border border-slate-800 rounded px-3 py-2">
+            No friends yet. Add friends from the Friends page first, then invite them here.
+          </p>
+        ) : (
+          <>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search friends"
+                className="pl-8 bg-[#0b1220] border-slate-700 text-white text-sm"
+              />
+            </div>
+            <div className="max-h-72 overflow-y-auto space-y-1 pr-1">
+              {visibleFriends.length === 0 ? (
+                <p className="text-[11px] text-slate-500 italic px-3 py-2">
+                  No matches.
+                </p>
+              ) : (
+                visibleFriends.map((p) => {
+                  const alreadyMember = memberSet.has(p.user_id);
+                  const inviteSent = pendingInviteeSet.has(p.user_id);
+                  const sending =
+                    inviteMutation.isPending &&
+                    inviteMutation.variables?.inviteeId === p.user_id;
+                  const disabled = alreadyMember || inviteSent || guildFull || sending;
+                  let buttonLabel;
+                  if (alreadyMember) buttonLabel = 'Already a member';
+                  else if (inviteSent) buttonLabel = 'Invite sent';
+                  else if (guildFull) buttonLabel = 'Guild full';
+                  else if (sending) buttonLabel = 'Inviting…';
+                  else buttonLabel = 'Invite';
+                  return (
+                    <div
+                      key={p.user_id}
+                      className="flex items-center gap-3 bg-[#0b1220] border border-slate-800 rounded-lg px-3 py-2"
+                    >
+                      {p.avatar_url ? (
+                        <img src={p.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover object-top flex-shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-[#37F2D1]/20 flex-shrink-0 flex items-center justify-center text-xs font-bold text-white">
+                          {displayInitial(p)}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold text-white truncate">
+                          {displayName(p, { fallback: 'Friend' })}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        disabled={disabled}
+                        onClick={() => inviteMutation.mutate({ inviteeId: p.user_id, profile: p })}
+                        className={
+                          alreadyMember || inviteSent
+                            ? 'bg-slate-700 text-slate-300 hover:bg-slate-700 cursor-not-allowed'
+                            : 'bg-[#fbbf24] text-[#050816] font-bold hover:bg-[#fde68a]'
+                        }
+                      >
+                        {!disabled && <UserPlus className="w-3 h-3 mr-1" />}
+                        {buttonLabel}
+                      </Button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
