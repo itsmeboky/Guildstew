@@ -1127,6 +1127,29 @@ export function multiclassProficienciesFor(className) {
   return MULTICLASS_PROFICIENCIES[className] || {};
 }
 
+/**
+ * Per RAW (PHB p. 164), only Bard, Ranger, and Rogue grant a skill
+ * on multiclass entry. Bard's grant is "any skill"; Ranger's and
+ * Rogue's are restricted to their class-specific skill list — the
+ * SAME list used for primary-class picks, so we read it directly
+ * from CLASS_SKILL_CHOICES rather than maintaining a parallel copy.
+ *
+ * Returns `{ count, from }` shaped to match CLASS_SKILL_CHOICES, or
+ * null when the class doesn't grant a skill on entry. UI consumers
+ * should treat null as "no picker needed".
+ */
+export function getMulticlassSkillGrant(className) {
+  const block = MULTICLASS_PROFICIENCIES[className];
+  const count = Number(block?.skills) || 0;
+  if (count <= 0) return null;
+  const choice = CLASS_SKILL_CHOICES[className];
+  if (!choice) return null;
+  return {
+    count,
+    from: choice.from,
+  };
+}
+
 
 // ─────────────────────────────────────────────
 // MODIFIABLE RULES (Homebrew overrides these)
