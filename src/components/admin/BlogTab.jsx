@@ -532,10 +532,14 @@ function BlogEditor({ open, post, onClose, onSave }) {
               Inline images upload to the blog assets bucket via the toolbar image button. Existing posts authored in markdown still render correctly on the reader.
             </p>
           </div>
-          <div>
-            <Label className="text-xs">Cover Image URL <span className="text-slate-500 font-normal">(thumbnail used on blog cards / home page)</span></Label>
-            <Input value={form.cover_image_url} onChange={(e) => set({ cover_image_url: e.target.value })} className="bg-[#050816] border-slate-700 text-white mt-1" placeholder="https://…" />
-          </div>
+          <BlogImageField
+            label="Cover Image"
+            description="Thumbnail used on blog cards + the home page. Recommended 800×500, 3MB max."
+            value={form.cover_image_url}
+            onChange={(url) => set({ cover_image_url: url })}
+            maxBytes={3 * 1024 * 1024}
+            userId={null}
+          />
 
           <BlogImageField
             label="Header Image"
