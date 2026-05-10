@@ -409,41 +409,56 @@ function Annotations({ entry, character, isGM }) {
   const druidic = meta.druidic_message;
   const cantSymbols = Array.isArray(meta.thieves_cant_symbols) ? meta.thieves_cant_symbols : [];
   const druidicSymbols = Array.isArray(meta.druidic_symbols) ? meta.druidic_symbols : [];
-  const knowsCant = isGM || speaksLanguage(character, "Thieves' Cant");
-  const knowsDruidic = isGM || speaksLanguage(character, "Druidic");
 
-  const hasCant = !!cant || cantSymbols.length > 0;
-  const hasDruidic = !!druidic || druidicSymbols.length > 0;
-  if (!hasCant && !hasDruidic) return null;
+  // Raw symbols are PUBLIC — every viewer sees them on the entry.
+  // Decoding (symbol → meaning) happens via the cypher inventory
+  // item (rogue / druid only) or the campaign mapping (GM). The
+  // textual message is the GM's plain-English authoring note and
+  // stays GM-only — auto-translating it for class-eligible players
+  // would bypass the cypher cross-reference, which is the in-fiction
+  // action.
+  const hasCantSymbols = cantSymbols.length > 0;
+  const hasDruidicSymbols = druidicSymbols.length > 0;
+  const showCantBlock = hasCantSymbols || (!!cant && isGM);
+  const showDruidicBlock = hasDruidicSymbols || (!!druidic && isGM);
+  if (!showCantBlock && !showDruidicBlock) return null;
 
   return (
     <>
-      {hasCant && knowsCant && (
+      {showCantBlock && (
         <div className="mt-4 border-l-2 border-amber-500/50 pl-4 py-2 bg-amber-900/10 rounded-r-lg space-y-2">
           <p className="text-xs text-amber-400 font-semibold uppercase tracking-wider">
             🗡️ Thieves&apos; Cant
           </p>
-          <AnnotationSymbols
-            cipherType="thieves_cant"
-            selected={cantSymbols}
-            catalog={THIEVES_CANT_SYMBOLS}
-            defaultColor={meta.thieves_cant_color || CANT_DEFAULT_COLOR}
-          />
-          {cant && <p className="text-sm text-amber-200/80 italic">{cant}</p>}
+          {hasCantSymbols && (
+            <AnnotationSymbols
+              cipherType="thieves_cant"
+              selected={cantSymbols}
+              catalog={THIEVES_CANT_SYMBOLS}
+              defaultColor={CANT_DEFAULT_COLOR}
+            />
+          )}
+          {cant && isGM && (
+            <p className="text-sm text-amber-200/80 italic">{cant}</p>
+          )}
         </div>
       )}
-      {hasDruidic && knowsDruidic && (
+      {showDruidicBlock && (
         <div className="mt-4 border-l-2 border-emerald-500/50 pl-4 py-2 bg-emerald-900/10 rounded-r-lg space-y-2">
           <p className="text-xs text-emerald-400 font-semibold uppercase tracking-wider">
             🌿 Druidic
           </p>
-          <AnnotationSymbols
-            cipherType="druidic"
-            selected={druidicSymbols}
-            catalog={DRUIDIC_SYMBOLS}
-            defaultColor={meta.druidic_color || DRUIDIC_DEFAULT_COLOR}
-          />
-          {druidic && <p className="text-sm text-emerald-200/80 italic">{druidic}</p>}
+          {hasDruidicSymbols && (
+            <AnnotationSymbols
+              cipherType="druidic"
+              selected={druidicSymbols}
+              catalog={DRUIDIC_SYMBOLS}
+              defaultColor={DRUIDIC_DEFAULT_COLOR}
+            />
+          )}
+          {druidic && isGM && (
+            <p className="text-sm text-emerald-200/80 italic">{druidic}</p>
+          )}
         </div>
       )}
     </>
@@ -463,7 +478,12 @@ function AnnotationSymbols({ cipherType, selected, catalog, defaultColor }) {
             <CipherSymbol
               cipherType={cipherType}
               symbol={sym}
-              color={sel.color || defaultColor}
+              // Always render in the cipher's default colour so the
+              // entry view matches the cypher modal exactly. Legacy
+              // `sel.color` (per-entry GM colour pick) is ignored —
+              // the data stays in metadata in case a future feature
+              // brings back per-entry styling.
+              color={defaultColor}
               size={40}
             />
             <span className="text-[9px] text-slate-400 font-semibold text-center leading-tight">
