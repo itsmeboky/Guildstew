@@ -11,6 +11,7 @@ import {
 import { base44 } from "@/api/base44Client";
 import { STARTING_EQUIPMENT } from "@/components/dnd5e/dnd5eRules";
 import { safeText } from "@/utils/safeRender";
+import { isLockedInventoryItem } from "@/config/cipherInventoryItems";
 
 /** STARTING_EQUIPMENT[class].choices is an array of objects like
  *  { option1: 'Mace', option2: 'Warhammer (if proficient)' } — one
@@ -64,6 +65,11 @@ export default function EquipmentStep({ characterData, updateCharacterData }) {
     });
   };
   const removeInventoryItem = (index) => {
+    const target = inventory[index];
+    if (isLockedInventoryItem(target)) {
+      toast.error(`${target.name} is bound to your class — it can't be removed.`);
+      return;
+    }
     updateCharacterData({ inventory: inventory.filter((_, i) => i !== index) });
   };
   const updateInventoryItem = (index, field, value) => {
@@ -311,9 +317,11 @@ export default function EquipmentStep({ characterData, updateCharacterData }) {
                 <div className="col-span-1 flex justify-end">
                   <Button
                     onClick={() => removeInventoryItem(index)}
+                    disabled={isLockedInventoryItem(item)}
+                    title={isLockedInventoryItem(item) ? "Class-bound — cannot be removed" : "Remove item"}
                     size="icon"
                     variant="ghost"
-                    className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                    className="text-red-400 hover:text-red-300 hover:bg-red-500/20 disabled:text-slate-600 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>

@@ -53,6 +53,7 @@ function LegalFooter() {
 // sidebar's user header next to the username/avatar, and showing
 // it in both spots was redundant.
 import LazyImage from "@/components/ui/LazyImage";
+import CipherQuickAccessBar from "@/components/worldLore/CipherQuickAccessBar";
 
 export default function Layout({ children, currentPageName }) {
   const location = useLocation();
@@ -573,10 +574,20 @@ export default function Layout({ children, currentPageName }) {
     || currentPageName === "CampaignSpells"
     || currentPageName === "CampaignAbilities"
     || currentPageName === "GMPanel"
-    || currentPageName === "CampaignPlayerPanel"
     || currentPageName === "CampaignView"
   ) {
     return <>{children}</>;
+  }
+  // CampaignPlayerPanel uses its own shell but still needs the
+  // cipher quick-access overlay so rogues / druids can pull up their
+  // cypher without leaving the panel.
+  if (currentPageName === "CampaignPlayerPanel") {
+    return (
+      <>
+        {children}
+        <CipherQuickAccessBar campaignId={campaignId} />
+      </>
+    );
   }
   // Admin dashboard has its own full-screen sidebar shell.
   if (currentPageName === "Admin") {
@@ -591,9 +602,16 @@ export default function Layout({ children, currentPageName }) {
     return <>{children}</>;
   }
   // World Lore owns its own horizontal nav + landing grid and no
-  // longer wants the Layout's old world-lore sidebar tree.
+  // longer wants the Layout's old world-lore sidebar tree. The
+  // cipher quick-access overlay rides along so rogues / druids
+  // reading entries can hit their cypher in one click.
   if (currentPageName === "CampaignWorldLore") {
-    return <>{children}</>;
+    return (
+      <>
+        {children}
+        <CipherQuickAccessBar campaignId={campaignId} />
+      </>
+    );
   }
   // Auth-flow pages render without nav/sidebar so the user can finish
   // password reset / email verification without distractions. Legal
