@@ -10,6 +10,7 @@ import CampaignSettingsStep from "@/components/campaigns/create/CampaignSettings
 import CampaignHomebrewStep from "@/components/campaigns/create/CampaignHomebrewStep";
 import { supabase } from "@/api/supabaseClient";
 import { checkActiveCampaignLimit } from "@/utils/campaignLifecycle";
+import { generateCipherMaps } from "@/utils/languageCipherMaps";
 import { toast } from "sonner";
 import { trackEvent } from "@/utils/analytics";
 
@@ -83,6 +84,12 @@ export default function CreateCampaign() {
           throw new Error(gate.reason || 'Active campaign limit reached.');
         }
       }
+
+      // Per-campaign cipher randomisation. Same Cant + Druidic symbol
+      // shapes across campaigns, but each campaign assigns the
+      // meanings differently — so the cypher inventory items decode
+      // against this campaign's mapping, not the global catalogue.
+      payload.language_cipher_maps = generateCipherMaps();
 
       const campaign = await base44.entities.Campaign.create(payload);
 
