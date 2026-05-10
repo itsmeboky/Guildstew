@@ -50,15 +50,17 @@ const STEPS = [
   { id: 'review', label: 'Review', component: ReviewStep }
 ];
 
+// Character creator backdrop pool. One of these is picked at random
+// per mount (useState initializer at the consumer site, so the
+// background doesn't flicker between renders). Hosted in Supabase
+// app-assets so the asset list lives in one place; updating the
+// Storage bucket doesn't require a code change beyond editing this
+// array.
 const BACKGROUND_GIFS = [
-  'https://i.imgur.com/R7iho4v.gif',
-  'https://i.imgur.com/TDqaFe2.gif',
-  'https://i.imgur.com/GMYKSnu.gif',
-  'https://i.imgur.com/VYI8Dqf.gif',
-  'https://i.imgur.com/2Ux58y5.gif',
-  'https://i.imgur.com/9objTJy.gif',
-  'https://i.imgur.com/rr91mop.gif',
-  'https://i.imgur.com/O5bstqD.gif'
+  'https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/charactercreatorbg1.webp',
+  'https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/charactercreatorbg2.webp',
+  'https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/charactercreatorbg3.webp',
+  'https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/charactercreatorbg4.webp',
 ];
 
 const classSkillCounts = {
