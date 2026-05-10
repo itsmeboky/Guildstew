@@ -724,11 +724,13 @@ const handleSubmit = () => {
             </h1>
             {!editCharacterId && (
               <Button
-                onClick={() => setQuickCreateOpen(true)}
-                className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] font-bold"
+                onClick={() => toast("Coming in 1.0 — use Full Creator for now.")}
+                disabled
+                title="Coming in 1.0 — use Full Creator for now"
+                className="bg-transparent border-2 border-dashed border-slate-600 text-slate-400 font-bold cursor-not-allowed hover:bg-transparent disabled:opacity-100"
               >
                 <Zap className="w-4 h-4 mr-2" />
-                Quick Create
+                Quick Create — Coming in 1.0
               </Button>
             )}
           </div>

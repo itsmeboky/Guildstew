@@ -80,8 +80,11 @@ export default function CreateCharacterDialog({ open, onClose }) {
   };
 
   const handleQuickCreate = () => {
-    onClose();
-    setQuickCreateOpen(true);
+    // AI-driven creation paths are gated until 1.0 (provider
+    // integration + level-N completeness still in flight). Users
+    // see the card visually but the click no-ops with a toast,
+    // matching the SpiceEmporium "Disabled for Alpha" pattern.
+    toast("Coming in 1.0 — use Full Character Creator for now.");
   };
 
   const handleQuickCreateComplete = (generatedCharacter) => {
@@ -192,14 +195,15 @@ function DialogPackedContent({ packId, handleFullCreator, handleQuickCreate }) {
 
             <div
               onClick={handleQuickCreate}
-              className="bg-[#1E2430] rounded-xl p-6 border-2 border-gray-600 hover:border-[#FF5722] cursor-pointer transition-all group"
+              title="Coming in 1.0 — use Full Character Creator for now"
+              className="bg-[#1E2430]/40 rounded-xl p-6 border-2 border-dashed border-slate-700 cursor-not-allowed opacity-70 transition-all group"
             >
               <div className="flex justify-center mb-4">
-                <div className="w-16 h-16 bg-[#FF5722]/20 rounded-full flex items-center justify-center group-hover:bg-[#FF5722]/30 transition-all">
-                  <Zap className="w-8 h-8 text-[#FF5722]" />
+                <div className="w-16 h-16 bg-slate-500/15 rounded-full flex items-center justify-center">
+                  <Zap className="w-8 h-8 text-slate-400" />
                 </div>
               </div>
-              <h3 className="text-xl font-bold text-center mb-2">Quick Create</h3>
+              <h3 className="text-xl font-bold text-center mb-2 text-slate-300">Quick Create</h3>
               <p className="text-sm text-gray-400 text-center mb-4">
                 Jump right in with pre-configured character templates
               </p>
@@ -209,6 +213,9 @@ function DialogPackedContent({ packId, handleFullCreator, handleQuickCreate }) {
                 <li>• Recommended defaults</li>
                 <li>• Start playing faster</li>
               </ul>
+              <div className="mt-4 inline-flex items-center justify-center w-full text-xs font-black uppercase tracking-widest text-slate-400">
+                Coming in 1.0
+              </div>
             </div>
           </div>
     </>
