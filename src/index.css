@@ -252,3 +252,91 @@ body {
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
 }
+
+/* === Forum rich-text editor =================================== */
+
+/* Editor body min-height (set per-instance via --quill-min-h). */
+.ql-container.ql-snow .ql-editor {
+  min-height: var(--quill-min-h, 160px);
+}
+
+/* Dark variant — used inside the New Thread dialog (slate panel). */
+.forum-quill-dark .ql-toolbar.ql-snow {
+  background: #050816;
+  border: 1px solid #334155;
+  border-bottom: none;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+}
+.forum-quill-dark .ql-container.ql-snow {
+  background: #050816;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+.forum-quill-dark .ql-snow .ql-stroke { stroke: #cbd5e1; }
+.forum-quill-dark .ql-snow .ql-fill   { fill:   #cbd5e1; }
+.forum-quill-dark .ql-snow .ql-picker-label { color: #cbd5e1; }
+.forum-quill-dark .ql-editor.ql-blank::before { color: #64748b; font-style: italic; }
+
+/* Cream variant — used inside the in-thread Reply composer. */
+.forum-quill-cream .ql-toolbar.ql-snow {
+  background: #FFF8F3;
+  border: 1px solid #EAD5C2;
+  border-bottom: none;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+}
+.forum-quill-cream .ql-container.ql-snow {
+  background: #FFF8F3;
+  color: #1A1A2E;
+  border: 1px solid #EAD5C2;
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+.forum-quill-cream .ql-editor.ql-blank::before { color: #9a8470; font-style: italic; }
+
+/* Read view — keep embedded images bounded so a giant screenshot
+   doesn't blow out the post card. */
+.forum-post-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 0.5rem 0;
+}
+.forum-post-body p  { margin: 0.4rem 0; }
+.forum-post-body h2 { font-size: 1.2rem; font-weight: 700; margin: 0.8rem 0 0.4rem; }
+.forum-post-body h3 { font-size: 1.05rem; font-weight: 700; margin: 0.7rem 0 0.3rem; }
+.forum-post-body h4 { font-size: 0.95rem; font-weight: 700; margin: 0.6rem 0 0.3rem; }
+.forum-post-body ul,
+.forum-post-body ol { padding-left: 1.4rem; margin: 0.4rem 0; }
+.forum-post-body blockquote {
+  border-left: 3px solid #EAD5C2;
+  padding: 0.2rem 0.8rem;
+  margin: 0.5rem 0;
+  color: #5a4633;
+  font-style: italic;
+}
+.forum-post-body pre {
+  background: #1A1A2E;
+  color: #f8fafc;
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 0.8rem;
+}
+.forum-post-body code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.85em;
+}
+.forum-post-body pre code { background: transparent; padding: 0; }
+.forum-post-body a { color: #FF5722; text-decoration: underline; }
+
+/* Mobile: let the toolbar wrap rather than overflow off-screen. */
+.forum-quill-dark .ql-toolbar.ql-snow,
+.forum-quill-cream .ql-toolbar.ql-snow {
+  flex-wrap: wrap;
+}

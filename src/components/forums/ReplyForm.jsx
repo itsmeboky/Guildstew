@@ -4,22 +4,29 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/AuthContext";
 import { createReply, isAdminEmail } from "@/lib/forumsClient";
 import { CREAM } from "@/pages/Forums";
+import ForumRichTextEditor from "@/components/forums/ForumRichTextEditor";
 
 /**
  * Reply composer at the bottom of a thread.
  *
- * Uses a bare textarea + button rather than the shadcn Textarea so
- * the cream-theme styling stays consistent inside the creamsicle
- * page. `is_dev_reply` is auto-set when the author is an admin.
+ * Wraps the shared ForumRichTextEditor (Quill) so replies have the
+ * same formatting + image-embed capabilities as new threads.
+ * `is_dev_reply` is auto-set when the author is an admin.
  */
 export default function ReplyForm({ thread }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [content, setContent] = useState("");
 
+  const isContentEmpty = (html) =>
+    !html
+      ?.replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;|&amp;|&lt;|&gt;/g, " ")
+      .trim();
+
   const post = useMutation({
     mutationFn: async () => {
-      if (!content.trim()) throw new Error("Write something before posting.");
+      if (isContentEmpty(content)) throw new Error("Write something before posting.");
       return createReply({
         thread_id: thread.id,
         author_id: user.id,
@@ -45,23 +52,19 @@ export default function ReplyForm({ thread }) {
       <p className="text-xs uppercase tracking-widest font-black mb-2" style={{ color: CREAM.textMuted }}>
         Reply
       </p>
-      <textarea
-        rows={5}
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        placeholder="Markdown supported (headings, bold, italic, links, code, lists)."
-        className="w-full rounded-md border text-sm p-2 outline-none font-mono leading-relaxed"
-        style={{
-          backgroundColor: CREAM.pageBg,
-          color: CREAM.textPrimary,
-          borderColor: CREAM.cardBorder,
-        }}
-      />
+      <div className="forum-quill-cream">
+        <ForumRichTextEditor
+          value={content}
+          onChange={setContent}
+          placeholder="Share your reply — toolbar for formatting, paste a screenshot to embed an image."
+          minHeight={140}
+        />
+      </div>
       <div className="mt-2 flex justify-end">
         <button
           type="button"
           onClick={() => post.mutate()}
-          disabled={post.isPending || !content.trim()}
+          disabled={post.isPending || isContentEmpty(content)}
           className="text-sm font-black px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
           style={{ backgroundColor: CREAM.accent, color: "#FFF8F3" }}
         >

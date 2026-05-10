@@ -8,9 +8,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/AuthContext";
 import { createThread, isAdminEmail } from "@/lib/forumsClient";
+import ForumRichTextEditor from "@/components/forums/ForumRichTextEditor";
 
 /**
  * New Thread dialog.
@@ -35,11 +35,19 @@ export default function NewThreadDialog({ open, onClose, category }) {
   const isAdmin = isAdminEmail(user?.email);
   const blocked = !!category?.is_dev_only && !isAdmin;
 
+  // Quill emits "<p><br></p>" for an empty editor — strip tags and
+  // entities to detect visually-empty content.
+  const isContentEmpty = (html) =>
+    !html
+      ?.replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;|&amp;|&lt;|&gt;/g, " ")
+      .trim();
+
   const post = useMutation({
     mutationFn: async () => {
       if (blocked) throw new Error("Only admins can post in this category.");
       if (!title.trim()) throw new Error("Title is required.");
-      if (!content.trim()) throw new Error("Content is required.");
+      if (isContentEmpty(content)) throw new Error("Content is required.");
       return createThread({
         category_id: category.id,
         author_id: user.id,
@@ -77,11 +85,11 @@ export default function NewThreadDialog({ open, onClose, category }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose?.(); }}>
-      <DialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-xl">
+      <DialogContent className="bg-[#1E2430] border border-gray-700 text-white max-w-2xl">
         <DialogHeader>
           <DialogTitle>New Thread · {category?.name}</DialogTitle>
           <DialogDescription className="text-slate-400">
-            Markdown supported (headings, bold, italic, links, code, lists).
+            Format with the toolbar. Drop in images via the picker, paste a screenshot, or paste an image URL.
           </DialogDescription>
         </DialogHeader>
 
@@ -103,15 +111,15 @@ export default function NewThreadDialog({ open, onClose, category }) {
             />
           </div>
           <div>
-            <Label className="text-xs">Content (Markdown)</Label>
-            <Textarea
-              rows={10}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="bg-[#050816] border-slate-700 text-white mt-1 font-mono text-xs leading-relaxed"
-              placeholder="Share your thoughts, questions, or story."
-              disabled={blocked}
-            />
+            <Label className="text-xs">Content</Label>
+            <div className="forum-quill-dark mt-1">
+              <ForumRichTextEditor
+                value={content}
+                onChange={setContent}
+                placeholder="Share your thoughts, questions, or story."
+                minHeight={220}
+              />
+            </div>
           </div>
         </div>
 

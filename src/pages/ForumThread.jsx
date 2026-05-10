@@ -12,6 +12,7 @@ import {
 } from "@/lib/forumsClient";
 import { useAuth } from "@/lib/AuthContext";
 import { renderBlogMarkdown } from "@/lib/renderBlogMarkdown";
+import { sanitizeForumHtml } from "@/lib/sanitizeForumHtml";
 import { CREAM } from "@/pages/Forums";
 import ReplyForm from "@/components/forums/ReplyForm";
 import { displayName, displayInitial } from "@/utils/displayName";
@@ -381,9 +382,9 @@ function Post({
           </p>
         ) : (
           <article
-            className="text-sm leading-relaxed"
+            className="forum-post-body text-sm leading-relaxed"
             style={{ color: CREAM.textPrimary }}
-            dangerouslySetInnerHTML={{ __html: renderBlogMarkdown(body || "") }}
+            dangerouslySetInnerHTML={{ __html: sanitizeForumHtml(renderBlogMarkdown(body || "")) }}
           />
         )}
         {onLike !== undefined && !isOP && !isDeleted && (

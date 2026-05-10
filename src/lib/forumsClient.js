@@ -1,4 +1,5 @@
 import { supabase } from "@/api/supabaseClient";
+import { sanitizeForumHtml } from "@/lib/sanitizeForumHtml";
 
 /**
  * Forums client — categories, threads, replies, likes.
@@ -106,7 +107,7 @@ export async function createThread({ category_id, author_id, author_name, title,
       author_id,
       title,
       slug,
-      content,
+      content: sanitizeForumHtml(content),
       is_dev_post: !!is_dev_post,
     })
     .select()
@@ -121,7 +122,7 @@ export async function createReply({ thread_id, author_id, content, is_dev_reply 
     .insert({
       thread_id,
       author_id,
-      content,
+      content: sanitizeForumHtml(content),
       is_dev_reply: !!is_dev_reply,
     })
     .select()
