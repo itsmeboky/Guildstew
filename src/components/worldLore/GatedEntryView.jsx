@@ -9,7 +9,7 @@ import {
   getComprehensionLevel, speaksLanguage,
 } from "@/utils/languageComprehension";
 import { fontFamilyFor } from "@/utils/languageFonts";
-import { SymbolImage } from "@/components/shared/SymbolPicker";
+import { CipherSymbol } from "@/components/shared/CipherSymbol";
 import { THIEVES_CANT_SYMBOLS, CANT_DEFAULT_COLOR } from "@/config/thievesCantSymbols";
 import { DRUIDIC_SYMBOLS, DRUIDIC_DEFAULT_COLOR } from "@/config/druidicSymbols";
 
@@ -389,6 +389,7 @@ function Annotations({ entry, character, isGM }) {
             🗡️ Thieves&apos; Cant
           </p>
           <AnnotationSymbols
+            cipherType="thieves_cant"
             selected={cantSymbols}
             catalog={THIEVES_CANT_SYMBOLS}
             defaultColor={meta.thieves_cant_color || CANT_DEFAULT_COLOR}
@@ -402,6 +403,7 @@ function Annotations({ entry, character, isGM }) {
             🌿 Druidic
           </p>
           <AnnotationSymbols
+            cipherType="druidic"
             selected={druidicSymbols}
             catalog={DRUIDIC_SYMBOLS}
             defaultColor={meta.druidic_color || DRUIDIC_DEFAULT_COLOR}
@@ -413,7 +415,7 @@ function Annotations({ entry, character, isGM }) {
   );
 }
 
-function AnnotationSymbols({ selected, catalog, defaultColor }) {
+function AnnotationSymbols({ cipherType, selected, catalog, defaultColor }) {
   if (!Array.isArray(selected) || selected.length === 0) return null;
   const byId = new Map(catalog.map((s) => [s.id, s]));
   return (
@@ -423,11 +425,11 @@ function AnnotationSymbols({ selected, catalog, defaultColor }) {
         if (!sym) return null;
         return (
           <div key={sel.id} className="flex flex-col items-center gap-0.5 w-16">
-            <SymbolImage
-              src={sym.src}
+            <CipherSymbol
+              cipherType={cipherType}
+              symbol={sym}
               color={sel.color || defaultColor}
               size={40}
-              title={sym.name}
             />
             <span className="text-[9px] text-slate-400 font-semibold text-center leading-tight">
               {sym.name}
