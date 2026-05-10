@@ -542,6 +542,7 @@ export default function EntryForm({
       <div className="border border-dashed border-slate-600 rounded-lg p-3 space-y-3">
         <span className="text-sm text-slate-400">🌿 Druidic (Optional)</span>
         <SymbolPicker
+          cipherType="druidic"
           symbols={DRUIDIC_SYMBOLS}
           categories={DRUIDIC_CATEGORIES}
           selected={druidicSymbols}
