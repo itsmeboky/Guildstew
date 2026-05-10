@@ -143,15 +143,21 @@ export default function AlphaWelcomeModal({ open, onClaimed, onClose }) {
           animate={{ scale: 1, y: 0, opacity: 1 }}
           exit={{ scale: 0.92, y: 16, opacity: 0 }}
           transition={{ type: "spring", stiffness: 240, damping: 22 }}
-          className="relative w-full max-w-3xl bg-[#1E2430] border border-[#37F2D1]/40 rounded-2xl shadow-[0_30px_80px_rgba(0,0,0,0.7)] overflow-hidden"
+          className="relative w-full max-w-3xl bg-[#1E2430] border border-[#37F2D1]/40 rounded-2xl shadow-[0_30px_80px_rgba(0,0,0,0.7)] overflow-visible"
         >
-          {/* Sticker — overlaps the top-right corner of the card.
-              Hidden on small viewports so the message has room. */}
+          {/* Sticker — floats over the top-right corner with part
+              outside the modal bounds, like a sticker peeling off
+              the page. The card MUST be overflow-visible above (not
+              the default overflow-hidden), otherwise the escaping
+              portion gets clipped at the rounded edge. Hidden on
+              small viewports so it doesn't crowd the close button
+              or extend off-screen. pointer-events-none keeps clicks
+              passing through to the X button beneath. */}
           <img
             src={STICKER_URL}
             alt=""
             aria-hidden="true"
-            className="hidden md:block pointer-events-none absolute -top-12 -right-8 w-44 lg:w-52 z-10 drop-shadow-[0_12px_30px_rgba(0,0,0,0.6)]"
+            className="hidden md:block pointer-events-none absolute -top-12 -right-12 w-44 lg:w-52 z-30 drop-shadow-[0_18px_40px_rgba(0,0,0,0.65)]"
           />
 
           {/* Header */}

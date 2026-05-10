@@ -626,6 +626,7 @@ export default function Layout({ children, currentPageName }) {
     currentPageName === "ResetPassword" ||
     currentPageName === "VerifyEmail" ||
     currentPageName === "Login" ||
+    currentPageName === "AlphaGate" ||
     currentPageName === "Signup" ||
     (!user && (
       currentPageName === "Terms" ||
