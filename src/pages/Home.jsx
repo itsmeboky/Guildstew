@@ -7,6 +7,10 @@ import { createPageUrl } from "@/utils";
 import { Link } from "react-router-dom";
 import LazyImage from "@/components/ui/LazyImage";
 import { supabase } from "@/api/supabaseClient";
+import CommunityHighlightsCard from "@/components/home/CommunityHighlightsCard";
+import UpcomingSessionsCard from "@/components/home/UpcomingSessionsCard";
+import AlphaWelcomeModal from "@/components/alpha/AlphaWelcomeModal";
+import { useAuth } from "@/lib/AuthContext";
 
 const HERO_SLIDES = [
   {
@@ -39,7 +43,31 @@ const HERO_SLIDES = [
 ];
 
 export default function Home() {
+  const { user } = useAuth();
   const [currentSlide, setCurrentSlide] = useState(0);
+
+  // Alpha welcome modal — drives off user_profiles.has_seen_alpha_welcome.
+  // Local override flips immediately on claim so the modal closes
+  // without waiting for the React Query invalidation roundtrip.
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const { data: alphaProfile } = useQuery({
+    queryKey: ["userProfile", user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_profiles")
+        .select("id, has_seen_alpha_welcome, alpha_gift_claimed")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      return data || null;
+    },
+    enabled: !!user?.id,
+    staleTime: 30_000,
+  });
+  const showAlphaWelcome =
+    !!user &&
+    !!alphaProfile &&
+    !alphaProfile.has_seen_alpha_welcome &&
+    !welcomeDismissed;
 
   // Admin-managed hero banners. Falls back to the hard-coded
   // HERO_SLIDES above when no admin banners exist, so the homepage
@@ -405,64 +433,15 @@ export default function Home() {
               from the hero section's top padding, not from a gap
               between the hero and these cards. */}
           <div className="grid grid-cols-12 gap-6 mb-8">
-            {/* Newest Game Pack — admin override wins over the
-                auto-derived products[0] card so marketing can
-                hand-pick what's featured. */}
-            <div className="col-span-2 rounded-3xl p-5 h-[320px] flex flex-col relative overflow-hidden">
-              <div className="theme-homepage-card absolute inset-0" />
-              <div className="relative z-10 flex flex-col h-full">
-                <h3 className="text-xl font-bold text-white mb-4 text-center">Newest Game Pack</h3>
-                {newestOverride?.name ? (
-                  <ConfigCard config={newestOverride} />
-                ) : products.length > 0 ? (
-                  <div className="flex-1 flex flex-col min-h-0">
-                    <div className="flex-1 rounded-2xl mb-3 min-h-0 overflow-hidden relative">
-                      <LazyImage
-                        src={products[0].cover_image_url}
-                        alt={products[0].name}
-                        className="absolute inset-0 w-full h-full"
-                      />
-                    </div>
-                    <p className="text-white text-sm font-semibold text-center line-clamp-2">{products[0].name}</p>
-                    <p className="text-white text-lg font-bold text-center mt-1">${products[0].price}</p>
-                  </div>
-                ) : null}
-              </div>
-            </div>
+            {/* Upcoming Sessions — campaigns the player is in,
+                sorted by next scheduled session. Replaced the
+                previous "Newest Game Pack" widget. */}
+            <UpcomingSessionsCard user={user} />
 
-            {/* Top Selling Game Packs — admin can replace the auto
-                top-5 grid with a single curated card via site_config. */}
-            <div className="col-span-7 rounded-3xl p-5 h-[320px] relative overflow-hidden">
-              <div className="theme-homepage-card absolute inset-0" />
-              <div className="relative z-10 h-full flex flex-col">
-                <h3 className="text-xl font-bold text-white mb-4 text-center">Top Selling Game Packs</h3>
-                {topSellingOverride?.name ? (
-                  <ConfigCard config={topSellingOverride} large />
-                ) : (
-                <div className="grid grid-cols-5 gap-4 flex-1">
-                  {products.slice(0, 5).map(product => (
-                    <div key={product.id} className="group cursor-pointer flex flex-col">
-                      <div className="flex-1 rounded-2xl mb-2 relative overflow-hidden group-hover:scale-105 transition-transform min-h-0">
-                        <LazyImage 
-                          src={product.cover_image_url}
-                          alt={product.name}
-                          className="absolute inset-0 w-full h-full"
-                        />
-                        <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/60 backdrop-blur-sm px-2 py-1 rounded z-10">
-                          <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-                          <span className="text-white text-xs font-semibold">{product.rating || 4.8}</span>
-                        </div>
-                      </div>
-                      <p className="text-white text-xs font-semibold text-center line-clamp-2 group-hover:text-[#37F2D1] transition-colors">
-                        {product.name}
-                      </p>
-                      <p className="text-white text-sm font-bold text-center mt-1">${product.price}</p>
-                    </div>
-                  ))}
-                </div>
-                )}
-              </div>
-            </div>
+            {/* Community Highlights — recent profile posts from
+                the current user's accepted friends. Replaced the
+                previous "Top Selling Game Packs" widget. */}
+            <CommunityHighlightsCard user={user} />
 
             {/* Blog */}
             <div className="col-span-3 rounded-3xl p-5 h-[320px] relative overflow-hidden">
@@ -511,6 +490,12 @@ export default function Home() {
 
         </div>
       </div>
+
+      <AlphaWelcomeModal
+        open={showAlphaWelcome}
+        onClaimed={() => setWelcomeDismissed(true)}
+        onClose={() => setWelcomeDismissed(true)}
+      />
     </div>
   );
 }

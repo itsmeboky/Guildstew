@@ -81,7 +81,12 @@ export default function CampaignApplyFlow({ campaign, onClose }) {
     if (deps.length === 0) {
       return { ok: false, reason: "This campaign uses custom content" };
     }
-    const missing = deps.filter((id) => !installedModIds.has(id));
+    // mod_dependencies is canonically an array of
+    // {mod_id, mod_type, mod_name} objects (see RaceStep.jsx,
+    // ClassStep.jsx, the 20261128 migration). Read .mod_id for
+    // membership checks; legacy plain-string entries became objects
+    // in the migration's canonicalization pass.
+    const missing = deps.filter((d) => !installedModIds.has(d?.mod_id));
     if (missing.length > 0) {
       return { ok: false, reason: `Missing required mod: ${missing.length} item${missing.length === 1 ? "" : "s"}` };
     }

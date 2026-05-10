@@ -15,7 +15,7 @@ import { checkAchievements } from "@/utils/achievementChecker";
  * thresholds (e.g. ones earned outside of an end-of-combat trigger)
  * land here on visit.
  */
-export default function Achievements() {
+export default function Achievements({ embedded = false } = {}) {
   const queryClient = useQueryClient();
   const [failedImages, setFailedImages] = useState({});
 
@@ -193,9 +193,9 @@ export default function Achievements() {
   };
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8">Achievements</h1>
+    <div className={embedded ? "h-full overflow-y-auto p-6" : "min-h-screen p-8"}>
+      <div className={embedded ? "" : "max-w-7xl mx-auto"}>
+        {!embedded && <h1 className="text-4xl font-bold mb-8">Achievements</h1>}
 
         {/* --- Progress block --- */}
         <div className="bg-[#2A3441] rounded-2xl p-6 mb-8">

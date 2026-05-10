@@ -170,7 +170,7 @@ export default function CustomCompanionApprovalDialog({
                   >
                     <div className="w-10 h-10 rounded overflow-hidden bg-[#1E2430] border border-slate-700 flex-shrink-0">
                       {p.companion.image ? (
-                        <img src={p.companion.image} alt="" className="w-full h-full object-cover" />
+                        <img src={p.companion.image} alt="" className="w-full h-full object-cover object-top" />
                       ) : (
                         <PawPrint className="w-full h-full p-2 text-slate-600" />
                       )}
@@ -231,7 +231,7 @@ export default function CustomCompanionApprovalDialog({
             <div className="flex items-start gap-3 bg-[#050816] border border-slate-700 rounded-lg p-3">
               <div className="w-16 h-16 rounded overflow-hidden bg-[#1E2430] border border-slate-700 flex-shrink-0">
                 {editing.companion.image ? (
-                  <img src={editing.companion.image} alt="" className="w-full h-full object-cover" />
+                  <img src={editing.companion.image} alt="" className="w-full h-full object-cover object-top" />
                 ) : (
                   <PawPrint className="w-full h-full p-3 text-slate-600" />
                 )}

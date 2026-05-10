@@ -5,6 +5,13 @@ import { Sparkles, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import InfoTip from "@/components/characterCreator/InfoTip";
+import { tipFor } from "@/components/characterCreator/creatorTips";
+import {
   spellsByClass,
   recommendedSpells,
   spellDetails as hardcodedSpellDetails,
@@ -17,6 +24,14 @@ import {
   getMaxSpellLevelForCharacter
 } from "@/components/dnd5e/spellData";
 import { getBreweryClassSpellSlots } from "@/lib/breweryClassApply";
+import {
+  SPELLS_KNOWN_TABLE,
+  spellsKnown,
+  spellsPrepared,
+  cantripsKnown,
+  abilityModifier,
+  SPELLCASTING_ABILITY,
+} from "@/components/dnd5e/dnd5eRules";
 
 export default function SpellsStep({ characterData, updateCharacterData }) {
   const [hoveredEffect, setHoveredEffect] = useState(null);
@@ -176,7 +191,18 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
       <div className="bg-[#2A3441] rounded-xl p-6 mb-6 border-2 border-[#1E2430]">
         <div className="flex justify-between items-start">
           <div>
-            <h2 className="text-2xl font-bold text-[#FFC6AA] mb-3">Spellcasting</h2>
+            <h2 className="text-2xl font-bold text-[#FFC6AA] mb-3 flex items-center gap-2">
+              Spellcasting
+              <InfoTip width="w-80">{tipFor("spell_prepared_vs_known")}</InfoTip>
+            </h2>
+            <div className="flex items-center gap-4 mb-3 text-xs text-white/70 flex-wrap">
+              <span className="inline-flex items-center gap-1">
+                Cantrips <InfoTip>{tipFor("spell_cantrip")}</InfoTip>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                Spell Slots <InfoTip>{tipFor("spell_slots")}</InfoTip>
+              </span>
+            </div>
             <p className="text-white mb-2">
               {spellcastingClass ? (
                 <>
@@ -210,6 +236,8 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
           </Button>
         </div>
       </div>
+
+      <PerClassSpellsKnownPanel characterData={characterData} />
 
       {pactSlots && (
         <div className="mb-6 bg-[#1E2430] border-2 border-[#5B4B9E] rounded-xl p-4">
@@ -278,60 +306,71 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
                       };
 
                       return (
-                        <div
-                          key={spell}
-                          onClick={() => !isDisabled && handleToggle(!isSelected)}
-                          className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-[#2A3441] border-[#37F2D1] border-4'
-                              : 'bg-[#2A3441] border-[#1E2430]'
-                          } ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-[#37F2D1]/50'}`}
-                        >
-                          <div className="flex items-start gap-3 mb-2">
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={handleToggle}
-                              disabled={isDisabled}
-                              className="mt-1 border-white pointer-events-none"
-                            />
-                            {spellIcons[spell] && (
-                              <img
-                                src={spellIcons[spell]}
-                                alt={spell}
-                                className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border-2 border-[#37F2D1]/30"
-                              />
-                            )}
-                            <div className="flex-1">
-                              <h4 className="font-semibold text-[#FFC6AA]">{spell}</h4>
-                              <div className="text-xs text-gray-400 mb-2">
-                                {details.school} • {details.castingTime} • {details.range}
-                              </div>
-                              <p className="text-xs text-white leading-relaxed line-clamp-3">{details.description}</p>
-                              {details.effects && details.effects.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-1">
-                                  {details.effects.map((effect, idx) => (
-                                    <div
-                                      key={idx}
-                                      className="relative"
-                                      onMouseEnter={() => setHoveredEffect(effect)}
-                                      onMouseLeave={() => setHoveredEffect(null)}
-                                    >
-                                      <Badge className="bg-[#FF5722] text-white text-xs cursor-help">
-                                        {effect}
-                                      </Badge>
-                                      {hoveredEffect === effect && effectDescriptions[effect] && (
-                                        <div className="absolute z-10 bottom-full left-0 mb-2 bg-[#1E2430] text-white p-3 rounded-lg text-xs w-64 shadow-lg border-2 border-[#FF5722]">
-                                          <div className="font-bold mb-1">{effect}</div>
-                                          {effectDescriptions[effect]}
+                        <HoverCard key={spell} openDelay={150} closeDelay={100}>
+                          <HoverCardTrigger asChild>
+                            <div
+                              onClick={() => !isDisabled && handleToggle(!isSelected)}
+                              className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'bg-[#2A3441] border-[#37F2D1] border-4'
+                                  : 'bg-[#2A3441] border-[#1E2430]'
+                              } ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-[#37F2D1]/50'}`}
+                            >
+                              <div className="flex items-start gap-3 mb-2">
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={handleToggle}
+                                  disabled={isDisabled}
+                                  className="mt-1 border-white pointer-events-none"
+                                />
+                                {spellIcons[spell] && (
+                                  <img
+                                    src={spellIcons[spell]}
+                                    alt={spell}
+                                    className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border-2 border-[#37F2D1]/30"
+                                  />
+                                )}
+                                <div className="flex-1">
+                                  <h4 className="font-semibold text-[#FFC6AA]">{spell}</h4>
+                                  <div className="text-xs text-gray-400 mb-2">
+                                    {details.school} • {details.castingTime} • {details.range}
+                                  </div>
+                                  <p className="text-xs text-white leading-relaxed line-clamp-3">{details.description}</p>
+                                  {details.effects && details.effects.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-1">
+                                      {details.effects.map((effect, idx) => (
+                                        <div
+                                          key={idx}
+                                          className="relative"
+                                          onMouseEnter={() => setHoveredEffect(effect)}
+                                          onMouseLeave={() => setHoveredEffect(null)}
+                                        >
+                                          <Badge className="bg-[#FF5722] text-white text-xs cursor-help">
+                                            {effect}
+                                          </Badge>
+                                          {hoveredEffect === effect && effectDescriptions[effect] && (
+                                            <div className="absolute z-10 bottom-full left-0 mb-2 bg-[#1E2430] text-white p-3 rounded-lg text-xs w-64 shadow-lg border-2 border-[#FF5722]">
+                                              <div className="font-bold mb-1">{effect}</div>
+                                              {effectDescriptions[effect]}
+                                            </div>
+                                          )}
                                         </div>
-                                      )}
+                                      ))}
                                     </div>
-                                  ))}
+                                  )}
                                 </div>
-                              )}
+                              </div>
                             </div>
-                          </div>
-                        </div>
+                          </HoverCardTrigger>
+                          <HoverCardContent
+                            side="right"
+                            align="start"
+                            sideOffset={8}
+                            className="w-96 max-h-[80vh] overflow-y-auto custom-scrollbar bg-[#1E2430] border-2 border-[#37F2D1]/50 text-white p-4"
+                          >
+                            <SpellFullDetail name={spell} spell={details} />
+                          </HoverCardContent>
+                        </HoverCard>
                       );
                     })
                   )}
@@ -341,6 +380,165 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Full spell detail rendered in the hover popover. Untruncated
+ * description plus all metadata (level, school, casting time, range,
+ * components, duration, at-higher-levels scaling, eligible classes).
+ *
+ * Tolerates the slight shape variance between the API spell rows
+ * (level: number, classes: array, higherLevel: string) and the
+ * hardcoded fallback rows (level: "Cantrip" | string, no higherLevel
+ * / classes). Missing fields drop their row instead of rendering "-".
+ */
+function SpellFullDetail({ name, spell }) {
+  if (!spell) return null;
+  const levelDisplay =
+    spell.level === 0 || spell.level === "Cantrip"
+      ? "Cantrip"
+      : typeof spell.level === "number"
+        ? `Level ${spell.level}`
+        : spell.level;
+  const higher = spell.higherLevel || spell.higher_level || spell.atHigherLevels;
+  const classes = Array.isArray(spell.classes) ? spell.classes : [];
+  const meta = [
+    levelDisplay && spell.school ? `${levelDisplay} ${spell.school}` : (levelDisplay || spell.school),
+    spell.castingTime,
+    spell.range,
+    spell.components,
+    spell.duration,
+  ].filter(Boolean);
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h4 className="text-base font-bold text-[#FFC6AA] leading-tight">{name}</h4>
+        {meta.length > 0 && (
+          <p className="text-[11px] text-gray-400 mt-0.5">{meta.join(" • ")}</p>
+        )}
+      </div>
+
+      {spell.description && (
+        <p className="text-xs text-white/90 leading-relaxed whitespace-pre-line">
+          {spell.description}
+        </p>
+      )}
+
+      {higher && (
+        <div className="border-l-2 border-[#37F2D1]/60 pl-3 py-1">
+          <p className="text-[10px] uppercase tracking-widest text-[#37F2D1] font-bold mb-1">
+            At Higher Levels
+          </p>
+          <p className="text-xs text-white/85 leading-relaxed whitespace-pre-line">{higher}</p>
+        </div>
+      )}
+
+      {classes.length > 0 && (
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-1">
+            Classes
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {classes.map((c) => (
+              <Badge key={c} className="bg-[#1E2430] border border-[#37F2D1]/30 text-[#37F2D1] text-[10px]">
+                {c}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Per-class spells-known / spells-prepared reference panel for
+ * multiclass casters. Today's spell picker selects from a unified
+ * pool constrained by total slot count per level — it doesn't
+ * track which class learned which spell, which means a Bard 3 /
+ * Sorcerer 2 has no enforced per-class budget. Per RAW (PHB p.
+ * 165), each class tracks its known/prepared spells separately:
+ *   Bard 3 → 6 spells known
+ *   Sorcerer 2 → 3 spells known + Sorcerer's cantrip count
+ *
+ * This panel surfaces the rules so player + GM can verify the
+ * total count is consistent with each class's individual budget.
+ * Renders nothing for single-class characters (the inline
+ * Spellcasting summary already shows the right number) and for
+ * non-caster classes (no spells to surface). Reads from the
+ * existing SPELLS_KNOWN_TABLE so the rules data stays the single
+ * source of truth.
+ */
+function PerClassSpellsKnownPanel({ characterData }) {
+  const primary = characterData?.class;
+  const multiclasses = Array.isArray(characterData?.multiclasses)
+    ? characterData.multiclasses.filter((mc) => mc?.class && mc?.level)
+    : [];
+  if (multiclasses.length === 0) return null; // single-class — existing summary is sufficient
+
+  const primaryLevel =
+    Math.max(1, Number(characterData?.level) || 1) -
+    multiclasses.reduce((s, mc) => s + (Number(mc.level) || 0), 0);
+
+  const allEntries = [
+    { className: primary, level: Math.max(1, primaryLevel) },
+    ...multiclasses.map((mc) => ({ className: mc.class, level: Number(mc.level) || 0 })),
+  ].filter((e) => e.className && e.level > 0 && SPELLS_KNOWN_TABLE[e.className]);
+
+  if (allEntries.length === 0) return null;
+
+  const attributes = characterData?.attributes || {};
+
+  return (
+    <div className="mb-6 bg-[#1E2430] border-2 border-[#5B4B9E]/40 rounded-xl p-4">
+      <h3 className="text-[#5B4B9E] font-bold mb-1 flex items-center gap-2">
+        Multiclass Spells Reference
+        <InfoTip width="w-80">
+          Each class tracks its own spells known or prepared count.
+          The picker below shows the unified slot pool — these per-class
+          budgets are the RAW limits to keep your selections consistent
+          with.
+        </InfoTip>
+      </h3>
+      <p className="text-xs text-white/60 mb-3">
+        Per PHB p. 165, multiclass casters track spells separately per class.
+      </p>
+      <ul className="text-sm text-white space-y-1.5">
+        {allEntries.map(({ className: cls, level }) => {
+          const data = SPELLS_KNOWN_TABLE[cls];
+          if (!data) return null;
+          const cantrips = cantripsKnown(cls, level);
+          let spellsLine = null;
+          if (data.type === "known") {
+            const known = spellsKnown(cls, level);
+            if (known != null) spellsLine = `${known} spells known`;
+          } else if (data.type === "prepared") {
+            const ability = SPELLCASTING_ABILITY[cls];
+            const score = Number(attributes?.[ability] ?? 10);
+            const mod = abilityModifier(score);
+            const prepared = spellsPrepared(cls, level, mod);
+            if (prepared != null) {
+              spellsLine = `${prepared} prepared (${ability?.toUpperCase()} mod ${mod >= 0 ? "+" : ""}${mod} + level adj.)`;
+            }
+          }
+          return (
+            <li key={cls} className="flex items-center justify-between gap-2 flex-wrap">
+              <span>
+                <span className="font-bold text-white">{cls}</span>{" "}
+                <span className="text-white/60">level {level}</span>
+              </span>
+              <span className="text-[#37F2D1] text-xs font-semibold">
+                {cantrips > 0 && `${cantrips} cantrips`}
+                {cantrips > 0 && spellsLine && " · "}
+                {spellsLine || (cantrips === 0 ? "—" : "")}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

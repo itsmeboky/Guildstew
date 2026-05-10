@@ -35,6 +35,8 @@ export default [
     },
     rules: {
       "no-unused-vars": "off",
+      "no-undef": "error",
+      "react/jsx-no-undef": ["error", { allowGlobals: false }],
       "react/jsx-uses-vars": "error",
       "unused-imports/no-unused-imports": "error",
       "unused-imports/no-unused-vars": [

@@ -26,12 +26,16 @@ export default function ForumThread() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: category } = useQuery({
+  const { data: category, isLoading: categoryLoading } = useQuery({
     queryKey: ["forumCategory", categorySlug],
     queryFn: () => getCategoryBySlug(categorySlug),
   });
 
-  const { data: thread } = useQuery({
+  const {
+    data: thread,
+    isLoading: threadLoading,
+    isFetching: threadFetching,
+  } = useQuery({
     queryKey: ["forumThread", category?.id, threadSlug],
     queryFn: () => getThread(category.id, threadSlug),
     enabled: !!category?.id && !!threadSlug,
@@ -44,10 +48,33 @@ export default function ForumThread() {
   });
 
   // One-shot view-count bump. The RPC runs as SECURITY DEFINER so
-  // anonymous readers can bump without a write policy.
+  // anonymous readers can bump without a write policy. Note:
+  // supabase.rpc() returns a PostgrestBuilder (thenable, not a
+  // true Promise) — it has .then() but no .catch(). Chaining
+  // .catch() directly on the rpc() result throws synchronously
+  // and crashes the page render, so we await inside try/catch
+  // and log on either the Supabase error envelope or an
+  // unexpected throw. Cancel flag covers the unmount-during-
+  // fetch case so we don't log noise after the user navigated
+  // away.
   useEffect(() => {
     if (!thread?.id) return;
-    supabase.rpc("increment_forum_thread_view", { p_thread_id: thread.id }).catch(() => {});
+    let cancelled = false;
+    (async () => {
+      try {
+        const { error } = await supabase.rpc("increment_forum_thread_view", {
+          p_thread_id: thread.id,
+        });
+        if (error && !cancelled) {
+          console.error("Forum view-count bump failed:", error);
+        }
+      } catch (err) {
+        if (!cancelled) console.error("Forum view-count bump threw:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [thread?.id]);
 
   // Author profiles — batch-fetch for OP + every reply.
@@ -89,12 +116,24 @@ export default function ForumThread() {
     onError: () => toast.error("Could not toggle like"),
   });
 
-  if (!category) {
-    return <NotFound />;
-  }
-  if (category && !thread) {
-    return <NotFound />;
-  }
+  // Loading vs missing must be distinguished here. useQuery's `data`
+  // is `undefined` while a query is fetching and `null` (per the
+  // forumsClient helpers' `data || null` contracts) when the row
+  // truly doesn't exist. Treat both as 404 — which the previous
+  // `if (!category) return <NotFound />` did — and a fresh redirect
+  // from "post a thread" lands on the NotFound page during the
+  // initial query window. Gate on the load state so we render a
+  // skeleton during the fetch and only fall to NotFound when we
+  // know the row isn't there.
+  if (categoryLoading) return <ThreadLoading />;
+  if (!category) return <NotFound />;
+
+  // Thread query is gated on category?.id, so its first state once
+  // category resolves is "fetching" (not "settled with null").
+  // Treat the very first fetch and the loading flag the same.
+  const threadResolved = !threadLoading && !threadFetching;
+  if (!threadResolved && !thread) return <ThreadLoading />;
+  if (!thread) return <NotFound />;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: CREAM.pageBg }}>
@@ -270,6 +309,48 @@ function NotFound() {
         <Link to="/forums" className="inline-flex items-center gap-1 mt-4 text-sm" style={{ color: CREAM.accent }}>
           <ArrowLeft className="w-4 h-4" /> Back to Forums
         </Link>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Loading skeleton — shown while the category and thread queries
+ * are still resolving. Distinct visual from NotFound so the user
+ * doesn't read a brief loading flicker as a hard error. Matches
+ * the actual ForumThread layout (header band + post card) so the
+ * shell stays stable when the real content swaps in.
+ */
+function ThreadLoading() {
+  return (
+    <div className="min-h-screen" style={{ backgroundColor: CREAM.pageBg }}>
+      <div
+        className="w-full px-6 py-6"
+        style={{ background: `linear-gradient(135deg, ${CREAM.gradStart} 0%, ${CREAM.gradEnd} 100%)` }}
+      >
+        <div className="max-w-3xl mx-auto">
+          <div className="h-3 w-24 rounded bg-black/10 animate-pulse" />
+          <div className="h-7 w-2/3 rounded bg-black/10 animate-pulse mt-3" />
+        </div>
+      </div>
+      <div className="max-w-3xl mx-auto px-6 py-6 space-y-4">
+        <div
+          className="rounded-xl border p-4 space-y-3"
+          style={{ backgroundColor: CREAM.card, borderColor: CREAM.cardBorder }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-black/10 animate-pulse" />
+            <div className="flex-1 space-y-1.5">
+              <div className="h-3 w-32 rounded bg-black/10 animate-pulse" />
+              <div className="h-2.5 w-48 rounded bg-black/10 animate-pulse" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="h-3 w-full rounded bg-black/10 animate-pulse" />
+            <div className="h-3 w-5/6 rounded bg-black/10 animate-pulse" />
+            <div className="h-3 w-4/6 rounded bg-black/10 animate-pulse" />
+          </div>
+        </div>
       </div>
     </div>
   );

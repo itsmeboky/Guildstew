@@ -5,6 +5,40 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
+import SubclassPicker from "@/components/characterCreator/SubclassPicker";
+import InfoTip from "@/components/characterCreator/InfoTip";
+import { tipFor } from "@/components/characterCreator/creatorTips";
+import {
+  meetsMulticlassPrereqs,
+  multiclassPrereqDescription,
+  multiclassProficienciesFor,
+} from "@/components/dnd5e/dnd5eRules";
+
+// Canonical "choose your specialization" feature names per class.
+// When a feature's name lands in this set, render the arrow-pattern
+// SubclassPicker instead of the legacy Select dropdown. Other
+// choice-required features (Fighting Style, Expertise picks,
+// Eldritch Invocations, etc.) keep the dropdown — those are short
+// flat lists, not paragraph-rich subclass cards.
+const SUBCLASS_FEATURE_NAMES = new Set([
+  "Primal Path",
+  "Bard College",
+  "Divine Domain",
+  "Druid Circle",
+  "Martial Archetype",
+  "Monastic Tradition",
+  "Sacred Oath",
+  "Ranger Archetype",
+  "Ranger Conclave",
+  "Roguish Archetype",
+  "Sorcerous Origin",
+  "Otherworldly Patron",
+  "Arcane Tradition",
+]);
+
+function isSubclassFeature(feature) {
+  return !!feature?.choiceRequired && SUBCLASS_FEATURE_NAMES.has(feature?.name);
+}
 
 export default function ClassFeaturesStep({ characterData, updateCharacterData }) {
   const [multiclasses, setMulticlasses] = useState(characterData.multiclasses || []);
@@ -12,9 +46,22 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
 
   const availableClasses = ["Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk", "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard"];
   const usedClasses = [characterData.class, ...multiclasses.map(mc => mc.class).filter(Boolean)];
-  
+
   const primaryClassLevel = characterData.level - multiclasses.reduce((sum, mc) => sum + (mc.level || 0), 0);
-  const canMulticlass = characterData.level >= 2 && primaryClassLevel >= 1;
+
+  // Multiclass prereq gates (PHB p. 163). Both rules must pass:
+  //   (a) Player meets the prereq for their PRIMARY class.
+  //   (b) Player meets the prereq for the TARGET class being added.
+  // Rule (a) is computed once and shown as a banner — failing it
+  // hides the Add Class button entirely. Rule (b) disables
+  // individual class options in the per-multiclass dropdown so
+  // the player can see what's available without guessing.
+  const attributes = characterData.attributes || {};
+  const primaryPrereqMet = meetsMulticlassPrereqs(characterData.class, attributes);
+  const primaryPrereqDesc = multiclassPrereqDescription(characterData.class);
+
+  const canMulticlass =
+    characterData.level >= 2 && primaryClassLevel >= 1 && primaryPrereqMet;
 
   const primaryFeatures = getClassFeaturesForLevel(characterData.class, primaryClassLevel) || [];
 
@@ -71,9 +118,10 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
           while others require you to make choices (like picking a subclass or fighting style).
         </p>
         {characterData.level >= 2 && (
-          <p className="text-white">
-            💡 <span className="font-bold">Multiclassing:</span> At level 2+, you can multiclass into another class to gain abilities from multiple sources. 
+          <p className="text-white flex items-start gap-2 flex-wrap">
+            💡 <span className="font-bold">Multiclassing:</span> At level 2+, you can multiclass into another class to gain abilities from multiple sources.
             Each level you gain can be put into any of your classes.
+            <InfoTip>{tipFor("multiclass_prereqs")}</InfoTip>
           </p>
         )}
       </div>
@@ -128,35 +176,47 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
                 </p>
 
                 {hasChoice && feature.choices && (
-                  <div className="mt-5 p-5 bg-[#1E2430]/50 rounded-lg border-2 border-[#FF5722]">
-                    <p className="text-[#FF5722] font-semibold mb-4 text-sm">
-                      ⚠️ You must make a choice for this feature:
-                    </p>
-                    
-                    <Select
-                      value={currentChoice || ""}
-                      onValueChange={(value) => handleFeatureChoice(featureKey, value)}
-                    >
-                      <SelectTrigger className="h-auto min-h-11 w-full">
-                        <SelectValue placeholder="Select option..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {feature.choices.map((choice, cIdx) => {
-                          const choiceName = typeof choice === 'string' ? choice : choice.name;
-                          const choiceDesc = typeof choice === 'object' ? choice.description : null;
-                          return (
-                            <SelectItem
-                              key={cIdx}
-                              value={choiceName}
-                              description={choiceDesc || undefined}
-                            >
-                              {choiceName}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  isSubclassFeature(feature) ? (
+                    <div className="mt-5">
+                      <SubclassPicker
+                        choices={feature.choices}
+                        value={currentChoice || null}
+                        onSelect={(value) => handleFeatureChoice(featureKey, value)}
+                        featureName={feature.name}
+                        levelGained={feature.level}
+                      />
+                    </div>
+                  ) : (
+                    <div className="mt-5 p-5 bg-[#1E2430]/50 rounded-lg border-2 border-[#FF5722]">
+                      <p className="text-[#FF5722] font-semibold mb-4 text-sm">
+                        ⚠️ You must make a choice for this feature:
+                      </p>
+
+                      <Select
+                        value={currentChoice || ""}
+                        onValueChange={(value) => handleFeatureChoice(featureKey, value)}
+                      >
+                        <SelectTrigger className="h-auto min-h-11 w-full">
+                          <SelectValue placeholder="Select option..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {feature.choices.map((choice, cIdx) => {
+                            const choiceName = typeof choice === 'string' ? choice : choice.name;
+                            const choiceDesc = typeof choice === 'object' ? choice.description : null;
+                            return (
+                              <SelectItem
+                                key={cIdx}
+                                value={choiceName}
+                                description={choiceDesc || undefined}
+                              >
+                                {choiceName}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )
                 )}
               </div>
             );
@@ -164,10 +224,26 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
         </div>
       </div>
 
+      {characterData.level >= 2 && primaryClassLevel >= 1 && !primaryPrereqMet && (
+        <div className="mb-6 bg-[#2A3441] border-2 border-[#FF5722]/60 rounded-xl p-4">
+          <h3 className="text-[#FF5722] font-bold mb-1 flex items-center gap-2">
+            ⚠️ Multiclass locked — primary class prereq not met
+          </h3>
+          <p className="text-sm text-white/80">
+            To multiclass out of <span className="font-bold">{characterData.class}</span>,
+            your character needs <span className="text-[#FF5722] font-bold">{primaryPrereqDesc}</span>.
+            Adjust your ability scores on the previous step to unlock multiclassing.
+          </p>
+        </div>
+      )}
+
       {canMulticlass && (
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-[#5B4B9E]">Multiclassing</h3>
+            <h3 className="text-xl font-bold text-[#5B4B9E] flex items-center gap-2">
+              Multiclassing
+              <InfoTip>{tipFor("multiclass_prereqs")}</InfoTip>
+            </h3>
             <Button
               onClick={handleAddMulticlass}
               disabled={primaryClassLevel <= 1}
@@ -192,11 +268,25 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
                   <SelectContent className="bg-[#2A3441] border-[#1E2430]">
                     {availableClasses
                       .filter(c => !usedClasses.includes(c) || c === mc.class)
-                      .map((cls) => (
-                        <SelectItem key={cls} value={cls} className="text-white hover:bg-[#1E2430]">
-                          {cls}
-                        </SelectItem>
-                      ))}
+                      .map((cls) => {
+                        const meets = meetsMulticlassPrereqs(cls, attributes);
+                        const desc = multiclassPrereqDescription(cls);
+                        return (
+                          <SelectItem
+                            key={cls}
+                            value={cls}
+                            disabled={!meets}
+                            description={meets ? desc : `Requires ${desc} — ability scores too low`}
+                            className={
+                              meets
+                                ? "text-white hover:bg-[#1E2430]"
+                                : "text-slate-500 cursor-not-allowed"
+                            }
+                          >
+                            {cls}
+                          </SelectItem>
+                        );
+                      })}
                   </SelectContent>
                 </Select>
 
@@ -227,6 +317,10 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
               </div>
 
               {mc.class && mc.level && (
+                <MulticlassProficienciesPanel className={mc.class} />
+              )}
+
+              {mc.class && mc.level && (
                 <div className="grid grid-cols-1 gap-3">
                   {(getClassFeaturesForLevel(mc.class, mc.level) || []).map((feature, fIdx) => {
                     const featureKey = `${mc.class}-${feature.level}-${feature.name}`;
@@ -255,29 +349,41 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
                         </p>
                         
                         {hasChoice && feature.choices && (
-                          <Select
-                            value={currentChoice || ""}
-                            onValueChange={(value) => handleFeatureChoice(featureKey, value)}
-                          >
-                            <SelectTrigger className="h-auto min-h-11 w-full mt-4">
-                              <SelectValue placeholder="Make a choice..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {feature.choices.map((choice, cIdx) => {
-                                const choiceName = typeof choice === 'string' ? choice : choice.name;
-                                const choiceDesc = typeof choice === 'object' ? choice.description : null;
-                                return (
-                                  <SelectItem
-                                    key={cIdx}
-                                    value={choiceName}
-                                    description={choiceDesc || undefined}
-                                  >
-                                    {choiceName}
-                                  </SelectItem>
-                                );
-                              })}
-                            </SelectContent>
-                          </Select>
+                          isSubclassFeature(feature) ? (
+                            <div className="mt-4">
+                              <SubclassPicker
+                                choices={feature.choices}
+                                value={currentChoice || null}
+                                onSelect={(value) => handleFeatureChoice(featureKey, value)}
+                                featureName={feature.name}
+                                levelGained={feature.level}
+                              />
+                            </div>
+                          ) : (
+                            <Select
+                              value={currentChoice || ""}
+                              onValueChange={(value) => handleFeatureChoice(featureKey, value)}
+                            >
+                              <SelectTrigger className="h-auto min-h-11 w-full mt-4">
+                                <SelectValue placeholder="Make a choice..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {feature.choices.map((choice, cIdx) => {
+                                  const choiceName = typeof choice === 'string' ? choice : choice.name;
+                                  const choiceDesc = typeof choice === 'object' ? choice.description : null;
+                                  return (
+                                    <SelectItem
+                                      key={cIdx}
+                                      value={choiceName}
+                                      description={choiceDesc || undefined}
+                                    >
+                                      {choiceName}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                          )
                         )}
                       </div>
                     );
@@ -295,6 +401,74 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
             ⚠️ Please make all required feature choices before proceeding
           </p>
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Surfaces the LIMITED proficiencies a character gains by
+ * multiclassing into `className`. Per RAW (PHB p. 164) this is a
+ * subset of the class's primary list — players don't get the full
+ * starting bundle on multiclass entry. Sourced from
+ * MULTICLASS_PROFICIENCIES so the rules table stays the single
+ * source of truth; updating the data here refreshes every UI
+ * surface that reads it.
+ */
+function MulticlassProficienciesPanel({ className }) {
+  const profs = multiclassProficienciesFor(className);
+  const hasArmor = Array.isArray(profs.armor) && profs.armor.length > 0;
+  const hasWeapons = Array.isArray(profs.weapons) && profs.weapons.length > 0;
+  const skillCount = Number(profs.skills) || 0;
+  const hasOther = Array.isArray(profs.other) && profs.other.length > 0;
+  const hasNotes = !!profs.notes;
+  const grantsAnything = hasArmor || hasWeapons || skillCount > 0 || hasOther;
+
+  if (!grantsAnything && !hasNotes) {
+    return (
+      <div className="mb-4 bg-[#1E2430]/80 border border-slate-700 rounded-lg p-3 text-sm text-slate-400">
+        Multiclassing into <span className="font-bold text-white">{className}</span>{" "}
+        grants no additional proficiencies (you keep what you already have).
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-4 bg-[#1E2430]/80 border border-[#37F2D1]/30 rounded-lg p-3">
+      <p className="text-xs uppercase tracking-widest text-[#37F2D1] font-bold mb-2">
+        Multiclass Proficiencies Gained
+      </p>
+      <ul className="text-sm text-white space-y-1">
+        {hasArmor && (
+          <li>
+            <span className="text-slate-400">Armor:</span>{" "}
+            <span className="font-semibold capitalize">{profs.armor.join(", ")}</span>
+          </li>
+        )}
+        {hasWeapons && (
+          <li>
+            <span className="text-slate-400">Weapons:</span>{" "}
+            <span className="font-semibold capitalize">{profs.weapons.join(", ")}</span>
+          </li>
+        )}
+        {skillCount > 0 && (
+          <li>
+            <span className="text-slate-400">Skills:</span>{" "}
+            <span className="font-semibold">
+              {skillCount} from the {className} skill list
+            </span>
+          </li>
+        )}
+        {hasOther &&
+          profs.other.map((item, i) => (
+            <li key={i}>
+              <span className="text-slate-400">Also:</span>{" "}
+              <span className="font-semibold">{item}</span>
+            </li>
+          ))}
+      </ul>
+      {hasNotes && (
+        <p className="mt-2 text-[11px] italic text-slate-400">{profs.notes}</p>
       )}
     </div>
   );

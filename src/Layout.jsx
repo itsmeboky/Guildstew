@@ -7,7 +7,7 @@ import { Play, Users, Trophy, PieChart, Settings, Beer, LogOut, Plus, Radio, Use
 import AppSidebar from "@/components/layout/AppSidebar";
 import ChatPanel from "@/components/chat/ChatPanel";
 import SessionReminderNotification from "@/components/notifications/SessionReminderNotification";
-import DiceRoller from "@/components/dice/DiceRoller";
+import DiceRoller, { preloadDiceModels } from "@/components/dice/DiceRoller";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
@@ -53,6 +53,8 @@ function LegalFooter() {
 // sidebar's user header next to the username/avatar, and showing
 // it in both spots was redundant.
 import LazyImage from "@/components/ui/LazyImage";
+import CipherQuickAccessBar from "@/components/worldLore/CipherQuickAccessBar";
+import ReportProblemDialog from "@/components/support/ReportProblemDialog";
 
 export default function Layout({ children, currentPageName }) {
   const location = useLocation();
@@ -83,6 +85,12 @@ export default function Layout({ children, currentPageName }) {
     support: false
   });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Universal Report a Problem dialog state — drives both the
+  // sidebar trigger items and the dialog mount at the bottom of
+  // this Layout. Keeping the state here means the dialog stays
+  // mounted across route changes / sidebar toggles, so the
+  // minimise/restore flow preserves form contents reliably.
+  const [reportProblemOpen, setReportProblemOpen] = useState(false);
 
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
@@ -101,6 +109,20 @@ export default function Layout({ children, currentPageName }) {
     enabled: !!user?.id,
     initialData: null
   });
+
+  // Warm the dice .glb cache as soon as auth resolves. The codebase
+  // currently has no user-level uploadedModels — Tavern dice skins
+  // override material/texture only, not geometry — so this preloads
+  // DEFAULT_MODEL_URLS (passing null lets preloadDiceModels handle
+  // every die type from its default map). The campaign-mount
+  // preloads in GMPanel/CampaignPlayerPanel still run for the rare
+  // campaigns that ship custom uploadedModels; both calls land in
+  // the same module-scoped _modelCache and the second is a no-op
+  // for any URL already in flight or cached.
+  useEffect(() => {
+    if (!user?.id) return;
+    preloadDiceModels(null);
+  }, [user?.id]);
 
   const { data: friendships } = useQuery({
     queryKey: ['friendships', user?.id],
@@ -416,7 +438,8 @@ export default function Layout({ children, currentPageName }) {
       items: [
         { name: 'Documentation', path: createPageUrl('Documentation') },
         { name: 'FAQ', path: createPageUrl('FAQ') },
-        { name: 'Report a Problem', path: createPageUrl('ReportProblem') }
+        { name: 'Report a Problem', icon: AlertCircle, onClick: () => setReportProblemOpen(true) },
+        { name: 'My Tickets', path: createPageUrl('SupportTicket') }
       ]
     }
   ];
@@ -559,9 +582,16 @@ export default function Layout({ children, currentPageName }) {
     || currentPageName === "CampaignSpells"
     || currentPageName === "CampaignAbilities"
     || currentPageName === "GMPanel"
-    || currentPageName === "CampaignPlayerPanel"
     || currentPageName === "CampaignView"
   ) {
+    return <>{children}</>;
+  }
+  // CampaignPlayerPanel intentionally does NOT mount the cipher
+  // quick-access overlay. Combat / character-sheet view has no
+  // symbols to decode — the overlay belongs on world-lore pages,
+  // where rogues / druids actually read GM-authored entries with
+  // embedded symbols. Mounted further down on CampaignWorldLore.
+  if (currentPageName === "CampaignPlayerPanel") {
     return <>{children}</>;
   }
   // Admin dashboard has its own full-screen sidebar shell.
@@ -577,9 +607,16 @@ export default function Layout({ children, currentPageName }) {
     return <>{children}</>;
   }
   // World Lore owns its own horizontal nav + landing grid and no
-  // longer wants the Layout's old world-lore sidebar tree.
+  // longer wants the Layout's old world-lore sidebar tree. The
+  // cipher quick-access overlay rides along so rogues / druids
+  // reading entries can hit their cypher in one click.
   if (currentPageName === "CampaignWorldLore") {
-    return <>{children}</>;
+    return (
+      <>
+        {children}
+        <CipherQuickAccessBar campaignId={campaignId} />
+      </>
+    );
   }
   // Auth-flow pages render without nav/sidebar so the user can finish
   // password reset / email verification without distractions. Legal
@@ -860,6 +897,26 @@ export default function Layout({ children, currentPageName }) {
                                 </a>
                               );
                             }
+                            if (typeof item.onClick === 'function') {
+                              // Modal / action items (e.g. Report a Problem)
+                              // render as buttons that fire the onClick instead
+                              // of navigating. Same visual treatment as a Link.
+                              return (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={item.onClick}
+                                  className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-300 group ${
+                                    isWorldLorePage
+                                      ? 'text-gray-500 hover:text-[#37F2D1] hover:bg-white/5 backdrop-blur-sm'
+                                      : isDarkMode ? 'text-gray-300 hover:bg-[#1E2430]/50' : 'text-gray-700 hover:bg-gray-100'
+                                  }`}
+                                >
+                                  {item.icon && <item.icon className="w-3 h-3 transition-transform duration-300 group-hover:scale-110" />}
+                                  {item.name}
+                                </button>
+                              );
+                            }
                             return (
                               <Link
                               key={idx}
@@ -1005,6 +1062,14 @@ export default function Layout({ children, currentPageName }) {
           />
         </div>
       )}
+
+      {/* Universal Report a Problem dialog. Mounted once at Layout
+          root so it stays alive across route changes — keeps the
+          minimise/restore screenshot flow's form state intact. */}
+      <ReportProblemDialog
+        open={reportProblemOpen}
+        onClose={() => setReportProblemOpen(false)}
+      />
     </div>
   );
 }

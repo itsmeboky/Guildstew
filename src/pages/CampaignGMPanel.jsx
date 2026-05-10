@@ -81,7 +81,7 @@ export default function CampaignGMPanel() {
 
   const toggleSessionMutation = useMutation({
     mutationFn: async ({ active }) => {
-      const updateData = { is_session_active: active };
+      const updateData = { session_active: active };
       if (active) {
         // Heal all characters to full on session start
         const campaignChars = await base44.entities.Character.filter({ campaign_id: campaignId });
@@ -208,7 +208,7 @@ export default function CampaignGMPanel() {
               {campaign?.name || campaign?.title}
             </h1>
             <div className="flex items-center justify-center gap-4">
-              {campaign.is_session_active ? (
+              {campaign.session_active ? (
                 <Button
                   className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] px-8 py-6 text-lg"
                   onClick={() => navigate(createPageUrl("GMPanel") + `?id=${campaignId}`)}

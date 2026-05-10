@@ -52,6 +52,23 @@ export default function NewThreadDialog({ open, onClose, category }) {
       toast.success("Thread posted");
       queryClient.invalidateQueries({ queryKey: ["forumThreads", category.id] });
       queryClient.invalidateQueries({ queryKey: ["forumCategoryStats"] });
+
+      // Prime the destination page's caches with the freshly-
+      // inserted thread + the category we already have. Without
+      // this, ForumThread.jsx renders its loading skeleton during
+      // the network roundtrip; with it, the new thread shows
+      // instantly on first paint.
+      if (thread?.slug) {
+        queryClient.setQueryData(
+          ["forumCategory", category.slug],
+          category,
+        );
+        queryClient.setQueryData(
+          ["forumThread", category.id, thread.slug],
+          thread,
+        );
+      }
+
       onClose?.();
       if (thread?.slug) navigate(`/forums/${category.slug}/${thread.slug}`);
     },

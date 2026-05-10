@@ -16,7 +16,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { spellIcons, spellDetails as hardcodedSpellDetails, getCharacterSpellSlots, fetchAllSpells } from "@/components/dnd5e/spellData";
-import { Heart, Music, Circle, Triangle, Crosshair } from "lucide-react";
+import { Heart, Music, Lightbulb, Circle, Triangle, Crosshair } from "lucide-react";
 import LootManager from "@/components/gm/LootManager";
 import GMSessionSidebar from "@/components/gm/GMSessionSidebar";
 import MoneyCounter from "@/components/shared/MoneyCounter";
@@ -24,11 +24,18 @@ import ItemTooltip from "@/components/shared/ItemTooltip";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
 import { computeArmorClass } from "@/components/dnd5e/armorClass";
 import { safeText } from "@/utils/safeRender";
+import MonsterStatBlock from "@/game-packs/dnd5e/ui/MonsterStatBlock";
+import EquipmentLayout from "@/game-packs/dnd5e/ui/EquipmentLayout";
+import getSilhouetteImage from "@/components/shared/getSilhouetteImage";
 
 // Helpers to extract the character's fighting-style names from any of
 // the several shapes a sheet might use. Used by AC (Defense +1) and
 // weapon damage (Great Weapon Fighting, Dueling, Archery, etc.).
-function collectFightingStyles(character) {
+//
+// Exported so MonsterStatBlock (extracted to game-packs/dnd5e/ui in
+// Phase 1.11) can import it back. SectionCard further down is exported
+// for the same reason.
+export function collectFightingStyles(character) {
   if (!character) return [];
   const out = [];
   const primary = character.fighting_style || character.fightingStyle;
@@ -45,7 +52,7 @@ function collectFightingStyles(character) {
 }
 
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import CampaignLog from "@/components/gm/CampaignLog";
 import CharacterSelector from "@/components/gm/CharacterSelector";
 import CombatQueue from "@/components/gm/CombatQueue";
@@ -63,8 +70,11 @@ import { canEquipToSlot } from "@/components/gm/equipmentRules";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import CombatActionBar from "@/components/combat/CombatActionBar";
 import CombatDiceWindow from "@/components/combat/CombatDiceWindow";
+import { preloadDiceModels } from "@/components/dice/DiceRoller";
 import DeathSaveWindow from "@/components/combat/DeathSaveWindow";
 import CustomCompanionApprovalDialog from "@/components/gm/CustomCompanionApprovalDialog";
+import CallRollPicker from "@/components/gm/CallRollPicker";
+import GroupDiceArena from "@/components/combat/GroupDiceArena";
 import {
   blankDeathSaves, applyDeathSaveRoll, applyDownedDamage, isDying,
 } from "@/components/combat/deathSaves";
@@ -91,22 +101,13 @@ import CampaignSettingsContent from "@/components/session/content/CampaignSettin
 import GMSidebarAchievements from "@/components/gm/GMSidebarAchievements";
 import GMSidebarPlayers from "@/components/gm/GMSidebarPlayers";
 import GMSidebarUpdates from "@/components/gm/GMSidebarUpdates";
-import {
-  getAC as monsterGetAC,
-  getSpeed as monsterGetSpeed,
-  getCR as monsterGetCR,
-  getSenses as monsterGetSenses,
-  getLanguages as monsterGetLanguages,
-  getDamageInfo as monsterGetDamageInfo,
-  getAbilityScores as monsterGetAbilityScores,
-} from "@/utils/monsterHelpers";
+import { getRule } from "@/engine/contentLayer";
 import {
   abilityModifier,
   proficiencyBonus,
   CONCENTRATION,
   applyDamageModifiers,
   attacksPerAction,
-  getRule,
   DEATH_RULES,
   RAGE_DAMAGE_BONUS,
   RAGES_PER_DAY,
@@ -127,6 +128,8 @@ import {
 } from "@/components/combat/classResources";
 import { toast } from "sonner";
 import { useTurnContext } from "@/components/combat/useTurnContext";
+import { buildEncounterUpdate } from "@/lib/combat/buildEncounterUpdate";
+import { useCampaignRealtime } from "@/lib/useCampaignRealtime";
 
 const basicActionIcons = [
   { name: "Non-Lethal", url: "https://static.wixstatic.com/media/5cdfd8_2717bd75c7c8435197830d28dc91d0c4~mv2.png", toggleable: true },
@@ -185,7 +188,10 @@ export default function GMPanel() {
   const [equippedItems, setEquippedItems] = useState({});
   const [initiativeOrder, setInitiativeOrder] = useState([]);
   const [combatActive, setCombatActive] = useState(false);
-  const [actionsState, setActionsState] = useState({ action: true, bonus: true, reaction: true, inspiration: false });
+  // Phase-3 redesign Commit 2: GM-side picker for the GroupDiceArena.
+  // mode determines which combat_data key the picker writes to.
+  const [callPicker, setCallPicker] = useState(null); // null | 'initiative' | 'dc_check'
+  const [actionsState, setActionsState] = useState({ action: true, bonus: true, reaction: true });
   const [activeConditions, setActiveConditions] = useState({});
 
   // 1. Auto-select first combatant if the combat queue has items and no
@@ -213,8 +219,23 @@ export default function GMPanel() {
     queryKey: ['campaign', campaignId],
     queryFn: () => base44.entities.Campaign.filter({ id: campaignId }).then(campaigns => campaigns[0]),
     enabled: !!campaignId,
-    refetchInterval: (data) => (data?.combat_active || data?.combat_data?.stage === 'initiative') ? 1000 : 2000
+    // Realtime carries live updates via useCampaignRealtime below.
+    // Polling stays as a slow resilience fallback so a missed
+    // socket event or a brief disconnect re-syncs within a few
+    // seconds instead of waiting for the next manual interaction.
+    refetchInterval: 5000,
   });
+  // Push live campaign UPDATEs into the cache directly. Drops
+  // spectator dice sync latency from the ~1s polling floor to
+  // sub-100ms (alpha bug 5).
+  useCampaignRealtime(campaignId);
+
+  // Warm the dice GLB cache as soon as the campaign loads, so the
+  // first-ever dice tray of the session renders the player's chosen
+  // models instead of the orange fallback geometry. Idempotent.
+  useEffect(() => {
+    preloadDiceModels(campaign?.dice_config?.uploadedModels);
+  }, [campaign?.dice_config?.uploadedModels]);
 
   // currentUser needs to be declared before the session-start and
   // presence effects below, which both read it. Keeping the
@@ -237,7 +258,6 @@ export default function GMPanel() {
       session_started_at: new Date().toISOString(),
       active_session_players: campaign.player_ids || [],
       disconnected_players: [],
-      is_session_active: true,
     }).catch(() => {});
   }, [campaignId, campaign?.id, campaign?.session_active]);
 
@@ -760,23 +780,35 @@ export default function GMPanel() {
     const encounter = campaign?.combat_data?.active_encounter;
     if (encounter?.phase === 'damage_result' && encounter.damageRoll && encounter.timestamp !== lastProcessedDamageRef.current) {
       lastProcessedDamageRef.current = encounter.timestamp;
-      
+
       const damage = encounter.damageRoll.total;
       const targetId = encounter.targetId;
 
       // Apply damage if target is a combat-queue entry (managed by GM).
+      // Two writes are needed:
+      //   1. localStorage combat queue — the canonical HP source the
+      //      Combat Queue panel + the order-rebuild path read from.
+      //   2. combat_data.order — the snapshot the live turn-tracker HP
+      //      bars render from. Without this, player-sourced damage
+      //      lands in localStorage but the visible bar never updates,
+      //      because the order entry's hit_points.current stays put.
+      //      Mirrors the GM-as-actor path's updateOrderCombatant call
+      //      at the equivalent point in the GM's onRoll handler.
       if (targetId.startsWith('monster-')) {
         const queueId = targetId.replace('monster-', '');
         const queue = readCombatQueue(campaignId);
+        let appliedNewCurrent = null;
         if (queue.length > 0) {
           const newQueue = queue.map(m => {
             if (m.queueId === queueId || String(m.queueId) === queueId) {
               const currentHp = m.hit_points?.current !== undefined ? m.hit_points.current : (m.hit_points?.max || 10);
+              const nextCurrent = Math.max(0, currentHp - damage);
+              appliedNewCurrent = { current: nextCurrent, max: m.hit_points?.max || currentHp };
               return {
                 ...m,
                 hit_points: {
                   ...m.hit_points,
-                  current: Math.max(0, currentHp - damage)
+                  current: nextCurrent
                 }
               };
             }
@@ -784,18 +816,30 @@ export default function GMPanel() {
           });
           writeCombatQueue(campaignId, newQueue);
         }
+        if (appliedNewCurrent) {
+          const orderEntry = (campaign?.combat_data?.order || []).find(
+            (c) => (c.uniqueId || c.id) === targetId,
+          );
+          if (orderEntry) {
+            updateOrderCombatant(targetId, {
+              hit_points: {
+                ...(orderEntry.hit_points || {}),
+                current: appliedNewCurrent.current,
+                max: appliedNewCurrent.max,
+              },
+            });
+          }
+        }
       }
     }
   }, [campaign?.combat_data?.active_encounter, campaignId]);
 
   const endSessionMutation = useMutation({
     mutationFn: async () => {
-      // Reset combat state + the new session-lifecycle columns.
-      // The old flags (is_session_active, ready_player_ids,
-      // combat_data) stay in sync so existing consumers keep
-      // working.
+      // Reset combat state + the session-lifecycle columns.
+      // is_session_active was dropped in 20261128_character_ownership_
+      // model_foundation.sql; session_active is the canonical column.
       await base44.entities.Campaign.update(campaignId, {
-        is_session_active: false,
         last_session_ended_at: new Date().toISOString(),
         ready_player_ids: [],
         combat_active: false,
@@ -2404,6 +2448,14 @@ export default function GMPanel() {
         uniqueId: `monster-${m.queueId}`,
         initiative_rolled: true,
         hit_points: hp,
+        // Surface AC + the original stats block so attack-roll
+        // hit/miss math against this combatant uses the real AC,
+        // not the default-10 fallback. Without these the actor's
+        // CombatDiceWindow read target.armor_class as undefined →
+        // defaulted to 10 → most "misses" registered as hits and
+        // showed the damage prompt. Smell from alpha bug 1.
+        armor_class: stats.armor_class || stats.ac || 10,
+        stats,
         faction: m.faction || 'enemy',
         originalFaction: m.originalFaction || m.faction || 'enemy',
         charmDuration: m.charmDuration ?? null,
@@ -2534,7 +2586,7 @@ export default function GMPanel() {
   //     attack / take damage / let your turn pass without re-hiding and
   //     you're exposed.
   React.useEffect(() => {
-    setActionsState({ action: true, bonus: true, reaction: true, inspiration: false });
+    setActionsState({ action: true, bonus: true, reaction: true });
     setAttackMode(null);
     setSneakActive(false);
     setRemainingAttacks(0);
@@ -2814,6 +2866,18 @@ export default function GMPanel() {
         onOpenModal={setActiveModal}
         onEndSession={() => setShowEndSessionAlert(true)}
         disconnectedPlayers={disconnectedPlayerSummaries}
+        sectionBadges={{
+          // Pending re-entry: players who readied (or re-readied
+          // after leaving) while the session is active but haven't
+          // been admitted yet. Same computation lives in
+          // GMSidebarPlayers — this is just the count for the
+          // sidebar nav badge.
+          players: campaign?.session_active
+            ? (campaign?.ready_player_ids || []).filter(
+                (uid) => !(campaign?.active_session_players || []).includes(uid),
+              ).length
+            : 0,
+        }}
       />
 
       <SessionModal
@@ -2952,7 +3016,8 @@ export default function GMPanel() {
             setMonsterInventory={setMonsterInventory}
             equippedItems={equippedItems}
             setEquippedItems={setEquippedItems}
-            onRollInitiative={rollInitiative}
+            onRollInitiative={() => setCallPicker('initiative')}
+            onCallDcCheck={() => setCallPicker('dc_check')}
             onManageConditions={() => setShowConditionManager(true)}
             onDrinkPotion={drinkHealingPotion}
           />
@@ -2977,6 +3042,50 @@ export default function GMPanel() {
               characters={characters}
               campaignId={campaignId}
               isGM={isGM}
+            />
+
+            {/* Phase-3 redesign Commit 2: GM picker → write call →
+                arena auto-renders when combat_data.{call}.active is
+                true. Picker dismisses itself on send; arena lives
+                until GM accepts/closes. */}
+            <CallRollPicker
+              open={callPicker !== null}
+              onClose={() => setCallPicker(null)}
+              mode={callPicker || 'initiative'}
+              campaign={campaign}
+              campaignId={campaignId}
+              players={players}
+            />
+
+            {/* Arena visibility gate is inside the component — renders
+                nothing when no call is active or viewer isn't selected.
+                Refresh-resilient by virtue of being driven from
+                campaign.combat_data state rather than local UI state. */}
+            <GroupDiceArena
+              mode="initiative"
+              call={campaign?.combat_data?.initiative_call}
+              isGM={isGM}
+              currentUserId={currentUser?.id}
+              campaign={campaign}
+              campaignId={campaignId}
+              players={players}
+              characters={characters}
+              allUserProfiles={allUserProfiles}
+            />
+
+            {/* Same arena, dc_check dispatch — Commit 3. Both arenas
+                gate on their own call.active so only one renders at
+                a time in practice (one call per campaign). */}
+            <GroupDiceArena
+              mode="dc_check"
+              call={campaign?.combat_data?.dc_check_call}
+              isGM={isGM}
+              currentUserId={currentUser?.id}
+              campaign={campaign}
+              campaignId={campaignId}
+              players={players}
+              characters={characters}
+              allUserProfiles={allUserProfiles}
             />
 
             {activeDeathSaveTarget && (
@@ -3029,10 +3138,17 @@ export default function GMPanel() {
                         // Give the dice window live access to the
                         // actor's classResources + any inspiration
                         // stored on their combat_data.order entry.
+                        // Field set kept symmetric with player-side
+                        // via the Phase-1 commit-2 audit; both flags
+                        // looked up against the same order entry so
+                        // the post-roll prompts behave identically.
                         classResources:
                           campaign?.combat_data?.classResources?.[
                             getCharacterKey(selectedCharacter)
                           ] || {},
+                        hasInspiration: (campaign?.combat_data?.order || [])
+                          .find((c) => (c.uniqueId || c.id) === getCharacterKey(selectedCharacter))
+                          ?.hasInspiration,
                         bardicInspiration: (campaign?.combat_data?.order || [])
                           .find((c) => (c.uniqueId || c.id) === getCharacterKey(selectedCharacter))
                           ?.bardicInspiration,
@@ -3148,6 +3264,7 @@ export default function GMPanel() {
               // Spectator Props
               isSpectator={!combatState.isOpen && !!campaign?.combat_data?.active_encounter}
               spectatorData={campaign?.combat_data?.active_encounter}
+              gmScreenMode={!!campaign?.settings?.gm_screen_mode}
               sneakActive={sneakActive}
               extraAttackInfo={
                 totalExtraAttacks > 1
@@ -3176,20 +3293,13 @@ export default function GMPanel() {
                 setCombatState(prev => ({ ...prev, isOpen: false, step: 'selecting_target' }));
               }}
               onRoll={(data) => {
-                // Sync roll to DB for spectators
+                // Sync roll to DB for spectators. Encounter-update
+                // shape lives in src/lib/combat/buildEncounterUpdate.js
+                // so this branch list stays in lockstep with the
+                // player-side onRoll at CampaignPlayerPanel.jsx.
                 if (campaign?.combat_data?.active_encounter) {
                   const currentEncounter = campaign.combat_data.active_encounter;
-                  let updates = {};
-
-                  if (data.type === 'attack_result') { // Custom event we'll add to DiceWindow
-                     updates = { phase: 'attack_result', attackRoll: data.roll };
-                  } else if (data.type === 'damage') {
-                     updates = { phase: 'damage_result', damageRoll: { total: data.value, ...data.detail } };
-                  } else if (data.type === 'rolling_attack') {
-                     updates = { phase: 'rolling_attack' };
-                  } else if (data.type === 'rolling_damage') {
-                     updates = { phase: 'rolling_damage' };
-                  }
+                  const updates = buildEncounterUpdate(data) || {};
 
                   if (Object.keys(updates).length > 0) {
                     base44.entities.Campaign.update(campaignId, {
@@ -4125,7 +4235,22 @@ export default function GMPanel() {
               </div>
             ) : (
             <CombatActionBar
-              character={selectedCharacter ? { ...selectedCharacter, equipment: equippedItems } : null}
+              character={selectedCharacter ? (() => {
+                // Surface order-entry inspiration flags on the
+                // character prop so the action bar's
+                // InspirationButton renders live state. Mirrors the
+                // dice window's actor wiring at line ~3070-3079.
+                const orderEntry = (campaign?.combat_data?.order || [])
+                  .find((c) => (c.uniqueId || c.id) === selectedCharacterKey);
+                return {
+                  ...selectedCharacter,
+                  equipment: equippedItems,
+                  hasInspiration: orderEntry?.hasInspiration,
+                  bardicInspiration: orderEntry?.bardicInspiration,
+                };
+              })() : null}
+              isGM={true}
+              onGrantInspiration={setCombatantInspiration}
               actionsState={actionsState}
               setActionsState={setActionsState}
               attackMode={attackMode}
@@ -4406,16 +4531,26 @@ export default function GMPanel() {
                       // the old top-level fields kept showing 0/0
                       // and AC 10 for every card. Fall through to
                       // the legacy flat shape for older rows.
+                      //
+                      // `hit_points.{current,max}` is the canonical
+                      // shape that combat damage / heal writebacks
+                      // update (see Character.update calls in this
+                      // file). It must be read FIRST: legacy rows
+                      // can carry a stale `hp_current` left over from
+                      // a pre-`{max,current,temporary}` migration,
+                      // and reading that flat field first would
+                      // shadow live damage updates and freeze the
+                      // Adventurers panel at the pre-combat HP.
                       const currentHp =
-                        character?.hp_current
-                        ?? character?.hit_points?.current
+                        character?.hit_points?.current
                         ?? stats?.hit_points?.current
+                        ?? character?.hp_current
                         ?? stats?.hit_points
                         ?? 0;
                       const maxHp =
-                        character?.hp_max
-                        ?? character?.hit_points?.max
+                        character?.hit_points?.max
                         ?? stats?.hit_points?.max
+                        ?? character?.hp_max
                         ?? stats?.hit_points
                         ?? 0;
                       // Effective AC: derive from equipped armor + DEX
@@ -4546,11 +4681,11 @@ export default function GMPanel() {
                               {activeConditions[`companion-${player.user_id}`][0]}
                             </div>
                           )}
-                          <div 
-                            className="h-16 bg-cover bg-center relative"
-                            style={{ 
-                              backgroundImage: character?.companion_image 
-                                ? `url(${character.companion_image})` 
+                          <div
+                            className="h-16 bg-cover bg-top relative"
+                            style={{
+                              backgroundImage: character?.companion_image
+                                ? `url(${character.companion_image})`
                                 : 'none',
                               backgroundColor: '#1a1f2e'
                             }}
@@ -5630,7 +5765,7 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
                               : 'bg-[#0b1220] border-[#111827] hover:border-slate-600'
                           }`}
                         >
-                          <div className="w-10 h-10 rounded-full bg-cover bg-center bg-[#111827]" style={{ backgroundImage: char?.profile_avatar_url ? `url(${char.profile_avatar_url})` : 'none' }} />
+                          <div className="w-10 h-10 rounded-full bg-cover bg-top bg-[#111827]" style={{ backgroundImage: char?.profile_avatar_url ? `url(${char.profile_avatar_url})` : 'none' }} />
                           <div className="text-left min-w-0 flex-1">
                             <p className="text-sm font-bold text-white truncate">{char?.name || player.username}</p>
                             {adjustingHp ? (
@@ -5684,7 +5819,7 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
                                 : 'bg-[#0b1220] border-[#111827] hover:border-slate-600'
                             }`}
                           >
-                            <div className="w-10 h-10 rounded-full bg-cover bg-center bg-[#111827]" style={{ backgroundImage: (monster.image_url || monster.avatar_url) ? `url(${monster.image_url || monster.avatar_url})` : 'none' }} />
+                            <div className="w-10 h-10 rounded-full bg-cover bg-top bg-[#111827]" style={{ backgroundImage: (monster.image_url || monster.avatar_url) ? `url(${monster.image_url || monster.avatar_url})` : 'none' }} />
                             <div className="text-left min-w-0 flex-1">
                               <p className="text-sm font-bold text-white truncate">{safeText(monster.name)}</p>
                               {adjustingHp ? (
@@ -5721,27 +5856,8 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
   );
 }
 
-function getSilhouetteImage(character) {
-  if (!character) return 'https://static.wixstatic.com/media/5cdfd8_35e9f29559bd43239470a098001a1fe5~mv2.png';
-  
-  if (character.type === 'monster') {
-    return 'https://static.wixstatic.com/media/5cdfd8_c201364be8ad40aa9518230a106c8442~mv2.png';
-  }
-  
-  const gender = (character.gender || character.appearance?.gender || '').toLowerCase();
-  
-  if (gender.includes('female') || gender.includes('woman') || gender === 'f') {
-    return 'https://static.wixstatic.com/media/5cdfd8_95e7b63afc9a444e97bbadc37e59b154~mv2.png';
-  } else if (gender.includes('non-binary') || gender.includes('nonbinary') || gender.includes('enby') || gender.includes('nb') || gender.includes('agender') || gender.includes('genderfluid') || gender.includes('other')) {
-    return 'https://static.wixstatic.com/media/5cdfd8_35e9f29559bd43239470a098001a1fe5~mv2.png';
-  } else if (gender.includes('male') || gender.includes('man') || gender === 'm') {
-    return 'https://static.wixstatic.com/media/5cdfd8_8b8fc7ed62dd4c74927bfee94c031e7d~mv2.png';
-  }
-  
-  return 'https://static.wixstatic.com/media/5cdfd8_35e9f29559bd43239470a098001a1fe5~mv2.png';
-}
-
-function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPossessed, players, onPossessPlayer, monsterInventory, setMonsterInventory, equippedItems, setEquippedItems, onRollInitiative, onManageConditions, onDrinkPotion }) {
+function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPossessed, players, onPossessPlayer, monsterInventory, setMonsterInventory, equippedItems, setEquippedItems, onRollInitiative, onCallDcCheck, onManageConditions, onDrinkPotion }) {
+  const queryClient = useQueryClient();
   const [showQuickEquip, setShowQuickEquip] = useState(false);
   const [draggedItem, setDraggedItem] = useState(null);
 
@@ -5808,28 +5924,6 @@ function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPosses
       delete newEquipped[slotId];
       setEquippedItems(newEquipped);
     }
-  };
-
-  const equipmentSlots = {
-    left: [
-      { id: 'head', label: 'Head Gear' },
-      { id: 'armor', label: 'Armor' },
-      { id: 'gauntlets', label: 'Gauntlets' },
-      { id: 'belt', label: 'Belt' },
-      { id: 'boots', label: 'Boots' }
-    ],
-    right: [
-      { id: 'cloak', label: 'Cloak' },
-      { id: 'necklace', label: 'Necklace' },
-      { id: 'ring1', label: 'Ring 1' },
-      { id: 'ring2', label: 'Ring 2' },
-      { id: 'implement', label: 'Implement' }
-    ],
-    bottom: [
-      { id: 'weapon1', label: 'Weapon 1' },
-      { id: 'weapon2', label: 'Weapon 2' },
-      { id: 'ranged', label: 'Ranged' }
-    ]
   };
 
   // Calculate inventory slots based on items
@@ -5906,10 +6000,21 @@ function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPosses
           <button
             onClick={onRollInitiative}
             className="w-full flex items-center justify-center gap-2 bg-[#FF5722] hover:bg-[#FF6B3D] text-white rounded-lg py-3 text-sm font-bold transition-colors shadow-lg"
+            title="Open picker → players roll in shared arena → GM accepts to start combat."
           >
             <Dices className="w-5 h-5" />
-            ROLL FOR INITIATIVE
+            CALL FOR INITIATIVE
           </button>
+
+          {onCallDcCheck && (
+            <button
+              onClick={onCallDcCheck}
+              className="w-full flex items-center justify-center gap-2 bg-[#1a1f2e] hover:bg-[#252b3d] text-[#37F2D1] border border-[#37F2D1]/40 rounded-lg py-2 text-xs font-bold transition-colors"
+              title="Request a skill check or saving throw from one or more players."
+            >
+              CALL FOR DC CHECK
+            </button>
+          )}
 
           <button
             onClick={onManageConditions}
@@ -5948,61 +6053,19 @@ function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPosses
             </button>
           )}
 
-          <div className="w-full relative flex gap-3 justify-center mb-2">
-            <img 
-              src={getSilhouetteImage(character)} 
-              alt="Character Silhouette" 
+          <EquipmentLayout
+            equippedItems={equippedItems}
+            draggedItem={draggedItem}
+            onDragStart={(item, slotId) => handleDragStart(item, 'slot', slotId)}
+            onDropOnSlot={handleDropOnSlot}
+            onUnequip={unequipItem}
+          >
+            <img
+              src={getSilhouetteImage(character)}
+              alt="Character Silhouette"
               className="absolute inset-0 w-full h-full object-contain opacity-20 pointer-events-none"
             />
-            
-            <div className="flex flex-col gap-3 relative z-10">
-              {equipmentSlots.left.map(slot => (
-                <EquipmentSlot 
-                  key={slot.id} 
-                  slotId={slot.id}
-                  label={slot.label} 
-                  item={equippedItems[slot.id]} 
-                  onDrop={() => handleDropOnSlot(slot.id)}
-                  onDragStart={(item) => handleDragStart(item, 'slot', slot.id)}
-                  onUnequip={() => unequipItem(slot.id)}
-                  isValidTarget={draggedItem ? canEquipToSlot(draggedItem.item, slot.id) : undefined}
-                />
-              ))}
-            </div>
-            
-            <div className="w-32 flex-shrink-0 relative z-10"></div>
-            
-            <div className="flex flex-col gap-3 relative z-10">
-              {equipmentSlots.right.map(slot => (
-                <EquipmentSlot 
-                  key={slot.id} 
-                  slotId={slot.id}
-                  label={slot.label} 
-                  item={equippedItems[slot.id]} 
-                  onDrop={() => handleDropOnSlot(slot.id)}
-                  onDragStart={(item) => handleDragStart(item, 'slot', slot.id)}
-                  onUnequip={() => unequipItem(slot.id)}
-                  isValidTarget={draggedItem ? canEquipToSlot(draggedItem.item, slot.id) : undefined}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="w-full flex gap-3 justify-center pt-2 border-t border-[#111827]">
-            {equipmentSlots.bottom.map(slot => (
-              <EquipmentSlot 
-                key={slot.id} 
-                slotId={slot.id}
-                label={slot.label} 
-                size="large" 
-                item={equippedItems[slot.id]} 
-                onDrop={() => handleDropOnSlot(slot.id)}
-                onDragStart={(item) => handleDragStart(item, 'slot', slot.id)}
-                onUnequip={() => unequipItem(slot.id)}
-                isValidTarget={draggedItem ? canEquipToSlot(draggedItem.item, slot.id) : undefined}
-              />
-            ))}
-          </div>
+          </EquipmentLayout>
 
           {/* Inventory Grid */}
           <div className="w-full pt-3 border-t border-[#111827] mt-2">
@@ -6122,65 +6185,6 @@ function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPosses
             </button>
           </div>
         </>
-      )}
-    </div>
-  );
-}
-
-// Removed local SLOT_RESTRICTIONS and canEquipToSlot - imported from utils
-
-function EquipmentSlot({ label, size = 'normal', item, slotId, onDrop, onDragStart, onUnequip, isValidTarget }) {
-  const [showTooltip, setShowTooltip] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const slotSize = size === 'large' ? 'w-16 h-16' : 'w-14 h-14';
-
-  const borderColor = isDragOver && isValidTarget ? 'border-[#37F2D1] bg-[#37F2D1]/20' :
-                      isDragOver && !isValidTarget ? 'border-red-500 bg-red-500/20' :
-                      isValidTarget ? 'border-[#37F2D1] border-dashed bg-[#37F2D1]/5' :
-                      item ? 'border-[#37F2D1]/50 bg-[#111827]' : 
-                      'border-[#111827] hover:border-[#22c5f5]/50';
-
-  const itemImage = item ? (
-    item.image_url || 
-    itemIcons[item.name] || 
-    itemIcons[Object.keys(itemIcons).find(k => k.toLowerCase() === item.name?.toLowerCase())] ||
-    itemIcons[Object.keys(itemIcons).find(k => item.name?.toLowerCase().includes(k.toLowerCase()))]
-  ) : null;
-
-  return (
-    <div className="relative">
-      <div
-        draggable={!!item}
-        onDragStart={() => item && onDragStart && onDragStart(item)}
-        onDragOver={(e) => {
-          e.preventDefault();
-          if (isValidTarget !== undefined) setIsDragOver(true);
-        }}
-        onDragLeave={() => setIsDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsDragOver(false);
-          onDrop && onDrop();
-        }}
-        onMouseEnter={() => setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
-        onDoubleClick={() => item && onUnequip && onUnequip()}
-        className={`${slotSize} rounded-xl bg-[#0b1220] border-2 transition-all shadow-[0_8px_20px_rgba(0,0,0,0.7)] flex items-center justify-center cursor-pointer overflow-hidden ${borderColor} ${isDragOver ? 'scale-105' : ''}`}
-      >
-        {item && itemImage ? (
-          <img src={itemImage} alt={safeText(item.name)} className="w-full h-full object-cover" />
-        ) : item ? (
-          <span className="text-[8px] text-center text-slate-300 px-1 line-clamp-2">
-            {safeText(item.name)}
-          </span>
-        ) : (
-          <span className="text-[8px] text-center text-slate-600 px-1 leading-tight font-medium">{label}</span>
-        )}
-      </div>
-      {showTooltip && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-[#1E2430] text-white px-2 py-1 rounded text-[10px] whitespace-nowrap z-50 shadow-xl border border-[#37F2D1]">
-          {item ? `${label}: ${safeText(item.name)} (double-click to unequip)` : label}
-        </div>
       )}
     </div>
   );
@@ -6675,7 +6679,9 @@ function InventoryOrganizer({ inventory, setInventory, onClose, isMonsterInvento
 
 
 
-function SectionCard({ title, children, className }) {
+// Exported so MonsterStatBlock (extracted in Phase 1.11) can import it
+// back. See note on collectFightingStyles near the top of this file.
+export function SectionCard({ title, children, className }) {
   return (
     <div className={`rounded-[24px] bg-[#050816]/95 shadow-[0_18px_50px_rgba(0,0,0,0.7)] overflow-hidden ${className}`}>
       <div className="px-5 pt-3 pb-2 border-b border-[#111827]">
@@ -6917,514 +6923,6 @@ function DeathSavePanel({ combatant, isPlayer, isActiveTurn, onRoll, onAdjust, o
   );
 }
 
-function MonsterStatBlock({ character, className, onActionClick }) {
-  const [activeTab, setActiveTab] = useState('traits');
-  
-  // Listen for custom event as fallback/bridge
-  useEffect(() => {
-    const handler = (e) => {
-      if (onActionClick) onActionClick(e.detail);
-    };
-    window.addEventListener('gm-monster-action', handler);
-    return () => window.removeEventListener('gm-monster-action', handler);
-  }, [onActionClick]);
-
-  if (!character) {
-    return (
-      <SectionCard title="Monster Stats" className={className}>
-        <div className="h-full flex items-center justify-center">
-          <p className="text-slate-500 text-[11px]">Select a character to view stats</p>
-        </div>
-      </SectionCard>
-    );
-  }
-
-  // Prioritize internal stats object if available (NPC structure), otherwise use top level
-  const stats = character.stats || character;
-  const abilities = stats.abilities || stats.attributes || {};
-  
-  const getMod = (score) => {
-    if (!score) return '+0';
-    const mod = abilityModifier(score);
-    return mod >= 0 ? `+${mod}` : `${mod}`;
-  };
-
-  // Handle nested attributes structure or flat keys. Falls through
-  // to monsterGetAbilityScores for the SRD long-name keys
-  // (`strength`, `dexterity`, …) so reseeded monsters resolve too.
-  const helperScores = monsterGetAbilityScores(character);
-  const getAbilityScore = (key) => {
-    const lk = key.toLowerCase();
-    if (abilities[lk] != null) return abilities[lk];
-    if (stats[lk] != null) return stats[lk];
-    if (stats.attributes?.[lk] != null) return stats.attributes[lk];
-    if (helperScores[lk] != null) return helperScores[lk];
-    return 10;
-  };
-
-  const abilityScores = {
-    STR: getAbilityScore('STR'),
-    DEX: getAbilityScore('DEX'),
-    CON: getAbilityScore('CON'),
-    INT: getAbilityScore('INT'),
-    WIS: getAbilityScore('WIS'),
-    CHA: getAbilityScore('CHA')
-  };
-
-  // Features can be in various places depending on data source.
-  // SRD monsters tend to store under `special_abilities`, imported
-  // monsters sometimes use `special_traits`, PCs use `features`.
-  const traits = stats.traits || character.traits || [];
-  const actions = stats.actions || character.actions || [];
-  const specialAbilities = stats.special_abilities || character.special_abilities ||
-                          stats.special_traits || character.special_traits ||
-                          stats.features || character.features || [];
-  const legendaryActions = stats.legendary_actions || character.legendary_actions || [];
-  const reactions = stats.reactions || character.reactions || [];
-  const bonusActions = stats.bonus_actions || character.bonus_actions || [];
-  const lairActions = stats.lair_actions || character.lair_actions || [];
-  const auras = stats.auras || character.auras || [];
-  const multiattack = stats.multiattack || character.multiattack || null;
-  const legendaryPerRound = stats.legendary_actions_per_round ?? character.legendary_actions_per_round ?? null;
-  const legendaryResistances = stats.legendary_resistances ?? character.legendary_resistances ?? null;
-
-  const skills = stats.skills || character.skills || {};
-  // Senses / languages on reseeded SRD monsters are objects /
-  // arrays — pipe them through the shared helpers so they end up
-  // as plain strings before they hit JSX. Same story for the
-  // damage info group: arrays of strings or arrays of objects with
-  // `name` keys.
-  const senses    = monsterGetSenses(character)    || stats.senses    || character.senses    || '';
-  const languages = monsterGetLanguages(character) || stats.languages || character.languages || '—';
-  const damageInfo = monsterGetDamageInfo(character);
-  const damageResistances     = damageInfo.resistances     || (Array.isArray(stats.damage_resistances)     ? stats.damage_resistances.join(', ')     : stats.damage_resistances     || character.damage_resistances     || null);
-  const damageImmunities      = damageInfo.immunities      || (Array.isArray(stats.damage_immunities)      ? stats.damage_immunities.join(', ')      : stats.damage_immunities      || character.damage_immunities      || null);
-  const damageVulnerabilities = damageInfo.vulnerabilities || (Array.isArray(stats.damage_vulnerabilities) ? stats.damage_vulnerabilities.join(', ') : stats.damage_vulnerabilities || character.damage_vulnerabilities || null);
-  const conditionImmunities   = damageInfo.conditionImmunities || (Array.isArray(stats.condition_immunities) ? stats.condition_immunities.map((c) => c?.name || c).join(', ') : stats.condition_immunities || character.condition_immunities || null);
-  const proficiencyBonus = stats.proficiency_bonus || character.proficiency_bonus || 2;
-  
-  // Prefer a derived AC when the character has anything in their
-  // equipment slots — armor + shield + DEX calculated per 5e rules.
-  // Falls back to the static armor_class field for monsters / sheets
-  // without an equipped map.
-  const equippedForAC = character.equipped || character.equipment || {};
-  const hasArmorEquipped =
-    equippedForAC && Object.values(equippedForAC).some((i) => i?.category === 'armor');
-  const computedACValue = hasArmorEquipped
-    ? computeArmorClass({
-        equipped: equippedForAC,
-        dex:
-          character.attributes?.dex ||
-          character.stats?.dexterity ||
-          10,
-        fightingStyles: collectFightingStyles(character),
-      }).total
-    : null;
-  // AC on reseeded SRD monsters ships as `[{ type: "natural", value: 19 }]`,
-  // which crashes React if we hand it to JSX. monsterGetAC normalises
-  // both that array shape and a plain number, so we route the
-  // computed (equipped-armor) value first and fall through to it.
-  const ac = computedACValue ?? monsterGetAC(character);
-  const hpObj = stats.hit_points || character.hit_points;
-  const hp = typeof hpObj === 'object' ? (hpObj?.max || '?') : (hpObj || '?');
-  // Speed on reseeded SRD monsters ships as `{ walk: "40 ft.",
-  // fly: "80 ft.", swim: "40 ft." }`; the helper joins it into a
-  // single readable string.
-  const speed = monsterGetSpeed(character) || '30 ft.';
-  const cr = monsterGetCR(character);
-
-  // Spells might be in stats.spells (NPC) or character.spells
-  const spellsData = stats.spells || character.spells;
-  const hasSpells = spellsData && (
-    (Array.isArray(spellsData) && spellsData.length > 0) || 
-    (typeof spellsData === 'object' && Object.keys(spellsData).some(k => spellsData[k]?.length > 0))
-  );
-
-  return (
-    <SectionCard title={safeText(character.name) || 'Monster Stats'} className={`${className} flex flex-col`}>
-      <div className="flex flex-col h-full">
-        {/* Tabs */}
-        <div className="flex gap-1 bg-[#0b1220] rounded-lg p-0.5 mb-3 flex-shrink-0">
-          {['traits', 'abilities', 'skills', ...(hasSpells ? ['spells'] : [])].map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 px-2 py-1 rounded-md text-[9px] font-semibold uppercase tracking-wide transition-colors ${
-                activeTab === tab 
-                  ? 'bg-[#22c5f5] text-white' 
-                  : 'text-slate-400 hover:text-white hover:bg-[#111827]'
-              }`}
-            >
-              {tab === 'abilities' ? 'Stats' : tab}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 min-h-[300px]">
-          {/* Traits Tab */}
-          {activeTab === 'traits' && (
-            <div className="space-y-4">
-              {/* Core Stats Header */}
-              <div className="grid grid-cols-4 gap-2 text-[10px] bg-[#0b1220] p-2 rounded-xl border border-[#111827]">
-                <div className="text-center">
-                  <span className="text-slate-400 block text-[9px] uppercase tracking-wider">AC</span>
-                  <span className="text-white font-bold text-sm">{safeText(ac)}</span>
-                </div>
-                <div className="text-center border-l border-[#1e293b]">
-                  <span className="text-slate-400 block text-[9px] uppercase tracking-wider">HP</span>
-                  <span className="text-white font-bold text-sm">{safeText(hp)}</span>
-                </div>
-                <div className="text-center border-l border-[#1e293b]">
-                  <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Speed</span>
-                  <span className="text-white font-bold text-sm">{safeText(speed)}</span>
-                </div>
-                <div className="text-center border-l border-[#1e293b]">
-                  <span className="text-slate-400 block text-[9px] uppercase tracking-wider">CR</span>
-                  <span className="text-amber-400 font-bold text-sm">{safeText(cr)}</span>
-                </div>
-              </div>
-
-              {/* Traits & Special Abilities */}
-              {(traits.length > 0 || specialAbilities.length > 0) && (
-                <div>
-                  <p className="text-[10px] text-amber-400 uppercase tracking-wide mb-2 font-bold border-b border-amber-500/20 pb-1">Traits & Features</p>
-                  <div className="space-y-3">
-                    {[...traits, ...specialAbilities].map((trait, idx) => (
-                      <div key={idx} className="text-[11px]">
-                        <span className="text-white font-bold">{safeText(trait.name)}. </span>
-                        <span className="text-slate-300 leading-relaxed">{safeText(trait.desc || trait.description)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Damage / Condition treatment — only shows the rows
-                  that the monster actually defines so the panel
-                  stays compact for simple stat blocks. */}
-              {(damageResistances || damageImmunities || damageVulnerabilities || conditionImmunities) && (
-                <div>
-                  <p className="text-[10px] text-blue-400 uppercase tracking-wide mb-2 font-bold border-b border-blue-500/20 pb-1">Treatment</p>
-                  <div className="space-y-1.5 text-[11px]">
-                    {damageVulnerabilities && (
-                      <div>
-                        <span className="text-slate-400 uppercase tracking-wide text-[9px]">Vulnerabilities </span>
-                        <span className="text-rose-300">{safeText(damageVulnerabilities)}</span>
-                      </div>
-                    )}
-                    {damageResistances && (
-                      <div>
-                        <span className="text-slate-400 uppercase tracking-wide text-[9px]">Resistances </span>
-                        <span className="text-emerald-300">{safeText(damageResistances)}</span>
-                      </div>
-                    )}
-                    {damageImmunities && (
-                      <div>
-                        <span className="text-slate-400 uppercase tracking-wide text-[9px]">Damage Immunities </span>
-                        <span className="text-slate-200">{safeText(damageImmunities)}</span>
-                      </div>
-                    )}
-                    {conditionImmunities && (
-                      <div>
-                        <span className="text-slate-400 uppercase tracking-wide text-[9px]">Condition Immunities </span>
-                        <span className="text-slate-200">{safeText(conditionImmunities)}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Actions */}
-              {actions.length > 0 && (
-                <div>
-                  <p className="text-[10px] text-red-400 uppercase tracking-wide mb-2 font-bold border-b border-red-500/20 pb-1">Actions</p>
-                  <div className="space-y-3">
-                    {actions.map((action, idx) => (
-                      <div
-                        key={idx}
-                        className="text-[11px] hover:bg-white/5 p-1 rounded cursor-pointer transition-colors group"
-                        onClick={() => {
-                          // Trigger action selection in parent (GMPanel)
-                          // We need to lift this up. The component prop signature doesn't have onActionClick.
-                          // Let's look for a way to bubble this event up.
-                          // Currently MonsterStatBlock is self contained for display.
-                          // I will add a custom event dispatch or callback if passed.
-                          if (character?.onActionClick) {
-                             character.onActionClick(action);
-                          } else {
-                             // Dispatch global event as fallback if props drilling is hard,
-                             // but better to use the prop we'll add in GMPanel usage
-                             const event = new CustomEvent('gm-monster-action', { detail: action });
-                             window.dispatchEvent(event);
-                          }
-                        }}
-                      >
-                        <span className="text-white font-bold group-hover:text-[#37F2D1] transition-colors">{safeText(action.name)}. </span>
-                        <span className="text-slate-300 leading-relaxed">{safeText(action.desc || action.description)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Reactions */}
-              {reactions.length > 0 && (
-                <div>
-                  <p className="text-[10px] text-orange-400 uppercase tracking-wide mb-2 font-bold border-b border-orange-500/20 pb-1">Reactions</p>
-                  <div className="space-y-3">
-                    {reactions.map((reaction, idx) => (
-                      <div key={idx} className="text-[11px]">
-                        <span className="text-white font-bold">{safeText(reaction.name)}. </span>
-                        <span className="text-slate-300 leading-relaxed">{safeText(reaction.desc || reaction.description)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Multi-Attack callout */}
-              {multiattack && multiattack.enabled && (multiattack.description || (Array.isArray(multiattack.attacks) && multiattack.attacks.length > 0)) && (
-                <div>
-                  <p className="text-[10px] text-amber-400 uppercase tracking-wide mb-2 font-bold border-b border-amber-500/20 pb-1">Multi-Attack</p>
-                  {multiattack.description && (
-                    <p className="text-[11px] text-slate-300 leading-relaxed mb-1">{safeText(multiattack.description)}</p>
-                  )}
-                  {Array.isArray(multiattack.attacks) && multiattack.attacks.length > 0 && (
-                    <ul className="text-[11px] text-slate-400 list-disc list-inside">
-                      {multiattack.attacks.map((a, i) => (
-                        <li key={i}>{a.count > 1 ? `${safeText(a.count)}× ` : ""}{safeText(a.name)}</li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-
-              {/* Bonus Actions */}
-              {bonusActions.length > 0 && (
-                <div>
-                  <p className="text-[10px] text-cyan-400 uppercase tracking-wide mb-2 font-bold border-b border-cyan-500/20 pb-1">Bonus Actions</p>
-                  <div className="space-y-3">
-                    {bonusActions.map((action, idx) => (
-                      <div key={idx} className="text-[11px]">
-                        <span className="text-white font-bold">{safeText(action.name)}. </span>
-                        <span className="text-slate-300 leading-relaxed">{safeText(action.desc || action.description)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Legendary Actions */}
-              {legendaryActions.length > 0 && (
-                <div>
-                  <p className="text-[10px] text-purple-400 uppercase tracking-wide mb-2 font-bold border-b border-purple-500/20 pb-1">
-                    Legendary Actions
-                    {legendaryPerRound != null && Number(legendaryPerRound) > 0 && (
-                      <span className="text-slate-500 normal-case ml-2 font-normal">
-                        ({safeText(legendaryPerRound)}/round)
-                      </span>
-                    )}
-                  </p>
-                  <div className="space-y-3">
-                    {legendaryActions.map((action, idx) => (
-                      <div key={idx} className="text-[11px]">
-                        <span className="text-white font-bold">
-                          {safeText(action.name)}
-                          {action.legendary_cost > 1 && (
-                            <span className="text-purple-300"> (Costs {safeText(action.legendary_cost)})</span>
-                          )}
-                          . </span>
-                        <span className="text-slate-300 leading-relaxed">{safeText(action.desc || action.description)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Legendary Resistances */}
-              {legendaryResistances != null && Number(legendaryResistances) > 0 && (
-                <div>
-                  <p className="text-[10px] text-fuchsia-400 uppercase tracking-wide mb-2 font-bold border-b border-fuchsia-500/20 pb-1">Legendary Resistance</p>
-                  <p className="text-[11px] text-slate-300 leading-relaxed">
-                    If the creature fails a saving throw, it can choose to succeed instead.
-                    <span className="text-fuchsia-300 ml-1 font-bold">{safeText(legendaryResistances)}/day</span>
-                  </p>
-                </div>
-              )}
-
-              {/* Lair Actions */}
-              {lairActions.length > 0 && (
-                <div>
-                  <p className="text-[10px] text-lime-400 uppercase tracking-wide mb-2 font-bold border-b border-lime-500/20 pb-1">Lair Actions</p>
-                  <p className="text-[10px] text-slate-400 italic mb-2">On initiative count 20 (losing ties), the creature takes one lair action.</p>
-                  <div className="space-y-3">
-                    {lairActions.map((action, idx) => (
-                      <div key={idx} className="text-[11px]">
-                        <span className="text-white font-bold">{safeText(action.name)}. </span>
-                        <span className="text-slate-300 leading-relaxed">{safeText(action.desc || action.description)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Auras */}
-              {auras.length > 0 && (
-                <div>
-                  <p className="text-[10px] text-pink-400 uppercase tracking-wide mb-2 font-bold border-b border-pink-500/20 pb-1">Auras</p>
-                  <div className="space-y-3">
-                    {auras.map((aura, idx) => (
-                      <div key={idx} className="text-[11px]">
-                        <span className="text-white font-bold">{safeText(aura.name)}. </span>
-                        <span className="text-slate-400">({safeText(aura.radius) || "—"})</span>
-                        {aura.description && (
-                          <span className="text-slate-300 leading-relaxed"> {safeText(aura.description)}</span>
-                        )}
-                        {(aura.damage_dice || aura.applies_condition) && (
-                          <div className="text-[10px] text-slate-400 mt-0.5">
-                            {aura.damage_dice && <span>Damage: {safeText(aura.damage_dice)} {safeText(aura.damage_type)}</span>}
-                            {aura.save_ability && <span className="ml-2">Save: DC {safeText(aura.save_dc) || "?"} {safeText(aura.save_ability)}</span>}
-                            {aura.applies_condition && <span className="ml-2">Applies: {safeText(aura.applies_condition)}</span>}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {traits.length === 0
-                && specialAbilities.length === 0
-                && actions.length === 0
-                && bonusActions.length === 0
-                && reactions.length === 0
-                && legendaryActions.length === 0
-                && lairActions.length === 0
-                && auras.length === 0
-                && !damageResistances
-                && !damageImmunities
-                && !damageVulnerabilities
-                && !conditionImmunities && (
-                <div className="h-full flex items-center justify-center py-8">
-                  <p className="text-slate-500 text-xs italic">No traits or actions defined.</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Ability Scores Tab */}
-          {activeTab === 'abilities' && (
-            <div className="h-full">
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                {Object.entries(abilityScores).map(([name, score]) => (
-                  <div key={name} className="flex justify-between items-center bg-[#0b1220] rounded-lg p-2 border border-[#111827]">
-                    <span className="text-xs text-amber-400 font-bold w-8">{safeText(name)}</span>
-                    <span className="text-white font-bold text-sm">{safeText(score)}</span>
-                    <span className="text-xs text-slate-400 w-8 text-right">{getMod(score)}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Saves if available */}
-              {stats.saving_throws && Object.keys(stats.saving_throws).length > 0 && (
-                <div className="mt-4">
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-2">Saving Throws</p>
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(stats.saving_throws).filter(([_, p]) => p).map(([key, val]) => (
-                      <span key={key} className="text-xs bg-[#1a1f2e] px-2 py-1 rounded text-slate-300 border border-[#2A3441]">
-                        {safeText(key).toUpperCase()} +{getMod(abilityScores[key.toUpperCase()]) + proficiencyBonus}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Skills Tab */}
-          {activeTab === 'skills' && (
-            <div className="space-y-4">
-              <div className="flex justify-between text-xs pb-2 border-b border-[#111827]">
-                <span className="text-slate-400">Proficiency Bonus</span>
-                <span className="text-amber-400 font-bold">+{proficiencyBonus}</span>
-              </div>
-
-              {skills && Object.keys(skills).length > 0 && (
-                <div>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-2">Skills</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {typeof skills === 'object' && !Array.isArray(skills) ? (
-                      Object.entries(skills).filter(([_, v]) => v).map(([skill, value]) => {
-                        // Calculate bonus roughly if boolean, or use value if number
-                        let bonus = "+?";
-                        if (typeof value === 'number') bonus = value >= 0 ? `+${value}` : value;
-                        else if (value === true) bonus = "Proficient";
-                        
-                        return (
-                          <div key={skill} className="flex justify-between bg-[#0b1220] px-2 py-1.5 rounded text-xs">
-                            <span className="text-slate-300">{safeText(skill)}</span>
-                            <span className="text-[#37F2D1]">{safeText(bonus)}</span>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <p className="text-xs text-slate-300 col-span-2">{Array.isArray(skills) ? skills.map((s) => safeText(s)).join(', ') : safeText(skills)}</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {(senses || languages) && (
-                <div className="space-y-3 pt-2">
-                  {senses && (
-                    <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Senses</p>
-                      <p className="text-xs text-white bg-[#0b1220] p-2 rounded">{safeText(senses)}</p>
-                    </div>
-                  )}
-                  {languages && (
-                    <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Languages</p>
-                      <p className="text-xs text-white bg-[#0b1220] p-2 rounded">{safeText(languages)}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Spells Tab */}
-          {activeTab === 'spells' && (
-            <div className="space-y-4 max-h-[350px] overflow-y-auto custom-scrollbar pr-2 border border-slate-800/50 rounded-lg p-2 bg-[#080c14]/50">
-              {typeof spellsData === 'object' && !Array.isArray(spellsData) ? (
-                Object.entries(spellsData).map(([level, spells]) => {
-                  if (!spells || spells.length === 0) return null;
-                  const label = level === 'cantrips' ? 'Cantrips' :
-                               level.startsWith('level') ? `Level ${level.replace('level', '')}` :
-                               level;
-                  return (
-                    <div key={level}>
-                      <p className="text-[10px] text-purple-400 uppercase tracking-wide mb-2 font-bold sticky top-0 bg-[#050816] py-1">{safeText(label)}</p>
-                      <div className="space-y-1">
-                        {spells.map((spell, idx) => (
-                          <div key={idx} className="text-xs bg-[#0b1220] p-2 rounded border border-[#111827]">
-                            <span className="text-white font-medium">{safeText(typeof spell === 'string' ? spell : spell?.name)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-xs text-slate-400">Spells format not supported or empty.</p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </SectionCard>
-  );
-}
 
 function TogglePill({ label }) {
   return (
@@ -7553,7 +7051,7 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
                             damping: 15,
                             delay: index * 0.1
                           }}
-                          className="flex flex-col items-center gap-2 relative"
+                          className="group flex flex-col items-center gap-2 relative"
                         >
                           {selectionMode && (
                             <div className="absolute -top-8 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full animate-bounce shadow-lg z-50">
@@ -7581,38 +7079,93 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
                             </div>
                           )}
 
-                          {/* Bardic Inspiration badge — a small ♪ in the
-                              Bard class tint when the combatant holds an
-                              unspent inspiration die. */}
-                          {combatant.bardicInspiration && (
-                            <div
-                              className="absolute -top-1 -left-1 text-[10px] font-black z-30 rounded-full w-5 h-5 flex items-center justify-center shadow-[0_0_8px_rgba(252,211,77,0.8)]"
+                          {/* GM one-click Inspiration grant — top-right
+                              overlay, hover-only. Calls
+                              setCombatantInspiration directly via
+                              onGrantInspiration. Click toggles. Hidden
+                              when bardicInspiration is set because that
+                              comes from the Bard class feature only;
+                              GMs don't manage Bardic. */}
+                          {isGM && onGrantInspiration && !combatant.bardicInspiration && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onGrantInspiration(
+                                  combatant.uniqueId || combatant.id,
+                                  !combatant.hasInspiration,
+                                );
+                              }}
+                              className={`absolute -top-1 -right-1 z-30 rounded-full w-5 h-5 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100 ${combatant.hasInspiration ? 'opacity-100' : ''}`}
                               style={{
-                                backgroundColor: '#fbbf24',
-                                color: '#1f1303',
+                                backgroundColor: combatant.hasInspiration ? '#facc15' : 'rgba(15,18,25,0.85)',
+                                color: combatant.hasInspiration ? '#1f1303' : '#facc15',
                                 border: '1.5px solid #fde68a',
                               }}
-                              title={`Bardic Inspiration (${combatant.bardicInspiration.die})${combatant.bardicInspiration.fromName ? ` — from ${combatant.bardicInspiration.fromName}` : ''}`}
+                              title={combatant.hasInspiration ? 'Clear Inspiration' : 'Grant Inspiration'}
                             >
-                              ♪
-                            </div>
+                              <Lightbulb className="w-3 h-3" strokeWidth={3} />
+                            </button>
                           )}
 
-                          {/* Inspiration badge — gold ★ on top-left when
-                              the character has DM inspiration. */}
-                          {combatant.hasInspiration && !combatant.bardicInspiration && (
+                          {/* Inspiration badge — unified slot, source-aware
+                              icon. Bardic (Music note) wins when both are
+                              present because a Bard's gift is more
+                              recently bestowed and is the bigger flourish.
+                              The standard-Inspiration badge below is
+                              redundant with the GM grant button above
+                              (which renders the lightbulb at full opacity
+                              when granted), so we only render this slot
+                              for the bardic case + the non-GM read-only
+                              standard case. See commit 2 of the
+                              inspiration-redesign hotfix. */}
+                          {/* AnimatePresence wraps the bardic badge so the
+                              icon swap (no inspiration → bardic, or
+                              standard → bardic) plays a one-shot scale +
+                              fade flourish: feels like the Bard just lit
+                              the recipient up. Spring physics on
+                              entrance, gentle scale-down on exit when the
+                              die gets consumed. Spectator dice prompts +
+                              the post-roll consume flow are unchanged. */}
+                          <AnimatePresence>
+                            {combatant.bardicInspiration && (
+                              <motion.div
+                                key={`bardic-${combatant.uniqueId || combatant.id}`}
+                                initial={{ scale: 0.4, opacity: 0, rotate: -20 }}
+                                animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                                exit={{ scale: 0.7, opacity: 0 }}
+                                transition={{ type: 'spring', stiffness: 420, damping: 14 }}
+                                className="absolute -top-1 -left-1 z-30 rounded-full w-5 h-5 flex items-center justify-center shadow-[0_0_12px_rgba(252,211,77,0.95)]"
+                                style={{
+                                  backgroundColor: '#fbbf24',
+                                  color: '#1f1303',
+                                  border: '1.5px solid #fde68a',
+                                }}
+                                title={`Bardic Inspiration (${combatant.bardicInspiration.die}${combatant.bardicInspiration.fromName ? ` from ${combatant.bardicInspiration.fromName}` : ''}) — adds the die to a roll's result.`}
+                              >
+                                <Music className="w-3 h-3" strokeWidth={3} />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                          {!combatant.bardicInspiration && combatant.hasInspiration && !isGM ? (
+                            // Non-GM viewers (other players) see the
+                            // standard-Inspiration lightbulb here; GMs
+                            // see it on the top-right grant button
+                            // above instead, where they can click to
+                            // toggle.
                             <div
-                              className="absolute -top-1 -left-1 text-[11px] font-black z-30 rounded-full w-5 h-5 flex items-center justify-center shadow-[0_0_10px_rgba(250,204,21,0.9)]"
+                              className="absolute -top-1 -left-1 z-30 rounded-full w-5 h-5 flex items-center justify-center shadow-[0_0_10px_rgba(250,204,21,0.9)]"
                               style={{
                                 backgroundColor: '#facc15',
                                 color: '#1f1303',
                                 border: '1.5px solid #fde68a',
                               }}
-                              title="Inspiration (advantage on one roll)"
+                              title="Inspiration — granted by GM. Use to gain advantage on a roll."
                             >
-                              ★
+                              <Lightbulb className="w-3 h-3" strokeWidth={3} />
                             </div>
-                          )}
+                          ) : null}
 
                           {/* Exhaustion badge — small numbered pip in the
                               bottom-left corner when exhaustion > 0. */}

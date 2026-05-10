@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import ReportProblemDialog from "@/components/support/ReportProblemDialog";
 import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -227,7 +228,12 @@ export default function AppSidebar() {
           <SidebarSection label="Support">
             <SidebarLink to={createPageUrl("FAQ")}           icon={HelpCircle}     label="FAQ" />
             <SidebarLink to={createPageUrl("Docs")}          icon={BookOpen}       label="Documentation" />
-            <SidebarLink to={createPageUrl("SupportTicket")} icon={AlertTriangle}  label="Report a Problem" />
+            {/* Quick-file modal — minimise/restore lets the user run
+                their OS screenshot tools without losing the form.
+                The full SupportTicket page stays one click further
+                down for ticket follow-ups and admin replies. */}
+            <ReportProblemSidebarTrigger />
+            <SidebarLink to={createPageUrl("SupportTicket")} icon={MessageSquare} label="My Tickets" />
           </SidebarSection>
         </nav>
 
@@ -289,6 +295,30 @@ export function SidebarSection({ label, children }) {
       )}
       <div className="space-y-0.5">{children}</div>
     </div>
+  );
+}
+
+/**
+ * Sidebar entry that opens the ReportProblemDialog instead of
+ * navigating. Mirrors SidebarLink's visual treatment so it sits
+ * cleanly alongside the other Support items. Owns its own dialog
+ * state — the dialog stays mounted while open so minimise/restore
+ * preserves the form.
+ */
+function ReportProblemSidebarTrigger() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors text-slate-300 hover:bg-[#2a3441] hover:text-white"
+      >
+        <AlertTriangle className="w-[18px] h-[18px] text-[#FF5722]" />
+        <span className="flex-1 truncate">Report a Problem</span>
+      </button>
+      <ReportProblemDialog open={open} onClose={() => setOpen(false)} />
+    </>
   );
 }
 

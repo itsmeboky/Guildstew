@@ -1,9 +1,14 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { supabase } from "@/api/supabaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { UserPlus, Link as LinkIcon, Copy, Check, ArrowLeft } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { UserPlus, Link as LinkIcon, Copy, Check, ArrowLeft, RefreshCw, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -93,11 +98,22 @@ export default function CampaignInvite() {
       // Create invitation record. invited_user_id is the recipient;
       // invited_by is the GM who sent it. The table column is
       // invited_user_id, NOT user_id.
+      //
+      // The denormalized fields (campaign_name, inviter_username,
+      // inviter_avatar) populate the recipient's pending-invites
+      // inbox without forcing a JOIN to campaigns + user_profiles
+      // on every render. Schema added in
+      // 20261127_campaign_invite_codes_and_inbox.sql.
       await base44.entities.CampaignInvitation.create({
         campaign_id: campaignId,
         invited_user_id: friendId,
         invited_by: user.id,
-        status: 'pending'
+        status: 'pending',
+        campaign_name: campaign.title || campaign.name || null,
+        inviter_username:
+          currentUserProfile?.username ||
+          (user?.email ? user.email.split('@')[0] : null),
+        inviter_avatar: currentUserProfile?.avatar_url || null,
       });
       
       return friendId;
@@ -134,6 +150,49 @@ export default function CampaignInvite() {
     toast.success('Invite link copied to clipboard');
     setTimeout(() => setCopied(false), 2000);
   };
+
+  // Share-code state. The campaigns row already carries an
+  // invite_code (CreateCampaign.jsx generates one client-side on
+  // create, the 20261127 migration backfills any legacy NULLs).
+  // We just display + copy + regenerate it here.
+  const [codeCopied, setCodeCopied] = useState(false);
+  const [confirmingRegenerate, setConfirmingRegenerate] = useState(false);
+
+  const handleCopyCode = () => {
+    if (!campaign?.invite_code) return;
+    navigator.clipboard.writeText(campaign.invite_code);
+    setCodeCopied(true);
+    toast.success('Invite code copied to clipboard');
+    setTimeout(() => setCodeCopied(false), 2000);
+  };
+
+  // Regenerate via the SECURITY DEFINER RPC. The function checks
+  // game_master_id = auth.uid() server-side, so a non-GM call is
+  // rejected at the DB even if the client somehow surfaces the
+  // button. Returns the new code; we update the cache so the UI
+  // re-renders without a refetch.
+  const regenerateCodeMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc(
+        'regenerate_campaign_invite_code',
+        { p_campaign_id: campaignId },
+      );
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (newCode) => {
+      queryClient.setQueryData(['campaign', campaignId], (prev) =>
+        prev ? { ...prev, invite_code: newCode } : prev
+      );
+      queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
+      toast.success(`New invite code generated: ${newCode}`);
+      setConfirmingRegenerate(false);
+    },
+    onError: (err) => {
+      toast.error(`Couldn't regenerate code: ${err?.message || err}`);
+      setConfirmingRegenerate(false);
+    },
+  });
 
   const isPlayerInCampaign = (friendId) => {
     return campaign?.player_ids?.includes(friendId);
@@ -231,12 +290,59 @@ export default function CampaignInvite() {
             </div>
           </div>
 
-          {/* Share Link */}
-          <div className="bg-[#2A3441] rounded-xl p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <LinkIcon className="w-5 h-5 text-[#FF5722]" />
-              <h2 className="text-xl font-bold text-white">Share Invite Link</h2>
+          {/* Share Code + Share Link, stacked in the right column */}
+          <div className="space-y-6">
+            {/* Share Code */}
+            <div className="bg-[#2A3441] rounded-xl p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <KeyRound className="w-5 h-5 text-[#37F2D1]" />
+                <h2 className="text-xl font-bold text-white">Share Invite Code</h2>
+              </div>
+
+              <p className="text-gray-400 text-sm mb-4">
+                Players paste this 6-character code into the
+                <span className="text-white font-medium"> Enter Invite Code </span>
+                modal to join. Permanent until you regenerate it.
+              </p>
+
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex-1 bg-[#050816] border border-[#37F2D1]/30 rounded-lg px-4 py-3 text-center">
+                  <span className="font-mono text-3xl tracking-[0.4em] text-[#37F2D1] font-bold select-all">
+                    {campaign?.invite_code || '------'}
+                  </span>
+                </div>
+                <Button
+                  onClick={handleCopyCode}
+                  disabled={!campaign?.invite_code}
+                  className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#050816] font-bold h-[60px] px-4"
+                  title="Copy code"
+                >
+                  {codeCopied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                </Button>
+                <Button
+                  onClick={() => setConfirmingRegenerate(true)}
+                  variant="outline"
+                  className="border-gray-600 text-gray-200 hover:bg-[#1E2430] h-[60px] px-4"
+                  disabled={regenerateCodeMutation.isPending}
+                  title="Regenerate code"
+                >
+                  <RefreshCw
+                    className={`w-5 h-5 ${regenerateCodeMutation.isPending ? 'animate-spin' : ''}`}
+                  />
+                </Button>
+              </div>
+
+              <p className="text-xs text-gray-500">
+                Regenerating immediately invalidates the current code; existing players stay in the campaign.
+              </p>
             </div>
+
+            {/* Share Link */}
+            <div className="bg-[#2A3441] rounded-xl p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <LinkIcon className="w-5 h-5 text-[#FF5722]" />
+                <h2 className="text-xl font-bold text-white">Share Invite Link</h2>
+              </div>
 
             <p className="text-gray-400 text-sm mb-4">
               Share this link with anyone you want to invite to your campaign. They'll be able to join by clicking the link.
@@ -267,6 +373,7 @@ export default function CampaignInvite() {
                 </ul>
               </div>
             </div>
+          </div>
           </div>
         </div>
 
@@ -338,6 +445,36 @@ export default function CampaignInvite() {
           </div>
         )}
       </div>
+
+      {/* Regenerate-code confirmation dialog. Confirm prompt is the
+          standard pattern for destructive actions in this app; the
+          actual mutation runs only on confirm. The DB-side
+          regenerate_campaign_invite_code RPC enforces GM ownership,
+          so even if this dialog is bypassed via devtools, a
+          non-GM call is rejected at the DB. */}
+      <AlertDialog open={confirmingRegenerate} onOpenChange={setConfirmingRegenerate}>
+        <AlertDialogContent className="bg-[#2A3441] border-gray-700 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Regenerate invite code?</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-300">
+              The current code will stop working immediately. Anyone who already has it will need the new code to join.
+              Existing players in the campaign are unaffected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-transparent border-gray-600 text-white hover:bg-[#1E2430]">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => regenerateCodeMutation.mutate()}
+              className="bg-[#FF5722] hover:bg-[#FF6B3D] text-white"
+              disabled={regenerateCodeMutation.isPending}
+            >
+              {regenerateCodeMutation.isPending ? 'Generating…' : 'Regenerate'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
