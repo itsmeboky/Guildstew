@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { loadCampaignBans, findCharacterIncompatibilities } from "@/lib/campaignBans";
 import { getSpellSlots, getPactSlots } from "@/components/dnd5e/spellData";
+import { getSkillsCompletion } from "@/components/characterCreator/skillsCompletion";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   calculateMaxHP, 
@@ -64,32 +65,6 @@ const BACKGROUND_GIFS = [
   'https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/charactercreatorbg3.webp',
   'https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/ui/charactercreatorbg4.webp',
 ];
-
-const classSkillCounts = {
-  Barbarian: 2, Bard: 3, Cleric: 2, Druid: 2, Fighter: 2, Monk: 2,
-  Paladin: 2, Ranger: 3, Rogue: 4, Sorcerer: 2, Warlock: 2, Wizard: 2
-};
-
-// Helper function to get skills provided by a background
-const getBackgroundSkills = (background) => {
-  const backgroundSkillMap = {
-    "Acolyte": ["Insight", "Religion"],
-    "Charlatan": ["Deception", "Sleight of Hand"],
-    "Criminal": ["Deception", "Stealth"],
-    "Entertainer": ["Acrobatics", "Performance"],
-    "Folk Hero": ["Animal Handling", "Survival"],
-    "Guild Artisan": ["Insight", "Persuasion"],
-    "Hermit": ["Medicine", "Religion"],
-    "Noble": ["History", "Persuasion"],
-    "Outlander": ["Athletics", "Survival"],
-    "Sage": ["Arcana", "History"],
-    "Sailor": ["Athletics", "Perception"],
-    "Soldier": ["Athletics", "Intimidation"],
-    "Urchin": ["Sleight of Hand", "Stealth"],
-    // Add other backgrounds as needed
-  };
-  return backgroundSkillMap[background] || [];
-};
 
 export default function CharacterCreator() {
   const navigate = useNavigate();
@@ -473,22 +448,14 @@ export default function CharacterCreator() {
       case 'features':
         return true;
       case 'skills':
-        const primarySkillCount = classSkillCounts[characterData.class] || 2;
-        const multiclassSkillCount = (characterData.multiclasses || []).filter(mc => mc.class).length;
-        const racialBonusSkills = 
-          characterData.race === "Half-Elf" ? 2 : 
-          characterData.race === "Human" ? 1 : 
-          0;
-        const totalRequired = primarySkillCount + multiclassSkillCount + racialBonusSkills;
-        
-        // Get background skills (these don't count toward the total for selection)
-        const backgroundSkillsFromData = characterData.background ? getBackgroundSkills(characterData.background) : [];
-        const selectedSkillsList = Object.entries(characterData.skills || {}).filter(([_, selected]) => selected).map(([skill]) => skill);
-        
-        // Filter out skills that are granted by the background, as these are not "chosen" skills.
-        const nonBackgroundSkills = selectedSkillsList.filter(skill => !backgroundSkillsFromData.includes(skill));
-        
-        return nonBackgroundSkills.length === totalRequired;
+        // Single source of truth shared with SkillsStep — registry-
+        // driven (CLASS_SKILL_CHOICES + getRaceSkillProficiencies +
+        // getBackgroundSkills) so fixed-racial grants don't get
+        // double-counted, racial bonus picks track the actual race
+        // (not just the old hardcoded Half-Elf/Human pair), and
+        // expertise-required classes (Rogue, Bard) can't slip past
+        // without selections.
+        return getSkillsCompletion(characterData).isComplete;
       case 'spells':
         const spellSlots = getSpellSlots(characterData.class, characterData.level, characterData.multiclasses || []);
         const pactSlots = getPactSlots(characterData.class, characterData.level, characterData.multiclasses || []);
