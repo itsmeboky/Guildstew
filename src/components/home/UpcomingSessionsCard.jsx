@@ -41,30 +41,35 @@ export default function UpcomingSessionsCard({ user }) {
   });
 
   // Filter to future-scheduled, sort by soonest, cap at 4.
+  // For each campaign we resolve an "effective" next-session
+  // timestamp. The GM-set explicit `next_session_time` wins; if
+  // that's not set we fall back to computing the next occurrence
+  // of the campaign's recurring `session_day` / `session_time`
+  // schedule. Campaigns with neither are excluded.
   const upcoming = useMemo(() => {
     const now = Date.now();
     return campaigns
-      .filter((c) => {
-        const t = c.next_session_time;
-        if (!t) return false;
-        const ms = new Date(t).getTime();
-        return Number.isFinite(ms) && ms > now;
+      .map((c) => {
+        const explicit = c.next_session_time
+          ? new Date(c.next_session_time).getTime()
+          : NaN;
+        const computed = Number.isFinite(explicit) && explicit > now
+          ? explicit
+          : nextRecurringOccurrenceMs(c.session_day, c.session_time);
+        return { campaign: c, when: computed };
       })
-      .sort(
-        (a, b) =>
-          new Date(a.next_session_time).getTime() -
-          new Date(b.next_session_time).getTime(),
-      )
+      .filter((row) => Number.isFinite(row.when) && row.when > now)
+      .sort((a, b) => a.when - b.when)
       .slice(0, 4);
   }, [campaigns]);
 
   return (
-    <div className="col-span-2 rounded-3xl p-5 h-[320px] flex flex-col relative overflow-hidden">
+    <div className="col-span-4 rounded-3xl p-5 h-[320px] flex flex-col relative overflow-hidden">
       <div className="theme-homepage-card absolute inset-0" />
       <div className="relative z-10 flex flex-col h-full">
         <h3 className="text-xl font-bold text-white mb-3 text-center flex items-center justify-center gap-1.5">
           <Calendar className="w-4 h-4 text-yellow-300" />
-          Upcoming
+          Upcoming Sessions
         </h3>
 
         {isLoading ? (
@@ -81,7 +86,7 @@ export default function UpcomingSessionsCard({ user }) {
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-2">
-            {upcoming.map((c) => (
+            {upcoming.map(({ campaign: c, when }) => (
               <Link
                 key={c.id}
                 to={createPageUrl("CampaignView") + `?id=${c.id}`}
@@ -92,10 +97,10 @@ export default function UpcomingSessionsCard({ user }) {
                 </p>
                 <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-600">
                   <Clock className="w-3 h-3 flex-shrink-0" />
-                  <span className="truncate">{formatScheduled(c.next_session_time)}</span>
+                  <span className="truncate">{formatScheduled(when)}</span>
                 </div>
                 <p className="text-[10px] font-semibold text-[#FF5722] mt-0.5">
-                  {formatCountdown(c.next_session_time)}
+                  {formatCountdown(when)}
                 </p>
               </Link>
             ))}
@@ -120,14 +125,15 @@ function UpcomingSessionsSkeleton() {
 }
 
 /**
- * "Fri 7:00 PM" / "Mar 4 · 7:00 PM" formatting. Uses the local
+ * "Fri 7:00 PM" / "Mar 4 · 7:00 PM" formatting. Accepts an ms
+ * timestamp (resolved earlier from either next_session_time or the
+ * recurring session_day / session_time fallback). Uses the local
  * timezone so the player sees the time their own clock shows when
  * the session starts.
  */
-function formatScheduled(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
+function formatScheduled(ms) {
+  if (!Number.isFinite(ms)) return "";
+  const d = new Date(ms);
   const now = new Date();
   const sameYear = d.getFullYear() === now.getFullYear();
   const datePart = d.toLocaleDateString(undefined, {
@@ -148,10 +154,9 @@ function formatScheduled(iso) {
  * "in N days" — anything further out shows the actual date in
  * formatScheduled above.
  */
-function formatCountdown(iso) {
-  if (!iso) return "";
-  const diffMs = new Date(iso).getTime() - Date.now();
-  if (!Number.isFinite(diffMs)) return "";
+function formatCountdown(ms) {
+  if (!Number.isFinite(ms)) return "";
+  const diffMs = ms - Date.now();
   if (diffMs <= 0) return "starting now";
   const minutes = Math.round(diffMs / 60_000);
   if (minutes < 60) {
@@ -162,4 +167,42 @@ function formatCountdown(iso) {
   if (hours < 24) return `in ${hours} hour${hours === 1 ? "" : "s"}`;
   const days = Math.floor(diffMs / 86_400_000);
   return `in ${days} day${days === 1 ? "" : "s"}`;
+}
+
+/**
+ * Computes the next occurrence (as ms epoch) of a recurring
+ * weekly session. `sessionDay` is a full day name from the
+ * canonical list ("Sunday".."Saturday") set in
+ * CampaignSettingsStep.jsx. `sessionTime` is a 24-hour "HH:MM"
+ * string (the storage format documented in
+ * src/utils/sessionTime.js). Returns NaN when either input is
+ * missing or unparseable so the caller's Number.isFinite check
+ * filters the row out cleanly.
+ *
+ * If today is the right weekday and the time is still in the
+ * future, the next occurrence is today. Otherwise it advances to
+ * the next weekly slot (1-7 days ahead).
+ */
+const DAY_NAME_TO_INDEX = {
+  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
+  Thursday: 4, Friday: 5, Saturday: 6,
+};
+
+function nextRecurringOccurrenceMs(sessionDay, sessionTime) {
+  if (!sessionDay || !sessionTime) return NaN;
+  const targetDow = DAY_NAME_TO_INDEX[sessionDay];
+  if (targetDow == null) return NaN;
+  const m = String(sessionTime).match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return NaN;
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm) || hh > 23 || mm > 59) return NaN;
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(hh, mm, 0, 0);
+  const todayDow = now.getDay();
+  let daysAhead = (targetDow - todayDow + 7) % 7;
+  if (daysAhead === 0 && target.getTime() <= now.getTime()) daysAhead = 7;
+  target.setDate(target.getDate() + daysAhead);
+  return target.getTime();
 }
