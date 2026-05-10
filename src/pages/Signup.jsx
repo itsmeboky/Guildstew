@@ -65,6 +65,13 @@ export default function Signup() {
           username: placeholderUsername,
           tos_accepted_at: new Date().toISOString(),
           tos_version: CURRENT_TOS_VERSION,
+          // Alpha comp: every signup lands on Veteran tier with
+          // full feature access. billingClient.getSubscriptionStatus
+          // checks admin_tier_override first, so this short-
+          // circuits the (unfinished) subscription edge function
+          // and skips Stripe entirely. Reverted post-alpha by
+          // clearing the override.
+          admin_tier_override: "veteran",
         });
         trackEvent(data.user.id, "user_signup");
       }

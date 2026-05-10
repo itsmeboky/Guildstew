@@ -48,10 +48,33 @@ export default function ForumThread() {
   });
 
   // One-shot view-count bump. The RPC runs as SECURITY DEFINER so
-  // anonymous readers can bump without a write policy.
+  // anonymous readers can bump without a write policy. Note:
+  // supabase.rpc() returns a PostgrestBuilder (thenable, not a
+  // true Promise) — it has .then() but no .catch(). Chaining
+  // .catch() directly on the rpc() result throws synchronously
+  // and crashes the page render, so we await inside try/catch
+  // and log on either the Supabase error envelope or an
+  // unexpected throw. Cancel flag covers the unmount-during-
+  // fetch case so we don't log noise after the user navigated
+  // away.
   useEffect(() => {
     if (!thread?.id) return;
-    supabase.rpc("increment_forum_thread_view", { p_thread_id: thread.id }).catch(() => {});
+    let cancelled = false;
+    (async () => {
+      try {
+        const { error } = await supabase.rpc("increment_forum_thread_view", {
+          p_thread_id: thread.id,
+        });
+        if (error && !cancelled) {
+          console.error("Forum view-count bump failed:", error);
+        }
+      } catch (err) {
+        if (!cancelled) console.error("Forum view-count bump threw:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [thread?.id]);
 
   // Author profiles — batch-fetch for OP + every reply.

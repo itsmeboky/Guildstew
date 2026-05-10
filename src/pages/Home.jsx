@@ -9,6 +9,7 @@ import LazyImage from "@/components/ui/LazyImage";
 import { supabase } from "@/api/supabaseClient";
 import CommunityHighlightsCard from "@/components/home/CommunityHighlightsCard";
 import UpcomingSessionsCard from "@/components/home/UpcomingSessionsCard";
+import AlphaWelcomeModal from "@/components/alpha/AlphaWelcomeModal";
 import { useAuth } from "@/lib/AuthContext";
 
 const HERO_SLIDES = [
@@ -44,6 +45,29 @@ const HERO_SLIDES = [
 export default function Home() {
   const { user } = useAuth();
   const [currentSlide, setCurrentSlide] = useState(0);
+
+  // Alpha welcome modal — drives off user_profiles.has_seen_alpha_welcome.
+  // Local override flips immediately on claim so the modal closes
+  // without waiting for the React Query invalidation roundtrip.
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const { data: alphaProfile } = useQuery({
+    queryKey: ["userProfile", user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_profiles")
+        .select("id, has_seen_alpha_welcome, alpha_gift_claimed")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      return data || null;
+    },
+    enabled: !!user?.id,
+    staleTime: 30_000,
+  });
+  const showAlphaWelcome =
+    !!user &&
+    !!alphaProfile &&
+    !alphaProfile.has_seen_alpha_welcome &&
+    !welcomeDismissed;
 
   // Admin-managed hero banners. Falls back to the hard-coded
   // HERO_SLIDES above when no admin banners exist, so the homepage
@@ -466,6 +490,12 @@ export default function Home() {
 
         </div>
       </div>
+
+      <AlphaWelcomeModal
+        open={showAlphaWelcome}
+        onClaimed={() => setWelcomeDismissed(true)}
+        onClose={() => setWelcomeDismissed(true)}
+      />
     </div>
   );
 }
