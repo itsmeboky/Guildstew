@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  Check, Copy, Link as LinkIcon, Shield, ShieldOff,
+  Check, Copy, Link as LinkIcon, RotateCcw, Shield, ShieldOff,
   Trash2, UserMinus, Image as ImageIcon, X,
 } from "lucide-react";
 import {
@@ -12,7 +12,13 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/api/supabaseClient";
-import { guildRemove } from "@/api/billingClient";
+import {
+  guildRemove,
+  getActiveGuildInviteCode,
+  rotateGuildInviteCode,
+  revokeGuildInviteCode,
+} from "@/api/billingClient";
+import { generateInviteCodeString } from "@/lib/guildInviteCode";
 import { displayName, displayInitial } from "@/utils/displayName";
 
 /**
@@ -38,7 +44,6 @@ export default function GuildSettingsDialog({
   guild,
   guildOwnerId,
   profiles = [],
-  inviteCode,
 }) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState("general");
@@ -49,6 +54,7 @@ export default function GuildSettingsDialog({
   const [disbandConfirm, setDisbandConfirm] = useState("");
   const [disbandOpen, setDisbandOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   React.useEffect(() => {
     if (open) {
@@ -64,6 +70,18 @@ export default function GuildSettingsDialog({
     () => profiles.filter((p) => p.user_id !== guildOwnerId),
     [profiles, guildOwnerId],
   );
+
+  // Live invite-code lookup. Owner-only via RLS; the dialog itself
+  // is leader-gated upstream so this query only runs in the right
+  // hands. Disabled while the dialog is closed so we don't pull
+  // codes into cache for guilds the user just clicked past.
+  const guildId = guild?.id || null;
+  const { data: inviteCodeRow, isFetching: codeLoading } = useQuery({
+    queryKey: ["guildInviteCode", guildId],
+    queryFn: () => getActiveGuildInviteCode(guildId),
+    enabled: !!guildId && open && tab === "invites",
+  });
+  const inviteCode = inviteCodeRow?.code || "";
 
   const inviteLink = useMemo(() => {
     if (!inviteCode) return "";
@@ -169,16 +187,40 @@ export default function GuildSettingsDialog({
     onError: (err) => toast.error(err.message || "Failed to disband"),
   });
 
-  const copyInvite = async () => {
-    if (!inviteLink) return;
+  const copyText = async (text, setter) => {
+    if (!text) return;
     try {
-      await navigator.clipboard.writeText(inviteLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      await navigator.clipboard.writeText(text);
+      setter(true);
+      setTimeout(() => setter(false), 1500);
     } catch {
       toast.error("Copy failed — paste manually from the field.");
     }
   };
+  const copyInvite = () => copyText(inviteCode, setCopied);
+  const copyInviteLink = () => copyText(inviteLink, setCopiedLink);
+
+  const rotateMutation = useMutation({
+    mutationFn: () => rotateGuildInviteCode({
+      guildId,
+      createdBy: guildOwnerId,
+      generateCode: generateInviteCodeString,
+    }),
+    onSuccess: () => {
+      toast.success(inviteCode ? "New code generated — old code revoked." : "Invite code generated.");
+      queryClient.invalidateQueries({ queryKey: ["guildInviteCode", guildId] });
+    },
+    onError: (err) => toast.error(err?.message || "Could not generate code"),
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: () => revokeGuildInviteCode(guildId),
+    onSuccess: () => {
+      toast.success("Code revoked. Anyone who had it can no longer redeem.");
+      queryClient.invalidateQueries({ queryKey: ["guildInviteCode", guildId] });
+    },
+    onError: (err) => toast.error(err?.message || "Could not revoke code"),
+  });
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -301,35 +343,96 @@ export default function GuildSettingsDialog({
           )}
 
           {tab === "invites" && (
-            <div className="space-y-3">
-              <label className="text-xs font-black uppercase tracking-widest text-slate-300 block">
-                Invite Link
-              </label>
-              {inviteCode ? (
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-black uppercase tracking-widest text-slate-300 block">
+                  Invite Code
+                </label>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Share this code with anyone you want to invite. They redeem it under <span className="text-slate-300">Settings → Join a Guild</span> or at <span className="text-slate-300">/guild</span>.
+                </p>
+              </div>
+
+              {codeLoading && !inviteCodeRow ? (
+                <p className="text-sm text-slate-400 italic">Loading…</p>
+              ) : inviteCode ? (
                 <>
                   <div className="flex items-center gap-2">
                     <Input
-                      value={inviteLink}
+                      value={inviteCode}
                       readOnly
-                      className="bg-[#050816] border-slate-700 text-white font-mono text-xs"
+                      className="bg-[#050816] border-slate-700 text-amber-200 font-mono text-base tracking-widest"
                     />
                     <Button
                       onClick={copyInvite}
                       variant="outline"
                       className="border-amber-500/40 text-amber-200 flex-shrink-0"
+                      title="Copy code"
                     >
                       {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     </Button>
                   </div>
-                  <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                    <LinkIcon className="w-3 h-3" />
-                    Share with up to 5 friends. Invites expire after 7 days of inactivity.
+
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={inviteLink}
+                      readOnly
+                      className="bg-[#050816] border-slate-700 text-slate-300 font-mono text-xs"
+                    />
+                    <Button
+                      onClick={copyInviteLink}
+                      variant="outline"
+                      className="border-slate-600 text-slate-300 flex-shrink-0"
+                      title="Copy share link"
+                    >
+                      {copiedLink ? <Check className="w-4 h-4" /> : <LinkIcon className="w-4 h-4" />}
+                    </Button>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500">
+                    Used <span className="text-slate-300 font-semibold">{inviteCodeRow.use_count || 0}</span> times
+                    {inviteCodeRow.created_at && (
+                      <> · created <span className="text-slate-300">{new Date(inviteCodeRow.created_at).toLocaleDateString()}</span></>
+                    )}
+                  </p>
+
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <Button
+                      onClick={() => rotateMutation.mutate()}
+                      disabled={rotateMutation.isPending}
+                      variant="outline"
+                      className="border-amber-500/40 text-amber-200"
+                    >
+                      <RotateCcw className="w-4 h-4 mr-1.5" />
+                      {rotateMutation.isPending ? "Generating…" : "Regenerate"}
+                    </Button>
+                    <Button
+                      onClick={() => revokeMutation.mutate()}
+                      disabled={revokeMutation.isPending}
+                      variant="outline"
+                      className="border-red-500/40 text-red-300"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1.5" />
+                      {revokeMutation.isPending ? "Revoking…" : "Revoke"}
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-relaxed">
+                    Regenerate rotates the code — anyone who had the old one will see "Invite code not recognized." Revoke turns off code-based joining entirely; you can still invite from the friends list.
                   </p>
                 </>
               ) : (
-                <p className="text-sm text-slate-400 bg-[#050816] border border-slate-700 rounded p-3">
-                  No invite code set yet. Invites are currently sent one-by-one from the Billing page — the shareable code is coming.
-                </p>
+                <div className="space-y-2">
+                  <p className="text-sm text-slate-400 bg-[#050816] border border-slate-700 rounded p-3">
+                    No active invite code. Generate one to share — friends and community can redeem it to join (up to the 6-member cap).
+                  </p>
+                  <Button
+                    onClick={() => rotateMutation.mutate()}
+                    disabled={rotateMutation.isPending || !guildId}
+                    className="bg-amber-500 hover:bg-amber-400 text-[#0b1324] font-black"
+                  >
+                    {rotateMutation.isPending ? "Generating…" : "Generate Invite Code"}
+                  </Button>
+                </div>
               )}
             </div>
           )}
