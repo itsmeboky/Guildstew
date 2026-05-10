@@ -9,6 +9,7 @@ import LazyImage from "@/components/ui/LazyImage";
 import { supabase } from "@/api/supabaseClient";
 import CommunityHighlightsCard from "@/components/home/CommunityHighlightsCard";
 import UpcomingSessionsCard from "@/components/home/UpcomingSessionsCard";
+import { useAuth } from "@/lib/AuthContext";
 
 const HERO_SLIDES = [
   {
@@ -41,6 +42,7 @@ const HERO_SLIDES = [
 ];
 
 export default function Home() {
+  const { user } = useAuth();
   const [currentSlide, setCurrentSlide] = useState(0);
 
   // Admin-managed hero banners. Falls back to the hard-coded
