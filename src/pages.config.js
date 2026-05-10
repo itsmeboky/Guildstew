@@ -65,6 +65,7 @@ import Admin from './pages/Admin';
 import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
 import Signup from './pages/Signup';
+import AlphaGate from "./pages/AlphaGate";
 import AdventuringParty from './pages/AdventuringParty';
 import QuickNotes from './pages/QuickNotes';
 import CampaignMonsters from './pages/CampaignMonsters';
@@ -147,6 +148,7 @@ export const PAGES = {
     // mystery alias.
     "Login": Landing,
     "Signup": Signup,
+    "AlphaGate": AlphaGate,
     "AdventuringParty": AdventuringParty,
     "QuickNotes": QuickNotes,
     "CampaignMonsters": CampaignMonsters,
