@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, ArrowLeft, Send, Volume2, VolumeX } from "lucide-react";
 import { Skeleton, AvatarSkeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 
 const CHAT_NOTIFICATION_SOUNDS = [
   "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/app-assets/notification/chatnotif1.mp3",
@@ -33,6 +34,7 @@ export default function ChatPanel({
 }) {
   const [selectedConversationId, setSelectedConversationId] = useState(null);
   const [messageText, setMessageText] = useState("");
+  const [sending, setSending] = useState(false);
   const [muted, setMuted] = useState(
     () => localStorage.getItem("gs-chat-muted") === "true",
   );
@@ -131,9 +133,13 @@ export default function ChatPanel({
   };
 
   const handleSend = useCallback(async () => {
-    if (!messageText.trim() || !selectedConversationId || !user) return;
+    if (!messageText.trim() || !selectedConversationId || !user || sending) return;
     const text = messageText.trim();
+    // Optimistic clear so the input feels responsive. If the write
+    // fails the catch block restores the text (and surfaces the
+    // error via toast) so the user doesn't lose what they typed.
     setMessageText("");
+    setSending(true);
     try {
       await base44.entities.Message.create({
         conversation_id: selectedConversationId,
@@ -141,10 +147,19 @@ export default function ChatPanel({
         content: text,
         read_by: [user.id],
       });
-      await base44.entities.ChatConversation.update(selectedConversationId, {
-        last_message: text.slice(0, 80),
-        last_message_at: new Date().toISOString(),
-      });
+      // Conversation metadata bump is best-effort: if the
+      // last_message / last_message_at update fails (older row
+      // without those columns, intermittent network blip), the
+      // message itself still landed and is visible. Don't surface
+      // the secondary failure as an error to the user.
+      try {
+        await base44.entities.ChatConversation.update(selectedConversationId, {
+          last_message: text.slice(0, 80),
+          last_message_at: new Date().toISOString(),
+        });
+      } catch (metaErr) {
+        console.warn("Chat last-message bump failed:", metaErr);
+      }
       queryClient.invalidateQueries({
         queryKey: ["chatMessages", selectedConversationId],
       });
@@ -153,8 +168,14 @@ export default function ChatPanel({
       });
     } catch (err) {
       console.error("Chat send failed:", err);
+      // Restore the unsent text so the user can retry / copy it.
+      setMessageText(text);
+      const detail = err?.message || err?.error?.message || "unknown error";
+      toast.error(`Couldn't send message: ${detail}`);
+    } finally {
+      setSending(false);
     }
-  }, [messageText, selectedConversationId, user, queryClient]);
+  }, [messageText, selectedConversationId, user, sending, queryClient]);
 
   const profileOf = useCallback(
     (uid) => allProfiles.find((p) => p.user_id === uid),
@@ -392,8 +413,9 @@ export default function ChatPanel({
               />
               <button
                 onClick={handleSend}
-                disabled={!messageText.trim()}
+                disabled={!messageText.trim() || sending}
                 className="w-8 h-8 rounded-lg bg-[#FF5722] hover:bg-[#FF6B3D] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-colors flex-shrink-0"
+                title={sending ? "Sending…" : "Send"}
               >
                 <Send className="w-3.5 h-3.5 text-white" />
               </button>
