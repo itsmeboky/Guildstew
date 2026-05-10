@@ -27,12 +27,28 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  // ── Alpha gate ──────────────────────────────────────────
+  const [alphaEmail] = useState(() => sessionStorage.getItem("gs-alpha-email") || "");
+  const [alphaCode] = useState(() => sessionStorage.getItem("gs-alpha-code") || "");
+
+  React.useEffect(() => {
+    if (!alphaEmail || !alphaCode) {
+      navigate("/AlphaGate", { replace: true });
+    } else {
+      setEmail(alphaEmail);
+    }
+  }, [alphaEmail, alphaCode, navigate]);
+  // ────────────────────────────────────────────────────────
+
   const handleGoogle = async () => {
     setError(null);
     try {
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${window.location.origin}/Onboarding` },
+        options: {
+          redirectTo: `${window.location.origin}/Onboarding`,
+          queryParams: { login_hint: alphaEmail || undefined },
+        },
       });
       if (oauthError) throw oauthError;
     } catch (err) {
@@ -74,6 +90,16 @@ export default function Signup() {
           admin_tier_override: "veteran",
         });
         trackEvent(data.user.id, "user_signup");
+        // Redeem the alpha code so it can't be reused
+        if (alphaCode) {
+          await supabase.rpc("redeem_alpha_code", {
+            p_email: email.toLowerCase(),
+            p_code: alphaCode,
+            p_user_id: data.user.id,
+          });
+          sessionStorage.removeItem("gs-alpha-email");
+          sessionStorage.removeItem("gs-alpha-code");
+        }
       }
 
       // If Supabase email confirmation is enabled, data.session is
@@ -141,8 +167,9 @@ export default function Signup() {
               <Input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="bg-[#FFD4C4] border-none h-9 text-gray-800 text-sm"
+                onChange={(e) => !alphaEmail && setEmail(e.target.value)}
+                readOnly={!!alphaEmail}
+                className={`border-none h-9 text-gray-800 text-sm ${alphaEmail ? "bg-gray-200 cursor-not-allowed" : "bg-[#FFD4C4]"}`}
               />
             </div>
 
