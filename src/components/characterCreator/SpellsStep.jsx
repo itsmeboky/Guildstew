@@ -24,6 +24,14 @@ import {
   getMaxSpellLevelForCharacter
 } from "@/components/dnd5e/spellData";
 import { getBreweryClassSpellSlots } from "@/lib/breweryClassApply";
+import {
+  SPELLS_KNOWN_TABLE,
+  spellsKnown,
+  spellsPrepared,
+  cantripsKnown,
+  abilityModifier,
+  SPELLCASTING_ABILITY,
+} from "@/components/dnd5e/dnd5eRules";
 
 export default function SpellsStep({ characterData, updateCharacterData }) {
   const [hoveredEffect, setHoveredEffect] = useState(null);
@@ -228,6 +236,8 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
           </Button>
         </div>
       </div>
+
+      <PerClassSpellsKnownPanel characterData={characterData} />
 
       {pactSlots && (
         <div className="mb-6 bg-[#1E2430] border-2 border-[#5B4B9E] rounded-xl p-4">
@@ -440,6 +450,95 @@ function SpellFullDetail({ name, spell }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Per-class spells-known / spells-prepared reference panel for
+ * multiclass casters. Today's spell picker selects from a unified
+ * pool constrained by total slot count per level — it doesn't
+ * track which class learned which spell, which means a Bard 3 /
+ * Sorcerer 2 has no enforced per-class budget. Per RAW (PHB p.
+ * 165), each class tracks its known/prepared spells separately:
+ *   Bard 3 → 6 spells known
+ *   Sorcerer 2 → 3 spells known + Sorcerer's cantrip count
+ *
+ * This panel surfaces the rules so player + GM can verify the
+ * total count is consistent with each class's individual budget.
+ * Renders nothing for single-class characters (the inline
+ * Spellcasting summary already shows the right number) and for
+ * non-caster classes (no spells to surface). Reads from the
+ * existing SPELLS_KNOWN_TABLE so the rules data stays the single
+ * source of truth.
+ */
+function PerClassSpellsKnownPanel({ characterData }) {
+  const primary = characterData?.class;
+  const multiclasses = Array.isArray(characterData?.multiclasses)
+    ? characterData.multiclasses.filter((mc) => mc?.class && mc?.level)
+    : [];
+  if (multiclasses.length === 0) return null; // single-class — existing summary is sufficient
+
+  const primaryLevel =
+    Math.max(1, Number(characterData?.level) || 1) -
+    multiclasses.reduce((s, mc) => s + (Number(mc.level) || 0), 0);
+
+  const allEntries = [
+    { className: primary, level: Math.max(1, primaryLevel) },
+    ...multiclasses.map((mc) => ({ className: mc.class, level: Number(mc.level) || 0 })),
+  ].filter((e) => e.className && e.level > 0 && SPELLS_KNOWN_TABLE[e.className]);
+
+  if (allEntries.length === 0) return null;
+
+  const attributes = characterData?.attributes || {};
+
+  return (
+    <div className="mb-6 bg-[#1E2430] border-2 border-[#5B4B9E]/40 rounded-xl p-4">
+      <h3 className="text-[#5B4B9E] font-bold mb-1 flex items-center gap-2">
+        Multiclass Spells Reference
+        <InfoTip width="w-80">
+          Each class tracks its own spells known or prepared count.
+          The picker below shows the unified slot pool — these per-class
+          budgets are the RAW limits to keep your selections consistent
+          with.
+        </InfoTip>
+      </h3>
+      <p className="text-xs text-white/60 mb-3">
+        Per PHB p. 165, multiclass casters track spells separately per class.
+      </p>
+      <ul className="text-sm text-white space-y-1.5">
+        {allEntries.map(({ className: cls, level }) => {
+          const data = SPELLS_KNOWN_TABLE[cls];
+          if (!data) return null;
+          const cantrips = cantripsKnown(cls, level);
+          let spellsLine = null;
+          if (data.type === "known") {
+            const known = spellsKnown(cls, level);
+            if (known != null) spellsLine = `${known} spells known`;
+          } else if (data.type === "prepared") {
+            const ability = SPELLCASTING_ABILITY[cls];
+            const score = Number(attributes?.[ability] ?? 10);
+            const mod = abilityModifier(score);
+            const prepared = spellsPrepared(cls, level, mod);
+            if (prepared != null) {
+              spellsLine = `${prepared} prepared (${ability?.toUpperCase()} mod ${mod >= 0 ? "+" : ""}${mod} + level adj.)`;
+            }
+          }
+          return (
+            <li key={cls} className="flex items-center justify-between gap-2 flex-wrap">
+              <span>
+                <span className="font-bold text-white">{cls}</span>{" "}
+                <span className="text-white/60">level {level}</span>
+              </span>
+              <span className="text-[#37F2D1] text-xs font-semibold">
+                {cantrips > 0 && `${cantrips} cantrips`}
+                {cantrips > 0 && spellsLine && " · "}
+                {spellsLine || (cantrips === 0 ? "—" : "")}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
