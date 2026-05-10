@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Map as MapIcon, Swords, Church, ScrollText, Gem, MessageSquare, Castle, Crown, Home } from "lucide-react";
 import { base44 } from "@/api/base44Client";
@@ -13,6 +13,7 @@ import RumorBoardView from "@/components/worldLore/RumorBoardView";
 import LegendTrackerView from "@/components/worldLore/LegendTrackerView";
 import GuildHallPanel from "@/components/worldLore/GuildHallPanel";
 import { stripHtml } from "@/utils/worldLoreVisibility";
+import { ensureCipherMapsForCampaign, hasCompleteCipherMaps } from "@/utils/languageCipherMaps";
 
 // v2 features removed: Cosmology, Flora, Myth, Calendar,
 // Magic/Grimoire, Technology/Recipes, Player Diary. Their sub-
@@ -74,6 +75,7 @@ const EMPTY_COPY = {
 export default function CampaignWorldLore({ embedded = false, campaignId: campaignIdOverride } = {}) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const params = new URLSearchParams(window.location.search);
   const campaignId = campaignIdOverride ?? params.get("id");
   const initialCategory = params.get("category") || null;
@@ -101,6 +103,28 @@ export default function CampaignWorldLore({ embedded = false, campaignId: campai
     || (Array.isArray(campaign.co_dm_ids) && campaign.co_dm_ids.includes(user?.id))
   );
   const isMole = !!campaign && campaign.mole_player_id === user?.id;
+
+  // Lazy-generate cipher maps for campaigns that pre-date the
+  // randomisation feature. Only the GM writes — RLS would reject a
+  // player attempt anyway, and we want to avoid every player on the
+  // campaign racing to generate at the same time.
+  useEffect(() => {
+    if (!campaign || !isGM) return;
+    if (hasCompleteCipherMaps(campaign)) return;
+    let cancelled = false;
+    ensureCipherMapsForCampaign(campaign)
+      .then(() => {
+        if (cancelled) return;
+        queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("Cipher map backfill failed:", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [campaign, isGM, campaignId, queryClient]);
 
   const { data: characters = [] } = useQuery({
     queryKey: ["campaignCharacters", campaignId],
