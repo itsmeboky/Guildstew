@@ -12,6 +12,7 @@ import {
   meetsMulticlassPrereqs,
   multiclassPrereqDescription,
   multiclassProficienciesFor,
+  multiPickCount,
   FEATS,
 } from "@/components/dnd5e/dnd5eRules";
 import {
@@ -335,35 +336,12 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
                       />
                     </div>
                   ) : (
-                    <div className="mt-5 p-5 bg-[#1E2430]/50 rounded-lg border-2 border-[#FF5722]">
-                      <p className="text-[#FF5722] font-semibold mb-4 text-sm">
-                        ⚠️ You must make a choice for this feature:
-                      </p>
-
-                      <Select
-                        value={currentChoice || ""}
-                        onValueChange={(value) => handleFeatureChoice(featureKey, value)}
-                      >
-                        <SelectTrigger className="h-auto min-h-11 w-full">
-                          <SelectValue placeholder="Select option..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {feature.choices.map((choice, cIdx) => {
-                            const choiceName = typeof choice === 'string' ? choice : choice.name;
-                            const choiceDesc = typeof choice === 'object' ? choice.description : null;
-                            return (
-                              <SelectItem
-                                key={cIdx}
-                                value={choiceName}
-                                description={choiceDesc || undefined}
-                              >
-                                {choiceName}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <FeatureChoicePicker
+                      feature={feature}
+                      classLevel={primaryClassLevel}
+                      currentChoice={currentChoice}
+                      onChange={(value) => handleFeatureChoice(featureKey, value)}
+                    />
                   )
                 )}
               </div>
@@ -508,29 +486,12 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
                               />
                             </div>
                           ) : (
-                            <Select
-                              value={currentChoice || ""}
-                              onValueChange={(value) => handleFeatureChoice(featureKey, value)}
-                            >
-                              <SelectTrigger className="h-auto min-h-11 w-full mt-4">
-                                <SelectValue placeholder="Make a choice..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {feature.choices.map((choice, cIdx) => {
-                                  const choiceName = typeof choice === 'string' ? choice : choice.name;
-                                  const choiceDesc = typeof choice === 'object' ? choice.description : null;
-                                  return (
-                                    <SelectItem
-                                      key={cIdx}
-                                      value={choiceName}
-                                      description={choiceDesc || undefined}
-                                    >
-                                      {choiceName}
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
+                            <FeatureChoicePicker
+                              feature={feature}
+                              classLevel={mc.level}
+                              currentChoice={currentChoice}
+                              onChange={(value) => handleFeatureChoice(featureKey, value)}
+                            />
                           )
                         )}
                       </div>
@@ -804,6 +765,151 @@ function AbilitySelect({ label, value, onChange, attributes, bump, excludeAbilit
           })}
         </SelectContent>
       </Select>
+    </div>
+  );
+}
+
+/**
+ * Choice picker for a single class feature with `choiceRequired:
+ * true`. Two render modes driven by multiPickCount(featureName,
+ * classLevel):
+ *
+ *   - count === 1: single dropdown (Fighting Style, Pact Boon,
+ *     Domain at L1, Otherworldly Patron, etc.). Stores the chosen
+ *     option name as a string in feature_choices[key].
+ *
+ *   - count > 1: multi-chip picker (Sorcerer Metamagic at L3 = 2
+ *     picks, L10 = 3, L17 = 4; Warlock Eldritch Invocations
+ *     scaling per PHB table). Stores an array of option names.
+ *
+ * Backward compatibility: existing characters saved with the
+ * legacy single-string shape still load — we coerce string ↔
+ * array on read so the picker doesn't lose the old pick when a
+ * level-up bumps the same feature into multi-pick territory.
+ */
+function FeatureChoicePicker({ feature, classLevel, currentChoice, onChange }) {
+  const pickCount = multiPickCount(feature.name, classLevel);
+
+  // Normalize legacy single-string shape to an array so the rest
+  // of this component is array-only.
+  const selected = Array.isArray(currentChoice)
+    ? currentChoice
+    : currentChoice
+    ? [currentChoice]
+    : [];
+
+  if (pickCount <= 1) {
+    return (
+      <div className="mt-5 p-5 bg-[#1E2430]/50 rounded-lg border-2 border-[#FF5722]">
+        <p className="text-[#FF5722] font-semibold mb-4 text-sm">
+          ⚠️ You must make a choice for this feature:
+        </p>
+        <Select
+          value={selected[0] || ""}
+          onValueChange={(value) => onChange(value)}
+        >
+          <SelectTrigger className="h-auto min-h-11 w-full">
+            <SelectValue placeholder="Select option..." />
+          </SelectTrigger>
+          <SelectContent>
+            {feature.choices.map((choice, cIdx) => {
+              const choiceName = typeof choice === "string" ? choice : choice.name;
+              const choiceDesc = typeof choice === "object" ? choice.description : null;
+              return (
+                <SelectItem
+                  key={cIdx}
+                  value={choiceName}
+                  description={choiceDesc || undefined}
+                >
+                  {choiceName}
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+
+  // Multi-pick: chip toggles. Click to add until pickCount; click
+  // a selected chip to remove. Show running counter so the player
+  // can see how many slots remain at this level.
+  const togglePick = (choiceName) => {
+    const isSelected = selected.includes(choiceName);
+    let next;
+    if (isSelected) {
+      next = selected.filter((s) => s !== choiceName);
+    } else {
+      if (selected.length >= pickCount) return;
+      next = [...selected, choiceName];
+    }
+    // Always write as an array for multi-pick features so the
+    // shape is stable on reload.
+    onChange(next);
+  };
+
+  const complete = selected.length === pickCount;
+
+  return (
+    <div
+      className={`mt-5 p-5 rounded-lg border-2 ${
+        complete
+          ? "bg-emerald-500/10 border-emerald-500/40"
+          : "bg-[#1E2430]/50 border-[#FF5722]"
+      }`}
+    >
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <p className={`font-semibold text-sm ${complete ? "text-emerald-300" : "text-[#FF5722]"}`}>
+          {complete
+            ? `✓ Picked ${pickCount}/${pickCount}`
+            : `⚠️ Pick ${pickCount} option${pickCount > 1 ? "s" : ""} for this feature:`}
+        </p>
+        <span className="text-xs text-white/60">
+          {selected.length}/{pickCount} selected
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {feature.choices.map((choice, cIdx) => {
+          const choiceName = typeof choice === "string" ? choice : choice.name;
+          const choiceDesc = typeof choice === "object" ? choice.description : "";
+          const isSelected = selected.includes(choiceName);
+          const blocked = !isSelected && selected.length >= pickCount;
+          return (
+            <button
+              key={cIdx}
+              type="button"
+              onClick={() => togglePick(choiceName)}
+              disabled={blocked}
+              title={choiceDesc || undefined}
+              className={`text-xs font-bold rounded-full px-3 py-1.5 border transition-colors ${
+                isSelected
+                  ? "bg-amber-500 text-[#1E2430] border-amber-300"
+                  : blocked
+                  ? "bg-[#1E2430] text-white/30 border-[#1E2430] cursor-not-allowed"
+                  : "bg-[#0b1220] text-white border-amber-500/40 hover:border-amber-300 cursor-pointer"
+              }`}
+            >
+              {choiceName}
+            </button>
+          );
+        })}
+      </div>
+      {selected.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {selected.map((choiceName) => {
+            const choice = feature.choices.find(
+              (c) => (typeof c === "string" ? c : c.name) === choiceName,
+            );
+            const desc = choice && typeof choice === "object" ? choice.description : null;
+            if (!desc) return null;
+            return (
+              <li key={choiceName} className="text-[11px] text-white/70 leading-relaxed">
+                <span className="font-bold text-amber-200">{choiceName}:</span> {desc}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
