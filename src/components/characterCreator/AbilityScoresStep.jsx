@@ -2,9 +2,40 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dices, HelpCircle, X, Sparkles } from "lucide-react";
+import { Dices, HelpCircle, X, Sparkles, Calculator, Minus, Plus } from "lucide-react";
 import { getRacialAbilityBonuses } from "@/components/dnd5e/raceData";
 import { abilityModifier } from '@/components/dnd5e/dnd5eRules';
+
+// Point Buy (RAW): scores 8..15, total budget 27. Cost to RAISE
+// from N to N+1 is 1pt for 9..13 and 2pt for 14..15.
+const POINT_BUY_BUDGET = 27;
+const POINT_BUY_MIN = 8;
+const POINT_BUY_MAX = 15;
+
+function pointBuyCostToReach(score) {
+  // Total points spent to bring a base-8 score up to `score`.
+  if (score <= 8) return 0;
+  if (score <= 13) return score - 8;
+  if (score <= 15) return 5 + (score - 13) * 2;
+  return Infinity;
+}
+
+function pointBuyNextStepCost(score) {
+  // Cost to increase by 1 from `score`. Infinity if at max.
+  if (score >= POINT_BUY_MAX) return Infinity;
+  return score >= 13 ? 2 : 1;
+}
+
+function pointBuyTotalSpent(scores) {
+  return Object.values(scores).reduce(
+    (sum, s) => sum + pointBuyCostToReach(s),
+    0,
+  );
+}
+
+const POINT_BUY_DEFAULTS = {
+  str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8,
+};
 import {
   getBreweryRaceBonuses,
   getBreweryAbilityPickerSpec,
@@ -100,13 +131,50 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
     const newValue = Math.max(3, Math.min(18, parseInt(value) || 8));
     const newBaseScores = { ...baseScores, [key]: newValue };
     setBaseScores(newBaseScores);
-    
+
     // Calculate final scores with racial bonuses
     const finalScores = {};
     Object.keys(newBaseScores).forEach(k => {
       finalScores[k] = newBaseScores[k] + (racialBonuses[k] || 0);
     });
-    
+
+    updateCharacterData({ attributes: finalScores });
+  };
+
+  // Point Buy helpers — operate on baseScores so racial bonuses
+  // are applied on top exactly the same way as every other method.
+  const pointBuySpent = pointBuyTotalSpent(baseScores);
+  const pointBuyRemaining = POINT_BUY_BUDGET - pointBuySpent;
+
+  const adjustPointBuy = (key, delta) => {
+    const current = baseScores[key] ?? 8;
+    if (delta > 0) {
+      const cost = pointBuyNextStepCost(current);
+      if (current >= POINT_BUY_MAX) return;
+      if (cost > pointBuyRemaining) return;
+    } else if (delta < 0) {
+      if (current <= POINT_BUY_MIN) return;
+    } else {
+      return;
+    }
+    const next = Math.max(POINT_BUY_MIN, Math.min(POINT_BUY_MAX, current + delta));
+    const newBaseScores = { ...baseScores, [key]: next };
+    setBaseScores(newBaseScores);
+    const finalScores = {};
+    Object.keys(newBaseScores).forEach((k) => {
+      finalScores[k] = newBaseScores[k] + (racialBonuses[k] || 0);
+    });
+    updateCharacterData({ attributes: finalScores });
+  };
+
+  const switchToPointBuy = () => {
+    setMethod("point_buy");
+    setAssignedScores({});
+    setBaseScores(POINT_BUY_DEFAULTS);
+    const finalScores = {};
+    Object.keys(POINT_BUY_DEFAULTS).forEach((k) => {
+      finalScores[k] = POINT_BUY_DEFAULTS[k] + (racialBonuses[k] || 0);
+    });
     updateCharacterData({ attributes: finalScores });
   };
 
@@ -245,6 +313,14 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
           Standard Array
         </Button>
         <Button
+          onClick={switchToPointBuy}
+          variant={method === "point_buy" ? "default" : "outline"}
+          className={method === "point_buy" ? "bg-[#FF5722] hover:bg-[#FF6B3D] text-white" : "bg-[#2A3441] text-white border-[#1E2430] hover:bg-[#1E2430]"}
+        >
+          <Calculator className="w-4 h-4 mr-2" />
+          Point Buy
+        </Button>
+        <Button
           onClick={() => { setMethod("roll"); rollAbilityScores(); }}
           variant={method === "roll" ? "default" : "outline"}
           className={method === "roll" ? "bg-[#FF5722] hover:bg-[#FF6B3D] text-white" : "bg-[#2A3441] text-white border-[#1E2430] hover:bg-[#1E2430]"}
@@ -380,6 +456,27 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
         </div>
       )}
 
+      {/* Point Buy budget banner */}
+      {method === "point_buy" && (
+        <div className="bg-[#2A3441] rounded-xl p-4 mb-6 border-2 border-[#37F2D1]/40 flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h3 className="text-white font-semibold flex items-center gap-2">
+              <Calculator className="w-4 h-4 text-[#37F2D1]" />
+              Point Buy
+            </h3>
+            <p className="text-xs text-white/60">
+              All scores start at 8, max 15. Costs 1 pt to raise to 13, 2 pt to raise to 14 or 15.
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] uppercase tracking-widest text-white/60">Points Remaining</div>
+            <div className={`text-3xl font-black ${pointBuyRemaining === 0 ? "text-[#37F2D1]" : pointBuyRemaining < 0 ? "text-[#FF5722]" : "text-white"}`}>
+              {pointBuyRemaining}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Ability Score Grid */}
       <div className="grid grid-cols-3 gap-6">
         {abilities.map((ability) => {
@@ -409,15 +506,21 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
                 >
                   <option value="">Select</option>
                   {standardArray.map(score => (
-                    <option 
-                      key={score} 
-                      value={score} 
+                    <option
+                      key={score}
+                      value={score}
                       disabled={Object.values(assignedScores).includes(score) && assignedScores[ability.key] !== score}
                     >
                       {score}
                     </option>
                   ))}
                 </select>
+              ) : method === "point_buy" ? (
+                <PointBuyControl
+                  score={baseScore}
+                  remaining={pointBuyRemaining}
+                  onAdjust={(delta) => adjustPointBuy(ability.key, delta)}
+                />
               ) : (
                 <Input
                   type="number"
@@ -442,6 +545,56 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Point Buy +/- control for one ability. Disabled states cover
+ * three constraint cases: (a) at minimum score 8, (b) at maximum
+ * score 15, (c) next increase would exceed the remaining budget.
+ * Cost-to-increase indicator helps the player plan ahead.
+ */
+function PointBuyControl({ score, remaining, onAdjust }) {
+  const nextCost = pointBuyNextStepCost(score);
+  const canDecrease = score > POINT_BUY_MIN;
+  const canIncrease = score < POINT_BUY_MAX && nextCost <= remaining;
+  const decreaseTitle = canDecrease ? "Decrease (refunds points)" : "At minimum (8)";
+  const increaseTitle = score >= POINT_BUY_MAX
+    ? "At maximum (15)"
+    : nextCost > remaining
+      ? `Need ${nextCost} pt — only ${remaining} remaining`
+      : `+1 (costs ${nextCost} pt)`;
+  return (
+    <div>
+      <div className="flex items-center justify-center gap-2">
+        <button
+          type="button"
+          onClick={() => onAdjust(-1)}
+          disabled={!canDecrease}
+          title={decreaseTitle}
+          className="w-9 h-9 rounded bg-[#1E2430] border-2 border-[#1E2430] text-white hover:border-[#FF5722] hover:text-[#FF5722] flex items-center justify-center disabled:opacity-30 disabled:hover:border-[#1E2430] disabled:hover:text-white disabled:cursor-not-allowed"
+        >
+          <Minus className="w-4 h-4" />
+        </button>
+        <div className="bg-[#1E2430] border-2 border-[#1E2430] text-white text-center text-2xl font-bold rounded min-w-[60px] py-1">
+          {score}
+        </div>
+        <button
+          type="button"
+          onClick={() => onAdjust(+1)}
+          disabled={!canIncrease}
+          title={increaseTitle}
+          className="w-9 h-9 rounded bg-[#1E2430] border-2 border-[#1E2430] text-white hover:border-[#37F2D1] hover:text-[#37F2D1] flex items-center justify-center disabled:opacity-30 disabled:hover:border-[#1E2430] disabled:hover:text-white disabled:cursor-not-allowed"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="mt-1 text-center text-[10px] uppercase tracking-widest text-white/50">
+        {score >= POINT_BUY_MAX
+          ? "Max"
+          : `Next +1: ${nextCost} pt`}
       </div>
     </div>
   );
