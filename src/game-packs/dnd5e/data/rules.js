@@ -90,7 +90,6 @@ export const POINT_BUY_COSTS = {
 };
 export const POINT_BUY_TOTAL = 27;
 
-
 // ─────────────────────────────────────────────
 // COMBAT RULES
 // ─────────────────────────────────────────────
@@ -238,7 +237,6 @@ export const SHOVE_RULES = {
   effects: ['Knock prone', 'Push 5 feet away'],
   cost: 'action', // replaces one attack if you have Extra Attack
 };
-
 
 // ─────────────────────────────────────────────
 // CLASS DATA
@@ -570,7 +568,6 @@ export function attacksPerAction(className, level) {
   return 1;
 }
 
-
 // ─────────────────────────────────────────────
 // RACE DATA
 // ─────────────────────────────────────────────
@@ -662,7 +659,6 @@ export const RACES = {
   },
 };
 
-
 // ─────────────────────────────────────────────
 // SPELLCASTING RULES
 // ─────────────────────────────────────────────
@@ -713,7 +709,6 @@ export const SPELL_SCHOOLS = [
   'Abjuration', 'Conjuration', 'Divination', 'Enchantment',
   'Evocation', 'Illusion', 'Necromancy', 'Transmutation',
 ];
-
 
 // ─────────────────────────────────────────────
 // EQUIPMENT RULES
@@ -860,7 +855,6 @@ export const CURRENCY = {
   pp: { name: 'Platinum', gpValue: 10 },
 };
 
-
 // ─────────────────────────────────────────────
 // REST AND RECOVERY
 // ─────────────────────────────────────────────
@@ -891,7 +885,6 @@ export const REST_RULES = {
     restrictions: 'Can only benefit from one long rest per 24 hours. Must have at least 1 HP.',
   },
 };
-
 
 // ─────────────────────────────────────────────
 // DEATH AND DYING
@@ -924,7 +917,6 @@ export const DEATH_RULES = {
     ],
   },
 };
-
 
 // ─────────────────────────────────────────────
 // LEVEL PROGRESSION
@@ -983,7 +975,6 @@ export const ENCOUNTER_MULTIPLIER = {
   '15+': 4,
 };
 
-
 // ─────────────────────────────────────────────
 // MULTICLASSING RULES
 // ─────────────────────────────────────────────
@@ -1003,7 +994,6 @@ export const MULTICLASS_REQUIREMENTS = {
   Warlock:   { cha: 13 },
   Wizard:    { int: 13 },
 };
-
 
 // ─────────────────────────────────────────────
 // MODIFIABLE RULES (Homebrew overrides these)
@@ -1071,7 +1061,6 @@ export const MODIFIABLE_RULES = {
   },
 };
 
-
 // ─────────────────────────────────────────────
 // RULES LOOKUP SYSTEM
 // ─────────────────────────────────────────────
@@ -1137,7 +1126,6 @@ const deepMerge = deepMergeRules;
 // Covers: Feats, Fighting Styles, Exhaustion, Detailed Class Ability Mechanics,
 // Environmental Rules, Vision, Backgrounds, Subclass Features
 // ============================================================================
-
 
 // ─────────────────────────────────────────────
 // FEATS
@@ -1343,9 +1331,9 @@ export const FEATS = {
   'Martial Adept': {
     prerequisite: null,
     effects: [
-      { type: 'special', description: 'Learn 2 Battle Master maneuvers. Gain 1 superiority die (d6).' },
+      { type: 'special', description: 'Martial Archetype subclass feature.' },
     ],
-    description: '2 Battle Master maneuvers. 1 superiority die (d6), recharges on short/long rest.',
+    description: 'Choose a Martial Archetype.',
   },
   'Medium Armor Master': {
     prerequisite: { proficiency: 'medium armor' },
@@ -1491,7 +1479,6 @@ export const FEATS = {
   },
 };
 
-
 // ─────────────────────────────────────────────
 // FIGHTING STYLES
 // ─────────────────────────────────────────────
@@ -1529,7 +1516,6 @@ export const FIGHTING_STYLES = {
   },
 };
 
-
 // ─────────────────────────────────────────────
 // EXHAUSTION
 // ─────────────────────────────────────────────
@@ -1555,7 +1541,6 @@ export const EXHAUSTION_RULES = {
   ],
   stacking: 'Effects are cumulative — level 3 includes level 1 and 2 effects',
 };
-
 
 // ─────────────────────────────────────────────
 // DETAILED CLASS ABILITY MECHANICS
@@ -1892,7 +1877,6 @@ export const CLASS_ABILITY_MECHANICS = {
   },
 };
 
-
 // ─────────────────────────────────────────────
 // ENVIRONMENTAL AND SITUATIONAL RULES
 // ─────────────────────────────────────────────
@@ -2006,7 +1990,6 @@ export const IMPROVISED_WEAPONS = {
   description: 'Bottles, table legs, frying pans, etc. 1d4 damage, no proficiency bonus.',
 };
 
-
 // ─────────────────────────────────────────────
 // INSPIRATION
 // ─────────────────────────────────────────────
@@ -2018,7 +2001,6 @@ export const INSPIRATION = {
   sharing: 'Can give your inspiration to another player character',
   description: 'DM awards it. Spend for advantage on one roll. Can\'t stack. Can give to another player.',
 };
-
 
 // ─────────────────────────────────────────────
 // BACKGROUNDS (Skill/Tool proficiencies)
@@ -2118,7 +2100,6 @@ export const BACKGROUNDS = {
   },
 };
 
-
 // ─────────────────────────────────────────────
 // LANGUAGES
 // ─────────────────────────────────────────────
@@ -2135,7 +2116,6 @@ export const LANGUAGES = {
     Sylvan: 'Elvish', Undercommon: 'Elvish',
   },
 };
-
 
 // ─────────────────────────────────────────────
 // TOOL PROFICIENCIES
@@ -2161,7 +2141,6 @@ export const TOOLS = {
   ],
 };
 
-
 // ─────────────────────────────────────────────
 // LIFESTYLE EXPENSES
 // ─────────────────────────────────────────────
@@ -2176,7 +2155,6 @@ export const LIFESTYLE_EXPENSES = {
   Aristocratic: { costPerDay: 10, description: 'Mansion, feasts, finest clothes, social influence' },
 };
 
-
 // ─────────────────────────────────────────────
 // SUBCLASS FEATURES (Combat-relevant only)
 // ─────────────────────────────────────────────
@@ -2189,23 +2167,6 @@ export const SUBCLASS_COMBAT_FEATURES = {
     10: { name: 'Intimidating Presence', description: 'Action: frighten one creature within 30ft. WIS save vs 8 + prof + CHA.' },
     14: { name: 'Retaliation', description: 'Reaction: melee attack against creature that damages you within 5ft.' },
   },
-  'Path of the Totem Warrior': {
-    3:  { name: 'Totem Spirit', options: {
-      Bear: 'While raging, resistance to all damage except psychic',
-      Eagle: 'While raging, opportunity attacks against you have disadvantage. Dash as bonus action.',
-      Wolf: 'While raging, allies have advantage on melee attacks vs enemies within 5ft of you.',
-    }},
-    6:  { name: 'Aspect of the Beast', options: {
-      Bear: 'Double carrying capacity, advantage on STR checks to push/pull/lift/break',
-      Eagle: 'See 1 mile clearly, no dim light Perception disadvantage',
-      Wolf: 'Track creatures at fast pace, stealth at normal pace',
-    }},
-    14: { name: 'Totemic Attunement', options: {
-      Bear: 'While raging, enemies within 5ft have disadvantage on attacks vs targets other than you',
-      Eagle: 'While raging, gain flying speed equal to walking speed',
-      Wolf: 'While raging, bonus action to knock Large or smaller creature prone on melee hit',
-    }},
-  },
 
   // FIGHTER
   Champion: {
@@ -2215,14 +2176,6 @@ export const SUBCLASS_COMBAT_FEATURES = {
     15: { name: 'Superior Critical', description: 'Critical hit on 18, 19, or 20', critRange: 18 },
     18: { name: 'Survivor', description: 'At start of turn, if below half HP: regain 5 + CON mod HP. Must have at least 1 HP.' },
   },
-  'Battle Master': {
-    3:  { name: 'Combat Superiority', description: '4 superiority dice (d8). Learn 3 maneuvers. Short rest recharge.',
-      superiority: { dice: 4, dieSize: 8, maneuvers: 3 } },
-    7:  { name: 'Know Your Enemy', description: 'Study creature for 1 min: learn if equal/superior/inferior in two characteristics.' },
-    10: { name: 'Improved Combat Superiority', description: 'Superiority dice become d10.', dieSize: 10, maneuvers: 5 },
-    15: { name: 'Relentless', description: 'Regain 1 superiority die on initiative if you have none.', maneuvers: 7 },
-    18: { name: 'Superior Combat Superiority', description: 'Superiority dice become d12.', dieSize: 12 },
-  },
 
   // ROGUE
   Thief: {
@@ -2231,12 +2184,6 @@ export const SUBCLASS_COMBAT_FEATURES = {
     13: { name: 'Use Magic Device', description: 'Ignore class/race/level requirements on magic items.' },
     17: { name: 'Thief\'s Reflexes', description: 'Two turns in first round of combat (first at normal, second at initiative minus 10).' },
   },
-  Assassin: {
-    3:  { name: 'Assassinate', description: 'Advantage on attacks vs creatures that haven\'t acted yet. Hits on surprised creatures are automatic crits.' },
-    9:  { name: 'Infiltration Expertise', description: 'Create false identity over 7 days.' },
-    13: { name: 'Impostor', description: 'Mimic another person\'s speech, writing, and behavior.' },
-    17: { name: 'Death Strike', description: 'On hit against surprised target, DC 8+DEX+prof CON save or double all damage.' },
-  },
 
   // WIZARD
   'School of Evocation': {
@@ -2244,12 +2191,6 @@ export const SUBCLASS_COMBAT_FEATURES = {
     6:  { name: 'Potent Cantrip', description: 'Cantrip save: target takes half damage on success instead of none.' },
     10: { name: 'Empowered Evocation', description: 'Add INT mod to damage of wizard evocation spells.' },
     14: { name: 'Overchannel', description: 'Maximize damage of 5th-level or lower spell. After first use per long rest, 2d12 necrotic per spell level.' },
-  },
-  'School of Abjuration': {
-    2:  { name: 'Arcane Ward', description: 'When casting abjuration spell, create ward with HP = 2 × wizard level + INT mod. Absorbs damage.' },
-    6:  { name: 'Projected Ward', description: 'Reaction: ward absorbs damage for ally within 30ft.' },
-    10: { name: 'Improved Abjuration', description: 'Add proficiency to ability checks for abjuration spells (Counterspell, Dispel Magic).' },
-    14: { name: 'Spell Resistance', description: 'Advantage on saves vs spells. Resistance to spell damage.' },
   },
 
   // CLERIC
@@ -2309,11 +2250,6 @@ export const SUBCLASS_COMBAT_FEATURES = {
   },
 };
 
-
-// ─────────────────────────────────────────────
-// BATTLE MASTER MANEUVERS
-// ─────────────────────────────────────────────
-
 export const BATTLE_MASTER_MANEUVERS = {
   'Commander\'s Strike':     { cost: 'bonus action + 1 die', description: 'Ally uses reaction to attack, adding superiority die to damage.' },
   'Disarming Attack':        { cost: '1 die', description: 'Add die to damage. Target STR save or drops held item.' },
@@ -2340,7 +2276,6 @@ export const BATTLE_MASTER_MANEUVERS = {
 // Legacy, Starting Equipment, remaining subclasses, ASI rules
 // ============================================================================
 
-
 // ─────────────────────────────────────────────
 // WILD SHAPE (Druid)
 // ─────────────────────────────────────────────
@@ -2364,7 +2299,7 @@ export const WILD_SHAPE = {
     8:  { maxCR: 1, limitations: 'None', examples: ['Giant Eagle', 'Giant Spider', 'Dire Wolf', 'Brown Bear'] },
   },
   moonDruid: {
-    description: 'Circle of the Moon druids have enhanced Wild Shape',
+    description: 'Some druid subclasses (PHB-only) extend Wild Shape',
     changes: {
       2:  { maxCR: 1, cost: 'bonus action', special: 'Can use Wild Shape as bonus action' },
       6:  { maxCR: (druidLevel) => Math.floor(druidLevel / 3), special: 'Beast attacks count as magical' },
@@ -2430,7 +2365,6 @@ export const WILD_SHAPE = {
   },
 };
 
-
 // ─────────────────────────────────────────────
 // WARLOCK PACT BOONS
 // ─────────────────────────────────────────────
@@ -2467,7 +2401,6 @@ export const PACT_BOONS = {
     invocations: ['Book of Ancient Secrets (copy ritual spells from any class into your book)'],
   },
 };
-
 
 // ─────────────────────────────────────────────
 // DRAGONBORN ANCESTRY
@@ -2506,7 +2439,6 @@ export const BREATH_WEAPON = {
   description: 'Action: all creatures in area make save. Full damage on fail, half on success. Recharges on short/long rest.',
 };
 
-
 // ─────────────────────────────────────────────
 // TIEFLING INFERNAL LEGACY
 // ─────────────────────────────────────────────
@@ -2517,7 +2449,6 @@ export const TIEFLING_INFERNAL_LEGACY = {
   5:  { spell: 'Darkness', uses: 1, recharge: 'long rest', description: 'Cast Darkness once per long rest' },
   spellcastingAbility: 'cha',
 };
-
 
 // ─────────────────────────────────────────────
 // HALF-ELF VERSATILITY
@@ -2530,7 +2461,6 @@ export const HALF_ELF_RULES = {
   },
   skillVersatility: 2, // proficiency in 2 skills of choice
 };
-
 
 // ─────────────────────────────────────────────
 // STARTING EQUIPMENT BY CLASS
@@ -2646,7 +2576,6 @@ export const STARTING_EQUIPMENT = {
   },
 };
 
-
 // ─────────────────────────────────────────────
 // EQUIPMENT PACKS
 // ─────────────────────────────────────────────
@@ -2682,7 +2611,6 @@ export const EQUIPMENT_PACKS = {
   },
 };
 
-
 // ─────────────────────────────────────────────
 // REMAINING SUBCLASS FEATURES
 // ─────────────────────────────────────────────
@@ -2698,99 +2626,12 @@ export const ADDITIONAL_SUBCLASS_FEATURES = {
     6:  { name: 'Additional Magical Secrets', description: 'Learn 2 spells from any class at level 6 (in addition to level 10 Magical Secrets).' },
     14: { name: 'Peerless Skill', description: 'Spend Bardic Inspiration die on your own ability checks.' },
   },
-  'College of Valor': {
-    3:  { name: 'Bonus Proficiencies', description: 'Medium armor, shields, martial weapons.' },
-    3.1: { name: 'Combat Inspiration', description: 'Bardic Inspiration die can be added to weapon damage or AC (reaction vs one attack).' },
-    6:  { name: 'Extra Attack', description: 'Attack twice when taking the Attack action.' },
-    14: { name: 'Battle Magic', description: 'When you cast a bard spell as an action, bonus action weapon attack.' },
-  },
-
-  // CLERIC — Life Domain already in Part 2
-  'Light Domain': {
-    1:  { name: 'Warding Flare', description: 'Reaction: impose disadvantage on attack roll against you. Uses = WIS mod/long rest.' },
-    2:  { name: 'Radiance of the Dawn', description: 'Channel Divinity: dispel magical darkness within 30ft. Hostiles make CON save: 2d10+cleric level radiant damage (half on save).' },
-    6:  { name: 'Improved Flare', description: 'Warding Flare can protect allies within 30ft, not just you.' },
-    8:  { name: 'Potent Spellcasting', description: 'Add WIS mod to cleric cantrip damage.' },
-    17: { name: 'Corona of Light', description: 'Action: 60ft bright light, 30ft dim. Enemies in bright light have disadvantage on saves vs fire/radiant spells.' },
-  },
-  'Tempest Domain': {
-    1:  { name: 'Wrath of the Storm', description: 'Reaction when hit by creature within 5ft: target makes DEX save, 2d8 lightning or thunder damage (half on save). Uses = WIS mod/long rest.' },
-    2:  { name: 'Destructive Wrath', description: 'Channel Divinity: maximize lightning or thunder damage instead of rolling.' },
-    6:  { name: 'Thunderbolt Strike', description: 'When you deal lightning damage to Large or smaller creature, push it 10ft.' },
-    8:  { name: 'Divine Strike', description: '+1d8 thunder damage once per turn on weapon attacks. +2d8 at 14.' },
-    17: { name: 'Stormborn', description: 'Flying speed equal to walking speed outdoors when not underground.' },
-  },
-
-  // DRUID — Circle of the Moon is embedded in WILD_SHAPE above
   'Circle of the Land': {
     2:  { name: 'Natural Recovery', description: 'During short rest, recover spell slot levels totaling up to half druid level (no 6th+). Like Arcane Recovery.' },
     3:  { name: 'Circle Spells', description: 'Bonus prepared spells based on chosen terrain (Arctic, Coast, Desert, Forest, Grassland, Mountain, Swamp, Underdark).' },
     6:  { name: 'Land\'s Stride', description: 'Moving through nonmagical difficult terrain costs no extra movement. Advantage on saves vs magical plant effects.' },
     10: { name: 'Nature\'s Ward', description: 'Immune to poison, disease. Can\'t be charmed or frightened by elementals or fey.' },
     14: { name: 'Nature\'s Sanctuary', description: 'Beasts and plants must make WIS save to attack you. On fail, must choose new target.' },
-  },
-
-  // FIGHTER — Champion and Battle Master already in Part 2
-  'Eldritch Knight': {
-    3:  { name: 'Spellcasting', description: 'Learn wizard spells. Mostly abjuration and evocation. INT-based. Use Fighter 1/3 caster table for slots.' },
-    3.1: { name: 'Weapon Bond', description: 'Bond with weapon over 1-hour ritual. Can\'t be disarmed. Summon to hand as bonus action.' },
-    7:  { name: 'War Magic', description: 'When you cast a cantrip, bonus action weapon attack.' },
-    10: { name: 'Eldritch Strike', description: 'When you hit with weapon, target has disadvantage on next save vs your spells before end of your next turn.' },
-    15: { name: 'Arcane Charge', description: 'When you Action Surge, teleport up to 30ft to an unoccupied space.' },
-    18: { name: 'Improved War Magic', description: 'When you cast a spell (not just cantrip), bonus action weapon attack.' },
-  },
-
-  // MONK — Way of the Open Hand already in Part 2
-  'Way of Shadow': {
-    3:  { name: 'Shadow Arts', description: 'Spend 2 ki: cast Darkness, Darkvision, Pass without Trace, or Silence without components. Minor Illusion cantrip for free.' },
-    6:  { name: 'Shadow Step', description: 'In dim light or darkness: bonus action teleport 60ft to another dim/dark space. Advantage on first melee attack after.' },
-    11: { name: 'Cloak of Shadows', description: 'In dim light or darkness: action to become invisible until you attack, cast, or enter bright light.' },
-    17: { name: 'Opportunist', description: 'Reaction: melee attack vs creature within 5ft that is hit by another creature\'s attack.' },
-  },
-  'Way of the Four Elements': {
-    3:  { name: 'Disciple of the Elements', description: 'Learn elemental disciplines. Spend ki to cast spells. Learn more at 6, 11, 17.' },
-    disciplines: {
-      'Fangs of the Fire Snake': { ki: 1, description: 'Unarmed reach becomes 10ft this turn. Deal fire damage. Spend 1 ki for +1d10 fire.' },
-      'Fist of Four Thunders': { ki: 2, description: 'Cast Thunderwave.' },
-      'Fist of Unbroken Air': { ki: 2, description: 'Ranged 30ft: 3d10 bludgeoning, STR save or pushed 20ft and knocked prone. +1d10 per extra ki.' },
-      'Rush of the Gale Spirits': { ki: 2, description: 'Cast Gust of Wind.' },
-      'Shape the Flowing River': { ki: 1, description: 'Control water/ice in 30ft cube.' },
-      'Sweeping Cinder Strike': { ki: 2, description: 'Cast Burning Hands.' },
-      'Water Whip': { ki: 2, description: 'Ranged 30ft: 3d10 bludgeoning, STR save or pulled 25ft or knocked prone. +1d10 per extra ki.' },
-    },
-  },
-
-  // PALADIN — Oath of Devotion already in Part 2
-  'Oath of the Ancients': {
-    3:  { name: 'Nature\'s Wrath', description: 'Channel Divinity: restrain creature within 10ft. STR/DEX save each turn to escape.' },
-    3.1: { name: 'Turn the Faithless', description: 'Channel Divinity: turn fey and fiends within 30ft. WIS save or turned for 1 minute.' },
-    7:  { name: 'Aura of Warding', description: 'You and allies within 10ft have resistance to spell damage. 30ft at 18.' },
-    15: { name: 'Undying Sentinel', description: 'Drop to 1 HP instead of 0 once per long rest. No old age drawbacks.' },
-    20: { name: 'Elder Champion', description: '1 min: regain 10 HP/turn start, paladin spells as bonus action, enemies within 10ft have disadvantage on saves vs your spells.' },
-  },
-  'Oath of Vengeance': {
-    3:  { name: 'Abjure Enemy', description: 'Channel Divinity: one creature within 60ft makes WIS save or is frightened and speed = 0. Fiends/undead have disadvantage.' },
-    3.1: { name: 'Vow of Enmity', description: 'Channel Divinity: bonus action, advantage on attacks vs one creature within 10ft for 1 minute.' },
-    7:  { name: 'Relentless Avenger', description: 'When you hit with opportunity attack, move up to half your speed immediately after (no OA provoked).' },
-    15: { name: 'Soul of Vengeance', description: 'When Vow of Enmity target attacks, reaction melee attack against it.' },
-    20: { name: 'Avenging Angel', description: '1 hour: wings (60ft fly), 30ft aura of menace (WIS save or frightened for 1 min).' },
-  },
-
-  // RANGER — Hunter already in Part 2
-  'Beast Master': {
-    3:  { name: 'Ranger\'s Companion', description: 'Gain a beast companion (CR 1/4 or lower, Medium or smaller). HP = max(normal, 4 × ranger level). Add proficiency to AC, attacks, damage, saves, skills. Obeys commands. Takes turn on your initiative.' },
-    7:  { name: 'Exceptional Training', description: 'When companion doesn\'t attack, command it to Dash/Disengage/Dodge/Help as bonus action. Its attacks count as magical.' },
-    11: { name: 'Bestial Fury', description: 'Companion makes two attacks when you command Attack.' },
-    15: { name: 'Share Spells', description: 'When you cast a spell targeting yourself, companion also benefits if within 30ft.' },
-  },
-
-  // ROGUE — Thief and Assassin already in Part 2
-  'Arcane Trickster': {
-    3:  { name: 'Spellcasting', description: 'Learn wizard spells. Mostly enchantment and illusion. INT-based. Use Rogue 1/3 caster table.' },
-    3.1: { name: 'Mage Hand Legerdemain', description: 'Mage Hand is invisible. Can stow/retrieve objects, pick locks, disarm traps at range. Bonus action to control.' },
-    9:  { name: 'Magical Ambush', description: 'If hidden when casting spell, target has disadvantage on save.' },
-    13: { name: 'Versatile Trickster', description: 'Bonus action: Mage Hand gives you advantage on attack against creature within 5ft of the hand.' },
-    17: { name: 'Spell Thief', description: 'Reaction when target casts spell at you: save DC 8+INT+prof. On success, negate the spell and you can cast it once within 8 hours.' },
   },
 
   // SORCERER
@@ -2801,70 +2642,10 @@ export const ADDITIONAL_SUBCLASS_FEATURES = {
     14: { name: 'Dragon Wings', description: 'Bonus action: sprout wings. Fly speed = walking speed. Can\'t use in medium/heavy armor.' },
     18: { name: 'Draconic Presence', description: '5 sorcery points + action: 60ft aura of awe/fear. WIS save or charmed/frightened for 1 min.' },
   },
-  'Wild Magic': {
-    1:  { name: 'Wild Magic Surge', description: 'After casting 1st+ level sorcerer spell, DM can have you roll d20. On 1, roll on Wild Magic Surge table.' },
-    1.1: { name: 'Tides of Chaos', description: 'Advantage on one attack, check, or save. Recharges on long rest OR when DM triggers a Wild Magic Surge.' },
-    6:  { name: 'Bend Luck', description: '2 sorcery points + reaction: add or subtract 1d4 to another creature\'s attack, check, or save.' },
-    14: { name: 'Controlled Chaos', description: 'Roll twice on Wild Magic Surge table, choose either result.' },
-    18: { name: 'Spell Bombardment', description: 'When you roll max on a spell damage die, roll one additional die of that type.' },
-  },
 
-  // WARLOCK — The Fiend already in Part 2
-  'The Great Old One': {
-    1:  { name: 'Awakened Mind', description: 'Telepathy with any creature within 30ft. Don\'t need to share a language.' },
-    6:  { name: 'Entropic Ward', description: 'Reaction: impose disadvantage on attack roll against you. If it misses, advantage on your next attack vs them.' },
-    10: { name: 'Thought Shield', description: 'Resistance to psychic damage. Your thoughts can\'t be read telepathically.' },
-    14: { name: 'Create Thrall', description: 'Touch incapacitated humanoid: charmed indefinitely. Telepathy at any distance on same plane.' },
-  },
-  'The Archfey': {
-    1:  { name: 'Fey Presence', description: 'Action: creatures in 10ft cube make WIS save or charmed/frightened until end of next turn. Short rest recharge.' },
-    6:  { name: 'Misty Escape', description: 'Reaction when taking damage: turn invisible and teleport 60ft. Invisible until start of next turn.' },
-    10: { name: 'Beguiling Defenses', description: 'Immune to being charmed. Reaction: reflect charm back (WIS save or charmed for 1 minute).' },
-    14: { name: 'Dark Delirium', description: 'Action: creature within 60ft makes WIS save or charmed/frightened for 1 minute (sees illusory horror). Short rest recharge.' },
-  },
-
-  // WIZARD — Evocation and Abjuration already in Part 2
-  'School of Divination': {
-    2:  { name: 'Portent', description: 'After long rest, roll 2d20 and record. Replace any attack, save, or check roll with a portent die before rolling.' },
-    6:  { name: 'Expert Divination', description: 'When you cast divination spell of 2nd+, regain a spell slot of lower level (max 5th).' },
-    10: { name: 'The Third Eye', description: 'Action: gain darkvision 60ft, see Ethereal Plane 60ft, read any language, or see invisible within 10ft. Until concentration ends.' },
-    14: { name: 'Greater Portent', description: 'Roll 3d20 for portent instead of 2.' },
-  },
-  'School of Conjuration': {
-    2:  { name: 'Minor Conjuration', description: 'Action: conjure a nonmagical object up to 3ft per side, 10lbs, worth 10gp max. Lasts 1 hour.' },
-    6:  { name: 'Benign Transposition', description: 'Teleport 30ft to unoccupied space, or swap with willing Small/Medium creature. Recharges on long rest or conjuration spell cast.' },
-    10: { name: 'Focused Conjuration', description: 'Concentration on conjuration spells can\'t be broken by taking damage.' },
-    14: { name: 'Durable Summons', description: 'Creatures you conjure have 30 temporary HP.' },
-  },
-  'School of Enchantment': {
-    2:  { name: 'Hypnotic Gaze', description: 'Action: charm creature within 5ft (WIS save). Incapacitated and speed 0 while you maintain (action each turn, within 5ft).' },
-    6:  { name: 'Instinctive Charm', description: 'Reaction when attacked by creature within 30ft: WIS save or it targets nearest creature instead. Once per long rest.' },
-    10: { name: 'Split Enchantment', description: 'Single-target enchantment spells can target two creatures.' },
-    14: { name: 'Alter Memories', description: 'When you charm a creature, erase its memory of being charmed. CHA check vs INT: erase up to 1 + CHA mod hours of memory.' },
-  },
-  'School of Illusion': {
-    2:  { name: 'Improved Minor Illusion', description: 'Minor Illusion can create both sound AND image simultaneously.' },
-    6:  { name: 'Malleable Illusions', description: 'Action: change the nature of an ongoing illusion spell.' },
-    10: { name: 'Illusory Self', description: 'Reaction: create duplicate when attacked. Attack auto-misses. Short rest recharge.' },
-    14: { name: 'Illusory Reality', description: 'Bonus action: make one nonliving, nonmagical object in an illusion spell REAL for 1 minute.' },
-  },
-  'School of Necromancy': {
-    2:  { name: 'Grim Harvest', description: 'When you kill with a spell (1st+), regain HP = 2 × spell level (3 × for necromancy). Not on constructs/undead.' },
-    6:  { name: 'Undead Thralls', description: 'Animate Dead: create one extra undead. Your undead get +wizard level HP and add proficiency to damage.' },
-    10: { name: 'Inured to Undeath', description: 'Resistance to necrotic damage. HP max can\'t be reduced.' },
-    14: { name: 'Command Undead', description: 'Action: one undead makes CHA save or is permanently controlled by you. Intelligent undead (INT 8+) save with advantage and can repeat.' },
-  },
-  'School of Transmutation': {
-    2:  { name: 'Minor Alchemy', description: '10 minutes: transform up to 1 cubic foot of wood/stone/iron/copper/silver to another of those materials. Lasts 1 hour.' },
-    6:  { name: 'Transmuter\'s Stone', description: 'Over 8 hours, create stone with one benefit: darkvision 60ft, +10 speed, CON save proficiency, or resistance to one elemental type.' },
-    10: { name: 'Shapechanger', description: 'Add Polymorph to spellbook. Can cast on self without spell slot to become a beast (CR = level or lower).' },
-    14: { name: 'Master Transmuter', description: 'Destroy transmuter\'s stone for one: transmute nonmagical object (up to 5ft cube), remove all curses/diseases/poisons, cast Raise Dead (no component), or reduce apparent age by 3d10 years.' },
-  },
 };
 
-
 // ─────────────────────────────────────────────
-// THIRD-CASTER SPELL SLOTS (Eldritch Knight / Arcane Trickster)
 // ─────────────────────────────────────────────
 
 export const THIRD_CASTER_SLOTS = {
@@ -2888,7 +2669,6 @@ export function thirdCasterSlots(classLevel) {
   return THIRD_CASTER_SLOTS[bestKey] || [];
 }
 
-
 // ─────────────────────────────────────────────
 // MULTICLASS SPELL SLOT TABLE
 // ─────────────────────────────────────────────
@@ -2901,7 +2681,6 @@ export function multiclassSpellSlots(totalCasterLevel) {
 }
 
 export function calculateMulticlassCasterLevel(classes) {
-  // classes = [{ name: 'Wizard', level: 5 }, { name: 'Fighter', level: 3, subclass: 'Eldritch Knight' }]
   let total = 0;
   for (const cls of classes) {
     const type = CASTER_TYPE[cls.name];
@@ -2909,7 +2688,11 @@ export function calculateMulticlassCasterLevel(classes) {
     else if (type === 'half') total += Math.floor(cls.level / 2);
     else if (type === 'none') {
       // Check for third-caster subclasses
-      if (cls.subclass === 'Eldritch Knight' || cls.subclass === 'Arcane Trickster') {
+      // Third-caster archetypes are a PHB feature category that's not in 2014 SRD;
+// the set is intentionally empty until a homebrew / SRD source provides them.
+const THIRD_CASTER_ARCHETYPES = new Set([]);
+
+if (cls.subclass && THIRD_CASTER_ARCHETYPES.has(cls.subclass)) {
         total += Math.floor(cls.level / 3);
       }
     }
@@ -2917,7 +2700,6 @@ export function calculateMulticlassCasterLevel(classes) {
   }
   return total;
 }
-
 
 // ─────────────────────────────────────────────
 // ASI RULES
@@ -2929,7 +2711,6 @@ export const ASI_RULES = {
   levels: 'See ABILITY_SCORE_IMPROVEMENT_LEVELS per class',
   description: 'At ASI levels, choose: +2 to one score (max 20), +1 to two scores (max 20 each), or gain a feat.',
 };
-
 
 // ─────────────────────────────────────────────
 // ADVENTURING GEAR (common items with mechanical effects)
@@ -2967,7 +2748,6 @@ export const HEALING_POTIONS = {
   'Potion of Supreme Healing':  { rarity: 'Very Rare', healing: '10d4+20', cost: 5000 },
 };
 
-
 // ─────────────────────────────────────────────
 // MAGIC ITEM RARITY
 // ─────────────────────────────────────────────
@@ -2979,7 +2759,6 @@ export const MAGIC_ITEM_RARITY = {
   'Very Rare': { characterLevel: '11+', gpRange: '5001-50000', description: '+3 weapons/armor, powerful items' },
   Legendary:   { characterLevel: '17+', gpRange: '50001+',    description: 'Artifacts, world-shaping items' },
 };
-
 
 // ─────────────────────────────────────────────
 // TRAVEL RULES
@@ -2998,7 +2777,6 @@ export const FORCED_MARCH = {
   failure: '1 level of exhaustion',
   description: 'After 8+ hours of travel, CON save each additional hour or gain 1 exhaustion.',
 };
-
 
 // ─────────────────────────────────────────────
 // FOOD AND WATER REQUIREMENTS
@@ -3022,7 +2800,6 @@ export const FOOD_AND_WATER = {
   },
 };
 
-
 // ─────────────────────────────────────────────
 // TRAPS
 // ─────────────────────────────────────────────
@@ -3038,7 +2815,6 @@ export const TRAP_SEVERITY = {
 // Append this to dnd5eRules.js after Part 3.
 // Covers all 18 remaining SRD gaps.
 // ============================================================================
-
 
 // ─────────────────────────────────────────────
 // GAP 1: RACIAL FEATURE MECHANICS
@@ -3274,7 +3050,6 @@ export const RACIAL_FEATURE_MECHANICS = {
   },
 };
 
-
 // ─────────────────────────────────────────────
 // GAP 2: SPELLS KNOWN / PREPARED FORMULAS
 // ─────────────────────────────────────────────
@@ -3366,31 +3141,6 @@ export const SPELLS_KNOWN_TABLE = {
     changeDaily: true,
     description: 'Spellbook starts with 6 spells. +2 per level. Prepare INT mod + wizard level after long rest. Can copy found spells.',
   },
-  // Eldritch Knight (Fighter subclass): knows fixed number, mostly abjuration/evocation
-  'Eldritch Knight': {
-    type: 'known',
-    cantrips: { 3: 2, 10: 3 },
-    spellsKnown: {
-      3: 3, 4: 4, 7: 5, 8: 6, 10: 7, 11: 8, 13: 9, 14: 10, 16: 11, 19: 12, 20: 13,
-    },
-    restriction: 'Spells must be abjuration or evocation (except at levels 3, 8, 14, 20 — any wizard school)',
-    swapOnLevelUp: 1,
-    spellcastingAbility: 'int',
-    description: 'Wizard spells, mostly abjuration/evocation. INT-based.',
-  },
-  // Arcane Trickster (Rogue subclass): knows fixed number, mostly enchantment/illusion
-  'Arcane Trickster': {
-    type: 'known',
-    cantrips: { 3: 3, 10: 4 }, // includes Mage Hand which is mandatory
-    spellsKnown: {
-      3: 3, 4: 4, 7: 5, 8: 6, 10: 7, 11: 8, 13: 9, 14: 10, 16: 11, 19: 12, 20: 13,
-    },
-    restriction: 'Spells must be enchantment or illusion (except at levels 3, 8, 14, 20 — any wizard school)',
-    mandatoryCantrip: 'Mage Hand',
-    swapOnLevelUp: 1,
-    spellcastingAbility: 'int',
-    description: 'Wizard spells, mostly enchantment/illusion. INT-based. Must know Mage Hand.',
-  },
 };
 
 /** Helper to get number of cantrips known for any class at any level */
@@ -3418,7 +3168,6 @@ export function spellsPrepared(className, level, abilityMod) {
   if (classData.startLevel && level < classData.startLevel) return 0;
   return classData.preparedFormula(abilityMod, level);
 }
-
 
 // ─────────────────────────────────────────────
 // GAP 3: CLASS TOOL PROFICIENCIES
@@ -3454,7 +3203,6 @@ export const CLASS_SKILL_CHOICES = {
   Wizard:    { count: 2, from: ['Arcana', 'History', 'Insight', 'Investigation', 'Medicine', 'Religion'] },
 };
 
-
 // ─────────────────────────────────────────────
 // GAP 4: BONUS ACTION SPELL RESTRICTION
 // ─────────────────────────────────────────────
@@ -3469,7 +3217,6 @@ export const BONUS_ACTION_SPELL_RULE = {
   ],
   implementation: 'When a bonus action spell is cast, flag the turn. Block casting leveled spells as an action. Only allow cantrips.',
 };
-
 
 // ─────────────────────────────────────────────
 // GAP 5: SPELL AREAS OF EFFECT
@@ -3508,7 +3255,6 @@ export const SPELL_AREAS_OF_EFFECT = {
   },
 };
 
-
 // ─────────────────────────────────────────────
 // GAP 6: SAVING THROW NAT 20/1 CLARIFICATION
 // ─────────────────────────────────────────────
@@ -3537,7 +3283,6 @@ export const SAVING_THROW_RULES = {
   implementation: 'The combat system should NOT auto-succeed/fail saves on nat 20/1 unless homebrew rules enable it.',
 };
 
-
 // ─────────────────────────────────────────────
 // GAP 7: COMBINING MAGICAL EFFECTS
 // ─────────────────────────────────────────────
@@ -3549,7 +3294,6 @@ export const COMBINING_MAGICAL_EFFECTS = {
   magicItemBonuses: 'Bonuses from multiple magic items generally stack unless they provide the same named effect (e.g., two Rings of Protection — only one +1 AC applies).',
   implementation: 'When applying spell effects, check if the same spell is already active on the target. If so, use the stronger instance. Different spells always stack.',
 };
-
 
 // ─────────────────────────────────────────────
 // GAP 8: READY ACTION DETAILS
@@ -3569,7 +3313,6 @@ export const READY_ACTION = {
   movementReady: 'You can also ready a movement. Use your reaction to move up to your speed in response to a trigger.',
   implementation: 'When Ready is used: consume the Action, store the trigger and the prepared action/spell. On trigger: consume the Reaction to execute. If spell: begin concentration immediately and consume slot.',
 };
-
 
 // ─────────────────────────────────────────────
 // GAP 9: UNSEEN ATTACKERS AND TARGETS
@@ -3598,7 +3341,6 @@ export const UNSEEN_ATTACKERS_AND_TARGETS = {
   },
 };
 
-
 // ─────────────────────────────────────────────
 // GAP 10: OPPORTUNITY ATTACK CLARIFICATION
 // ─────────────────────────────────────────────
@@ -3619,7 +3361,6 @@ export const OPPORTUNITY_ATTACK_RULES = {
   description: 'Reaction: ONE melee weapon attack when an enemy you can see leaves your reach. Extra Attack doesn\'t apply.',
 };
 
-
 // ─────────────────────────────────────────────
 // GAP 11: CONTESTS (OPPOSED CHECKS)
 // ─────────────────────────────────────────────
@@ -3636,7 +3377,6 @@ export const CONTEST_RULES = {
   description: 'Both roll. Higher wins. Ties go to the status quo (the one trying to change things fails).',
 };
 
-
 // ─────────────────────────────────────────────
 // GAP 12: TEMPORARY HP RULES
 // ─────────────────────────────────────────────
@@ -3650,7 +3390,6 @@ export const TEMPORARY_HP_RULES = {
   cantExceedMax: false, // Temp HP doesn\'t have to stay under your max HP — it stacks on top.
   description: 'Don\'t stack (pick higher). Not healing. Absorb damage before real HP. Drop on long rest.',
 };
-
 
 // ─────────────────────────────────────────────
 // GAP 13: ADVANTAGE/DISADVANTAGE GENERAL RULES
@@ -3667,7 +3406,6 @@ export const ADVANTAGE_DISADVANTAGE_RULES = {
   statisticalImpact: 'Advantage is roughly equivalent to +5. Disadvantage is roughly -5.',
   description: 'Any advantage + any disadvantage = cancel, roll normally. Never more than 2d20. No stacking.',
 };
-
 
 // ─────────────────────────────────────────────
 // GAP 14: DIFFICULTY CLASS TABLE
@@ -3691,7 +3429,6 @@ export function getDifficultyLabel(dc) {
   return 'Nearly Impossible';
 }
 
-
 // ─────────────────────────────────────────────
 // GAP 15: ATTUNEMENT
 // ─────────────────────────────────────────────
@@ -3710,7 +3447,6 @@ export const ATTUNEMENT_RULES = {
   sameItem: 'Only one creature can be attuned to a given item at a time',
   description: 'Max 3 attuned items. Short rest to attune. Ends if you die, someone else attunes, or 100+ ft away for 24+ hours.',
 };
-
 
 // ─────────────────────────────────────────────
 // GAP 16: COMPLETE ELDRITCH INVOCATIONS
@@ -3874,7 +3610,6 @@ export const ELDRITCH_INVOCATIONS = {
   },
 };
 
-
 // ─────────────────────────────────────────────
 // GAP 17: CIRCLE OF THE LAND TERRAIN SPELLS
 // ─────────────────────────────────────────────
@@ -3929,7 +3664,6 @@ export const CIRCLE_OF_THE_LAND_SPELLS = {
     9: ['Cloudkill', 'Insect Plague'],
   },
 };
-
 
 // ─────────────────────────────────────────────
 // GAP 18: SPELL SCROLL RULES
