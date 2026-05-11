@@ -248,11 +248,53 @@ export const CLASS_HIT_DICE = {
   Sorcerer: 6, Wizard: 6,
 };
 
+// CLASS_PRIMARY_ABILITY: per-class primary ability spec.
+//
+// Shape: { abilities: [<ability>...], mode: 'single' | 'or' | 'and' }
+//
+//   - mode='single': one primary ability (most classes).
+//   - mode='or':     player picks one (PHB Fighter: STR OR DEX). Multiclass
+//                    prereq is satisfied by 13 in EITHER ability.
+//   - mode='and':    both abilities are primary (Monk, Paladin, Ranger).
+//                    Multiclass prereq requires 13 in BOTH abilities.
+//
+// `mode: 'single'` exists as a sentinel even for single-ability classes so
+// consumers can branch on `mode` without inspecting `abilities.length`. The
+// discriminator MUST survive any future refactor — flattening to a bare
+// array would lose the AND-vs-OR distinction that multiclass-prereq
+// validation depends on.
+//
+// MIRROR-OF: src/components/dnd5e/dnd5eRules.js. The two registries stay
+// in lockstep; any change here must land in that file in the same commit.
 export const CLASS_PRIMARY_ABILITY = {
-  Barbarian: 'str', Bard: 'cha', Cleric: 'wis', Druid: 'wis',
-  Fighter: 'str', Monk: 'dex', Paladin: 'str', Ranger: 'dex',
-  Rogue: 'dex', Sorcerer: 'cha', Warlock: 'cha', Wizard: 'int',
+  Barbarian: { abilities: ['str'],        mode: 'single' },
+  Bard:      { abilities: ['cha'],        mode: 'single' },
+  Cleric:    { abilities: ['wis'],        mode: 'single' },
+  Druid:     { abilities: ['wis'],        mode: 'single' },
+  Fighter:   { abilities: ['str', 'dex'], mode: 'or'     }, // PHB pg. 70: STR or DEX
+  Monk:      { abilities: ['dex', 'wis'], mode: 'and'    }, // PHB pg. 76: DEX & WIS
+  Paladin:   { abilities: ['str', 'cha'], mode: 'and'    }, // PHB pg. 82: STR & CHA
+  Ranger:    { abilities: ['dex', 'wis'], mode: 'and'    }, // PHB pg. 89: DEX & WIS
+  Rogue:     { abilities: ['dex'],        mode: 'single' },
+  Sorcerer:  { abilities: ['cha'],        mode: 'single' },
+  Warlock:   { abilities: ['cha'],        mode: 'single' },
+  Wizard:    { abilities: ['int'],        mode: 'single' },
 };
+
+/**
+ * Display string for a class's primary ability, respecting AND/OR
+ * semantics. Mirror-of the helper in dnd5eRules.js.
+ */
+export function primaryAbilityDisplay(className) {
+  const entry = CLASS_PRIMARY_ABILITY[className];
+  if (!entry || !Array.isArray(entry.abilities) || entry.abilities.length === 0) {
+    return '';
+  }
+  const names = entry.abilities.map((a) => ABILITY_NAMES[a] || a);
+  if (entry.mode === 'or') return names.join(' or ');
+  if (entry.mode === 'and') return names.join(' & ');
+  return names[0];
+}
 
 export const CLASS_SAVING_THROWS = {
   Barbarian: ['str', 'con'], Bard: ['dex', 'cha'], Cleric: ['wis', 'cha'],

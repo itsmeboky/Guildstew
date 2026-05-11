@@ -125,7 +125,7 @@ OGL pass — that is the desired state, not a regression.
 | Field | Spec value | Code value | Match | Source |
 |---|---|---|---|---|
 | Hit die | d10 | 10 | ✅ | `dnd5eRules.js:246` |
-| Primary ability | Strength or Dexterity | `'str'` (single value; spec says either) | ❌ | `dnd5eRules.js:253` |
+| Primary ability | Strength or Dexterity | `{ abilities: ['str', 'dex'], mode: 'or' }` → "Strength or Dexterity" via `primaryAbilityDisplay()` | ✅ | `dnd5eRules.js:266` |
 | Saving throws | Strength, Constitution | `['str', 'con']` | ✅ | `dnd5eRules.js:260` |
 | Armor proficiencies | All armor, Shields | `['light', 'medium', 'heavy', 'shields']` | ✅ | `dnd5eRules.js:269` |
 | Weapon proficiencies | Simple, Martial | `['simple', 'martial']` | ✅ | `dnd5eRules.js:284` |
@@ -138,12 +138,10 @@ OGL pass — that is the desired state, not a regression.
 | Caster type | none (Eldritch Knight excepted, but EK is PHB-only) | `'none'` | ✅ | `dnd5eRules.js:302` |
 | Multiclass prereq | STR 13 OR DEX 13 | `[{ str: 13 }, { dex: 13 }]` | ✅ | `dnd5eRules.js:1000` |
 
-❌ **Fighter primary ability**: spec says "Strength **or** Dexterity"; code stores
-only `'str'`. The data model treats `CLASS_PRIMARY_ABILITY` as a single
-ability per class, but Fighter / Paladin / Ranger / Monk all have dual
-primary abilities per the PHB. Implications: any UI that renders "Primary
-Ability: STR" for Fighter is misleading the player. Fix needs the field to
-accept an array.
+✅ **Fighter primary ability**: was a `❌` in the initial audit; resolved in
+Commit 2 (`<this commit>`) by widening `CLASS_PRIMARY_ABILITY` to the
+discriminated shape `{ abilities, mode }` so OR-mode renders as
+"Strength or Dexterity" instead of clobbering to "Strength".
 
 ---
 
@@ -152,7 +150,7 @@ accept an array.
 | Field | Spec value | Code value | Match | Source |
 |---|---|---|---|---|
 | Hit die | d8 | 8 | ✅ | `dnd5eRules.js:247` |
-| Primary ability | Dexterity & Wisdom | `'dex'` (single value) | ❌ | `dnd5eRules.js:252` |
+| Primary ability | Dexterity & Wisdom | `{ abilities: ['dex', 'wis'], mode: 'and' }` → "Dexterity & Wisdom" via `primaryAbilityDisplay()` | ✅ | `dnd5eRules.js:266` |
 | Saving throws | Strength, Dexterity | `['str', 'dex']` | ✅ | `dnd5eRules.js:260` |
 | Armor proficiencies | None | `[]` | ✅ | `dnd5eRules.js:270` |
 | Weapon proficiencies | Simple, shortswords | `['simple', 'shortsword']` | ✅ | `dnd5eRules.js:285` |
@@ -165,8 +163,7 @@ accept an array.
 | Caster type | none | `'none'` | ✅ | `dnd5eRules.js:302` |
 | Multiclass prereq | DEX 13 AND WIS 13 | `[{ dex: 13, wis: 13 }]` (both required) | ✅ | `dnd5eRules.js:1001` |
 
-❌ **Monk primary ability**: spec says "Dexterity & Wisdom"; code stores only
-`'dex'`. Same shape gap as Fighter.
+✅ **Monk primary ability**: resolved in Commit 2.
 
 ---
 
@@ -175,7 +172,7 @@ accept an array.
 | Field | Spec value | Code value | Match | Source |
 |---|---|---|---|---|
 | Hit die | d10 | 10 | ✅ | `dnd5eRules.js:246` |
-| Primary ability | Strength & Charisma | `'str'` (single value) | ❌ | `dnd5eRules.js:252` |
+| Primary ability | Strength & Charisma | `{ abilities: ['str', 'cha'], mode: 'and' }` → "Strength & Charisma" via `primaryAbilityDisplay()` | ✅ | `dnd5eRules.js:266` |
 | Saving throws | Wisdom, Charisma | `['wis', 'cha']` | ✅ | `dnd5eRules.js:260` |
 | Armor proficiencies | All armor, Shields | `['light', 'medium', 'heavy', 'shields']` | ✅ | `dnd5eRules.js:271` |
 | Weapon proficiencies | Simple, Martial | `['simple', 'martial']` | ✅ | `dnd5eRules.js:286` |
@@ -190,8 +187,7 @@ accept an array.
 | Spellcasting ability | CHA | `'cha'` | ✅ | `dnd5eRules.js:296` |
 | Multiclass prereq | STR 13 AND CHA 13 | `[{ str: 13, cha: 13 }]` | ✅ | `dnd5eRules.js:1002` |
 
-❌ **Paladin primary ability**: spec says "Strength & Charisma"; code stores
-only `'str'`. Same shape gap.
+✅ **Paladin primary ability**: resolved in Commit 2.
 
 ---
 
@@ -200,7 +196,7 @@ only `'str'`. Same shape gap.
 | Field | Spec value | Code value | Match | Source |
 |---|---|---|---|---|
 | Hit die | d10 | 10 | ✅ | `dnd5eRules.js:246` |
-| Primary ability | Dexterity & Wisdom | `'dex'` (single value) | ❌ | `dnd5eRules.js:252` |
+| Primary ability | Dexterity & Wisdom | `{ abilities: ['dex', 'wis'], mode: 'and' }` → "Dexterity & Wisdom" via `primaryAbilityDisplay()` | ✅ | `dnd5eRules.js:266` |
 | Saving throws | Strength, Dexterity | `['str', 'dex']` | ✅ | `dnd5eRules.js:260` |
 | Armor proficiencies | Light, Medium, Shields | `['light', 'medium', 'shields']` | ✅ | `dnd5eRules.js:272` |
 | Weapon proficiencies | Simple, Martial | `['simple', 'martial']` | ✅ | `dnd5eRules.js:287` |
@@ -217,8 +213,7 @@ only `'str'`. Same shape gap.
 | Swap on level up | 1 | `swapOnLevelUp: 1` | ✅ | `dnd5eRules.js:3256` |
 | Multiclass prereq | DEX 13 AND WIS 13 | `[{ dex: 13, wis: 13 }]` | ✅ | `dnd5eRules.js:1003` |
 
-❌ **Ranger primary ability**: spec says "Dexterity & Wisdom"; code stores
-only `'dex'`. Same shape gap.
+✅ **Ranger primary ability**: resolved in Commit 2.
 
 ---
 
@@ -318,23 +313,18 @@ only `'dex'`. Same shape gap.
 
 ## Cross-cutting findings
 
-### ❌ Single-string `CLASS_PRIMARY_ABILITY` doesn't model dual-stat classes
+### ✅ Single-string `CLASS_PRIMARY_ABILITY` resolved in Commit 2
 
-The data shape `CLASS_PRIMARY_ABILITY` stores one string per class:
-
-```js
-Fighter: 'str',  // spec: Strength OR Dexterity
-Monk: 'dex',     // spec: Dexterity & Wisdom
-Paladin: 'str',  // spec: Strength & Charisma
-Ranger: 'dex',   // spec: Dexterity & Wisdom
-```
-
-Four classes (Fighter, Monk, Paladin, Ranger) lose information. The fix is
-to widen the field to either an array of strings or to keep the existing
-field as the canonical "lead" stat plus add a `CLASS_SECONDARY_ABILITY` map.
-Multiclass-prereqs already model this correctly via the
-`MULTICLASS_REQUIREMENTS` shape (single object = AND, array of objects = OR),
-so the precedent for richer per-class shape exists.
+The data shape now uses a discriminated form `{ abilities, mode }` with
+`mode: 'single' | 'or' | 'and'`. Fighter is OR-mode (player picks one);
+Monk / Paladin / Ranger are AND-mode (both abilities are primary). The
+discriminator preserves the AND-vs-OR distinction that multiclass-prereq
+validation will depend on downstream — flattening to a bare array would
+have lost that. A new `primaryAbilityDisplay(className)` helper centralises
+the join logic so call sites render "Strength or Dexterity" / "Dexterity &
+Wisdom" without re-implementing the formatting. Tests at
+`src/components/dnd5e/__tests__/classPrimaryAbility.test.js` lock the
+semantics and verify both parallel registries stay in lockstep.
 
 ### ⚪ Subclass-content gap (intentional, not mismatch)
 
@@ -380,16 +370,13 @@ backlog.
 | Bard | 13 / 13 ✅ | |
 | Cleric | 14 / 14 ✅ | |
 | Druid | 13 / 13 ✅ | |
-| Fighter | 12 / 13 ❌ | Primary ability single-string (STR or DEX) |
-| Monk | 12 / 13 ❌ | Primary ability single-string (DEX & WIS) |
-| Paladin | 12 / 13 ❌ | Primary ability single-string (STR & CHA) |
-| Ranger | 14 / 15 ❌ | Primary ability single-string (DEX & WIS) |
+| Fighter | 13 / 13 ✅ | Primary ability OR-mode resolved in Commit 2 |
+| Monk | 13 / 13 ✅ | Primary ability AND-mode resolved in Commit 2 |
+| Paladin | 13 / 13 ✅ | Primary ability AND-mode resolved in Commit 2 |
+| Ranger | 15 / 15 ✅ | Primary ability AND-mode resolved in Commit 2 |
 | Rogue | 12 / 12 ✅ | |
 | Sorcerer | 13 / 13 ✅ | |
 | Warlock | 15 / 15 ✅ | |
 | Wizard | 16 / 16 ✅ | |
 
-**Total mismatches: 4** — all of them the same shape gap
-(`CLASS_PRIMARY_ABILITY` only stores a single ability per class, doesn't
-model dual-primary or "either/or" cases). Single fix in Commit 2 closes all
-four rows.
+**Total mismatches after Commit 2: 0.**
