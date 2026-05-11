@@ -376,9 +376,19 @@ export const FULL_CASTER_SLOTS = {
   20: [4, 3, 3, 3, 3, 2, 2, 1, 1],
 };
 
-/** Half caster slots — use character level / 2 rounded up in the full caster table */
+/**
+ * 2014 half-caster slots (Paladin / Ranger). PHB pg. 84 / 91:
+ * Half-casters do NOT get spellcasting at level 1 — they get their
+ * Spellcasting feature at level 2. So a level-1 half-caster has zero
+ * spell slots. From level 2 onward, look up the slots at
+ * `ceil(characterLevel / 2)` in the full caster table.
+ *
+ * (2024 inverts this — half-casters cast from level 1. The 2024 game
+ * pack will ship its own half-caster helper; this one stays 2014-RAW.)
+ */
 export function halfCasterSlots(characterLevel) {
-  const effectiveLevel = Math.max(1, Math.ceil(characterLevel / 2));
+  if (characterLevel < 2) return [];
+  const effectiveLevel = Math.ceil(characterLevel / 2);
   return FULL_CASTER_SLOTS[effectiveLevel] || [];
 }
 
