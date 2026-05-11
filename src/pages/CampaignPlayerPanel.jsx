@@ -676,12 +676,14 @@ function CampaignPlayerPanelContent() {
     }
   }, [combatState.isOpen, combatState.target, myCharacter]);
 
-  // Redirect if session ends
+  // Redirect if session ends. `session_active` is the canonical
+  // column; `is_session_active` was dropped in
+  // 20261128_character_ownership_model_foundation.sql.
   useEffect(() => {
-    if (campaign && !campaign.is_session_active) {
+    if (campaign && !campaign.session_active) {
       navigate(createPageUrl("CampaignPanel") + `?id=${campaignId}`);
     }
-  }, [campaign, campaignId, navigate]);
+  }, [campaign?.session_active, campaignId, navigate]);
 
   const players = React.useMemo(() => {
     if (!campaign?.player_ids) return [];
