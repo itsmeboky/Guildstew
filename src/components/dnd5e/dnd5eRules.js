@@ -248,11 +248,58 @@ export const CLASS_HIT_DICE = {
   Sorcerer: 6, Wizard: 6,
 };
 
+// CLASS_PRIMARY_ABILITY: per-class primary ability spec.
+//
+// Shape: { abilities: [<ability>...], mode: 'single' | 'or' | 'and' }
+//
+//   - mode='single': one primary ability (most classes).
+//   - mode='or':     player picks one (PHB Fighter: STR OR DEX). Multiclass
+//                    prereq is satisfied by 13 in EITHER ability.
+//   - mode='and':    both abilities are primary (Monk, Paladin, Ranger).
+//                    Multiclass prereq requires 13 in BOTH abilities.
+//
+// `mode: 'single'` exists as a sentinel even for single-ability classes so
+// consumers can branch on `mode` without inspecting `abilities.length`. The
+// discriminator MUST survive any future refactor — flattening to a bare
+// array would lose the AND-vs-OR distinction that multiclass-prereq
+// validation depends on.
 export const CLASS_PRIMARY_ABILITY = {
-  Barbarian: 'str', Bard: 'cha', Cleric: 'wis', Druid: 'wis',
-  Fighter: 'str', Monk: 'dex', Paladin: 'str', Ranger: 'dex',
-  Rogue: 'dex', Sorcerer: 'cha', Warlock: 'cha', Wizard: 'int',
+  Barbarian: { abilities: ['str'],        mode: 'single' },
+  Bard:      { abilities: ['cha'],        mode: 'single' },
+  Cleric:    { abilities: ['wis'],        mode: 'single' },
+  Druid:     { abilities: ['wis'],        mode: 'single' },
+  Fighter:   { abilities: ['str', 'dex'], mode: 'or'     }, // PHB pg. 70: STR or DEX
+  Monk:      { abilities: ['dex', 'wis'], mode: 'and'    }, // PHB pg. 76: DEX & WIS
+  Paladin:   { abilities: ['str', 'cha'], mode: 'and'    }, // PHB pg. 82: STR & CHA
+  Ranger:    { abilities: ['dex', 'wis'], mode: 'and'    }, // PHB pg. 89: DEX & WIS
+  Rogue:     { abilities: ['dex'],        mode: 'single' },
+  Sorcerer:  { abilities: ['cha'],        mode: 'single' },
+  Warlock:   { abilities: ['cha'],        mode: 'single' },
+  Wizard:    { abilities: ['int'],        mode: 'single' },
 };
+
+/**
+ * Display string for a class's primary ability, respecting AND/OR
+ * semantics of dual-primary classes:
+ *   - single → "Strength"
+ *   - 'or'   → "Strength or Dexterity"
+ *   - 'and'  → "Dexterity & Wisdom"
+ *
+ * Consumers (class step, AI prompts, sheet header) should call this
+ * instead of indexing CLASS_PRIMARY_ABILITY directly so the AND-vs-OR
+ * distinction renders correctly without each call site re-implementing
+ * the join logic.
+ */
+export function primaryAbilityDisplay(className) {
+  const entry = CLASS_PRIMARY_ABILITY[className];
+  if (!entry || !Array.isArray(entry.abilities) || entry.abilities.length === 0) {
+    return '';
+  }
+  const names = entry.abilities.map((a) => ABILITY_NAMES[a] || a);
+  if (entry.mode === 'or') return names.join(' or ');
+  if (entry.mode === 'and') return names.join(' & ');
+  return names[0];
+}
 
 export const CLASS_SAVING_THROWS = {
   Barbarian: ['str', 'con'], Bard: ['dex', 'cha'], Cleric: ['wis', 'cha'],
@@ -2611,6 +2658,12 @@ export const HALF_ELF_RULES = {
 // ─────────────────────────────────────────────
 // STARTING EQUIPMENT BY CLASS
 // ─────────────────────────────────────────────
+//
+// TODO(vetting): row-by-row audit of every class's starting equipment
+// vs PHB 2014 was DEFERRED from the 2014 class data audit (audit at
+// audits/2014_class_audit.md). Audit when alpha playtest surfaces
+// equipment-step issues, or proactively before the 2024 starting-
+// equipment two-option redesign lands.
 
 export const STARTING_EQUIPMENT = {
   Barbarian: {

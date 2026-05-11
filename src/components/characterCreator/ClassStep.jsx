@@ -14,7 +14,7 @@ import { tipFor } from "@/components/characterCreator/creatorTips";
 import {
   CLASS_HIT_DICE,
   CLASS_SAVING_THROWS,
-  CLASS_PRIMARY_ABILITY,
+  primaryAbilityDisplay,
   CLASS_ARMOR_PROFICIENCIES,
   CLASS_WEAPON_PROFICIENCIES,
   ABILITY_NAMES,
@@ -190,7 +190,11 @@ const classes = [
 classes.forEach((cls) => {
   const name = cls.name;
   cls.hitDie = `d${CLASS_HIT_DICE[name] || 8}`;
-  cls.primaryAbility = ABILITY_NAMES[CLASS_PRIMARY_ABILITY[name]] || cls.primaryAbility;
+  // primaryAbilityDisplay respects AND/OR semantics for dual-primary
+  // classes — returns "Strength or Dexterity" for Fighter, "Dexterity &
+  // Wisdom" for Monk/Ranger, etc. Falls back to the hand-typed array
+  // value if the helper returns empty (defensive).
+  cls.primaryAbility = primaryAbilityDisplay(name) || cls.primaryAbility;
   cls.savingThrows = (CLASS_SAVING_THROWS[name] || []).map(
     (ab) => ABILITY_NAMES[ab] || ab,
   );
