@@ -24,6 +24,7 @@ import * as dnd5e_2024_equipment from "./dnd5e_2024/equipment.js";
 import * as dnd5e_2024_classes from "./dnd5e_2024/classes.js";
 import * as dnd5e_2024_classFeatures from "./dnd5e_2024/classFeatures.js";
 import * as dnd5e_2024_subclassFeatures from "./dnd5e_2024/subclassFeatures.js";
+import * as dnd5e_2024_rules from "./dnd5e_2024/rules.js";
 
 // 2014 classes / class features are still served by the legacy
 // hard-coded data in `src/game-packs/dnd5e/data/classFeatures.js`
@@ -43,6 +44,10 @@ const ADAPTERS = {
     ...dnd5e_2024_classes,
     ...dnd5e_2024_classFeatures,
     ...dnd5e_2024_subclassFeatures,
+    // rules module is a scaffold — most helpers throw "not yet
+    // implemented" until commits 6/7 land. The spread pattern keeps
+    // it discoverable on the adapter object for the day they ship.
+    rules: dnd5e_2024_rules,
   },
 };
 
