@@ -95,3 +95,26 @@ test('Mirror registry (game-packs/dnd5e/data/rules.js) has identical shape', () 
     );
   }
 });
+
+// PHB 2014 half-casters get spellcasting at level 2, not level 1.
+// halfCasterSlots(1) used to return [2] (one 1st-level slot, from
+// rounding 1/2 up to 1 and reading the full-caster table at index 1)
+// — that bug let a Paladin/Ranger 1 see a spell picker they shouldn't.
+// Both registries fixed in lockstep.
+test('halfCasterSlots returns [] at level 1 (PHB 2014: half-casters cast from L2)', () => {
+  assert.deepEqual(primary.halfCasterSlots(1), []);
+  assert.deepEqual(mirror.halfCasterSlots(1), []);
+});
+
+test('halfCasterSlots returns full-caster L1 progression at half-caster L2', () => {
+  // ceil(2/2) = 1, FULL_CASTER_SLOTS[1] = [2]
+  assert.deepEqual(primary.halfCasterSlots(2), [2]);
+  assert.deepEqual(mirror.halfCasterSlots(2), [2]);
+});
+
+test('halfCasterSlots scales correctly at higher levels', () => {
+  // Paladin/Ranger 5 → ceil(5/2) = 3, FULL_CASTER_SLOTS[3] = [4, 2]
+  assert.deepEqual(primary.halfCasterSlots(5), [4, 2]);
+  // Paladin/Ranger 20 → ceil(20/2) = 10, FULL_CASTER_SLOTS[10] = [4,3,3,3,2]
+  assert.deepEqual(primary.halfCasterSlots(20), [4, 3, 3, 3, 2]);
+});
