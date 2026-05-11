@@ -43,19 +43,10 @@ export async function checkAndGrantStipend(userId, tier, guildId = null) {
     await addSpice(userId, stipendAmount, "stipend", `Monthly ${tier} stipend`);
   }
 
-  // Stamp last_stipend_at. Use upsert so the row exists even when the
-  // stipend credit was a guild-wallet deposit (which wouldn't have
-  // touched spice_wallets).
-  await supabase
-    .from("spice_wallets")
-    .upsert(
-      {
-        user_id: userId,
-        last_stipend_at: now.toISOString(),
-        updated_at: now.toISOString(),
-      },
-      { onConflict: "user_id" },
-    );
+  // Stamp last_stipend_at via the SECURITY DEFINER RPC. Direct
+  // upsert on spice_wallets is RLS-rejected — see
+  // 20261213_spice_ledger_atomic_rpcs.sql.
+  await supabase.rpc("mark_stipend_granted", { p_user_id: userId });
 
   return { granted: true, amount: stipendAmount, tier };
 }
