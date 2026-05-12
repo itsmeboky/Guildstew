@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { createDotGrid } from "./dotGrid";
 import { ThreeSceneContext } from "./ThreeSceneContext";
 import { useScene } from "../state/SceneContext";
+import { useTools } from "../state/ToolContext";
 
 const TILE_SIZE = 28;
 const VIEW_WIDTH_INITIAL = 800;
@@ -31,6 +32,14 @@ export default function Viewport({ children }) {
   // already see a stable reference through ThreeSceneContext.
   const [threeScene] = useState(() => new THREE.Scene());
   const { paintTile, eraseTile } = useScene();
+  const { activeMaterialId } = useTools();
+  // Mirrored into a ref so the long-lived mousedown/mousemove closures
+  // captured by the main effect always paint with the latest material
+  // selection — including mid-stroke if the user swaps swatches.
+  const activeMaterialIdRef = useRef(activeMaterialId);
+  useEffect(() => {
+    activeMaterialIdRef.current = activeMaterialId;
+  }, [activeMaterialId]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -99,6 +108,12 @@ export default function Viewport({ children }) {
     let panActive = false;
     let panLastX = 0;
     let panLastY = 0;
+    // Stroke painting: -1 means no stroke; 0 means left/paint, 2 means
+    // right/erase. lastStrokeTile guards against re-firing on every
+    // mousemove that stays within one tile.
+    let strokeButton = -1;
+    let lastStrokeTileX = 0;
+    let lastStrokeTileY = 0;
 
     function updateCursor() {
       if (panActive) canvas.style.cursor = "grabbing";
@@ -131,41 +146,57 @@ export default function Viewport({ children }) {
         startPan(e.clientX, e.clientY);
         return;
       }
-      // Left: pan when space is held, otherwise paint.
+      // Left: pan when space is held, otherwise begin a paint stroke.
       if (e.button === 0) {
         if (spaceHeld) {
           startPan(e.clientX, e.clientY);
         } else {
           const { tileX, tileY } = clientToTile(e.clientX, e.clientY);
-          paintTile(tileX, tileY, "grass");
+          paintTile(tileX, tileY, activeMaterialIdRef.current);
+          strokeButton = 0;
+          lastStrokeTileX = tileX;
+          lastStrokeTileY = tileY;
         }
         return;
       }
-      // Right: erase. Context menu is suppressed separately.
+      // Right: begin an erase stroke. Context menu is suppressed separately.
       if (e.button === 2) {
         const { tileX, tileY } = clientToTile(e.clientX, e.clientY);
         eraseTile(tileX, tileY);
+        strokeButton = 2;
+        lastStrokeTileX = tileX;
+        lastStrokeTileY = tileY;
       }
     }
 
     function onMouseMove(e) {
-      if (!panActive) return;
-      const dx = e.clientX - panLastX;
-      const dy = e.clientY - panLastY;
-      panLastX = e.clientX;
-      panLastY = e.clientY;
-      const worldPerPixelX = (camera.right - camera.left) / canvasWidth;
-      const worldPerPixelY = (camera.top - camera.bottom) / canvasHeight;
-      camera.position.x -= dx * worldPerPixelX;
-      camera.position.y += dy * worldPerPixelY;
+      if (panActive) {
+        const dx = e.clientX - panLastX;
+        const dy = e.clientY - panLastY;
+        panLastX = e.clientX;
+        panLastY = e.clientY;
+        const worldPerPixelX = (camera.right - camera.left) / canvasWidth;
+        const worldPerPixelY = (camera.top - camera.bottom) / canvasHeight;
+        camera.position.x -= dx * worldPerPixelX;
+        camera.position.y += dy * worldPerPixelY;
+        return;
+      }
+      if (strokeButton === -1) return;
+      const { tileX, tileY } = clientToTile(e.clientX, e.clientY);
+      if (tileX === lastStrokeTileX && tileY === lastStrokeTileY) return;
+      lastStrokeTileX = tileX;
+      lastStrokeTileY = tileY;
+      if (strokeButton === 0) paintTile(tileX, tileY, activeMaterialIdRef.current);
+      else if (strokeButton === 2) eraseTile(tileX, tileY);
     }
 
     function onMouseUp(e) {
-      if (!panActive) return;
-      // Either button that can start pan (0 with space, 1 always) ends it.
-      if (e.button === 0 || e.button === 1) {
+      if (panActive && (e.button === 0 || e.button === 1)) {
         panActive = false;
         updateCursor();
+      }
+      if (strokeButton !== -1 && e.button === strokeButton) {
+        strokeButton = -1;
       }
     }
 
