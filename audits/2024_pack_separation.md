@@ -45,17 +45,17 @@ or the legacy 2014 paths.
 | `race` | `RaceStep.jsx` | — | ❌ 2024 falls back to 2014 |
 | `class` | `ClassStep.jsx` | `ClassStep2024.jsx` | ✅ dispatched on `gamePack` |
 | `abilities` | `AbilityScoresStep.jsx` | — | ❌ 2024 falls back to 2014 |
-| `features` | `ClassFeaturesStep.jsx` | `ClassFeaturesStep2024.jsx` | ✅ dispatched on `gamePack` |
+| `features` | `ClassFeaturesStep.jsx` | `ClassFeaturesStep2024.jsx` (extended in Commit 8 with Weapon Mastery picker + L1 path-choice banner) | ✅ dispatched on `gamePack` |
 | `skills` | `SkillsStep.jsx` | — | ❌ 2024 falls back to 2014 |
-| `spells` | `SpellsStep.jsx` | — | ❌ 2024 falls back to 2014 |
+| `spells` | `SpellsStep.jsx` | — | ❌ 2024 falls back to 2014 (DEFERRED — see below) |
 | `equipment` | `EquipmentStep.jsx` (gamepack-aware via adapter) | (same) | ⚠️ shared component, but the adapter dispatches the equipment list per `characterData.gamePack`. Not a fallback — same UI, edition-correct data. |
 | `review` | `ReviewStep.jsx` | — | ❌ 2024 falls back to 2014 |
 
-**6 of 8 steps still cross-run 2014 logic for 2024 characters.** This is
-the dispatcher gap that commits 6-8 will close (per the spec's commit
-plan: 6 = martial classes, 7 = spellcasting classes, 8 = creator UI
-adjustments). Until then, **2024 stays `coming_soon` in the picker** so
-no user actually hits the cross-edition paths in production.
+**5 of 8 steps still cross-run 2014 logic for 2024 characters.** Down
+from 6 of 8 before Commit 8 (Weapon Mastery + L1 path-choice live in
+the already-dispatched `features` step now). Until the remaining
+steps ship, **2024 stays `coming_soon` in the picker** so no user
+actually hits the cross-edition paths in production.
 
 ℹ️ **The picker gate is the safety net.** As long as `useUserGamePacks()`
 doesn't surface `dnd5e_2024` to the picker, the only path to a
@@ -143,20 +143,75 @@ it as its own commit, not bundled into the Commit 5 scaffold.
 (6-of-8 dispatcher coverage, campaign-level gamepack, mechanical data)
 are explicit work items for commits 6-8, not silent fallbacks.
 
-**Action items captured:**
+**Action items captured (status after Commit 8):**
 
-1. **Commit 6** — Implement 2024 martial classes data in `dnd5e_2024/rules.js`
-   (Weapon Mastery slot counts, half-caster slot helper with L1 + round-up
-   rules, ASI extras).
-2. **Commit 7** — Implement 2024 spellcasting data in `dnd5e_2024/rules.js`
-   (SPELLS_KNOWN_TABLE with fixed prepared tables, CANTRIPS_KNOWN, Divine
-   Order / Primal Order options, Innate Sorcery / Magical Cunning
-   mechanics).
-3. **Commit 8** — Build 2024-specific step components for race / abilities /
-   skills / spells / review (Divine Order picker at L1 Cleric, Primal Order
-   picker at L1 Druid, Weapon Mastery picker for martial classes, fixed
-   prepared spell table UI, etc.).
+1. ✅ **Commit 6** — 2024 martial classes data shipped.
+2. ✅ **Commit 7** — 2024 spellcasting classes data shipped.
+3. ⚠️ **Commit 8** (partial — see deferred items below) — Weapon
+   Mastery picker for the 5 martials + L1 path-choice banner for
+   Cleric/Druid landed in `ClassFeaturesStep2024.jsx`. Subclass L3
+   gate confirmed correct (already present from Commit 3 of the
+   original 2024 bundle).
 4. **Separate ticket** — Campaign-level gamepack: migration adding
    `campaigns.game_pack`, UI dropdown in campaign settings, character
    creation inheritance from campaign context, cross-edition character
    attach enforcement.
+
+### Commit 8 deferred sub-items (need their own commits)
+
+The spec doc's Commit 8 listed 7 UI changes. Commit 8 (this one)
+shipped 2 of them. The remaining 5 are deferred with rationale:
+
+**a. SpellsStep2024.jsx (deferred — SRD data gap):** Building a
+2024-specific spell prep step is blocked because the 2024 SRD's
+per-class spell lists (`spells` field on each class in
+`5e-SRD-Classes.json`) are malformed in the upstream 5e-bits
+extraction — every class shows a single string like `"/"` or
+`"/api/2"` instead of a spell-ref array. Without per-class spell
+lists, the picker has nothing to show. Options once resolved:
+either fix the upstream extraction or hand-author the class
+spell lists (the latter would re-introduce hand-authored
+content that the OGL pass stripped). Deferred until upstream is
+corrected or a licensed source ships.
+
+**b. Paladin Divine Smite rendering (deferred — depends on 8a):**
+Per 2024 PHB, Divine Smite is a spell, always prepared. The
+`SPELLS_KNOWN_TABLE.Paladin.alwaysPrepared = ["Divine Smite"]`
+field is set (Commit 6). Rendering this in the picker depends
+on SpellsStep2024 existing, so this lands when 8a does.
+
+**c. Hunter's Mark always-prepared rendering (deferred — depends
+on 8a):** Same shape as Divine Smite. The data field is set
+(`SPELLS_KNOWN_TABLE.Ranger.alwaysPrepared = ["Hunter's Mark"]`).
+
+**d. Two-option starting equipment (deferred — UX redesign):**
+The 2024 SRD provides structured `starting_equipment_options`
+with `(a) package + small gold or (b) gold-only` per class. The
+existing EquipmentStep uses the 2014 (a)/(b)/(c) sub-option
+trees inline. Adapting the step to the 2024 two-option shape is
+a UX redesign that touches the shared component. Either build
+`EquipmentStep2024.jsx` or extend the existing step to be
+gamepack-aware via the adapter shape. Either way it's its own
+commit-sized work.
+
+**e. Background ASI shift (deferred — architectural):** 2024 moves
+ability score bonuses from species (race) to background. This
+requires:
+  - A new BackgroundStep (or expanding RaceStep) to capture the
+    ASI assignment
+  - Species no longer offering ASI when gamePack === 'dnd5e_2024'
+  - Validator changes to account for the shifted source of ASI
+  Substantial architectural change touching multiple steps and
+  the character data model. Its own commit (or sub-bundle).
+
+**f. Wizard spellbook concept (deferred — carried from Vetting
+Commit 4):** The 2024 Wizard needs a `character.spellbook =
+{ cantrips, spells }` data field plus a two-step UI flow at
+creation (pick into spellbook → pick prepared from spellbook).
+Same scope concern as in Commit 4's deferral. Will benefit
+both 2014 and 2024 Wizards when it lands.
+
+**g. Mystic Arcanum picker for Warlock 11+ (deferred — carried
+from Vetting Commit 4):** Same as the 2014 deferral. Low alpha
+impact (testers create at L1-10), high impact at high-level
+starts.

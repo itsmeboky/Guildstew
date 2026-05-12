@@ -1,0 +1,15 @@
+{
+  "revised": {},
+  "added": {},
+  "removed": [],
+  "_meta": {
+    "source": "Stopgap. 2014 SRD spells are used as the base for the 2024 spell pool. Revisions and additions per SRD 5.2 to be added as sourced.",
+    "schema": {
+      "revised": "Object keyed by spell index. Each value is a partial spell object that is deep-merged onto the 2014 base entry, overriding fields like `desc`, `higher_level`, `damage`, etc.",
+      "added": "Object keyed by spell index. Each value is a full spell entry (same shape as a 2014 SRD spell) for spells that exist only in SRD 5.2.",
+      "removed": "Array of spell indices to drop from the merged list (e.g. spells WotC removed from the 2024 spell list)."
+    },
+    "srd_5_2_url": "https://www.dndbeyond.com/srd",
+    "license": "CC-BY 4.0"
+  }
+}

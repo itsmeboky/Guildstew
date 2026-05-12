@@ -30,6 +30,7 @@ import {
 } from "@/components/dnd5e/characterMapping";
 
 import RaceStep from "@/components/characterCreator/RaceStep";
+import SpeciesStep2024 from "@/components/characterCreator/SpeciesStep2024";
 import ClassStep from "@/components/characterCreator/ClassStep";
 import ClassStep2024 from "@/components/characterCreator/ClassStep2024";
 import AbilityScoresStep from "@/components/characterCreator/AbilityScoresStep";
@@ -671,6 +672,7 @@ const handleSubmit = () => {
   const _stepDef = STEPS[currentStep];
   const _is2024 = characterData.gamePack === 'dnd5e_2024';
   const CurrentStepComponent =
+    _is2024 && _stepDef.id === 'race' ? SpeciesStep2024 :
     _is2024 && _stepDef.id === 'class' ? ClassStep2024 :
     _is2024 && _stepDef.id === 'features' ? ClassFeaturesStep2024 :
     _stepDef.component;
