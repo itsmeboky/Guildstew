@@ -43,7 +43,7 @@ import SkillsStep2024 from "@/components/characterCreator/SkillsStep2024";
 import SpellsStep from "@/components/characterCreator/SpellsStep";
 import SpellsStep2024 from "@/components/characterCreator/SpellsStep2024";
 import {
-  SPELLS_KNOWN_TABLE as SPELLS_KNOWN_TABLE_2024,
+  getSpellsKnownEntry as getSpellsKnownEntry2024,
   spellsPrepared as spellsPrepared2024,
   cantripsKnown as cantripsKnown2024,
 } from "@/data/games/dnd5e_2024/rules";
@@ -525,7 +525,7 @@ export default function CharacterCreator() {
         if (characterData.gamePack === 'dnd5e_2024') {
           const cls = characterData.class;
           const lvl = Number(characterData.level) || 1;
-          const tableEntry = cls ? SPELLS_KNOWN_TABLE_2024[cls] : null;
+          const tableEntry = getSpellsKnownEntry2024(cls);
           if (!tableEntry) return true; // non-caster
           const cantripsTarget = cantripsKnown2024(cls, lvl);
           const preparedTarget = spellsPrepared2024(cls, lvl);

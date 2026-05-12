@@ -35,8 +35,8 @@
  * shape branching.
  */
 
-import CLASSES_RAW from "../../../../docs/5e_reference/2024/5e-SRD-Classes.json";
-import SUBCLASSES_RAW from "../../../../docs/5e_reference/2024/5e-SRD-Subclasses.json";
+import CLASSES_RAW from "../../../../docs/5e_reference/2024/5e-SRD-Classes.json" with { type: "json" };
+import SUBCLASSES_RAW from "../../../../docs/5e_reference/2024/5e-SRD-Subclasses.json" with { type: "json" };
 
 const ABILITY_FULL_NAME = {
   str: "Strength",
@@ -100,9 +100,16 @@ function normalise(raw) {
     .filter((s) => s.class?.index === id)
     .map(normaliseSubclass);
 
-  const skillChoiceRaw = (raw.proficiency_choices || []).find((c) =>
-    String(c.desc || "").toLowerCase().includes("skill"),
-  );
+  // Find the proficiency_choices block whose options are skill
+  // proficiencies. The SRD encodes skill choices via item indices
+  // like "skill-stealth" — the `desc` field is freeform and often
+  // doesn't include the word "skill" (e.g. Wizard's reads
+  // "Choose 2: Arcana, History, ..."), so we detect by option shape
+  // instead of by description text.
+  const skillChoiceRaw = (raw.proficiency_choices || []).find((c) => {
+    const first = c?.from?.options?.[0]?.item?.index || "";
+    return String(first).startsWith("skill-");
+  });
   const skillChoice = skillChoiceRaw
     ? normaliseProficiencyChoice(skillChoiceRaw)
     : { choose: 0, options: [] };

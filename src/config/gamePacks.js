@@ -49,13 +49,10 @@ export const GAME_PACKS = {
     short: "5e (2024)",
     tagline: "The 2024 revision — PHB 2024.",
     description:
-      "The 2024 PHB revision. Weapon Mastery on martial classes, reworked spell lists, ASI through feats, refreshed subclasses, and updated species rules.",
+      "The 2024 revision. Weapon Mastery on martial classes, reworked spell lists, ASI through backgrounds, refreshed subclasses, and updated species rules. SRD 5.2 only — non-SRD content is not shipped.",
     accent: "#37F2D1",
     icon: "🐉",
-    // coming_soon while the 2024 character creator (classes,
-    // features, skills, spells) is still being authored. Flips to
-    // 'available' once full coverage lands.
-    status: "coming_soon",
+    status: "available",
     creatorRoute: "CharacterCreator",
   },
   pathfinder_2e: {

@@ -12,7 +12,7 @@ import { getSpeciesById, getSubspecies } from "@/data/games/dnd5e_2024/species";
 import { getBackgroundById } from "@/data/games/dnd5e_2024/backgrounds";
 import { getClassByName } from "@/data/games/dnd5e_2024/classes";
 import {
-  SPELLS_KNOWN_TABLE,
+  getSpellsKnownEntry,
   spellsPrepared,
   cantripsKnown,
   getSpellSlots,
@@ -111,7 +111,7 @@ export default function ReviewStep2024({ characterData }) {
     ? characterData.expertise
     : [];
 
-  const spellTable = className ? SPELLS_KNOWN_TABLE[className] : null;
+  const spellTable = getSpellsKnownEntry(className);
   const isCaster = !!spellTable;
   const cantrips = characterData.spells?.cantrips || [];
   const prepared = characterData.spells?.prepared || [];
