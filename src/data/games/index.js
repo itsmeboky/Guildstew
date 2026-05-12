@@ -96,15 +96,32 @@ const ADAPTERS = {
   },
 };
 
-const ALIASES = {
+// Legacy alias resolution — older character records may carry
+// "dnd5e" from before the 2014 / 2024 split.
+const PACK_ALIASES = {
   dnd5e: "dnd5e_2014",
 };
 
-export function getGamePack(packId) {
-  const id = ALIASES[packId] || packId || "dnd5e_2014";
-  return ADAPTERS[id] || ADAPTERS.dnd5e_2014;
+function resolvePackId(packId) {
+  return PACK_ALIASES[packId] || packId || "dnd5e_2014";
 }
 
-export function listGamePackIds() {
-  return Object.keys(ADAPTERS);
+/**
+ * Return the game-pack adapter module for a character / pack id.
+ * Falls back to the 2014 D&D pack for unknown / missing ids so
+ * legacy characters with no `gamePack` field continue to render.
+ */
+export function getGamePackData(packId) {
+  const canonical = resolvePackId(packId);
+  return PACKS[canonical] || dnd5e2014;
 }
+
+// Backwards-compat alias for callers that still use the older name.
+export const getGamePack = getGamePackData;
+
+// List of canonical pack ids — kept for callers that need to enumerate.
+export function listGamePackIds() {
+  return Object.keys(PACKS);
+}
+
+export { dnd5e2014, dnd5e2024 };
