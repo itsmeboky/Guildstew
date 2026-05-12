@@ -5,11 +5,10 @@
  */
 
 import React from "react";
+import { useActiveCampaign } from "../hooks/useActiveCampaign";
 
 export default function ForagerHome() {
-  const params = new URLSearchParams(window.location.search);
-  const campaignId = params.get("id");
-  const mapId = params.get("map");
+  const { campaignId, mapId } = useActiveCampaign();
 
   return (
     <div className="min-h-screen bg-[#1E2430] flex items-center justify-center px-6">
