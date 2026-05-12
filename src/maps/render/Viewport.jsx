@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { createDotGrid } from "./dotGrid";
 import { ThreeSceneContext } from "./ThreeSceneContext";
 import { useScene } from "../state/SceneContext";
+import { useTools } from "../state/ToolContext";
 
 const TILE_SIZE = 28;
 const VIEW_WIDTH_INITIAL = 800;
@@ -31,6 +32,14 @@ export default function Viewport({ children }) {
   // already see a stable reference through ThreeSceneContext.
   const [threeScene] = useState(() => new THREE.Scene());
   const { paintTile, eraseTile } = useScene();
+  const { activeMaterialId } = useTools();
+  // Mirrored into a ref so the long-lived mousedown/mousemove closures
+  // captured by the main effect always paint with the latest material
+  // selection — including mid-stroke if the user swaps swatches.
+  const activeMaterialIdRef = useRef(activeMaterialId);
+  useEffect(() => {
+    activeMaterialIdRef.current = activeMaterialId;
+  }, [activeMaterialId]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -143,7 +152,7 @@ export default function Viewport({ children }) {
           startPan(e.clientX, e.clientY);
         } else {
           const { tileX, tileY } = clientToTile(e.clientX, e.clientY);
-          paintTile(tileX, tileY, "grass");
+          paintTile(tileX, tileY, activeMaterialIdRef.current);
           strokeButton = 0;
           lastStrokeTileX = tileX;
           lastStrokeTileY = tileY;
@@ -177,7 +186,7 @@ export default function Viewport({ children }) {
       if (tileX === lastStrokeTileX && tileY === lastStrokeTileY) return;
       lastStrokeTileX = tileX;
       lastStrokeTileY = tileY;
-      if (strokeButton === 0) paintTile(tileX, tileY, "grass");
+      if (strokeButton === 0) paintTile(tileX, tileY, activeMaterialIdRef.current);
       else if (strokeButton === 2) eraseTile(tileX, tileY);
     }
 
