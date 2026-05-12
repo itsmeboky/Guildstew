@@ -13,7 +13,7 @@
  * SRD expansion. None are hand-authored.
  */
 
-import subclassesData from "../../../../docs/5e_reference/2024/5e-SRD-Subclasses.json";
+import subclassesData from "../../../../docs/5e_reference/2024/5e-SRD-Subclasses.json" with { type: "json" };
 
 /**
  * Get all subclasses for a given class index (e.g. "barbarian") or

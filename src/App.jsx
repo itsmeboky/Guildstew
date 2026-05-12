@@ -65,6 +65,7 @@ const AuthenticatedApp = () => {
         <Route path="/EULA" element={<ErrorBoundary resetKeys={routeResetKeys}><Pages.EULA /></ErrorBoundary>} />
         <Route path="/Cookies" element={<ErrorBoundary resetKeys={routeResetKeys}><Pages.Cookies /></ErrorBoundary>} />
         <Route path="/PrivacySummary" element={<ErrorBoundary resetKeys={routeResetKeys}><Pages.PrivacySummary /></ErrorBoundary>} />
+        <Route path="/Attributions" element={<ErrorBoundary resetKeys={routeResetKeys}><Pages.Attributions /></ErrorBoundary>} />
         {/* Guild invite-link redemption — must be reachable while
             unauth so the page can render the "Sign in required"
             state instead of bouncing the visitor to the marketing

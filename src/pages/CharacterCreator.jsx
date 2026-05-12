@@ -14,6 +14,8 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { loadCampaignBans, findCharacterIncompatibilities } from "@/lib/campaignBans";
 import { getSpellSlots, getPactSlots } from "@/components/dnd5e/spellData";
 import { getSkillsCompletion } from "@/components/characterCreator/skillsCompletion";
+import { getSkillsCompletion2024 } from "@/components/characterCreator/skillsCompletion2024";
+import { getSpellsCompletion } from "@/components/characterCreator/spellsCompletion";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   calculateMaxHP, 
@@ -34,12 +36,21 @@ import SpeciesStep2024 from "@/components/characterCreator/SpeciesStep2024";
 import ClassStep from "@/components/characterCreator/ClassStep";
 import ClassStep2024 from "@/components/characterCreator/ClassStep2024";
 import AbilityScoresStep from "@/components/characterCreator/AbilityScoresStep";
+import AbilitiesStep2024 from "@/components/characterCreator/AbilitiesStep2024";
 import ClassFeaturesStep from "@/components/characterCreator/ClassFeaturesStep";
 import ClassFeaturesStep2024 from "@/components/characterCreator/ClassFeaturesStep2024";
 import SkillsStep from "@/components/characterCreator/SkillsStep";
+import SkillsStep2024 from "@/components/characterCreator/SkillsStep2024";
 import SpellsStep from "@/components/characterCreator/SpellsStep";
+import SpellsStep2024 from "@/components/characterCreator/SpellsStep2024";
+import {
+  getSpellsKnownEntry as getSpellsKnownEntry2024,
+  spellsPrepared as spellsPrepared2024,
+  cantripsKnown as cantripsKnown2024,
+} from "@/data/games/dnd5e_2024/rules";
 import EquipmentStep from "@/components/characterCreator/EquipmentStep";
 import ReviewStep from "@/components/characterCreator/ReviewStep";
+import ReviewStep2024 from "@/components/characterCreator/ReviewStep2024";
 import QuickCreateDialog from "@/components/characterCreator/QuickCreateDialog";
 import ModeSelector from "@/components/characterCreator/ModeSelector";
 import QuickPickFlow from "@/components/characterCreator/QuickPickFlow";
@@ -486,6 +497,16 @@ export default function CharacterCreator() {
     
     switch (step.id) {
       case 'race':
+        // 2024 splits the legacy "race step" into species (this
+        // step) + background (chosen later in AbilitiesStep2024
+        // because the background grants the ASI). The gate here
+        // therefore drops the background requirement for 2024
+        // and validates the species selection instead — without
+        // this branch, 2024 chars couldn't proceed past the
+        // species step because background is empty until later.
+        if (characterData.gamePack === 'dnd5e_2024') {
+          return !!(characterData.name && characterData.species?.speciesId);
+        }
         return characterData.name && characterData.race && characterData.background;
       case 'class':
         return characterData.class && characterData.alignment;
@@ -501,34 +522,45 @@ export default function CharacterCreator() {
       case 'features':
         return true;
       case 'skills':
-        // Single source of truth shared with SkillsStep — registry-
-        // driven (CLASS_SKILL_CHOICES + getRaceSkillProficiencies +
-        // getBackgroundSkills) so fixed-racial grants don't get
-        // double-counted, racial bonus picks track the actual race
-        // (not just the old hardcoded Half-Elf/Human pair), and
-        // expertise-required classes (Rogue, Bard) can't slip past
-        // without selections.
-        return getSkillsCompletion(characterData).isComplete;
+        // 2024 reads from its own SRD-driven completion helper —
+        // background skills come from AbilitiesStep2024's selection,
+        // class skill choice count from the 2024 class adapter, and
+        // species "Skillful" trait grants a bonus pick. 2014 path
+        // still uses the registry-driven helper that handles legacy
+        // race / background / multiclass entries.
+        return (characterData.gamePack === 'dnd5e_2024'
+          ? getSkillsCompletion2024(characterData)
+          : getSkillsCompletion(characterData)
+        ).isComplete;
       case 'spells':
-        const spellSlots = getSpellSlots(characterData.class, characterData.level, characterData.multiclasses || []);
-        const pactSlots = getPactSlots(characterData.class, characterData.level, characterData.multiclasses || []);
-        
-        // Calculate total slots by level (standard + pact)
-        const totalSlots = { ...spellSlots };
-        if (pactSlots) {
-          const key = `level${pactSlots.slotLevel}`;
-          totalSlots[key] = (totalSlots[key] || 0) + pactSlots.slots;
+        if (characterData.gamePack === 'dnd5e_2024') {
+          const cls = characterData.class;
+          const lvl = Number(characterData.level) || 1;
+          const tableEntry = getSpellsKnownEntry2024(cls);
+          if (!tableEntry) return true; // non-caster
+          const cantripsTarget = cantripsKnown2024(cls, lvl);
+          const preparedTarget = spellsPrepared2024(cls, lvl);
+          const wizardSpellbookSize = tableEntry.type === 'spellbook'
+            ? (tableEntry.startingSpellbookSpells || 6)
+              + Math.max(0, lvl - 1) * (tableEntry.spellsPerLevel || 2)
+            : 0;
+          const s = characterData.spells || {};
+          const cantripsCount = Array.isArray(s.cantrips) ? s.cantrips.length : 0;
+          const preparedCountSel = Array.isArray(s.prepared) ? s.prepared.length : 0;
+          const spellbookCount = Array.isArray(s.spellbook) ? s.spellbook.length : 0;
+          if (cantripsCount !== cantripsTarget) return false;
+          if (preparedCountSel !== preparedTarget) return false;
+          if (tableEntry.type === 'spellbook' && spellbookCount !== wizardSpellbookSize) return false;
+          return true;
         }
-
-        // If no spell slots, step is valid
-        if (Object.values(totalSlots).every(slots => slots === 0)) return true;
-        
-        // Check if all available slots are filled
-        return Object.entries(totalSlots).every(([levelKey, slots]) => {
-          if (slots === 0) return true;
-          const selectedCount = (characterData.spells?.[levelKey] || []).length;
-          return selectedCount === slots;
-        });
+        // 2014 path — share the spell-completion helper with
+        // SpellsStep so the picker caps and the Next-button gate
+        // can never drift apart. The previous validator compared
+        // picks against per-level SLOTS (casts/day), which never
+        // matched the picker's prepared/known/spellbook caps for
+        // Bard / Cleric / Druid / Warlock / Wizard at L1, leaving
+        // every prepared/known caster stuck on this step.
+        return getSpellsCompletion(characterData).isComplete;
       case 'equipment':
         return true;
       case 'review':
@@ -674,7 +706,11 @@ const handleSubmit = () => {
   const CurrentStepComponent =
     _is2024 && _stepDef.id === 'race' ? SpeciesStep2024 :
     _is2024 && _stepDef.id === 'class' ? ClassStep2024 :
+    _is2024 && _stepDef.id === 'abilities' ? AbilitiesStep2024 :
     _is2024 && _stepDef.id === 'features' ? ClassFeaturesStep2024 :
+    _is2024 && _stepDef.id === 'skills' ? SkillsStep2024 :
+    _is2024 && _stepDef.id === 'spells' ? SpellsStep2024 :
+    _is2024 && _stepDef.id === 'review' ? ReviewStep2024 :
     _stepDef.component;
 
   // Mode selector — first screen before any creator steps render.

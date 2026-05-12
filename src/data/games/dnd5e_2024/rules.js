@@ -620,6 +620,19 @@ export const SPELLS_KNOWN_TABLE = withUnknownClassGuard(
 );
 
 /**
+ * Safe accessor for SPELLS_KNOWN_TABLE that returns null for
+ * non-spellcasting classes (Barbarian, Fighter, Monk, Rogue)
+ * instead of throwing via the unknown-class guard. UI code that
+ * needs to branch on "is this class a caster?" should use this
+ * rather than indexing SPELLS_KNOWN_TABLE directly.
+ */
+export function getSpellsKnownEntry(className) {
+  if (!className) return null;
+  if (!(className in SPELLS_KNOWN_TABLE_MAP)) return null;
+  return SPELLS_KNOWN_TABLE_MAP[className];
+}
+
+/**
  * Returns the number of spells the class can prepare at the given
  * class level, per the 2024 fixed-table model. Returns null for
  * non-spellcasting classes and 0 for spellcasters that haven't yet
