@@ -52,7 +52,7 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
     ? getBreweryClassSpellSlots(breweryClass, characterData.level)
     : getSpellSlots(characterData.class, characterData.level, characterData.multiclasses || []);
   const availableSpells = getAllAvailableSpells(characterData.class, characterData.multiclasses || [], fullSpellsList);
-  
+
   const selectedSpells = characterData.spells || {};
 
   const pactSlots = getPactSlots(
@@ -68,22 +68,88 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
     characterData.multiclasses || []
   );
 
+  // Per-spell-level SLOT count for display ("X casts/day"). Pact Magic
+  // slots merge into the matching spell-level row for display only —
+  // they used to drive the pick cap too, which conflated non-fungible
+  // pools for multiclass Warlock + full-caster builds. The pick cap
+  // is now driven by `prepKnownCap` / `cantripCap` below (PHB 2014
+  // model: prepared/known is a single TOTAL count distributable
+  // across eligible spell levels, while slots are casts/day).
   const getSlotsForLevelKey = (levelKey) => {
     let slots = spellSlots[levelKey] || 0;
-  
-    // Merge Pact Magic slots for display only:
-    if (
-      pactSlots &&
-      levelKey.startsWith("level")
-    ) {
+    if (pactSlots && levelKey.startsWith("level")) {
       const numericLevel = parseInt(levelKey.replace("level", ""), 10);
       if (numericLevel === pactSlots.slotLevel) {
         slots += pactSlots.slots;
       }
     }
-  
     return slots;
   };
+
+  // Total prepared / known spell cap (excluding cantrips) summed
+  // across every spellcasting class. PHB 2014 model: prepared casters
+  // (Cleric/Druid/Paladin/Wizard) prepare ABILITY_MOD + class level
+  // (or Paladin's CHA + floor(lvl/2)) spells from their list, and
+  // known casters (Bard/Sorcerer/Warlock/Ranger) know a fixed table
+  // value. Either way, the cap is a TOTAL count distributable across
+  // any eligible spell level — NOT a per-spell-level slot cap (that's
+  // casts/day, a separate axis).
+  //
+  // Brewery classes are skipped here (their slot progression is
+  // author-defined and out of scope for the SRD-table cap).
+  const totalSelectedNonCantrips = Object.entries(selectedSpells).reduce(
+    (sum, [key, arr]) => (key === "cantrips" ? sum : sum + (Array.isArray(arr) ? arr.length : 0)),
+    0,
+  );
+  const totalSelectedCantrips = Array.isArray(selectedSpells.cantrips)
+    ? selectedSpells.cantrips.length
+    : 0;
+
+  const spellcastingEntries = (() => {
+    const multis = Array.isArray(characterData.multiclasses)
+      ? characterData.multiclasses.filter((mc) => mc?.class && mc?.level)
+      : [];
+    const primaryLevel = Math.max(
+      1,
+      (Number(characterData.level) || 1) - multis.reduce((s, m) => s + (Number(m.level) || 0), 0),
+    );
+    return [
+      { class: characterData.class, level: primaryLevel },
+      ...multis.map((m) => ({ class: m.class, level: Number(m.level) || 0 })),
+    ].filter((e) => e.class && e.level > 0 && SPELLS_KNOWN_TABLE[e.class]);
+  })();
+
+  const attributesForCap = characterData.attributes || {};
+  const prepKnownCap = spellcastingEntries.reduce((sum, { class: cls, level }) => {
+    const data = SPELLS_KNOWN_TABLE[cls];
+    if (!data) return sum;
+    if (data.type === "known") {
+      return sum + (spellsKnown(cls, level) || 0);
+    }
+    if (data.type === "prepared") {
+      // spellsPrepared() respects the class's startLevel guard
+      // (Paladin: returns 0 at L1 since spellcasting starts at L2).
+      const ability = SPELLCASTING_ABILITY[cls];
+      const score = Number(attributesForCap?.[ability] ?? 10);
+      const mod = abilityModifier(score);
+      return sum + (spellsPrepared(cls, level, mod) || 0);
+    }
+    if (data.type === "spellbook") {
+      // Wizard. Note: until the spellbook concept ships, the picker
+      // pool is the FULL Wizard list and the player can prepare any
+      // spell from it (incorrectly). The cap math is right; the pool
+      // gating is the W4 gap filed in the audit.
+      const ability = SPELLCASTING_ABILITY[cls];
+      const score = Number(attributesForCap?.[ability] ?? 10);
+      const mod = abilityModifier(score);
+      return sum + (data.preparedFormula(mod, level) || 0);
+    }
+    return sum;
+  }, 0);
+  const cantripCap = spellcastingEntries.reduce(
+    (sum, { class: cls, level }) => sum + (cantripsKnown(cls, level) || 0),
+    0,
+  );
 
   // Helper to merge API spell details with hardcoded ones (for icons/effects)
   const getSpellDetail = (spellName) => {
@@ -173,12 +239,30 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
     if (recommended) {
       const newSpells = { ...selectedSpells };
 
-      // Auto-select spells for each level based on recommendations and available slots
-      Object.keys(spellSlots).forEach(levelKey => {
-        if (spellSlots[levelKey] > 0 && recommended[levelKey]) {
-          // Take recommended spells up to the slot limit
-          newSpells[levelKey] = recommended[levelKey].slice(0, spellSlots[levelKey]);
+      // Auto-select up to the per-class TOTAL prepared/known cap
+      // (cantrips counted separately, against cantripCap). Walk
+      // levels in ascending order so the first 1st-level spells
+      // get auto-picked before higher levels eat the budget.
+      let cantripBudget = cantripCap;
+      let prepBudget = prepKnownCap;
+      const orderedKeys = Object.keys(spellSlots).sort((a, b) => {
+        if (a === "cantrips") return -1;
+        if (b === "cantrips") return 1;
+        const ai = parseInt(a.replace("level", ""), 10);
+        const bi = parseInt(b.replace("level", ""), 10);
+        return ai - bi;
+      });
+      orderedKeys.forEach((levelKey) => {
+        if (!recommended[levelKey] || (spellSlots[levelKey] || 0) <= 0) return;
+        const remaining = levelKey === "cantrips" ? cantripBudget : prepBudget;
+        if (remaining <= 0) {
+          newSpells[levelKey] = [];
+          return;
         }
+        const taken = recommended[levelKey].slice(0, remaining);
+        newSpells[levelKey] = taken;
+        if (levelKey === "cantrips") cantripBudget -= taken.length;
+        else prepBudget -= taken.length;
       });
 
       updateCharacterData({ spells: newSpells });
@@ -213,15 +297,35 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
               )}
             </p>
             <div className="flex gap-4 text-sm flex-wrap">
+              {/* Per-class TOTAL caps. PHB 2014: prepared/known is one
+                  pool per class; per-spell-level slot counts are
+                  casts/day, a separate axis. */}
+              {(cantripCap > 0 || prepKnownCap > 0) && (
+                <>
+                  {cantripCap > 0 && (
+                    <div className="text-[#37F2D1]">
+                      <span className="font-bold">Cantrips:</span> {totalSelectedCantrips}/{cantripCap}
+                    </div>
+                  )}
+                  {prepKnownCap > 0 && (
+                    <div className="text-[#37F2D1]">
+                      <span className="font-bold">Spells:</span> {totalSelectedNonCantrips}/{prepKnownCap}{" "}
+                      <span className="text-white/50">prepared/known</span>
+                    </div>
+                  )}
+                </>
+              )}
+              {/* Per-spell-level slot counts (casts/day) — separate
+                  from the prepared/known total. Pact slots merge into
+                  the matching row for display only. */}
               {Object.keys(spellSlots).map((levelKey) => {
                 const slots = getSlotsForLevelKey(levelKey);
-                if (slots <= 0) return null;
-
-                const levelLabel = levelKey === "cantrips" ? "Cantrips" : `Level ${levelKey.replace("level", "")}`;
-                const currentCount = (selectedSpells[levelKey] || []).length;
+                if (slots <= 0 || levelKey === "cantrips") return null;
+                const levelLabel = `Level ${levelKey.replace("level", "")}`;
                 return (
-                  <div key={levelKey} className="text-[#37F2D1]">
-                    <span className="font-bold">{levelLabel}:</span> {currentCount}/{slots}
+                  <div key={levelKey} className="text-white/70">
+                    <span className="font-semibold">{levelLabel}:</span> {slots}{" "}
+                    <span className="text-white/40">casts/day</span>
                   </div>
                 );
               })}
@@ -293,7 +397,23 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
                     spellsForLevel.map((spell) => {
                       const details = getSpellDetail(spell);
                       const isSelected = currentSelected.includes(spell);
-                      const isDisabled = !isSelected && currentSelected.length >= slots;
+                      // Cap by TOTAL prepared/known per class (PHB 2014),
+                      // not per-spell-level slot count. Cantrips and
+                      // non-cantrips share separate caps. Brewery
+                      // classes have no SRD-table cap; fall back to
+                      // the per-level slot count for them.
+                      const isCantrip = levelKey === "cantrips";
+                      const totalCap = breweryClass
+                        ? slots
+                        : isCantrip
+                          ? cantripCap
+                          : prepKnownCap;
+                      const totalSelected = breweryClass
+                        ? currentSelected.length
+                        : isCantrip
+                          ? totalSelectedCantrips
+                          : totalSelectedNonCantrips;
+                      const isDisabled = !isSelected && totalSelected >= totalCap;
 
                       const handleToggle = (checked) => {
                         const newSpells = checked
