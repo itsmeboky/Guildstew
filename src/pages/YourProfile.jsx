@@ -37,6 +37,12 @@ export default function YourProfile() {
   const [editProfileOpen, setEditProfileOpen] = useState(false);
 
   const queryClient = useQueryClient();
+  // Source-of-truth for the signed-in user. The legacy ['currentUser']
+  // useQuery below depended on base44.auth.me() (undefined on the
+  // wrapper) and only worked because AuthContext side-stamped the
+  // cache via setQueryData. Stamping author fields off that racey
+  // value left NULLs in posts.author_id when the cache hadn't been
+  // populated yet — read from the context directly for writes.
   const { user: authUser } = useAuth();
 
   const { data: user } = useQuery({
@@ -208,9 +214,13 @@ console.log('PROFILE PAGE USER:', user)
         }
       }
 
-      return base44.entities.Post.create({ 
-        profile_user_id: user.id,
-        content: data.content, 
+      if (!authUser?.id) throw new Error('Not authenticated');
+
+      return base44.entities.Post.create({
+        profile_user_id: authUser.id,
+        author_id: authUser.id,
+        created_by: authUser.id,
+        content: data.content,
         image_url: imageUrl,
         link_preview: linkPreview
       });
@@ -249,12 +259,15 @@ console.log('PROFILE PAGE USER:', user)
   // a new comment is a JSONB array set — read current, push, write.
   const addCommentMutation = useMutation({
     mutationFn: async ({ post, content }) => {
+      if (!authUser?.id) throw new Error('Not authenticated');
+      const myProfile = allUserProfiles.find((p) => p.user_id === authUser.id);
       const comments = Array.isArray(post.comments) ? post.comments : [];
       const next = [...comments, {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        user_id: user.id,
-        username: user.username || 'Anonymous',
-        avatar_url: user.avatar_url || null,
+        user_id: authUser.id,
+        author_id: authUser.id,
+        username: myProfile?.username || null,
+        avatar_url: myProfile?.avatar_url || null,
         content,
         created_at: new Date().toISOString(),
       }];
@@ -634,7 +647,8 @@ console.log('PROFILE PAGE USER:', user)
                   </>
                 )}
                 {displayedPosts.map(post => {
-                  const authorProfile = allUserProfiles.find(p => p.user_id === post.author_id);
+                  const authorUuid = post.author_id || post.created_by;
+                  const authorProfile = allUserProfiles.find(p => p.user_id === authorUuid);
                   const hasLiked = (post.likes || []).includes(user?.id);
                   const authorColor1 = user?.profile_color_1 || "#FF5722";
                   const authorColor2 = user?.profile_color_2 || "#37F2D1";

@@ -87,7 +87,7 @@ function GuildHub() {
       if (memberIds.length === 0) return [];
       const { data } = await supabase
         .from("user_profiles")
-        .select("user_id, username, full_name, avatar_url, status, last_seen_at, favorite_class, favorite_class_icon, tagline, display_title, subscription_tier")
+        .select("user_id, username, avatar_url, status, last_seen_at, favorite_class, favorite_class_icon, tagline, display_title, subscription_tier")
         .in("user_id", memberIds);
       return data || [];
     },
