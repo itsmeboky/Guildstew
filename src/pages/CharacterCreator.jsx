@@ -15,6 +15,7 @@ import { loadCampaignBans, findCharacterIncompatibilities } from "@/lib/campaign
 import { getSpellSlots, getPactSlots } from "@/components/dnd5e/spellData";
 import { getSkillsCompletion } from "@/components/characterCreator/skillsCompletion";
 import { getSkillsCompletion2024 } from "@/components/characterCreator/skillsCompletion2024";
+import { getSpellsCompletion } from "@/components/characterCreator/spellsCompletion";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   calculateMaxHP, 
@@ -496,6 +497,16 @@ export default function CharacterCreator() {
     
     switch (step.id) {
       case 'race':
+        // 2024 splits the legacy "race step" into species (this
+        // step) + background (chosen later in AbilitiesStep2024
+        // because the background grants the ASI). The gate here
+        // therefore drops the background requirement for 2024
+        // and validates the species selection instead — without
+        // this branch, 2024 chars couldn't proceed past the
+        // species step because background is empty until later.
+        if (characterData.gamePack === 'dnd5e_2024') {
+          return !!(characterData.name && characterData.species?.speciesId);
+        }
         return characterData.name && characterData.race && characterData.background;
       case 'class':
         return characterData.class && characterData.alignment;
@@ -542,25 +553,14 @@ export default function CharacterCreator() {
           if (tableEntry.type === 'spellbook' && spellbookCount !== wizardSpellbookSize) return false;
           return true;
         }
-        const spellSlots = getSpellSlots(characterData.class, characterData.level, characterData.multiclasses || []);
-        const pactSlots = getPactSlots(characterData.class, characterData.level, characterData.multiclasses || []);
-
-        // Calculate total slots by level (standard + pact)
-        const totalSlots = { ...spellSlots };
-        if (pactSlots) {
-          const key = `level${pactSlots.slotLevel}`;
-          totalSlots[key] = (totalSlots[key] || 0) + pactSlots.slots;
-        }
-
-        // If no spell slots, step is valid
-        if (Object.values(totalSlots).every(slots => slots === 0)) return true;
-
-        // Check if all available slots are filled
-        return Object.entries(totalSlots).every(([levelKey, slots]) => {
-          if (slots === 0) return true;
-          const selectedCount = (characterData.spells?.[levelKey] || []).length;
-          return selectedCount === slots;
-        });
+        // 2014 path — share the spell-completion helper with
+        // SpellsStep so the picker caps and the Next-button gate
+        // can never drift apart. The previous validator compared
+        // picks against per-level SLOTS (casts/day), which never
+        // matched the picker's prepared/known/spellbook caps for
+        // Bard / Cleric / Druid / Warlock / Wizard at L1, leaving
+        // every prepared/known caster stuck on this step.
+        return getSpellsCompletion(characterData).isComplete;
       case 'equipment':
         return true;
       case 'review':
