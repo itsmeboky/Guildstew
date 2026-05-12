@@ -19,6 +19,7 @@ import StatusDot from "@/components/presence/StatusDot";
 import { statusMeta } from "@/lib/PresenceContext";
 import { Skeleton, CardSkeleton } from "@/components/ui/skeleton";
 import SocialHandlesDisplay from "@/components/profile/SocialHandlesDisplay";
+import { invalidateProfileQueries } from "@/lib/invalidateProfileQueries";
 
 export default function YourProfile() {
   const sub = useSubscription();
@@ -149,7 +150,7 @@ console.log('PROFILE PAGE USER:', user)
   const updateBioMutation = useMutation({
     mutationFn: (bio) => base44.auth.updateMe({ bio }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      invalidateProfileQueries(queryClient);
       setEditingBio(false);
     }
   });
@@ -157,7 +158,7 @@ console.log('PROFILE PAGE USER:', user)
   const updateGenresMutation = useMutation({
     mutationFn: (genres) => base44.auth.updateMe({ favorite_genres: genres }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      invalidateProfileQueries(queryClient);
     }
   });
 
@@ -166,7 +167,7 @@ console.log('PROFILE PAGE USER:', user)
   const updateLinksMutation = useMutation({
     mutationFn: (socialLinks) => base44.auth.updateMe({ social_links: socialLinks }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      invalidateProfileQueries(queryClient);
       setEditingLinks(false);
     }
   });
@@ -631,7 +632,7 @@ console.log('PROFILE PAGE USER:', user)
                   </>
                 )}
                 {displayedPosts.map(post => {
-                  const authorProfile = allUserProfiles.find(p => p.email === post.created_by);
+                  const authorProfile = allUserProfiles.find(p => p.user_id === post.author_id);
                   const hasLiked = (post.likes || []).includes(user?.id);
                   const authorColor1 = user?.profile_color_1 || "#FF5722";
                   const authorColor2 = user?.profile_color_2 || "#37F2D1";
@@ -756,6 +757,7 @@ console.log('PROFILE PAGE USER:', user)
                       <PostComments
                         post={post}
                         currentUser={user}
+                        allUserProfiles={allUserProfiles}
                         onAddComment={(content) => addCommentMutation.mutate({ post, content })}
                         onDeleteComment={(commentId) => deleteCommentMutation.mutate({ post, commentId })}
                         adding={addCommentMutation.isPending}

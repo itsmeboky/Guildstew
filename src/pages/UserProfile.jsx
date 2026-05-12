@@ -619,7 +619,7 @@ export default function UserProfile() {
                   </>
                 )}
                 {posts.slice(0, 5).map(post => {
-                  const authorProfile = allUserProfiles.find(p => p.email === post.created_by);
+                  const authorProfile = allUserProfiles.find(p => p.user_id === post.author_id);
                   const hasLiked = (post.likes || []).includes(currentUser?.id);
                   const authorColor1 = authorProfile?.profile_color_1 || user?.profile_color_1 || "#FF5722";
                   const authorColor2 = authorProfile?.profile_color_2 || user?.profile_color_2 || "#37F2D1";
@@ -691,6 +691,7 @@ export default function UserProfile() {
                       <PostComments
                         post={post}
                         currentUser={currentUser}
+                        allUserProfiles={allUserProfiles}
                         onAddComment={(content) => addCommentMutation.mutate({ post, content })}
                         onDeleteComment={(commentId) => deleteCommentMutation.mutate({ post, commentId })}
                         adding={addCommentMutation.isPending}
