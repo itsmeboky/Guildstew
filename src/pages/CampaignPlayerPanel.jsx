@@ -722,11 +722,6 @@ function CampaignPlayerPanelContent() {
     }
   }, [combatState.isOpen, combatState.target, myCharacter]);
 
-<<<<<<< HEAD
-  // Redirect if session ends. `session_active` is the canonical
-  // column; `is_session_active` was dropped in
-  // 20261128_character_ownership_model_foundation.sql.
-=======
   // Redirect if session ends. The column is `session_active` per
   // 20261128_character_ownership_model_foundation.sql (PART 3, which
   // dropped the duplicate `is_session_active` after reconciling
@@ -734,7 +729,6 @@ function CampaignPlayerPanelContent() {
   // here, so the negation always tripped and bounced the player
   // back to CampaignPanel — the navigation loop the side-nav work
   // had been working around.
->>>>>>> origin/claude/fix-player-panel-regressions-YfJYa
   useEffect(() => {
     if (campaign && !campaign.session_active) {
       navigate(createPageUrl("CampaignPanel") + `?id=${campaignId}`);
@@ -2814,19 +2808,6 @@ function TurnOrderDisplay({ order, currentTurnIndex, onSelectTarget, selectionMo
                 {/* Simple Bar for Monsters (No numbers) */}
                 {combatant.type !== 'player' && (
                    <div className="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden mt-1 border border-gray-700 relative" title="Monster Health">
-                      {/* Assuming we want to show *some* indication of health loss if possible.
-                          Since we don't have the exact Combat Queue data prop passed here in the TurnOrderDisplay inside CampaignPlayerPanel,
-                          we can't render an accurate bar.
-                          HOWEVER, the user explicitly asked for it: "All monsters and NPCs need to have a health bar... Players should also be able to see HP being lost."
-
-                          To fix this properly, we need to fetch the combat queue in CampaignPlayerPanel and pass it down,
-                          OR rely on the fact that 'combatant' in 'order' might have updated 'hit_points' if we are syncing correctly.
-                          
-                          Currently 'campaign.combat_data.order' is static until updated.
-                          If we update the campaign entity with new order data when damage happens, it will reflect here.
-                          
-                          Let's assume the order object contains the snapshot of HP.
-                      */}
                       {(() => {
                          const current = combatant.hit_points?.current !== undefined ? combatant.hit_points.current : (combatant.hit_points?.max || 10);
                          const max = combatant.hit_points?.max || 10;
