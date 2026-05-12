@@ -49,6 +49,7 @@ import {
 } from "@/data/games/dnd5e_2024/rules";
 import EquipmentStep from "@/components/characterCreator/EquipmentStep";
 import ReviewStep from "@/components/characterCreator/ReviewStep";
+import ReviewStep2024 from "@/components/characterCreator/ReviewStep2024";
 import QuickCreateDialog from "@/components/characterCreator/QuickCreateDialog";
 import ModeSelector from "@/components/characterCreator/ModeSelector";
 import QuickPickFlow from "@/components/characterCreator/QuickPickFlow";
@@ -709,6 +710,7 @@ const handleSubmit = () => {
     _is2024 && _stepDef.id === 'features' ? ClassFeaturesStep2024 :
     _is2024 && _stepDef.id === 'skills' ? SkillsStep2024 :
     _is2024 && _stepDef.id === 'spells' ? SpellsStep2024 :
+    _is2024 && _stepDef.id === 'review' ? ReviewStep2024 :
     _stepDef.component;
 
   // Mode selector — first screen before any creator steps render.
