@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 import InfoTip from "@/components/characterCreator/InfoTip";
 import { tipFor } from "@/components/characterCreator/creatorTips";
 import { getGamePack } from "@/data/games";
+import { getClassIcon } from "@/data/games/dnd5e_2024/assets";
 
 /**
  * 2024 D&D 5e — class step.
@@ -110,6 +111,7 @@ export default function ClassStep2024({ characterData, updateCharacterData }) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
         {classes.map((cls) => {
           const isSelected = characterData.class === cls.name;
+          const iconUrl = getClassIcon(cls.name);
           return (
             <button
               key={cls.id}
@@ -122,22 +124,37 @@ export default function ClassStep2024({ characterData, updateCharacterData }) {
                   : "bg-[#2A3441]/50 border-[#1E2430] hover:border-[#37F2D1]/50"
               }`}
             >
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-bold text-white">{cls.name}</h3>
-                {isSelected && <Check className="w-4 h-4 text-[#37F2D1]" />}
-              </div>
-              <div className="flex flex-wrap gap-2 text-xs text-white/60">
-                <span>d{cls.hitDie}</span>
-                <span>•</span>
-                <span>{cls.primaryAbility || "—"}</span>
-                {cls.hasWeaponMastery && (
-                  <>
-                    <span>•</span>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#37F2D1]">
-                      <Sword className="w-3 h-3" /> Mastery
-                    </span>
-                  </>
+              <div className="flex items-center gap-3 mb-2">
+                {iconUrl ? (
+                  <img
+                    src={iconUrl}
+                    alt={cls.name}
+                    className="w-12 h-12 object-contain flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded bg-gradient-to-br from-[#37F2D1]/30 to-[#5B4B9E]/30 flex items-center justify-center flex-shrink-0">
+                    <Sparkles className="w-6 h-6 text-[#37F2D1]" />
+                  </div>
                 )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-lg font-bold text-white truncate">{cls.name}</h3>
+                    {isSelected && <Check className="w-4 h-4 text-[#37F2D1] flex-shrink-0" />}
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs text-white/60 mt-1">
+                    <span>d{cls.hitDie}</span>
+                    <span>•</span>
+                    <span>{cls.primaryAbility || "—"}</span>
+                    {cls.hasWeaponMastery && (
+                      <>
+                        <span>•</span>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#37F2D1]">
+                          <Sword className="w-3 h-3" /> Mastery
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             </button>
           );
@@ -151,9 +168,17 @@ export default function ClassStep2024({ characterData, updateCharacterData }) {
           className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border-2 border-[#37F2D1]/40 mb-6"
         >
           <div className="flex items-center gap-4 mb-4">
-            <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-[#37F2D1]/30 to-[#8B5CF6]/30 flex items-center justify-center">
-              <Sparkles className="w-8 h-8 text-[#37F2D1]" />
-            </div>
+            {getClassIcon(selectedClass.name) ? (
+              <img
+                src={getClassIcon(selectedClass.name)}
+                alt={selectedClass.name}
+                className="w-20 h-20 object-contain"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-[#37F2D1]/30 to-[#8B5CF6]/30 flex items-center justify-center">
+                <Sparkles className="w-10 h-10 text-[#37F2D1]" />
+              </div>
+            )}
             <div className="flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-2xl font-bold text-white">{selectedClass.name}</h3>

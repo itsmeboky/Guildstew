@@ -4,6 +4,7 @@
  * SOURCE OF TRUTH:
  *   - docs/5e_reference/2024/5e-SRD-Species.json     (9 species)
  *   - docs/5e_reference/2024/5e-SRD-Subspecies.json  (24 subspecies)
+ *   - docs/5e_reference/2024/5e-SRD-Traits.json      (trait descriptions)
  *
  * 2024 PHB renames "race" → "species" and DROPS the species-grants-
  * ASI mechanic. Background grants ASI in 2024. The data layer here
@@ -14,17 +15,46 @@
  * Tiefling legacies) carry their own additional `traits` array;
  * `getSubspecies(idx)` returns the full record so consumers can
  * surface lineage spells / abilities.
+ *
+ * Trait descriptions live in a separate Traits JSON file (the
+ * Species file only carries trait names). The adapter resolves
+ * those at load time and attaches a `description` string to each
+ * trait so the UI can render hover/select tooltips without a
+ * second adapter hop.
  */
 
 import SPECIES from "../../../../docs/5e_reference/2024/5e-SRD-Species.json" with { type: "json" };
 import SUBSPECIES from "../../../../docs/5e_reference/2024/5e-SRD-Subspecies.json" with { type: "json" };
+import TRAITS from "../../../../docs/5e_reference/2024/5e-SRD-Traits.json" with { type: "json" };
 
-const BY_SPECIES_ID = new Map(SPECIES.map((s) => [s.index, s]));
-const BY_SUBSPECIES_ID = new Map(SUBSPECIES.map((s) => [s.index, s]));
+const TRAIT_BY_INDEX = new Map(TRAITS.map((t) => [t.index, t]));
 
-/** Returns all 2024 SRD species. */
+function enrichTraits(rawTraits) {
+  if (!Array.isArray(rawTraits)) return [];
+  return rawTraits.map((t) => {
+    const full = TRAIT_BY_INDEX.get(t.index);
+    return {
+      ...t,
+      description: full?.description || "",
+    };
+  });
+}
+
+const ENRICHED_SPECIES = SPECIES.map((s) => ({
+  ...s,
+  traits: enrichTraits(s.traits),
+}));
+const ENRICHED_SUBSPECIES = SUBSPECIES.map((s) => ({
+  ...s,
+  traits: enrichTraits(s.traits),
+}));
+
+const BY_SPECIES_ID = new Map(ENRICHED_SPECIES.map((s) => [s.index, s]));
+const BY_SUBSPECIES_ID = new Map(ENRICHED_SUBSPECIES.map((s) => [s.index, s]));
+
+/** Returns all 2024 SRD species, with trait descriptions resolved. */
 export function getSpeciesList() {
-  return SPECIES;
+  return ENRICHED_SPECIES;
 }
 
 /** Single-species lookup by SRD index (e.g. "dragonborn"). */
@@ -37,7 +67,7 @@ export function getSpeciesById(id) {
  *  that don't have subspecies (e.g. Human in 2024 SRD). */
 export function getSubspeciesForSpecies(speciesId) {
   if (!speciesId) return [];
-  return SUBSPECIES.filter((s) => s.species?.index === speciesId);
+  return ENRICHED_SUBSPECIES.filter((s) => s.species?.index === speciesId);
 }
 
 /** Single-subspecies lookup by SRD index
