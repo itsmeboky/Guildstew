@@ -82,9 +82,9 @@ export default function SpeciesStep2024({ characterData, updateCharacterData }) 
             2024
           </Badge>
           <InfoTip width="w-80">
-            PHB 2024 renames "race" to "species" and moves ability score
-            bonuses to the background. Your species sets size, speed, and
-            innate traits — nothing more.
+            The 2024 edition renames "race" to "species" and moves ability
+            score bonuses to the background. Your species sets size, speed,
+            and innate traits — nothing more.
           </InfoTip>
         </h2>
         <p className="text-white/80 text-sm">
@@ -205,8 +205,7 @@ export default function SpeciesStep2024({ characterData, updateCharacterData }) 
             <span className="font-bold text-[#5B4B9E]">{selectedSubspecies.name}</span>
           </p>
           <p className="text-xs text-white/50 mt-1 italic">
-            Ability score bonuses come from your background, not your species
-            (PHB 2024).
+            Ability score bonuses come from your background, not your species.
           </p>
         </div>
       )}

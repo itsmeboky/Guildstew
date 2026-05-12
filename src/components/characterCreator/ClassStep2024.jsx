@@ -115,7 +115,10 @@ export default function ClassStep2024({ characterData, updateCharacterData }) {
       <div className="space-y-4">
         <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]">
           <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide">
-            Class (PHB 2024)
+            Class
+            <span className="ml-2 inline-block bg-[#37F2D1] text-[#1E2430] text-[9px] font-black px-1.5 py-0.5 rounded">
+              2024
+            </span>
           </Label>
           <Select value={characterData.class || ""} onValueChange={handleClassSelect}>
             <SelectTrigger className="bg-[#2A3441]/80 border-[#37F2D1]/30 text-white text-base h-12">
