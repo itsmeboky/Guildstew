@@ -757,6 +757,7 @@ console.log('PROFILE PAGE USER:', user)
                       <PostComments
                         post={post}
                         currentUser={user}
+                        allUserProfiles={allUserProfiles}
                         onAddComment={(content) => addCommentMutation.mutate({ post, content })}
                         onDeleteComment={(commentId) => deleteCommentMutation.mutate({ post, commentId })}
                         adding={addCommentMutation.isPending}

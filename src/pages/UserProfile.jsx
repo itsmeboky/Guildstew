@@ -691,6 +691,7 @@ export default function UserProfile() {
                       <PostComments
                         post={post}
                         currentUser={currentUser}
+                        allUserProfiles={allUserProfiles}
                         onAddComment={(content) => addCommentMutation.mutate({ post, content })}
                         onDeleteComment={(commentId) => deleteCommentMutation.mutate({ post, commentId })}
                         adding={addCommentMutation.isPending}
