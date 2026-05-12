@@ -14,6 +14,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { loadCampaignBans, findCharacterIncompatibilities } from "@/lib/campaignBans";
 import { getSpellSlots, getPactSlots } from "@/components/dnd5e/spellData";
 import { getSkillsCompletion } from "@/components/characterCreator/skillsCompletion";
+import { getSkillsCompletion2024 } from "@/components/characterCreator/skillsCompletion2024";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   calculateMaxHP, 
@@ -38,6 +39,7 @@ import AbilitiesStep2024 from "@/components/characterCreator/AbilitiesStep2024";
 import ClassFeaturesStep from "@/components/characterCreator/ClassFeaturesStep";
 import ClassFeaturesStep2024 from "@/components/characterCreator/ClassFeaturesStep2024";
 import SkillsStep from "@/components/characterCreator/SkillsStep";
+import SkillsStep2024 from "@/components/characterCreator/SkillsStep2024";
 import SpellsStep from "@/components/characterCreator/SpellsStep";
 import EquipmentStep from "@/components/characterCreator/EquipmentStep";
 import ReviewStep from "@/components/characterCreator/ReviewStep";
@@ -502,14 +504,16 @@ export default function CharacterCreator() {
       case 'features':
         return true;
       case 'skills':
-        // Single source of truth shared with SkillsStep — registry-
-        // driven (CLASS_SKILL_CHOICES + getRaceSkillProficiencies +
-        // getBackgroundSkills) so fixed-racial grants don't get
-        // double-counted, racial bonus picks track the actual race
-        // (not just the old hardcoded Half-Elf/Human pair), and
-        // expertise-required classes (Rogue, Bard) can't slip past
-        // without selections.
-        return getSkillsCompletion(characterData).isComplete;
+        // 2024 reads from its own SRD-driven completion helper —
+        // background skills come from AbilitiesStep2024's selection,
+        // class skill choice count from the 2024 class adapter, and
+        // species "Skillful" trait grants a bonus pick. 2014 path
+        // still uses the registry-driven helper that handles legacy
+        // race / background / multiclass entries.
+        return (characterData.gamePack === 'dnd5e_2024'
+          ? getSkillsCompletion2024(characterData)
+          : getSkillsCompletion(characterData)
+        ).isComplete;
       case 'spells':
         const spellSlots = getSpellSlots(characterData.class, characterData.level, characterData.multiclasses || []);
         const pactSlots = getPactSlots(characterData.class, characterData.level, characterData.multiclasses || []);
@@ -677,6 +681,7 @@ const handleSubmit = () => {
     _is2024 && _stepDef.id === 'class' ? ClassStep2024 :
     _is2024 && _stepDef.id === 'abilities' ? AbilitiesStep2024 :
     _is2024 && _stepDef.id === 'features' ? ClassFeaturesStep2024 :
+    _is2024 && _stepDef.id === 'skills' ? SkillsStep2024 :
     _stepDef.component;
 
   // Mode selector — first screen before any creator steps render.
