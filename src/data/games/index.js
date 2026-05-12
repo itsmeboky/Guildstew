@@ -17,36 +17,81 @@
  * lands with the 2024 character creator — `getGamePack()` accepts
  * `dnd5e` as an alias for `dnd5e_2014` so existing characters keep
  * working unchanged.
+ *
+ * Adapter shape is built from EXPLICIT named imports rather than
+ * `...moduleNamespace` spreads. Spreading an ES module namespace
+ * object works in dev (Vite serves them as real objects) but can
+ * silently drop properties in some production-build configurations
+ * — the symptom was a `getGamePack(...).getEquipment is not a
+ * function` crash on the Equipment step in prod. Explicit imports
+ * make every function rollup keeps tree-shakeable and observable.
  */
 
-import * as dnd5e_2014_equipment from "./dnd5e_2014/equipment.js";
-import * as dnd5e_2024_equipment from "./dnd5e_2024/equipment.js";
-import * as dnd5e_2024_classes from "./dnd5e_2024/classes.js";
-import * as dnd5e_2024_classFeatures from "./dnd5e_2024/classFeatures.js";
-import * as dnd5e_2024_subclassFeatures from "./dnd5e_2024/subclassFeatures.js";
+import {
+  getEquipment as getEquipment_2014,
+  getEquipmentByCategory as getEquipmentByCategory_2014,
+  getEquipmentByName as getEquipmentByName_2014,
+  getEquipmentById as getEquipmentById_2014,
+} from "./dnd5e_2014/equipment.js";
+
+import {
+  getEquipment as getEquipment_2024,
+  getEquipmentByCategory as getEquipmentByCategory_2024,
+  getEquipmentByName as getEquipmentByName_2024,
+  getEquipmentById as getEquipmentById_2024,
+  getWeaponsWithMastery as getWeaponsWithMastery_2024,
+} from "./dnd5e_2024/equipment.js";
+
+import {
+  getClasses as getClasses_2024,
+  getClassByName as getClassByName_2024,
+  getClassById as getClassById_2024,
+  getSubclassesForClass as getSubclassesForClass_2024,
+  getMulticlassPrereqs as getMulticlassPrereqs_2024,
+} from "./dnd5e_2024/classes.js";
+
+import {
+  getClasses as getClassFeatureClasses_2024,
+  getClassBasics as getClassBasics_2024,
+  getClassAsiLevels as getClassAsiLevels_2024,
+  hasPerLevelFeatures as hasPerLevelFeatures_2024,
+} from "./dnd5e_2024/classFeatures.js";
+
+import {
+  getSubclassFeaturesAtLevel as getSubclassFeaturesAtLevel_2024,
+} from "./dnd5e_2024/subclassFeatures.js";
+
 import * as dnd5e_2024_rules from "./dnd5e_2024/rules.js";
 
-// 2014 classes / class features are still served by the legacy
-// hard-coded data in `src/game-packs/dnd5e/data/classFeatures.js`
-// + `ClassStep.jsx` + `ClassFeaturesStep.jsx` per the "don't
-// refactor 2014 surgically" rule. The dispatcher in
-// CharacterCreator.jsx uses the existing 2014 steps for
-// `dnd5e_2014` and the 2024-prefixed step components (which call
-// into the 2024 adapter modules below) for `dnd5e_2024`.
 const ADAPTERS = {
   dnd5e_2014: {
     id: "dnd5e_2014",
-    ...dnd5e_2014_equipment,
+    getEquipment: getEquipment_2014,
+    getEquipmentByCategory: getEquipmentByCategory_2014,
+    getEquipmentByName: getEquipmentByName_2014,
+    getEquipmentById: getEquipmentById_2014,
   },
   dnd5e_2024: {
     id: "dnd5e_2024",
-    ...dnd5e_2024_equipment,
-    ...dnd5e_2024_classes,
-    ...dnd5e_2024_classFeatures,
-    ...dnd5e_2024_subclassFeatures,
-    // rules module is a scaffold — most helpers throw "not yet
-    // implemented" until commits 6/7 land. The spread pattern keeps
-    // it discoverable on the adapter object for the day they ship.
+    getEquipment: getEquipment_2024,
+    getEquipmentByCategory: getEquipmentByCategory_2024,
+    getEquipmentByName: getEquipmentByName_2024,
+    getEquipmentById: getEquipmentById_2024,
+    getWeaponsWithMastery: getWeaponsWithMastery_2024,
+    getClasses: getClasses_2024,
+    getClassByName: getClassByName_2024,
+    getClassById: getClassById_2024,
+    getSubclassesForClass: getSubclassesForClass_2024,
+    getMulticlassPrereqs: getMulticlassPrereqs_2024,
+    // classFeatures helpers — getClasses is already on the class
+    // adapter above; the classFeatures module's own `getClasses`
+    // wraps a different shape, so it's mapped as
+    // `getClassFeatureClasses` here to keep both surfaces.
+    getClassFeatureClasses: getClassFeatureClasses_2024,
+    getClassBasics: getClassBasics_2024,
+    getClassAsiLevels: getClassAsiLevels_2024,
+    hasPerLevelFeatures: hasPerLevelFeatures_2024,
+    getSubclassFeaturesAtLevel: getSubclassFeaturesAtLevel_2024,
     rules: dnd5e_2024_rules,
   },
 };
