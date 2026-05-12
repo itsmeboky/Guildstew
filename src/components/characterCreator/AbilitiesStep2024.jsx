@@ -10,6 +10,7 @@ import {
   getBackgroundFeat,
   getBackgroundProficiencies,
 } from "@/data/games/dnd5e_2024/backgrounds";
+import { backgroundCopy } from "@/data/games/dnd5e_2024/copy";
 import InfoTip from "@/components/characterCreator/InfoTip";
 
 /**
@@ -222,18 +223,56 @@ export default function AbilitiesStep2024({ characterData, updateCharacterData }
       className="max-w-5xl mx-auto"
     >
       <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 mb-6 border border-[#2A3441]">
-        <h2 className="text-2xl font-bold text-[#FFC6AA] mb-2 flex items-center gap-2">
-          Abilities & Background
+        <h2 className="text-2xl font-bold text-[#FFC6AA] mb-3 flex items-center gap-2">
+          What are Ability Scores?
           <Badge className="bg-[#37F2D1] text-[#1E2430] text-[10px] font-black">
             2024
           </Badge>
         </h2>
-        <p className="text-white/80 text-sm">
-          Generate base scores (Standard Array, Point Buy, or Rolling),
-          then pick a background. Your background grants ability score
-          increases (+2/+1 or +1/+1/+1 across three abilities), two
-          skills, one tool, an Origin feat, and starting equipment.
+        <p className="text-white mb-4">
+          Ability Scores are the foundation of your character. They represent
+          your character's natural talents and capabilities. Each score
+          ranges from 3 (very poor) to 18 (exceptional) before bonuses, and
+          caps at 20 at character creation. These scores determine how good
+          your character is at different tasks.
         </p>
+        <p className="text-white mb-4">
+          <span className="font-bold text-[#FF5722]">The Modifier</span> is
+          the number you'll actually use in gameplay. It ranges from -4 to
+          +5 for scores between 3-20. Higher scores give better modifiers.
+        </p>
+        <p className="text-white mb-4">
+          <span className="font-bold text-[#37F2D1]">2024 change:</span>{" "}
+          Ability score bonuses come from your <span className="font-bold">background</span>,
+          not your species. After you generate base scores, pick a background
+          below to distribute its +2/+1 (or +1/+1/+1) across three abilities.
+        </p>
+        <div className="grid grid-cols-3 gap-4 text-sm">
+          <div className="bg-[#2A3441]/80 p-3 rounded">
+            <span className="font-bold text-[#FF5722]">💪 Strength:</span>
+            <span className="text-white"> Melee attacks, carrying capacity</span>
+          </div>
+          <div className="bg-[#2A3441]/80 p-3 rounded">
+            <span className="font-bold text-[#FF5722]">🏃 Dexterity:</span>
+            <span className="text-white"> Ranged attacks, stealth, dodging</span>
+          </div>
+          <div className="bg-[#2A3441]/80 p-3 rounded">
+            <span className="font-bold text-[#FF5722]">❤️ Constitution:</span>
+            <span className="text-white"> Hit points, endurance</span>
+          </div>
+          <div className="bg-[#2A3441]/80 p-3 rounded">
+            <span className="font-bold text-[#FF5722]">🧠 Intelligence:</span>
+            <span className="text-white"> Knowledge, investigation, arcana</span>
+          </div>
+          <div className="bg-[#2A3441]/80 p-3 rounded">
+            <span className="font-bold text-[#FF5722]">👁️ Wisdom:</span>
+            <span className="text-white"> Perception, insight, willpower</span>
+          </div>
+          <div className="bg-[#2A3441]/80 p-3 rounded">
+            <span className="font-bold text-[#FF5722]">💬 Charisma:</span>
+            <span className="text-white"> Persuasion, deception, performance</span>
+          </div>
+        </div>
       </div>
 
       {/* Method picker */}
@@ -253,8 +292,8 @@ export default function AbilitiesStep2024({ characterData, updateCharacterData }
                 onClick={() => setMethod(id)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm font-semibold transition-all ${
                   active
-                    ? "bg-[#37F2D1] text-[#1E2430] border-[#37F2D1]"
-                    : "bg-[#2A3441] text-white/70 border-[#1E2430] hover:border-[#37F2D1]/50"
+                    ? "bg-[#FF5722] text-white border-[#FF5722] hover:bg-[#FF6B3D]"
+                    : "bg-[#2A3441] text-white/70 border-[#1E2430] hover:bg-[#1E2430]"
                 }`}
               >
                 <Icon className="w-4 h-4" />
@@ -462,6 +501,11 @@ export default function AbilitiesStep2024({ characterData, updateCharacterData }
                   <h4 className="text-white font-bold">{bg.name}</h4>
                   {isSelected && <Sparkles className="w-4 h-4 text-[#37F2D1]" />}
                 </div>
+                {backgroundCopy(bg.name).description && (
+                  <p className="text-xs text-white/70 mb-2 leading-relaxed">
+                    {backgroundCopy(bg.name).description}
+                  </p>
+                )}
                 <p className="text-xs text-white/60">
                   Abilities: <span className="text-[#37F2D1]">{abilityLabels}</span>
                 </p>
