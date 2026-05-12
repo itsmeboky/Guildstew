@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, User, Sparkles, Sword, Check } from "lucide-react";
+import { Upload, User, Sparkles, Sword } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -11,45 +12,18 @@ import InfoTip from "@/components/characterCreator/InfoTip";
 import { tipFor } from "@/components/characterCreator/creatorTips";
 import { getGamePack } from "@/data/games";
 import { getClassIcon } from "@/data/games/dnd5e_2024/assets";
+import { classCopy, ALIGNMENTS } from "@/data/games/dnd5e_2024/copy";
 
 /**
  * 2024 D&D 5e — class step.
  *
- * Card-grid picker. Players click a class card to select; the card
- * lights up in selected state, the right-hand detail panel shows the
- * class's hit die, saves, primary ability, skill choice count, and
- * subclass-decision level, and the Next button enables.
- *
- * Persistence:
- *   characterData.class            = class name (string, e.g. "Wizard")
- *   characterData._gamePackClassId = SRD index (e.g. "wizard")
- *   characterData.features         = [] (seeded for the features step)
- *
- * The card layout mirrors SpeciesStep2024's grid pattern. The
- * previous version used a Radix Select dropdown which surfaced a
- * production blocker — the dropdown either failed to open or its
- * value updates didn't propagate consistently. A clickable card is
- * simpler React state, no Radix shadow trees to debug, and gives
- * the player a glanceable comparison of all 12 classes at once.
+ * Mirrors the 2014 ClassStep visual layout (2-column grid: class +
+ * detail card on the left, alignment + portrait + name on the
+ * right). Data wiring stays on the 2024 adapter — class list comes
+ * from `getGamePack("dnd5e_2024").getClasses()` (SRD-sourced) and
+ * descriptive copy comes from `classCopy(name)` which carries
+ * 2024-edition flavor text for every class.
  */
-
-// 2024 subclass-decision level per class. Source: PHB 2024.
-const SUBCLASS_DECISION_LEVEL = {
-  cleric: 3, sorcerer: 3, warlock: 3, druid: 3, wizard: 3, bard: 3,
-  fighter: 3, rogue: 3, monk: 3, paladin: 3, ranger: 3, barbarian: 3,
-};
-
-const ALIGNMENTS = [
-  { name: "Lawful Good",    description: "Honour, compassion, and order." },
-  { name: "Neutral Good",   description: "Does good because it's right." },
-  { name: "Chaotic Good",   description: "Values freedom and kindness above rules." },
-  { name: "Lawful Neutral", description: "Values order and tradition." },
-  { name: "True Neutral",   description: "Balanced; acts based on situation." },
-  { name: "Chaotic Neutral",description: "Values personal freedom; unpredictable." },
-  { name: "Lawful Evil",    description: "Uses systems to gain power and hurt others." },
-  { name: "Neutral Evil",   description: "Purely selfish, no loyalty." },
-  { name: "Chaotic Evil",   description: "Cruel, unpredictable, destructive." },
-];
 
 export default function ClassStep2024({ characterData, updateCharacterData }) {
   const adapter = getGamePack("dnd5e_2024");
@@ -57,11 +31,12 @@ export default function ClassStep2024({ characterData, updateCharacterData }) {
 
   const selectedClass = classes.find((c) => c.name === characterData.class) || null;
   const selectedAlignment = ALIGNMENTS.find((a) => a.name === characterData.alignment);
+  const selectedCopy = selectedClass ? classCopy(selectedClass.name) : null;
 
   const [uploading, setUploading] = useState(false);
 
-  const handleClassSelect = (className) => {
-    const cls = classes.find((c) => c.name === className);
+  const handleClassSelect = (value) => {
+    const cls = classes.find((c) => c.name === value);
     if (!cls) return;
     updateCharacterData({
       class: cls.name,
@@ -89,156 +64,142 @@ export default function ClassStep2024({ characterData, updateCharacterData }) {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3 }}
-      className="max-w-6xl mx-auto"
+      className="grid grid-cols-2 gap-6"
     >
-      <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441] mb-6">
-        <div className="flex items-center gap-2 mb-2">
-          <Label className="text-white/70 text-sm uppercase tracking-wide">
-            Class
-          </Label>
-          <span className="inline-block bg-[#37F2D1] text-[#1E2430] text-[9px] font-black px-1.5 py-0.5 rounded">
-            2024
-          </span>
-          <InfoTip>{tipFor("class")}</InfoTip>
-        </div>
-        <p className="text-white/60 text-sm">
-          Pick a class to define your character's combat role and core
-          abilities. Click a card to select.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-        {classes.map((cls) => {
-          const isSelected = characterData.class === cls.name;
-          const iconUrl = getClassIcon(cls.name);
-          return (
-            <button
-              key={cls.id}
-              type="button"
-              onClick={() => handleClassSelect(cls.name)}
-              data-testid={`class-card-${cls.id}`}
-              className={`text-left p-4 rounded-lg border-2 transition-all ${
-                isSelected
-                  ? "bg-[#2A3441] border-[#37F2D1] shadow-lg shadow-[#37F2D1]/20"
-                  : "bg-[#2A3441]/50 border-[#1E2430] hover:border-[#37F2D1]/50"
-              }`}
-            >
-              <div className="flex items-center gap-3 mb-2">
-                {iconUrl ? (
-                  <img
-                    src={iconUrl}
-                    alt={cls.name}
-                    className="w-12 h-12 object-contain flex-shrink-0"
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded bg-gradient-to-br from-[#37F2D1]/30 to-[#5B4B9E]/30 flex items-center justify-center flex-shrink-0">
-                    <Sparkles className="w-6 h-6 text-[#37F2D1]" />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-lg font-bold text-white truncate">{cls.name}</h3>
-                    {isSelected && <Check className="w-4 h-4 text-[#37F2D1] flex-shrink-0" />}
-                  </div>
-                  <div className="flex flex-wrap gap-2 text-xs text-white/60 mt-1">
-                    <span>d{cls.hitDie}</span>
-                    <span>•</span>
-                    <span>{cls.primaryAbility || "—"}</span>
-                    {cls.hasWeaponMastery && (
-                      <>
-                        <span>•</span>
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#37F2D1]">
-                          <Sword className="w-3 h-3" /> Mastery
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {selectedClass && (
+      <div className="space-y-4">
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border-2 border-[#37F2D1]/40 mb-6"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
         >
-          <div className="flex items-center gap-4 mb-4">
-            {getClassIcon(selectedClass.name) ? (
-              <img
-                src={getClassIcon(selectedClass.name)}
-                alt={selectedClass.name}
-                className="w-20 h-20 object-contain"
-              />
-            ) : (
-              <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-[#37F2D1]/30 to-[#8B5CF6]/30 flex items-center justify-center">
-                <Sparkles className="w-10 h-10 text-[#37F2D1]" />
+          <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide flex items-center gap-2">
+            Class
+            <span className="inline-block bg-[#37F2D1] text-[#1E2430] text-[9px] font-black px-1.5 py-0.5 rounded">
+              2024
+            </span>
+            <InfoTip>{tipFor("class")}</InfoTip>
+          </Label>
+          <Select
+            value={characterData.class || ""}
+            onValueChange={handleClassSelect}
+          >
+            <SelectTrigger className="bg-[#2A3441]/80 border-[#37F2D1]/30 text-white text-base h-12 hover:border-[#37F2D1]/60 transition-colors">
+              <SelectValue placeholder="Select class" />
+            </SelectTrigger>
+            <SelectContent className="bg-[#1E2430] border-[#2A3441]">
+              {classes.map((cls) => (
+                <SelectItem
+                  key={cls.id}
+                  value={cls.name}
+                  className="text-white hover:bg-[#2A3441] focus:bg-[#2A3441]"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    {cls.name}
+                    {cls.hasWeaponMastery && (
+                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1 py-0.5">
+                        <Sword className="w-2.5 h-2.5" /> Mastery
+                      </span>
+                    )}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </motion.div>
+
+        {selectedClass && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2 }}
+            className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
+          >
+            <div className="flex items-center gap-4 mb-4">
+              {getClassIcon(selectedClass.name) ? (
+                <img
+                  src={getClassIcon(selectedClass.name)}
+                  alt={selectedClass.name}
+                  className="w-20 h-20 object-contain"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-[#37F2D1]/30 to-[#8B5CF6]/30 flex items-center justify-center">
+                  <Sparkles className="w-10 h-10 text-[#37F2D1]" />
+                </div>
+              )}
+              <div className="flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-2xl font-bold text-white">{selectedClass.name}</h3>
+                  {selectedClass.hasWeaponMastery && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1.5 py-0.5">
+                      <Sword className="w-3 h-3" /> Weapon Mastery
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-white/60 mt-1">Hit Die: d{selectedClass.hitDie}</p>
+              </div>
+            </div>
+
+            <p className="text-white/80 mb-4 text-sm leading-relaxed">
+              {selectedCopy.description}
+            </p>
+
+            <div className="bg-[#37F2D1]/10 rounded-lg p-4 mb-4 border border-[#37F2D1]/20">
+              <p className="text-xs font-semibold text-[#37F2D1] mb-2">💡 PLAYSTYLE TIP</p>
+              <p className="text-sm text-white/80">{selectedCopy.playstyle}</p>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-white/60">Primary Ability:</span>
+                <span className="text-[#37F2D1] font-semibold">
+                  {selectedClass.primaryAbility || "—"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/60">Saving Throws:</span>
+                <span className="text-white">
+                  {(selectedClass.savingThrows || []).join(", ")}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/60">Skills:</span>
+                <span className="text-white">
+                  Choose {selectedClass.skillChoiceCount} of{" "}
+                  {selectedClass.skillChoices.length}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/60">Subclass at level:</span>
+                <span className="text-white">3</span>
+              </div>
+            </div>
+
+            {(selectedClass.multiclass?.prerequisites?.length ?? 0) > 0 && (
+              <div className="bg-[#37F2D1]/10 rounded-lg p-3 mt-4 border border-[#37F2D1]/20 text-xs">
+                <p className="font-semibold text-[#37F2D1] mb-1 uppercase tracking-wide">
+                  Multiclass prerequisites
+                </p>
+                <ul className="space-y-0.5 text-white/80">
+                  {selectedClass.multiclass.prerequisites.map((p) => (
+                    <li key={p.ability}>
+                      {p.abilityName} {p.minimumScore}+
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
-            <div className="flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-2xl font-bold text-white">{selectedClass.name}</h3>
-                {selectedClass.hasWeaponMastery && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1.5 py-0.5">
-                    <Sword className="w-3 h-3" /> Weapon Mastery
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-white/60 mt-1">Hit Die: d{selectedClass.hitDie}</p>
-            </div>
-          </div>
+          </motion.div>
+        )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div className="flex justify-between bg-[#2A3441]/50 rounded px-3 py-2">
-              <span className="text-white/60">Primary Ability:</span>
-              <span className="text-[#37F2D1] font-semibold">
-                {selectedClass.primaryAbility || "—"}
-              </span>
-            </div>
-            <div className="flex justify-between bg-[#2A3441]/50 rounded px-3 py-2">
-              <span className="text-white/60">Saving Throws:</span>
-              <span className="text-white">
-                {(selectedClass.savingThrows || []).join(", ")}
-              </span>
-            </div>
-            <div className="flex justify-between bg-[#2A3441]/50 rounded px-3 py-2">
-              <span className="text-white/60">Skills:</span>
-              <span className="text-white">
-                Choose {selectedClass.skillChoiceCount} of{" "}
-                {selectedClass.skillChoices.length}
-              </span>
-            </div>
-            <div className="flex justify-between bg-[#2A3441]/50 rounded px-3 py-2">
-              <span className="text-white/60">Subclass at level:</span>
-              <span className="text-white">
-                {SUBCLASS_DECISION_LEVEL[selectedClass.id] ?? 3}
-              </span>
-            </div>
-          </div>
-
-          {(selectedClass.multiclass?.prerequisites?.length ?? 0) > 0 && (
-            <div className="bg-[#37F2D1]/10 rounded-lg p-3 mt-4 border border-[#37F2D1]/20 text-xs">
-              <p className="font-semibold text-[#37F2D1] mb-1 uppercase tracking-wide">
-                Multiclass prerequisites
-              </p>
-              <ul className="space-y-0.5 text-white/80">
-                {selectedClass.multiclass.prerequisites.map((p) => (
-                  <li key={p.ability}>
-                    {p.abilityName} {p.minimumScore}+
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </motion.div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]">
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
+        >
           <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide">
             Alignment
           </Label>
@@ -246,80 +207,157 @@ export default function ClassStep2024({ characterData, updateCharacterData }) {
             value={characterData.alignment || "True Neutral"}
             onValueChange={(value) => updateCharacterData({ alignment: value })}
           >
-            <SelectTrigger className="bg-[#2A3441]/80 border-[#37F2D1]/30 text-white h-12">
+            <SelectTrigger className="bg-[#2A3441]/80 border-[#37F2D1]/30 text-white h-12 hover:border-[#37F2D1]/60 transition-colors">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-[#1E2430] border-[#2A3441]">
-              {ALIGNMENTS.map((a) => (
+              {ALIGNMENTS.map((align) => (
                 <SelectItem
-                  key={a.name}
-                  value={a.name}
+                  key={align.name}
+                  value={align.name}
                   className="text-white hover:bg-[#2A3441] focus:bg-[#2A3441]"
                 >
-                  {a.name}
+                  {align.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           {selectedAlignment && (
-            <div className="bg-[#2A3441]/50 rounded-lg p-3 mt-3 border border-[#37F2D1]/20">
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              className="bg-[#2A3441]/50 rounded-lg p-3 mt-3 border border-[#37F2D1]/20"
+            >
               <p className="text-sm text-white/80">{selectedAlignment.description}</p>
-            </div>
+            </motion.div>
           )}
-        </div>
+        </motion.div>
 
-        <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]">
-          <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide">
-            Portrait
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
+        >
+          <Label className="text-white/70 mb-4 block text-sm uppercase tracking-wide">
+            Physical Details
           </Label>
-          {characterData.avatar_url ? (
-            <div className="relative h-32 rounded-lg overflow-hidden bg-[#2A3441] mb-3">
-              <img
-                src={characterData.avatar_url}
-                alt="Character portrait"
-                className="w-full h-full object-cover"
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <Label className="text-white/50 text-xs mb-1 block">Age</Label>
+              <Input
+                type="number"
+                value={characterData.appearance?.age || ""}
+                onChange={(e) => updateCharacterData({
+                  appearance: { ...characterData.appearance, age: parseInt(e.target.value) },
+                })}
+                placeholder="25"
+                className="bg-[#2A3441]/80 border-[#37F2D1]/20 text-white h-10 focus:border-[#37F2D1]"
               />
             </div>
-          ) : (
-            <div className="h-32 rounded-lg bg-[#2A3441] flex items-center justify-center mb-3">
-              <User className="w-12 h-12 text-white/30" />
+            <div>
+              <Label className="text-white/50 text-xs mb-1 block">Height</Label>
+              <Input
+                value={characterData.appearance?.height || ""}
+                onChange={(e) => updateCharacterData({
+                  appearance: { ...characterData.appearance, height: e.target.value },
+                })}
+                placeholder="5'10&quot;"
+                className="bg-[#2A3441]/80 border-[#37F2D1]/20 text-white h-10 focus:border-[#37F2D1]"
+              />
             </div>
-          )}
-          <label className="flex items-center justify-center gap-2 px-4 py-2 bg-[#37F2D1]/10 border border-[#37F2D1]/30 rounded-lg text-[#37F2D1] cursor-pointer hover:bg-[#37F2D1]/20 transition-colors">
-            <Upload className="w-4 h-4" />
-            <span className="text-sm font-medium">
-              {uploading ? "Uploading…" : "Upload"}
-            </span>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageUpload}
-              disabled={uploading}
-            />
-          </label>
-        </div>
+            <div>
+              <Label className="text-white/50 text-xs mb-1 block">Weight</Label>
+              <Input
+                value={characterData.appearance?.weight || ""}
+                onChange={(e) => updateCharacterData({
+                  appearance: { ...characterData.appearance, weight: e.target.value },
+                })}
+                placeholder="180 lbs"
+                className="bg-[#2A3441]/80 border-[#37F2D1]/20 text-white h-10 focus:border-[#37F2D1]"
+              />
+            </div>
+          </div>
+        </motion.div>
+      </div>
 
-        <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]">
+      <div className="space-y-4">
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
+        >
+          <Label className="text-white/70 mb-3 block text-sm uppercase tracking-wide">
+            Character Portrait
+          </Label>
+          <div
+            className="relative overflow-hidden rounded-xl bg-[#2A3441]/50 mx-auto border border-[#37F2D1]/20"
+            style={{ aspectRatio: "2/3", width: "100%" }}
+          >
+            {characterData.avatar_url ? (
+              <img
+                src={characterData.avatar_url}
+                alt="Character"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center">
+                <User className="w-20 h-20 text-white/20 mb-3" />
+                <p className="text-white/40 text-center px-4 text-sm">Upload character portrait</p>
+              </div>
+            )}
+          </div>
+          <Button
+            onClick={() => document.getElementById("avatar-upload-2024").click()}
+            disabled={uploading}
+            className="w-full mt-3 bg-[#FF5722]/90 hover:bg-[#FF5722] text-white border-0"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            {uploading ? "Uploading..." : "Upload Portrait"}
+          </Button>
+          <input
+            type="file"
+            id="avatar-upload-2024"
+            accept="image/*"
+            onChange={handleImageUpload}
+            className="hidden"
+          />
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
+        >
           <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide">
-            Name
+            Character Name
           </Label>
           <Input
             value={characterData.name || ""}
             onChange={(e) => updateCharacterData({ name: e.target.value })}
-            placeholder="Name your character"
-            className="bg-[#2A3441]/80 border-[#37F2D1]/30 text-white h-10 mb-3"
+            placeholder="Enter character name"
+            className="bg-[#2A3441]/80 border-[#37F2D1]/20 text-white text-lg h-12 placeholder:text-white/30 focus:border-[#37F2D1]"
           />
-          <Label className="text-white/70 mb-2 block text-xs uppercase tracking-wide">
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.5 }}
+          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
+        >
+          <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide">
             Description
           </Label>
           <Textarea
             value={characterData.description || ""}
             onChange={(e) => updateCharacterData({ description: e.target.value })}
-            placeholder="Backstory, personality, motivations…"
-            className="bg-[#2A3441]/80 border-[#37F2D1]/30 text-white text-sm min-h-[80px]"
+            placeholder="Tell us about your character's backstory, personality, and motivations..."
+            className="bg-[#2A3441]/80 border-[#37F2D1]/20 text-white min-h-[120px] focus:border-[#37F2D1]"
           />
-        </div>
+        </motion.div>
       </div>
     </motion.div>
   );
