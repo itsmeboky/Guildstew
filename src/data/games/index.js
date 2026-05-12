@@ -113,7 +113,7 @@ function resolvePackId(packId) {
  */
 export function getGamePackData(packId) {
   const canonical = resolvePackId(packId);
-  return PACKS[canonical] || dnd5e2014;
+  return ADAPTERS[canonical] || ADAPTERS.dnd5e_2014;
 }
 
 // Backwards-compat alias for callers that still use the older name.
@@ -121,7 +121,5 @@ export const getGamePack = getGamePackData;
 
 // List of canonical pack ids — kept for callers that need to enumerate.
 export function listGamePackIds() {
-  return Object.keys(PACKS);
+  return Object.keys(ADAPTERS);
 }
-
-export { dnd5e2014, dnd5e2024 };
