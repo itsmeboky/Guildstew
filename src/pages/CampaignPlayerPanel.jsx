@@ -28,6 +28,13 @@ import TradeOfferDialog from "@/components/trade/TradeOfferDialog";
 import TradesPanel from "@/components/trade/TradesPanel";
 import { Handshake } from "lucide-react";
 import CampaignConsentDialog, { needsCampaignConsent } from "@/components/consent/CampaignConsentDialog";
+import PlayerSessionSidebar from "@/components/player/PlayerSessionSidebar";
+import SessionModal from "@/components/session/SessionModal";
+import PlayerCampaignUpdatesContent from "@/components/player/PlayerCampaignUpdatesContent";
+import PlayerAdventuringPartyContent from "@/components/player/PlayerAdventuringPartyContent";
+import PlayerQuickNotesContent from "@/components/player/PlayerQuickNotesContent";
+import PlayerCampaignArchivesContent from "@/components/player/PlayerCampaignArchivesContent";
+import Achievements from "@/pages/Achievements";
 import { getConditionModifiers } from "@/components/combat/conditions";
 import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
 import { toast } from "sonner";
@@ -278,6 +285,45 @@ function CampaignPlayerPanelContent() {
   // the Campaigns page with a toast — same user can't straddle two
   // sessions at once.
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+
+  // Active player-sidebar section. Mirrors GMPanel's `activeModal`
+  // but uses string keys from PLAYER_SECTIONS in PlayerSessionSidebar.
+  // Null → no overlay; the live session continues to render
+  // underneath when a section is open.
+  const [activeSection, setActiveSection] = useState(null);
+
+  // Unread Campaign Updates badge. The badge count is total updates
+  // minus rows the current user has already marked read in
+  // campaign_update_reads. PlayerCampaignUpdatesContent upserts a
+  // read row for every loaded update on mount, so opening the
+  // section drives the badge to zero on next refetch.
+  const { data: campaignUpdates = [] } = useQuery({
+    queryKey: ['campaignUpdates', campaignId],
+    queryFn: () => base44.entities.CampaignUpdate.filter({ campaign_id: campaignId }, "-created_at").catch(() => []),
+    enabled: !!campaignId,
+    initialData: [],
+  });
+  const { data: campaignUpdateReads = [] } = useQuery({
+    queryKey: ['campaignUpdateReads', campaignId, user?.id],
+    queryFn: async () => {
+      if (!user?.id || !campaignId) return [];
+      const updateIds = (campaignUpdates || []).map((u) => u.id);
+      if (updateIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('campaign_update_reads')
+        .select('campaign_update_id')
+        .eq('user_id', user.id)
+        .in('campaign_update_id', updateIds);
+      if (error) return [];
+      return data || [];
+    },
+    enabled: !!campaignId && !!user?.id && (campaignUpdates || []).length > 0,
+    initialData: [],
+  });
+  const unreadUpdatesCount = React.useMemo(() => {
+    const reads = new Set((campaignUpdateReads || []).map((r) => r.campaign_update_id));
+    return (campaignUpdates || []).filter((u) => !reads.has(u.id)).length;
+  }, [campaignUpdates, campaignUpdateReads]);
 
   useEffect(() => {
     let cancelled = false;
@@ -676,9 +722,19 @@ function CampaignPlayerPanelContent() {
     }
   }, [combatState.isOpen, combatState.target, myCharacter]);
 
+<<<<<<< HEAD
   // Redirect if session ends. `session_active` is the canonical
   // column; `is_session_active` was dropped in
   // 20261128_character_ownership_model_foundation.sql.
+=======
+  // Redirect if session ends. The column is `session_active` per
+  // 20261128_character_ownership_model_foundation.sql (PART 3, which
+  // dropped the duplicate `is_session_active` after reconciling
+  // values). Reading `is_session_active` always returned undefined
+  // here, so the negation always tripped and bounced the player
+  // back to CampaignPanel — the navigation loop the side-nav work
+  // had been working around.
+>>>>>>> origin/claude/fix-player-panel-regressions-YfJYa
   useEffect(() => {
     if (campaign && !campaign.session_active) {
       navigate(createPageUrl("CampaignPanel") + `?id=${campaignId}`);
@@ -738,7 +794,7 @@ function CampaignPlayerPanelContent() {
     || (Array.isArray(campaign?.co_dm_ids) && campaign.co_dm_ids.includes(user?.id));
 
   return (
-    <div className="h-screen w-screen bg-[#020617] text-white flex flex-col overflow-hidden">
+    <div className="h-screen w-screen bg-[#020617] text-white flex flex-row overflow-hidden">
       <CampaignConsentDialog
         open={showConsentDialog}
         campaign={campaign}
@@ -746,15 +802,76 @@ function CampaignPlayerPanelContent() {
         onAccept={() => queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] })}
       />
 
+      {/* Player session sidebar — parity mirror of GMSessionSidebar.
+          Always visible during an active session for non-GMs. The
+          floating top-right Leave Session button this used to host
+          is now the sidebar's primary action. */}
       {!isGM && campaign?.session_active && (
-        <button
-          type="button"
-          onClick={() => setShowLeaveConfirm(true)}
-          className="fixed top-4 right-4 z-40 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold uppercase tracking-wider rounded-lg px-4 py-2 shadow-lg shadow-amber-900/50"
-        >
-          Leave Session
-        </button>
+        <PlayerSessionSidebar
+          activeSection={activeSection}
+          onOpenSection={setActiveSection}
+          onLeaveSession={() => setShowLeaveConfirm(true)}
+          sectionBadges={{ campaignUpdates: unreadUpdatesCount }}
+        />
       )}
+
+      {/* Section overlays — same SessionModal swap-by-active-key
+          pattern GMPanel uses. The live session keeps rendering
+          underneath; nothing navigates away. */}
+      <SessionModal
+        isOpen={activeSection === 'campaignUpdates'}
+        onClose={() => setActiveSection(null)}
+        title="Campaign Updates"
+      >
+        <div className="h-full overflow-y-auto p-6">
+          <PlayerCampaignUpdatesContent
+            campaignId={campaignId}
+            campaign={campaign}
+            user={user}
+            allUserProfiles={allUserProfiles}
+          />
+        </div>
+      </SessionModal>
+
+      <SessionModal
+        isOpen={activeSection === 'adventuringParty'}
+        onClose={() => setActiveSection(null)}
+        title="Adventuring Party"
+      >
+        <PlayerAdventuringPartyContent campaignId={campaignId} campaign={campaign} />
+      </SessionModal>
+
+      <SessionModal
+        isOpen={activeSection === 'quickNotes'}
+        onClose={() => setActiveSection(null)}
+        title="Quick Notes"
+      >
+        <PlayerQuickNotesContent
+          campaignId={campaignId}
+          user={user}
+          myCharacter={myCharacter}
+        />
+      </SessionModal>
+
+      <SessionModal
+        isOpen={activeSection === 'campaignArchives'}
+        onClose={() => setActiveSection(null)}
+        title="Campaign Archives"
+      >
+        <PlayerCampaignArchivesContent campaignId={campaignId} campaign={campaign} />
+      </SessionModal>
+
+      <SessionModal
+        isOpen={activeSection === 'achievements'}
+        onClose={() => setActiveSection(null)}
+        title="Achievements"
+      >
+        <div className="h-full overflow-y-auto">
+          <Achievements embedded />
+        </div>
+      </SessionModal>
+
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
 
       {showLeaveConfirm && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
@@ -1435,6 +1552,7 @@ function CampaignPlayerPanelContent() {
           })()}
         </AlertDialogContent>
       </AlertDialog>
+      </div>
     </div>
   );
 }
@@ -1542,9 +1660,9 @@ function CharacterPanel({ character, user, guildHall, equippedItems, setEquipped
   return (
     <div className="relative z-10 rounded-[32px] bg-[#050816]/95 px-6 pt-6 pb-8 shadow-[0_24px_60px_rgba(0,0,0,0.8)] flex flex-col items-center gap-6">
       <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.8)]">
-        <div 
-          className="w-full h-full bg-cover bg-center" 
-          style={{ 
+        <div
+          className="w-full h-full bg-cover bg-top"
+          style={{
             backgroundImage: character 
               ? `url(${character.image_url || character.avatar_url || character.profile_avatar_url || '/images/karliah-avatar.jpg'})` 
               : 'none',
