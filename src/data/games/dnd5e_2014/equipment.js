@@ -25,7 +25,7 @@
  * (plural) and may add a `mastery` field on weapons.
  */
 
-import EQUIPMENT_RAW from "../../../../docs/5e_reference/2014/5e-SRD-Equipment.json";
+import EQUIPMENT_RAW from "../../../../docs/5e_reference/2014/5e-SRD-Equipment.json" with { type: "json" };
 
 function formatCost(cost) {
   if (!cost || cost.quantity == null) return null;
