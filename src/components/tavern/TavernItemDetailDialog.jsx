@@ -91,7 +91,7 @@ export default function TavernItemDetailDialog({ item: itemProp, open, onClose, 
       const { supabase } = await import("@/api/supabaseClient");
       const { data } = await supabase
         .from("user_profiles")
-        .select("user_id, username, full_name")
+        .select("user_id, username")
         .in("user_id", reviewerIds);
       return data || [];
     },

@@ -65,7 +65,7 @@ export default function TitlesTab({ adminId }) {
       if (granteeIds.length === 0) return [];
       const { data } = await supabase
         .from("user_profiles")
-        .select("user_id, username, full_name, email, display_title")
+        .select("user_id, username, email, display_title")
         .in("user_id", granteeIds);
       return data || [];
     },
@@ -82,7 +82,7 @@ export default function TitlesTab({ adminId }) {
       if (term.length < 2) return [];
       const { data } = await supabase
         .from("user_profiles")
-        .select("user_id, username, full_name, email")
+        .select("user_id, username, email")
         .or(`username.ilike.%${term}%,email.ilike.%${term}%`)
         .limit(8);
       return data || [];
@@ -208,7 +208,7 @@ export default function TitlesTab({ adminId }) {
                     onClick={() => setChosenUser(m)}
                     className="w-full text-left px-3 py-2 hover:bg-slate-800 text-sm flex items-center justify-between"
                   >
-                    <span className="text-white font-bold">{m.username || m.full_name || "?"}</span>
+                    <span className="text-white font-bold">{m.username || "?"}</span>
                     <span className="text-[11px] text-slate-500">{m.email}</span>
                   </button>
                 ))}
@@ -270,7 +270,7 @@ export default function TitlesTab({ adminId }) {
                 return (
                   <tr key={g.id} className="border-t border-slate-800">
                     <td className="px-3 py-2">
-                      <p className="text-white font-bold">{p?.username || p?.full_name || g.user_id.slice(0, 8)}</p>
+                      <p className="text-white font-bold">{p?.username || g.user_id.slice(0, 8)}</p>
                       <p className="text-[10px] text-slate-500">{p?.email}</p>
                     </td>
                     <td className="px-3 py-2 text-slate-200">{t?.label || g.title_id}</td>

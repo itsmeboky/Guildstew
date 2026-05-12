@@ -54,7 +54,7 @@ export default function ForumCategory() {
       if (authorIds.length === 0) return [];
       const { data } = await supabase
         .from("user_profiles")
-        .select("user_id, username, full_name, avatar_url")
+        .select("user_id, username, avatar_url")
         .in("user_id", authorIds);
       return data || [];
     },

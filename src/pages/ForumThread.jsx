@@ -100,7 +100,7 @@ export default function ForumThread() {
       if (authorIds.length === 0) return [];
       const { data } = await supabase
         .from("user_profiles")
-        .select("user_id, username, full_name, avatar_url, subscription_tier")
+        .select("user_id, username, avatar_url, subscription_tier")
         .in("user_id", authorIds);
       return data || [];
     },

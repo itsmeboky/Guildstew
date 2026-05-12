@@ -43,7 +43,7 @@ export default function CashoutsTab() {
       if (userIds.length === 0) return [];
       const { data } = await supabase
         .from("user_profiles")
-        .select("user_id, username, full_name")
+        .select("user_id, username")
         .in("user_id", userIds);
       return data || [];
     },
@@ -51,7 +51,7 @@ export default function CashoutsTab() {
   });
   const userLabel = (id) => {
     const p = users.find((u) => u.user_id === id);
-    return p?.username || p?.full_name || id.slice(0, 8);
+    return p?.username || id.slice(0, 8);
   };
 
   const approve = useMutation({

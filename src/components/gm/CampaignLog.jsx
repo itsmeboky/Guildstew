@@ -103,7 +103,7 @@ export default function CampaignLog({ campaignId, currentUser, currentUserProfil
       campaign_id: campaignId,
       type: "chat",
       user_id: currentUser?.id,
-      user_name: currentUserProfile?.username || currentUser?.full_name,
+      user_name: currentUserProfile?.username || currentUser?.username,
       user_avatar: currentUserProfile?.avatar_url,
       content: message,
       is_whisper: isWhisper,
