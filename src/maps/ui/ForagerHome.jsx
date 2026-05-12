@@ -44,7 +44,8 @@ export default function ForagerHome() {
               </p>
             </div>
             <p className="text-[#f8a47c]/70 text-xs mt-3 leading-relaxed">
-              Left-click to paint grass · Right-click to erase
+              Left-click to paint · Right-click to erase · Middle-mouse or
+              Space+drag to pan · Scroll to zoom
             </p>
           </div>
         </div>

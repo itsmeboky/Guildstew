@@ -10,19 +10,19 @@ const VIEW_WIDTH_MIN = 100;
 const VIEW_WIDTH_MAX = 5000;
 const ZOOM_STEP = 0.9;
 const CLEAR_COLOR = 0x0a0d1a;
-const CLICK_THRESHOLD_PX = 3;
 
 /**
  * Self-contained Three.js viewport for Forager. Owns the renderer,
  * camera, and animation loop. Holds the THREE.Scene in React state so
- * descendant layers (rendered as children) can register meshes on it
- * via ThreeSceneContext.
+ * descendant layers rendered as children can register meshes on it via
+ * ThreeSceneContext.
  *
- * Input handling distinguishes click from drag with a small pixel
- * threshold: a left-press that releases under the threshold paints a
- * grass tile at the cursor; one that moves beyond it pans the camera.
- * Right-click erases (and the browser's default context menu is
- * suppressed on the canvas).
+ * Mouse roles are unambiguous: left paints, right erases (both fire on
+ * mousedown for responsiveness), middle drags to pan. Space-bar held +
+ * left-drag also pans (Photoshop/Figma convention) so trackpad users
+ * without a middle button still get pan-mode. The cursor reflects the
+ * current role — crosshair to paint, grab while space is held, grabbing
+ * while actually panning.
  */
 export default function Viewport({ children }) {
   const containerRef = useRef(null);
@@ -75,8 +75,8 @@ export default function Viewport({ children }) {
     /**
      * Convert a clientX/Y pixel coordinate to a (tileX, tileY) pair.
      * Pixel space: origin top-left, Y grows down. World space: origin
-     * at camera center, Y grows up. We flip Y in NDC before scaling
-     * by half-view-size to get a world-space offset from the camera.
+     * at camera center, Y grows up. Flip Y in NDC before scaling by
+     * half-view-size to get a world-space offset from the camera.
      */
     function clientToTile(clientX, clientY) {
       const rect = canvas.getBoundingClientRect();
@@ -94,38 +94,66 @@ export default function Viewport({ children }) {
       };
     }
 
-    let pressButton = -1;
-    let pressX = 0;
-    let pressY = 0;
-    let lastX = 0;
-    let lastY = 0;
+    // ── input state ────────────────────────────────────────────────
+    let spaceHeld = false;
     let panActive = false;
+    let panLastX = 0;
+    let panLastY = 0;
+
+    function updateCursor() {
+      if (panActive) canvas.style.cursor = "grabbing";
+      else if (spaceHeld) canvas.style.cursor = "grab";
+      else canvas.style.cursor = "crosshair";
+    }
+
+    /** True when keyboard focus is in a text input, textarea, or contenteditable. */
+    function isTypingTarget() {
+      const el = document.activeElement;
+      if (!el) return false;
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+        return true;
+      }
+      return el instanceof HTMLElement && el.isContentEditable;
+    }
+
+    function startPan(clientX, clientY) {
+      panActive = true;
+      panLastX = clientX;
+      panLastY = clientY;
+      updateCursor();
+    }
 
     function onMouseDown(e) {
-      if (e.button !== 0 && e.button !== 2) return;
-      pressButton = e.button;
-      pressX = e.clientX;
-      pressY = e.clientY;
-      lastX = e.clientX;
-      lastY = e.clientY;
-      panActive = false;
+      // Middle: pan. Always preventDefault to kill autoscroll.
+      if (e.button === 1) {
+        e.preventDefault();
+        startPan(e.clientX, e.clientY);
+        return;
+      }
+      // Left: pan when space is held, otherwise paint.
+      if (e.button === 0) {
+        if (spaceHeld) {
+          startPan(e.clientX, e.clientY);
+        } else {
+          const { tileX, tileY } = clientToTile(e.clientX, e.clientY);
+          paintTile(tileX, tileY, "grass");
+        }
+        return;
+      }
+      // Right: erase. Context menu is suppressed separately.
+      if (e.button === 2) {
+        const { tileX, tileY } = clientToTile(e.clientX, e.clientY);
+        eraseTile(tileX, tileY);
+      }
     }
 
     function onMouseMove(e) {
-      // Only the left button can pan; right-button drags are ignored
-      // so right-click stays a clean erase gesture.
-      if (pressButton !== 0) return;
-      const totalDx = e.clientX - pressX;
-      const totalDy = e.clientY - pressY;
-      if (!panActive && Math.hypot(totalDx, totalDy) >= CLICK_THRESHOLD_PX) {
-        panActive = true;
-        canvas.style.cursor = "grabbing";
-      }
       if (!panActive) return;
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      lastX = e.clientX;
-      lastY = e.clientY;
+      const dx = e.clientX - panLastX;
+      const dy = e.clientY - panLastY;
+      panLastX = e.clientX;
+      panLastY = e.clientY;
       const worldPerPixelX = (camera.right - camera.left) / canvasWidth;
       const worldPerPixelY = (camera.top - camera.bottom) / canvasHeight;
       camera.position.x -= dx * worldPerPixelX;
@@ -133,18 +161,12 @@ export default function Viewport({ children }) {
     }
 
     function onMouseUp(e) {
-      if (pressButton === -1) return;
-      const totalDx = e.clientX - pressX;
-      const totalDy = e.clientY - pressY;
-      const moved = Math.hypot(totalDx, totalDy);
-      if (moved < CLICK_THRESHOLD_PX) {
-        const { tileX, tileY } = clientToTile(e.clientX, e.clientY);
-        if (pressButton === 0) paintTile(tileX, tileY, "grass");
-        else if (pressButton === 2) eraseTile(tileX, tileY);
+      if (!panActive) return;
+      // Either button that can start pan (0 with space, 1 always) ends it.
+      if (e.button === 0 || e.button === 1) {
+        panActive = false;
+        updateCursor();
       }
-      pressButton = -1;
-      panActive = false;
-      canvas.style.cursor = "grab";
     }
 
     function onWheel(e) {
@@ -161,6 +183,26 @@ export default function Viewport({ children }) {
       e.preventDefault();
     }
 
+    function onKeyDown(e) {
+      if (e.code !== "Space") return;
+      if (isTypingTarget()) return;
+      // Stop the page from scrolling on space.
+      e.preventDefault();
+      if (spaceHeld) return;
+      spaceHeld = true;
+      updateCursor();
+    }
+
+    function onKeyUp(e) {
+      if (e.code !== "Space") return;
+      if (!spaceHeld) return;
+      spaceHeld = false;
+      // If a space+left pan was in progress, end it on space-release too.
+      // The user can re-press space and re-click to pan again.
+      if (panActive) panActive = false;
+      updateCursor();
+    }
+
     function onResize() {
       const w = container.clientWidth;
       const h = container.clientHeight;
@@ -172,15 +214,19 @@ export default function Viewport({ children }) {
     }
 
     canvas.addEventListener("mousedown", onMouseDown);
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
+    // Mousemove/up on document so middle-drag keeps tracking even when
+    // the cursor leaves the canvas mid-pan.
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
     canvas.addEventListener("wheel", onWheel, { passive: false });
     canvas.addEventListener("contextmenu", onContextMenu);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
 
     const resizeObserver = new ResizeObserver(onResize);
     resizeObserver.observe(container);
 
-    canvas.style.cursor = "grab";
+    updateCursor();
 
     let animationId = 0;
     function animate() {
@@ -192,10 +238,12 @@ export default function Viewport({ children }) {
     return () => {
       cancelAnimationFrame(animationId);
       canvas.removeEventListener("mousedown", onMouseDown);
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
       canvas.removeEventListener("wheel", onWheel);
       canvas.removeEventListener("contextmenu", onContextMenu);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
       resizeObserver.disconnect();
       threeScene.remove(dotGrid);
       dotGrid.geometry.dispose();
@@ -206,7 +254,7 @@ export default function Viewport({ children }) {
 
   return (
     <div ref={containerRef} className="absolute inset-0">
-      <canvas ref={canvasRef} className="block w-full h-full" />
+      <canvas ref={canvasRef} className="block w-full h-full select-none" />
       <ThreeSceneContext.Provider value={threeScene}>
         {children}
       </ThreeSceneContext.Provider>
