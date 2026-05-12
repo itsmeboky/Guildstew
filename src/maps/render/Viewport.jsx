@@ -1,26 +1,36 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { createDotGrid } from "./dotGrid";
+import { ThreeSceneContext } from "./ThreeSceneContext";
+import { useScene } from "../state/SceneContext";
 
+const TILE_SIZE = 28;
 const VIEW_WIDTH_INITIAL = 800;
 const VIEW_WIDTH_MIN = 100;
 const VIEW_WIDTH_MAX = 5000;
 const ZOOM_STEP = 0.9;
 const CLEAR_COLOR = 0x0a0d1a;
+const CLICK_THRESHOLD_PX = 3;
 
 /**
  * Self-contained Three.js viewport for Forager. Owns the renderer,
- * scene, orthographic camera, and animation loop. Handles pan (left
- * mouse drag), zoom (wheel), and parent-resize. The canvas fills the
- * positioned ancestor it's mounted into; ForagerHome provides the box.
+ * camera, and animation loop. Holds the THREE.Scene in React state so
+ * descendant layers (rendered as children) can register meshes on it
+ * via ThreeSceneContext.
  *
- * Future render layers (terrain, buildings, NPCs) will need access to
- * the scene — we'll expose it via ref or context in Phase 3. Phase 2
- * just renders the dot-grid background.
+ * Input handling distinguishes click from drag with a small pixel
+ * threshold: a left-press that releases under the threshold paints a
+ * grass tile at the cursor; one that moves beyond it pans the camera.
+ * Right-click erases (and the browser's default context menu is
+ * suppressed on the canvas).
  */
-export default function Viewport() {
+export default function Viewport({ children }) {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
+  // Scene lives in state so children rendering before the effect runs
+  // already see a stable reference through ThreeSceneContext.
+  const [threeScene] = useState(() => new THREE.Scene());
+  const { paintTile, eraseTile } = useScene();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -30,8 +40,6 @@ export default function Viewport() {
     let viewWidth = VIEW_WIDTH_INITIAL;
     let canvasWidth = container.clientWidth || 1;
     let canvasHeight = container.clientHeight || 1;
-
-    const scene = new THREE.Scene();
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -52,7 +60,7 @@ export default function Viewport() {
     camera.lookAt(0, 0, 0);
 
     const dotGrid = createDotGrid();
-    scene.add(dotGrid);
+    threeScene.add(dotGrid);
 
     function updateCameraProjection() {
       const aspectNow = canvasWidth / canvasHeight;
@@ -64,35 +72,81 @@ export default function Viewport() {
       camera.updateProjectionMatrix();
     }
 
-    let isPanning = false;
+    /**
+     * Convert a clientX/Y pixel coordinate to a (tileX, tileY) pair.
+     * Pixel space: origin top-left, Y grows down. World space: origin
+     * at camera center, Y grows up. We flip Y in NDC before scaling
+     * by half-view-size to get a world-space offset from the camera.
+     */
+    function clientToTile(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const px = clientX - rect.left;
+      const py = clientY - rect.top;
+      const ndcX = (px / rect.width) * 2 - 1;
+      const ndcY = -((py / rect.height) * 2 - 1);
+      const halfW = (camera.right - camera.left) / 2;
+      const halfH = (camera.top - camera.bottom) / 2;
+      const worldX = camera.position.x + ndcX * halfW;
+      const worldY = camera.position.y + ndcY * halfH;
+      return {
+        tileX: Math.floor(worldX / TILE_SIZE),
+        tileY: Math.floor(worldY / TILE_SIZE),
+      };
+    }
+
+    let pressButton = -1;
+    let pressX = 0;
+    let pressY = 0;
     let lastX = 0;
     let lastY = 0;
+    let panActive = false;
 
     function onMouseDown(e) {
-      if (e.button !== 0) return;
-      isPanning = true;
+      if (e.button !== 0 && e.button !== 2) return;
+      pressButton = e.button;
+      pressX = e.clientX;
+      pressY = e.clientY;
       lastX = e.clientX;
       lastY = e.clientY;
-      canvas.style.cursor = "grabbing";
+      panActive = false;
     }
+
     function onMouseMove(e) {
-      if (!isPanning) return;
+      // Only the left button can pan; right-button drags are ignored
+      // so right-click stays a clean erase gesture.
+      if (pressButton !== 0) return;
+      const totalDx = e.clientX - pressX;
+      const totalDy = e.clientY - pressY;
+      if (!panActive && Math.hypot(totalDx, totalDy) >= CLICK_THRESHOLD_PX) {
+        panActive = true;
+        canvas.style.cursor = "grabbing";
+      }
+      if (!panActive) return;
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
       lastX = e.clientX;
       lastY = e.clientY;
       const worldPerPixelX = (camera.right - camera.left) / canvasWidth;
       const worldPerPixelY = (camera.top - camera.bottom) / canvasHeight;
-      // drag right -> camera moves left so world-content stays under cursor.
-      // pixel Y grows downward, world Y grows upward — flip the sign.
       camera.position.x -= dx * worldPerPixelX;
       camera.position.y += dy * worldPerPixelY;
     }
-    function onMouseUp() {
-      if (!isPanning) return;
-      isPanning = false;
+
+    function onMouseUp(e) {
+      if (pressButton === -1) return;
+      const totalDx = e.clientX - pressX;
+      const totalDy = e.clientY - pressY;
+      const moved = Math.hypot(totalDx, totalDy);
+      if (moved < CLICK_THRESHOLD_PX) {
+        const { tileX, tileY } = clientToTile(e.clientX, e.clientY);
+        if (pressButton === 0) paintTile(tileX, tileY, "grass");
+        else if (pressButton === 2) eraseTile(tileX, tileY);
+      }
+      pressButton = -1;
+      panActive = false;
       canvas.style.cursor = "grab";
     }
+
     function onWheel(e) {
       e.preventDefault();
       const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
@@ -102,6 +156,11 @@ export default function Viewport() {
       );
       updateCameraProjection();
     }
+
+    function onContextMenu(e) {
+      e.preventDefault();
+    }
+
     function onResize() {
       const w = container.clientWidth;
       const h = container.clientHeight;
@@ -116,6 +175,7 @@ export default function Viewport() {
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
     canvas.addEventListener("wheel", onWheel, { passive: false });
+    canvas.addEventListener("contextmenu", onContextMenu);
 
     const resizeObserver = new ResizeObserver(onResize);
     resizeObserver.observe(container);
@@ -125,7 +185,7 @@ export default function Viewport() {
     let animationId = 0;
     function animate() {
       animationId = requestAnimationFrame(animate);
-      renderer.render(scene, camera);
+      renderer.render(threeScene, camera);
     }
     animate();
 
@@ -135,29 +195,21 @@ export default function Viewport() {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
       canvas.removeEventListener("wheel", onWheel);
+      canvas.removeEventListener("contextmenu", onContextMenu);
       resizeObserver.disconnect();
-      scene.traverse((obj) => {
-        // Object3D itself has no geometry/material — those live on
-        // Mesh/Points/Line subclasses. Duck-type the dispose walk so
-        // future layers (any disposable child) clean up automatically.
-        /** @type {any} */
-        const disposable = obj;
-        if (disposable.geometry) disposable.geometry.dispose();
-        if (disposable.material) {
-          if (Array.isArray(disposable.material)) {
-            disposable.material.forEach((m) => m.dispose());
-          } else {
-            disposable.material.dispose();
-          }
-        }
-      });
+      threeScene.remove(dotGrid);
+      dotGrid.geometry.dispose();
+      /** @type {THREE.Material} */ (dotGrid.material).dispose();
       renderer.dispose();
     };
-  }, []);
+  }, [threeScene, paintTile, eraseTile]);
 
   return (
     <div ref={containerRef} className="absolute inset-0">
       <canvas ref={canvasRef} className="block w-full h-full" />
+      <ThreeSceneContext.Provider value={threeScene}>
+        {children}
+      </ThreeSceneContext.Provider>
     </div>
   );
 }
