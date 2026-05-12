@@ -17,19 +17,20 @@ import {
 } from "@/components/ui/dialog";
 import { safeText } from "@/utils/safeRender";
 import { rarityBadgeClasses, rarityLabel } from "@/config/itemRarity";
+import { getGamePack } from "@/data/games";
 import ItemHoverCard from "@/components/items/ItemHoverCard";
 
 /**
  * Campaign Items tab. Split-panel layout: the selected item on the
  * left, a filterable merged list on the right. SRD items come from
- * dnd5e_items (the shared reference table); homebrew items come from
+ * the campaign's game-pack adapter (sourced from the canonical SRD
+ * JSON in docs/5e_reference/<edition>/); homebrew items come from
  * the per-campaign campaign_items table. Each row is tagged with
  * _source so the two render side by side with distinct badges.
  *
  * All rendering is routed through the safe helpers because the
- * reseeded SRD data stores `properties`, `damage`, and
- * `armor_class` as JSONB objects — rendering them directly crashes
- * React.
+ * adapter normalises raw SRD records under `properties._raw`
+ * (objects, not strings) — rendering them directly crashes React.
  */
 
 const RARITY_OPTIONS = [
@@ -53,12 +54,12 @@ const SOURCE_OPTIONS = [
 const safeString = safeText;
 
 /**
- * Item-field accessors. The reseeded dnd5e_items rows store the raw
- * D&D 5e API record under `properties._raw` and hoist the handful of
- * fields we display to top-level keys inside `properties`. Homebrew
- * items usually have the same shape flattened onto the row itself.
- * Each accessor walks both paths so the UI stays consistent across
- * sources.
+ * Item-field accessors. SRD rows from the game-pack adapter store
+ * the raw 5e SRD record under `properties._raw` and hoist the
+ * handful of fields we display to top-level keys inside
+ * `properties`. Homebrew items usually have the same shape
+ * flattened onto the row itself. Each accessor walks both paths
+ * so the UI stays consistent across sources.
  */
 function getItemCost(item) {
   const top = item?.cost;
@@ -177,14 +178,18 @@ export default function CampaignItems({ embedded = false, campaignId: campaignId
     initialData: [],
   });
 
-  const { data: srdItems = [] } = useQuery({
-    queryKey: ["srdItems"],
-    queryFn: () => base44.entities.Dnd5eItem
-      .list("name")
-      .then((rows) => (rows || []).map((i) => ({ ...i, _source: "srd" })))
-      .catch(() => []),
-    initialData: [],
-  });
+  // SRD items come from the per-game-pack adapter (canonical JSON
+  // shipped in docs/5e_reference/), not the legacy dnd5e_items
+  // Supabase table. The previous base44.entities.Dnd5eItem.list
+  // query silent-failed with .catch(() => []) when the table was
+  // missing / empty, leaving GMs and players with blank pickers
+  // mid-session.
+  const srdItems = useMemo(() => {
+    const packId = campaign?.game_pack || "dnd5e_2014";
+    return getGamePack(packId)
+      .getEquipment()
+      .map((i) => ({ ...i, _source: "srd" }));
+  }, [campaign?.game_pack]);
 
   const merged = useMemo(() => [...srdItems, ...homebrewItems], [srdItems, homebrewItems]);
 

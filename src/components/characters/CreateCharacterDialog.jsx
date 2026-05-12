@@ -78,7 +78,11 @@ export default function CreateCharacterDialog({ open, onClose }) {
 
   const handleFullCreator = () => {
     onClose();
-    navigate(createPageUrl("CharacterCreator"));
+    // Stamp the chosen pack on the URL so CharacterCreator's
+    // dispatcher routes the per-step UI to the right edition.
+    const url = createPageUrl("CharacterCreator");
+    const sep = url.includes("?") ? "&" : "?";
+    navigate(`${url}${sep}gamePack=${encodeURIComponent(chosenPack || "dnd5e_2014")}`);
   };
 
   const handleQuickCreate = () => {
