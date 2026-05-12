@@ -1,5 +1,6 @@
 import React from "react";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   getClassBasics,
   hasPerLevelFeatures,
@@ -8,6 +9,11 @@ import {
   getSubclassesForClass,
   getSubclassFeaturesAtLevel,
 } from "@/data/games/dnd5e_2024/subclassFeatures";
+import { getWeaponsWithMastery } from "@/data/games/dnd5e_2024/equipment";
+import {
+  weaponMasterySlots,
+  SPELLS_KNOWN_TABLE,
+} from "@/data/games/dnd5e_2024/rules";
 import SubclassPicker from "@/components/characterCreator/SubclassPicker";
 import InfoTip from "@/components/characterCreator/InfoTip";
 import { tipFor } from "@/components/characterCreator/creatorTips";
@@ -19,22 +25,29 @@ import { tipFor } from "@/components/characterCreator/creatorTips";
  * adapters. Routed by the dispatcher in CharacterCreator.jsx when
  * characterData.gamePack === 'dnd5e_2024'.
  *
- * What renders here:
+ * What renders here (Commits 3 + 8):
  *   - Class basics card (hit die, primary ability, saving throws,
  *     proficiencies) sourced from 2024 SRD Classes.json
  *   - Subclass picker at level >= 3 listing SRD subclasses for the
- *     chosen class (12 total in SRD, 1 per class)
- *   - Subclass features (inline in 2024 SRD Subclasses.json) for
- *     the chosen subclass, cumulative up to the character level
+ *     chosen class (12 total in SRD, 1 per class) [Commit 3]
+ *   - Subclass features inline from 2024 SRD Subclasses.json [Commit 3]
+ *   - **Weapon Mastery picker** for the 5 martial classes that
+ *     get the mechanic in 2024 (Barbarian, Fighter, Paladin,
+ *     Ranger, Rogue). Player picks N weapon types per
+ *     `weaponMasterySlots(class, level)`; the mastery property of
+ *     each weapon is sourced from `5e-SRD-Equipment.json`. [Commit 8]
+ *   - **Level-1 class-path-choice banner** for Cleric / Druid
+ *     where the SRD entry has `level1ClassPathChoice: true`. The
+ *     PHB-2024 option names (Divine Order: Protector/Thaumaturge;
+ *     Primal Order: Magician/Warden) are NOT in the OGL SRD JSON,
+ *     so this commit only surfaces the existence of the mechanic
+ *     with a banner; the picker stays a smell pending SRD
+ *     expansion. [Commit 8]
  *
- * What does NOT render (SRD gap, prominently banner-explained):
- *   - Per-level class features. The 2024 SRD's `class_levels`
- *     field is a URL stub, not inline data, and PHB 2024 is not
- *     OGL-covered. Until WotC expands the SRD or a licensed
- *     third-party drop lands, these features are not rendered.
- *     Players should refer to PHB 2024 directly.
- *
- * Multiclass UI for 2024 also not shipped here — separate scope.
+ * What does NOT render (deferred):
+ *   - Per-level non-subclass class features (`class_levels` is a
+ *     URL stub in the 2024 SRD).
+ *   - Multiclass UI for 2024 (separate scope, multiclass vetting).
  */
 
 export default function ClassFeaturesStep2024({ characterData, updateCharacterData }) {
@@ -54,6 +67,43 @@ export default function ClassFeaturesStep2024({ characterData, updateCharacterDa
   const subclassFeatures = chosenSubclass
     ? getSubclassFeaturesAtLevel(chosenSubclass, level)
     : [];
+
+  // ── Weapon Mastery (2024 mechanic) ──────────────────────────
+  // 5 of 6 martial classes get Weapon Mastery slots in 2024.
+  // weaponMasterySlots() returns 0 for classes that don't have the
+  // mechanic, gating the picker cleanly.
+  const masterySlotCount = weaponMasterySlots(className, level);
+  const selectedMasteries = Array.isArray(characterData.weaponMasteries)
+    ? characterData.weaponMasteries
+    : [];
+  const masteryWeapons = masterySlotCount > 0 ? getWeaponsWithMastery() : [];
+
+  const toggleMastery = (weaponName) => {
+    const isSelected = selectedMasteries.includes(weaponName);
+    if (isSelected) {
+      updateCharacterData({
+        weaponMasteries: selectedMasteries.filter((n) => n !== weaponName),
+      });
+    } else if (selectedMasteries.length < masterySlotCount) {
+      updateCharacterData({
+        weaponMasteries: [...selectedMasteries, weaponName],
+      });
+    }
+  };
+
+  // ── L1 class-path choice (Cleric Divine Order / Druid Primal
+  //    Order) ───────────────────────────────────────────────────
+  // The mechanic exists; the PHB-2024 option names are NOT in the
+  // OGL SRD JSON. We surface the existence with a banner so the
+  // player knows to consult the PHB; the picker itself stays a
+  // smell pending SRD expansion or licensed third-party data.
+  const hasL1PathChoice = (() => {
+    try {
+      return !!SPELLS_KNOWN_TABLE[className]?.level1ClassPathChoice;
+    } catch {
+      return false;
+    }
+  })();
 
   if (!className) {
     return (
@@ -150,6 +200,92 @@ export default function ClassFeaturesStep2024({ characterData, updateCharacterDa
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* L1 class-path-choice banner — Cleric Divine Order /
+          Druid Primal Order. The mechanic exists in PHB 2024 but
+          the option names aren't in the OGL SRD JSON, so this
+          surfaces the mechanic without naming the options. */}
+      {hasL1PathChoice && (
+        <div className="mb-8 p-4 bg-[#5B4B9E]/10 rounded-xl border-2 border-[#5B4B9E]/40 text-sm">
+          <p className="font-semibold text-[#5B4B9E] mb-1">
+            Level-1 path choice (PHB 2024)
+          </p>
+          <p className="text-white/80">
+            PHB 2024 adds a level-1 path choice for {basics?.name} that
+            grants different proficiencies / cantrips depending on which
+            option you pick. The specific option names and effects are
+            PHB-only content not present in the OGL SRD; refer to your
+            PHB 2024 to make the choice. We'll surface the picker once
+            the SRD is expanded.
+          </p>
+        </div>
+      )}
+
+      {/* Weapon Mastery picker — 2024 mechanic for 5 martial classes
+          (Barbarian, Fighter, Paladin, Ranger, Rogue). Slot count
+          scales with class level per weaponMasterySlots(). */}
+      {masterySlotCount > 0 && (
+        <div className="mb-8">
+          <h3 className="text-xl font-bold text-[#FFC6AA] mb-2 flex items-center gap-2">
+            Weapon Mastery
+            <Badge className="bg-[#37F2D1] text-[#1E2430] text-[10px] font-black">
+              2024
+            </Badge>
+          </h3>
+          <p className="text-sm text-white/70 mb-4">
+            Choose {masterySlotCount} weapon type{masterySlotCount === 1 ? "" : "s"} you
+            can apply mastery properties to. You can swap one of these
+            on a long rest.
+          </p>
+          <div className="mb-3 text-sm text-[#37F2D1]">
+            Selected: {selectedMasteries.length} / {masterySlotCount}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-96 overflow-y-auto pr-2">
+            {masteryWeapons.map((w) => {
+              const isSelected = selectedMasteries.includes(w.name);
+              const isDisabled = !isSelected && selectedMasteries.length >= masterySlotCount;
+              return (
+                <button
+                  key={w.id}
+                  type="button"
+                  onClick={() => !isDisabled && toggleMastery(w.name)}
+                  disabled={isDisabled}
+                  className={`text-left p-3 rounded-lg border-2 transition-all ${
+                    isSelected
+                      ? "bg-[#2A3441] border-[#37F2D1]"
+                      : "bg-[#2A3441]/50 border-[#1E2430] hover:border-[#37F2D1]/50"
+                  } ${isDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-white text-sm font-semibold">{w.name}</span>
+                    <Checkbox
+                      checked={isSelected}
+                      disabled={isDisabled}
+                      onCheckedChange={() => !isDisabled && toggleMastery(w.name)}
+                      className="pointer-events-none"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <Badge className="bg-[#5B4B9E] text-white text-[9px] font-bold uppercase tracking-wider">
+                      {w.mastery}
+                    </Badge>
+                    {w.damage?.dice && (
+                      <span className="text-white/50">
+                        {w.damage.dice} {w.damage.type?.toLowerCase()}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          {selectedMasteries.length < masterySlotCount && (
+            <p className="mt-3 text-xs text-[#FF5722]">
+              ⚠️ Pick {masterySlotCount - selectedMasteries.length} more weapon{masterySlotCount - selectedMasteries.length === 1 ? "" : "s"} to use mastery properties.
+            </p>
+          )}
         </div>
       )}
 
