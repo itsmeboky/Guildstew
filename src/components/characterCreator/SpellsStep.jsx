@@ -32,6 +32,7 @@ import {
   abilityModifier,
   SPELLCASTING_ABILITY,
 } from "@/components/dnd5e/dnd5eRules";
+import { getSpellsCompletion } from "@/components/characterCreator/spellsCompletion";
 
 export default function SpellsStep({ characterData, updateCharacterData }) {
   const [hoveredEffect, setHoveredEffect] = useState(null);
@@ -119,37 +120,14 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
     ].filter((e) => e.class && e.level > 0 && SPELLS_KNOWN_TABLE[e.class]);
   })();
 
-  const attributesForCap = characterData.attributes || {};
-  const prepKnownCap = spellcastingEntries.reduce((sum, { class: cls, level }) => {
-    const data = SPELLS_KNOWN_TABLE[cls];
-    if (!data) return sum;
-    if (data.type === "known") {
-      return sum + (spellsKnown(cls, level) || 0);
-    }
-    if (data.type === "prepared") {
-      // spellsPrepared() respects the class's startLevel guard
-      // (Paladin: returns 0 at L1 since spellcasting starts at L2).
-      const ability = SPELLCASTING_ABILITY[cls];
-      const score = Number(attributesForCap?.[ability] ?? 10);
-      const mod = abilityModifier(score);
-      return sum + (spellsPrepared(cls, level, mod) || 0);
-    }
-    if (data.type === "spellbook") {
-      // Wizard. Note: until the spellbook concept ships, the picker
-      // pool is the FULL Wizard list and the player can prepare any
-      // spell from it (incorrectly). The cap math is right; the pool
-      // gating is the W4 gap filed in the audit.
-      const ability = SPELLCASTING_ABILITY[cls];
-      const score = Number(attributesForCap?.[ability] ?? 10);
-      const mod = abilityModifier(score);
-      return sum + (data.preparedFormula(mod, level) || 0);
-    }
-    return sum;
-  }, 0);
-  const cantripCap = spellcastingEntries.reduce(
-    (sum, { class: cls, level }) => sum + (cantripsKnown(cls, level) || 0),
-    0,
-  );
+  // Cap math is shared with the Next-button validator via
+  // getSpellsCompletion() so the picker and gate can never disagree.
+  // Wizards specifically: at character creation the cap is the
+  // spellbook size (6 at L1, +2 per level), not the prepared formula
+  // — preparation is a daily in-game decision, not a creator choice.
+  const completion = getSpellsCompletion(characterData);
+  const cantripCap = completion.cantripCap;
+  const prepKnownCap = completion.nonCantripCap;
 
   // Helper to merge API spell details with hardcoded ones (for icons/effects)
   const getSpellDetail = (spellName) => {

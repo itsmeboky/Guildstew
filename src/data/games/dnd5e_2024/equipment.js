@@ -23,7 +23,7 @@
  * UI is edition-agnostic. See sibling `dnd5e_2014/equipment.js`.
  */
 
-import EQUIPMENT_RAW from "../../../../docs/5e_reference/2024/5e-SRD-Equipment.json";
+import EQUIPMENT_RAW from "../../../../docs/5e_reference/2024/5e-SRD-Equipment.json" with { type: "json" };
 
 const FILTER_PREFERENCE = [
   "weapons",

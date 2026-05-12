@@ -12,7 +12,7 @@ import {
 import { getWeaponsWithMastery } from "@/data/games/dnd5e_2024/equipment";
 import {
   weaponMasterySlots,
-  SPELLS_KNOWN_TABLE,
+  getSpellsKnownEntry,
   // Class-scaling helpers — each is a per-class function that
   // returns the relevant live value at the given class level. The
   // scaling panel below renders whichever ones are non-zero/non-null
@@ -234,13 +234,7 @@ export default function ClassFeaturesStep2024({ characterData, updateCharacterDa
   // OGL SRD JSON. We surface the existence with a banner so the
   // player knows to consult the PHB; the picker itself stays a
   // smell pending SRD expansion or licensed third-party data.
-  const hasL1PathChoice = (() => {
-    try {
-      return !!SPELLS_KNOWN_TABLE[className]?.level1ClassPathChoice;
-    } catch {
-      return false;
-    }
-  })();
+  const hasL1PathChoice = !!getSpellsKnownEntry(className)?.level1ClassPathChoice;
 
   if (!className) {
     return (
@@ -254,23 +248,26 @@ export default function ClassFeaturesStep2024({ characterData, updateCharacterDa
     <div className="max-w-6xl mx-auto">
       {/* Header + per-level gap banner */}
       <div className="bg-[#2A3441] rounded-xl p-6 mb-6 border-2 border-[#1E2430]">
-        <h2 className="text-2xl font-bold text-[#FFC6AA] mb-3">
-          Class Features (PHB 2024)
+        <h2 className="text-2xl font-bold text-[#FFC6AA] mb-3 flex items-center gap-2">
+          Class Features
+          <Badge className="bg-[#37F2D1] text-[#1E2430] text-[10px] font-black">
+            2024
+          </Badge>
         </h2>
         <p className="text-white text-sm leading-7">
           Class basics (hit die, proficiencies, saving throws) and{" "}
           <span className="font-semibold">subclass features at level 3+</span>{" "}
-          are sourced from the 2024 SRD and render below.
+          render below from the 2024 SRD.
         </p>
         <div className="mt-4 p-4 bg-[#FF5722]/10 rounded-lg border border-[#FF5722]/40 text-sm text-white/90">
           <p className="font-semibold text-[#FF5722] mb-1">
             ⚠️ Per-level class features not available
           </p>
           <p>
-            The 2024 SRD does not include per-level class progression.
-            Refer to your PHB 2024 for the full feature list as you
-            level up. We'll surface them automatically once Wizards
-            expands the SRD.
+            The SRD does not include per-level class progression. Consult
+            your rulebook of choice for the full feature list as you
+            level up. We'll surface them automatically once the SRD
+            ships them.
           </p>
         </div>
       </div>
@@ -373,22 +370,23 @@ export default function ClassFeaturesStep2024({ characterData, updateCharacterDa
         </div>
       )}
 
-      {/* L1 class-path-choice banner — Cleric Divine Order /
-          Druid Primal Order. The mechanic exists in PHB 2024 but
-          the option names aren't in the OGL SRD JSON, so this
-          surfaces the mechanic without naming the options. */}
+      {/* L1 path-choice banner — the SRD records that some classes
+          have a level-1 path choice (`level1ClassPathChoice: true`)
+          without specifying option names. We surface the existence of
+          additional level-1 options so players consulting non-SRD
+          sources know to make the choice; the picker stays gated
+          pending SRD expansion. No option names or PHB content are
+          surfaced. */}
       {hasL1PathChoice && (
         <div className="mb-8 p-4 bg-[#5B4B9E]/10 rounded-xl border-2 border-[#5B4B9E]/40 text-sm">
           <p className="font-semibold text-[#5B4B9E] mb-1">
-            Level-1 path choice (PHB 2024)
+            Additional level-1 options
           </p>
           <p className="text-white/80">
-            PHB 2024 adds a level-1 path choice for {basics?.name} that
-            grants different proficiencies / cantrips depending on which
-            option you pick. The specific option names and effects are
-            PHB-only content not present in the OGL SRD; refer to your
-            PHB 2024 to make the choice. We'll surface the picker once
-            the SRD is expanded.
+            {basics?.name || "This class"} has a level-1 path choice
+            with options beyond what the SRD provides. Consult your
+            rulebook of choice to make the selection — we'll surface
+            the picker once the SRD ships the option list.
           </p>
         </div>
       )}

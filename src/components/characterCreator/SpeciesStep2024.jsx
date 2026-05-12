@@ -82,15 +82,28 @@ export default function SpeciesStep2024({ characterData, updateCharacterData }) 
             2024
           </Badge>
           <InfoTip width="w-80">
-            PHB 2024 renames "race" to "species" and moves ability score
-            bonuses to the background. Your species sets size, speed, and
-            innate traits — nothing more.
+            The 2024 edition renames "race" to "species" and moves ability
+            score bonuses to the background. Your species sets size, speed,
+            and innate traits — nothing more.
           </InfoTip>
         </h2>
         <p className="text-white/80 text-sm">
           Pick the species your character belongs to. In 2024, ability
           score increases come from your background, not your species.
         </p>
+
+        <div className="mt-4">
+          <label className="text-white/70 text-xs uppercase tracking-wide block mb-1">
+            Character Name
+          </label>
+          <input
+            type="text"
+            value={characterData.name || ""}
+            onChange={(e) => updateCharacterData({ name: e.target.value })}
+            placeholder="Enter character name"
+            className="w-full bg-[#1E2430] border-2 border-[#1E2430] focus:border-[#37F2D1] outline-none text-white px-3 py-2 rounded-lg text-sm"
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
@@ -205,8 +218,7 @@ export default function SpeciesStep2024({ characterData, updateCharacterData }) 
             <span className="font-bold text-[#5B4B9E]">{selectedSubspecies.name}</span>
           </p>
           <p className="text-xs text-white/50 mt-1 italic">
-            Ability score bonuses come from your background, not your species
-            (PHB 2024).
+            Ability score bonuses come from your background, not your species.
           </p>
         </div>
       )}

@@ -22,7 +22,7 @@
  * hasPerLevelFeatures() and render a placeholder when false.
  */
 
-import classesData from "../../../../docs/5e_reference/2024/5e-SRD-Classes.json";
+import classesData from "../../../../docs/5e_reference/2024/5e-SRD-Classes.json" with { type: "json" };
 
 /**
  * List all 2024 SRD classes.

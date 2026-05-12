@@ -37,6 +37,8 @@ function LegalFooter() {
         <Link to="/EULA" className="hover:text-[#37F2D1]">EULA</Link>
         <span className="text-slate-700">·</span>
         <Link to="/Cookies" className="hover:text-[#37F2D1]">Cookie Policy</Link>
+        <span className="text-slate-700">·</span>
+        <Link to="/Attributions" className="hover:text-[#37F2D1]">Attributions</Link>
       </div>
       <p className="mt-2 text-slate-600">
         © {new Date().getFullYear()} Aetherian Studios. All rights reserved.
@@ -633,7 +635,8 @@ export default function Layout({ children, currentPageName }) {
       currentPageName === "Privacy" ||
       currentPageName === "EULA" ||
       currentPageName === "Cookies" ||
-      currentPageName === "PrivacySummary"
+      currentPageName === "PrivacySummary" ||
+      currentPageName === "Attributions"
     ))
   ) {
     return <>{children}</>;
