@@ -631,7 +631,7 @@ console.log('PROFILE PAGE USER:', user)
                   </>
                 )}
                 {displayedPosts.map(post => {
-                  const authorProfile = allUserProfiles.find(p => p.email === post.created_by);
+                  const authorProfile = allUserProfiles.find(p => p.user_id === post.author_id);
                   const hasLiked = (post.likes || []).includes(user?.id);
                   const authorColor1 = user?.profile_color_1 || "#FF5722";
                   const authorColor2 = user?.profile_color_2 || "#37F2D1";
