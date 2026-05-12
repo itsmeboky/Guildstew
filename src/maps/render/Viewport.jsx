@@ -12,18 +12,21 @@ const VIEW_WIDTH_MAX = 5000;
 const ZOOM_STEP = 0.9;
 const CLEAR_COLOR = 0x0a0d1a;
 
+const PREVIEW_COLOR = 0xff5300;
+const PREVIEW_DOT_PX = 8;
+
 /**
  * Self-contained Three.js viewport for Forager. Owns the renderer,
  * camera, and animation loop. Holds the THREE.Scene in React state so
  * descendant layers rendered as children can register meshes on it via
  * ThreeSceneContext.
  *
- * Mouse roles are unambiguous: left paints, right erases (both fire on
- * mousedown for responsiveness), middle drags to pan. Space-bar held +
- * left-drag also pans (Photoshop/Figma convention) so trackpad users
- * without a middle button still get pan-mode. The cursor reflects the
- * current role — crosshair to paint, grab while space is held, grabbing
- * while actually panning.
+ * Input dispatch is tool-aware. Terrain mode: left paints, right
+ * erases, both with stroke-on-drag. Building mode: left places a
+ * corner (double-click or Enter finishes the polygon), right undoes
+ * the last corner, Escape cancels the in-progress shape. Middle-mouse
+ * and Space+left-drag pan in either mode. The cursor stays "crosshair"
+ * by default, "grab" while space is held, "grabbing" during a pan.
  */
 export default function Viewport({ children }) {
   const containerRef = useRef(null);
@@ -31,15 +34,25 @@ export default function Viewport({ children }) {
   // Scene lives in state so children rendering before the effect runs
   // already see a stable reference through ThreeSceneContext.
   const [threeScene] = useState(() => new THREE.Scene());
-  const { paintTile, eraseTile } = useScene();
-  const { activeMaterialId } = useTools();
-  // Mirrored into a ref so the long-lived mousedown/mousemove closures
-  // captured by the main effect always paint with the latest material
-  // selection — including mid-stroke if the user swaps swatches.
+  const { paintTile, eraseTile, addBuilding } = useScene();
+  const { activeTool, activeMaterialId } = useTools();
+  // Tool + material mirrored into refs so the long-lived mousedown/move
+  // closures captured by the main effect always see the latest values
+  // without re-running (and tearing down the renderer) on every change.
   const activeMaterialIdRef = useRef(activeMaterialId);
+  const activeToolRef = useRef(activeTool);
+  // A bridge for the activeTool-change effect to reach helpers defined
+  // inside the main effect (preview rebuild, in-progress polygon reset).
+  const onToolChangeRef = useRef(() => {});
+
   useEffect(() => {
     activeMaterialIdRef.current = activeMaterialId;
   }, [activeMaterialId]);
+
+  useEffect(() => {
+    activeToolRef.current = activeTool;
+    onToolChangeRef.current();
+  }, [activeTool]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -108,12 +121,83 @@ export default function Viewport({ children }) {
     let panActive = false;
     let panLastX = 0;
     let panLastY = 0;
-    // Stroke painting: -1 means no stroke; 0 means left/paint, 2 means
-    // right/erase. lastStrokeTile guards against re-firing on every
-    // mousemove that stays within one tile.
+    // Terrain stroke: -1 idle, 0 left/paint, 2 right/erase. lastStrokeTile
+    // skips re-firing on every move that stays within one tile.
     let strokeButton = -1;
     let lastStrokeTileX = 0;
     let lastStrokeTileY = 0;
+    // Building tool: in-progress polygon corners + tile-snapped cursor.
+    /** @type {{x: number, y: number}[]} */
+    let buildingCorners = [];
+    let cursorTileX = 0;
+    let cursorTileY = 0;
+    let cursorTracked = false;
+
+    // ── preview group (building corners + line to cursor) ──────────
+    const previewGroup = new THREE.Group();
+    previewGroup.position.z = 0.05;
+    threeScene.add(previewGroup);
+
+    function clearPreviewGroup() {
+      while (previewGroup.children.length > 0) {
+        const child = previewGroup.children[0];
+        previewGroup.remove(child);
+        /** @type {any} */
+        const disposable = child;
+        if (disposable.geometry) disposable.geometry.dispose();
+        if (disposable.material) disposable.material.dispose();
+      }
+    }
+
+    function rebuildBuildingPreview() {
+      clearPreviewGroup();
+      if (activeToolRef.current !== "building") return;
+      if (buildingCorners.length === 0) return;
+
+      const dotPositions = [];
+      for (const c of buildingCorners) {
+        dotPositions.push(c.x * TILE_SIZE, c.y * TILE_SIZE, 0);
+      }
+      const dotGeom = new THREE.BufferGeometry();
+      dotGeom.setAttribute(
+        "position",
+        new THREE.Float32BufferAttribute(dotPositions, 3)
+      );
+      const dotMat = new THREE.PointsMaterial({
+        color: PREVIEW_COLOR,
+        size: PREVIEW_DOT_PX,
+        sizeAttenuation: false,
+      });
+      previewGroup.add(new THREE.Points(dotGeom, dotMat));
+
+      const linePts = buildingCorners.map(
+        (c) => new THREE.Vector3(c.x * TILE_SIZE, c.y * TILE_SIZE, 0)
+      );
+      if (cursorTracked) {
+        linePts.push(
+          new THREE.Vector3(
+            cursorTileX * TILE_SIZE,
+            cursorTileY * TILE_SIZE,
+            0
+          )
+        );
+      }
+      if (linePts.length >= 2) {
+        const lineGeom = new THREE.BufferGeometry().setFromPoints(linePts);
+        const lineMat = new THREE.LineBasicMaterial({ color: PREVIEW_COLOR });
+        previewGroup.add(new THREE.Line(lineGeom, lineMat));
+      }
+    }
+
+    // Tool changes reach in via this ref. When leaving building mode
+    // mid-draw, drop the in-progress corners so re-entering doesn't
+    // resume a forgotten polygon.
+    onToolChangeRef.current = () => {
+      if (activeToolRef.current !== "building") {
+        buildingCorners = [];
+      }
+      rebuildBuildingPreview();
+    };
 
     function updateCursor() {
       if (panActive) canvas.style.cursor = "grabbing";
@@ -139,27 +223,59 @@ export default function Viewport({ children }) {
       updateCursor();
     }
 
+    function finishBuilding() {
+      if (buildingCorners.length < 3) return;
+      addBuilding(buildingCorners);
+      buildingCorners = [];
+      rebuildBuildingPreview();
+    }
+
     function onMouseDown(e) {
-      // Middle: pan. Always preventDefault to kill autoscroll.
+      // Middle: pan in either tool. preventDefault kills autoscroll.
       if (e.button === 1) {
         e.preventDefault();
         startPan(e.clientX, e.clientY);
         return;
       }
-      // Left: pan when space is held, otherwise begin a paint stroke.
-      if (e.button === 0) {
-        if (spaceHeld) {
-          startPan(e.clientX, e.clientY);
-        } else {
+      // Space+left also pans regardless of active tool.
+      if (e.button === 0 && spaceHeld) {
+        startPan(e.clientX, e.clientY);
+        return;
+      }
+
+      if (activeToolRef.current === "building") {
+        if (e.button === 0) {
+          // Browsers report consecutive clicks via e.detail. The
+          // second mousedown of a double-click arrives with detail===2
+          // — treat it as "finish" and skip placing another corner.
+          if (e.detail >= 2) {
+            finishBuilding();
+            return;
+          }
           const { tileX, tileY } = clientToTile(e.clientX, e.clientY);
-          paintTile(tileX, tileY, activeMaterialIdRef.current);
-          strokeButton = 0;
-          lastStrokeTileX = tileX;
-          lastStrokeTileY = tileY;
+          buildingCorners = [...buildingCorners, { x: tileX, y: tileY }];
+          rebuildBuildingPreview();
+          return;
+        }
+        if (e.button === 2) {
+          if (buildingCorners.length > 0) {
+            buildingCorners = buildingCorners.slice(0, -1);
+            rebuildBuildingPreview();
+          }
+          return;
         }
         return;
       }
-      // Right: begin an erase stroke. Context menu is suppressed separately.
+
+      // Terrain tool.
+      if (e.button === 0) {
+        const { tileX, tileY } = clientToTile(e.clientX, e.clientY);
+        paintTile(tileX, tileY, activeMaterialIdRef.current);
+        strokeButton = 0;
+        lastStrokeTileX = tileX;
+        lastStrokeTileY = tileY;
+        return;
+      }
       if (e.button === 2) {
         const { tileX, tileY } = clientToTile(e.clientX, e.clientY);
         eraseTile(tileX, tileY);
@@ -181,13 +297,32 @@ export default function Viewport({ children }) {
         camera.position.y += dy * worldPerPixelY;
         return;
       }
+
+      if (activeToolRef.current === "building") {
+        const { tileX, tileY } = clientToTile(e.clientX, e.clientY);
+        if (
+          !cursorTracked ||
+          tileX !== cursorTileX ||
+          tileY !== cursorTileY
+        ) {
+          cursorTileX = tileX;
+          cursorTileY = tileY;
+          cursorTracked = true;
+          if (buildingCorners.length > 0) rebuildBuildingPreview();
+        }
+        return;
+      }
+
       if (strokeButton === -1) return;
       const { tileX, tileY } = clientToTile(e.clientX, e.clientY);
       if (tileX === lastStrokeTileX && tileY === lastStrokeTileY) return;
       lastStrokeTileX = tileX;
       lastStrokeTileY = tileY;
-      if (strokeButton === 0) paintTile(tileX, tileY, activeMaterialIdRef.current);
-      else if (strokeButton === 2) eraseTile(tileX, tileY);
+      if (strokeButton === 0) {
+        paintTile(tileX, tileY, activeMaterialIdRef.current);
+      } else if (strokeButton === 2) {
+        eraseTile(tileX, tileY);
+      }
     }
 
     function onMouseUp(e) {
@@ -215,21 +350,31 @@ export default function Viewport({ children }) {
     }
 
     function onKeyDown(e) {
-      if (e.code !== "Space") return;
       if (isTypingTarget()) return;
-      // Stop the page from scrolling on space.
-      e.preventDefault();
-      if (spaceHeld) return;
-      spaceHeld = true;
-      updateCursor();
+      if (e.code === "Space") {
+        e.preventDefault();
+        if (spaceHeld) return;
+        spaceHeld = true;
+        updateCursor();
+        return;
+      }
+      if (activeToolRef.current !== "building") return;
+      if (e.code === "Enter") {
+        e.preventDefault();
+        finishBuilding();
+      } else if (e.code === "Escape") {
+        e.preventDefault();
+        if (buildingCorners.length > 0) {
+          buildingCorners = [];
+          rebuildBuildingPreview();
+        }
+      }
     }
 
     function onKeyUp(e) {
       if (e.code !== "Space") return;
       if (!spaceHeld) return;
       spaceHeld = false;
-      // If a space+left pan was in progress, end it on space-release too.
-      // The user can re-press space and re-click to pan again.
       if (panActive) panActive = false;
       updateCursor();
     }
@@ -245,8 +390,6 @@ export default function Viewport({ children }) {
     }
 
     canvas.addEventListener("mousedown", onMouseDown);
-    // Mousemove/up on document so middle-drag keeps tracking even when
-    // the cursor leaves the canvas mid-pan.
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
     canvas.addEventListener("wheel", onWheel, { passive: false });
@@ -276,12 +419,15 @@ export default function Viewport({ children }) {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       resizeObserver.disconnect();
+      clearPreviewGroup();
+      threeScene.remove(previewGroup);
       threeScene.remove(dotGrid);
       dotGrid.geometry.dispose();
       /** @type {THREE.Material} */ (dotGrid.material).dispose();
       renderer.dispose();
+      onToolChangeRef.current = () => {};
     };
-  }, [threeScene, paintTile, eraseTile]);
+  }, [threeScene, paintTile, eraseTile, addBuilding]);
 
   return (
     <div ref={containerRef} className="absolute inset-0">

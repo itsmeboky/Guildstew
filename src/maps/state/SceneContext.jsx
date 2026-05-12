@@ -38,11 +38,16 @@ const INITIAL_SCENE = {
 };
 
 /**
+ * @typedef {import("../engine/types").Position2D} Position2D
+ *
  * @typedef {Object} SceneContextValue
  * @property {Scene} scene
  * @property {(tileX: number, tileY: number, materialId: string) => void} paintTile
  * @property {(tileX: number, tileY: number) => void} eraseTile
+ * @property {(corners: Position2D[]) => void} addBuilding
  */
+
+const DEFAULT_WALL_MATERIAL = "stone-rough";
 
 /** @type {React.Context<SceneContextValue | null>} */
 const SceneContext = createContext(null);
@@ -84,8 +89,41 @@ export function SceneProvider({ children }) {
     });
   }, []);
 
+  const addBuilding = useCallback((corners) => {
+    if (!corners || corners.length < 3) return;
+    const shape = corners.map((c) => ({ x: c.x, y: c.y }));
+    const walls = shape.map((c, i) => {
+      const next = shape[(i + 1) % shape.length];
+      return {
+        id: crypto.randomUUID(),
+        x1: c.x,
+        y1: c.y,
+        x2: next.x,
+        y2: next.y,
+        materialId: DEFAULT_WALL_MATERIAL,
+      };
+    });
+    const building = {
+      id: crypto.randomUUID(),
+      shape,
+      walls,
+      doors: [],
+      windows: [],
+      name: "Building",
+      description: "",
+      defaultMaterialId: DEFAULT_WALL_MATERIAL,
+      isSolid: false,
+    };
+    setScene((prev) => ({
+      ...prev,
+      buildings: [...prev.buildings, building],
+    }));
+  }, []);
+
   return (
-    <SceneContext.Provider value={{ scene, paintTile, eraseTile }}>
+    <SceneContext.Provider
+      value={{ scene, paintTile, eraseTile, addBuilding }}
+    >
       {children}
     </SceneContext.Provider>
   );

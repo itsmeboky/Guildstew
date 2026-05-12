@@ -1,18 +1,36 @@
 /**
- * Forager landing page. Phase 4 — the terrain toolbar joins the
- * canvas. SceneProvider holds the authored map, ToolsProvider holds
- * the active material, Viewport renders, TerrainLayer draws, Toolbar
- * picks. More layers (buildings, NPCs, lights) will mount alongside as
- * their tools come online.
+ * Forager landing page. Phase 5 — the building tool joins the
+ * authoring kit. Layers (Terrain, Building) stack inside the Viewport,
+ * the Toolbar lets the user pick a tool, and the HUD hint reacts to
+ * which tool is currently active.
  */
 
 import React from "react";
 import { useActiveCampaign } from "../hooks/useActiveCampaign";
 import Viewport from "../render/Viewport";
 import TerrainLayer from "../render/TerrainLayer";
+import BuildingLayer from "../render/BuildingLayer";
 import { SceneProvider } from "../state/SceneContext";
-import { ToolsProvider } from "../state/ToolContext";
+import { ToolsProvider, useTools } from "../state/ToolContext";
 import Toolbar from "./Toolbar";
+
+function HudHint() {
+  const { activeTool } = useTools();
+  if (activeTool === "building") {
+    return (
+      <p className="text-[#f8a47c]/70 text-xs mt-3 leading-relaxed">
+        Click to add corners · Double-click or Enter to finish · Escape to
+        cancel · Right-click to undo last corner
+      </p>
+    );
+  }
+  return (
+    <p className="text-[#f8a47c]/70 text-xs mt-3 leading-relaxed">
+      Pick a material · Left-click to paint · Right-click to erase ·
+      Middle-mouse or Space+drag to pan
+    </p>
+  );
+}
 
 export default function ForagerHome() {
   const { campaignId, mapId } = useActiveCampaign();
@@ -23,6 +41,7 @@ export default function ForagerHome() {
         <div className="relative w-full h-screen overflow-hidden bg-[#0a0d1a]">
           <Viewport>
             <TerrainLayer />
+            <BuildingLayer />
           </Viewport>
           <Toolbar />
           <div className="absolute top-4 left-4 z-10 pointer-events-none">
@@ -31,7 +50,7 @@ export default function ForagerHome() {
                 Forager · v0
               </h1>
               <p className="text-[#f8a47c] text-xs uppercase tracking-widest mb-3">
-                Phase 4 · Terrain toolbar
+                Phase 5 · Building tool
               </p>
               <div className="space-y-1 text-sm">
                 <p className="text-[#f8a47c]">
@@ -47,10 +66,7 @@ export default function ForagerHome() {
                   </span>
                 </p>
               </div>
-              <p className="text-[#f8a47c]/70 text-xs mt-3 leading-relaxed">
-                Pick a material from the toolbar · Left-click to paint ·
-                Right-click to erase · Middle-mouse or Space+drag to pan
-              </p>
+              <HudHint />
             </div>
           </div>
         </div>

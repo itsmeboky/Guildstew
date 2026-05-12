@@ -12,13 +12,13 @@
 import React, { createContext, useContext, useState } from "react";
 
 /**
- * @typedef {'terrain'} ToolName
+ * @typedef {'terrain'|'building'} ToolName
  *
  * @typedef {Object} ToolState
- * @property {ToolName} activeTool   Currently only "terrain"; expands later.
- * @property {string} activeMaterialId   Which terrain material to paint.
+ * @property {ToolName} activeTool   Which tool the mouse is bound to.
+ * @property {string} activeMaterialId   Terrain material when the terrain tool is active.
  * @property {(id: string) => void} setActiveMaterial
- * @property {(name: ToolName) => void} setActiveTool   Placeholder for future tools.
+ * @property {(name: ToolName) => void} setActiveTool
  */
 
 /** @type {React.Context<ToolState | null>} */
