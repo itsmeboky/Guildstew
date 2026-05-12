@@ -8,6 +8,7 @@ import {
   getSubspeciesForSpecies,
   getSubspecies,
 } from "@/data/games/dnd5e_2024/species";
+import { getSpeciesIcon } from "@/data/games/dnd5e_2024/assets";
 import InfoTip from "@/components/characterCreator/InfoTip";
 
 /**
@@ -75,7 +76,7 @@ export default function SpeciesStep2024({ characterData, updateCharacterData }) 
       transition={{ duration: 0.3 }}
       className="max-w-5xl mx-auto"
     >
-      <div className="bg-[#2A3441] rounded-xl p-6 mb-6 border-2 border-[#1E2430]">
+      <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 mb-6 border border-[#2A3441]">
         <h2 className="text-2xl font-bold text-[#FFC6AA] mb-2 flex items-center gap-2">
           Species
           <Badge className="bg-[#37F2D1] text-[#1E2430] text-[10px] font-black">
@@ -110,6 +111,7 @@ export default function SpeciesStep2024({ characterData, updateCharacterData }) 
         {speciesList.map((s) => {
           const isSelected = selectedSpeciesId === s.index;
           const hasSubspecies = Array.isArray(s.subspecies) && s.subspecies.length > 0;
+          const iconUrl = getSpeciesIcon(s.name);
           return (
             <button
               key={s.index}
@@ -121,22 +123,33 @@ export default function SpeciesStep2024({ characterData, updateCharacterData }) 
                   : "bg-[#2A3441]/50 border-[#1E2430] hover:border-[#37F2D1]/50"
               }`}
             >
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-bold text-white">{s.name}</h3>
-                {isSelected && <Sparkles className="w-4 h-4 text-[#37F2D1]" />}
-              </div>
-              <div className="flex flex-wrap gap-2 text-xs text-white/60 mb-2">
-                <span>{s.type}</span>
-                <span>•</span>
-                <span>{s.size}</span>
-                <span>•</span>
-                <span>{s.speed} ft</span>
-                {hasSubspecies && (
-                  <>
-                    <span>•</span>
-                    <span>{s.subspecies.length} lineages</span>
-                  </>
+              <div className="flex items-center gap-3 mb-2">
+                {iconUrl && (
+                  <img
+                    src={iconUrl}
+                    alt={s.name}
+                    className="w-12 h-12 object-contain flex-shrink-0"
+                  />
                 )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-lg font-bold text-white truncate">{s.name}</h3>
+                    {isSelected && <Sparkles className="w-4 h-4 text-[#37F2D1] flex-shrink-0" />}
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs text-white/60 mt-1">
+                    <span>{s.type}</span>
+                    <span>•</span>
+                    <span>{s.size}</span>
+                    <span>•</span>
+                    <span>{s.speed} ft</span>
+                    {hasSubspecies && (
+                      <>
+                        <span>•</span>
+                        <span>{s.subspecies.length} lineages</span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
               {Array.isArray(s.traits) && s.traits.length > 0 && (
                 <div className="flex flex-wrap gap-1">
@@ -144,6 +157,7 @@ export default function SpeciesStep2024({ characterData, updateCharacterData }) 
                     <Badge
                       key={t.index}
                       className="bg-[#5B4B9E]/30 text-white text-[10px] border border-[#5B4B9E]/50"
+                      title={t.description || undefined}
                     >
                       {t.name}
                     </Badge>
@@ -210,14 +224,75 @@ export default function SpeciesStep2024({ characterData, updateCharacterData }) 
         </div>
       )}
 
-      {selectedSpecies && selectedSubspecies && (
-        <div className="bg-[#1E2430]/60 rounded-lg p-4 text-sm">
-          <p className="text-white/80">
-            <span className="font-bold text-[#37F2D1]">{selectedSpecies.name}</span>
-            <span className="text-white/50"> — </span>
-            <span className="font-bold text-[#5B4B9E]">{selectedSubspecies.name}</span>
-          </p>
-          <p className="text-xs text-white/50 mt-1 italic">
+      {selectedSpecies && (
+        <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441] mb-4">
+          <div className="flex items-center gap-3 mb-4">
+            {getSpeciesIcon(selectedSpecies.name) && (
+              <img
+                src={getSpeciesIcon(selectedSpecies.name)}
+                alt={selectedSpecies.name}
+                className="w-16 h-16 object-contain"
+              />
+            )}
+            <div>
+              <h3 className="text-xl font-bold text-[#37F2D1]">
+                {selectedSpecies.name}
+                {selectedSubspecies && (
+                  <>
+                    <span className="text-white/50 font-normal"> — </span>
+                    <span className="text-[#5B4B9E]">{selectedSubspecies.name}</span>
+                  </>
+                )}
+              </h3>
+              <p className="text-xs text-white/60 mt-0.5">
+                {selectedSpecies.type} • {selectedSpecies.size} • Speed {selectedSpecies.speed} ft
+              </p>
+            </div>
+          </div>
+
+          {Array.isArray(selectedSpecies.traits) && selectedSpecies.traits.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-wide text-white/50">Traits</p>
+              {selectedSpecies.traits.map((t) => (
+                <div key={t.index} className="bg-[#2A3441]/50 rounded p-3 text-sm">
+                  <p className="font-semibold text-[#FFC6AA] mb-1">{t.name}</p>
+                  {t.description && (
+                    <p className="text-white/80 text-xs leading-relaxed">
+                      {t.description}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {selectedSubspecies && Array.isArray(selectedSubspecies.traits)
+            && selectedSubspecies.traits.length > 0 && (
+            <div className="space-y-2 mt-4">
+              <p className="text-xs uppercase tracking-wide text-[#5B4B9E]">
+                {selectedSubspecies.name} traits
+              </p>
+              {selectedSubspecies.traits.map((t) => (
+                <div key={t.index} className="bg-[#2A3441]/50 rounded p-3 text-sm">
+                  <p className="font-semibold text-[#FFC6AA] mb-1">
+                    {t.name}
+                    {t.level > 1 && (
+                      <span className="ml-2 text-[10px] text-white/40 font-normal">
+                        Level {t.level}
+                      </span>
+                    )}
+                  </p>
+                  {t.description && (
+                    <p className="text-white/80 text-xs leading-relaxed">
+                      {t.description}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="text-xs text-white/50 mt-4 italic">
             Ability score bonuses come from your background, not your species.
           </p>
         </div>

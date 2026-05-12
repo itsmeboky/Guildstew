@@ -247,7 +247,7 @@ export default function ClassFeaturesStep2024({ characterData, updateCharacterDa
   return (
     <div className="max-w-6xl mx-auto">
       {/* Header + per-level gap banner */}
-      <div className="bg-[#2A3441] rounded-xl p-6 mb-6 border-2 border-[#1E2430]">
+      <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 mb-6 border border-[#2A3441]">
         <h2 className="text-2xl font-bold text-[#FFC6AA] mb-3 flex items-center gap-2">
           Class Features
           <Badge className="bg-[#37F2D1] text-[#1E2430] text-[10px] font-black">
@@ -285,7 +285,7 @@ export default function ClassFeaturesStep2024({ characterData, updateCharacterDa
             </div>
           </div>
 
-          <div className="bg-[#2A3441] rounded-xl p-6 border-2 border-[#1E2430] space-y-4">
+          <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441] space-y-4">
             <div>
               <h4 className="text-lg font-bold text-[#FFC6AA] mb-2">
                 Class basics
