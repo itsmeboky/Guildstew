@@ -38,8 +38,11 @@ export default function PostComments({ post, currentUser, allUserProfiles = [], 
     setOpen(true);
   };
 
-  const canDelete = (c) =>
-    currentUser?.id && (c.user_id === currentUser.id || post.profile_user_id === currentUser.id);
+  const canDelete = (c) => {
+    if (!currentUser?.id) return false;
+    const authorUuid = c.author_id || c.user_id || c.created_by || null;
+    return authorUuid === currentUser.id || post.profile_user_id === currentUser.id;
+  };
 
   return (
     <div className="pt-2 border-t border-gray-700/40 mt-2">
@@ -58,8 +61,9 @@ export default function PostComments({ post, currentUser, allUserProfiles = [], 
             <p className="text-xs text-gray-500 italic">Be the first to comment.</p>
           ) : (
             comments.map((c) => {
-              const commenter = c.user_id
-                ? allUserProfiles.find((p) => p.user_id === c.user_id)
+              const commenterUuid = c.author_id || c.user_id || c.created_by || null;
+              const commenter = commenterUuid
+                ? allUserProfiles.find((p) => p.user_id === commenterUuid)
                 : null;
               const username = commenter?.username || c.username || "Anonymous";
               const avatarUrl = commenter?.avatar_url || c.avatar_url || null;
