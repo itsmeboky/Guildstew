@@ -7,7 +7,7 @@ import {
   getCantripsForClass,
 } from "@/data/games/dnd5e_2024/spells";
 import {
-  SPELLS_KNOWN_TABLE,
+  getSpellsKnownEntry,
   spellsPrepared,
   cantripsKnown,
   getSpellSlots,
@@ -61,7 +61,7 @@ export default function SpellsStep2024({ characterData, updateCharacterData }) {
   const className = characterData.class;
   const cls = className ? getClassByName(className) : null;
   const classLevel = Number(characterData.level) || 1;
-  const tableEntry = className ? SPELLS_KNOWN_TABLE[className] : null;
+  const tableEntry = getSpellsKnownEntry(className);
 
   const isCaster = !!tableEntry;
   const shape = tableEntry?.type || "none"; // 'prepared' | 'spellbook' | 'pact' | 'none'

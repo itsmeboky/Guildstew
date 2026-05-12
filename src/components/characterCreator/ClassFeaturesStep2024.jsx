@@ -12,7 +12,7 @@ import {
 import { getWeaponsWithMastery } from "@/data/games/dnd5e_2024/equipment";
 import {
   weaponMasterySlots,
-  SPELLS_KNOWN_TABLE,
+  getSpellsKnownEntry,
   // Class-scaling helpers — each is a per-class function that
   // returns the relevant live value at the given class level. The
   // scaling panel below renders whichever ones are non-zero/non-null
@@ -234,13 +234,7 @@ export default function ClassFeaturesStep2024({ characterData, updateCharacterDa
   // OGL SRD JSON. We surface the existence with a banner so the
   // player knows to consult the PHB; the picker itself stays a
   // smell pending SRD expansion or licensed third-party data.
-  const hasL1PathChoice = (() => {
-    try {
-      return !!SPELLS_KNOWN_TABLE[className]?.level1ClassPathChoice;
-    } catch {
-      return false;
-    }
-  })();
+  const hasL1PathChoice = !!getSpellsKnownEntry(className)?.level1ClassPathChoice;
 
   if (!className) {
     return (
