@@ -41,6 +41,12 @@ import ClassFeaturesStep2024 from "@/components/characterCreator/ClassFeaturesSt
 import SkillsStep from "@/components/characterCreator/SkillsStep";
 import SkillsStep2024 from "@/components/characterCreator/SkillsStep2024";
 import SpellsStep from "@/components/characterCreator/SpellsStep";
+import SpellsStep2024 from "@/components/characterCreator/SpellsStep2024";
+import {
+  SPELLS_KNOWN_TABLE as SPELLS_KNOWN_TABLE_2024,
+  spellsPrepared as spellsPrepared2024,
+  cantripsKnown as cantripsKnown2024,
+} from "@/data/games/dnd5e_2024/rules";
 import EquipmentStep from "@/components/characterCreator/EquipmentStep";
 import ReviewStep from "@/components/characterCreator/ReviewStep";
 import QuickCreateDialog from "@/components/characterCreator/QuickCreateDialog";
@@ -515,9 +521,29 @@ export default function CharacterCreator() {
           : getSkillsCompletion(characterData)
         ).isComplete;
       case 'spells':
+        if (characterData.gamePack === 'dnd5e_2024') {
+          const cls = characterData.class;
+          const lvl = Number(characterData.level) || 1;
+          const tableEntry = cls ? SPELLS_KNOWN_TABLE_2024[cls] : null;
+          if (!tableEntry) return true; // non-caster
+          const cantripsTarget = cantripsKnown2024(cls, lvl);
+          const preparedTarget = spellsPrepared2024(cls, lvl);
+          const wizardSpellbookSize = tableEntry.type === 'spellbook'
+            ? (tableEntry.startingSpellbookSpells || 6)
+              + Math.max(0, lvl - 1) * (tableEntry.spellsPerLevel || 2)
+            : 0;
+          const s = characterData.spells || {};
+          const cantripsCount = Array.isArray(s.cantrips) ? s.cantrips.length : 0;
+          const preparedCountSel = Array.isArray(s.prepared) ? s.prepared.length : 0;
+          const spellbookCount = Array.isArray(s.spellbook) ? s.spellbook.length : 0;
+          if (cantripsCount !== cantripsTarget) return false;
+          if (preparedCountSel !== preparedTarget) return false;
+          if (tableEntry.type === 'spellbook' && spellbookCount !== wizardSpellbookSize) return false;
+          return true;
+        }
         const spellSlots = getSpellSlots(characterData.class, characterData.level, characterData.multiclasses || []);
         const pactSlots = getPactSlots(characterData.class, characterData.level, characterData.multiclasses || []);
-        
+
         // Calculate total slots by level (standard + pact)
         const totalSlots = { ...spellSlots };
         if (pactSlots) {
@@ -527,7 +553,7 @@ export default function CharacterCreator() {
 
         // If no spell slots, step is valid
         if (Object.values(totalSlots).every(slots => slots === 0)) return true;
-        
+
         // Check if all available slots are filled
         return Object.entries(totalSlots).every(([levelKey, slots]) => {
           if (slots === 0) return true;
@@ -682,6 +708,7 @@ const handleSubmit = () => {
     _is2024 && _stepDef.id === 'abilities' ? AbilitiesStep2024 :
     _is2024 && _stepDef.id === 'features' ? ClassFeaturesStep2024 :
     _is2024 && _stepDef.id === 'skills' ? SkillsStep2024 :
+    _is2024 && _stepDef.id === 'spells' ? SpellsStep2024 :
     _stepDef.component;
 
   // Mode selector — first screen before any creator steps render.
