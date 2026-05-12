@@ -494,7 +494,26 @@ export default function CharacterCreator() {
 
   const validateStep = (stepIndex) => {
     const step = STEPS[stepIndex];
-    
+
+    // Wrap the per-step branch in a try / catch so a bug in a
+    // completion helper can never crash the entire creator render —
+    // the worst case is the Next button stays disabled and the
+    // error is logged in dev. Without this guard, an exception in
+    // (e.g.) getSpellsCompletion would propagate up through the
+    // render and trip the page-level ErrorBoundary, replacing the
+    // creator with "Something went wrong".
+    try {
+      return validateStepImpl(step);
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.error(`validateStep[${step?.id}] threw:`, err);
+      }
+      return false;
+    }
+  };
+
+  const validateStepImpl = (step) => {
     switch (step.id) {
       case 'race':
         // 2024 splits the legacy "race step" into species (this
