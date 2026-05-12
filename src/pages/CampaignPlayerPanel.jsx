@@ -722,11 +722,6 @@ function CampaignPlayerPanelContent() {
     }
   }, [combatState.isOpen, combatState.target, myCharacter]);
 
-<<<<<<< HEAD
-  // Redirect if session ends. `session_active` is the canonical
-  // column; `is_session_active` was dropped in
-  // 20261128_character_ownership_model_foundation.sql.
-=======
   // Redirect if session ends. The column is `session_active` per
   // 20261128_character_ownership_model_foundation.sql (PART 3, which
   // dropped the duplicate `is_session_active` after reconciling
@@ -734,7 +729,6 @@ function CampaignPlayerPanelContent() {
   // here, so the negation always tripped and bounced the player
   // back to CampaignPanel — the navigation loop the side-nav work
   // had been working around.
->>>>>>> origin/claude/fix-player-panel-regressions-YfJYa
   useEffect(() => {
     if (campaign && !campaign.session_active) {
       navigate(createPageUrl("CampaignPanel") + `?id=${campaignId}`);
