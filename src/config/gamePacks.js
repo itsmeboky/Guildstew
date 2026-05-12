@@ -2,25 +2,28 @@
 // Guildstew can theoretically run, which the player owns, and which
 // are still on the roadmap.
 //
-// Today every player owns dnd5e_2014 by default — no DB-backed
-// entitlements yet. dnd5e_2024 is staged as coming_soon while the
-// 2024 PHB ruleset is wired up (Layer 4 commits 2-4). When the
-// entitlement layer ships, replace the hard-coded `currentlyOwned`
-// in useUserGamePacks() with a per-user lookup; the rest of the
-// system (picker UI, routing) already keys off this catalog.
+// 5e splits into two siblings — `dnd5e_2014` and `dnd5e_2024` —
+// because the editions diverge enough mechanically (weapon mastery,
+// spell list reworks, ASI source change, etc.) that mixed-edition
+// characters would mean partial fall-through. Each sibling has its
+// own data adapter under src/data/games/<id>/ and its own per-step
+// UI; the picker shows them as separate cards.
+//
+// Today every player owns the available 5e pack by default — no
+// DB-backed entitlements yet. When the entitlement layer ships,
+// replace the hard-coded `currentlyOwned` in useUserGamePacks()
+// with a per-user lookup; the rest of the system already keys off
+// this catalog.
 
 export const GAME_PACKS = {
-  // Legacy alias for any code / DB row still referencing "dnd5e".
-  // Hidden from the picker (not in GAME_PACK_ORDER) but kept so
-  // existing characters / game_pack_listings rows resolve. New
-  // characters stamp themselves with dnd5e_2014.
-  dnd5e: {
-    id: "dnd5e",
-    name: "Dungeons & Dragons 5e",
-    short: "D&D 5e",
-    tagline: "Heroic high fantasy with d20 mechanics. The default.",
+  dnd5e_2014: {
+    id: "dnd5e_2014",
+    family: "dnd5e",
+    name: "D&D 5e (2014)",
+    short: "5e (2014)",
+    tagline: "The classic 5e ruleset — PHB 2014.",
     description:
-      "Classic D&D 5th edition. Twelve classes, ability scores, levels 1–20, advantage/disadvantage, the whole familiar toolkit.",
+      "Classic D&D 5th edition as written in the 2014 Player's Handbook. Twelve classes, ability scores, levels 1–20, advantage/disadvantage, the whole familiar toolkit.",
     accent: "#37F2D1",
     icon: "🐉",
     status: "legacy",
@@ -41,13 +44,17 @@ export const GAME_PACKS = {
   },
   dnd5e_2024: {
     id: "dnd5e_2024",
+    family: "dnd5e",
     name: "D&D 5e (2024)",
-    short: "D&D 5e 2024",
-    tagline: "2024 PHB ruleset — Species, Origin Feats, Weapon Mastery.",
+    short: "5e (2024)",
+    tagline: "The 2024 revision — PHB 2024.",
     description:
-      "The 2024 redesign: Species (with Half-Elf / Half-Orc folded into heritage), backgrounds grant ASIs + Origin Feats, Weapon Mastery for martials, three spell lists.",
-    accent: "#a855f7",
-    icon: "🐲",
+      "The 2024 PHB revision. Weapon Mastery on martial classes, reworked spell lists, ASI through feats, refreshed subclasses, and updated species rules.",
+    accent: "#37F2D1",
+    icon: "🐉",
+    // coming_soon while the 2024 character creator (classes,
+    // features, skills, spells) is still being authored. Flips to
+    // 'available' once full coverage lands.
     status: "coming_soon",
     creatorRoute: "CharacterCreator",
   },
@@ -122,22 +129,17 @@ export const GAME_PACK_ORDER = [
   "kids_on_bikes",
 ];
 
-// Resolve the canonical pack id even if the caller hands us a
-// legacy alias — `dnd5e` → `dnd5e_2014`. Keeps character records
-// from the pre-Layer-4 era working.
-export function resolveGamePackId(id) {
-  const pack = GAME_PACKS[id];
-  if (pack?.aliasFor) return pack.aliasFor;
-  if (pack) return pack.id;
-  return "dnd5e_2014";
-}
+// Aliases for ids that have shifted shape but may still appear in
+// older code paths or persisted data. Resolved by getGamePack so
+// callers don't have to know about the rename.
+const ID_ALIASES = {
+  dnd5e: "dnd5e_2014",
+};
 
 export function getGamePack(id) {
   if (!id) return null;
-  const pack = GAME_PACKS[id];
-  if (!pack) return null;
-  if (pack.aliasFor) return GAME_PACKS[pack.aliasFor] || null;
-  return pack;
+  const resolved = ID_ALIASES[id] || id;
+  return GAME_PACKS[resolved] || null;
 }
 
 export function getOwnedGamePacks(ownedIds) {
