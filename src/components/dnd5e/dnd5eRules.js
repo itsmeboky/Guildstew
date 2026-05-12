@@ -1176,6 +1176,44 @@ export function multiclassProficienciesFor(className) {
 }
 
 /**
+ * How many picks a scaling-pick class feature earns at a given
+ * class level. The classFeatures registry stores each feature once
+ * at its initial level, but several features (Sorcerer Metamagic,
+ * Warlock Eldritch Invocations) grant additional picks at higher
+ * levels per the PHB tables. The single-Select UI for single picks
+ * has to upgrade to a multi-chip picker for these.
+ *
+ * Returns 1 when the feature is a normal single-pick choice
+ * (Fighting Style, Pact Boon, etc.), or the higher count from the
+ * scaling table. Returns 0 when the feature isn't choice-bearing
+ * at the given level (e.g. asking about Metamagic at Sorcerer 1).
+ */
+const SCALING_FEATURE_PICKS = {
+  Metamagic: (lvl) => {
+    if (lvl >= 17) return 4;
+    if (lvl >= 10) return 3;
+    if (lvl >= 3) return 2;
+    return 0;
+  },
+  "Eldritch Invocations": (lvl) => {
+    if (lvl >= 18) return 8;
+    if (lvl >= 15) return 7;
+    if (lvl >= 12) return 6;
+    if (lvl >= 9) return 5;
+    if (lvl >= 7) return 4;
+    if (lvl >= 5) return 3;
+    if (lvl >= 2) return 2;
+    return 0;
+  },
+};
+
+export function multiPickCount(featureName, classLevel) {
+  const scaler = SCALING_FEATURE_PICKS[featureName];
+  if (scaler) return scaler(Number(classLevel) || 0);
+  return 1;
+}
+
+/**
  * Per RAW (PHB p. 164), only Bard, Ranger, and Rogue grant a skill
  * on multiclass entry. Bard's grant is "any skill"; Ranger's and
  * Rogue's are restricted to their class-specific skill list — the
@@ -1638,6 +1676,13 @@ export const FEATS = {
     ],
     description: 'Bonus action shove after Attack. Add shield AC to DEX saves. Reaction: no damage on DEX save success.',
   },
+  Skilled: {
+    prerequisite: null,
+    effects: [
+      { type: 'special', description: 'Gain proficiency in any combination of three skills or tools.' },
+    ],
+    description: 'Gain proficiency in three skills or tools (any combination).',
+  },
   'Skulker': {
     prerequisite: { dex: 13 },
     effects: [
@@ -1655,6 +1700,16 @@ export const FEATS = {
       { type: 'special', description: 'Learn one attack roll cantrip from any class' },
     ],
     description: 'Double spell attack range. Ignore half/three-quarters cover. Learn one attack cantrip.',
+  },
+  'Tavern Brawler': {
+    prerequisite: null,
+    effects: [
+      { type: 'ability_increase', amount: 1, choice: ['str', 'con'] },
+      { type: 'special', description: 'Proficient with improvised weapons.' },
+      { type: 'special', description: 'Unarmed strike damage becomes 1d4.' },
+      { type: 'special', description: 'When you hit with an unarmed strike or improvised weapon on your turn, you can use a bonus action to attempt to grapple the target.' },
+    ],
+    description: '+1 STR or CON. Proficient with improvised weapons. Unarmed strike does 1d4. Bonus-action grapple after a hit with unarmed / improvised.',
   },
   Tough: {
     prerequisite: null,

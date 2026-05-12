@@ -26,6 +26,19 @@ export const GAME_PACKS = {
       "Classic D&D 5th edition as written in the 2014 Player's Handbook. Twelve classes, ability scores, levels 1–20, advantage/disadvantage, the whole familiar toolkit.",
     accent: "#37F2D1",
     icon: "🐉",
+    status: "legacy",
+    creatorRoute: "CharacterCreator",
+    aliasFor: "dnd5e_2014",
+  },
+  dnd5e_2014: {
+    id: "dnd5e_2014",
+    name: "D&D 5e (2014)",
+    short: "D&D 5e 2014",
+    tagline: "Original 2014 PHB ruleset. The classic toolkit.",
+    description:
+      "Twelve classes, nine races, levels 1-20, the 2014 PHB rules everyone learned 5e on. Multiclass, ASIs, the lot.",
+    accent: "#37F2D1",
+    icon: "🐉",
     status: "available",
     creatorRoute: "CharacterCreator",
   },
@@ -102,6 +115,10 @@ export const GAME_PACKS = {
   },
 };
 
+// Order in which packs render in the picker. The legacy "dnd5e"
+// entry is intentionally omitted — it exists in GAME_PACKS only as
+// an alias for backward compat (existing characters / DB rows that
+// reference the pre-2014/2024-split slug).
 export const GAME_PACK_ORDER = [
   "dnd5e_2014",
   "dnd5e_2024",
@@ -128,7 +145,7 @@ export function getGamePack(id) {
 export function getOwnedGamePacks(ownedIds) {
   return GAME_PACK_ORDER
     .map((id) => GAME_PACKS[id])
-    .filter((p) => p && ownedIds.includes(p.id));
+    .filter((p) => p && ownedIds.includes(p.id) && p.status === "available");
 }
 
 export function getUpcomingGamePacks(ownedIds) {
