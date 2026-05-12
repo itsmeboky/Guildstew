@@ -633,19 +633,25 @@ function getCasterContribution(entry) {
   }
 
   // Third casters: only if they actually have the subclass
-  if (cls === "Fighter" && archetype === "Eldritch Knight") {
+  if (cls === "Fighter" && THIRD_CASTER_ARCHETYPES_FIGHTER.has(archetype)) {
     // No casting until Fighter 3
     const effectiveLevels = Math.max(0, level - 2);
     return effectiveLevels / 3;
   }
 
-  if (cls === "Rogue" && archetype === "Arcane Trickster") {
+  if (cls === "Rogue" && THIRD_CASTER_ARCHETYPES_ROGUE.has(archetype)) {
     const effectiveLevels = Math.max(0, level - 2);
     return effectiveLevels / 3;
   }
 
   return 0;
 }
+
+// Third-caster archetype sets. Empty in 2014 SRD baseline; populate via
+// homebrew override or future SRD expansion to enable 1/3-caster spell
+// slot computation for Fighter / Rogue archetypes.
+const THIRD_CASTER_ARCHETYPES_FIGHTER = new Set([]);
+const THIRD_CASTER_ARCHETYPES_ROGUE = new Set([]);
 
 export function getSpellSlots(className, level, multiclasses = []) {
   const base = {
@@ -738,7 +744,6 @@ function getSingleClassSpellSlots(className, level) {
   for(let i=1; i<=9; i++) slots[`level${i}`] = 0;
 
   if (["Fighter", "Barbarian", "Rogue", "Monk"].includes(className)) {
-    // TODO: Eldritch Knight / Arcane Trickster
     return slots;
   }
   
@@ -882,7 +887,6 @@ export function getPactSlots(primaryClass, level, multiclasses = []) {
 }
 
 function getMaxSpellLevelThirdCaster(level) {
-  // PHB: Eldritch Knight / Arcane Trickster max spell levels
   if (level >= 19) return 4;
   if (level >= 13) return 3;
   if (level >= 7) return 2;
@@ -920,12 +924,10 @@ function getMaxSpellLevelForSingleClass(entry) {
     const pact = warlockTable[Math.min(level, 20) - 1];
     return pact?.level || 0;
   }
-
-  // Third casters: Fighter (Eldritch Knight), Rogue (Arcane Trickster)
-  if (cls === "Fighter" && archetype === "Eldritch Knight") {
+  if (cls === "Fighter" && THIRD_CASTER_ARCHETYPES_FIGHTER.has(archetype)) {
     return getMaxSpellLevelThirdCaster(level);
   }
-  if (cls === "Rogue" && archetype === "Arcane Trickster") {
+  if (cls === "Rogue" && THIRD_CASTER_ARCHETYPES_ROGUE.has(archetype)) {
     return getMaxSpellLevelThirdCaster(level);
   }
 
@@ -1056,8 +1058,7 @@ export function getCharacterSpellSlots(character) {
       // Usually Warlock slots are special. Let's just return { [slotLevel]: count }.
       slots[slotLevel] = count;
     }
-  } 
-  // TODO: Artificer, Arcane Trickster, Eldritch Knight (1/3 casters)
+  }
 
   return slots;
 }
