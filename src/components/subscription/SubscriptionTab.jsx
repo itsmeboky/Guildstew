@@ -430,7 +430,7 @@ function OwnerSection({ members, outgoingInvites, ownerId, maxSeats, onInviteSen
       if (friendIds.length === 0) return [];
       const { data } = await supabase
         .from('user_profiles')
-        .select('user_id, username, full_name, avatar_url')
+        .select('user_id, username, avatar_url')
         .in('user_id', friendIds);
       return data || [];
     },
@@ -479,7 +479,7 @@ function OwnerSection({ members, outgoingInvites, ownerId, maxSeats, onInviteSen
     );
     if (!q) return rows;
     return rows.filter((p) => {
-      const hay = `${p.username || ''} ${p.full_name || ''}`.toLowerCase();
+      const hay = `${p.username || ''}`.toLowerCase();
       return hay.includes(q);
     });
   }, [friendProfiles, search]);

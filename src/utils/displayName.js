@@ -16,9 +16,9 @@
  *     they know which player is which; everyone else sees only
  *     the character name.
  *
- * Email / full_name are intentionally NOT consulted here — even as
- * fallbacks — so a stale screenshot or shared device never leaks
- * personally-identifying information.
+ * Email is intentionally NOT consulted here — even as a fallback —
+ * so a stale screenshot or shared device never leaks personally-
+ * identifying information.
  */
 
 /**
