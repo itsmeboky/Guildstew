@@ -77,13 +77,29 @@ export default function CampaignPanel() {
   // (GMs use CampaignGMPanel / GMPanel) but a GM landing here for
   // any reason should not be gated by the character picker.
   const isGM = !!campaign?.game_master_id && campaign.game_master_id === user?.id;
+  const isCoDM = Array.isArray(campaign?.co_dm_ids) && campaign.co_dm_ids.includes(user?.id);
 
-  // Automatically redirect if session is active AND player is ready
+  // Players added to `disconnected_players` by handleLeaveSession on
+  // CampaignPlayerPanel — they voluntarily left the live session and
+  // should stay on the lobby until they choose Rejoin. The reconnect
+  // useEffect in PlayerPanel removes the entry the moment the panel
+  // mounts, so this flag is true only while the player is actually
+  // here on the lobby.
+  const isDisconnected = Array.isArray(campaign?.disconnected_players)
+    && campaign.disconnected_players.includes(user?.id);
+
+  // Automatically redirect if session is active AND player is ready.
+  // Skip the redirect for players in disconnected_players: without
+  // this gate they get bounced straight back into PlayerPanel — the
+  // reconnect effect there re-adds them, and "Leave Session"
+  // becomes a no-op. GMs and co-DMs are also exempt (they shouldn't
+  // be routed into the player panel from the lobby).
   useEffect(() => {
-    if (campaign?.session_active && isReady) {
-      navigate(createPageUrl("CampaignPlayerPanel") + `?id=${campaignId}`);
-    }
-  }, [campaign?.session_active, isReady, campaignId, navigate]);
+    if (!campaign?.session_active || !isReady) return;
+    if (isGM || isCoDM) return;
+    if (isDisconnected) return;
+    navigate(createPageUrl("CampaignPlayerPanel") + `?id=${campaignId}`);
+  }, [campaign?.session_active, isReady, isGM, isCoDM, isDisconnected, campaignId, navigate]);
 
   const toggleReadyMutation = useMutation({
     mutationFn: async () => {
@@ -167,8 +183,12 @@ export default function CampaignPanel() {
     );
   }
 
-  // If player is ready, show lock screen (unless session started, which is handled by useEffect)
-  if (isReady) {
+  // If player is ready, show lock screen (unless session started, which is handled by useEffect).
+  // Disconnected players (just-left-session) fall through to the
+  // lobby render so the Rejoin Session button is reachable — the
+  // lock screen would only let them Cancel Ready and re-Ready,
+  // which doesn't trigger the reconnect path on PlayerPanel.
+  if (isReady && !isDisconnected) {
     return (
       <div className="min-h-screen bg-[#050816] flex flex-col items-center justify-center text-white p-4 relative overflow-hidden">
          {/* Background Image with Heavy Overlay */}
@@ -256,33 +276,50 @@ export default function CampaignPanel() {
               {campaign?.name || campaign?.title}
             </h1>
             <div className="flex items-center justify-center gap-4">
-              <Button
-                className={`px-12 py-6 text-xl font-bold transition-all ${
-                  myCharacter
-                    ? "bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] shadow-[0_0_20px_rgba(55,242,209,0.3)] hover:scale-105"
-                    : "bg-slate-600 text-slate-300 cursor-not-allowed opacity-70"
-                }`}
-                onClick={() => myCharacter && toggleReadyMutation.mutate()}
-                disabled={toggleReadyMutation.isPending || !myCharacter}
-                title={
-                  myCharacter
-                    ? (isReady ? "Click to clear ready" : "Signal you're ready to play")
-                    : "Pick or create a character before readying up"
-                }
-              >
-                {toggleReadyMutation.isPending ? (
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                ) : isReady ? (
-                  "NOT READY"
-                ) : (
-                  "READY UP"
-                )}
-              </Button>
+              {campaign?.session_active && !isGM && !isCoDM && isDisconnected ? (
+                // Voluntarily-left-the-session path. The reconnect
+                // useEffect inside CampaignPlayerPanel.jsx removes
+                // this user from disconnected_players on mount and
+                // toasts "Reconnected to session!", so all this
+                // button needs to do is navigate.
+                <Button
+                  onClick={() => navigate(createPageUrl('CampaignPlayerPanel') + `?id=${campaignId}`)}
+                  className="px-12 py-6 text-xl font-bold bg-amber-500 hover:bg-amber-400 text-[#1E2430] shadow-[0_0_20px_rgba(245,158,11,0.4)] hover:scale-105 transition-all"
+                  title="Rejoin the live session you left"
+                >
+                  REJOIN SESSION
+                </Button>
+              ) : (
+                <Button
+                  className={`px-12 py-6 text-xl font-bold transition-all ${
+                    myCharacter
+                      ? "bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430] shadow-[0_0_20px_rgba(55,242,209,0.3)] hover:scale-105"
+                      : "bg-slate-600 text-slate-300 cursor-not-allowed opacity-70"
+                  }`}
+                  onClick={() => myCharacter && toggleReadyMutation.mutate()}
+                  disabled={toggleReadyMutation.isPending || !myCharacter}
+                  title={
+                    myCharacter
+                      ? (isReady ? "Click to clear ready" : "Signal you're ready to play")
+                      : "Pick or create a character before readying up"
+                  }
+                >
+                  {toggleReadyMutation.isPending ? (
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  ) : isReady ? (
+                    "NOT READY"
+                  ) : (
+                    "READY UP"
+                  )}
+                </Button>
+              )}
             </div>
             <p className="mt-4 text-sm text-gray-400">
-              {myCharacter
-                ? "Click Ready Up to signal you are ready to play."
-                : "Pick or create a character on your slot below — then ready up."}
+              {campaign?.session_active && !isGM && !isCoDM && isDisconnected
+                ? "You left the live session. Rejoin to drop back into combat — the GM will see you reconnect."
+                : myCharacter
+                  ? "Click Ready Up to signal you are ready to play."
+                  : "Pick or create a character on your slot below — then ready up."}
             </p>
           </div>
         </div>
