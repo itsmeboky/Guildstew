@@ -265,9 +265,13 @@ export default function UserProfile() {
         }
       }
 
-      return base44.entities.Post.create({ 
+      if (!currentUser?.id) throw new Error('Not authenticated');
+
+      return base44.entities.Post.create({
         profile_user_id: userId,
-        content: data.content, 
+        author_id: currentUser.id,
+        created_by: currentUser.id,
+        content: data.content,
         image_url: imageUrl,
         link_preview: linkPreview
       });
@@ -302,6 +306,7 @@ export default function UserProfile() {
       const next = [...comments, {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         user_id: currentUser?.id,
+        author_id: currentUser?.id,
         username: currentUser?.username || 'Anonymous',
         avatar_url: currentUser?.avatar_url || null,
         content,
@@ -619,7 +624,8 @@ export default function UserProfile() {
                   </>
                 )}
                 {posts.slice(0, 5).map(post => {
-                  const authorProfile = allUserProfiles.find(p => p.user_id === post.author_id);
+                  const authorUuid = post.author_id || post.created_by;
+                  const authorProfile = allUserProfiles.find(p => p.user_id === authorUuid);
                   const hasLiked = (post.likes || []).includes(currentUser?.id);
                   const authorColor1 = authorProfile?.profile_color_1 || user?.profile_color_1 || "#FF5722";
                   const authorColor2 = authorProfile?.profile_color_2 || user?.profile_color_2 || "#37F2D1";

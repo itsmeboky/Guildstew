@@ -206,9 +206,13 @@ console.log('PROFILE PAGE USER:', user)
         }
       }
 
-      return base44.entities.Post.create({ 
+      if (!user?.id) throw new Error('Not authenticated');
+
+      return base44.entities.Post.create({
         profile_user_id: user.id,
-        content: data.content, 
+        author_id: user.id,
+        created_by: user.id,
+        content: data.content,
         image_url: imageUrl,
         link_preview: linkPreview
       });
@@ -251,6 +255,7 @@ console.log('PROFILE PAGE USER:', user)
       const next = [...comments, {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         user_id: user.id,
+        author_id: user.id,
         username: user.username || 'Anonymous',
         avatar_url: user.avatar_url || null,
         content,
@@ -632,7 +637,8 @@ console.log('PROFILE PAGE USER:', user)
                   </>
                 )}
                 {displayedPosts.map(post => {
-                  const authorProfile = allUserProfiles.find(p => p.user_id === post.author_id);
+                  const authorUuid = post.author_id || post.created_by;
+                  const authorProfile = allUserProfiles.find(p => p.user_id === authorUuid);
                   const hasLiked = (post.likes || []).includes(user?.id);
                   const authorColor1 = user?.profile_color_1 || "#FF5722";
                   const authorColor2 = user?.profile_color_2 || "#37F2D1";
