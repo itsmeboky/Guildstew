@@ -24,6 +24,7 @@ import { resolveStatus, statusMeta } from "@/lib/PresenceContext";
 import ReportUserDialog from "@/components/support/ReportUserDialog";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import SocialHandlesDisplay from "@/components/profile/SocialHandlesDisplay";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function UserProfile() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -47,6 +48,7 @@ export default function UserProfile() {
   };
 
   const queryClient = useQueryClient();
+  const { user: authUser } = useAuth();
 
   const { data: allUserProfiles } = useQuery({
     queryKey: ['allUserProfiles'],

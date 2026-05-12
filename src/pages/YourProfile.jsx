@@ -20,6 +20,7 @@ import { statusMeta } from "@/lib/PresenceContext";
 import { Skeleton, CardSkeleton } from "@/components/ui/skeleton";
 import SocialHandlesDisplay from "@/components/profile/SocialHandlesDisplay";
 import { invalidateProfileQueries } from "@/lib/invalidateProfileQueries";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function YourProfile() {
   const sub = useSubscription();
@@ -36,6 +37,7 @@ export default function YourProfile() {
   const [editProfileOpen, setEditProfileOpen] = useState(false);
 
   const queryClient = useQueryClient();
+  const { user: authUser } = useAuth();
 
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
