@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Sparkles } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
 import SubclassPicker from "@/components/characterCreator/SubclassPicker";
@@ -12,7 +12,21 @@ import {
   meetsMulticlassPrereqs,
   multiclassPrereqDescription,
   multiclassProficienciesFor,
+  multiPickCount,
+  FEATS,
 } from "@/components/dnd5e/dnd5eRules";
+import {
+  ABILITY_KEYS,
+  ABILITY_LABELS,
+  MAX_ABILITY_SCORE,
+  asiKey,
+  reachedAsiLevels,
+  feasibleFeats,
+  bumpsForSelection,
+  applyAsiBumps,
+  validateSelection,
+  fmtMod,
+} from "@/components/characterCreator/asiSelections";
 
 // Canonical "choose your specialization" feature names per class.
 // When a feature's name lands in this set, render the arrow-pattern
@@ -43,11 +57,91 @@ function isSubclassFeature(feature) {
 export default function ClassFeaturesStep({ characterData, updateCharacterData }) {
   const [multiclasses, setMulticlasses] = useState(characterData.multiclasses || []);
   const [featureChoices, setFeatureChoices] = useState(characterData.feature_choices || {});
+  const [asiSelections, setAsiSelections] = useState(characterData.asiSelections || {});
 
   const availableClasses = ["Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk", "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard"];
   const usedClasses = [characterData.class, ...multiclasses.map(mc => mc.class).filter(Boolean)];
 
-  const primaryClassLevel = characterData.level - multiclasses.reduce((sum, mc) => sum + (mc.level || 0), 0);
+  const totalLevel = Number(characterData.level) || 1;
+  const primaryClassLevel = totalLevel - multiclasses.reduce((sum, mc) => sum + (mc.level || 0), 0);
+
+  // Pre-ASI scores: written by AbilityScoresStep as
+  // baseAttributes = base + racial. The ASI picker below applies
+  // bumps relative to this baseline so re-picks don't compound.
+  // Falls back to attributes for editing legacy characters that
+  // never had a baseAttributes field saved.
+  const baseAttributes = characterData.baseAttributes || characterData.attributes || {};
+
+  // Whenever asiSelections changes, recompute effective attributes
+  // (= base + racial + ASI bumps) and persist both the audit trail
+  // and the derived attributes. Downstream consumers (HP / skill /
+  // save DC) keep reading characterData.attributes and naturally
+  // see the post-ASI value.
+  React.useEffect(() => {
+    updateCharacterData({
+      asiSelections,
+      attributes: applyAsiBumps(baseAttributes, asiSelections),
+    });
+    // baseAttributes intentionally omitted from deps — it's the
+    // source-of-truth for the recompute, not an input that should
+    // re-trigger when the user merely revisits this step.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asiSelections]);
+
+  // Reached ASI levels for the primary class only. Multiclass ASI
+  // distribution is filed as a smell (recon Layer 3) — the storage
+  // shape is multiclass-ready but the picker UI surfaces only the
+  // primary-class ASIs for now.
+  const primaryAsiLevels = reachedAsiLevels(characterData.class, primaryClassLevel);
+
+  // Prune ASI selections at levels the player has retreated below
+  // (e.g. user picked level 8, took the level-4 ASI, then dropped
+  // back to level 5 — the level-4 pick stays, but if they drop to
+  // 3 it should disappear). We compare against the primary class's
+  // currently-reached ASI levels.
+  React.useEffect(() => {
+    const validKeys = new Set(primaryAsiLevels.map((lvl) => asiKey(characterData.class, lvl)));
+    const stale = Object.keys(asiSelections || {}).filter((k) => {
+      // Only consider primary-class keys for pruning here. Multi-
+      // class ASI keys (e.g. "Fighter-4" while primary is Wizard)
+      // are left untouched — that's the smell flagged in the recon.
+      const [keyClass] = k.split("-");
+      return keyClass === characterData.class && !validKeys.has(k);
+    });
+    if (stale.length === 0) return;
+    setAsiSelections((current) => {
+      const next = { ...current };
+      for (const k of stale) delete next[k];
+      return next;
+    });
+  }, [characterData.class, primaryAsiLevels.length]);
+
+  const handleLevelChange = (newLevel) => {
+    const lvl = Math.max(1, Math.min(20, Number(newLevel) || 1));
+    // Clamp multiclass entries so primary stays at least 1.
+    const totalMc = multiclasses.reduce((sum, mc) => sum + (mc.level || 0), 0);
+    const clampedMcs = totalMc > lvl - 1
+      ? multiclasses.map((mc) => ({ ...mc, level: 0 })).filter(() => false) // wipe if level can't fit
+      : multiclasses;
+    if (clampedMcs !== multiclasses) setMulticlasses(clampedMcs);
+    updateCharacterData({
+      level: lvl,
+      ...(clampedMcs !== multiclasses ? { multiclasses: clampedMcs } : {}),
+    });
+  };
+
+  const handleAsiChange = (level, nextSelection) => {
+    const key = asiKey(characterData.class, level);
+    setAsiSelections((current) => {
+      const next = { ...current };
+      if (!nextSelection || (!nextSelection.kind)) {
+        delete next[key];
+      } else {
+        next[key] = nextSelection;
+      }
+      return next;
+    });
+  };
 
   // Multiclass prereq gates (PHB p. 163). Both rules must pass:
   //   (a) Player meets the prereq for their PRIMARY class.
@@ -114,17 +208,72 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
       <div className="bg-[#2A3441] rounded-xl p-6 mb-6 border-2 border-[#1E2430]">
         <h2 className="text-2xl font-bold text-[#FFC6AA] mb-3">Class Features</h2>
         <p className="text-white mb-3">
-          Class features are special abilities you gain as you level up. Some features are granted automatically, 
+          Class features are special abilities you gain as you level up. Some features are granted automatically,
           while others require you to make choices (like picking a subclass or fighting style).
         </p>
-        {characterData.level >= 2 && (
-          <p className="text-white flex items-start gap-2 flex-wrap">
+
+        <div className="flex items-center gap-3 mt-4 flex-wrap">
+          <label className="text-sm font-bold text-white">Character Level:</label>
+          <Select
+            value={String(totalLevel)}
+            onValueChange={handleLevelChange}
+          >
+            <SelectTrigger className="w-32 bg-[#1E2430] border-[#5B4B9E] text-white">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-[#1E2430] border-[#5B4B9E] text-white">
+              {Array.from({ length: 20 }, (_, i) => i + 1).map((l) => (
+                <SelectItem key={l} value={String(l)} className="text-white">
+                  Level {l}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="text-xs text-white/60">
+            Your {characterData.class} level: <span className="font-bold text-[#37F2D1]">{primaryClassLevel}</span>
+            {multiclasses.filter((mc) => mc.class).length > 0 && (
+              <span className="ml-1">(total − multiclass levels)</span>
+            )}
+          </span>
+        </div>
+
+        {totalLevel >= 2 && (
+          <p className="text-white flex items-start gap-2 flex-wrap mt-4">
             💡 <span className="font-bold">Multiclassing:</span> At level 2+, you can multiclass into another class to gain abilities from multiple sources.
             Each level you gain can be put into any of your classes.
             <InfoTip>{tipFor("multiclass_prereqs")}</InfoTip>
           </p>
         )}
       </div>
+
+      {primaryAsiLevels.length > 0 && (
+        <div className="mb-6 space-y-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-amber-300" />
+            <h3 className="text-lg font-bold text-amber-200">
+              Ability Score Improvements
+            </h3>
+            <span className="text-xs text-white/60">
+              ({primaryAsiLevels.length} earned at {characterData.class} level{primaryAsiLevels.length > 1 ? "s" : ""} {primaryAsiLevels.join(", ")})
+            </span>
+          </div>
+          {primaryAsiLevels.map((lvl) => {
+            const key = asiKey(characterData.class, lvl);
+            return (
+              <AsiCard
+                key={key}
+                className={characterData.class}
+                level={lvl}
+                selection={asiSelections[key]}
+                baseAttributes={baseAttributes}
+                asiSelections={asiSelections}
+                ownKey={key}
+                onChange={(next) => handleAsiChange(lvl, next)}
+              />
+            );
+          })}
+        </div>
+      )}
 
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -187,35 +336,12 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
                       />
                     </div>
                   ) : (
-                    <div className="mt-5 p-5 bg-[#1E2430]/50 rounded-lg border-2 border-[#FF5722]">
-                      <p className="text-[#FF5722] font-semibold mb-4 text-sm">
-                        ⚠️ You must make a choice for this feature:
-                      </p>
-
-                      <Select
-                        value={currentChoice || ""}
-                        onValueChange={(value) => handleFeatureChoice(featureKey, value)}
-                      >
-                        <SelectTrigger className="h-auto min-h-11 w-full">
-                          <SelectValue placeholder="Select option..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {feature.choices.map((choice, cIdx) => {
-                            const choiceName = typeof choice === 'string' ? choice : choice.name;
-                            const choiceDesc = typeof choice === 'object' ? choice.description : null;
-                            return (
-                              <SelectItem
-                                key={cIdx}
-                                value={choiceName}
-                                description={choiceDesc || undefined}
-                              >
-                                {choiceName}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <FeatureChoicePicker
+                      feature={feature}
+                      classLevel={primaryClassLevel}
+                      currentChoice={currentChoice}
+                      onChange={(value) => handleFeatureChoice(featureKey, value)}
+                    />
                   )
                 )}
               </div>
@@ -360,29 +486,12 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
                               />
                             </div>
                           ) : (
-                            <Select
-                              value={currentChoice || ""}
-                              onValueChange={(value) => handleFeatureChoice(featureKey, value)}
-                            >
-                              <SelectTrigger className="h-auto min-h-11 w-full mt-4">
-                                <SelectValue placeholder="Make a choice..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {feature.choices.map((choice, cIdx) => {
-                                  const choiceName = typeof choice === 'string' ? choice : choice.name;
-                                  const choiceDesc = typeof choice === 'object' ? choice.description : null;
-                                  return (
-                                    <SelectItem
-                                      key={cIdx}
-                                      value={choiceName}
-                                      description={choiceDesc || undefined}
-                                    >
-                                      {choiceName}
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
+                            <FeatureChoicePicker
+                              feature={feature}
+                              classLevel={mc.level}
+                              currentChoice={currentChoice}
+                              onChange={(value) => handleFeatureChoice(featureKey, value)}
+                            />
                           )
                         )}
                       </div>
@@ -469,6 +578,337 @@ function MulticlassProficienciesPanel({ className }) {
       </ul>
       {hasNotes && (
         <p className="mt-2 text-[11px] italic text-slate-400">{profs.notes}</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Picker card for a single ASI milestone. Three options:
+ *   - +2 to one ability (cap 20)
+ *   - +1 to two different abilities (cap 20 each)
+ *   - A feat (PHB list, filtered by ability-score prerequisite)
+ *
+ * The card writes its selection back through `onChange`. The parent
+ * step stores the result in characterData.asiSelections and
+ * recomputes characterData.attributes via applyAsiBumps.
+ *
+ * Cap-20 is shown as a per-ability ceiling — the dropdown shows
+ * the post-bump score next to each ability so the player can see
+ * "STR 16 → 18" rather than guess. Abilities already at 20 get
+ * disabled options.
+ */
+function AsiCard({ className, level, selection, baseAttributes, asiSelections, ownKey, onChange }) {
+  const kind = selection?.kind || "";
+
+  // The "current" ability score to bump from — every ASI taken
+  // BEFORE this one stacks. We sum the bumps from sibling
+  // selections (excluding this card's own) so the player sees the
+  // running total, not the base.
+  const otherSelections = React.useMemo(() => {
+    const out = { ...(asiSelections || {}) };
+    delete out[ownKey];
+    return out;
+  }, [asiSelections, ownKey]);
+  const runningAttributes = applyAsiBumps(baseAttributes, otherSelections);
+
+  const setKind = (nextKind) => {
+    if (nextKind === kind) return;
+    onChange({ kind: nextKind });
+  };
+
+  const setAbility1 = (val) => onChange({ ...selection, kind, ability1: val });
+  const setAbility2 = (val) => onChange({ ...selection, kind, ability2: val });
+  const setFeat = (val) => onChange({ ...selection, kind: "feat", feat: val });
+
+  const validation = validateSelection(selection);
+  const featList = feasibleFeats(runningAttributes);
+
+  return (
+    <div
+      className={`rounded-xl p-4 border-2 ${
+        validation
+          ? "bg-amber-500/10 border-amber-500/40"
+          : "bg-emerald-500/10 border-emerald-500/40"
+      }`}
+    >
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <Badge className="bg-amber-500 text-[#1E2430] text-xs font-black">
+            {className} L{level}
+          </Badge>
+          <span className="text-sm font-bold text-white">
+            Ability Score Improvement
+          </span>
+        </div>
+        {validation && (
+          <span className="text-[11px] text-amber-300 font-semibold">{validation}</span>
+        )}
+      </div>
+
+      <div className="flex gap-2 flex-wrap mb-3">
+        {[
+          { id: "plus2", label: "+2 to one" },
+          { id: "split", label: "+1 to two" },
+          { id: "feat", label: "Feat" },
+        ].map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setKind(id)}
+            className={`text-xs font-bold rounded-full px-3 py-1.5 border transition-colors ${
+              kind === id
+                ? "bg-amber-500 text-[#1E2430] border-amber-300"
+                : "bg-[#1E2430] text-white/70 border-slate-600 hover:border-amber-400"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {kind === "plus2" && (
+        <AbilitySelect
+          label="Pick one ability"
+          value={selection?.ability1 || ""}
+          onChange={setAbility1}
+          attributes={runningAttributes}
+          bump={2}
+          excludeAbility={null}
+        />
+      )}
+
+      {kind === "split" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <AbilitySelect
+            label="Ability 1 (+1)"
+            value={selection?.ability1 || ""}
+            onChange={setAbility1}
+            attributes={runningAttributes}
+            bump={1}
+            excludeAbility={selection?.ability2 || null}
+          />
+          <AbilitySelect
+            label="Ability 2 (+1)"
+            value={selection?.ability2 || ""}
+            onChange={setAbility2}
+            attributes={runningAttributes}
+            bump={1}
+            excludeAbility={selection?.ability1 || null}
+          />
+        </div>
+      )}
+
+      {kind === "feat" && (
+        <div>
+          <label className="text-xs uppercase tracking-wider font-bold text-white/70 block mb-1.5">
+            Pick a feat
+          </label>
+          <Select
+            value={selection?.feat || ""}
+            onValueChange={setFeat}
+          >
+            <SelectTrigger className="bg-[#1E2430] border-slate-600 text-white">
+              <SelectValue placeholder="Choose a feat" />
+            </SelectTrigger>
+            <SelectContent className="bg-[#1E2430] border-slate-600 text-white max-h-72">
+              {featList.map((feat) => (
+                <SelectItem key={feat} value={feat} className="text-white">
+                  {feat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selection?.feat && FEATS[selection.feat]?.description && (
+            <p className="text-[11px] text-white/60 mt-2 italic">
+              {FEATS[selection.feat].description}
+            </p>
+          )}
+          <p className="text-[10px] text-white/50 mt-2">
+            Spellcasting / proficiency-prereq feats are listed and
+            assumed to be eligible for the player's build — verify
+            with your DM.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AbilitySelect({ label, value, onChange, attributes, bump, excludeAbility }) {
+  return (
+    <div>
+      <label className="text-xs uppercase tracking-wider font-bold text-white/70 block mb-1.5">
+        {label}
+      </label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="bg-[#1E2430] border-slate-600 text-white">
+          <SelectValue placeholder="Choose an ability" />
+        </SelectTrigger>
+        <SelectContent className="bg-[#1E2430] border-slate-600 text-white">
+          {ABILITY_KEYS.map((k) => {
+            const current = attributes?.[k] || 10;
+            const next = Math.min(MAX_ABILITY_SCORE, current + bump);
+            const wasted = next === current;
+            const isExcluded = excludeAbility === k;
+            return (
+              <SelectItem
+                key={k}
+                value={k}
+                disabled={wasted || isExcluded}
+                className="text-white"
+              >
+                {ABILITY_LABELS[k]}: {current} → {next} ({fmtMod(next)})
+                {wasted && " — at cap"}
+              </SelectItem>
+            );
+          })}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+/**
+ * Choice picker for a single class feature with `choiceRequired:
+ * true`. Two render modes driven by multiPickCount(featureName,
+ * classLevel):
+ *
+ *   - count === 1: single dropdown (Fighting Style, Pact Boon,
+ *     Domain at L1, Otherworldly Patron, etc.). Stores the chosen
+ *     option name as a string in feature_choices[key].
+ *
+ *   - count > 1: multi-chip picker (Sorcerer Metamagic at L3 = 2
+ *     picks, L10 = 3, L17 = 4; Warlock Eldritch Invocations
+ *     scaling per PHB table). Stores an array of option names.
+ *
+ * Backward compatibility: existing characters saved with the
+ * legacy single-string shape still load — we coerce string ↔
+ * array on read so the picker doesn't lose the old pick when a
+ * level-up bumps the same feature into multi-pick territory.
+ */
+function FeatureChoicePicker({ feature, classLevel, currentChoice, onChange }) {
+  const pickCount = multiPickCount(feature.name, classLevel);
+
+  // Normalize legacy single-string shape to an array so the rest
+  // of this component is array-only.
+  const selected = Array.isArray(currentChoice)
+    ? currentChoice
+    : currentChoice
+    ? [currentChoice]
+    : [];
+
+  if (pickCount <= 1) {
+    return (
+      <div className="mt-5 p-5 bg-[#1E2430]/50 rounded-lg border-2 border-[#FF5722]">
+        <p className="text-[#FF5722] font-semibold mb-4 text-sm">
+          ⚠️ You must make a choice for this feature:
+        </p>
+        <Select
+          value={selected[0] || ""}
+          onValueChange={(value) => onChange(value)}
+        >
+          <SelectTrigger className="h-auto min-h-11 w-full">
+            <SelectValue placeholder="Select option..." />
+          </SelectTrigger>
+          <SelectContent>
+            {feature.choices.map((choice, cIdx) => {
+              const choiceName = typeof choice === "string" ? choice : choice.name;
+              const choiceDesc = typeof choice === "object" ? choice.description : null;
+              return (
+                <SelectItem
+                  key={cIdx}
+                  value={choiceName}
+                  description={choiceDesc || undefined}
+                >
+                  {choiceName}
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+
+  // Multi-pick: chip toggles. Click to add until pickCount; click
+  // a selected chip to remove. Show running counter so the player
+  // can see how many slots remain at this level.
+  const togglePick = (choiceName) => {
+    const isSelected = selected.includes(choiceName);
+    let next;
+    if (isSelected) {
+      next = selected.filter((s) => s !== choiceName);
+    } else {
+      if (selected.length >= pickCount) return;
+      next = [...selected, choiceName];
+    }
+    // Always write as an array for multi-pick features so the
+    // shape is stable on reload.
+    onChange(next);
+  };
+
+  const complete = selected.length === pickCount;
+
+  return (
+    <div
+      className={`mt-5 p-5 rounded-lg border-2 ${
+        complete
+          ? "bg-emerald-500/10 border-emerald-500/40"
+          : "bg-[#1E2430]/50 border-[#FF5722]"
+      }`}
+    >
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <p className={`font-semibold text-sm ${complete ? "text-emerald-300" : "text-[#FF5722]"}`}>
+          {complete
+            ? `✓ Picked ${pickCount}/${pickCount}`
+            : `⚠️ Pick ${pickCount} option${pickCount > 1 ? "s" : ""} for this feature:`}
+        </p>
+        <span className="text-xs text-white/60">
+          {selected.length}/{pickCount} selected
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {feature.choices.map((choice, cIdx) => {
+          const choiceName = typeof choice === "string" ? choice : choice.name;
+          const choiceDesc = typeof choice === "object" ? choice.description : "";
+          const isSelected = selected.includes(choiceName);
+          const blocked = !isSelected && selected.length >= pickCount;
+          return (
+            <button
+              key={cIdx}
+              type="button"
+              onClick={() => togglePick(choiceName)}
+              disabled={blocked}
+              title={choiceDesc || undefined}
+              className={`text-xs font-bold rounded-full px-3 py-1.5 border transition-colors ${
+                isSelected
+                  ? "bg-amber-500 text-[#1E2430] border-amber-300"
+                  : blocked
+                  ? "bg-[#1E2430] text-white/30 border-[#1E2430] cursor-not-allowed"
+                  : "bg-[#0b1220] text-white border-amber-500/40 hover:border-amber-300 cursor-pointer"
+              }`}
+            >
+              {choiceName}
+            </button>
+          );
+        })}
+      </div>
+      {selected.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {selected.map((choiceName) => {
+            const choice = feature.choices.find(
+              (c) => (typeof c === "string" ? c : c.name) === choiceName,
+            );
+            const desc = choice && typeof choice === "object" ? choice.description : null;
+            if (!desc) return null;
+            return (
+              <li key={choiceName} className="text-[11px] text-white/70 leading-relaxed">
+                <span className="font-bold text-amber-200">{choiceName}:</span> {desc}
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );
