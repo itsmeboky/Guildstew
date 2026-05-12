@@ -45,7 +45,7 @@ const ABILITIES = [
 function Section({ title, defaultOpen = true, children, badge }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="bg-[#2A3441] rounded-xl border-2 border-[#1E2430]">
+    <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl border border-[#2A3441]">
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -132,7 +132,7 @@ export default function ReviewStep2024({ characterData }) {
       className="max-w-5xl mx-auto space-y-4"
     >
       {/* Header card */}
-      <div className="bg-[#1E2430] rounded-xl p-6 border-2 border-[#37F2D1]/40">
+      <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#37F2D1]/40">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h2 className="text-3xl font-bold text-white">

@@ -145,7 +145,7 @@ export default function SpellsStep2024({ characterData, updateCharacterData }) {
         transition={{ duration: 0.3 }}
         className="max-w-3xl mx-auto"
       >
-        <div className="bg-[#2A3441] rounded-xl p-6 border-2 border-[#1E2430]">
+        <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]">
           <h2 className="text-2xl font-bold text-[#FFC6AA] mb-2 flex items-center gap-2">
             Spells
             <Badge className="bg-[#37F2D1] text-[#1E2430] text-[10px] font-black">
@@ -208,7 +208,7 @@ export default function SpellsStep2024({ characterData, updateCharacterData }) {
       transition={{ duration: 0.3 }}
       className="max-w-5xl mx-auto space-y-6"
     >
-      <div className="bg-[#2A3441] rounded-xl p-6 border-2 border-[#1E2430]">
+      <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]">
         <h2 className="text-2xl font-bold text-[#FFC6AA] mb-2 flex items-center gap-2">
           Spells
           <Badge className="bg-[#37F2D1] text-[#1E2430] text-[10px] font-black">
