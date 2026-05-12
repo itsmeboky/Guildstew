@@ -13,6 +13,23 @@ import { getWeaponsWithMastery } from "@/data/games/dnd5e_2024/equipment";
 import {
   weaponMasterySlots,
   SPELLS_KNOWN_TABLE,
+  // Class-scaling helpers — each is a per-class function that
+  // returns the relevant live value at the given class level. The
+  // scaling panel below renders whichever ones are non-zero/non-null
+  // for the chosen class.
+  rageUsesAtLevel,
+  rageDamageAtLevel,
+  sneakAttackDice,
+  martialArtsDie,
+  focusPoints,
+  layOnHandsPool,
+  channelDivinityUses,
+  sorceryPoints,
+  metamagicKnown,
+  getPactSlots,
+  eldritchInvocationsKnown,
+  mysticArcanumLevels,
+  cantripsKnown,
 } from "@/data/games/dnd5e_2024/rules";
 import SubclassPicker from "@/components/characterCreator/SubclassPicker";
 import InfoTip from "@/components/characterCreator/InfoTip";
@@ -90,6 +107,126 @@ export default function ClassFeaturesStep2024({ characterData, updateCharacterDa
       });
     }
   };
+
+  // ── Class scaling at this level ────────────────────────────
+  // Surfaces live mechanical values from the rules.js per-class
+  // helpers — Rage uses + damage (Barb), Sneak Attack dice (Rog),
+  // Martial Arts die + Focus Points (Monk), Lay on Hands pool +
+  // Channel Divinity uses (Pal/Clr), Bardic Inspiration die (Bard),
+  // Sorcery Points + Metamagic known (Sor), Eldritch Invocations
+  // + Mystic Arcanum levels (Wlk), cantrips known (any caster).
+  //
+  // Each row is only included if its helper returns a non-zero /
+  // non-null value, so single-class characters see only their
+  // relevant rows.
+  const scalingRows = (() => {
+    const rows = [];
+    const cantrips = cantripsKnown(className, level);
+    if (cantrips > 0) {
+      rows.push({ label: "Cantrips known", value: String(cantrips) });
+    }
+
+    if (className === "Barbarian") {
+      const uses = rageUsesAtLevel(level);
+      if (uses > 0) {
+        rows.push({
+          label: "Rage uses / Long Rest",
+          value: uses === Infinity ? "Unlimited" : String(uses),
+        });
+      }
+      const dmg = rageDamageAtLevel(level);
+      if (dmg > 0) {
+        rows.push({ label: "Rage damage bonus", value: `+${dmg}` });
+      }
+    }
+
+    if (className === "Rogue") {
+      const dice = sneakAttackDice(level);
+      if (dice > 0) {
+        rows.push({ label: "Sneak Attack", value: `${dice}d6` });
+      }
+    }
+
+    if (className === "Monk") {
+      const die = martialArtsDie(level);
+      if (die) {
+        rows.push({ label: "Martial Arts die", value: die });
+      }
+      const fp = focusPoints(level);
+      if (fp > 0) {
+        rows.push({ label: "Focus Points", value: String(fp) });
+      }
+    }
+
+    if (className === "Paladin") {
+      const pool = layOnHandsPool(level);
+      if (pool > 0) {
+        rows.push({ label: "Lay on Hands pool", value: `${pool} HP` });
+      }
+      const cd = channelDivinityUses("Paladin", level);
+      if (cd > 0) {
+        rows.push({
+          label: "Channel Divinity / Short or Long Rest",
+          value: String(cd),
+        });
+      }
+    }
+
+    if (className === "Cleric") {
+      const cd = channelDivinityUses("Cleric", level);
+      if (cd > 0) {
+        rows.push({ label: "Channel Divinity / Long Rest", value: String(cd) });
+      }
+    }
+
+    if (className === "Bard") {
+      // Bardic Inspiration die scales per the SPELLS_KNOWN_TABLE
+      // entry's bardicInspirationDie threshold map.
+      let die = null;
+      try {
+        const table = SPELLS_KNOWN_TABLE.Bard?.bardicInspirationDie || {};
+        const thresholds = Object.keys(table).map(Number).sort((a, b) => b - a);
+        for (const t of thresholds) if (level >= t) { die = table[t]; break; }
+      } catch { /* unknown-class proxy guard — Bard always exists */ }
+      if (die) {
+        rows.push({ label: "Bardic Inspiration die", value: die });
+      }
+    }
+
+    if (className === "Sorcerer") {
+      const sp = sorceryPoints(level);
+      if (sp > 0) {
+        rows.push({ label: "Sorcery Points", value: String(sp) });
+      }
+      const mm = metamagicKnown(level);
+      if (mm > 0) {
+        rows.push({ label: "Metamagic options known", value: String(mm) });
+      }
+    }
+
+    if (className === "Warlock") {
+      const pact = getPactSlots(level);
+      if (pact) {
+        rows.push({
+          label: "Pact Magic slots / Short or Long Rest",
+          value: `${pact.slots} × level-${pact.level}`,
+        });
+      }
+      const inv = eldritchInvocationsKnown(level);
+      if (inv > 0) {
+        rows.push({ label: "Eldritch Invocations known", value: String(inv) });
+      }
+      const arcanum = mysticArcanumLevels(level);
+      if (arcanum.length > 0) {
+        rows.push({
+          label: "Mystic Arcanum slots (1 / Long Rest each)",
+          value: arcanum.map((l) => `level-${l}`).join(", "),
+        });
+      }
+    }
+
+    return rows;
+  })();
 
   // ── L1 class-path choice (Cleric Divine Order / Druid Primal
   //    Order) ───────────────────────────────────────────────────
@@ -198,6 +335,39 @@ export default function ClassFeaturesStep2024({ characterData, updateCharacterDa
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Class scaling at this level — live mechanical values
+          from the per-class helpers. Renders only the rows
+          relevant to the chosen class. */}
+      {basics && scalingRows.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-xl font-bold text-[#FFC6AA] mb-2 flex items-center gap-2">
+            Class scaling at Level {level}
+            <Badge className="bg-[#37F2D1] text-[#1E2430] text-[10px] font-black">
+              2024
+            </Badge>
+          </h3>
+          <p className="text-sm text-white/60 mb-4">
+            Live values from the {basics.name} class table at your
+            current level.
+          </p>
+          <div className="bg-[#2A3441] rounded-xl p-5 border-2 border-[#1E2430]">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+              {scalingRows.map((row, idx) => (
+                <div
+                  key={`${row.label}-${idx}`}
+                  className="flex justify-between bg-[#1E2430]/40 rounded px-3 py-2"
+                >
+                  <span className="text-white/60">{row.label}</span>
+                  <span className="text-[#37F2D1] font-semibold">
+                    {row.value}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
