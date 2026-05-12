@@ -63,7 +63,7 @@ unless an internal URL hand-stamps `?gamePack=dnd5e_2024`.
 | 13 | Bard level 14: has only 3 subclass features triggered total (3, 6, 14) | ✅ | The SRD-included Bard subclass `College of Lore` has features inline with levels 3, 6, 14 in `5e-SRD-Subclasses.json`. `getSubclassFeaturesAtLevel("College of Lore", 14)` returns all three. Verified via the subclassFeatures adapter — `ClassFeaturesStep2024.jsx:54-56` cumulates them correctly. |
 | 14 | Barb level 1: has Weapon Mastery picker for 2 weapons | ✅ | `weaponMasterySlots("Barbarian", 1) === 2` (Commit 6, tested at `rules.test.js:128`). UI section renders at `ClassFeaturesStep2024.jsx:233-291` when `masterySlotCount > 0`. Picker disables additional picks once 2 weapons are selected. |
 | 15 | Fighter level 4: Weapon Mastery picker now allows 4 weapons | ✅ | `weaponMasterySlots("Fighter", 4) === 4` (verified by `rules.test.js:121-126`). Same picker as #14, scaled count. |
-| 16 | Monk level 5: uses Focus Points label, Martial Arts shows d8 | ⚠️ partial | Data correct: `focusPoints(5) === 5` and `martialArtsDie(5) === "d8"` (Commit 6, tested at `rules.test.js:159, 166`). UI rendering: `ClassFeaturesStep2024` doesn't currently surface these — Monk Focus Points and Martial Arts die are class scaling values that belong on the character sheet or features step. The data is queryable; the UI hasn't been wired to display it yet. **Deferred — needs a "class scaling" panel in ClassFeaturesStep2024.** |
+| 16 | Monk level 5: uses Focus Points label, Martial Arts shows d8 | ✅ | **Closed in Commit 10.** `ClassFeaturesStep2024` now renders a "Class scaling at Level N" info card that surfaces Monk's Focus Points (live: `focusPoints(level)`) and Martial Arts die (live: `martialArtsDie(level)`). Monk L5 shows "Focus Points: 5" and "Martial Arts die: d8". Same panel surfaces Rage uses/damage for Barb, Sneak Attack dice for Rogue, Lay on Hands + Channel Divinity for Pal, Channel Divinity for Cleric, Bardic Inspiration die for Bard, Sorcery Points + Metamagic for Sor, Pact Magic slots + Eldritch Invocations + Mystic Arcanum for Wlk, and cantrips known for any caster. |
 
 ---
 
@@ -196,46 +196,50 @@ Same shape as Paladin. Spell step fallback issue mirrors Paladin's. Mastery scal
 | **D4** | Wizard spellbook concept not implemented (carries from Commit 4 deferral) | Commit 4 + Commit 8 sub-item f | Needs `character.spellbook = { cantrips, spells }` field + two-step UI flow. Benefits both editions. |
 | **D5** | Mystic Arcanum picker for Warlock 11+ not implemented (carries from Commit 4) | Commit 4 + Commit 8 sub-item g | Low alpha impact (testers create at L1-10). |
 | **D6** | Cleric Divine Order / Druid Primal Order picker is a banner-only stub | Commit 8 partial — OGL constraint (option names not in SRD JSON) | Lands when SRD ships these option names, or when a licensed third-party data source is sourced. |
-| **D7** | Monk Focus Points / Martial Arts die not surfaced in UI | Spec check #16 — not in Commit 8 scope | Add a "class scaling" panel to ClassFeaturesStep2024 surfacing focusPoints, martialArtsDie, rageUses, etc. Small UI commit. |
+| ~~**D7**~~ | ~~Monk Focus Points / Martial Arts die not surfaced in UI~~ | ~~Spec check #16~~ | ✅ **Closed in Commit 10.** Class-scaling info card added to `ClassFeaturesStep2024`; surfaces all per-class live values from the Commit 6/7 helpers across all 12 PHB classes. |
 | **D8** | Race / Abilities / Skills / Spells / Review steps fall back to 2014 components for 2024 characters | Commits 8-10 scope cap — picker gate is the safety net | Build per-step 2024 components; each is its own commit. |
 | **D9** | 2024 Background ASI shift (species no longer grants ASI; background does) | Commit 8 sub-item e — architectural | New BackgroundStep + RaceStep changes + validator updates. Substantial commit. |
 | **D10** | Two-option starting equipment for 2024 | Commit 8 sub-item d — UX redesign | Adapter shape is in place (`starting_equipment_options` in 2024 SRD); UI needs new step or extension. |
 
-### Spec-check summary
+### Spec-check summary (refreshed after Commit 10)
 
-| Category | Count |
-|---|---|
-| ✅ Fully implemented | 5 (checks #4, #5, #6, #7, #13, #14, #15 — actually 7) |
-| ⚠️ Partial / data-correct, UI deferred | 8 (checks #1, #2, #3, #8, #9, #10, #11, #12, #16 — 9) |
+| Category | Count | Items |
+|---|---|---|
+| ✅ Fully implemented | 8 of 16 | #4, #5, #6, #7, #13, #14, #15, **#16 (closed in Commit 10)** |
+| ⚠️ Partial / data-correct, UI deferred | 8 of 16 | #1, #2, #3, #8, #9, #10, #11, #12 — all blocked by D1 (SpellsStep2024 deferral) or D6 (PHB-only option names not in OGL SRD) |
 | ❌ Mismatch (would fail user test) | 0 |
 
-No new mismatches surfaced. Every spec failure traces to one of the
-known Commit 8 deferrals (D1-D10 above) — none of them are new bugs.
-Commit 10 will revisit whether any of D1-D10 are now unblocked for
-implementation; otherwise they stay filed with their existing
-rationale.
+Commit 10 closed D7 / spec check #16 via the class-scaling info card
+in `ClassFeaturesStep2024`. The remaining 8 ⚠️ items all trace to
+D1 (SRD spell-list extraction gap) or D6 (PHB-only option names) —
+their unblock conditions are external (upstream SRD fix or licensed
+content drop), not solvable in code right now.
 
-### What Commit 10 should actually do
+### Commit 10 work (shipped)
 
-Given that 9 of the 16 spec checks are ⚠️ (deferred, not broken),
-Commit 10's "fix every ❌" instruction has nothing to fix in the
-strict sense. The pragmatic Commit 10 work:
+Added a "Class scaling at Level N" info card to
+`ClassFeaturesStep2024`. The card surfaces live values from the
+Commit 6/7 helpers per class:
 
-1. **Surface Monk Focus Points + Martial Arts die in the features
-   step** (D7). Small UI addition to ClassFeaturesStep2024. Closes
-   spec check #16 fully without touching SpellsStep.
+| Class | Rows surfaced |
+|---|---|
+| Barbarian | Rage uses / LR, Rage damage bonus |
+| Bard | Cantrips known, Bardic Inspiration die |
+| Cleric | Cantrips known, Channel Divinity uses / LR |
+| Druid | Cantrips known |
+| Fighter | (no class-scaling rows — Fighter's scaling lives in the per-level features table which isn't in the SRD JSON) |
+| Monk | Martial Arts die, Focus Points |
+| Paladin | Lay on Hands pool, Channel Divinity uses / SR or LR |
+| Ranger | (no class-scaling rows yet — Hunter's Mark free-cast count is in `SPELLS_KNOWN_TABLE.Ranger` as `alwaysPrepared`; surfaces in SpellsStep2024 when that ships) |
+| Rogue | Sneak Attack dice |
+| Sorcerer | Cantrips known, Sorcery Points, Metamagic options known |
+| Warlock | Cantrips known, Pact Magic slots, Eldritch Invocations known, Mystic Arcanum slots |
+| Wizard | Cantrips known |
 
-2. **Add a "class scaling at this level" info card** showing per-class
-   live values (Rage uses for Barb, Sneak Attack dice for Rogue,
-   Bardic Inspiration die for Bard, Sorcery Points for Sor, Eldritch
-   Invocations known for Wlk, etc.) — surfaces all the Commit 6/7
-   helpers that don't have UI homes yet. Single coherent UI addition
-   per the existing `getXAtLevel()` helper shape.
+Each row is only included if its helper returns a non-zero / non-null
+value, so single-class characters see only the rows relevant to them.
 
-3. Anything in D1-D10 that's now actionable should land. D7 is the
-   only one that doesn't require either SpellsStep2024 (D1-D5),
-   architectural change (D8, D9), or UX redesign (D10).
-
-Commit 10 will focus on D7 + the class-scaling-info panel. The
-remaining deferrals stay filed and get a follow-up sub-bundle when
-the unblock conditions are met (upstream SRD spell-list fix, etc.).
+Closes D7 / spec check #16. The remaining 8 ⚠️ items stay filed —
+their unblock conditions are external to this codebase (upstream
+SRD spell-list extraction fix for D1-D5, or licensed/upstream
+content drop for D6).
