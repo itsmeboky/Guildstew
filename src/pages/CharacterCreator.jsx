@@ -34,6 +34,7 @@ import SpeciesStep2024 from "@/components/characterCreator/SpeciesStep2024";
 import ClassStep from "@/components/characterCreator/ClassStep";
 import ClassStep2024 from "@/components/characterCreator/ClassStep2024";
 import AbilityScoresStep from "@/components/characterCreator/AbilityScoresStep";
+import AbilitiesStep2024 from "@/components/characterCreator/AbilitiesStep2024";
 import ClassFeaturesStep from "@/components/characterCreator/ClassFeaturesStep";
 import ClassFeaturesStep2024 from "@/components/characterCreator/ClassFeaturesStep2024";
 import SkillsStep from "@/components/characterCreator/SkillsStep";
@@ -674,6 +675,7 @@ const handleSubmit = () => {
   const CurrentStepComponent =
     _is2024 && _stepDef.id === 'race' ? SpeciesStep2024 :
     _is2024 && _stepDef.id === 'class' ? ClassStep2024 :
+    _is2024 && _stepDef.id === 'abilities' ? AbilitiesStep2024 :
     _is2024 && _stepDef.id === 'features' ? ClassFeaturesStep2024 :
     _stepDef.component;
 
