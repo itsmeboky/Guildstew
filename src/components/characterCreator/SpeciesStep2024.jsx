@@ -91,6 +91,19 @@ export default function SpeciesStep2024({ characterData, updateCharacterData }) 
           Pick the species your character belongs to. In 2024, ability
           score increases come from your background, not your species.
         </p>
+
+        <div className="mt-4">
+          <label className="text-white/70 text-xs uppercase tracking-wide block mb-1">
+            Character Name
+          </label>
+          <input
+            type="text"
+            value={characterData.name || ""}
+            onChange={(e) => updateCharacterData({ name: e.target.value })}
+            placeholder="Enter character name"
+            className="w-full bg-[#1E2430] border-2 border-[#1E2430] focus:border-[#37F2D1] outline-none text-white px-3 py-2 rounded-lg text-sm"
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
