@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { getGamePack } from "@/data/games";
 import { getClassIcon } from "@/data/games/dnd5e_2024/assets";
 import { classCopy, ALIGNMENTS } from "@/data/games/dnd5e_2024/copy";
+import { getSubclassesForClass } from "@/data/games/dnd5e_2024/subclassFeatures";
 import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
 import { Primer } from "@/components/characterCreator/chrome/Primer";
 import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
@@ -89,7 +90,14 @@ export default function ClassStep2024({ characterData, updateCharacterData }) {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
           {selectedClass ? (
-            <ClassFeaturedTome cls={selectedClass} copy={selectedCopy} accent={accent} />
+            <ClassFeaturedTome
+              cls={selectedClass}
+              copy={selectedCopy}
+              accent={accent}
+              level={characterData.level || 1}
+              subclass={characterData.subclass}
+              onPickSubclass={(name) => updateCharacterData({ subclass: name })}
+            />
           ) : (
             <EmptyClassPrompt />
           )}
@@ -158,8 +166,9 @@ function EmptyClassPrompt() {
   );
 }
 
-function ClassFeaturedTome({ cls, copy, accent }) {
+function ClassFeaturedTome({ cls, copy, accent, level, subclass, onPickSubclass }) {
   const icon = getClassIcon(cls.name);
+  const subclasses = getSubclassesForClass(cls.id);
   return (
     <div className="tome" style={{ padding: '32px 36px' }}>
       <div>
@@ -261,6 +270,82 @@ function ClassFeaturedTome({ cls, copy, accent }) {
             </div>
           </>
         )}
+
+        {subclasses.length > 0 && (
+          <>
+            <FleurDivider />
+            <SubclassChapter
+              subclasses={subclasses}
+              accent={accent}
+              level={level}
+              subclass={subclass}
+              onPick={onPickSubclass}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SubclassChapter({ subclasses, accent, level, subclass, onPick }) {
+  const availableNow = (level || 1) >= 3;
+  return (
+    <div>
+      <OrnateHeading color={accent}>Subclass</OrnateHeading>
+      <div
+        className="italic-serif"
+        style={{
+          fontSize: 14,
+          textAlign: 'center',
+          color: availableNow ? 'var(--teal)' : 'var(--text-dim)',
+          marginBottom: 18,
+        }}
+      >
+        {availableNow
+          ? `Active at your current level (${level || 1}).`
+          : `Unlocks at level 3 — pick now to plan your build.`}
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: subclasses.length === 1 ? '1fr' : subclasses.length === 2 ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+          gap: 12,
+        }}
+      >
+        {subclasses.map((s) => {
+          const active = subclass === s.name;
+          const desc = s.summary || s.description || '';
+          return (
+            <button
+              key={s.index || s.name}
+              type="button"
+              onClick={() => onPick(s.name)}
+              className={`pickable ${active ? 'selected' : ''}`}
+              style={{
+                padding: 16,
+                textAlign: 'left',
+                color: 'inherit',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+              }}
+            >
+              <div className="display" style={{ fontSize: 18, color: 'var(--text)' }}>
+                {s.name}
+              </div>
+              {desc && (
+                <div
+                  className="italic-serif"
+                  style={{ fontSize: 14, color: 'var(--text-dim)', lineHeight: 1.5, flex: 1 }}
+                >
+                  {desc}
+                </div>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
