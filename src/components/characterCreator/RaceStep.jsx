@@ -1,55 +1,206 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import { motion } from "framer-motion";
-import { Flame, Shield, Eye, Sword, Wind, Droplet, Heart, Sparkles } from "lucide-react";
-import { RACES } from '@/components/dnd5e/dnd5eRules';
-import { getModdedRaces } from '@/lib/modEngine';
-import InfoTip from "@/components/characterCreator/InfoTip";
-import { tipFor } from "@/components/characterCreator/creatorTips";
+import { RACES, BACKGROUNDS as SRD_BACKGROUNDS } from "@/components/dnd5e/dnd5eRules";
+import { getModdedRaces } from "@/lib/modEngine";
 import {
   applyBreweryRaceBaseline,
   applyBreweryRaceSubrace,
   clearBreweryRaceMarkers,
-} from '@/lib/breweryRaceApply';
-import { OrnateHeading } from "@/components/characterCreator/chrome/Ornaments";
+} from "@/lib/breweryRaceApply";
+import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
+import { Primer } from "@/components/characterCreator/chrome/Primer";
+import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
 
-// Normalize a brewery race (modEngine metadata shape) into the same
-// shape the SRD race list uses. Preserves brewery-flavored fields
-// (_source, _mod_id, _raw) so later steps can apply them.
+// ============================================================================
+// Step 1: Identity — race + background, with a sticky right rail for the
+// character codex (name + level). Exact port of
+// design-reference/character-creator/step-identity.jsx, with the existing
+// dnd5e data layer (RACES registry, brewery mod engine, SRD BACKGROUNDS
+// dictionary) wired in place of the prototype's hard-coded arrays.
+//
+// Portrait / age / height / weight / biography stay on the Class step
+// (which is where this codebase already collects them), per the brief's
+// "background, alignment, name, portrait sections go to whichever
+// existing steps handle them" rule.
+// ============================================================================
+
+// SRD 5e bonus-language pool. Used by the +1 choice picker for races that
+// grant an extra language (Human base, Half-Elf, High Elf's Extra Language
+// feature). Persisted into characterData.languages alongside the fixed list.
+const SRD_LANGUAGES = [
+  "Common", "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin",
+  "Halfling", "Orc", "Abyssal", "Celestial", "Draconic",
+  "Deep Speech", "Infernal", "Primordial", "Sylvan", "Undercommon",
+];
+
+// Local race lore — name, subtypes, description, subtypeDescriptions,
+// traits[], icon URL, image URL. This is the existing app's content
+// (preserved verbatim) and lives inline so brewery races can be merged
+// alongside without a parallel data path.
+const RACE_LORE = [
+  {
+    name: "Dragonborn",
+    subtypes: ["Gold", "Silver", "Bronze", "Copper", "Brass", "Red", "Blue", "Green", "Black", "White"],
+    description: "Proud dragon-blooded warriors who walk into a room like destiny follows them. Their scales gleam with elemental power; their breath weapon and resistance are tied to their draconic ancestry.",
+    subtypeDescriptions: {
+      Gold: "Noble and wise — fire breath in a 15ft cone, fire resistance.",
+      Silver: "Champions of good — cold breath in a 15ft cone, cold resistance.",
+      Bronze: "Sea-loving honorable warriors — lightning line, lightning resistance.",
+      Copper: "Witty and playful — acid line, acid resistance.",
+      Brass: "Talkative and sociable — fire line, fire resistance.",
+      Red: "Proud and arrogant — fire cone, fire resistance.",
+      Blue: "Vain and territorial — lightning line, lightning resistance.",
+      Green: "Cunning schemers — poison cone, poison resistance.",
+      Black: "Cruel and sadistic — acid line, acid resistance.",
+      White: "Savage bestial hunters — cold cone, cold resistance.",
+    },
+    traits: ["Breath Weapon", "Damage Resistance", "Draconic Ancestry"],
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/d987fae82_dragonbornraceicon.png",
+  },
+  {
+    name: "Elf",
+    subtypes: ["High Elf", "Wood Elf", "Drow"],
+    description: "Graceful and long-lived, elves carry an innate connection to magic and the wild. Keen senses and natural agility define their step.",
+    subtypeDescriptions: {
+      "High Elf": "Studious and proud — one wizard cantrip; elf weapon training.",
+      "Wood Elf": "Swift and stealthy — base speed 35; Mask of the Wild.",
+      Drow: "Underground dwellers — superior darkvision (120ft); Drow Magic.",
+    },
+    traits: ["Darkvision", "Fey Ancestry", "Trance", "Keen Senses"],
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/f696b9d6e_elfraceicon.png",
+  },
+  {
+    name: "Dwarf",
+    subtypes: ["Mountain Dwarf", "Hill Dwarf"],
+    description: "Bold and hardy — skilled warriors, miners, and craftspeople with a deep bond to stone and metal.",
+    subtypeDescriptions: {
+      "Mountain Dwarf": "Strong warriors — +2 Strength; armor proficiency.",
+      "Hill Dwarf": "Especially hardy and perceptive — +1 Wisdom, +1 HP per level.",
+    },
+    traits: ["Darkvision", "Dwarven Resilience", "Stonecunning"],
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/7b31ed2b9_dwarfraceicon.png",
+  },
+  {
+    name: "Human",
+    subtypes: ["Standard"],
+    description: "Versatile and ambitious — humans excel in any role and adapt faster than any other race.",
+    subtypeDescriptions: {
+      Standard: "Versatile — gains +1 to every ability score.",
+    },
+    traits: ["Versatile", "Extra Skill", "Ambitious"],
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/72c27f140_humanraceicon.png",
+  },
+  {
+    name: "Halfling",
+    subtypes: ["Lightfoot", "Stout"],
+    description: "Small and nimble — naturally lucky and brave, with a knack for slipping past trouble.",
+    subtypeDescriptions: {
+      Lightfoot: "Naturally stealthy — can hide behind creatures one size larger.",
+      Stout: "Hardy — advantage against poison; poison resistance.",
+    },
+    traits: ["Lucky", "Brave", "Halfling Nimbleness"],
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/1f05e3073_halflingraceicon.png",
+  },
+  {
+    name: "Tiefling",
+    subtypes: ["Asmodeus", "Baalzebul", "Dispater", "Fierna", "Glasya", "Levistus", "Mammon", "Mephistopheles", "Zariel"],
+    description: "Descended from fiends, tieflings carry an infernal heritage — striking horns, tails, and a natural pull toward magic.",
+    subtypeDescriptions: {
+      Asmodeus: "Most common — thaumaturgy; hellish rebuke; darkness.",
+      Baalzebul: "Lies and corruption — ray of sickness; crown of madness.",
+      Dispater: "Schemers — disguise self; detect thoughts.",
+      Fierna: "Manipulation — friends; charm person; suggestion.",
+      Glasya: "Tricksters — minor illusion; disguise self; invisibility.",
+      Levistus: "Frozen survivors — ray of frost; armor of Agathys; darkness.",
+      Mammon: "Greed — mage hand; Tenser's floating disk; arcane lock.",
+      Mephistopheles: "Arcane scholars — mage hand; burning hands; flame blade.",
+      Zariel: "Warriors — thaumaturgy; searing smite; branding smite.",
+    },
+    traits: ["Darkvision", "Hellish Resistance", "Infernal Legacy"],
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/bf4ea2436_TieflingRaceIcon.png",
+  },
+  {
+    name: "Half-Elf",
+    subtypes: ["Standard Half-Elf", "Half-High Elf", "Half-Wood Elf", "Half-Drow"],
+    description: "Walking in two worlds, half-elves combine human adaptability with elven grace — natural diplomats and bridges between cultures.",
+    subtypeDescriptions: {
+      "Standard Half-Elf": "Skill Versatility — proficiency in two skills of choice.",
+      "Half-High Elf": "Elf Weapon Training; one wizard cantrip.",
+      "Half-Wood Elf": "Speed 35; Mask of the Wild.",
+      "Half-Drow": "Superior darkvision (120ft); Drow Magic.",
+    },
+    traits: ["Darkvision", "Fey Ancestry", "Heritage Trait"],
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/297cad9ca_halfelfraceicon.png",
+  },
+  {
+    name: "Half-Orc",
+    subtypes: ["Standard"],
+    description: "Half-orcs combine human determination with orcish strength. Relentless and physically powerful — formidable warriors who refuse to stay down.",
+    subtypeDescriptions: {
+      Standard: "Powerful — +2 Strength, +1 Constitution. Survivors who refuse to fall.",
+    },
+    traits: ["Darkvision", "Relentless Endurance", "Savage Attacks"],
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/d4a087969_halforcraceicon.png",
+  },
+  {
+    name: "Gnome",
+    subtypes: ["Forest Gnome", "Rock Gnome"],
+    description: "Small, clever, endlessly curious. Ingenious tinkerers and nature-lovers who find wonder in the world.",
+    subtypeDescriptions: {
+      "Forest Gnome": "Speaks to small beasts; knows minor illusion. +1 Dexterity.",
+      "Rock Gnome": "Tinker — proficiency with tinker's tools; clockwork toys. +1 Constitution.",
+    },
+    traits: ["Darkvision", "Gnome Cunning", "Small Size"],
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/c56fbbc80_gnomeraceicon.png",
+  },
+];
+
+// Background lore — the prototype's data.jsx content merged with the
+// existing 2014 SRD BACKGROUNDS registry. Icon emoji, description blurb,
+// and tip come from the prototype; skills / tools / languages mirror the
+// SRD list so we don't fork from canon.
+const BACKGROUND_LORE = [
+  { name: "Acolyte", icon: "🛐", desc: "You served a temple or holy order. You know rites, faith, and how to find shelter at any shrine.", tip: "Great for clerics, paladins, monks — anyone whose backstory has roots in faith." },
+  { name: "Criminal", icon: "🗝️", desc: "You've lived outside the law. You know fences, secret passages, and how to lie convincingly.", tip: "Rogues love this. Also any character whose past has rough edges." },
+  { name: "Folk Hero", icon: "🌾", desc: "You stood up to a tyrant, saved a village, or pulled off something legendary. Commoners love you.", tip: "Fits fighters, rangers, barbarians from humble origins." },
+  { name: "Noble", icon: "👑", desc: "You were born into wealth and status. You know etiquette, politics, and how to call in favors.", tip: "Charismatic classes — bards, sorcerers, paladins — shine here." },
+  { name: "Sage", icon: "📜", desc: "A lifelong scholar. You know where to find the right book — and how to read what it says.", tip: "Wizards, artificers, anyone who loves lore." },
+  { name: "Soldier", icon: "🛡️", desc: "You served in a fighting force. You know discipline, gear, and the chain of command.", tip: "Fighters, paladins, barbarians — natural fit." },
+  { name: "Outlander", icon: "🏔️", desc: "You grew up in the wilds. Cities feel strange; the wilderness feels like home.", tip: "Rangers, druids, barbarians from far places." },
+  { name: "Sailor", icon: "⚓", desc: "You crewed a ship. You know knots, weather, and how to brawl in a tavern.", tip: "Pairs with anyone — adventurers travel a lot." },
+  { name: "Charlatan", icon: "🎭", desc: "You made your living deceiving people. You read motives like an open book.", tip: "Bards, rogues, sorcerers — anyone with a quick tongue." },
+  { name: "Entertainer", icon: "🎵", desc: "You thrive in front of an audience — laughter, tears, riot, you stir them all.", tip: "Bards, rogues, monks — anyone who shines on stage." },
+  { name: "Guild Artisan", icon: "🔨", desc: "You belong to a craft guild — a respected, established member of the mercantile world.", tip: "Artificers, fighters, wizards — characters with a trade." },
+  { name: "Hermit", icon: "🕯️", desc: "You lived in seclusion. In your solitude, you found a discovery worth sharing.", tip: "Druids, wizards, clerics — contemplative builds." },
+  { name: "Urchin", icon: "🪜", desc: "You grew up on the streets. You know shortcuts, hiding places, and how to make yourself small.", tip: "Rogues, monks, sorcerers — survivors." },
+];
+
+// Normalize a brewery race (modEngine metadata) into the same shape the
+// SRD race lore array uses, so the carousel + featured panel + medallion
+// row keep working without a parallel branch.
 function normalizeBreweryRace(mod) {
   const subraces = Array.isArray(mod.subraces) ? mod.subraces : [];
-  const subtypes = subraces.length > 0 ? subraces.map((s) => s.name).filter(Boolean) : ["Standard"];
+  const subtypes = subraces.length > 0
+    ? subraces.map((s) => s.name).filter(Boolean)
+    : ["Standard"];
   const subtypeDescriptions = {};
   if (subraces.length > 0) {
     for (const s of subraces) {
       if (s?.name) subtypeDescriptions[s.name] = s.description || "";
     }
   } else {
-    subtypeDescriptions["Standard"] = mod.description || "";
+    subtypeDescriptions.Standard = mod.description || "";
   }
-  const traits = (Array.isArray(mod.traits) ? mod.traits : []).map((t) => ({
-    icon: Sparkles,
-    name: t?.name || "Trait",
-    description: t?.description || "",
-  }));
+  const traits = (Array.isArray(mod.traits) ? mod.traits : [])
+    .map((t) => t?.name)
+    .filter(Boolean);
   return {
-    id: (mod.name || mod._mod_name || "unnamed").toLowerCase().replace(/\s+/g, "-"),
     name: mod.name || mod._mod_name || "Unnamed Race",
     subtypes,
     description: mod.description || "",
     subtypeDescriptions,
     traits,
     icon: mod.image_url || "",
-    image: mod.image_url || "",
-    // No prototype lore for brewery — these stay so the visual
-    // chip row still renders something meaningful.
-    speed: Number(mod.speed) || 30,
-    size: mod.size || "Medium",
-    languages: Array.isArray(mod.languages?.fixed) ? mod.languages.fixed : ["Common"],
-    bonuses: {},
     _source: "brewery",
     _mod_id: mod._mod_id,
     _mod_name: mod._mod_name || mod.name,
@@ -57,260 +208,59 @@ function normalizeBreweryRace(mod) {
   };
 }
 
-// D&D 5e SRD language list — populates the bonus-language picker for
-// races that grant one extra language of the player's choice.
-const SRD_LANGUAGES = [
-  "Common", "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin",
-  "Halfling", "Orc", "Abyssal", "Celestial", "Draconic",
-  "Deep Speech", "Infernal", "Primordial", "Sylvan", "Undercommon",
-];
-
-// Collapse the RACES registry + subrace override into the shape the
-// SRD traits panel renders.
-function computeRacialTags(raceName, subraceName) {
+// Compose ability bonuses by merging the base race registry with the
+// active subrace overrides. Returns a flat { str: 2, cha: 1 } object the
+// chip row maps over.
+function bonusesFor(raceName, subraceName) {
   const data = RACES[raceName];
-  if (!data) return null;
+  if (!data) return {};
   const sub = subraceName && data.subraces ? (data.subraces[subraceName] || {}) : {};
-  const speed = sub.speed ?? data.speed ?? 30;
-  const size = data.size || 'Medium';
-  const mergedFeatures = [...(data.features || []), ...(sub.features || [])];
-  const darkvisionFeat = mergedFeatures.find((f) => /darkvision/i.test(f));
-  const otherFeatures = mergedFeatures.filter((f) => !/darkvision/i.test(f));
-  const baseLangs = Array.isArray(data.languages) ? data.languages : [];
-  const fixedLangs = baseLangs.filter((l) => l !== '+1 choice');
-  const extraChoiceSlots = baseLangs.filter((l) => l === '+1 choice').length;
-  const bonuses = { ...(data.abilityBonuses || {}), ...(sub.abilityBonuses || {}) };
-  return {
-    speed,
-    size,
-    darkvision: darkvisionFeat || null,
-    features: otherFeatures,
-    fixedLangs,
-    extraChoiceSlots,
-    bonuses,
-  };
+  return { ...(data.abilityBonuses || {}), ...(sub.abilityBonuses || {}) };
 }
 
-// Race roster — ordered to match design-reference/character-creator/data.jsx.
-// Each entry carries:
-//   - `id`, `glyph`, `description`, `speed`, `size`, `languages`,
-//     `bonuses` (prototype-shape fields — added per the visual port
-//     spec for FeaturedRace's chip row + medallion emoji).
-//   - `icon` (URL), `traits` (rich objects), `subtypes` + `subtypeDescriptions`
-//     (existing-shape fields, untouched so saved characters keep
-//     loading and the SRD traits panel keeps reading them).
-// Prototype lore strings copied verbatim from
-// design-reference/character-creator/data.jsx.
-const races = [
-  {
-    id: "dragonborn",
-    name: "Dragonborn",
-    glyph: "🐉",
-    description: "Born of dragons, Dragonborn stand a head taller than humans with scaled hides and proud bearing. They value honor, skill, and ancestry — and breathe elemental fury when pressed.",
-    speed: 30,
-    size: "Medium",
-    languages: ["Common", "Draconic"],
-    bonuses: { str: 2, cha: 1 },
-    subtypes: ["Gold", "Silver", "Bronze", "Copper", "Brass", "Red", "Blue", "Green", "Black", "White"],
-    subtypeDescriptions: {
-      "Gold":   "Noble and wise, Gold Dragonborn radiate warmth and command respect. Their breath weapon is fire (15ft cone, Dex save), and they resist fire damage.",
-      "Silver": "Graceful and kind, Silver Dragonborn are champions of good. Their breath weapon is cold (15ft cone, Con save), and they resist cold damage.",
-      "Bronze": "Honorable warriors who love the sea. Their breath weapon is lightning (5ft x 30ft line, Dex save), and they resist lightning damage.",
-      "Copper": "Witty and playful with a love of jokes and tricks. Their breath weapon is acid (5ft x 30ft line, Dex save), and they resist acid damage.",
-      "Brass":  "Talkative and sociable, they love conversation. Their breath weapon is fire (5ft x 30ft line, Dex save), and they resist fire damage.",
-      "Red":    "Proud and greedy, often arrogant but powerful. Their breath weapon is fire (15ft cone, Dex save), and they resist fire damage.",
-      "Blue":   "Vain and territorial, they value order. Their breath weapon is lightning (5ft x 30ft line, Dex save), and they resist lightning damage.",
-      "Green":  "Cunning and deceptive schemers. Their breath weapon is poison (15ft cone, Con save), and they resist poison damage.",
-      "Black":  "Cruel and sadistic, they revel in suffering. Their breath weapon is acid (5ft x 30ft line, Dex save), and they resist acid damage.",
-      "White":  "Savage and bestial hunters. Their breath weapon is cold (15ft cone, Con save), and they resist cold damage.",
-    },
-    traits: [
-      { icon: Flame,  name: "Breath Weapon",      description: "Use your action to exhale destructive energy based on your draconic ancestry. Each creature in the area must make a saving throw." },
-      { icon: Shield, name: "Damage Resistance",  description: "You have resistance to the damage type associated with your draconic ancestry, taking half damage from that type." },
-      { icon: Eye,    name: "Draconic Ancestry",  description: "Your draconic ancestry sets your breath-weapon shape, save type, and damage resistance." },
-    ],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/d987fae82_dragonbornraceicon.png",
-  },
-  {
-    id: "dwarf",
-    name: "Dwarf",
-    glyph: "⚒️",
-    description: "Dwarves are short, broad, and bearded — masters of forge and stone. Centuries of life underground granted them keen sight in darkness and unmatched durability.",
-    speed: 25,
-    size: "Medium",
-    languages: ["Common", "Dwarvish"],
-    bonuses: { con: 2 },
-    subtypes: ["Mountain Dwarf", "Hill Dwarf"],
-    subtypeDescriptions: {
-      "Mountain Dwarf": "Strong warriors proficient in light and medium armor. They are larger and more combat-oriented. +2 Strength.",
-      "Hill Dwarf":     "Especially hardy with keen senses. They have additional hit points (1 per level) and increased Wisdom. +1 Wisdom, +1 HP per level.",
-    },
-    traits: [
-      { icon: Eye,    name: "Darkvision",         description: "You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light." },
-      { icon: Shield, name: "Dwarven Resilience", description: "You have advantage on saving throws against poison, and resistance against poison damage." },
-      { icon: Sword,  name: "Stonecunning",       description: "You have proficiency in History checks related to the origin of stonework, gaining double your proficiency bonus." },
-    ],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/7b31ed2b9_dwarfraceicon.png",
-  },
-  {
-    id: "elf",
-    name: "Elf",
-    glyph: "🏹",
-    description: "Elves live centuries. They view time differently than mortals — patient, deliberate, and unmatched at any craft to which they dedicate themselves.",
-    speed: 30,
-    size: "Medium",
-    languages: ["Common", "Elvish"],
-    bonuses: { dex: 2 },
-    subtypes: ["High Elf", "Wood Elf", "Dark Elf (Drow)"],
-    subtypeDescriptions: {
-      "High Elf":         "Studious and proud, High Elves master magic and intellect. They know one wizard cantrip and are proficient with longswords, shortswords, shortbows, and longbows. +1 Intelligence.",
-      "Wood Elf":         "Swift and stealthy forest dwellers. Their base walking speed is 35 feet, they can hide even when lightly obscured by nature, and are proficient with longswords, shortswords, shortbows, and longbows. +1 Wisdom.",
-      "Dark Elf (Drow)":  "Underground dwellers adapted to darkness. They have superior darkvision (120 feet), know the dancing lights cantrip, and can cast faerie fire and darkness once per long rest. Sunlight sensitivity. +1 Charisma.",
-    },
-    traits: [
-      { icon: Eye,   name: "Darkvision",   description: "You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light." },
-      { icon: Shield, name: "Fey Ancestry", description: "You have advantage on saving throws against being charmed, and magic can't put you to sleep." },
-      { icon: Wind,  name: "Trance",       description: "Elves don't need to sleep. Instead, they meditate deeply for 4 hours a day, remaining semiconscious." },
-    ],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/f696b9d6e_elfraceicon.png",
-  },
-  {
-    id: "gnome",
-    name: "Gnome",
-    glyph: "🎩",
-    description: "A gnome's energy fits a body twice its size. They explore the world with the joy of a child opening every drawer in a vast curiosity cabinet.",
-    speed: 25,
-    size: "Small",
-    languages: ["Common", "Gnomish"],
-    bonuses: { int: 2 },
-    subtypes: ["Forest Gnome", "Rock Gnome"],
-    subtypeDescriptions: {
-      "Forest Gnome": "Nature-loving gnomes who communicate with small beasts. They know the minor illusion cantrip and can speak with small animals. +1 Dexterity.",
-      "Rock Gnome":   "Ingenious inventors and tinkerers. They have proficiency with tinker's tools and can create clockwork toys and devices. +1 Constitution.",
-    },
-    traits: [
-      { icon: Eye,    name: "Darkvision",    description: "You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light." },
-      { icon: Shield, name: "Gnome Cunning", description: "You have advantage on all Intelligence, Wisdom, and Charisma saving throws against magic." },
-      { icon: Wind,   name: "Small Size",    description: "Gnomes are between 3 and 4 feet tall. Your small size grants you unique advantages in certain situations." },
-    ],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/c56fbbc80_gnomeraceicon.png",
-  },
-  {
-    id: "half-elf",
-    name: "Half-Elf",
-    glyph: "✨",
-    description: "Caught between human ambition and elven grace, half-elves belong nowhere and everywhere. Charming diplomats, restless wanderers, and bridges between cultures.",
-    speed: 30,
-    size: "Medium",
-    languages: ["Common", "Elvish", "+1 choice"],
-    bonuses: { cha: 2, choice: { count: 2, amount: 1, exclude: ["cha"] } },
-    subtypes: ["Standard Half-Elf", "Half-High Elf", "Half-Wood Elf", "Half-Drow"],
-    subtypeDescriptions: {
-      "Standard Half-Elf": "Versatile and charismatic, combining human adaptability with elven grace. +2 Charisma, +1 to two other ability scores. Gain Skill Versatility (proficiency in two skills of choice).",
-      "Half-High Elf":     "Reflecting high elf heritage. +2 Charisma, +1 to two other ability scores. Gain one wizard cantrip of your choice. Replaces Skill Versatility with Elf Weapon Training.",
-      "Half-Wood Elf":     "Reflecting wood elf heritage. +2 Charisma, +1 to two other ability scores. Base walking speed increases to 35 feet. Replaces Skill Versatility with Mask of the Wild.",
-      "Half-Drow":         "Reflecting drow heritage. +2 Charisma, +1 to two other ability scores. Superior Darkvision (120 feet). Replaces Skill Versatility with Drow Magic.",
-    },
-    traits: [
-      { icon: Eye,    name: "Darkvision",      description: "You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light." },
-      { icon: Shield, name: "Fey Ancestry",    description: "You have advantage on saving throws against being charmed, and magic can't put you to sleep." },
-      { icon: Heart,  name: "Skill Versatility", description: "You gain proficiency in two skills of your choice — replaced by lineage-specific traits for Half-High Elf, Half-Wood Elf, and Half-Drow." },
-    ],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/297cad9ca_halfelfraceicon.png",
-  },
-  {
-    id: "half-orc",
-    name: "Half-Orc",
-    glyph: "⚔️",
-    description: "Half-orcs are scarred by life from birth — but those scars are stories of survival. They love hard, fight harder, and never give up.",
-    speed: 30,
-    size: "Medium",
-    languages: ["Common", "Orc"],
-    bonuses: { str: 2, con: 1 },
-    subtypes: ["Standard"],
-    subtypeDescriptions: {
-      "Standard": "Powerful warriors combining human determination with orcish strength. +2 Strength, +1 Constitution. Natural survivors who refuse to fall.",
-    },
-    traits: [
-      { icon: Eye,    name: "Darkvision",           description: "You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light." },
-      { icon: Shield, name: "Menacing",             description: "You gain proficiency in the Intimidation skill." },
-      { icon: Shield, name: "Relentless Endurance", description: "When you are reduced to 0 hit points but not killed outright, you can drop to 1 hit point instead. You can't use this feature again until you finish a long rest." },
-      { icon: Sword,  name: "Savage Attacks",       description: "When you score a critical hit with a melee weapon attack, you can roll one of the weapon's damage dice one additional time and add it to the extra damage." },
-    ],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/d4a087969_halforcraceicon.png",
-  },
-  {
-    id: "halfling",
-    name: "Halfling",
-    glyph: "🍃",
-    description: "Halflings prize peace, full pantries, and good company — but when a halfling decides to leave home, the world had better watch out.",
-    speed: 25,
-    size: "Small",
-    languages: ["Common", "Halfling"],
-    bonuses: { dex: 2 },
-    subtypes: ["Lightfoot", "Stout"],
-    subtypeDescriptions: {
-      "Lightfoot": "Naturally stealthy, they can hide even behind creatures larger than them. Friendly and easygoing. +1 Charisma.",
-      "Stout":     "Hardier than other halflings with dwarven resilience. They have advantage on saves against poison and resistance to poison damage. +1 Constitution.",
-    },
-    traits: [
-      { icon: Flame,  name: "Lucky",               description: "When you roll a 1 on an attack roll, ability check, or saving throw, you can reroll the die and must use the new roll." },
-      { icon: Shield, name: "Brave",               description: "You have advantage on saving throws against being frightened." },
-      { icon: Wind,   name: "Halfling Nimbleness", description: "You can move through the space of any creature that is of a size larger than yours." },
-    ],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/1f05e3073_halflingraceicon.png",
-  },
-  {
-    id: "human",
-    name: "Human",
-    glyph: "🧭",
-    description: "Humans live brief, blazing lives. What they lack in centuries of experience they make up for in ambition, ingenuity, and sheer numbers.",
-    speed: 30,
-    size: "Medium",
-    languages: ["Common", "+1 choice"],
-    bonuses: { all: 1 },
-    subtypes: ["Standard"],
-    subtypeDescriptions: {
-      "Standard": "Versatile and ambitious, gaining +1 to all ability scores. Their adaptability makes them suited to any class or role.",
-    },
-    traits: [
-      { icon: Flame,  name: "Versatile",   description: "Humans gain +1 to all ability scores, making them adaptable to any class or role." },
-    ],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/72c27f140_humanraceicon.png",
-  },
-  {
-    id: "tiefling",
-    name: "Tiefling",
-    glyph: "🔥",
-    description: "Tieflings carry the mark of a devil somewhere in their bloodline. Society often distrusts them on sight — so they learn to speak well, fight smart, and trust their own.",
-    speed: 30,
-    size: "Medium",
-    languages: ["Common", "Infernal"],
-    bonuses: { cha: 2, int: 1 },
-    subtypes: ["Asmodeus", "Baalzebul", "Dispater", "Fierna", "Glasya", "Levistus", "Mammon", "Mephistopheles", "Zariel"],
-    subtypeDescriptions: {
-      "Asmodeus":       "The most common tiefling bloodline. Knows thaumaturgy cantrip, can cast hellish rebuke and darkness. +2 Charisma, +1 Intelligence.",
-      "Baalzebul":      "Legacy of lies and corruption. Knows thaumaturgy, can cast ray of sickness and crown of madness. +2 Charisma, +1 Intelligence.",
-      "Dispater":       "Infernal politicians and schemers. Knows thaumaturgy, can cast disguise self and detect thoughts. +2 Charisma, +1 Dexterity.",
-      "Fierna":         "Masters of manipulation and charm. Knows friends cantrip, can cast charm person and suggestion. +2 Charisma, +1 Wisdom.",
-      "Glasya":         "Cunning tricksters and thieves. Knows minor illusion, can cast disguise self and invisibility. +2 Charisma, +1 Dexterity.",
-      "Levistus":       "Frozen in ice, masters of survival. Knows ray of frost, can cast armor of Agathys and darkness. +2 Charisma, +1 Constitution.",
-      "Mammon":         "Driven by greed and wealth. Knows mage hand, can cast Tenser's floating disk and arcane lock. +2 Charisma, +1 Intelligence.",
-      "Mephistopheles": "Scholars of arcane secrets. Knows mage hand, can cast burning hands and flame blade. +2 Charisma, +1 Intelligence.",
-      "Zariel":         "Warriors bearing the mark of battle. Knows thaumaturgy, can cast searing smite and branding smite. +2 Charisma, +1 Strength.",
-    },
-    traits: [
-      { icon: Eye,     name: "Darkvision",         description: "You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light." },
-      { icon: Flame,   name: "Hellish Resistance", description: "You have resistance to fire damage." },
-      { icon: Droplet, name: "Infernal Legacy",    description: "You know the thaumaturgy cantrip. At 3rd level, you can cast hellish rebuke once per long rest." },
-    ],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/races/bf4ea2436_TieflingRaceIcon.png",
-  },
-];
+// Compose the trait list with subrace overrides folded in.
+function traitsFor(race, subraceName) {
+  const base = race.traits || [];
+  const subraceData = RACES[race.name]?.subraces?.[subraceName] || null;
+  const subraceFeatures = subraceData?.features || [];
+  return [...new Set([...base, ...subraceFeatures])];
+}
+
+// Speed / size resolution honoring subrace overrides (Wood Elf speed 35,
+// Dwarves not slowed by heavy armor, etc.).
+function speedFor(raceName, subraceName) {
+  const data = RACES[raceName];
+  if (!data) return 30;
+  const sub = subraceName && data.subraces ? (data.subraces[subraceName] || {}) : {};
+  return sub.speed ?? data.speed ?? 30;
+}
+
+function sizeFor(raceName) {
+  return RACES[raceName]?.size || "Medium";
+}
+
+// Number of bonus-language "+1 choice" slots the race grants. Persisted as
+// the extra slots on top of the fixed language list (Common, Elvish, etc.).
+function bonusLanguageSlots(raceName, subraceName) {
+  const data = RACES[raceName];
+  if (!data) return 0;
+  const baseLangs = Array.isArray(data.languages) ? data.languages : [];
+  const subData = subraceName && data.subraces ? (data.subraces[subraceName] || {}) : {};
+  const subLangs = Array.isArray(subData.languages) ? subData.languages : [];
+  return baseLangs.filter((l) => l === "+1 choice").length
+    + subLangs.filter((l) => l === "+1 choice").length;
+}
+
+function fixedLanguagesFor(raceName, subraceName) {
+  const data = RACES[raceName];
+  if (!data) return ["Common"];
+  const baseLangs = Array.isArray(data.languages) ? data.languages : [];
+  const subData = subraceName && data.subraces ? (data.subraces[subraceName] || {}) : {};
+  const subLangs = Array.isArray(subData.languages) ? subData.languages : [];
+  return [...new Set([...baseLangs, ...subLangs].filter((l) => l && l !== "+1 choice"))];
+}
 
 export default function RaceStep({ characterData, updateCharacterData, campaignId }) {
-  const [selectedRaceIndex, setSelectedRaceIndex] = useState(0);
-
   const { data: moddedRaces = [] } = useQuery({
     queryKey: ["characterCreator", "moddedRaces", campaignId],
     queryFn: () => getModdedRaces(campaignId),
@@ -318,20 +268,19 @@ export default function RaceStep({ characterData, updateCharacterData, campaignI
     initialData: [],
   });
 
-  const combinedRaces = React.useMemo(() => {
-    if (!moddedRaces || moddedRaces.length === 0) return races;
-    return [...races, ...moddedRaces.map(normalizeBreweryRace)];
+  const combinedRaces = useMemo(() => {
+    if (!moddedRaces || moddedRaces.length === 0) return RACE_LORE;
+    return [...RACE_LORE, ...moddedRaces.map(normalizeBreweryRace)];
   }, [moddedRaces]);
 
-  const currentRace = combinedRaces[selectedRaceIndex] || combinedRaces[0];
+  const currentRace =
+    combinedRaces.find((r) => r.name === characterData.race) || null;
+  const currentSubrace = characterData.subrace || currentRace?.subtypes?.[0] || "";
+  const selectedBackground = BACKGROUND_LORE.find((b) => b.name === characterData.background) || null;
 
-  // Same brewery / SRD / mod_dependencies handling as before — the
-  // medallion grid below just calls it with a different race index.
+  // ── Race selection ───────────────────────────────────────────
   const buildRaceUpdates = (race) => {
-    const base = {
-      race: race.name,
-      subrace: race.subtypes[0],
-    };
+    const base = { race: race.name, subrace: race.subtypes[0] };
     if (race._source === "brewery") {
       const baseline = applyBreweryRaceBaseline(race._raw || null, characterData);
       const subraceUpdates = applyBreweryRaceSubrace(
@@ -355,73 +304,101 @@ export default function RaceStep({ characterData, updateCharacterData, campaignI
     }
     const priorDeps = Array.isArray(characterData.mod_dependencies) ? characterData.mod_dependencies : [];
     const nonRaceDeps = priorDeps.filter((d) => d?.mod_type !== "race");
-    return {
-      ...base,
-      ...clearBreweryRaceMarkers(),
-      mod_dependencies: nonRaceDeps,
-    };
+    return { ...base, ...clearBreweryRaceMarkers(), mod_dependencies: nonRaceDeps };
   };
 
-  const handlePickRace = (race, index) => {
-    setSelectedRaceIndex(index);
+  const handlePickRace = (race) => {
     updateCharacterData(buildRaceUpdates(race));
   };
 
-  React.useEffect(() => {
-    if (!characterData.race) {
-      updateCharacterData(buildRaceUpdates(currentRace));
+  const handlePickSubrace = (subName) => {
+    if (!currentRace) return;
+    if (currentRace._source === "brewery") {
+      const baseline = applyBreweryRaceBaseline(currentRace._raw || null, characterData);
+      const subraceUpdates = applyBreweryRaceSubrace(
+        currentRace._raw || null,
+        subName,
+        baseline.race_features || [],
+      );
+      updateCharacterData({ subrace: subName, ...subraceUpdates });
     } else {
-      const initialRaceIndex = combinedRaces.findIndex((race) => race.name === characterData.race);
-      if (initialRaceIndex !== -1 && initialRaceIndex !== selectedRaceIndex) {
-        setSelectedRaceIndex(initialRaceIndex);
-      }
+      updateCharacterData({ subrace: subName });
     }
-  }, [characterData.race, selectedRaceIndex, updateCharacterData, currentRace.name, currentRace.subtypes, combinedRaces]);
+  };
 
-  const activeSubrace = characterData.subrace || currentRace.subtypes[0];
+  // Seed the first race on mount if the character has none yet — keeps
+  // the validator gate happy and matches the existing creator's behavior.
+  useEffect(() => {
+    if (!characterData.race && combinedRaces.length > 0) {
+      updateCharacterData(buildRaceUpdates(combinedRaces[0]));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [combinedRaces]);
 
   return (
     <div>
-      {/* Tome panel — the prototype wraps RaceSection inside .tome
-          with padding 32/36. */}
-      <div className="cc-tome" style={{ padding: '32px 36px' }}>
-        <RaceSection
-          currentRace={currentRace}
-          combinedRaces={combinedRaces}
-          activeSubrace={activeSubrace}
-          characterData={characterData}
-          updateCharacterData={updateCharacterData}
-          onPickRace={handlePickRace}
-        />
+      <StepHeader
+        kicker="Chapter I · The Hero"
+        title="Forge your hero"
+        subtitle="Name, heritage, history — the soul of your character before they ever swing a sword."
+      />
 
-        {currentRace?._source !== "brewery" && (
-          <SrdRacialTraitsPanel
-            raceName={currentRace.name}
-            subraceName={activeSubrace}
+      <Primer title="New to D&D? Start here">
+        Your character is the person you'll play. <strong>Race</strong> is the species you were
+        born as — it sets your size, speed, and one or two special tricks. <strong>Background</strong>{" "}
+        is what you did before adventuring — it gives you two skills and a unique perk. Don't
+        overthink it — every combination tells a story.
+      </Primer>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1.55fr 1fr',
+          gap: 28,
+          marginTop: 32,
+          alignItems: 'flex-start',
+        }}
+      >
+        {/* LEFT — tome page with race, background, alignment in flowing sections */}
+        <div className="tome" style={{ padding: '32px 36px' }}>
+          <RaceSection
+            currentRace={currentRace}
+            currentSubrace={currentSubrace}
             characterData={characterData}
             updateCharacterData={updateCharacterData}
+            combinedRaces={combinedRaces}
+            onPickRace={handlePickRace}
+            onPickSubrace={handlePickSubrace}
           />
-        )}
 
-        {currentRace?._source === "brewery" && (
-          <BreweryRacePickers
-            characterData={characterData}
+          <FleurDivider />
+
+          <BackgroundSection
+            value={characterData.background}
+            selected={selectedBackground}
+            onPick={(name) => updateCharacterData({ background: name })}
+          />
+        </div>
+
+        {/* RIGHT — character codex */}
+        <div style={{ position: 'sticky', top: 20, alignSelf: 'flex-start' }}>
+          <IdentityCodex
+            name={characterData.name}
+            level={characterData.level}
             updateCharacterData={updateCharacterData}
           />
-        )}
+        </div>
       </div>
     </div>
   );
 }
 
 // ============================================================================
-// Race section — 1:1 with design-reference/character-creator/step-identity.jsx
-// RaceSection (~40-76). OrnateHeading + FeaturedRace (or empty-state primer)
-// + medallion rail.
+// RACE SECTION — featured race tome on top, medallion rail beneath
 // ============================================================================
 function RaceSection({
-  currentRace, combinedRaces, activeSubrace,
-  characterData, updateCharacterData, onPickRace,
+  currentRace, currentSubrace, characterData, updateCharacterData,
+  combinedRaces, onPickRace, onPickSubrace,
 }) {
   return (
     <div>
@@ -430,19 +407,20 @@ function RaceSection({
       {currentRace ? (
         <FeaturedRace
           race={currentRace}
-          subrace={activeSubrace}
+          subrace={currentSubrace}
           characterData={characterData}
           updateCharacterData={updateCharacterData}
+          onPickSubrace={onPickSubrace}
         />
       ) : (
         <div
-          className="cc-primer"
+          className="primer"
           style={{
             textAlign: 'center',
             padding: 28,
-            fontFamily: 'var(--cc-serif)',
+            fontFamily: 'var(--serif)',
             fontStyle: 'italic',
-            color: 'var(--cc-text-dim)',
+            color: 'var(--text-dim)',
             fontSize: 16,
           }}
         >
@@ -450,22 +428,21 @@ function RaceSection({
         </div>
       )}
 
-      {/* Race rail — bigger icons, hover-reveal name, click to feature.
-          Prototype uses grid-template-columns: repeat(9, 1fr). */}
+      {/* Race rail — bigger icons, hover-reveal name, click to feature */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(9, 1fr)',
+          gridTemplateColumns: `repeat(${Math.min(9, Math.max(6, combinedRaces.length))}, 1fr)`,
           gap: 8,
           marginTop: 18,
         }}
       >
-        {combinedRaces.map((race, idx) => (
+        {combinedRaces.map((r) => (
           <RaceMedallion
-            key={`${race._source || 'srd'}-${race.id || race.name}`}
-            race={race}
-            active={characterData.race === race.name}
-            onClick={() => onPickRace(race, idx)}
+            key={r._mod_id || r.name}
+            race={r}
+            active={currentRace?.name === r.name}
+            onClick={() => onPickRace(r)}
           />
         ))}
       </div>
@@ -473,16 +450,17 @@ function RaceSection({
   );
 }
 
-// FeaturedRace — 1:1 with prototype step-identity.jsx (~78-137).
-function FeaturedRace({ race, subrace, characterData, updateCharacterData }) {
+function FeaturedRace({ race, subrace, characterData, updateCharacterData, onPickSubrace }) {
+  const isBrewery = race._source === "brewery";
+  const speed = isBrewery ? (race._raw?.speed || 30) : speedFor(race.name, subrace);
+  const size = isBrewery ? (race._raw?.size || "Medium") : sizeFor(race.name);
+  const bonuses = isBrewery ? {} : bonusesFor(race.name, subrace);
+  const traits = isBrewery ? (race.traits || []) : traitsFor(race, subrace);
+  const langSlots = isBrewery ? 0 : bonusLanguageSlots(race.name, subrace);
+  const fixedLangs = isBrewery ? [] : fixedLanguagesFor(race.name, subrace);
+
   return (
-    <motion.div
-      key={race.id || race.name}
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
-      style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: 22 }}
-    >
+    <div className="fade-in" style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: 22 }}>
       {/* Iconic emblem */}
       <div
         style={{
@@ -498,112 +476,51 @@ function FeaturedRace({ race, subrace, characterData, updateCharacterData }) {
           filter: 'drop-shadow(0 4px 12px rgba(255, 83, 0, 0.25))',
         }}
       >
-        <RaceGlyph race={race} size={56} />
+        {race.icon ? (
+          <img
+            src={race.icon}
+            alt={race.name}
+            style={{ width: 72, height: 72, objectFit: 'contain', filter: 'sepia(0.15) saturate(1.2)' }}
+          />
+        ) : (
+          <span style={{ filter: 'sepia(0.15) saturate(1.2)' }}>✦</span>
+        )}
       </div>
 
       <div>
         <div
-          className="cc-display"
+          className="display"
           style={{
             fontSize: 36,
-            color: 'var(--cc-orange-soft)',
+            color: 'var(--orange-soft)',
             lineHeight: 1,
             marginBottom: 8,
             letterSpacing: 1,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
           }}
         >
           {race.name}
-          <InfoTip>{tipFor("race")}</InfoTip>
-          {race._source === "brewery" && (
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 900,
-                letterSpacing: '0.12em',
-                textTransform: 'uppercase',
-                color: '#050816',
-                background: 'var(--cc-teal)',
-                borderRadius: 4,
-                padding: '2px 6px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 3,
-              }}
-            >
-              <Sparkles className="w-2.5 h-2.5" /> Brewery
-            </span>
-          )}
         </div>
-
         <p
-          className="cc-italic-serif"
-          style={{
-            fontSize: 16,
-            color: 'var(--cc-text-dim)',
-            margin: 0,
-            marginBottom: 14,
-            lineHeight: 1.55,
-          }}
+          className="italic-serif"
+          style={{ fontSize: 16, color: 'var(--text-dim)', margin: 0, marginBottom: 14, lineHeight: 1.55 }}
         >
           {race.description}
         </p>
 
-        {/* Chip row — Speed / Size / ability bonuses / trait names.
-            Order and class names match the prototype verbatim. */}
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 6,
-            marginBottom: 16,
-          }}
-        >
-          {race.speed != null && (
-            <span className="cc-chip cc-chip-gold">Speed {race.speed} ft</span>
-          )}
-          {race.size && (
-            <span className="cc-chip cc-chip-gold">Size {race.size}</span>
-          )}
-          {Object.entries(race.bonuses || {}).map(([k, v]) => {
-            if (k === 'choice') return null;
-            if (k === 'all') {
-              return (
-                <span key={k} className="cc-chip cc-chip-orange">All +{v}</span>
-              );
-            }
-            return (
-              <span key={k} className="cc-chip cc-chip-orange">
-                {k.toUpperCase()} +{v}
-              </span>
-            );
-          })}
-          {(race.traits || []).map((t, idx) => {
-            const name = typeof t === 'string' ? t : t.name;
-            const description = typeof t === 'object' ? t.description : null;
-            return (
-              <span
-                key={`${name}-${idx}`}
-                className="cc-chip cc-chip-neutral"
-                title={description || undefined}
-                style={description ? { cursor: 'help' } : undefined}
-              >
-                {name}
-              </span>
-            );
-          })}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+          <span className="chip chip-gold">Speed {speed} ft</span>
+          <span className="chip chip-gold">Size {size}</span>
+          {Object.entries(bonuses).map(([k, v]) => (
+            <span key={k} className="chip chip-orange">{k.toUpperCase()} +{v}</span>
+          ))}
+          {traits.map((t) => (
+            <span key={t} className="chip chip-neutral">{t}</span>
+          ))}
         </div>
 
-        {/* Lineage picker — only shown when there are 2+ subraces.
-            Prototype renders a grid of auto-fill minmax(180px, 1fr). */}
         {race.subtypes.length > 1 && (
           <div>
-            <div
-              className="cc-label"
-              style={{ marginBottom: 8, color: 'var(--cc-gold-soft)' }}
-            >
+            <div className="label" style={{ marginBottom: 8, color: 'var(--gold-soft)' }}>
               Choose a lineage
             </div>
             <div
@@ -613,47 +530,27 @@ function FeaturedRace({ race, subrace, characterData, updateCharacterData }) {
                 gap: 8,
               }}
             >
-              {race.subtypes.map((subtype) => {
-                const active = subrace === subtype;
+              {race.subtypes.map((s) => {
+                const active = subrace === s;
                 return (
                   <button
-                    key={subtype}
+                    key={s}
                     type="button"
-                    onClick={() => {
-                      const updates = { subrace: subtype };
-                      if (race._source === "brewery" && race._raw) {
-                        const baseline = applyBreweryRaceBaseline(race._raw, characterData);
-                        const subraceUpdates = applyBreweryRaceSubrace(
-                          race._raw,
-                          subtype,
-                          baseline.race_features || [],
-                        );
-                        Object.assign(updates, baseline, subraceUpdates);
-                      }
-                      updateCharacterData(updates);
-                    }}
-                    className={`cc-pickable ${active ? 'cc-selected-teal' : ''}`}
+                    onClick={() => onPickSubrace(s)}
+                    className={`pickable ${active ? 'selected-teal' : ''}`}
                     style={{ padding: '12px 14px', textAlign: 'left', color: 'inherit' }}
                   >
                     <div
-                      className="cc-display"
-                      style={{
-                        fontSize: 16,
-                        color: 'var(--cc-text)',
-                        marginBottom: 4,
-                      }}
+                      className="display"
+                      style={{ fontSize: 16, color: 'var(--text)', marginBottom: 4 }}
                     >
-                      {subtype}
+                      {s}
                     </div>
                     <div
-                      className="cc-italic-serif"
-                      style={{
-                        fontSize: 13,
-                        color: 'var(--cc-text-dim)',
-                        lineHeight: 1.45,
-                      }}
+                      className="italic-serif"
+                      style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.45 }}
                     >
-                      {race.subtypeDescriptions?.[subtype]}
+                      {race.subtypeDescriptions?.[s] || ''}
                     </div>
                   </button>
                 );
@@ -662,30 +559,24 @@ function FeaturedRace({ race, subrace, characterData, updateCharacterData }) {
           </div>
         )}
 
-        {/* AutoSelect for single-subtype races — mirrors the
-            prototype's AutoSelect helper (~139-142). */}
-        {race.subtypes.length === 1 && (
-          <AutoSelect
-            current={subrace}
-            target={race.subtypes[0]}
-            onMount={() => updateCharacterData({ subrace: race.subtypes[0] })}
+        {/* Bonus-language picker — only renders for races with "+1 choice"
+            in their language list (Human base, Half-Elf, High Elf's Extra
+            Language). The prototype doesn't render this UI, but it owns
+            characterData.languages persistence the existing data layer
+            requires. Styled to blend with the prototype's chip vocabulary. */}
+        {langSlots > 0 && (
+          <BonusLanguagePicker
+            slots={langSlots}
+            fixedLangs={fixedLangs}
+            value={characterData.languages || fixedLangs}
+            onChange={(langs) => updateCharacterData({ languages: langs })}
           />
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-// AutoSelect — 1:1 with prototype helper (~139-142).
-function AutoSelect({ onMount, current, target }) {
-  React.useEffect(() => {
-    if (current !== target) onMount();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return null;
-}
-
-// RaceMedallion — 1:1 with prototype step-identity.jsx (~144-176).
 function RaceMedallion({ race, active, onClick }) {
   return (
     <button
@@ -703,8 +594,8 @@ function RaceMedallion({ race, active, onClick }) {
         borderRadius: 4,
         transition: 'all .15s',
         background: active ? 'rgba(255, 83, 0, 0.10)' : 'transparent',
-        border: `1px solid ${active ? 'var(--cc-orange)' : 'transparent'}`,
-        boxShadow: active ? '0 0 16px var(--cc-orange-glow)' : 'none',
+        border: `1px solid ${active ? 'var(--orange)' : 'transparent'}`,
+        boxShadow: active ? '0 0 16px var(--orange-glow)' : 'none',
       }}
       onMouseEnter={(e) => {
         if (!active) e.currentTarget.style.background = 'rgba(212, 169, 81, 0.06)';
@@ -728,14 +619,18 @@ function RaceMedallion({ race, active, onClick }) {
           filter: active ? 'none' : 'grayscale(0.4) opacity(0.85)',
         }}
       >
-        <RaceGlyph race={race} size={26} />
+        {race.icon ? (
+          <img src={race.icon} alt="" style={{ width: 32, height: 32, objectFit: 'contain' }} />
+        ) : (
+          <span>✦</span>
+        )}
       </div>
       <div
         style={{
           fontSize: 11,
           fontWeight: 700,
           letterSpacing: 0.5,
-          color: active ? 'var(--cc-orange-soft)' : 'var(--cc-text-dim)',
+          color: active ? 'var(--orange-soft)' : 'var(--text-dim)',
           textAlign: 'center',
           lineHeight: 1.2,
         }}
@@ -746,308 +641,237 @@ function RaceMedallion({ race, active, onClick }) {
   );
 }
 
-// Glyph renderer — emoji for SRD races (per prototype), URL image
-// for brewery races (whose icon is a Supabase storage URL).
-function RaceGlyph({ race, size }) {
-  const glyph = race.glyph;
-  const url = race.icon;
-  if (glyph) {
-    return (
-      <span style={{ fontSize: size, lineHeight: 1, filter: 'sepia(0.15) saturate(1.2)' }}>
-        {glyph}
-      </span>
-    );
-  }
-  if (url) {
-    return (
-      <img
-        src={url}
-        alt=""
-        style={{
-          width: size + 12,
-          height: size + 12,
-          objectFit: 'contain',
-        }}
-      />
-    );
-  }
+function BonusLanguagePicker({ slots, fixedLangs, value, onChange }) {
+  const fixedSet = new Set(fixedLangs);
+  const chosen = (Array.isArray(value) ? value : []).filter((l) => !fixedSet.has(l));
+  const available = SRD_LANGUAGES.filter((l) => !fixedSet.has(l));
+  const setChosen = (next) => onChange([...fixedLangs, ...next]);
+
+  const handlePick = (lang) => {
+    if (chosen.includes(lang)) {
+      setChosen(chosen.filter((x) => x !== lang));
+    } else if (chosen.length < slots) {
+      setChosen([...chosen, lang]);
+    }
+  };
+
   return (
-    <span style={{ fontSize: size, lineHeight: 1, color: 'var(--cc-gold)' }}>
-      {race.name?.charAt(0) || '?'}
-    </span>
+    <div style={{ marginTop: 14 }}>
+      <div className="label" style={{ marginBottom: 6, color: 'var(--gold-soft)' }}>
+        Bonus language{slots > 1 ? `s (pick ${slots})` : ''}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {available.map((lang) => {
+          const picked = chosen.includes(lang);
+          return (
+            <button
+              key={lang}
+              type="button"
+              onClick={() => handlePick(lang)}
+              className={`pickable ${picked ? 'selected-gold' : ''}`}
+              style={{
+                padding: '6px 12px',
+                textAlign: 'center',
+                color: 'inherit',
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+            >
+              {lang}
+            </button>
+          );
+        })}
+      </div>
+      <div className="italic-serif" style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 6 }}>
+        {chosen.length}/{slots} chosen
+      </div>
+    </div>
   );
 }
 
 // ============================================================================
-// SRD racial traits panel — preserved verbatim from pre-port file.
-// Owns the language-merge + bonus-language picker behavior.
+// BACKGROUND SECTION
 // ============================================================================
-function TraitTag({ children, accent = "teal" }) {
-  const accents = {
-    teal:   "bg-[#37F2D1]/10 border-[#37F2D1]/40 text-[#37F2D1]",
-    amber:  "bg-amber-500/10 border-amber-400/40 text-amber-300",
-    violet: "bg-violet-500/10 border-violet-400/40 text-violet-300",
-    slate:  "bg-slate-700/40 border-slate-600/60 text-slate-200",
-  };
+function BackgroundSection({ value, selected, onPick }) {
   return (
-    <span className={`inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider rounded px-2 py-0.5 border ${accents[accent] || accents.slate}`}>
-      {children}
-    </span>
+    <div>
+      <OrnateHeading>Background</OrnateHeading>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 18 }}>
+        {BACKGROUND_LORE.map((b) => (
+          <BackgroundChip
+            key={b.name}
+            bg={b}
+            active={value === b.name}
+            onClick={() => onPick(b.name)}
+          />
+        ))}
+      </div>
+
+      {selected && (
+        <BackgroundDetail bg={selected} />
+      )}
+    </div>
   );
 }
 
-function SrdRacialTraitsPanel({ raceName, subraceName, characterData, updateCharacterData }) {
-  const tags = computeRacialTags(raceName, subraceName);
-  if (!tags) return null;
-
-  const bonusLangs = Array.isArray(characterData.bonus_languages)
-    ? characterData.bonus_languages
-    : [];
-
-  React.useEffect(() => {
-    const merged = Array.from(new Set([...tags.fixedLangs, ...bonusLangs]));
-    const current = Array.isArray(characterData.languages) ? characterData.languages : [];
-    const same = merged.length === current.length && merged.every((l, i) => l === current[i]);
-    if (!same) updateCharacterData({ languages: merged });
-  }, [raceName, subraceName, tags.fixedLangs.join("|"), bonusLangs.join("|")]);
-
-  React.useEffect(() => {
-    if (tags.extraChoiceSlots >= bonusLangs.length) return;
-    updateCharacterData({ bonus_languages: bonusLangs.slice(0, tags.extraChoiceSlots) });
-  }, [tags.extraChoiceSlots]);
-
-  const pickLanguage = (idx, value) => {
-    const next = [...bonusLangs];
-    next[idx] = value;
-    updateCharacterData({ bonus_languages: next.filter(Boolean) });
-  };
-
-  const eligibleLanguages = SRD_LANGUAGES
-    .filter((l) => !tags.fixedLangs.includes(l))
-    .filter((l) => !bonusLangs.includes(l));
-
-  const bonusEntries = Object.entries(tags.bonuses);
-
+function BackgroundChip({ bg, active, onClick }) {
+  const srd = SRD_BACKGROUNDS[bg.name];
+  const skillsLine = srd?.skills?.length ? srd.skills.join(' & ') : '';
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="mt-5 bg-[#2A3441]/50 rounded-lg p-4 border border-[#37F2D1]/20"
+    <button
+      type="button"
+      onClick={onClick}
+      className={`pickable ${active ? 'selected' : ''}`}
+      style={{
+        padding: '12px 14px',
+        textAlign: 'left',
+        color: 'inherit',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 4,
+      }}
     >
-      <h4 className="text-[#37F2D1] font-semibold text-sm mb-3">Racial Traits</h4>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 18 }}>{bg.icon}</span>
+        <span className="display" style={{ fontSize: 15, color: 'var(--text)' }}>{bg.name}</span>
+      </div>
+      <div className="italic-serif" style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.35 }}>
+        {skillsLine}
+      </div>
+    </button>
+  );
+}
 
-      <div className="flex flex-wrap gap-2 mb-3">
-        <TraitTag accent="teal">Speed: {tags.speed} ft.</TraitTag>
-        <TraitTag accent="slate">Size: {tags.size}</TraitTag>
-        {tags.darkvision && <TraitTag accent="violet">Darkvision 60 ft.</TraitTag>}
-        {bonusEntries.length > 0 && (
-          <TraitTag accent="amber">
-            {bonusEntries.map(([ab, val]) => `+${val} ${ab.toUpperCase()}`).join(", ")}
-          </TraitTag>
+function BackgroundDetail({ bg }) {
+  const srd = SRD_BACKGROUNDS[bg.name] || {};
+  return (
+    <div
+      className="fade-in"
+      style={{
+        padding: '16px 20px',
+        background: 'rgba(20, 12, 8, 0.5)',
+        borderRadius: 4,
+        borderLeft: '3px solid var(--gold)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
+        <span style={{ fontSize: 22 }}>{bg.icon}</span>
+        <span className="display" style={{ fontSize: 22, color: 'var(--orange-soft)' }}>
+          {bg.name}
+        </span>
+      </div>
+      <p
+        className="italic-serif"
+        style={{ fontSize: 14, color: 'var(--text-dim)', margin: '8px 0 14px', lineHeight: 1.5 }}
+      >
+        {bg.desc}
+      </p>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'auto 1fr',
+          columnGap: 14,
+          rowGap: 6,
+          fontSize: 13,
+          marginBottom: 10,
+        }}
+      >
+        {srd.skills?.length > 0 && (
+          <>
+            <span className="label" style={{ color: 'var(--gold-soft)' }}>Skills</span>
+            <span style={{ color: 'var(--text)' }}>{srd.skills.join(' · ')}</span>
+          </>
+        )}
+        {srd.tools?.length > 0 && (
+          <>
+            <span className="label" style={{ color: 'var(--gold-soft)' }}>Tools</span>
+            <span style={{ color: 'var(--text)' }}>{srd.tools.join(' · ')}</span>
+          </>
+        )}
+        {srd.languages > 0 && (
+          <>
+            <span className="label" style={{ color: 'var(--gold-soft)' }}>Languages</span>
+            <span style={{ color: 'var(--text)' }}>{srd.languages} of your choice</span>
+          </>
+        )}
+        {srd.feature && (
+          <>
+            <span className="label" style={{ color: 'var(--gold-soft)' }}>Feature</span>
+            <span style={{ color: 'var(--text)' }}>{srd.feature}</span>
+          </>
         )}
       </div>
-
-      {tags.features.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {tags.features.map((f) => (
-            <TraitTag key={f} accent="slate">{f}</TraitTag>
-          ))}
+      {bg.tip && (
+        <div
+          className="italic-serif"
+          style={{ fontSize: 13, color: 'var(--gold-soft)', marginTop: 8, opacity: 0.9 }}
+        >
+          ✦ {bg.tip}
         </div>
       )}
-
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] uppercase tracking-widest text-white/60 font-bold">Languages:</span>
-        {tags.fixedLangs.map((l) => (
-          <TraitTag key={l} accent="teal">{l}</TraitTag>
-        ))}
-        {bonusLangs.map((l) => (
-          <TraitTag key={`bonus-${l}`} accent="amber">{l} (chosen)</TraitTag>
-        ))}
-      </div>
-
-      {tags.extraChoiceSlots > 0 && (
-        <div className="mt-3 pt-3 border-t border-white/5">
-          <p className="text-[11px] text-white/60 mb-2">
-            {raceName} grants {tags.extraChoiceSlots} additional language of your choice.
-          </p>
-          <div className="flex flex-col gap-2">
-            {Array.from({ length: tags.extraChoiceSlots }).map((_, idx) => (
-              <Select
-                key={idx}
-                value={bonusLangs[idx] || ""}
-                onValueChange={(v) => pickLanguage(idx, v)}
-              >
-                <SelectTrigger className="bg-[#1E2430] border-slate-700 text-white text-xs h-9">
-                  <SelectValue placeholder="Pick a language…" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#1E2430] border-slate-700 text-white">
-                  {[
-                    ...(bonusLangs[idx] ? [bonusLangs[idx]] : []),
-                    ...eligibleLanguages,
-                  ].map((l) => (
-                    <SelectItem key={l} value={l} className="text-white text-xs">
-                      {l}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ))}
-          </div>
-        </div>
-      )}
-    </motion.div>
+    </div>
   );
 }
 
 // ============================================================================
-// Brewery race pickers — preserved verbatim from pre-port file.
-// Owns the bonus-language + skill-choice picker behavior.
+// IDENTITY CODEX — right rail (Name + Level only — portrait & appearance
+// live on the Class step in this codebase, kept intentionally compact)
 // ============================================================================
-function BreweryRacePickers({ characterData, updateCharacterData }) {
-  const race = characterData._brewery_race;
-  if (!race) return null;
-
-  const bonusLangPicks = Number(race.languages?.bonus_picks) || 0;
-  const restrictedTo   = Array.isArray(race.languages?.restricted_to) ? race.languages.restricted_to : [];
-  const skillChoose    = Number(race.skill_proficiencies?.choose) || 0;
-  const chooseFrom     = Array.isArray(race.skill_proficiencies?.choose_from) ? race.skill_proficiencies.choose_from : [];
-
-  const fixedLangs = Array.isArray(race.languages?.fixed) ? race.languages.fixed : [];
-  const fixedSkills = Array.isArray(race.skill_proficiencies?.fixed) ? race.skill_proficiencies.fixed : [];
-
-  const existingLangs = Array.isArray(characterData.languages) ? characterData.languages : [];
-  const existingBonus = Array.isArray(characterData._brewery_bonus_langs) ? characterData._brewery_bonus_langs : [];
-  const existingChosenSkills = Array.isArray(characterData._brewery_chosen_skills) ? characterData._brewery_chosen_skills : [];
-
-  const langOptions = restrictedTo.length > 0
-    ? restrictedTo.filter((l) => !fixedLangs.includes(l))
-    : [
-        "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin", "Halfling", "Orc",
-        "Abyssal", "Celestial", "Draconic", "Deep Speech", "Infernal",
-        "Primordial", "Sylvan", "Undercommon",
-      ].filter((l) => !fixedLangs.includes(l));
-  const skillOptionList = chooseFrom.length > 0
-    ? chooseFrom.filter((s) => !fixedSkills.includes(s))
-    : [
-        "Acrobatics", "Animal Handling", "Arcana", "Athletics", "Deception",
-        "History", "Insight", "Intimidation", "Investigation", "Medicine",
-        "Nature", "Perception", "Performance", "Persuasion", "Religion",
-        "Sleight of Hand", "Stealth", "Survival",
-      ].filter((s) => !fixedSkills.includes(s));
-
-  const toggleLang = (lang) => {
-    const active = existingBonus.includes(lang);
-    if (!active && existingBonus.length >= bonusLangPicks) return;
-    const nextBonus = active
-      ? existingBonus.filter((l) => l !== lang)
-      : [...existingBonus, lang];
-    const mergedLangs = Array.from(new Set([
-      ...existingLangs.filter((l) => !existingBonus.includes(l) || nextBonus.includes(l)),
-      ...nextBonus,
-    ]));
-    updateCharacterData({
-      _brewery_bonus_langs: nextBonus,
-      languages: mergedLangs,
-    });
-  };
-
-  const toggleSkill = (skill) => {
-    const active = existingChosenSkills.includes(skill);
-    if (!active && existingChosenSkills.length >= skillChoose) return;
-    const nextChosen = active
-      ? existingChosenSkills.filter((s) => s !== skill)
-      : [...existingChosenSkills, skill];
-    const nextSkills = { ...(characterData.skills || {}) };
-    if (active) {
-      if (!fixedSkills.includes(skill)) delete nextSkills[skill];
-    } else {
-      nextSkills[skill] = true;
-    }
-    updateCharacterData({
-      _brewery_chosen_skills: nextChosen,
-      skills: nextSkills,
-    });
-  };
-
-  if (bonusLangPicks === 0 && skillChoose === 0) return null;
-
+function IdentityCodex({ name, level, updateCharacterData }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="mt-4 space-y-3"
-    >
-      {bonusLangPicks > 0 && (
-        <div className="bg-[#0b1220] border-2 border-[#37F2D1]/30 rounded-lg p-3">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-[#37F2D1] font-bold text-xs uppercase tracking-widest">
-              Bonus Languages
-            </h4>
-            <span className="text-[10px] text-white/60">
-              {existingBonus.length} / {bonusLangPicks}
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {langOptions.map((lang) => {
-              const active = existingBonus.includes(lang);
-              const disabled = !active && existingBonus.length >= bonusLangPicks;
-              return (
-                <button
-                  key={lang}
-                  type="button"
-                  onClick={() => toggleLang(lang)}
-                  disabled={disabled}
-                  className={`px-2 py-1 rounded border text-[10px] font-semibold transition-colors ${
-                    active
-                      ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
-                      : disabled
-                        ? "bg-[#1E2430] text-slate-600 border-slate-800 cursor-not-allowed"
-                        : "bg-[#1E2430] text-slate-300 border-slate-700 hover:border-[#37F2D1]/60"
-                  }`}
-                >
-                  {lang}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+    <div className="panel-strong" style={{ padding: 24, position: 'relative' }}>
+      <div className="tome-corner tr" />
+      <div className="tome-corner bl" />
 
-      {skillChoose > 0 && (
-        <div className="bg-[#0b1220] border-2 border-[#37F2D1]/30 rounded-lg p-3">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-[#37F2D1] font-bold text-xs uppercase tracking-widest">
-              Skill Choices
-            </h4>
-            <span className="text-[10px] text-white/60">
-              {existingChosenSkills.length} / {skillChoose}
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {skillOptionList.map((skill) => {
-              const active = existingChosenSkills.includes(skill);
-              const disabled = !active && existingChosenSkills.length >= skillChoose;
-              return (
-                <button
-                  key={skill}
-                  type="button"
-                  onClick={() => toggleSkill(skill)}
-                  disabled={disabled}
-                  className={`px-2 py-1 rounded border text-[10px] font-semibold transition-colors ${
-                    active
-                      ? "bg-[#37F2D1] text-[#050816] border-[#37F2D1]"
-                      : disabled
-                        ? "bg-[#1E2430] text-slate-600 border-slate-800 cursor-not-allowed"
-                        : "bg-[#1E2430] text-slate-300 border-slate-700 hover:border-[#37F2D1]/60"
-                  }`}
-                >
-                  {skill}
-                </button>
-              );
-            })}
-          </div>
+      <div className="ornate-heading" style={{ marginBottom: 20 }}>
+        <span className="ornate-flourish small" />
+        <h3 style={{ fontSize: 22, color: 'var(--text)' }}>Codex</h3>
+        <span className="ornate-flourish small" />
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <div className="label" style={{ marginBottom: 6 }}>
+          Character Name <span style={{ color: 'var(--orange)' }}>*</span>
         </div>
-      )}
-    </motion.div>
+        <input
+          className="input"
+          value={name || ''}
+          onChange={(e) => updateCharacterData({ name: e.target.value })}
+          placeholder="e.g. Kael Stormwhisper"
+          maxLength={40}
+          style={{ fontSize: 16 }}
+        />
+      </div>
+
+      <div>
+        <div className="label" style={{ marginBottom: 6 }}>Level</div>
+        <select
+          className="input"
+          value={String(level || 1)}
+          onChange={(e) => updateCharacterData({ level: parseInt(e.target.value, 10) || 1 })}
+          style={{
+            appearance: 'none',
+            backgroundImage:
+              "url(\"data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237B8AA0' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'right 12px center',
+            paddingRight: 36,
+          }}
+        >
+          {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => (
+            <option key={lvl} value={String(lvl)}>Level {lvl}</option>
+          ))}
+        </select>
+      </div>
+
+      <div
+        className="italic-serif"
+        style={{ marginTop: 18, fontSize: 12, color: 'var(--text-faint)', lineHeight: 1.5 }}
+      >
+        Portrait, age, height, weight, and biography are set on the Class step.
+      </div>
+    </div>
   );
 }
