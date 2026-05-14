@@ -12,9 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
   Search, Plus, Edit3, Trash2, Eye, Star, FileText, CheckSquare, Square,
   Upload, Image as ImageIcon, X as XIcon,
 } from "lucide-react";
@@ -75,6 +72,12 @@ export default function BlogTab() {
       return data || [];
     },
   });
+
+  const categorySuggestions = useMemo(() => {
+    const fromPosts = posts.map((p) => p.category).filter(Boolean);
+    const seeded = CATEGORIES.map((c) => c.value);
+    return Array.from(new Set([...seeded, ...fromPosts])).sort();
+  }, [posts]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -325,6 +328,7 @@ export default function BlogTab() {
       <BlogEditor
         open={editor.open}
         post={editor.post}
+        categorySuggestions={categorySuggestions}
         onClose={() => setEditor({ open: false, post: null })}
         onSave={(row) => savePost.mutate(row)}
       />
@@ -332,7 +336,7 @@ export default function BlogTab() {
   );
 }
 
-function BlogEditor({ open, post, onClose, onSave }) {
+function BlogEditor({ open, post, categorySuggestions = [], onClose, onSave }) {
   const { user } = useAuth();
   const [form, setForm] = useState(() => initForm(post));
   const [slugTouched, setSlugTouched] = useState(false);
@@ -525,12 +529,19 @@ function BlogEditor({ open, post, onClose, onSave }) {
             </div>
             <div>
               <Label className="text-xs">Category</Label>
-              <Select value={form.category} onValueChange={(v) => set({ category: v })}>
-                <SelectTrigger className="bg-[#050816] border-slate-700 text-white mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Input
+                list="blog-category-suggestions"
+                value={form.category}
+                onChange={(e) => set({ category: e.target.value })}
+                onBlur={(e) => set({ category: e.target.value.trim() })}
+                className="bg-[#050816] border-slate-700 text-white mt-1"
+                placeholder="article"
+              />
+              <datalist id="blog-category-suggestions">
+                {categorySuggestions.map((c) => (
+                  <option key={c} value={c}>{CATEGORY_LABEL[c] || c}</option>
+                ))}
+              </datalist>
             </div>
           </div>
           <div>
