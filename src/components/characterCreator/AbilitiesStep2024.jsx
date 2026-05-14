@@ -12,6 +12,9 @@ import {
 } from "@/data/games/dnd5e_2024/backgrounds";
 import { backgroundCopy } from "@/data/games/dnd5e_2024/copy";
 import InfoTip from "@/components/characterCreator/InfoTip";
+import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
+import { Primer } from "@/components/characterCreator/chrome/Primer";
+import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
 
 /**
  * 2024 D&D 5e — abilities + background step.
@@ -216,68 +219,25 @@ export default function AbilitiesStep2024({ characterData, updateCharacterData }
   // ── Render ────────────────────────────────────────────────
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="max-w-5xl mx-auto"
-    >
-      <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 mb-6 border border-[#2A3441]">
-        <h2 className="text-2xl font-bold text-[#FFC6AA] mb-3 flex items-center gap-2">
-          What are Ability Scores?
-          <Badge className="bg-[#37F2D1] text-[#1E2430] text-[10px] font-black">
-            2024
-          </Badge>
-        </h2>
-        <p className="text-white mb-4">
-          Ability Scores are the foundation of your character. They represent
-          your character's natural talents and capabilities. Each score
-          ranges from 3 (very poor) to 18 (exceptional) before bonuses, and
-          caps at 20 at character creation. These scores determine how good
-          your character is at different tasks.
-        </p>
-        <p className="text-white mb-4">
-          <span className="font-bold text-[#FF5722]">The Modifier</span> is
-          the number you'll actually use in gameplay. It ranges from -4 to
-          +5 for scores between 3-20. Higher scores give better modifiers.
-        </p>
-        <p className="text-white mb-4">
-          <span className="font-bold text-[#37F2D1]">2024 change:</span>{" "}
-          Ability score bonuses come from your <span className="font-bold">background</span>,
-          not your species. After you generate base scores, pick a background
-          below to distribute its +2/+1 (or +1/+1/+1) across three abilities.
-        </p>
-        <div className="grid grid-cols-3 gap-4 text-sm">
-          <div className="bg-[#2A3441]/80 p-3 rounded">
-            <span className="font-bold text-[#FF5722]">💪 Strength:</span>
-            <span className="text-white"> Melee attacks, carrying capacity</span>
-          </div>
-          <div className="bg-[#2A3441]/80 p-3 rounded">
-            <span className="font-bold text-[#FF5722]">🏃 Dexterity:</span>
-            <span className="text-white"> Ranged attacks, stealth, dodging</span>
-          </div>
-          <div className="bg-[#2A3441]/80 p-3 rounded">
-            <span className="font-bold text-[#FF5722]">❤️ Constitution:</span>
-            <span className="text-white"> Hit points, endurance</span>
-          </div>
-          <div className="bg-[#2A3441]/80 p-3 rounded">
-            <span className="font-bold text-[#FF5722]">🧠 Intelligence:</span>
-            <span className="text-white"> Knowledge, investigation, arcana</span>
-          </div>
-          <div className="bg-[#2A3441]/80 p-3 rounded">
-            <span className="font-bold text-[#FF5722]">👁️ Wisdom:</span>
-            <span className="text-white"> Perception, insight, willpower</span>
-          </div>
-          <div className="bg-[#2A3441]/80 p-3 rounded">
-            <span className="font-bold text-[#FF5722]">💬 Charisma:</span>
-            <span className="text-white"> Persuasion, deception, performance</span>
-          </div>
-        </div>
-      </div>
+    <div>
+      <StepHeader
+        kicker="Chapter III · The Gift of Talents"
+        title="Forge your fate"
+        subtitle="Six numbers that decide what your hero can do. Plus the background that shaped them."
+      />
+
+      <Primer title="2024 D&D — what's different">
+        Each ability has a <strong>score</strong> (3–20) and a <strong>modifier</strong> (−4 to +5).
+        New in 2024: ability bonuses come from your <strong>background</strong>, not your species.
+        Pick base scores below, then choose a background to spend its +2/+1 (or +1/+1/+1) ASI.
+      </Primer>
+
+      <div className="tome" style={{ padding: '32px 36px', marginTop: 28 }}>
 
       {/* Method picker */}
+      <OrnateHeading>The Method</OrnateHeading>
       <div className="mb-6">
-        <h3 className="text-lg font-bold text-[#FFC6AA] mb-3">Base scores</h3>
+        <h3 className="text-lg font-bold text-[#FFC6AA] mb-3" style={{ display: 'none' }}>Base scores</h3>
         <div className="flex gap-2 flex-wrap mb-4">
           {[
             { id: "standard", label: "Standard Array", icon: Calculator },
@@ -470,7 +430,9 @@ export default function AbilitiesStep2024({ characterData, updateCharacterData }
         )}
       </div>
 
+      <FleurDivider />
       {/* Background picker */}
+      <OrnateHeading>The Background</OrnateHeading>
       <div className="mb-6">
         <h3 className="text-lg font-bold text-[#FFC6AA] mb-3 flex items-center gap-2">
           Background
@@ -643,9 +605,11 @@ export default function AbilitiesStep2024({ characterData, updateCharacterData }
         )}
       </div>
 
+      <FleurDivider />
       {/* Final scores */}
+      <OrnateHeading>Final Ability Scores</OrnateHeading>
       <div className="mb-4">
-        <h3 className="text-lg font-bold text-[#FFC6AA] mb-3">Final ability scores</h3>
+        <h3 className="text-lg font-bold text-[#FFC6AA] mb-3" style={{ display: 'none' }}>Final ability scores</h3>
         <div className="bg-[#2A3441] rounded-xl p-5 border-2 border-[#37F2D1]/40">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {ABILITIES.map((a) => {
@@ -671,6 +635,7 @@ export default function AbilitiesStep2024({ characterData, updateCharacterData }
           </div>
         </div>
       </div>
-    </motion.div>
+      </div>
+    </div>
   );
 }

@@ -265,7 +265,7 @@ export default function AbilityScoresStep({ characterData, updateCharacterData }
         will hint where to put the highs.
       </Primer>
 
-      <div className="cc-tome" style={{ padding: '32px 36px', marginTop: 24 }}>
+      <div className="tome" style={{ padding: '32px 36px', marginTop: 24 }}>
         <OrnateHeading>The Method</OrnateHeading>
         <MethodPicker
           method={method}
@@ -391,15 +391,15 @@ function MethodPicker({ method, onPick, onHelp, hasRecommendation }) {
               key={m.id}
               type="button"
               onClick={() => onPick(m.id)}
-              className={`cc-pickable ${active ? 'cc-selected' : ''}`}
+              className={`pickable ${active ? 'selected' : ''}`}
               style={{ padding: 14, textAlign: 'center', color: 'inherit' }}
             >
               <div style={{ fontSize: 26, marginBottom: 6 }}>{m.icon}</div>
               <div
-                className="cc-display"
+                className="display"
                 style={{
                   fontSize: 15,
-                  color: active ? 'var(--cc-orange-soft)' : 'var(--cc-text)',
+                  color: active ? 'var(--orange-soft)' : 'var(--text)',
                   marginBottom: 4,
                 }}
               >
@@ -410,8 +410,8 @@ function MethodPicker({ method, onPick, onHelp, hasRecommendation }) {
                   : 'method_manual')}</InfoTip>
               </div>
               <div
-                className="cc-italic-serif"
-                style={{ fontSize: 12, color: 'var(--cc-text-dim)', lineHeight: 1.4 }}
+                className="italic-serif"
+                style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.4 }}
               >
                 {m.desc}
               </div>
@@ -425,7 +425,7 @@ function MethodPicker({ method, onPick, onHelp, hasRecommendation }) {
           <button
             type="button"
             onClick={onHelp}
-            className="cc-btn-ghost"
+            className="btn-ghost"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -455,7 +455,7 @@ function RecommendationCard({ characterClass, recommendation, onClose }) {
         position: 'relative',
         background: 'rgba(55, 242, 209, 0.06)',
         border: '1px solid rgba(55, 242, 209, 0.32)',
-        borderLeft: '3px solid var(--cc-teal)',
+        borderLeft: '3px solid var(--teal)',
         borderRadius: 8,
         padding: '14px 18px',
         marginBottom: 18,
@@ -470,22 +470,22 @@ function RecommendationCard({ characterClass, recommendation, onClose }) {
           position: 'absolute',
           top: 10,
           right: 10,
-          color: 'var(--cc-text-dim)',
+          color: 'var(--text-dim)',
         }}
       >
         <X className="w-4 h-4" />
       </button>
       <div
-        className="cc-label"
-        style={{ color: 'var(--cc-teal)', marginBottom: 6 }}
+        className="label"
+        style={{ color: 'var(--teal)', marginBottom: 6 }}
       >
         Recommended for {characterClass}
       </div>
       <p
-        className="cc-italic-serif"
+        className="italic-serif"
         style={{
           fontSize: 14,
-          color: 'var(--cc-text-dim)',
+          color: 'var(--text-dim)',
           margin: '0 0 12px',
           lineHeight: 1.55,
         }}
@@ -497,16 +497,16 @@ function RecommendationCard({ characterClass, recommendation, onClose }) {
           style={{
             padding: '10px 12px',
             background: 'rgba(20, 12, 8, 0.45)',
-            border: '1px solid var(--cc-teal)',
+            border: '1px solid var(--teal)',
             borderRadius: 6,
           }}
         >
-          <div className="cc-label" style={{ color: 'var(--cc-teal)', marginBottom: 2 }}>
+          <div className="label" style={{ color: 'var(--teal)', marginBottom: 2 }}>
             Highest
           </div>
           <div
-            className="cc-display"
-            style={{ fontSize: 22, color: 'var(--cc-text)', textTransform: 'uppercase' }}
+            className="display"
+            style={{ fontSize: 22, color: 'var(--text)', textTransform: 'uppercase' }}
           >
             {recommendation.primary}
           </div>
@@ -515,16 +515,16 @@ function RecommendationCard({ characterClass, recommendation, onClose }) {
           style={{
             padding: '10px 12px',
             background: 'rgba(20, 12, 8, 0.45)',
-            border: '1px solid var(--cc-teal)',
+            border: '1px solid var(--teal)',
             borderRadius: 6,
           }}
         >
-          <div className="cc-label" style={{ color: 'var(--cc-teal)', marginBottom: 2 }}>
+          <div className="label" style={{ color: 'var(--teal)', marginBottom: 2 }}>
             Second
           </div>
           <div
-            className="cc-display"
-            style={{ fontSize: 22, color: 'var(--cc-text)', textTransform: 'uppercase' }}
+            className="display"
+            style={{ fontSize: 22, color: 'var(--text)', textTransform: 'uppercase' }}
           >
             {recommendation.secondary}
           </div>
@@ -546,14 +546,14 @@ function RacialBonusBanner({ race, subrace, isBrewery, bonuses }) {
         padding: '14px 18px',
         background: 'rgba(55, 242, 209, 0.06)',
         border: '1px solid rgba(55, 242, 209, 0.22)',
-        borderLeft: '3px solid var(--cc-teal)',
+        borderLeft: '3px solid var(--teal)',
         borderRadius: 6,
       }}
     >
       <div
-        className="cc-label"
+        className="label"
         style={{
-          color: 'var(--cc-teal)',
+          color: 'var(--teal)',
           marginBottom: 8,
           display: 'flex',
           alignItems: 'center',
@@ -568,7 +568,7 @@ function RacialBonusBanner({ race, subrace, isBrewery, bonuses }) {
               fontWeight: 900,
               letterSpacing: '0.12em',
               color: '#050816',
-              background: 'var(--cc-teal)',
+              background: 'var(--teal)',
               borderRadius: 4,
               padding: '2px 6px',
               display: 'inline-flex',
@@ -581,14 +581,14 @@ function RacialBonusBanner({ race, subrace, isBrewery, bonuses }) {
         )}
       </div>
       <div
-        className="cc-italic-serif"
-        style={{ fontSize: 13, color: 'var(--cc-text-dim)', marginBottom: 8 }}
+        className="italic-serif"
+        style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 8 }}
       >
         Your blood grants these bonuses automatically.
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {Object.entries(bonuses).map(([key, bonus]) => (
-          <span key={key} className="cc-chip cc-chip-orange">
+          <span key={key} className="chip chip-orange">
             {key.toUpperCase()} +{bonus}
           </span>
         ))}
@@ -612,9 +612,9 @@ function BreweryAbilityPicker({ spec, picks, picksMade, onToggle }) {
       }}
     >
       <div
-        className="cc-label"
+        className="label"
         style={{
-          color: 'var(--cc-teal)',
+          color: 'var(--teal)',
           marginBottom: 4,
           display: 'inline-flex',
           alignItems: 'center',
@@ -625,8 +625,8 @@ function BreweryAbilityPicker({ spec, picks, picksMade, onToggle }) {
         Choose {spec.count} {spec.count === 1 ? 'score' : 'scores'} — each gets +{spec.amount}
       </div>
       <p
-        className="cc-italic-serif"
-        style={{ fontSize: 12, color: 'var(--cc-text-dim)', margin: '0 0 10px' }}
+        className="italic-serif"
+        style={{ fontSize: 12, color: 'var(--text-dim)', margin: '0 0 10px' }}
       >
         Picked {picksMade} of {spec.count}
         {spec.excluded.length > 0
@@ -653,9 +653,9 @@ function BreweryAbilityPicker({ spec, picks, picksMade, onToggle }) {
                 fontWeight: 900,
                 letterSpacing: '0.18em',
                 textTransform: 'uppercase',
-                background: active ? 'var(--cc-teal)' : 'rgba(20, 12, 8, 0.6)',
-                color: active ? '#050816' : disabled ? 'var(--cc-text-faint)' : 'var(--cc-text-dim)',
-                border: `1px solid ${active ? 'var(--cc-teal)' : 'var(--cc-border)'}`,
+                background: active ? 'var(--teal)' : 'rgba(20, 12, 8, 0.6)',
+                color: active ? '#050816' : disabled ? 'var(--text-faint)' : 'var(--text-dim)',
+                border: `1px solid ${active ? 'var(--teal)' : 'var(--border)'}`,
                 opacity: disabled ? 0.5 : 1,
               }}
             >
@@ -679,13 +679,13 @@ function StandardArrayBank({ standardArray, assignedScores, availableScores, onS
         marginBottom: 18,
         padding: '14px 18px',
         background: 'rgba(20, 12, 8, 0.5)',
-        border: '1px solid var(--cc-border)',
+        border: '1px solid var(--border)',
         borderRadius: 8,
       }}
     >
       <div
-        className="cc-label"
-        style={{ marginBottom: 10, color: 'var(--cc-gold-soft)' }}
+        className="label"
+        style={{ marginBottom: 10, color: 'var(--gold-soft)' }}
       >
         Standard Array · pick a score for each ability below
       </div>
@@ -704,10 +704,10 @@ function StandardArrayBank({ standardArray, assignedScores, availableScores, onS
                 justifyContent: 'center',
                 fontWeight: 800,
                 fontSize: 20,
-                fontFamily: 'var(--cc-display)',
+                fontFamily: 'var(--display)',
                 background: isUsed ? 'rgba(55, 242, 209, 0.18)' : 'rgba(20, 12, 8, 0.7)',
-                color: isUsed ? 'var(--cc-teal)' : 'var(--cc-text-faint)',
-                border: `1px solid ${isUsed ? 'var(--cc-teal)' : 'var(--cc-border-faint)'}`,
+                color: isUsed ? 'var(--teal)' : 'var(--text-faint)',
+                border: `1px solid ${isUsed ? 'var(--teal)' : 'var(--border-faint)'}`,
                 opacity: isUsed ? 1 : 0.5,
               }}
             >
@@ -720,7 +720,7 @@ function StandardArrayBank({ standardArray, assignedScores, availableScores, onS
         <button
           type="button"
           onClick={onSave}
-          className="cc-btn-primary"
+          className="btn-primary"
           style={{ marginTop: 12 }}
         >
           Save & Lock Scores
@@ -734,7 +734,7 @@ function StandardArrayBank({ standardArray, assignedScores, availableScores, onS
 // Point buy budget banner
 // ============================================================================
 function PointBuyBudgetBanner({ remaining }) {
-  const tone = remaining === 0 ? 'var(--cc-teal)' : remaining < 0 ? 'var(--cc-orange)' : 'var(--cc-gold)';
+  const tone = remaining === 0 ? 'var(--teal)' : remaining < 0 ? 'var(--orange)' : 'var(--gold)';
   return (
     <div
       style={{
@@ -752,29 +752,29 @@ function PointBuyBudgetBanner({ remaining }) {
     >
       <div>
         <div
-          className="cc-label"
+          className="label"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
             gap: 6,
-            color: 'var(--cc-text-dim)',
+            color: 'var(--text-dim)',
           }}
         >
-          <Calculator className="w-4 h-4" style={{ color: 'var(--cc-teal)' }} />
+          <Calculator className="w-4 h-4" style={{ color: 'var(--teal)' }} />
           Point Buy Treasury
         </div>
         <div
-          className="cc-italic-serif"
-          style={{ fontSize: 12, color: 'var(--cc-text-faint)', marginTop: 2 }}
+          className="italic-serif"
+          style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 2 }}
         >
           8 = 0pt · 13 = 5pt · 14 = 7pt · 15 = 9pt
         </div>
       </div>
       <div style={{ textAlign: 'right' }}>
-        <div className="cc-display" style={{ fontSize: 36, color: tone, lineHeight: 1 }}>
+        <div className="display" style={{ fontSize: 36, color: tone, lineHeight: 1 }}>
           {remaining}
         </div>
-        <div className="cc-label" style={{ marginTop: 2, color: 'var(--cc-text-faint)' }}>
+        <div className="label" style={{ marginTop: 2, color: 'var(--text-faint)' }}>
           {remaining < 0 ? 'Overdrawn' : 'Remaining of 27'}
         </div>
       </div>
@@ -794,12 +794,12 @@ function AbilityCrest({
   const modValue = parseInt(modifier, 10);
   return (
     <div
-      className="cc-pickable"
+      className="pickable"
       style={{
         padding: '20px 18px 16px',
         position: 'relative',
         cursor: 'default',
-        borderColor: isPrimary ? `${ability.color}88` : 'var(--cc-border)',
+        borderColor: isPrimary ? `${ability.color}88` : 'var(--border)',
         background: isPrimary
           ? `linear-gradient(180deg, ${ability.color}1F, rgba(20, 12, 8, 0.5) 60%)`
           : undefined,
@@ -807,7 +807,7 @@ function AbilityCrest({
     >
       {isPrimary && (
         <div
-          className="cc-display"
+          className="display"
           style={{
             position: 'absolute',
             top: -10,
@@ -826,13 +826,13 @@ function AbilityCrest({
       )}
       {!isPrimary && isSecondary && (
         <div
-          className="cc-display"
+          className="display"
           style={{
             position: 'absolute',
             top: -10,
             left: 14,
             padding: '2px 10px',
-            background: 'var(--cc-gold)',
+            background: 'var(--gold)',
             color: '#050816',
             fontSize: 11,
             fontWeight: 800,
@@ -846,15 +846,15 @@ function AbilityCrest({
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
         <span style={{ fontSize: 22 }}>{ability.icon}</span>
-        <span className="cc-display" style={{ fontSize: 22, color: 'var(--cc-text)' }}>
+        <span className="display" style={{ fontSize: 22, color: 'var(--text)' }}>
           {ability.name}
         </span>
       </div>
       <div
-        className="cc-italic-serif"
+        className="italic-serif"
         style={{
           fontSize: 12,
-          color: 'var(--cc-text-faint)',
+          color: 'var(--text-faint)',
           marginBottom: 14,
           lineHeight: 1.4,
         }}
@@ -871,20 +871,20 @@ function AbilityCrest({
         }}
       >
         <div style={{ flex: 1 }}>
-          <div className="cc-label" style={{ marginBottom: 4, fontSize: 10 }}>
+          <div className="label" style={{ marginBottom: 4, fontSize: 10 }}>
             Score
           </div>
           {method === 'standard' ? (
             <select
               value={assignedValue ?? ''}
               onChange={(e) => onStandardAssign(e.target.value)}
-              className="cc-input"
+              className="input"
               style={{
                 textAlign: 'center',
                 fontSize: 18,
                 fontWeight: 800,
                 padding: '6px 4px',
-                fontFamily: 'var(--cc-display)',
+                fontFamily: 'var(--display)',
               }}
             >
               <option value="">—</option>
@@ -913,13 +913,13 @@ function AbilityCrest({
               max="18"
               value={baseScore}
               onChange={(e) => onScoreChange(e.target.value)}
-              className="cc-input"
+              className="input"
               style={{
                 textAlign: 'center',
                 fontSize: 20,
                 fontWeight: 800,
                 padding: '6px 4px',
-                fontFamily: 'var(--cc-display)',
+                fontFamily: 'var(--display)',
               }}
             />
           )}
@@ -927,10 +927,10 @@ function AbilityCrest({
             <div
               style={{
                 fontSize: 11,
-                color: 'var(--cc-teal)',
+                color: 'var(--teal)',
                 marginTop: 4,
                 textAlign: 'center',
-                fontFamily: 'var(--cc-serif)',
+                fontFamily: 'var(--serif)',
                 fontStyle: 'italic',
               }}
             >
@@ -954,20 +954,20 @@ function AbilityCrest({
             border: `1px solid ${ability.color}55`,
           }}
         >
-          <div className="cc-label" style={{ fontSize: 9, marginBottom: 0, color: ability.color }}>
+          <div className="label" style={{ fontSize: 9, marginBottom: 0, color: ability.color }}>
             MOD
           </div>
           <div
-            className="cc-display"
+            className="display"
             style={{
               fontSize: 30,
-              color: modValue >= 0 ? ability.color : 'var(--cc-orange)',
+              color: modValue >= 0 ? ability.color : 'var(--orange)',
               lineHeight: 1,
             }}
           >
             {modifier}
           </div>
-          <div style={{ fontSize: 10, color: 'var(--cc-text-faint)' }}>
+          <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>
             ({totalScore})
           </div>
         </div>
@@ -977,7 +977,7 @@ function AbilityCrest({
 }
 
 // ============================================================================
-// Point Buy +/- control (preserved logic, restyled to .cc-* tokens)
+// Point Buy +/- control — preserved logic, themed inline.
 // ============================================================================
 function PointBuyControl({ score, remaining, onAdjust }) {
   const nextCost = pointBuyNextStepCost(score);
@@ -1000,8 +1000,8 @@ function PointBuyControl({ score, remaining, onAdjust }) {
     justifyContent: 'center',
     borderRadius: 6,
     background: 'rgba(20, 12, 8, 0.6)',
-    border: `1px solid ${enabled ? 'var(--cc-border)' : 'var(--cc-border-faint)'}`,
-    color: enabled ? accent : 'var(--cc-text-faint)',
+    border: `1px solid ${enabled ? 'var(--border)' : 'var(--border-faint)'}`,
+    color: enabled ? accent : 'var(--text-faint)',
     opacity: enabled ? 1 : 0.4,
   });
 
@@ -1020,19 +1020,19 @@ function PointBuyControl({ score, remaining, onAdjust }) {
           onClick={() => onAdjust(-1)}
           disabled={!canDecrease}
           title={decreaseTitle}
-          style={buttonStyle(canDecrease, 'var(--cc-orange)')}
+          style={buttonStyle(canDecrease, 'var(--orange)')}
         >
           <Minus className="w-4 h-4" />
         </button>
         <div
           style={{
             background: 'rgba(20, 12, 8, 0.6)',
-            border: '1px solid var(--cc-border)',
-            color: 'var(--cc-text)',
+            border: '1px solid var(--border)',
+            color: 'var(--text)',
             textAlign: 'center',
             fontSize: 22,
             fontWeight: 800,
-            fontFamily: 'var(--cc-display)',
+            fontFamily: 'var(--display)',
             borderRadius: 6,
             minWidth: 60,
             padding: '4px 8px',
@@ -1045,18 +1045,18 @@ function PointBuyControl({ score, remaining, onAdjust }) {
           onClick={() => onAdjust(+1)}
           disabled={!canIncrease}
           title={increaseTitle}
-          style={buttonStyle(canIncrease, 'var(--cc-teal)')}
+          style={buttonStyle(canIncrease, 'var(--teal)')}
         >
           <Plus className="w-4 h-4" />
         </button>
       </div>
       <div
-        className="cc-label"
+        className="label"
         style={{
           marginTop: 4,
           textAlign: 'center',
           fontSize: 10,
-          color: 'var(--cc-text-faint)',
+          color: 'var(--text-faint)',
         }}
       >
         {score >= POINT_BUY_MAX ? 'Max' : `Next +1: ${nextCost} pt`}
