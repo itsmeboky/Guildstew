@@ -1,21 +1,20 @@
 import { useMemo, useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Search } from "lucide-react";
+import { Plus, Trash2, Search, Check, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { STARTING_EQUIPMENT } from "@/components/dnd5e/dnd5eRules";
 import { getGamePack } from "@/data/games";
 import { safeText } from "@/utils/safeRender";
 import { isLockedInventoryItem } from "@/config/cipherInventoryItems";
+import { motion } from "framer-motion";
+import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
+import { Primer } from "@/components/characterCreator/chrome/Primer";
+import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
+import { CharacterSummary } from "@/components/characterCreator/chrome/CharacterSummary";
 
-/** STARTING_EQUIPMENT[class].choices is an array of objects like
- *  { option1: 'Mace', option2: 'Warhammer (if proficient)' } — one
- *  "choose one" per entry. Normalise to a list of option strings
- *  so the UI can render buttons. */
+// STARTING_EQUIPMENT[class].choices is an array of objects like
+// { option1: 'Mace', option2: 'Warhammer (if proficient)' } — one
+// "choose one" per entry. Normalise to an option-string list so
+// the UI can render buttons.
 function optionsForChoice(choice) {
   if (!choice) return [];
   if (Array.isArray(choice)) return choice.flat().filter(Boolean);
@@ -26,27 +25,34 @@ function optionsForChoice(choice) {
 }
 
 const ITEM_TYPE_FILTERS = [
-  { value: "all",              label: "All Types" },
+  { value: "all",              label: "All types" },
   { value: "weapon",           label: "Weapons" },
   { value: "armor",            label: "Armor" },
   { value: "adventuring gear", label: "Gear" },
   { value: "tool",             label: "Tools" },
 ];
 
+const COINS = [
+  { id: 'cp', name: 'Copper',   color: '#B87333' },
+  { id: 'sp', name: 'Silver',   color: '#C0C0C0' },
+  { id: 'ep', name: 'Electrum', color: '#A8C5A6' },
+  { id: 'gp', name: 'Gold',     color: '#F2B33D' },
+  { id: 'pp', name: 'Platinum', color: '#E5E4E2' },
+];
+
 export default function EquipmentStep({ characterData, updateCharacterData }) {
   const classKey = characterData.class;
   const entry = classKey ? STARTING_EQUIPMENT[classKey] : null;
   const fixedItems = entry?.fixed || [];
-  const choices = useMemo(() => (entry?.choices || []).map(optionsForChoice), [entry]);
+  const choices = useMemo(
+    () => (entry?.choices || []).map(optionsForChoice),
+    [entry],
+  );
 
   const [selectedChoices, setSelectedChoices] = useState(
     Array.from({ length: choices.length }, (_, i) => (choices[i]?.[0] ?? "")),
   );
 
-  // Equipment list comes from the per-game-pack SRD adapter, not
-  // from a Supabase table. The previous Dnd5eItem entity query
-  // silent-failed (`.catch(() => [])`) when the table was missing
-  // / empty, leaving the browser blank.
   const allItems = useMemo(() => {
     const gamePackId = characterData.gamePack || "dnd5e_2014";
     return getGamePack(gamePackId).getEquipment();
@@ -63,6 +69,7 @@ export default function EquipmentStep({ characterData, updateCharacterData }) {
       inventory: [...inventory, { name: "", quantity: 1, weight: 0, description: "" }],
     });
   };
+
   const removeInventoryItem = (index) => {
     const target = inventory[index];
     if (isLockedInventoryItem(target)) {
@@ -71,6 +78,7 @@ export default function EquipmentStep({ characterData, updateCharacterData }) {
     }
     updateCharacterData({ inventory: inventory.filter((_, i) => i !== index) });
   };
+
   const updateInventoryItem = (index, field, value) => {
     const next = inventory.slice();
     next[index] = { ...next[index], [field]: value };
@@ -107,251 +115,741 @@ export default function EquipmentStep({ characterData, updateCharacterData }) {
       .slice(0, 50);
   }, [allItems, itemSearch, itemTypeFilter]);
 
+  const totalWeight = inventory.reduce(
+    (sum, item) => sum + (Number(item.weight) || 0) * (Number(item.quantity) || 1),
+    0,
+  );
+
   return (
-    <div className="space-y-6">
-      <div className="bg-[#2A3441] rounded-xl p-6 border-2 border-[#1E2430]">
-        <h2 className="text-2xl font-bold text-[#FFC6AA] mb-2">Equipment & Currency</h2>
-        <p className="text-white">Choose your starting gear and gold.</p>
-      </div>
+    <div>
+      <StepHeader
+        kicker="Chapter VII · The Pack"
+        title="Pack your gear"
+        subtitle="Your class starts you with a kit. Browse the bazaar, scribble in personal items, then count your coin."
+      />
 
-      {classKey && entry && (
-        <div className="bg-[#2A3441] rounded-xl p-6 border-2 border-[#1E2430] space-y-5">
-          <div>
-            <h3 className="text-lg font-bold text-white mb-2">
-              Starting Equipment for {classKey}
-            </h3>
-            {fixedItems.length > 0 && (
-              <>
-                <p className="text-xs uppercase tracking-widest text-slate-400 mb-1">Included</p>
-                <ul className="space-y-1 mb-4">
-                  {fixedItems.map((item, idx) => (
-                    <li key={idx} className="text-white">• {item}</li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
+      <Primer title="How starting equipment works">
+        Every class hands you a <strong>starter pack</strong> for free — armor, a weapon, tools,
+        supplies. Some slots have a choice (longsword <em>or</em> rapier?). Pick one from each
+        choice row, then click <strong>Add starting equipment</strong> to drop them into your
+        inventory below.
+      </Primer>
 
-          {choices.length > 0 && (
-            <div className="space-y-4">
-              <p className="text-xs uppercase tracking-widest text-slate-400">Choose One</p>
-              {choices.map((opts, idx) => (
-                <div
-                  key={idx}
-                  className="p-4 bg-[#1E2430] rounded-lg border border-slate-700/50"
-                >
-                  <p className="text-xs text-slate-400 mb-2">Choice {idx + 1}</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {opts.map((option) => {
-                      const isSelected = selectedChoices[idx] === option;
-                      return (
-                        <button
-                          key={option}
-                          type="button"
-                          onClick={() => {
-                            const next = selectedChoices.slice();
-                            next[idx] = option;
-                            setSelectedChoices(next);
-                          }}
-                          className={`text-left px-3 py-2 rounded-lg border-2 transition-colors text-sm ${
-                            isSelected
-                              ? "border-[#37F2D1] bg-[#37F2D1]/10 text-white"
-                              : "border-slate-700 text-slate-300 hover:border-slate-500"
-                          }`}
-                        >
-                          {option}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1.6fr 1fr',
+          gap: 24,
+          marginTop: 24,
+          alignItems: 'flex-start',
+        }}
+      >
+        {/* LEFT — kit + browser + inventory + currency */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {classKey && entry && (
+            <StartingKitPanel
+              classKey={classKey}
+              fixedItems={fixedItems}
+              choices={choices}
+              selectedChoices={selectedChoices}
+              onPick={(idx, option) => {
+                const next = selectedChoices.slice();
+                next[idx] = option;
+                setSelectedChoices(next);
+              }}
+              onApply={applyStartingEquipment}
+              startingGold={entry.startingGold}
+            />
           )}
 
-          <Button
-            onClick={applyStartingEquipment}
-            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430]"
-          >
-            Add Starting Equipment to Inventory
-          </Button>
+          <ItemBrowserPanel
+            open={showItemBrowser}
+            onToggle={() => setShowItemBrowser((v) => !v)}
+            search={itemSearch}
+            onSearchChange={setItemSearch}
+            typeFilter={itemTypeFilter}
+            onTypeChange={setItemTypeFilter}
+            filteredItems={filteredItems}
+            onAdd={addItemFromBrowser}
+          />
 
-          {entry?.startingGold && (
-            <p className="text-xs text-slate-400">
-              Alternative starting gold: {entry.startingGold.dice} × {entry.startingGold.multiplier} gp.
-            </p>
-          )}
+          <InventoryPanel
+            inventory={inventory}
+            totalWeight={totalWeight}
+            onAdd={addInventoryItem}
+            onRemove={removeInventoryItem}
+            onUpdate={updateInventoryItem}
+          />
+
+          <CoinPursePanel
+            currency={characterData.currency || {}}
+            onChange={(coin, value) =>
+              updateCharacterData({
+                currency: {
+                  ...characterData.currency,
+                  [coin]: Math.max(0, parseInt(value, 10) || 0),
+                },
+              })
+            }
+          />
         </div>
+
+        {/* RIGHT — character summary + packing list preview */}
+        <div
+          style={{
+            position: 'sticky',
+            top: 20,
+            alignSelf: 'flex-start',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 14,
+          }}
+        >
+          <CharacterSummary data={characterData} />
+          <PackingListPanel
+            inventory={inventory}
+            currency={characterData.currency || {}}
+            totalWeight={totalWeight}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Starting kit panel — fixed items chip row + choice rows + apply button
+// ============================================================================
+function StartingKitPanel({
+  classKey, fixedItems, choices, selectedChoices, onPick, onApply, startingGold,
+}) {
+  return (
+    <div className="cc-tome" style={{ padding: '28px 32px' }}>
+      <OrnateHeading>{classKey} starter kit</OrnateHeading>
+
+      {fixedItems.length > 0 && (
+        <>
+          <div
+            className="cc-label"
+            style={{ marginBottom: 8, color: 'var(--cc-gold-soft)' }}
+          >
+            Included automatically
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 6,
+              marginBottom: 18,
+            }}
+          >
+            {fixedItems.map((item, idx) => (
+              <span key={idx} className="cc-chip cc-chip-teal">
+                <Check className="w-3 h-3" /> {item}
+              </span>
+            ))}
+          </div>
+        </>
       )}
 
-      {/* Item browser — searches the shared dnd5e_items catalog */}
-      <div className="bg-[#2A3441] rounded-xl p-6 border-2 border-[#1E2430]">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="text-lg font-bold text-white">Browse Equipment</h3>
-          <Button
-            onClick={() => setShowItemBrowser(!showItemBrowser)}
-            variant="outline"
-            className="border-[#37F2D1]/30 text-[#37F2D1] hover:bg-[#37F2D1]/10"
+      {choices.length > 0 && (
+        <>
+          <FleurDivider />
+          <div
+            className="cc-label"
+            style={{ marginBottom: 10, color: 'var(--cc-gold-soft)' }}
           >
-            {showItemBrowser ? "Hide" : "Browse Items"}
-          </Button>
-        </div>
-
-        {showItemBrowser && (
-          <div>
-            <div className="flex gap-3 mb-4">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
-                <Input
-                  value={itemSearch}
-                  onChange={(e) => setItemSearch(e.target.value)}
-                  placeholder="Search items…"
-                  className="pl-7 bg-[#1E2430] border-[#2A3441] text-white"
-                />
+            Pick one from each row
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {choices.map((opts, idx) => (
+              <div
+                key={idx}
+                style={{
+                  background: 'rgba(20, 12, 8, 0.5)',
+                  padding: 12,
+                  borderRadius: 8,
+                  border: '1px solid var(--cc-border)',
+                }}
+              >
+                <div
+                  className="cc-label"
+                  style={{ marginBottom: 8, color: 'var(--cc-text-dim)' }}
+                >
+                  Choice {idx + 1}
+                </div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${Math.min(opts.length, 3)}, 1fr)`,
+                    gap: 6,
+                  }}
+                >
+                  {opts.map((option) => {
+                    const isSelected = selectedChoices[idx] === option;
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => onPick(idx, option)}
+                        className={`cc-pickable ${isSelected ? 'cc-selected-teal' : ''}`}
+                        style={{
+                          padding: '10px 12px',
+                          textAlign: 'center',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: isSelected ? 'var(--cc-teal)' : 'var(--cc-text)',
+                        }}
+                      >
+                        {option}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <Select value={itemTypeFilter} onValueChange={setItemTypeFilter}>
-                <SelectTrigger className="w-40 bg-[#1E2430] border-[#2A3441] text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ITEM_TYPE_FILTERS.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            ))}
+          </div>
+        </>
+      )}
 
-            <div className="max-h-72 overflow-y-auto space-y-1 bg-[#1E2430] rounded-lg border border-slate-700/50 divide-y divide-slate-700/30">
-              {filteredItems.length === 0 ? (
-                <p className="text-sm text-slate-500 italic p-4 text-center">
-                  No items match these filters.
-                </p>
-              ) : filteredItems.map((item) => (
+      <div style={{ marginTop: 18, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={onApply}
+          className="cc-btn-primary"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            background: 'linear-gradient(180deg, var(--cc-teal), color-mix(in srgb, var(--cc-teal), black 18%))',
+            color: '#050816',
+            border: '1px solid color-mix(in srgb, var(--cc-teal), black 30%)',
+          }}
+        >
+          <Sparkles className="w-4 h-4" />
+          Add starting equipment to inventory
+        </button>
+        {startingGold && (
+          <span
+            className="cc-italic-serif"
+            style={{
+              fontSize: 12,
+              color: 'var(--cc-text-faint)',
+            }}
+          >
+            Or roll {startingGold.dice} × {startingGold.multiplier} gp instead and shop in the
+            bazaar below.
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Item browser — searchable shop drawer
+// ============================================================================
+function ItemBrowserPanel({
+  open, onToggle, search, onSearchChange, typeFilter, onTypeChange,
+  filteredItems, onAdd,
+}) {
+  return (
+    <div className="cc-panel" style={{ padding: 18 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: open ? 14 : 0,
+          gap: 10,
+        }}
+      >
+        <h3
+          className="cc-display"
+          style={{ fontSize: 20, color: 'var(--cc-text)', margin: 0 }}
+        >
+          The bazaar
+        </h3>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="cc-btn-ghost"
+          style={{ fontSize: 12, padding: '6px 14px' }}
+        >
+          {open ? 'Hide' : 'Browse items'}
+        </button>
+      </div>
+
+      {open && (
+        <div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <Search
+                className="w-4 h-4"
+                style={{
+                  position: 'absolute',
+                  left: 10,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--cc-text-faint)',
+                }}
+              />
+              <input
+                value={search}
+                onChange={(e) => onSearchChange(e.target.value)}
+                placeholder="Search items…"
+                className="cc-input"
+                style={{ paddingLeft: 32 }}
+              />
+            </div>
+            <select
+              value={typeFilter}
+              onChange={(e) => onTypeChange(e.target.value)}
+              className="cc-input"
+              style={{ width: 160 }}
+            >
+              {ITEM_TYPE_FILTERS.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div
+            style={{
+              maxHeight: 320,
+              overflowY: 'auto',
+              background: 'rgba(20, 12, 8, 0.45)',
+              border: '1px solid var(--cc-border)',
+              borderRadius: 8,
+            }}
+          >
+            {filteredItems.length === 0 ? (
+              <p
+                className="cc-italic-serif"
+                style={{
+                  fontSize: 13,
+                  color: 'var(--cc-text-faint)',
+                  textAlign: 'center',
+                  padding: 16,
+                  margin: 0,
+                }}
+              >
+                No items match these filters.
+              </p>
+            ) : (
+              filteredItems.map((item) => (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => addItemFromBrowser(item)}
-                  className="w-full flex items-center justify-between p-2 hover:bg-[#252b3d] text-left"
+                  onClick={() => onAdd(item)}
+                  style={{
+                    all: 'unset',
+                    cursor: 'pointer',
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    borderBottom: '1px solid var(--cc-border-faint)',
+                    transition: 'background .12s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(212, 169, 81, 0.06)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      minWidth: 0,
+                    }}
+                  >
                     {item.icon_url ? (
                       <img
                         src={item.icon_url}
                         alt=""
-                        className="w-6 h-6 rounded object-cover flex-shrink-0"
-                        onError={(e) => { e.currentTarget.style.display = "none"; }}
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 4,
+                          objectFit: 'cover',
+                          flexShrink: 0,
+                        }}
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       />
                     ) : (
-                      <div className="w-6 h-6 rounded bg-slate-800 flex-shrink-0" />
+                      <div
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 4,
+                          background: 'rgba(20, 12, 8, 0.7)',
+                          flexShrink: 0,
+                        }}
+                      />
                     )}
-                    <span className="text-white text-sm truncate">{safeText(item.name)}</span>
+                    <span
+                      style={{
+                        fontSize: 13,
+                        color: 'var(--cc-text)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {safeText(item.name)}
+                    </span>
                     {item.type && (
-                      <span className="text-xs text-slate-500 flex-shrink-0">{safeText(item.type)}</span>
+                      <span
+                        className="cc-label"
+                        style={{ fontSize: 9, color: 'var(--cc-text-faint)' }}
+                      >
+                        {safeText(item.type)}
+                      </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      flexShrink: 0,
+                    }}
+                  >
                     {item.cost && (
-                      <span className="text-xs text-slate-400">{typeof item.cost === "string" ? item.cost : safeText(item.cost)}</span>
+                      <span style={{ fontSize: 11, color: 'var(--cc-gold-soft)' }}>
+                        {typeof item.cost === 'string' ? item.cost : safeText(item.cost)}
+                      </span>
                     )}
-                    <Plus className="w-4 h-4 text-[#37F2D1]" />
+                    <Plus className="w-4 h-4" style={{ color: 'var(--cc-teal)' }} />
                   </div>
                 </button>
-              ))}
-            </div>
+              ))
+            )}
           </div>
-        )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Inventory editor — name / qty / weight / notes / remove
+// ============================================================================
+function InventoryPanel({ inventory, totalWeight, onAdd, onRemove, onUpdate }) {
+  return (
+    <div className="cc-panel" style={{ padding: 18 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          marginBottom: 14,
+          gap: 10,
+          flexWrap: 'wrap',
+        }}
+      >
+        <h3
+          className="cc-display"
+          style={{ fontSize: 20, color: 'var(--cc-text)', margin: 0 }}
+        >
+          Personal items
+        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <span
+            className="cc-italic-serif"
+            style={{ fontSize: 12, color: 'var(--cc-text-faint)' }}
+          >
+            {inventory.length} item{inventory.length !== 1 ? 's' : ''} ·{' '}
+            {totalWeight.toFixed(1)} lb
+          </span>
+          <button
+            type="button"
+            onClick={onAdd}
+            className="cc-btn-primary"
+            style={{
+              fontSize: 12,
+              padding: '6px 14px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            <Plus className="w-4 h-4" /> Add item
+          </button>
+        </div>
       </div>
 
-      <div className="bg-[#2A3441] rounded-xl p-6 border-2 border-[#1E2430]">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-white">Inventory</h3>
-          <Button
-            onClick={addInventoryItem}
-            size="sm"
-            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430]"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Item
-          </Button>
-        </div>
-
-        <div className="space-y-3">
-          {inventory.map((item, index) => (
-            <div key={index} className="bg-[#1E2430] rounded-xl p-4 border-2 border-[#2A3441]">
-              <div className="grid grid-cols-12 gap-3 items-center">
-                <div className="col-span-5">
-                  <Input
+      {inventory.length === 0 ? (
+        <p
+          className="cc-italic-serif"
+          style={{
+            fontSize: 13,
+            color: 'var(--cc-text-faint)',
+            textAlign: 'center',
+            padding: 16,
+            margin: 0,
+          }}
+        >
+          Your pack is empty. Drop in starting equipment, browse the bazaar, or add personal
+          items above.
+        </p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {inventory.map((item, index) => {
+            const locked = isLockedInventoryItem(item);
+            return (
+              <div
+                key={index}
+                style={{
+                  background: 'rgba(20, 12, 8, 0.45)',
+                  border: `1px solid ${locked ? 'var(--cc-gold)' : 'var(--cc-border)'}`,
+                  borderRadius: 8,
+                  padding: 10,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '5fr 1.5fr 1.5fr 4fr auto',
+                    gap: 8,
+                    alignItems: 'center',
+                  }}
+                >
+                  <input
                     value={item.name}
-                    onChange={(e) => updateInventoryItem(index, "name", e.target.value)}
+                    onChange={(e) => onUpdate(index, 'name', e.target.value)}
                     placeholder="Item name"
-                    className="bg-[#2A3441] border-[#2A3441] text-white placeholder:text-gray-400"
+                    className="cc-input"
+                    disabled={locked}
                   />
-                </div>
-                <div className="col-span-2">
-                  <Input
+                  <input
                     type="number"
                     value={item.quantity}
-                    onChange={(e) => updateInventoryItem(index, "quantity", parseInt(e.target.value) || 1)}
+                    onChange={(e) => onUpdate(index, 'quantity', parseInt(e.target.value, 10) || 1)}
                     placeholder="Qty"
-                    className="bg-[#2A3441] border-[#2A3441] text-white placeholder:text-gray-400"
+                    className="cc-input"
+                    style={{ textAlign: 'center' }}
                   />
-                </div>
-                <div className="col-span-2">
-                  <Input
+                  <input
                     type="number"
                     value={item.weight}
-                    onChange={(e) => updateInventoryItem(index, "weight", parseFloat(e.target.value) || 0)}
-                    placeholder="Weight"
-                    className="bg-[#2A3441] border-[#2A3441] text-white placeholder:text-gray-400"
+                    onChange={(e) => onUpdate(index, 'weight', parseFloat(e.target.value) || 0)}
+                    placeholder="lb"
+                    className="cc-input"
+                    style={{ textAlign: 'center' }}
                   />
-                </div>
-                <div className="col-span-2">
-                  <Input
-                    value={item.description}
-                    onChange={(e) => updateInventoryItem(index, "description", e.target.value)}
+                  <input
+                    value={item.description || ''}
+                    onChange={(e) => onUpdate(index, 'description', e.target.value)}
                     placeholder="Notes"
-                    className="bg-[#2A3441] border-[#2A3441] text-white placeholder:text-gray-400"
+                    className="cc-input"
                   />
-                </div>
-                <div className="col-span-1 flex justify-end">
-                  <Button
-                    onClick={() => removeInventoryItem(index)}
-                    disabled={isLockedInventoryItem(item)}
-                    title={isLockedInventoryItem(item) ? "Class-bound — cannot be removed" : "Remove item"}
-                    size="icon"
-                    variant="ghost"
-                    className="text-red-400 hover:text-red-300 hover:bg-red-500/20 disabled:text-slate-600 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                  <button
+                    type="button"
+                    onClick={() => onRemove(index)}
+                    disabled={locked}
+                    title={locked ? 'Class-bound — cannot be removed' : 'Remove item'}
+                    style={{
+                      all: 'unset',
+                      cursor: locked ? 'not-allowed' : 'pointer',
+                      width: 36,
+                      height: 36,
+                      borderRadius: 8,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: locked ? 'var(--cc-text-faint)' : 'var(--cc-orange)',
+                      border: `1px solid ${locked ? 'var(--cc-border-faint)' : 'var(--cc-orange)'}`,
+                      opacity: locked ? 0.4 : 1,
+                    }}
                   >
                     <Trash2 className="w-4 h-4" />
-                  </Button>
+                  </button>
                 </div>
+                {locked && (
+                  <div
+                    className="cc-italic-serif"
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--cc-gold-soft)',
+                      marginTop: 6,
+                    }}
+                  >
+                    Bound to your class — survives session reloads.
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Coin purse — five colored coin slots
+// ============================================================================
+function CoinPursePanel({ currency, onChange }) {
+  return (
+    <div className="cc-panel" style={{ padding: 18 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          marginBottom: 14,
+          gap: 10,
+        }}
+      >
+        <h3
+          className="cc-display"
+          style={{ fontSize: 20, color: 'var(--cc-text)', margin: 0 }}
+        >
+          Coin purse
+        </h3>
+        <span
+          className="cc-italic-serif"
+          style={{ fontSize: 11, color: 'var(--cc-text-faint)' }}
+        >
+          1 pp = 10 gp = 100 sp = 1000 cp · electrum = 5 sp
+        </span>
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(5, 1fr)',
+          gap: 8,
+        }}
+      >
+        {COINS.map((c) => (
+          <div
+            key={c.id}
+            style={{
+              background: 'rgba(20, 12, 8, 0.55)',
+              padding: 10,
+              borderRadius: 8,
+              borderTop: `3px solid ${c.color}`,
+              border: '1px solid var(--cc-border)',
+            }}
+          >
+            <div
+              className="cc-label"
+              style={{
+                color: c.color,
+                marginBottom: 4,
+                fontSize: 10,
+              }}
+            >
+              {c.id}
+            </div>
+            <input
+              type="number"
+              min="0"
+              value={currency[c.id] || 0}
+              onChange={(e) => onChange(c.id, e.target.value)}
+              className="cc-input"
+              style={{
+                padding: '6px 8px',
+                fontSize: 14,
+                fontWeight: 700,
+                textAlign: 'center',
+              }}
+            />
+            <div
+              style={{
+                fontSize: 10,
+                color: 'var(--cc-text-faint)',
+                marginTop: 4,
+                textAlign: 'center',
+              }}
+            >
+              {c.name}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Packing list — right rail preview of what's in the pack
+// ============================================================================
+function PackingListPanel({ inventory, currency, totalWeight }) {
+  const totalGoldEquiv =
+    (Number(currency.cp) || 0) / 100
+    + (Number(currency.sp) || 0) / 10
+    + (Number(currency.ep) || 0) / 2
+    + (Number(currency.gp) || 0)
+    + (Number(currency.pp) || 0) * 10;
+
+  return (
+    <div className="cc-panel" style={{ padding: 16 }}>
+      <div className="cc-label" style={{ marginBottom: 10, color: 'var(--cc-gold-soft)' }}>
+        Packing list
       </div>
 
-      <div className="bg-[#2A3441] rounded-xl p-6 border-2 border-[#1E2430]">
-        <h3 className="text-lg font-bold text-white mb-4">Starting Currency</h3>
-        <div className="grid grid-cols-5 gap-4">
-          {["cp", "sp", "ep", "gp", "pp"].map((coin) => (
-            <div key={coin}>
-              <Label className="text-white mb-2 block uppercase font-bold">{coin}</Label>
-              <Input
-                type="number"
-                min="0"
-                value={characterData.currency?.[coin] || 0}
-                onChange={(e) => updateCharacterData({
-                  currency: { ...characterData.currency, [coin]: parseInt(e.target.value) || 0 },
-                })}
-                className="bg-[#1E2430] border-[#1E2430] text-white text-center placeholder:text-gray-500"
-              />
-            </div>
-          ))}
+      {inventory.length === 0 ? (
+        <div
+          className="cc-italic-serif"
+          style={{
+            fontSize: 12,
+            color: 'var(--cc-text-faint)',
+          }}
+        >
+          Pick gear to fill your pack.
         </div>
-        <p className="text-xs text-white mt-3 bg-[#1E2430] p-2 rounded">
-          CP = Copper, SP = Silver, EP = Electrum, GP = Gold, PP = Platinum
-        </p>
+      ) : (
+        <ul
+          style={{
+            margin: 0,
+            padding: '0 0 0 18px',
+            fontSize: 12,
+            color: 'var(--cc-text-dim)',
+            lineHeight: 1.7,
+            maxHeight: 240,
+            overflowY: 'auto',
+          }}
+        >
+          {inventory
+            .filter((it) => it?.name)
+            .map((it, i) => (
+              <li key={i}>
+                {it.name}
+                {it.quantity > 1 && (
+                  <span style={{ color: 'var(--cc-text-faint)' }}> ×{it.quantity}</span>
+                )}
+              </li>
+            ))}
+        </ul>
+      )}
+
+      <div
+        style={{
+          marginTop: 12,
+          paddingTop: 12,
+          borderTop: '1px solid var(--cc-border-faint)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+          fontSize: 11,
+          color: 'var(--cc-text-dim)',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span>Total weight</span>
+          <span style={{ color: 'var(--cc-text)', fontWeight: 600 }}>
+            {totalWeight.toFixed(1)} lb
+          </span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span>Treasury</span>
+          <span style={{ color: 'var(--cc-gold)', fontWeight: 600 }}>
+            {totalGoldEquiv.toFixed(1)} gp
+          </span>
+        </div>
       </div>
     </div>
   );
