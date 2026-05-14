@@ -23,7 +23,7 @@
  * UI is edition-agnostic. See sibling `dnd5e_2014/equipment.js`.
  */
 
-import EQUIPMENT_RAW from "../../../../docs/5e_reference/2024/5e-SRD-Equipment.json";
+import EQUIPMENT_RAW from "../../../../docs/5e_reference/2024/5e-SRD-Equipment.json" with { type: "json" };
 
 const FILTER_PREFERENCE = [
   "weapons",
@@ -137,4 +137,15 @@ export function getEquipmentByName(name) {
 export function getEquipmentById(id) {
   if (!id) return null;
   return BY_ID.get(id) || null;
+}
+
+/**
+ * Returns all 2024 SRD weapons that carry a mastery property
+ * (Cleave, Graze, Nick, Push, Sap, Slow, Topple, Vex). 38 weapons
+ * in the SRD — every weapon entry has a `mastery` field in the
+ * 2024 PHB. Consumers (ClassFeaturesStep2024 Weapon Mastery picker)
+ * use this to populate the choose-N-weapons UI.
+ */
+export function getWeaponsWithMastery() {
+  return ALL.filter((item) => item.mastery && item.mastery.length > 0);
 }

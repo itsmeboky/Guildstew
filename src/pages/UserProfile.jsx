@@ -24,6 +24,7 @@ import { resolveStatus, statusMeta } from "@/lib/PresenceContext";
 import ReportUserDialog from "@/components/support/ReportUserDialog";
 import { CardSkeleton } from "@/components/ui/skeleton";
 import SocialHandlesDisplay from "@/components/profile/SocialHandlesDisplay";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function UserProfile() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -47,6 +48,14 @@ export default function UserProfile() {
   };
 
   const queryClient = useQueryClient();
+  // Source-of-truth for the viewing user. AuthContext owns this —
+  // the legacy ['currentUser'] react-query hook still in this file
+  // depended on base44.auth.me() (which doesn't exist on the wrapper)
+  // and only worked because AuthContext side-stamped the cache via
+  // setQueryData. Mutations dereferenced .id from that racey value,
+  // so writes landed with NULL author_id when the cache hadn't been
+  // populated yet. Read straight from the context for stamping.
+  const { user: authUser } = useAuth();
 
   const { data: allUserProfiles } = useQuery({
     queryKey: ['allUserProfiles'],
@@ -265,9 +274,13 @@ export default function UserProfile() {
         }
       }
 
-      return base44.entities.Post.create({ 
+      if (!authUser?.id) throw new Error('Not authenticated');
+
+      return base44.entities.Post.create({
         profile_user_id: userId,
-        content: data.content, 
+        author_id: authUser.id,
+        created_by: authUser.id,
+        content: data.content,
         image_url: imageUrl,
         link_preview: linkPreview
       });
@@ -298,12 +311,15 @@ export default function UserProfile() {
   };
   const addCommentMutation = useMutation({
     mutationFn: async ({ post, content }) => {
+      if (!authUser?.id) throw new Error('Not authenticated');
+      const myProfile = allUserProfiles.find((p) => p.user_id === authUser.id);
       const comments = Array.isArray(post.comments) ? post.comments : [];
       const next = [...comments, {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        user_id: currentUser?.id,
-        username: currentUser?.username || 'Anonymous',
-        avatar_url: currentUser?.avatar_url || null,
+        user_id: authUser.id,
+        author_id: authUser.id,
+        username: myProfile?.username || null,
+        avatar_url: myProfile?.avatar_url || null,
         content,
         created_at: new Date().toISOString(),
       }];
@@ -619,7 +635,8 @@ export default function UserProfile() {
                   </>
                 )}
                 {posts.slice(0, 5).map(post => {
-                  const authorProfile = allUserProfiles.find(p => p.email === post.created_by);
+                  const authorUuid = post.author_id || post.created_by;
+                  const authorProfile = allUserProfiles.find(p => p.user_id === authorUuid);
                   const hasLiked = (post.likes || []).includes(currentUser?.id);
                   const authorColor1 = authorProfile?.profile_color_1 || user?.profile_color_1 || "#FF5722";
                   const authorColor2 = authorProfile?.profile_color_2 || user?.profile_color_2 || "#37F2D1";
@@ -691,6 +708,7 @@ export default function UserProfile() {
                       <PostComments
                         post={post}
                         currentUser={currentUser}
+                        allUserProfiles={allUserProfiles}
                         onAddComment={(content) => addCommentMutation.mutate({ post, content })}
                         onDeleteComment={(commentId) => deleteCommentMutation.mutate({ post, commentId })}
                         adding={addCommentMutation.isPending}

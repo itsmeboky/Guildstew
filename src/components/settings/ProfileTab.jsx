@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { useSubscription } from "@/lib/SubscriptionContext";
 import { supabase } from "@/api/supabaseClient";
 import { base44 } from "@/api/base44Client";
+import { invalidateProfileQueries } from "@/lib/invalidateProfileQueries";
 import {
   TITLE_CATALOG, computeEarnedTitleIds, unlockHintFor,
 } from "@/config/titleCatalog";
@@ -54,7 +55,7 @@ export default function ProfileTab() {
     },
     onSuccess: (_data, label) => {
       toast.success(`Title set to "${label}"`);
-      queryClient.invalidateQueries({ queryKey: ["currentUser"] });
+      invalidateProfileQueries(queryClient);
     },
     onError: (err) => {
       console.error("Set title", err);

@@ -59,7 +59,7 @@ export default function GuildActiveCampaigns({ memberIds = [], viewerId }) {
       if (gmIds.length === 0) return [];
       const { data } = await supabase
         .from("user_profiles")
-        .select("user_id, username, full_name")
+        .select("user_id, username")
         .in("user_id", gmIds);
       return data || [];
     },

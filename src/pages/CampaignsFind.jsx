@@ -60,7 +60,7 @@ export default function CampaignsFind() {
       if (gmIds.length === 0) return [];
       const { data } = await supabase
         .from("user_profiles")
-        .select("user_id, username, full_name, avatar_url")
+        .select("user_id, username, avatar_url")
         .in("user_id", gmIds);
       return data || [];
     },

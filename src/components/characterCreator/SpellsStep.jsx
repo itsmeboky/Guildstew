@@ -93,6 +93,13 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
     characterData.multiclasses || [],
   );
 
+  // Per-spell-level SLOT count for display ("X casts/day"). Pact Magic
+  // slots merge into the matching spell-level row for display only —
+  // they used to drive the pick cap too, which conflated non-fungible
+  // pools for multiclass Warlock + full-caster builds. The pick cap
+  // is now driven by `prepKnownCap` / `cantripCap` below (PHB 2014
+  // model: prepared/known is a single TOTAL count distributable
+  // across eligible spell levels, while slots are casts/day).
   const getSlotsForLevelKey = (levelKey) => {
     let slots = spellSlots[levelKey] || 0;
     if (pactSlots && levelKey.startsWith("level")) {
@@ -197,6 +204,10 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
         if (spellSlots[levelKey] > 0 && recommended[levelKey]) {
           newSpells[levelKey] = recommended[levelKey].slice(0, spellSlots[levelKey]);
         }
+        const taken = recommended[levelKey].slice(0, remaining);
+        newSpells[levelKey] = taken;
+        if (levelKey === "cantrips") cantripBudget -= taken.length;
+        else prepBudget -= taken.length;
       });
       updateCharacterData({ spells: newSpells });
       setShowRecommendation(recommendedClass);

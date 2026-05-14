@@ -9,7 +9,7 @@ import { tipFor } from "@/components/characterCreator/creatorTips";
 import {
   CLASS_HIT_DICE,
   CLASS_SAVING_THROWS,
-  CLASS_PRIMARY_ABILITY,
+  primaryAbilityDisplay,
   CLASS_ARMOR_PROFICIENCIES,
   CLASS_WEAPON_PROFICIENCIES,
   ABILITY_NAMES,

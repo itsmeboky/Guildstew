@@ -99,21 +99,36 @@ export async function listReplies(threadId) {
 }
 
 export async function createThread({ category_id, author_id, author_name, title, content, is_dev_post }) {
-  const slug = slugify(title);
-  const { data, error } = await supabase
-    .from("forum_threads")
-    .insert({
-      category_id,
-      author_id,
-      title,
-      slug,
-      content: sanitizeForumHtml(content),
-      is_dev_post: !!is_dev_post,
-    })
-    .select()
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  const baseSlug = slugify(title);
+  const safeContent = sanitizeForumHtml(content);
+  // (category_id, slug) is uniquely indexed
+  // (uniq_forum_thread_slug_per_category). Two threads titled "Test"
+  // in the same category would collide on the natural slug, so retry
+  // with `-2`, `-3`, … and fall back to a short random suffix on the
+  // final attempt. 23505 = Postgres unique_violation.
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const slug =
+      attempt === 0
+        ? baseSlug
+        : attempt < 5
+          ? `${baseSlug}-${attempt + 1}`
+          : `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
+    const { data, error } = await supabase
+      .from("forum_threads")
+      .insert({
+        category_id,
+        author_id,
+        title,
+        slug,
+        content: safeContent,
+        is_dev_post: !!is_dev_post,
+      })
+      .select()
+      .maybeSingle();
+    if (!error) return data;
+    if (error.code !== "23505") throw error;
+  }
+  throw new Error("Could not generate a unique forum thread slug after 6 attempts");
 }
 
 export async function createReply({ thread_id, author_id, content, is_dev_reply }) {

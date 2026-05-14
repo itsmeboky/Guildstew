@@ -56,7 +56,7 @@ export default function FriendsSidebarPanel({ user, friendIds = [], sub }) {
       if (targetIds.length === 0) return [];
       const { data } = await supabase
         .from("user_profiles")
-        .select("user_id, username, full_name, avatar_url, status, last_seen_at, favorite_class, favorite_class_icon, tagline, display_title")
+        .select("user_id, username, avatar_url, status, last_seen_at, favorite_class, favorite_class_icon, tagline, display_title")
         .in("user_id", targetIds);
       return data || [];
     },
