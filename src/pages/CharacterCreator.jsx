@@ -7,8 +7,7 @@ import { supabase } from "@/api/supabaseClient";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Zap, AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { loadCampaignBans, findCharacterIncompatibilities } from "@/lib/campaignBans";
@@ -41,6 +40,8 @@ import QuickCreateDialog from "@/components/characterCreator/QuickCreateDialog";
 import ModeSelector from "@/components/characterCreator/ModeSelector";
 import QuickPickFlow from "@/components/characterCreator/QuickPickFlow";
 import AIGenerateFlow from "@/components/characterCreator/AIGenerateFlow";
+import { Stepper } from "@/components/characterCreator/chrome/Stepper";
+import { StepNav } from "@/components/characterCreator/chrome/StepNav";
 
 const STEPS = [
   { id: 'race', label: 'Race', component: RaceStep },
@@ -527,6 +528,33 @@ export default function CharacterCreator() {
 
   const canProceed = validateStep(currentStep);
 
+  // Human-readable hint shown by the new StepNav when canProceed is
+  // false. Existing validateStep() returns boolean only; this mirrors
+  // its branches and surfaces the first missing piece.
+  const blockedReason = (() => {
+    if (canProceed) return null;
+    const step = STEPS[currentStep];
+    switch (step?.id) {
+      case 'race':
+        if (!characterData.name) return 'Name your character';
+        if (!characterData.race) return 'Pick a race';
+        if (!characterData.background) return 'Pick a background';
+        return 'Complete the identity fields';
+      case 'class':
+        if (!characterData.class) return 'Pick a class';
+        if (!characterData.alignment) return 'Pick an alignment';
+        return 'Complete your class & alignment';
+      case 'abilities':
+        return 'Set every ability score between 3 and 20';
+      case 'skills':
+        return 'Finish your skill picks';
+      case 'spells':
+        return 'Fill every available spell slot';
+      default:
+        return 'Complete this step to continue';
+    }
+  })();
+
   const handleNext = () => {
     if (!canProceed) {
       toast.error("Please complete all required fields");
@@ -735,176 +763,106 @@ const handleSubmit = () => {
     );
   }
 
+  // Full-mode render — wrapped with the new chrome from Phase B.
+  // Atmospheric backdrop replaces the random Supabase backgroundImage
+  // that the mode selector / Quick / AI flows still use; those branches
+  // above stay untouched. Step internals (CurrentStepComponent) render
+  // unchanged inside the new frame — Phase C migrates each step.
+  const isFinalStep = currentStep === STEPS.length - 1;
+  const submitting = createMutation.isPending;
+  const finalLabel = submitting
+    ? (editCharacterId ? 'Updating...' : campaignId ? 'Creating NPC...' : 'Creating...')
+    : incompatibilityGate
+    ? `Resolve ${editIncompatibilityViolations.length} conflict${editIncompatibilityViolations.length === 1 ? '' : 's'}`
+    : (editCharacterId ? 'Update Character' : campaignId ? 'Create NPC' : 'Create Character');
+  const stepNavBlockedReason = incompatibilityGate
+    ? 'Resolve banned-content conflicts above'
+    : blockedReason;
+
   return (
-    <div className="min-h-screen relative p-6">
-      <div 
-        className="fixed inset-0 bg-cover bg-center"
-        style={{ 
-          backgroundImage: `url(${backgroundImage})`,
-          animation: 'slowZoom 30s ease-in-out infinite alternate'
-        }}
-      />
-      
-      <div className="fixed inset-0 bg-[#1E2430]/85 backdrop-blur-sm" />
-      
-      <div className="max-w-6xl mx-auto relative z-10">
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8 text-center"
-        >
-          <div className="flex items-center justify-center gap-4 mb-2">
-            <h1 className="text-4xl font-bold text-white">
-              {editCharacterId ? 'Edit Character' : campaignId ? 'Create NPC' : 'Character Creator'}
-            </h1>
-            {!editCharacterId && (
-              <Button
-                onClick={() => toast("Coming in 1.0 — use Full Creator for now.")}
-                disabled
-                title="Coming in 1.0 — use Full Creator for now"
-                className="bg-transparent border-2 border-dashed border-slate-600 text-slate-400 font-bold cursor-not-allowed hover:bg-transparent disabled:opacity-100"
-              >
-                <Zap className="w-4 h-4 mr-2" />
-                Quick Create — Coming in 1.0
-              </Button>
-            )}
-          </div>
-          <p className="text-white/60">
-            {editCharacterId ? 'Modify your D&D 5e character' : campaignId ? 'Build your campaign NPC' : 'Build your D&D 5e character'}
+    <div className="cc-root relative min-h-screen">
+      <div className="cc-backdrop" aria-hidden />
+      <div className="cc-class-aura" aria-hidden />
+
+      <div className="relative z-10 mx-auto" style={{ maxWidth: 1280, padding: '32px 24px 80px' }}>
+        <header className="text-center" style={{ marginBottom: 24 }}>
+          <h1
+            className="cc-display"
+            style={{
+              fontSize: 52,
+              color: 'white',
+              lineHeight: 1,
+              marginBottom: 6,
+              letterSpacing: 1,
+              textShadow: '0 4px 24px rgba(255, 83, 0, 0.25)',
+            }}
+          >
+            {editCharacterId ? 'Edit Character' : campaignId ? 'Create NPC' : 'Character Creator'}
+          </h1>
+          <p style={{ color: 'var(--cc-text-dim)', margin: 0, fontSize: 15 }}>
+            {editCharacterId
+              ? 'Modify your D&D 5e character'
+              : campaignId
+              ? 'Build your campaign NPC'
+              : 'Build your D&D 5e hero — step by step, with help along the way.'}
           </p>
-        </motion.div>
+        </header>
 
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-8 bg-[#1E2430]/60 backdrop-blur-sm rounded-2xl p-4 border border-[#2A3441]"
-        >
-          <div className="flex justify-between mb-3">
-            {STEPS.map((step, index) => {
-              const isCompleted = completedSteps.includes(index) || index < currentStep;
-              const isClickable = isCompleted || editCharacterId; // Allow clicking on any step in edit mode if already visited
-              const isActive = index === currentStep;
-              
-              return (
-                <div
-                  key={step.id}
-                  className="flex-1 text-center"
-                >
-                  <motion.div
-                    onClick={() => isClickable && handleStepClick(index)}
-                    whileHover={isClickable ? { scale: 1.05 } : {}}
-                    whileTap={isClickable ? { scale: 0.95 } : {}}
-                    className={`w-10 h-10 rounded-full mx-auto mb-2 flex items-center justify-center font-bold transition-all ${
-                      isActive 
-                        ? 'bg-[#FF5722] text-white shadow-lg shadow-[#FF5722]/50' 
-                        : index < currentStep
-                        ? 'bg-[#37F2D1] text-[#1E2430]'
-                        : 'bg-[#2A3441] text-white/40'
-                    } ${isClickable ? 'cursor-pointer hover:shadow-lg' : ''}`}
-                  >
-                    {index + 1}
-                  </motion.div>
-                  <span className={`text-xs font-semibold ${isActive ? 'text-[#FF5722]' : index < currentStep ? 'text-[#37F2D1]' : 'text-white/40'}`}>
-                    {step.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="h-1.5 bg-[#2A3441] rounded-full overflow-hidden">
-            <motion.div
-              className="h-full bg-gradient-to-r from-[#FF5722] to-[#37F2D1]"
-              initial={{ width: 0 }}
-              animate={{ width: `${((currentStep + 1) / STEPS.length) * 100}%` }}
-              transition={{ duration: 0.5, ease: "easeInOut" }}
-            />
-          </div>
-        </motion.div>
+        <Stepper
+          current={currentStep}
+          completed={completedSteps}
+          onClick={handleStepClick}
+        />
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentStep}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.3 }}
-            className="mb-6"
-          >
-            {editIncompatibilities && editIncompatibilityViolations.length > 0 && (
-              <Alert className="mb-4 bg-amber-950/40 border-amber-700/60 text-amber-100">
-                <AlertTriangle className="h-4 w-4 text-amber-400" />
-                <AlertTitle className="text-amber-100">Adjustments needed</AlertTitle>
-                <AlertDescription className="text-amber-200/90">
-                  <p className="mb-2">
-                    This character relies on content the campaign has banned. Edit the highlighted fields
-                    to continue — the save button stays disabled until every conflict is resolved.
-                  </p>
-                  <ul className="list-disc list-inside space-y-1 text-sm">
-                    {editIncompatibilityViolations.map((conflict, i) => (
-                      <li key={`${conflict.field}-${conflict.banned_name}-${i}`}>
-                        <span className="font-semibold capitalize">{conflict.field}:</span>{' '}
-                        <span className="font-mono">{conflict.banned_name}</span>
-                        {conflict.reason ? <> — {conflict.reason}</> : ' is banned in this campaign'}
-                      </li>
-                    ))}
-                  </ul>
-                </AlertDescription>
-              </Alert>
-            )}
-            <CurrentStepComponent
-              characterData={characterData}
-              updateCharacterData={updateCharacterData}
-              campaignId={campaignId}
-            />
-          </motion.div>
-        </AnimatePresence>
-
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="flex justify-between"
-        >
-          <Button
-            onClick={handleBack}
-            disabled={currentStep === 0}
-            variant="outline"
-            className="bg-[#2A3441]/80 border-[#37F2D1]/30 hover:bg-[#2A3441] hover:border-[#37F2D1] hover:text-[#37F2D1] text-white disabled:opacity-30"
-          >
-            <ChevronLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-
-          {currentStep === STEPS.length - 1 ? (
-            <Button
-              onClick={handleSubmit}
-              disabled={createMutation.isPending || !canProceed || incompatibilityGate}
-              title={
-                incompatibilityGate
-                  ? 'Resolve every banned-content conflict above before saving'
-                  : undefined
-              }
-              className="bg-gradient-to-r from-[#FF5722] to-[#FF6B3D] hover:from-[#FF6B3D] hover:to-[#FF5722] text-white disabled:opacity-50 shadow-lg shadow-[#FF5722]/30"
-            >
-              {createMutation.isPending
-                ? (editCharacterId ? 'Updating...' : campaignId ? 'Creating NPC...' : 'Creating...')
-                : incompatibilityGate
-                ? `Resolve ${editIncompatibilityViolations.length} conflict${editIncompatibilityViolations.length === 1 ? '' : 's'}`
-                : (editCharacterId ? 'Update Character' : campaignId ? 'Create NPC' : 'Create Character')
-              }
-            </Button>
-          ) : (
-            <Button
-              onClick={handleNext}
-              disabled={!canProceed}
-              className="bg-gradient-to-r from-[#FF5722] to-[#FF6B3D] hover:from-[#FF6B3D] hover:to-[#FF5722] text-white disabled:opacity-50 shadow-lg shadow-[#FF5722]/30"
-            >
-              Next
-              <ChevronRight className="w-4 h-4 ml-2" />
-            </Button>
+        <div key={currentStep} className="cc-step-content" style={{ marginBottom: 6 }}>
+          {editIncompatibilities && editIncompatibilityViolations.length > 0 && (
+            <Alert className="mb-4 bg-amber-950/40 border-amber-700/60 text-amber-100">
+              <AlertTriangle className="h-4 w-4 text-amber-400" />
+              <AlertTitle className="text-amber-100">Adjustments needed</AlertTitle>
+              <AlertDescription className="text-amber-200/90">
+                <p className="mb-2">
+                  This character relies on content the campaign has banned. Edit the highlighted fields
+                  to continue — the save button stays disabled until every conflict is resolved.
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  {editIncompatibilityViolations.map((conflict, i) => (
+                    <li key={`${conflict.field}-${conflict.banned_name}-${i}`}>
+                      <span className="font-semibold capitalize">{conflict.field}:</span>{' '}
+                      <span className="font-mono">{conflict.banned_name}</span>
+                      {conflict.reason ? <> — {conflict.reason}</> : ' is banned in this campaign'}
+                    </li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
           )}
-        </motion.div>
+          <CurrentStepComponent
+            characterData={characterData}
+            updateCharacterData={updateCharacterData}
+            campaignId={campaignId}
+          />
+        </div>
+
+        <StepNav
+          onBack={handleBack}
+          onNext={isFinalStep ? handleSubmit : handleNext}
+          canBack={currentStep > 0}
+          canNext={canProceed && !incompatibilityGate && !submitting}
+          nextLabel={isFinalStep ? finalLabel : null}
+          blockedReason={stepNavBlockedReason}
+        />
+
+        <footer
+          style={{
+            marginTop: 60,
+            textAlign: 'center',
+            fontSize: 11,
+            color: 'var(--cc-text-faint)',
+            fontStyle: 'italic',
+          }}
+        >
+          D&D 5e content adapted from the System Reference Document 5.1 (CC BY 4.0).
+        </footer>
       </div>
 
       <QuickCreateDialog
@@ -912,13 +870,6 @@ const handleSubmit = () => {
         onClose={() => setQuickCreateOpen(false)}
         onCharacterCreated={handleQuickCreateComplete}
       />
-
-      <style>{`
-        @keyframes slowZoom {
-          0% { transform: scale(1); }
-          100% { transform: scale(1.1); }
-        }
-      `}</style>
     </div>
   );
 }
