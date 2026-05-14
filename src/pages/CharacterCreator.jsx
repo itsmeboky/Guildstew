@@ -56,6 +56,7 @@ import QuickPickFlow from "@/components/characterCreator/QuickPickFlow";
 import AIGenerateFlow from "@/components/characterCreator/AIGenerateFlow";
 import { Stepper } from "@/components/characterCreator/chrome/Stepper";
 import { StepNav } from "@/components/characterCreator/chrome/StepNav";
+import { themeForClass } from "@/data/character-creator-class-themes";
 
 const STEPS = [
   { id: 'race', label: 'Race', component: RaceStep },
@@ -291,6 +292,35 @@ export default function CharacterCreator() {
       setCompletedSteps(STEPS.map((_, idx) => idx)); // Mark all steps as complete for editing
     }
   }, [existingCharacter, editCharacterId, campaignId]);
+
+  // Class-driven page palette: when the picked class changes, shift the
+  // .cc-root surface to that class's theme and trigger the arrival
+  // shockwave. Skipped silently when no class is picked yet.
+  useEffect(() => {
+    const root = document.querySelector('.cc-root');
+    if (!root) return;
+    const theme = themeForClass(characterData.class);
+    if (theme) {
+      root.style.setProperty('--page-bg-1', theme.bg1);
+      root.style.setProperty('--page-bg-2', theme.bg2);
+      root.style.setProperty('--page-accent', theme.accent);
+      root.style.setProperty('--page-accent-deep', theme.accentDeep);
+      root.style.setProperty('--aura-tint', theme.color);
+      root.style.setProperty('--aura-deep', theme.auraDeep);
+      root.style.setProperty('--aura-strength', '1');
+    } else {
+      root.style.setProperty('--aura-strength', '0');
+    }
+  }, [characterData.class]);
+
+  useEffect(() => {
+    if (!characterData.class) return;
+    const el = document.getElementById('class-arrival');
+    if (!el) return;
+    el.classList.add('firing');
+    const timer = setTimeout(() => el.classList.remove('firing'), 1600);
+    return () => clearTimeout(timer);
+  }, [characterData.class]);
 
   useEffect(() => {
     // This effect handles resetting creation flow if class changes during creation,
@@ -864,14 +894,15 @@ const handleSubmit = () => {
     : blockedReason;
 
   return (
-    <div className="cc-root relative min-h-screen">
-      <div className="cc-backdrop" aria-hidden />
-      <div className="cc-class-aura" aria-hidden />
+    <div className="cc-root">
+      <div className="backdrop" aria-hidden />
+      <div className="class-aura" aria-hidden />
+      <div className="class-arrival" id="class-arrival" aria-hidden />
 
-      <div className="relative z-10 mx-auto" style={{ maxWidth: 1280, padding: '32px 24px 80px' }}>
-        <header className="text-center" style={{ marginBottom: 24 }}>
+      <div style={{ position: 'relative', zIndex: 10, maxWidth: 1280, margin: '0 auto', padding: '32px 24px 80px' }}>
+        <header style={{ textAlign: 'center', marginBottom: 24 }}>
           <h1
-            className="cc-display"
+            className="display"
             style={{
               fontSize: 52,
               color: 'white',
@@ -883,7 +914,7 @@ const handleSubmit = () => {
           >
             {editCharacterId ? 'Edit Character' : campaignId ? 'Create NPC' : 'Character Creator'}
           </h1>
-          <p style={{ color: 'var(--cc-text-dim)', margin: 0, fontSize: 15 }}>
+          <p style={{ color: 'var(--text-dim)', margin: 0, fontSize: 15 }}>
             {editCharacterId
               ? 'Modify your D&D 5e character'
               : campaignId
@@ -898,7 +929,7 @@ const handleSubmit = () => {
           onClick={handleStepClick}
         />
 
-        <div key={currentStep} className="cc-step-content" style={{ marginBottom: 6 }}>
+        <div key={currentStep} className="step-content" style={{ marginBottom: 6 }}>
           {editIncompatibilities && editIncompatibilityViolations.length > 0 && (
             <Alert className="mb-4 bg-amber-950/40 border-amber-700/60 text-amber-100">
               <AlertTriangle className="h-4 w-4 text-amber-400" />
@@ -941,7 +972,7 @@ const handleSubmit = () => {
             marginTop: 60,
             textAlign: 'center',
             fontSize: 11,
-            color: 'var(--cc-text-faint)',
+            color: 'var(--text-faint)',
             fontStyle: 'italic',
           }}
         >
