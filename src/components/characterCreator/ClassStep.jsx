@@ -1,11 +1,6 @@
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, User, Move, ZoomIn, ZoomOut, Save, Pencil, Sparkles } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
@@ -30,6 +25,30 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { motion } from "framer-motion";
 import CompanionPicker from "@/components/characterCreator/CompanionPicker";
+import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
+import { Primer } from "@/components/characterCreator/chrome/Primer";
+import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
+
+// Family label rendered above the class name in the featured tome.
+// Mirrors the prototype's classFamily() flavor map.
+const CLASS_FAMILY = {
+  Barbarian: "Primal", Bard: "Lyric", Cleric: "Divine", Druid: "Wild",
+  Fighter: "Steelborn", Monk: "Disciplined", Paladin: "Sworn",
+  Ranger: "Wandering", Rogue: "Roguish", Sorcerer: "Innate",
+  Warlock: "Pact-Bound", Wizard: "Studied",
+};
+
+// Class-tinted accent color used by the featured tome's hit-die /
+// primary / saves chips, the playstyle callout border, and the
+// build summary heading. Matches the prototype's per-class palette.
+const CLASS_ACCENT = {
+  Barbarian: "#E03A3A", Bard:      "#D4A951",
+  Cleric:    "#FFD27D", Druid:     "#37F2D1",
+  Fighter:   "#A8B0BB", Monk:      "#FF9933",
+  Paladin:   "#FFE680", Ranger:    "#7AB55F",
+  Rogue:     "#9E5BFF", Sorcerer:  "#FF5722",
+  Warlock:   "#9E5BFF", Wizard:    "#5B9CFF",
+};
 
 // Normalize a brewery class (modEngine metadata shape) into the
 // same shape the SRD class list uses. Keeps provenance (_source,
@@ -120,131 +139,88 @@ const classes = [
     primaryAbility: "Dexterity & Wisdom",
     savingThrows: ["Strength", "Dexterity"],
     features: ["Unarmored Defense", "Martial Arts"],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/f2e85e13a_Monk1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/4ee7d7898_Monk1.png"
   },
   {
     name: "Paladin",
-    description: "Paladins are holy warriors bound by sacred oaths. They combine divine magic with martial prowess to smite evil. Paladins can heal allies, protect the innocent, and channel divine power through their weapons. Their oath grants them unique abilities and spells. They are natural leaders who inspire their allies with their unwavering conviction. Their Divine Smite ability makes them devastating against evil creatures.",
-    playstyle: "Perfect for players who want to be a frontline fighter with support capabilities. Paladins are tough, deal good damage, and can heal. Ideal for those who enjoy playing heroes with strong moral codes.",
+    description: "Paladins are holy warriors bound by sacred oaths to fight evil and protect the innocent. They combine martial prowess with divine magic. Paladins can heal wounds, smite enemies with radiant damage, and inspire allies with their auras. They're durable frontline fighters who also support their party. Their oaths grant them unique abilities and shape their character's morality.",
+    playstyle: "Great for players who want a hero who fights for justice. Paladins are powerful in melee, can heal, and have devastating smite attacks. Perfect for those who enjoy roleplaying noble characters.",
     hitDie: "d10",
     primaryAbility: "Strength & Charisma",
     savingThrows: ["Wisdom", "Charisma"],
     features: ["Divine Sense", "Lay on Hands"],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/1eb7cd2f2_Paladin1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/f4a25cc1f_Paladin1.png"
   },
   {
     name: "Ranger",
-    description: "Rangers are skilled hunters and wilderness warriors. They combine martial prowess with nature magic and tracking abilities. Rangers excel at fighting specific enemy types and navigating natural environments. They can use both melee and ranged weapons effectively. Their connection to nature grants them spellcasting and the ability to have an animal companion. They are masters of survival and excel at reconnaissance.",
-    playstyle: "Great for players who want a mix of combat and exploration skills. Rangers are versatile and self-sufficient. Perfect for those who enjoy nature themes and tactical positioning.",
+    description: "Rangers are skilled hunters and trackers who blend martial combat with nature magic. They're masters of the wilderness and excel at fighting specific types of enemies. Rangers can fight with both melee weapons and bows, often using two weapons at once. They have animal companions and can navigate difficult terrain. Their connection to nature grants them magical abilities and survival skills.",
+    playstyle: "Perfect for players who love wilderness adventures and combining magic with combat. Rangers are great at ranged attacks, tracking, and have a beloved animal companion. Ideal for outdoor campaigns.",
     hitDie: "d10",
     primaryAbility: "Dexterity & Wisdom",
     savingThrows: ["Strength", "Dexterity"],
     features: ["Favored Enemy", "Natural Explorer"],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/748e5be38_Ranger1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/eed59ea36_Ranger1.png"
   },
   {
     name: "Rogue",
-    description: "Rogues are stealthy tricksters who strike from the shadows with deadly precision. They excel at dealing massive damage to single targets through sneak attacks. Rogues are masters of stealth, locks, and traps. Their cunning and quick reflexes make them invaluable for reconnaissance and infiltration. They can avoid damage through evasion and have numerous skills. Rogues are the ultimate skill specialists.",
-    playstyle: "Best for players who enjoy tactical positioning and big damage numbers. Rogues reward clever play and careful planning. Perfect for those who like stealth, skills, and being the party's scout.",
+    description: "Rogues rely on stealth, skill, and cunning rather than brute strength. They're masters of stealth, deception, and precision attacks. Rogues excel at sneak attacks that deal massive damage to surprised enemies. They're skilled at picking locks, disarming traps, and navigating social situations. Their expertise in various skills makes them incredibly versatile outside of combat.",
+    playstyle: "Best for players who enjoy stealth, skill use, and tactical combat. Rogues deal high damage with sneak attacks and excel at scouting and infiltration. Great for clever players.",
     hitDie: "d8",
     primaryAbility: "Dexterity",
     savingThrows: ["Dexterity", "Intelligence"],
     features: ["Sneak Attack", "Thieves' Cant"],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/a66f2aac1_Rogue1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/eddae7d4e_Rogue1.png"
   },
   {
     name: "Sorcerer",
-    description: "Sorcerers are natural spellcasters born with innate magical power. Unlike wizards who study magic, sorcerers channel raw magical energy through their bloodline. They can manipulate their spells using Metamagic, bending magic to their will. Sorcerers have fewer spells known than wizards but can cast them more flexibly. Their magical origin grants them unique abilities. They excel at sustained magical combat.",
-    playstyle: "Ideal for players who want to be powerful spellcasters with unique abilities. Sorcerers can modify their spells in creative ways. Great for those who enjoy magic but want spontaneity over preparation.",
+    description: "Sorcerers are innate spellcasters with magic flowing in their blood. They can manipulate their spells in unique ways through metamagic. Sorcerers have fewer spells than wizards but can modify them on the fly to be more powerful, reach more targets, or have unusual effects. Their bloodline grants them additional magical abilities. They're flexible spellcasters who can adapt to many situations.",
+    playstyle: "Ideal for players who want powerful spell modifications and dynamic magic. Sorcerers can twist spells to do amazing things mid-cast. Perfect for those who enjoy creative spellcasting.",
     hitDie: "d6",
     primaryAbility: "Charisma",
     savingThrows: ["Constitution", "Charisma"],
     features: ["Spellcasting", "Sorcerous Origin"],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/6f5b501db_Sorceror1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/bcebcaf04_Sorcerer1.png"
   },
   {
     name: "Warlock",
-    description: "Warlocks gain their power through a pact with a powerful otherworldly being. This patron grants them magical abilities and eldritch powers. Warlocks have fewer spell slots than other casters but they recharge on short rests. They gain powerful invocations that customize their abilities. Their Eldritch Blast is the most reliable magical attack in the game. They blend magic with unique supernatural abilities granted by their patron.",
-    playstyle: "Perfect for players who want consistent magical damage with interesting abilities. Warlocks are reliable and have great customization. Ideal for those who enjoy pacts, mysteries, and eldritch themes.",
+    description: "Warlocks gain magical power through pacts with otherworldly entities. Their patron grants them unique abilities and spells in exchange for service. Warlocks have fewer spell slots but their spells are always cast at their highest level. They have powerful invocations that grant additional abilities. Their pact magic recharges on short rests, making them effective in extended adventures.",
+    playstyle: "Great for players who love dark themes and powerful single-target attacks. Warlocks have unique pact magic that recharges quickly. Perfect for those who enjoy mysterious patrons and eldritch power.",
     hitDie: "d8",
     primaryAbility: "Charisma",
     savingThrows: ["Wisdom", "Charisma"],
     features: ["Otherworldly Patron", "Pact Magic"],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/184c98268_Warlock1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/3eb6d8a78_Warlock1.png"
   },
   {
     name: "Wizard",
-    description: "Wizards are scholarly spellcasters who master arcane magic through study. They have the largest spell list of any class and can prepare different spells each day. Wizards learn spells from scrolls and other wizards' spellbooks. Their versatility is unmatched as they can have the perfect spell for almost any situation. They are masters of arcane knowledge. Wizards shape reality itself through their mastery of magic.",
-    playstyle: "Best for players who enjoy strategic planning and having a solution for everything. Wizards are the ultimate utility casters. Perfect for those who love magic, learning, and preparation.",
+    description: "Wizards are masters of arcane magic who learn spells through intense study. They have the largest spell list of any class. Wizards must memorize their spells daily but have access to incredible magical power. They can specialize in different schools of magic to enhance their abilities. With the right spells, a wizard can solve almost any problem and dominate any battle.",
+    playstyle: "Perfect for players who love magic and want maximum spell variety. Wizards can prepare different spells each day for any situation. Great for tactical players who enjoy planning and customization.",
     hitDie: "d6",
     primaryAbility: "Intelligence",
     savingThrows: ["Intelligence", "Wisdom"],
     features: ["Spellcasting", "Arcane Recovery"],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/94cfaa28a_Wizard1.png"
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/a8da4ae3c_Wizard1.png"
   }
 ];
 
-// Overlay registry rules data onto the presentation array so the
-// render always shows the canonical hit die, saves, etc. from the
-// single source of truth without losing descriptions / icons.
-classes.forEach((cls) => {
-  const name = cls.name;
-  cls.hitDie = `d${CLASS_HIT_DICE[name] || 8}`;
-  // primaryAbilityDisplay respects AND/OR semantics for dual-primary
-  // classes — returns "Strength or Dexterity" for Fighter, "Dexterity &
-  // Wisdom" for Monk/Ranger, etc. Falls back to the hand-typed array
-  // value if the helper returns empty (defensive).
-  cls.primaryAbility = primaryAbilityDisplay(name) || cls.primaryAbility;
-  cls.savingThrows = (CLASS_SAVING_THROWS[name] || []).map(
-    (ab) => ABILITY_NAMES[ab] || ab,
-  );
-});
-
 const alignments = [
-  {
-    name: "Lawful Good",
-    description: "Believes in honor, compassion, and helping others while respecting laws and order. Think noble paladins and righteous heroes."
-  },
-  {
-    name: "Neutral Good",
-    description: "Does good because it's right, regardless of laws. Helps others and fights evil pragmatically. Think kind-hearted adventurers."
-  },
-  {
-    name: "Chaotic Good",
-    description: "Values freedom and kindness above all. Does good but dislikes rules and authority. Think Robin Hood or rebel heroes."
-  },
-  {
-    name: "Lawful Neutral",
-    description: "Values order, tradition, and law above all else. Neither particularly good nor evil. Think judges or soldiers following orders."
-  },
-  {
-    name: "True Neutral",
-    description: "Balanced and pragmatic. Doesn't lean toward law or chaos, good or evil. Acts based on situation. Think druids protecting natural balance."
-  },
-  {
-    name: "Chaotic Neutral",
-    description: "Values personal freedom above all. Unpredictable and follows their whims. Neither cruel nor caring. Think free spirits and wanderers."
-  },
-  {
-    name: "Lawful Evil",
-    description: "Uses laws and systems to gain power and hurt others methodically. Think tyrants and corrupt officials."
-  },
-  {
-    name: "Neutral Evil",
-    description: "Purely selfish and does whatever benefits them. No loyalty to law or chaos. Think mercenaries and opportunists."
-  },
-  {
-    name: "Chaotic Evil",
-    description: "Destroys and causes suffering for pleasure. Values freedom to do terrible things. Think demons and psychopaths."
-  }
+  { name: "Lawful Good",     short: "LG", description: "Believes in honor, compassion, and helping others while respecting laws and order. Think noble paladins and righteous heroes." },
+  { name: "Neutral Good",    short: "NG", description: "Does good because it's right, regardless of laws. Helps others and fights evil pragmatically. Think kind-hearted adventurers." },
+  { name: "Chaotic Good",    short: "CG", description: "Values freedom and kindness above all. Does good but dislikes rules and authority. Think Robin Hood or rebel heroes." },
+  { name: "Lawful Neutral",  short: "LN", description: "Values order, tradition, and law above all else. Neither particularly good nor evil. Think judges or soldiers following orders." },
+  { name: "True Neutral",    short: "TN", description: "Balanced and pragmatic. Doesn't lean toward law or chaos, good or evil. Acts based on situation. Think druids protecting natural balance." },
+  { name: "Chaotic Neutral", short: "CN", description: "Values personal freedom above all. Unpredictable and follows their whims. Neither cruel nor caring. Think free spirits and wanderers." },
+  { name: "Lawful Evil",     short: "LE", description: "Uses laws and systems to gain power and hurt others methodically. Think tyrants and corrupt officials." },
+  { name: "Neutral Evil",    short: "NE", description: "Purely selfish and does whatever benefits them. No loyalty to law or chaos. Think mercenaries and opportunists." },
+  { name: "Chaotic Evil",    short: "CE", description: "Destroys and causes suffering for pleasure. Values freedom to do terrible things. Think demons and psychopaths." },
 ];
 
 const companionTypes = {
   Paladin: { name: "Mount", description: "Your loyal steed that accompanies you in battle" },
-  Ranger: { name: "Animal Companion", description: "Your beast companion that fights alongside you" },
+  Ranger:  { name: "Animal Companion", description: "Your beast companion that fights alongside you" },
   Warlock: { name: "Patron", description: "The otherworldly entity you made a pact with" },
-  Wizard: { name: "Familiar", description: "Your magical companion that serves and scouts for you" },
-  Druid: { name: "Animal Companion", description: "A creature of nature bonded to you" }
+  Wizard:  { name: "Familiar", description: "Your magical companion that serves and scouts for you" },
+  Druid:   { name: "Animal Companion", description: "A creature of nature bonded to you" },
 };
 
 export default function ClassStep({ characterData, updateCharacterData, campaignId }) {
@@ -265,7 +241,6 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
 
   const [uploading, setUploading] = useState(false);
   const [uploadingProfile, setUploadingProfile] = useState(false);
-  const [uploadingCompanion, setUploadingCompanion] = useState(false);
   const [fullBodyPosition, setFullBodyPosition] = useState(characterData.avatar_position || { x: 0, y: 0 });
   const [fullBodyZoom, setFullBodyZoom] = useState(characterData.avatar_zoom || 1);
   const [profilePosition, setProfilePosition] = useState(characterData.profile_position || { x: 0, y: 0 });
@@ -275,15 +250,14 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [fullBodySaved, setFullBodySaved] = useState(!!characterData.avatar_position);
   const [profileSaved, setProfileSaved] = useState(!!characterData.profile_position);
-  
-  const selectedClass = combinedClasses.find(c => c.name === characterData.class);
-  const selectedAlignment = alignments.find(a => a.name === characterData.alignment);
+
+  const selectedClass = combinedClasses.find((c) => c.name === characterData.class);
+  const selectedAlignment = alignments.find((a) => a.name === characterData.alignment);
   const companionInfo = companionTypes[characterData.class];
 
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setUploading(true);
     try {
       const { file_url } = await base44.integrations.Core.UploadFile({ file });
@@ -302,7 +276,6 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
   const handleProfileImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setUploadingProfile(true);
     try {
       const { file_url } = await base44.integrations.Core.UploadFile({ file });
@@ -315,22 +288,6 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
       toast.error("Failed to upload image");
     } finally {
       setUploadingProfile(false);
-    }
-  };
-
-  const handleCompanionImageUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploadingCompanion(true);
-    try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      updateCharacterData({ companion_image: file_url });
-      toast.success(`${companionInfo.name} image uploaded!`);
-    } catch (error) {
-      toast.error("Failed to upload image");
-    } finally {
-      setUploadingCompanion(false);
     }
   };
 
@@ -349,12 +306,12 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
     if (isDraggingFull) {
       const deltaX = e.clientX - dragStart.x;
       const deltaY = e.clientY - dragStart.y;
-      setFullBodyPosition(prev => ({ x: prev.x + deltaX, y: prev.y + deltaY }));
+      setFullBodyPosition((prev) => ({ x: prev.x + deltaX, y: prev.y + deltaY }));
       setDragStart({ x: e.clientX, y: e.clientY });
     } else if (isDraggingProfile) {
       const deltaX = e.clientX - dragStart.x;
       const deltaY = e.clientY - dragStart.y;
-      setProfilePosition(prev => ({ x: prev.x + deltaX, y: prev.y + deltaY }));
+      setProfilePosition((prev) => ({ x: prev.x + deltaX, y: prev.y + deltaY }));
       setDragStart({ x: e.clientX, y: e.clientY });
     }
   };
@@ -375,441 +332,1047 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
     }
   }, [isDraggingFull, isDraggingProfile, dragStart]);
 
+  const handlePickClass = (cls) => {
+    const baseUpdates = {
+      class: cls.name,
+      features: (cls?.features || []).map((f) => ({ name: f, source: cls.name, description: "" })),
+    };
+    const priorDeps = Array.isArray(characterData.mod_dependencies) ? characterData.mod_dependencies : [];
+    const nonClassDeps = priorDeps.filter((d) => d?.mod_type !== "class");
+    if (cls?._source === "brewery" && cls?._raw) {
+      Object.assign(
+        baseUpdates,
+        clearBreweryClassMarkers(),
+        applyBreweryClassBaseline(cls._raw, characterData),
+      );
+      const classDep = cls._mod_id
+        ? [{ mod_id: cls._mod_id, mod_name: cls._mod_name || cls.name, mod_type: "class" }]
+        : [];
+      baseUpdates.mod_dependencies = [...nonClassDeps, ...classDep];
+    } else {
+      Object.assign(baseUpdates, clearBreweryClassMarkers());
+      baseUpdates.mod_dependencies = nonClassDeps;
+    }
+    updateCharacterData(baseUpdates);
+  };
+
   const profileImageUrl = characterData.profile_avatar_url || characterData.avatar_url;
+  const accent = (selectedClass && CLASS_ACCENT[selectedClass.name]) || "var(--cc-orange)";
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.3 }}
-      className="grid grid-cols-2 gap-6"
-    >
-      <div className="space-y-4">
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
-        >
-          <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide">Class</Label>
-          <Select
-            value={characterData.class}
-            onValueChange={(value) => {
-              const cls = combinedClasses.find(c => c.name === value);
-              const baseUpdates = {
-                class: value,
-                features: (cls?.features || []).map(f => ({ name: f, source: value, description: "" })),
-              };
-              // Strip the previously-tagged class mod (if any),
-              // then re-tag when the new pick is a brewery class.
-              const priorDeps = Array.isArray(characterData.mod_dependencies) ? characterData.mod_dependencies : [];
-              const nonClassDeps = priorDeps.filter((d) => d?.mod_type !== "class");
-              if (cls?._source === "brewery" && cls?._raw) {
-                Object.assign(
-                  baseUpdates,
-                  clearBreweryClassMarkers(),
-                  applyBreweryClassBaseline(cls._raw, characterData),
-                );
-                const classDep = cls._mod_id
-                  ? [{ mod_id: cls._mod_id, mod_name: cls._mod_name || cls.name, mod_type: "class" }]
-                  : [];
-                baseUpdates.mod_dependencies = [...nonClassDeps, ...classDep];
-              } else {
-                Object.assign(baseUpdates, clearBreweryClassMarkers());
-                baseUpdates.mod_dependencies = nonClassDeps;
-              }
-              updateCharacterData(baseUpdates);
-            }}
-          >
-            <SelectTrigger className="bg-[#2A3441]/80 border-[#37F2D1]/30 text-white text-base h-12 hover:border-[#37F2D1]/60 transition-colors">
-              <SelectValue placeholder="Select class" />
-            </SelectTrigger>
-            <SelectContent className="bg-[#1E2430] border-[#2A3441]">
-              {combinedClasses.map((cls) => (
-                <SelectItem
-                  key={cls.name}
-                  value={cls.name}
-                  className="text-white hover:bg-[#2A3441] focus:bg-[#2A3441]"
-                >
-                  <span className="inline-flex items-center gap-2">
-                    {cls.name}
-                    {cls._source === "brewery" && (
-                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1 py-0.5">
-                        <Sparkles className="w-2.5 h-2.5" /> Brewery
-                      </span>
-                    )}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </motion.div>
+    <div>
+      <StepHeader
+        kicker="Chapter II · The Calling"
+        title="Choose your path"
+        subtitle="What kind of hero is this? Each calling shapes your spells, your weapons, your destiny."
+      />
 
-        {selectedClass && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2 }}
-            className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
-          >
-            <div className="flex items-center gap-4 mb-4">
-              {selectedClass.icon ? (
-                <img src={selectedClass.icon} alt={selectedClass.name} className="w-20 h-20 object-contain" />
-              ) : (
-                <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-[#37F2D1]/30 to-[#8B5CF6]/30 flex items-center justify-center">
-                  <Sparkles className="w-10 h-10 text-[#37F2D1]" />
-                </div>
-              )}
-              <div className="flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-2xl font-bold text-white">{selectedClass.name}</h3>
-                  <InfoTip>{tipFor("class")}</InfoTip>
-                  {selectedClass._source === "brewery" && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1.5 py-0.5">
-                      <Sparkles className="w-3 h-3" /> Brewery
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-white/60 mt-1">Hit Die: {selectedClass.hitDie}</p>
-              </div>
-            </div>
-            <p className="text-white/80 mb-4 text-sm leading-relaxed">{selectedClass.description}</p>
-            <div className="bg-[#37F2D1]/10 rounded-lg p-4 mb-4 border border-[#37F2D1]/20">
-              <p className="text-xs font-semibold text-[#37F2D1] mb-2">💡 PLAYSTYLE TIP</p>
-              <p className="text-sm text-white/80">{selectedClass.playstyle}</p>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-white/60">Primary Ability:</span>
-                <span className="text-[#37F2D1] font-semibold">{selectedClass.primaryAbility}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-white/60">Saving Throws:</span>
-                <span className="text-white">{(selectedClass.savingThrows || []).join(", ")}</span>
-              </div>
-            </div>
-          </motion.div>
-        )}
+      <Primer title="How to pick a class">
+        Pick the <strong>fantasy</strong> first — the kind of hero you want to be. The mechanics
+        will follow. Some classes — like Warlock, Paladin, Cleric, Ranger, Druid — bring along a
+        <strong> patron, deity, companion,</strong> or <strong>familiar</strong> you'll detail
+        below. Alignment and physical details are roleplay scaffolding; tweak them anytime.
+      </Primer>
 
-        {selectedClass?._source === "brewery" && (
-          <BreweryClassPickers
-            characterData={characterData}
-            updateCharacterData={updateCharacterData}
-          />
-        )}
-
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
-        >
-          <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide">Alignment</Label>
-          <Select
-            value={characterData.alignment}
-            onValueChange={(value) => updateCharacterData({ alignment: value })}
-          >
-            <SelectTrigger className="bg-[#2A3441]/80 border-[#37F2D1]/30 text-white h-12 hover:border-[#37F2D1]/60 transition-colors">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-[#1E2430] border-[#2A3441]">
-              {alignments.map((align) => (
-                <SelectItem 
-                  key={align.name} 
-                  value={align.name} 
-                  className="text-white hover:bg-[#2A3441] focus:bg-[#2A3441]"
-                >
-                  {align.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {selectedAlignment && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              className="bg-[#2A3441]/50 rounded-lg p-3 mt-3 border border-[#37F2D1]/20"
-            >
-              <p className="text-sm text-white/80">{selectedAlignment.description}</p>
-            </motion.div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1.55fr 1fr',
+          gap: 28,
+          marginTop: 24,
+          alignItems: 'flex-start',
+        }}
+      >
+        {/* LEFT — featured tome */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+          {selectedClass ? (
+            <ClassFeaturedTome
+              cls={selectedClass}
+              accent={accent}
+            />
+          ) : (
+            <EmptyClassPrompt />
           )}
-        </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
-        >
-          <Label className="text-white/70 mb-4 block text-sm uppercase tracking-wide">Physical Details</Label>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <Label className="text-white/50 text-xs mb-1 block">Age</Label>
-              <Input
-                type="number"
-                value={characterData.appearance?.age || ""}
-                onChange={(e) => updateCharacterData({
-                  appearance: { ...characterData.appearance, age: parseInt(e.target.value) }
+          {selectedClass?._source === "brewery" && (
+            <BreweryClassPickers
+              characterData={characterData}
+              updateCharacterData={updateCharacterData}
+            />
+          )}
+
+          {selectedClass && (
+            <div className="cc-tome" style={{ padding: '32px 36px' }}>
+              <OrnateHeading>Alignment</OrnateHeading>
+              <AlignmentGrid
+                value={characterData.alignment}
+                onChange={(name) => updateCharacterData({ alignment: name })}
+                selectedAlignment={selectedAlignment}
+              />
+
+              <FleurDivider />
+
+              <OrnateHeading>Physical Details</OrnateHeading>
+              <PhysicalDetails
+                appearance={characterData.appearance || {}}
+                onChange={(patch) => updateCharacterData({
+                  appearance: { ...(characterData.appearance || {}), ...patch },
                 })}
-                placeholder="25"
-                className="bg-[#2A3441]/80 border-[#37F2D1]/20 text-white h-10 focus:border-[#37F2D1]"
+              />
+
+              <FleurDivider />
+
+              <OrnateHeading>Biography</OrnateHeading>
+              <textarea
+                className="cc-input cc-italic-serif"
+                value={characterData.description || ''}
+                onChange={(e) => updateCharacterData({ description: e.target.value })}
+                placeholder="Their story so far — origins, scars, the moment they took up the call..."
+                rows={5}
+                style={{
+                  resize: 'vertical',
+                  minHeight: 110,
+                  fontFamily: 'var(--cc-serif)',
+                  fontSize: 15,
+                  lineHeight: 1.55,
+                  fontStyle: 'italic',
+                }}
               />
             </div>
-            <div>
-              <Label className="text-white/50 text-xs mb-1 block">Height</Label>
-              <Input
-                value={characterData.appearance?.height || ""}
-                onChange={(e) => updateCharacterData({
-                  appearance: { ...characterData.appearance, height: e.target.value }
-                })}
-                placeholder="5'10&quot;"
-                className="bg-[#2A3441]/80 border-[#37F2D1]/20 text-white h-10 focus:border-[#37F2D1]"
-              />
-            </div>
-            <div>
-              <Label className="text-white/50 text-xs mb-1 block">Weight</Label>
-              <Input
-                value={characterData.appearance?.weight || ""}
-                onChange={(e) => updateCharacterData({
-                  appearance: { ...characterData.appearance, weight: e.target.value }
-                })}
-                placeholder="180 lbs"
-                className="bg-[#2A3441]/80 border-[#37F2D1]/20 text-white h-10 focus:border-[#37F2D1]"
-              />
-            </div>
-          </div>
-        </motion.div>
+          )}
 
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.5 }}
-          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
-        >
-          <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide">Biography</Label>
-          <Textarea
-            value={characterData.description}
-            onChange={(e) => updateCharacterData({ description: e.target.value })}
-            placeholder="Write your character's story..."
-            className="bg-[#2A3441]/80 border-[#37F2D1]/20 text-white min-h-32 focus:border-[#37F2D1] resize-none"
-          />
-        </motion.div>
-
-        {companionInfo && (
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.6 }}
-          >
+          {companionInfo && (
             <CompanionPicker
               characterData={characterData}
               updateCharacterData={updateCharacterData}
               campaignId={campaignId}
             />
-          </motion.div>
-        )}
-      </div>
-
-      <div className="space-y-4">
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
-        >
-          <Label className="text-white/70 mb-3 block text-sm uppercase tracking-wide">Full Character Portrait</Label>
-          <div 
-            className="relative overflow-hidden rounded-xl bg-[#2A3441]/50 mx-auto border border-[#37F2D1]/20"
-            style={{ aspectRatio: '2/3', width: '100%' }}
-          >
-            {characterData.avatar_url ? (
-              <>
-                <img
-                  src={characterData.avatar_url}
-                  alt="Character"
-                  className={fullBodySaved ? "absolute" : "absolute cursor-move"}
-                  style={{
-                    transform: `translate(${fullBodyPosition.x}px, ${fullBodyPosition.y}px) scale(${fullBodyZoom})`,
-                    transformOrigin: 'center center',
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
-                    pointerEvents: fullBodySaved ? 'none' : 'auto'
-                  }}
-                  onMouseDown={(e) => handleMouseDown(e, 'full')}
-                  draggable={false}
-                />
-                {!fullBodySaved && (
-                  <div className="absolute bottom-3 left-3 right-3 bg-black/70 backdrop-blur-sm rounded-lg p-3 space-y-2">
-                    <div className="flex items-center gap-2 text-white text-xs">
-                      <Move className="w-3 h-3" />
-                      <span>Drag to reposition</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <ZoomOut className="w-3 h-3 text-white" />
-                      <Slider
-                        value={[fullBodyZoom]}
-                        onValueChange={(val) => setFullBodyZoom(val[0])}
-                        min={0.5}
-                        max={3}
-                        step={0.1}
-                        className="flex-1"
-                      />
-                      <ZoomIn className="w-3 h-3 text-white" />
-                    </div>
-                  </div>
-                )}
-                {fullBodySaved && (
-                  <button
-                    onClick={() => setFullBodySaved(false)}
-                    className="absolute top-3 right-3 bg-[#FF5722] hover:bg-[#FF6B3D] text-white p-2 rounded-lg transition-colors"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                )}
-              </>
-            ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center">
-                <User className="w-20 h-20 text-white/20 mb-3" />
-                <p className="text-white/40 text-center px-4 text-sm">Upload character portrait</p>
-              </div>
-            )}
-          </div>
-          {characterData.avatar_url && !fullBodySaved && (
-            <Button
-              onClick={() => {
-                setFullBodySaved(true);
-                updateCharacterData({ 
-                  avatar_position: fullBodyPosition,
-                  avatar_zoom: fullBodyZoom
-                });
-              }}
-              className="w-full mt-3 bg-[#37F2D1] hover:bg-[#37F2D1]/80 text-[#1E2430]"
-            >
-              <Save className="w-4 h-4 mr-2" />
-              Save Position
-            </Button>
           )}
-          <Button
-            onClick={() => document.getElementById('avatar-upload').click()}
-            disabled={uploading}
-            className="w-full mt-3 bg-[#FF5722]/90 hover:bg-[#FF5722] text-white border-0"
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            {uploading ? 'Uploading...' : 'Upload Portrait'}
-          </Button>
-          <input
-            type="file"
-            id="avatar-upload"
-            accept="image/*"
-            onChange={handleImageUpload}
-            className="hidden"
-          />
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
+        {/* RIGHT — class roster + portrait + build summary, sticky rail */}
+        <div
+          style={{
+            position: 'sticky',
+            top: 20,
+            alignSelf: 'flex-start',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+          }}
         >
-          <Label className="text-white/70 mb-3 block text-sm uppercase tracking-wide">Profile Picture</Label>
-          <div className="flex justify-center">
-            <div className="relative">
-              <div className="w-32 h-32 rounded-full bg-[#2A3441]/50 overflow-hidden border-2 border-[#FF5722]/50 relative">
-                {profileImageUrl ? (
-                  <img
-                    src={profileImageUrl}
-                    alt="Profile"
-                    className={profileSaved ? "absolute" : "absolute cursor-move"}
-                    style={{
-                      transform: `translate(${profilePosition.x}px, ${profilePosition.y}px) scale(${profileZoom})`,
-                      transformOrigin: 'center center',
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'contain',
-                      pointerEvents: profileSaved ? 'none' : 'auto'
-                    }}
-                    onMouseDown={(e) => handleMouseDown(e, 'profile')}
-                    draggable={false}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <User className="w-12 h-12 text-white/20" />
-                  </div>
-                )}
-              </div>
-              {profileSaved && profileImageUrl && (
-                <button
-                  onClick={() => setProfileSaved(false)}
-                  className="absolute -top-1 -right-1 bg-[#FF5722] hover:bg-[#FF6B3D] text-white p-1.5 rounded-full transition-colors"
-                >
-                  <Pencil className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-          </div>
-          {profileImageUrl && !profileSaved && (
-            <div className="mt-3 bg-[#2A3441]/50 rounded-lg p-3 border border-[#FF5722]/20">
-              <div className="flex items-center gap-2 text-white/70 text-xs mb-2">
-                <Move className="w-3 h-3" />
-                <span>Drag to reposition</span>
-              </div>
-              <div className="flex items-center gap-2 mb-3">
-                <ZoomOut className="w-3 h-3 text-white/70" />
-                <Slider
-                  value={[profileZoom]}
-                  onValueChange={(val) => setProfileZoom(val[0])}
-                  min={0.5}
-                  max={3}
-                  step={0.1}
-                  className="flex-1"
-                />
-                <ZoomIn className="w-3 h-3 text-white/70" />
-              </div>
-              <Button
-                onClick={() => {
-                  setProfileSaved(true);
-                  updateCharacterData({
-                    profile_position: profilePosition,
-                    profile_zoom: profileZoom
-                  });
-                }}
-                className="w-full bg-[#37F2D1] hover:bg-[#37F2D1]/80 text-[#1E2430]"
-                size="sm"
-              >
-                <Save className="w-3 h-3 mr-2" />
-                Save Position
-              </Button>
-            </div>
-          )}
-          <Button
-            onClick={() => document.getElementById('profile-upload').click()}
-            disabled={uploadingProfile}
-            className="w-full mt-3 bg-[#FF5722]/90 hover:bg-[#FF5722] text-white"
-            size="sm"
-          >
-            <Upload className="w-3 h-3 mr-2" />
-            {uploadingProfile ? 'Uploading...' : 'Upload Profile Photo'}
-          </Button>
-          <input
-            type="file"
-            id="profile-upload"
-            accept="image/*"
-            onChange={handleProfileImageUpload}
-            className="hidden"
+          <ClassRoster
+            combinedClasses={combinedClasses}
+            current={characterData.class}
+            onPick={handlePickClass}
           />
-        </motion.div>
+
+          <PortraitPanel
+            label="Full Portrait"
+            avatarUrl={characterData.avatar_url}
+            position={fullBodyPosition}
+            zoom={fullBodyZoom}
+            saved={fullBodySaved}
+            uploading={uploading}
+            onUpload={handleImageUpload}
+            onMouseDown={(e) => handleMouseDown(e, 'full')}
+            onZoomChange={(val) => setFullBodyZoom(val[0])}
+            onSave={() => {
+              setFullBodySaved(true);
+              updateCharacterData({
+                avatar_position: fullBodyPosition,
+                avatar_zoom: fullBodyZoom,
+              });
+            }}
+            onEdit={() => setFullBodySaved(false)}
+            inputId="avatar-upload"
+            aspectRatio="2/3"
+          />
+
+          <ProfilePanel
+            avatarUrl={profileImageUrl}
+            position={profilePosition}
+            zoom={profileZoom}
+            saved={profileSaved}
+            uploading={uploadingProfile}
+            onUpload={handleProfileImageUpload}
+            onMouseDown={(e) => handleMouseDown(e, 'profile')}
+            onZoomChange={(val) => setProfileZoom(val[0])}
+            onSave={() => {
+              setProfileSaved(true);
+              updateCharacterData({
+                profile_position: profilePosition,
+                profile_zoom: profileZoom,
+              });
+            }}
+            onEdit={() => setProfileSaved(false)}
+          />
+
+          {selectedClass && (
+            <ClassBuildSummary cls={selectedClass} accent={accent} />
+          )}
+        </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-// Skill + equipment pickers rendered under the detail panel when
-// the selected class is brewery-sourced. The skill picker mirrors
-// the race-side BreweryRacePickers style so both creators feel
-// consistent.
+// ============================================================================
+// Empty class prompt
+// ============================================================================
+function EmptyClassPrompt() {
+  return (
+    <div
+      className="cc-tome"
+      style={{
+        padding: '60px 36px',
+        textAlign: 'center',
+        minHeight: 400,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 16,
+      }}
+    >
+      <div style={{ fontSize: 56, opacity: 0.4, marginBottom: 8, color: 'var(--cc-gold)' }}>✦</div>
+      <div className="cc-display" style={{ fontSize: 32, color: 'var(--cc-text)' }}>
+        Choose a calling
+      </div>
+      <div
+        className="cc-italic-serif"
+        style={{
+          fontSize: 16,
+          color: 'var(--cc-text-dim)',
+          maxWidth: 400,
+          lineHeight: 1.5,
+        }}
+      >
+        Pick one of the twelve callings from the roster — the chapter will unfurl with their lore.
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Featured class tome — big icon + name + chips + description + playstyle
+// ============================================================================
+function ClassFeaturedTome({ cls, accent }) {
+  const family = CLASS_FAMILY[cls.name] || (cls._source === "brewery" ? "Brewery" : "Calling");
+  return (
+    <div className="cc-tome" style={{ padding: '32px 36px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginBottom: 20 }}>
+        <div
+          style={{
+            width: 100,
+            height: 100,
+            background: `radial-gradient(circle, ${accent}55 0%, ${accent}11 50%, transparent 75%)`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            filter: `drop-shadow(0 4px 16px ${accent}66)`,
+          }}
+        >
+          {cls.icon ? (
+            <img src={cls.icon} alt="" style={{ width: 76, height: 76, objectFit: 'contain' }} />
+          ) : (
+            <Sparkles className="w-14 h-14" style={{ color: accent }} />
+          )}
+        </div>
+
+        <div style={{ flex: 1 }}>
+          <div
+            className="cc-label"
+            style={{
+              color: accent,
+              marginBottom: 6,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span>The {family}</span>
+            {cls._source === "brewery" && (
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 900,
+                  letterSpacing: '0.12em',
+                  color: '#050816',
+                  background: 'var(--cc-teal)',
+                  borderRadius: 4,
+                  padding: '2px 6px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                }}
+              >
+                <Sparkles className="w-2.5 h-2.5" /> Brewery
+              </span>
+            )}
+          </div>
+          <div
+            className="cc-display"
+            style={{
+              fontSize: 42,
+              color: 'var(--cc-text)',
+              lineHeight: 1,
+              marginBottom: 10,
+              letterSpacing: 1,
+              textShadow: `0 2px 16px ${accent}44`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            {cls.name}
+            <InfoTip>{tipFor("class")}</InfoTip>
+          </div>
+          <div
+            className="cc-italic-serif"
+            style={{ fontSize: 15, color: 'var(--cc-text-dim)' }}
+          >
+            Hit Die <span style={{ color: accent }}>{cls.hitDie}</span>
+            &nbsp;·&nbsp;
+            Primary <span style={{ color: accent }}>{cls.primaryAbility || '—'}</span>
+            &nbsp;·&nbsp;
+            Saves <span style={{ color: accent }}>{(cls.savingThrows || []).join(', ') || '—'}</span>
+          </div>
+        </div>
+      </div>
+
+      <p
+        className="cc-body-prose"
+        style={{
+          marginBottom: 18,
+          fontSize: 15,
+          color: 'var(--cc-text)',
+          lineHeight: 1.65,
+        }}
+      >
+        {cls.description}
+      </p>
+
+      {cls.playstyle && (
+        <div
+          style={{
+            padding: 16,
+            borderLeft: `3px solid ${accent}`,
+            background: `linear-gradient(90deg, ${accent}14, transparent 80%)`,
+            borderRadius: 4,
+          }}
+        >
+          <div className="cc-label" style={{ color: accent, marginBottom: 4 }}>
+            ✦ Playstyle
+          </div>
+          <div
+            className="cc-italic-serif"
+            style={{
+              fontSize: 15,
+              color: 'var(--cc-text)',
+              lineHeight: 1.55,
+            }}
+          >
+            {cls.playstyle}
+          </div>
+        </div>
+      )}
+
+      {(cls.features || []).length > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <div className="cc-label" style={{ color: accent, marginBottom: 8 }}>
+            Level 1 Features
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {cls.features.map((f) => (
+              <span
+                key={f}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  letterSpacing: 0.4,
+                  textTransform: 'uppercase',
+                  color: accent,
+                  background: `${accent}14`,
+                  border: `1px solid ${accent}55`,
+                  borderRadius: 4,
+                  padding: '5px 10px',
+                }}
+              >
+                {f}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Class roster (right rail) — medallion grid replacing the shadcn Select
+// ============================================================================
+function ClassRoster({ combinedClasses, current, onPick }) {
+  return (
+    <div className="cc-panel" style={{ padding: 16 }}>
+      <div className="cc-label" style={{ marginBottom: 12, color: 'var(--cc-gold-soft)' }}>
+        The Twelve Callings
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 6,
+        }}
+      >
+        {combinedClasses.map((c) => {
+          const active = c.name === current;
+          const accent = CLASS_ACCENT[c.name] || 'var(--cc-teal)';
+          return (
+            <button
+              key={c.name}
+              type="button"
+              onClick={() => onPick(c)}
+              title={c.name}
+              style={{
+                all: 'unset',
+                cursor: 'pointer',
+                padding: '10px 4px',
+                textAlign: 'center',
+                borderRadius: 4,
+                transition: 'all .2s',
+                background: active ? `${accent}1F` : 'transparent',
+                border: `1px solid ${active ? accent : 'transparent'}`,
+                boxShadow: active ? `0 0 14px ${accent}40` : 'none',
+                position: 'relative',
+              }}
+              onMouseEnter={(e) => {
+                if (!active) e.currentTarget.style.background = 'rgba(212, 169, 81, 0.06)';
+              }}
+              onMouseLeave={(e) => {
+                if (!active) e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 4,
+                  filter: active ? 'none' : 'grayscale(0.4) opacity(0.75)',
+                  transition: 'filter .2s',
+                }}
+              >
+                {c.icon ? (
+                  <img src={c.icon} alt="" style={{ width: 32, height: 32, objectFit: 'contain' }} />
+                ) : (
+                  <Sparkles style={{ width: 24, height: 24, color: accent }} />
+                )}
+              </div>
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: active ? accent : 'var(--cc-text-dim)',
+                  letterSpacing: 0.3,
+                  lineHeight: 1.2,
+                }}
+              >
+                {c.name}
+              </div>
+              {c._source === "brewery" && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 2,
+                    right: 2,
+                    fontSize: 8,
+                    fontWeight: 900,
+                    color: '#050816',
+                    background: 'var(--cc-teal)',
+                    borderRadius: 3,
+                    padding: '1px 3px',
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  MOD
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Class build summary — right-rail panel with derived class facts
+// ============================================================================
+function ClassBuildSummary({ cls, accent }) {
+  return (
+    <div className="cc-panel-strong" style={{ padding: 18, position: 'relative' }}>
+      <div className="cc-tome-corner cc-tr"></div>
+      <div className="cc-tome-corner cc-bl"></div>
+
+      <div
+        className="cc-ornate-heading"
+        style={{ marginBottom: 16, '--ornate-color': accent }}
+      >
+        <span className="cc-ornate-flourish small" style={{ background: accent }}></span>
+        <h3 style={{ fontSize: 18, color: 'var(--cc-text)' }}>{cls.name} build</h3>
+        <span className="cc-ornate-flourish small" style={{ background: accent }}></span>
+      </div>
+
+      <SummaryRow label="Hit Die" value={cls.hitDie} accent={accent} />
+      <SummaryRow label="Primary" value={cls.primaryAbility || '—'} accent={accent} />
+      <SummaryRow label="Saves" value={(cls.savingThrows || []).join(', ') || '—'} accent={accent} />
+
+      {(cls.features || []).length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div className="cc-label" style={{ marginBottom: 8, color: 'var(--cc-gold-soft)' }}>
+            Level 1
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {cls.features.map((f) => (
+              <div
+                key={f}
+                style={{
+                  fontSize: 13,
+                  color: 'var(--cc-text)',
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  gap: 6,
+                }}
+              >
+                <span style={{ color: accent }}>◆</span>
+                <span style={{ fontWeight: 700 }}>{f}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SummaryRow({ label, value, accent }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        gap: 12,
+        padding: '6px 0',
+        borderBottom: '1px solid var(--cc-border-faint)',
+        fontSize: 13,
+      }}
+    >
+      <span className="cc-label" style={{ color: 'var(--cc-text-dim)', letterSpacing: 0.4 }}>
+        {label}
+      </span>
+      <span style={{ color: 'var(--cc-text)', fontWeight: 600, textAlign: 'right' }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+// ============================================================================
+// Alignment grid — 3×3 with elegant labels (replaces shadcn Select)
+// ============================================================================
+function AlignmentGrid({ value, onChange, selectedAlignment }) {
+  return (
+    <>
+      <div
+        className="cc-italic-serif"
+        style={{
+          fontSize: 14,
+          color: 'var(--cc-text-dim)',
+          marginBottom: 14,
+          textAlign: 'center',
+        }}
+      >
+        Roleplay only — no mechanics depend on alignment.
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: 6,
+          maxWidth: 540,
+          margin: '0 auto',
+        }}
+      >
+        {alignments.map((a) => {
+          const active = value === a.name;
+          return (
+            <button
+              key={a.name}
+              type="button"
+              onClick={() => onChange(a.name)}
+              style={{
+                all: 'unset',
+                cursor: 'pointer',
+                padding: '12px 8px',
+                textAlign: 'center',
+                borderRadius: 6,
+                background: active ? 'rgba(255, 83, 0, 0.10)' : 'rgba(20, 12, 8, 0.4)',
+                border: `1px solid ${active ? 'var(--cc-orange)' : 'var(--cc-border)'}`,
+                boxShadow: active ? '0 0 12px var(--cc-orange-glow)' : 'none',
+                transition: 'all .15s',
+              }}
+            >
+              <div
+                className="cc-display"
+                style={{
+                  fontSize: 13,
+                  color: active ? 'var(--cc-orange-soft)' : 'var(--cc-gold-soft)',
+                  marginBottom: 2,
+                }}
+              >
+                {a.short}
+              </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: 'var(--cc-text)',
+                  letterSpacing: 0.2,
+                  lineHeight: 1.3,
+                }}
+              >
+                {a.name.split(' ')[0]}<br />
+                {a.name.split(' ')[1] || ' '}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {selectedAlignment && (
+        <motion.div
+          key={selectedAlignment.name}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+          className="cc-italic-serif"
+          style={{
+            marginTop: 16,
+            textAlign: 'center',
+            fontSize: 14,
+            color: 'var(--cc-text-dim)',
+            lineHeight: 1.5,
+            maxWidth: 540,
+            margin: '16px auto 0',
+          }}
+        >
+          <strong
+            className="cc-display"
+            style={{ color: 'var(--cc-orange-soft)', fontSize: 16, fontWeight: 'normal' }}
+          >
+            {selectedAlignment.name}.
+          </strong>{' '}
+          {selectedAlignment.description}
+        </motion.div>
+      )}
+    </>
+  );
+}
+
+// ============================================================================
+// Physical details — age + height + weight inputs
+// ============================================================================
+function PhysicalDetails({ appearance, onChange }) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: 12,
+      }}
+    >
+      <div>
+        <div className="cc-label" style={{ marginBottom: 6 }}>Age</div>
+        <input
+          type="number"
+          className="cc-input"
+          value={appearance.age || ''}
+          onChange={(e) => onChange({ age: parseInt(e.target.value, 10) })}
+          placeholder="25"
+        />
+      </div>
+      <div>
+        <div className="cc-label" style={{ marginBottom: 6 }}>Height</div>
+        <input
+          className="cc-input"
+          value={appearance.height || ''}
+          onChange={(e) => onChange({ height: e.target.value })}
+          placeholder={"5'10\""}
+        />
+      </div>
+      <div>
+        <div className="cc-label" style={{ marginBottom: 6 }}>Weight</div>
+        <input
+          className="cc-input"
+          value={appearance.weight || ''}
+          onChange={(e) => onChange({ weight: e.target.value })}
+          placeholder="180 lbs"
+        />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Portrait panel (full body) — drag/zoom positioning, restyled around .cc-*
+// ============================================================================
+function PortraitPanel({
+  label, avatarUrl, position, zoom, saved, uploading,
+  onUpload, onMouseDown, onZoomChange, onSave, onEdit,
+  inputId, aspectRatio,
+}) {
+  return (
+    <div className="cc-panel-strong" style={{ padding: 16, position: 'relative' }}>
+      <div className="cc-label" style={{ marginBottom: 10, color: 'var(--cc-gold-soft)' }}>
+        {label}
+      </div>
+      <div
+        className="cc-portrait-frame"
+        style={{
+          position: 'relative',
+          overflow: 'hidden',
+          borderRadius: 8,
+          background: 'rgba(20, 12, 8, 0.5)',
+          border: '1px solid var(--cc-border)',
+          aspectRatio,
+          width: '100%',
+        }}
+      >
+        {avatarUrl ? (
+          <>
+            <img
+              src={avatarUrl}
+              alt="Character"
+              className={saved ? "absolute" : "absolute cursor-move"}
+              style={{
+                transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+                transformOrigin: 'center center',
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                pointerEvents: saved ? 'none' : 'auto',
+              }}
+              onMouseDown={onMouseDown}
+              draggable={false}
+            />
+            {!saved && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: 12,
+                  left: 12,
+                  right: 12,
+                  background: 'rgba(5, 8, 22, 0.78)',
+                  borderRadius: 8,
+                  padding: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 11,
+                    color: 'var(--cc-text)',
+                  }}
+                >
+                  <Move className="w-3 h-3" />
+                  <span>Drag to reposition</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ZoomOut className="w-3 h-3" style={{ color: 'var(--cc-text)' }} />
+                  <Slider
+                    value={[zoom]}
+                    onValueChange={onZoomChange}
+                    min={0.5}
+                    max={3}
+                    step={0.1}
+                    className="flex-1"
+                  />
+                  <ZoomIn className="w-3 h-3" style={{ color: 'var(--cc-text)' }} />
+                </div>
+              </div>
+            )}
+            {saved && (
+              <button
+                type="button"
+                onClick={onEdit}
+                style={{
+                  all: 'unset',
+                  cursor: 'pointer',
+                  position: 'absolute',
+                  top: 10,
+                  right: 10,
+                  background: 'var(--cc-orange)',
+                  color: 'white',
+                  padding: 8,
+                  borderRadius: 6,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            )}
+          </>
+        ) : (
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--cc-text-faint)',
+            }}
+          >
+            <User className="w-16 h-16" style={{ opacity: 0.35, marginBottom: 10 }} />
+            <p
+              className="cc-italic-serif"
+              style={{ fontSize: 13, color: 'var(--cc-text-faint)' }}
+            >
+              Drop your character art
+            </p>
+          </div>
+        )}
+      </div>
+
+      {avatarUrl && !saved && (
+        <button
+          type="button"
+          onClick={onSave}
+          className="cc-btn-primary"
+          style={{
+            marginTop: 10,
+            width: '100%',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+          }}
+        >
+          <Save className="w-4 h-4" />
+          Save position
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => document.getElementById(inputId).click()}
+        disabled={uploading}
+        className="cc-btn-orange"
+        style={{
+          marginTop: 10,
+          width: '100%',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          opacity: uploading ? 0.6 : 1,
+        }}
+      >
+        <Upload className="w-4 h-4" />
+        {uploading ? 'Uploading…' : 'Upload portrait'}
+      </button>
+      <input
+        type="file"
+        id={inputId}
+        accept="image/*"
+        onChange={onUpload}
+        className="hidden"
+      />
+    </div>
+  );
+}
+
+// ============================================================================
+// Profile panel (round avatar) — drag/zoom positioning
+// ============================================================================
+function ProfilePanel({
+  avatarUrl, position, zoom, saved, uploading,
+  onUpload, onMouseDown, onZoomChange, onSave, onEdit,
+}) {
+  return (
+    <div className="cc-panel-strong" style={{ padding: 16 }}>
+      <div className="cc-label" style={{ marginBottom: 10, color: 'var(--cc-gold-soft)' }}>
+        Profile Avatar
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <div style={{ position: 'relative' }}>
+          <div
+            style={{
+              width: 128,
+              height: 128,
+              borderRadius: '50%',
+              overflow: 'hidden',
+              background: 'rgba(20, 12, 8, 0.5)',
+              border: '2px solid var(--cc-orange)',
+              position: 'relative',
+            }}
+          >
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt="Profile"
+                className={saved ? "absolute" : "absolute cursor-move"}
+                style={{
+                  transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+                  transformOrigin: 'center center',
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  pointerEvents: saved ? 'none' : 'auto',
+                }}
+                onMouseDown={onMouseDown}
+                draggable={false}
+              />
+            ) : (
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <User className="w-12 h-12" style={{ color: 'var(--cc-text-faint)', opacity: 0.45 }} />
+              </div>
+            )}
+          </div>
+          {saved && avatarUrl && (
+            <button
+              type="button"
+              onClick={onEdit}
+              style={{
+                all: 'unset',
+                cursor: 'pointer',
+                position: 'absolute',
+                top: -4,
+                right: -4,
+                background: 'var(--cc-orange)',
+                color: 'white',
+                padding: 6,
+                borderRadius: '50%',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {avatarUrl && !saved && (
+        <div
+          style={{
+            marginTop: 12,
+            background: 'rgba(20, 12, 8, 0.5)',
+            borderRadius: 8,
+            padding: 12,
+            border: '1px solid var(--cc-border)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 11,
+              color: 'var(--cc-text-dim)',
+              marginBottom: 8,
+            }}
+          >
+            <Move className="w-3 h-3" />
+            <span>Drag to reposition</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <ZoomOut className="w-3 h-3" style={{ color: 'var(--cc-text-dim)' }} />
+            <Slider
+              value={[zoom]}
+              onValueChange={onZoomChange}
+              min={0.5}
+              max={3}
+              step={0.1}
+              className="flex-1"
+            />
+            <ZoomIn className="w-3 h-3" style={{ color: 'var(--cc-text-dim)' }} />
+          </div>
+          <button
+            type="button"
+            onClick={onSave}
+            className="cc-btn-primary"
+            style={{
+              width: '100%',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              fontSize: 12,
+            }}
+          >
+            <Save className="w-3 h-3" />
+            Save position
+          </button>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => document.getElementById('profile-upload').click()}
+        disabled={uploading}
+        className="cc-btn-orange"
+        style={{
+          marginTop: 10,
+          width: '100%',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          fontSize: 12,
+          opacity: uploading ? 0.6 : 1,
+        }}
+      >
+        <Upload className="w-3 h-3" />
+        {uploading ? 'Uploading…' : 'Upload profile photo'}
+      </button>
+      <input
+        type="file"
+        id="profile-upload"
+        accept="image/*"
+        onChange={onUpload}
+        className="hidden"
+      />
+    </div>
+  );
+}
+
+// ============================================================================
+// Brewery class pickers — preserved verbatim from the pre-port file
+// ============================================================================
 const CLASS_SKILL_OPTIONS = [
   "Acrobatics", "Animal Handling", "Arcana", "Athletics", "Deception",
   "History", "Insight", "Intimidation", "Investigation", "Medicine",
@@ -970,7 +1533,7 @@ function BreweryClassPickers({ characterData, updateCharacterData }) {
       {Array.isArray(cls.subclass?.options) && cls.subclass.options.length > 0 && (() => {
         const chooseAt = Number(cls.subclass.choose_at_level) || 3;
         const canPick  = lvl >= chooseAt;
-        const chosen   = characterData._brewery_class_subclass || "";
+        const chosenSub = characterData._brewery_class_subclass || "";
         const label    = cls.subclass.name || "Subclass";
         return (
           <div className="bg-[#0b1220] border border-[#37F2D1]/30 rounded-lg p-3">
@@ -985,7 +1548,7 @@ function BreweryClassPickers({ characterData, updateCharacterData }) {
             {canPick ? (
               <div className="space-y-2">
                 {cls.subclass.options.map((opt) => {
-                  const active = chosen === opt.name;
+                  const active = chosenSub === opt.name;
                   return (
                     <button
                       key={opt.name}
