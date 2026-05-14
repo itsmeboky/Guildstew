@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { buildCampaignCompanions } from "@/utils/campaignCompanions";
 import { ChevronLeft, ChevronRight, Settings, GripVertical, X, EyeOff, Eye, Package, Search, Dices, AlertCircle, LogOut } from "lucide-react";
 import {
   AlertDialog,
@@ -411,6 +412,18 @@ export default function GMPanel() {
     staleTime: 60000
   });
 
+  // Companions live in `companions` table rows AND in the character row's
+  // `companions[]` JSONB array. buildCampaignCompanions() merges both
+  // and the GM Companions row renders the union (see line ~4660).
+  const { data: campaignCompanionRows = [] } = useQuery({
+    queryKey: ['campaignCompanions', campaignId],
+    queryFn: () => base44.entities.Companion
+      .filter({ campaign_id: campaignId })
+      .catch(() => []),
+    enabled: !!campaignId,
+    refetchInterval: 5000,
+  });
+
   // Resolve campaign.disconnected_players (user_id strings) into the
   // { id, name } summaries the sidebar wants. Falls back to the raw
   // user_id when we don't have a profile cached yet.
@@ -462,6 +475,11 @@ export default function GMPanel() {
 
     return Array.from(playerMap.values());
   }, [campaign?.player_ids, allUserProfiles, characters, campaignId]);
+
+  const companionEntries = React.useMemo(
+    () => buildCampaignCompanions(campaignCompanionRows, players),
+    [campaignCompanionRows, players],
+  );
   // =================================================================
 
   // The GM can always act, regardless of whose turn it is in the combat
@@ -4662,35 +4680,43 @@ export default function GMPanel() {
 
                 <SectionCard title="Companions">
                   <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar">
-                    {players.filter(p => p.character?.companion_name).map((player) => {
-                      const character = player.character;
-                      const color1 = player.profile_color_1 || "#FF5722";
-                      const color2 = player.profile_color_2 || "#37F2D1";
+                    {companionEntries.map((entry) => {
+                      const color1 = entry.profile_color_1 || "#FF5722";
+                      const color2 = entry.profile_color_2 || "#37F2D1";
+                      const conditionKey = entry.owner_user_id
+                        ? `companion-${entry.owner_user_id}`
+                        : null;
+                      const conditions = conditionKey ? activeConditions[conditionKey] : null;
+                      const isPending = entry.approval_status === "pending";
 
                       return (
                         <div
-                          key={`companion-${player.user_id}`}
+                          key={entry.key}
                           className="min-w-[120px] max-w-[120px] rounded-2xl bg-[#050816] overflow-hidden shadow-[0_8px_20px_rgba(0,0,0,0.6)] border-2 relative"
                           style={{
-                            borderColor: activeConditions[`companion-${player.user_id}`]?.[0] ? CONDITIONS[activeConditions[`companion-${player.user_id}`][0]].color : undefined,
-                            borderImage: !activeConditions[`companion-${player.user_id}`]?.length ? `linear-gradient(135deg, ${color1}, ${color2}) 1` : undefined
+                            borderColor: conditions?.[0] ? CONDITIONS[conditions[0]].color : undefined,
+                            borderImage: !conditions?.length ? `linear-gradient(135deg, ${color1}, ${color2}) 1` : undefined,
+                            opacity: isPending ? 0.75 : 1,
                           }}
                         >
-                          {activeConditions[`companion-${player.user_id}`]?.length > 0 && (
+                          {isPending && (
+                            <div className="absolute top-1 left-1 right-1 z-30 bg-amber-500/90 text-amber-950 text-[8px] font-bold px-1.5 py-0.5 rounded-full text-center">
+                              Needs Approval
+                            </div>
+                          )}
+                          {conditions?.length > 0 && (
                             <div className="absolute top-1 left-1/2 -translate-x-1/2 z-20 bg-black/80 text-white text-[8px] px-2 py-0.5 rounded-full border border-white/20 whitespace-nowrap">
-                              {activeConditions[`companion-${player.user_id}`][0]}
+                              {conditions[0]}
                             </div>
                           )}
                           <div
                             className="h-16 bg-cover bg-top relative"
                             style={{
-                              backgroundImage: character?.companion_image
-                                ? `url(${character.companion_image})`
-                                : 'none',
+                              backgroundImage: entry.image_url ? `url(${entry.image_url})` : 'none',
                               backgroundColor: '#1a1f2e'
                             }}
                           >
-                            {!character?.companion_image && (
+                            {!entry.image_url && (
                               <div className="absolute inset-0 flex items-center justify-center text-2xl text-gray-600">
                                 🐾
                               </div>
@@ -4698,16 +4724,16 @@ export default function GMPanel() {
                           </div>
                           <div className="px-2 py-1.5 text-[10px]">
                             <div className="font-semibold truncate text-white">
-                              {character?.companion_name}
+                              {entry.name}
                             </div>
                             <p className="text-[9px] text-slate-500 truncate">
-                              {character?.name}'s companion
+                              {entry.character_name ? `${entry.character_name}'s companion` : "Companion"}
                             </p>
                           </div>
                         </div>
                       );
                     })}
-                    {players.filter(p => p.character?.companion_name).length === 0 && (
+                    {companionEntries.length === 0 && (
                       <div className="text-[10px] text-slate-600 italic py-2">No active companions</div>
                     )}
                   </div>

@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { buildCampaignCompanions } from "@/utils/campaignCompanions";
 import { 
   ChevronLeft, ChevronRight, Settings, GripVertical, X, EyeOff, Eye, 
   Package, Search, Dices, AlertCircle, Heart, Music, Circle, Triangle, Crosshair, CircleDollarSign
@@ -270,6 +271,21 @@ function CampaignPlayerPanelContent() {
     queryKey: ['allUserProfiles'],
     queryFn: () => base44.entities.UserProfile.list(),
     staleTime: 60000
+  });
+
+  // Companions live in two places after creation:
+  //  - rows in the `companions` table (Party panel additions)
+  //  - JSONB on the character row (CharacterCreator picker)
+  // buildCampaignCompanions() merges both. The query polls during
+  // combat for the same reason characters do — companion HP/state
+  // changes need to surface to everyone in the campaign.
+  const { data: campaignCompanionRows = [] } = useQuery({
+    queryKey: ['campaignCompanions', campaignId],
+    queryFn: () => base44.entities.Companion
+      .filter({ campaign_id: campaignId })
+      .catch(() => []),
+    enabled: !!campaignId,
+    refetchInterval: (campaign?.combat_active) ? 2000 : 5000,
   });
 
   // Characters query moved up to modify refetchInterval
@@ -750,6 +766,16 @@ function CampaignPlayerPanelContent() {
     
     return Array.from(playerMap.values());
   }, [campaign?.player_ids, allUserProfiles, characters, campaignId]);
+
+  const companionEntries = React.useMemo(() => {
+    const all = buildCampaignCompanions(campaignCompanionRows, players);
+    // Players see only approved companions in the bar, plus their own
+    // pending ones so they can see "Awaiting GM Approval" on their work.
+    return all.filter((entry) =>
+      entry.approval_status === "approved"
+      || (entry.approval_status === "pending" && entry.owner_user_id === user?.id),
+    );
+  }, [campaignCompanionRows, players, user?.id]);
 
   const currentUserProfile = React.useMemo(() => {
     return allUserProfiles.find(p => p.user_id === user?.id);
@@ -1323,24 +1349,28 @@ function CampaignPlayerPanelContent() {
 
                 <SectionCard title="Companions">
                   <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar">
-                    {players.filter(p => p.character?.companion_name).map((player) => {
-                      const char = player.character;
-                      return (
-                        <div key={`comp-${player.user_id}`} className="min-w-[120px] max-w-[120px] rounded-2xl bg-[#050816] overflow-hidden shadow border border-slate-700 relative">
-                          <div 
-                            className="h-16 bg-cover bg-center relative"
-                            style={{ backgroundImage: char?.companion_image ? `url(${char.companion_image})` : 'none', backgroundColor: '#1a1f2e' }}
-                          >
-                            {!char?.companion_image && <div className="absolute inset-0 flex items-center justify-center text-2xl">🐾</div>}
+                    {companionEntries.map((entry) => (
+                      <div key={entry.key} className="min-w-[120px] max-w-[120px] rounded-2xl bg-[#050816] overflow-hidden shadow border border-slate-700 relative">
+                        {entry.approval_status === "pending" && (
+                          <div className="absolute top-1 left-1 right-1 z-20 bg-amber-500/90 text-amber-950 text-[8px] font-bold px-1.5 py-0.5 rounded-full text-center">
+                            Awaiting GM Approval
                           </div>
-                          <div className="px-2 py-1.5 text-[10px]">
-                            <div className="font-semibold truncate text-white">{char?.companion_name}</div>
-                            <p className="text-[9px] text-slate-500 truncate">{char?.name}'s companion</p>
-                          </div>
+                        )}
+                        <div
+                          className="h-16 bg-cover bg-center relative"
+                          style={{ backgroundImage: entry.image_url ? `url(${entry.image_url})` : 'none', backgroundColor: '#1a1f2e' }}
+                        >
+                          {!entry.image_url && <div className="absolute inset-0 flex items-center justify-center text-2xl">🐾</div>}
                         </div>
-                      );
-                    })}
-                    {players.filter(p => p.character?.companion_name).length === 0 && (
+                        <div className="px-2 py-1.5 text-[10px]">
+                          <div className="font-semibold truncate text-white">{entry.name}</div>
+                          <p className="text-[9px] text-slate-500 truncate">
+                            {entry.character_name ? `${entry.character_name}'s companion` : "Companion"}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                    {companionEntries.length === 0 && (
                       <div className="text-[10px] text-slate-600 italic py-2">No active companions</div>
                     )}
                   </div>

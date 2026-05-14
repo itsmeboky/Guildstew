@@ -1,3 +1,8 @@
+/* Character Creator design system foundation. Specialty CSS (variables,
+   ornament classes, panel surfaces) lives in its own file; everything is
+   .cc- prefixed so nothing applies until a component opts in. */
+@import './styles/character-creator.css';
+
 /* === Font face declarations ===
    Cream: heading / display font for nav, section titles, CTAs.
    OpenDyslexic: accessibility replacement for everything when
