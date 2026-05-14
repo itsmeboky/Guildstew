@@ -773,10 +773,15 @@ function CampaignPlayerPanelContent() {
     return Array.from(playerMap.values());
   }, [campaign?.player_ids, allUserProfiles, characters, campaignId]);
 
-  const companionEntries = React.useMemo(
-    () => buildCampaignCompanions(campaignCompanionRows, players),
-    [campaignCompanionRows, players],
-  );
+  const companionEntries = React.useMemo(() => {
+    const all = buildCampaignCompanions(campaignCompanionRows, players);
+    // Players see only approved companions in the bar, plus their own
+    // pending ones so they can see "Awaiting GM Approval" on their work.
+    return all.filter((entry) =>
+      entry.approval_status === "approved"
+      || (entry.approval_status === "pending" && entry.owner_user_id === user?.id),
+    );
+  }, [campaignCompanionRows, players, user?.id]);
 
   const currentUserProfile = React.useMemo(() => {
     return allUserProfiles.find(p => p.user_id === user?.id);
@@ -1352,6 +1357,11 @@ function CampaignPlayerPanelContent() {
                   <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar">
                     {companionEntries.map((entry) => (
                       <div key={entry.key} className="min-w-[120px] max-w-[120px] rounded-2xl bg-[#050816] overflow-hidden shadow border border-slate-700 relative">
+                        {entry.approval_status === "pending" && (
+                          <div className="absolute top-1 left-1 right-1 z-20 bg-amber-500/90 text-amber-950 text-[8px] font-bold px-1.5 py-0.5 rounded-full text-center">
+                            Awaiting GM Approval
+                          </div>
+                        )}
                         <div
                           className="h-16 bg-cover bg-center relative"
                           style={{ backgroundImage: entry.image_url ? `url(${entry.image_url})` : 'none', backgroundColor: '#1a1f2e' }}

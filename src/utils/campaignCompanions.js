@@ -32,6 +32,7 @@ export function buildCampaignCompanions(companionRows, players) {
       image_url: row.image_url || null,
       profile_color_1: player?.profile_color_1 || null,
       profile_color_2: player?.profile_color_2 || null,
+      approval_status: row.approval_status || "approved",
     });
     if (row.character_id) charactersWithTableRows.add(row.character_id);
   }
@@ -55,6 +56,7 @@ export function buildCampaignCompanions(companionRows, players) {
           image_url: c.image || null,
           profile_color_1: player.profile_color_1 || null,
           profile_color_2: player.profile_color_2 || null,
+          approval_status: c.needs_gm_approval ? "pending" : "approved",
         }),
       );
     } else if (char.companion_name) {
@@ -68,6 +70,7 @@ export function buildCampaignCompanions(companionRows, players) {
         image_url: char.companion_image || null,
         profile_color_1: player.profile_color_1 || null,
         profile_color_2: player.profile_color_2 || null,
+        approval_status: "approved",
       });
     }
   }

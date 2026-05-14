@@ -4687,6 +4687,7 @@ export default function GMPanel() {
                         ? `companion-${entry.owner_user_id}`
                         : null;
                       const conditions = conditionKey ? activeConditions[conditionKey] : null;
+                      const isPending = entry.approval_status === "pending";
 
                       return (
                         <div
@@ -4694,9 +4695,15 @@ export default function GMPanel() {
                           className="min-w-[120px] max-w-[120px] rounded-2xl bg-[#050816] overflow-hidden shadow-[0_8px_20px_rgba(0,0,0,0.6)] border-2 relative"
                           style={{
                             borderColor: conditions?.[0] ? CONDITIONS[conditions[0]].color : undefined,
-                            borderImage: !conditions?.length ? `linear-gradient(135deg, ${color1}, ${color2}) 1` : undefined
+                            borderImage: !conditions?.length ? `linear-gradient(135deg, ${color1}, ${color2}) 1` : undefined,
+                            opacity: isPending ? 0.75 : 1,
                           }}
                         >
+                          {isPending && (
+                            <div className="absolute top-1 left-1 right-1 z-30 bg-amber-500/90 text-amber-950 text-[8px] font-bold px-1.5 py-0.5 rounded-full text-center">
+                              Needs Approval
+                            </div>
+                          )}
                           {conditions?.length > 0 && (
                             <div className="absolute top-1 left-1/2 -translate-x-1/2 z-20 bg-black/80 text-white text-[8px] px-2 py-0.5 rounded-full border border-white/20 whitespace-nowrap">
                               {conditions[0]}
