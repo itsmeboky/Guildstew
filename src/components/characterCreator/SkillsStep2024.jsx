@@ -10,6 +10,8 @@ import {
 import { getClassByName } from "@/data/games/dnd5e_2024/classes";
 import { getSpeciesById, getSubspecies } from "@/data/games/dnd5e_2024/species";
 import InfoTip from "@/components/characterCreator/InfoTip";
+import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
+import { Primer } from "@/components/characterCreator/chrome/Primer";
 import { tipFor } from "@/components/characterCreator/creatorTips";
 
 /**
@@ -171,21 +173,23 @@ export default function SkillsStep2024({ characterData, updateCharacterData }) {
   })();
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]">
-        <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
-          Skill Proficiencies
-          <span className="inline-block bg-[#37F2D1] text-[#1E2430] text-[9px] font-black px-1.5 py-0.5 rounded">
-            2024
-          </span>
-        </h2>
-        <p className="text-white/70 mb-4">
-          Choose {classSkillCount} skill{classSkillCount === 1 ? "" : "s"} from your{" "}
-          {className || "class"} list
-          {speciesBonusSkills > 0
-            ? `, plus ${speciesBonusSkills} free pick from any skill (species Skillful)`
-            : ""}
-        </p>
+    <div>
+      <StepHeader
+        kicker="Step 5 of 8"
+        title="Pick your skills"
+        subtitle="Proficiency means you add your proficiency bonus to rolls with that skill."
+      />
+
+      <Primer title="Sources of skill proficiency">
+        Your <strong>background</strong> grants a fixed set of skills automatically. Your{" "}
+        <strong>class</strong> lets you pick {classSkillCount} more from its list.
+        {speciesBonusSkills > 0
+          ? ` Your species (Skillful) adds ${speciesBonusSkills} free pick from any skill.`
+          : ""}
+      </Primer>
+
+      <div className="panel" style={{ padding: 20, marginTop: 20 }}>
+        <div className="label" style={{ marginBottom: 10 }}>Tally</div>
 
         <div className="flex items-center gap-4 mb-4 flex-wrap">
           <div className="bg-[#2A3441] rounded-lg px-4 py-2 inline-flex items-center gap-2">

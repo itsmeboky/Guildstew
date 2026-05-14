@@ -225,12 +225,12 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
           title="Pick your skills"
         />
         <div
-          className="cc-tome"
+          className="tome"
           style={{ padding: 40, textAlign: 'center', marginTop: 24 }}
         >
           <div
-            className="cc-italic-serif"
-            style={{ fontSize: 16, color: 'var(--cc-text-dim)' }}
+            className="italic-serif"
+            style={{ fontSize: 16, color: 'var(--text-dim)' }}
           >
             Pick a class on Chapter II — your skill list comes from there.
           </div>
@@ -313,7 +313,7 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
         />
       )}
 
-      <div className="cc-panel" style={{ padding: 20, marginTop: 16 }}>
+      <div className="panel" style={{ padding: 20, marginTop: 16 }}>
         <div
           style={{
             display: 'flex',
@@ -325,22 +325,22 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
           }}
         >
           <h3
-            className="cc-display"
-            style={{ fontSize: 22, color: 'var(--cc-text)', margin: 0 }}
+            className="display"
+            style={{ fontSize: 22, color: 'var(--text)', margin: 0 }}
           >
             All 18 skills
           </h3>
           <div style={{ display: 'flex', gap: 6, fontSize: 11, alignItems: 'center' }}>
-            <span className="cc-chip cc-chip-teal" style={{ fontSize: 10, padding: '2px 6px' }}>
+            <span className="chip" style={{ fontSize: 10, padding: '2px 6px' }}>
               ✓ Background
             </span>
-            <span className="cc-chip cc-chip-orange" style={{ fontSize: 10, padding: '2px 6px' }}>
+            <span className="chip chip-orange" style={{ fontSize: 10, padding: '2px 6px' }}>
               ✓ Class pick
             </span>
-            <span className="cc-chip cc-chip-gold" style={{ fontSize: 10, padding: '2px 6px' }}>
+            <span className="chip chip-gold" style={{ fontSize: 10, padding: '2px 6px' }}>
               ✓ Racial / Multiclass
             </span>
-            <span className="cc-chip cc-chip-neutral" style={{ fontSize: 10, padding: '2px 6px' }}>
+            <span className="chip chip-neutral" style={{ fontSize: 10, padding: '2px 6px' }}>
               Locked
             </span>
           </div>
@@ -410,10 +410,10 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
           && availableClassSkills.length < ALL_SKILLS.length
           && (
             <div
-              className="cc-italic-serif"
+              className="italic-serif"
               style={{
                 fontSize: 12,
-                color: 'var(--cc-text-faint)',
+                color: 'var(--text-faint)',
                 marginTop: 12,
                 textAlign: 'center',
               }}
@@ -450,15 +450,15 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
             marginTop: 18,
             background: 'rgba(212, 169, 81, 0.10)',
             border: '1px solid rgba(212, 169, 81, 0.32)',
-            borderLeft: '3px solid var(--cc-gold)',
+            borderLeft: '3px solid var(--gold)',
             borderRadius: 8,
             padding: '14px 18px',
           }}
         >
           <div
-            className="cc-label"
+            className="label"
             style={{
-              color: 'var(--cc-gold)',
+              color: 'var(--gold)',
               marginBottom: 6,
               display: 'inline-flex',
               alignItems: 'center',
@@ -468,10 +468,10 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
             <Star className="w-4 h-4" /> Expertise
           </div>
           <p
-            className="cc-italic-serif"
+            className="italic-serif"
             style={{
               fontSize: 13,
-              color: 'var(--cc-text-dim)',
+              color: 'var(--text-dim)',
               margin: 0,
               lineHeight: 1.55,
             }}
@@ -491,9 +491,9 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
 // ============================================================================
 function StatusCard({ label, value, tone, icon, sub, tip }) {
   const palettes = {
-    teal:   { bg: 'rgba(55, 242, 209, 0.08)', border: 'rgba(55, 242, 209, 0.32)', label: 'var(--cc-teal)' },
-    orange: { bg: 'rgba(255, 83, 0, 0.10)',   border: 'rgba(255, 83, 0, 0.40)',   label: 'var(--cc-orange-soft)' },
-    gold:   { bg: 'rgba(212, 169, 81, 0.10)', border: 'rgba(212, 169, 81, 0.40)', label: 'var(--cc-gold)' },
+    teal:   { bg: 'rgba(55, 242, 209, 0.08)', border: 'rgba(55, 242, 209, 0.32)', label: 'var(--teal)' },
+    orange: { bg: 'rgba(255, 83, 0, 0.10)',   border: 'rgba(255, 83, 0, 0.40)',   label: 'var(--orange-soft)' },
+    gold:   { bg: 'rgba(212, 169, 81, 0.10)', border: 'rgba(212, 169, 81, 0.40)', label: 'var(--gold)' },
   };
   const p = palettes[tone] || palettes.teal;
   return (
@@ -508,7 +508,7 @@ function StatusCard({ label, value, tone, icon, sub, tip }) {
       }}
     >
       <div
-        className="cc-label"
+        className="label"
         style={{
           color: p.label,
           marginBottom: 6,
@@ -522,18 +522,18 @@ function StatusCard({ label, value, tone, icon, sub, tip }) {
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
         <span style={{ fontSize: 18 }}>{icon}</span>
         <span
-          className="cc-display"
-          style={{ fontSize: 22, color: 'var(--cc-text)' }}
+          className="display"
+          style={{ fontSize: 22, color: 'var(--text)' }}
         >
           {value}
         </span>
       </div>
       {sub && (
         <div
-          className="cc-italic-serif"
+          className="italic-serif"
           style={{
             fontSize: 11,
-            color: 'var(--cc-text-dim)',
+            color: 'var(--text-dim)',
             marginTop: 6,
             lineHeight: 1.4,
           }}
@@ -550,8 +550,8 @@ function StatusCard({ label, value, tone, icon, sub, tip }) {
 // ============================================================================
 function SkillSourceBanner({ icon, label, skills, tone }) {
   const palettes = {
-    teal: { bg: 'rgba(55, 242, 209, 0.06)', border: 'var(--cc-teal)' },
-    gold: { bg: 'rgba(212, 169, 81, 0.10)', border: 'var(--cc-gold)' },
+    teal: { bg: 'rgba(55, 242, 209, 0.06)', border: 'var(--teal)' },
+    gold: { bg: 'rgba(212, 169, 81, 0.10)', border: 'var(--gold)' },
   };
   const p = palettes[tone] || palettes.teal;
   return (
@@ -566,7 +566,7 @@ function SkillSourceBanner({ icon, label, skills, tone }) {
       }}
     >
       <div
-        className="cc-label"
+        className="label"
         style={{
           color: p.border,
           marginBottom: 8,
@@ -579,7 +579,7 @@ function SkillSourceBanner({ icon, label, skills, tone }) {
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {skills.map((s) => (
-          <span key={s} className="cc-chip cc-chip-gold">{s}</span>
+          <span key={s} className="chip chip-gold">{s}</span>
         ))}
       </div>
     </div>
@@ -594,19 +594,19 @@ function SkillRow({
   disabled, expertiseAllowed, onToggle, onExpertiseToggle,
 }) {
   const palette = {
-    bg:         { bg: 'rgba(55, 242, 209, 0.12)',  border: 'var(--cc-teal)' },
-    pick:       { bg: 'rgba(255, 83, 0, 0.12)',    border: 'var(--cc-orange)' },
-    racial:     { bg: 'rgba(212, 169, 81, 0.10)',  border: 'var(--cc-gold)' },
+    bg:         { bg: 'rgba(55, 242, 209, 0.12)',  border: 'var(--teal)' },
+    pick:       { bg: 'rgba(255, 83, 0, 0.12)',    border: 'var(--orange)' },
+    racial:     { bg: 'rgba(212, 169, 81, 0.10)',  border: 'var(--gold)' },
     multiclass: { bg: 'rgba(158, 91, 255, 0.10)',  border: '#9E5BFF' },
-    avail:      { bg: 'rgba(20, 12, 8, 0.45)',     border: 'var(--cc-border)' },
-    locked:     { bg: 'rgba(20, 12, 8, 0.30)',     border: 'var(--cc-border-faint)' },
+    avail:      { bg: 'rgba(20, 12, 8, 0.45)',     border: 'var(--border)' },
+    locked:     { bg: 'rgba(20, 12, 8, 0.30)',     border: 'var(--border-faint)' },
   };
   const p = palette[status] || palette.avail;
   const isProficient = status === 'bg' || status === 'pick' || status === 'racial' || status === 'multiclass';
   const checkmarkBg =
-    status === 'bg' ? 'var(--cc-teal)'
-    : status === 'pick' ? 'var(--cc-orange)'
-    : status === 'racial' ? 'var(--cc-gold)'
+    status === 'bg' ? 'var(--teal)'
+    : status === 'pick' ? 'var(--orange)'
+    : status === 'racial' ? 'var(--gold)'
     : status === 'multiclass' ? '#9E5BFF'
     : 'transparent';
 
@@ -653,7 +653,7 @@ function SkillRow({
           style={{
             fontSize: 13,
             fontWeight: 700,
-            color: 'var(--cc-text)',
+            color: 'var(--text)',
             lineHeight: 1.2,
             display: 'flex',
             alignItems: 'center',
@@ -663,7 +663,7 @@ function SkillRow({
           {skill}
           {hasExpertise && (
             <span
-              className="cc-chip cc-chip-gold"
+              className="chip chip-gold"
               style={{ fontSize: 9, padding: '1px 5px' }}
             >
               EXPERT
@@ -671,10 +671,10 @@ function SkillRow({
           )}
         </div>
         <div
-          className="cc-label"
+          className="label"
           style={{
             fontSize: 9,
-            color: 'var(--cc-text-faint)',
+            color: 'var(--text-faint)',
             marginTop: 2,
           }}
         >
@@ -683,14 +683,14 @@ function SkillRow({
       </div>
 
       <div
-        className="cc-display"
+        className="display"
         style={{
           fontSize: 18,
           color: hasExpertise
-            ? 'var(--cc-gold)'
+            ? 'var(--gold)'
             : isProficient
-              ? 'var(--cc-teal)'
-              : 'var(--cc-text-dim)',
+              ? 'var(--teal)'
+              : 'var(--text-dim)',
           minWidth: 32,
           textAlign: 'right',
         }}
@@ -714,9 +714,9 @@ function SkillRow({
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: hasExpertise ? 'var(--cc-gold)' : 'rgba(20, 12, 8, 0.6)',
-            color: hasExpertise ? '#050816' : 'var(--cc-text-faint)',
-            border: `1px solid ${hasExpertise ? 'var(--cc-gold)' : 'var(--cc-border)'}`,
+            background: hasExpertise ? 'var(--gold)' : 'rgba(20, 12, 8, 0.6)',
+            color: hasExpertise ? '#050816' : 'var(--text-faint)',
+            border: `1px solid ${hasExpertise ? 'var(--gold)' : 'var(--border)'}`,
           }}
           title={hasExpertise ? 'Remove expertise' : 'Add expertise'}
         >
@@ -832,17 +832,17 @@ function MulticlassSkillPicker({
           Multiclass · {className}
         </span>
         <h3
-          className="cc-display"
+          className="display"
           style={{ fontSize: 14, color: '#C9A3FF', margin: 0 }}
         >
           Pick {grant.count} skill{grant.count > 1 ? "s" : ""}
           {grant.from === "any" ? " (any skill)" : ` from the ${className} list`}
         </h3>
         <span
-          className="cc-label"
+          className="label"
           style={{
             marginLeft: 'auto',
-            color: myPicks.length === wantedCount ? 'var(--cc-teal)' : 'var(--cc-orange-soft)',
+            color: myPicks.length === wantedCount ? 'var(--teal)' : 'var(--orange-soft)',
           }}
         >
           {myPicks.length}/{wantedCount}
@@ -851,8 +851,8 @@ function MulticlassSkillPicker({
 
       {noOptionsLeft ? (
         <p
-          className="cc-italic-serif"
-          style={{ fontSize: 12, color: 'var(--cc-text-dim)', margin: 0 }}
+          className="italic-serif"
+          style={{ fontSize: 12, color: 'var(--text-dim)', margin: 0 }}
         >
           All skills on the {className} list are already granted from other sources — the
           multiclass skill is wasted, but doesn't block your character.
@@ -878,8 +878,8 @@ function MulticlassSkillPicker({
                   padding: '6px 12px',
                   borderRadius: 999,
                   background: isMine ? '#9E5BFF' : 'rgba(20, 12, 8, 0.55)',
-                  color: isMine ? 'white' : blocked ? 'var(--cc-text-faint)' : 'var(--cc-text)',
-                  border: `1px solid ${isMine ? '#9E5BFF' : 'var(--cc-border)'}`,
+                  color: isMine ? 'white' : blocked ? 'var(--text-faint)' : 'var(--text)',
+                  border: `1px solid ${isMine ? '#9E5BFF' : 'var(--border)'}`,
                   opacity: blocked ? 0.4 : 1,
                   display: 'inline-flex',
                   alignItems: 'center',
