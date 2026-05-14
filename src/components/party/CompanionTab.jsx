@@ -49,6 +49,9 @@ export default function CompanionTab({ character, canEdit }) {
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["companions", character?.id] });
+    if (character?.campaign_id) {
+      queryClient.invalidateQueries({ queryKey: ["campaignCompanions", character.campaign_id] });
+    }
   };
 
   const addMutation = useMutation({
