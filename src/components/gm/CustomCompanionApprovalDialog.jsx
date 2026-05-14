@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, Check, ChevronRight, PawPrint } from "lucide-react";
+import { AlertTriangle, Check, ChevronRight, PawPrint, X as XIcon } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -52,17 +52,32 @@ export default function CustomCompanionApprovalDialog({
   const [editing, setEditing] = useState(null);
   const [stats, setStats] = useState(BLANK_STATS);
 
-  // Compute the pending queue. Each entry points at a specific
-  // companion on a specific character row so the save knows where
-  // to write.
+  // Pending rows from the companions TABLE (party-panel additions).
+  // Run alongside the JSONB-shape pending entries the characters prop
+  // already exposes — both feed the same queue below.
+  const { data: pendingTableRows = [] } = useQuery({
+    queryKey: ["pendingCompanions", campaignId],
+    queryFn: () => base44.entities.Companion
+      .filter({ campaign_id: campaignId, approval_status: "pending" })
+      .catch(() => []),
+    enabled: !!isGM && !!campaignId,
+    refetchInterval: 10000,
+  });
+
+  // Compute the pending queue. Each entry points at the underlying
+  // row so the save knows where to write — either a JSONB index on a
+  // Character row or a companion row id.
   const pending = useMemo(() => {
     const rows = [];
+
     for (const char of characters || []) {
       const comps = Array.isArray(char.companions) ? char.companions : [];
       comps.forEach((comp, idx) => {
-        if (comp?.needs_gm_approval && !dismissed.has(`${char.id}:${idx}`)) {
+        const key = `jsonb:${char.id}:${idx}`;
+        if (comp?.needs_gm_approval && !dismissed.has(key)) {
           rows.push({
-            key: `${char.id}:${idx}`,
+            key,
+            source: "jsonb",
             characterId: char.id,
             characterName: char.name || "Unnamed",
             playerName: char.created_by || "",
@@ -73,8 +88,33 @@ export default function CustomCompanionApprovalDialog({
         }
       });
     }
+
+    for (const row of pendingTableRows) {
+      const key = `table:${row.id}`;
+      if (dismissed.has(key)) continue;
+      const ownerChar = (characters || []).find((c) => c.id === row.character_id);
+      rows.push({
+        key,
+        source: "table",
+        rowId: row.id,
+        characterId: row.character_id,
+        characterName: ownerChar?.name || "Unnamed",
+        playerName: ownerChar?.created_by || "",
+        companion: {
+          name: row.name,
+          image: row.image_url,
+          description: row.description || "",
+          creature_type: row.type || "Beast",
+          ac: row.stats?.ac,
+          hp: row.hp_max ?? row.hp_current,
+          speed: row.stats?.speed,
+        },
+        tableRow: row,
+      });
+    }
+
     return rows;
-  }, [characters, dismissed]);
+  }, [characters, pendingTableRows, dismissed]);
 
   // Load the current companion's existing stats into the form
   // whenever the editor opens on a new entry.
@@ -100,6 +140,50 @@ export default function CustomCompanionApprovalDialog({
       special: comp.special || "",
     });
   }, [editing]);
+
+  const approveRow = useMutation({
+    mutationFn: async ({ rowId, key }) => {
+      const me = await base44.auth.me().catch(() => null);
+      await base44.entities.Companion.update(rowId, {
+        approval_status: "approved",
+        approved_at: new Date().toISOString(),
+        approved_by: me?.id || null,
+      });
+      return key;
+    },
+    onSuccess: (key) => {
+      toast.success("Companion approved.");
+      setDismissed((prev) => new Set(prev).add(key));
+      queryClient.invalidateQueries({ queryKey: ["pendingCompanions", campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaignCompanions", campaignId] });
+    },
+    onError: (err) => {
+      console.error("Approve companion", err);
+      toast.error(`Couldn't approve: ${err?.message || err}`);
+    },
+  });
+
+  const rejectRow = useMutation({
+    mutationFn: async ({ rowId, key }) => {
+      const me = await base44.auth.me().catch(() => null);
+      await base44.entities.Companion.update(rowId, {
+        approval_status: "rejected",
+        approved_at: new Date().toISOString(),
+        approved_by: me?.id || null,
+      });
+      return key;
+    },
+    onSuccess: (key) => {
+      toast.success("Companion rejected.");
+      setDismissed((prev) => new Set(prev).add(key));
+      queryClient.invalidateQueries({ queryKey: ["pendingCompanions", campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaignCompanions", campaignId] });
+    },
+    onError: (err) => {
+      console.error("Reject companion", err);
+      toast.error(`Couldn't reject: ${err?.message || err}`);
+    },
+  });
 
   const save = useMutation({
     mutationFn: async () => {
@@ -153,14 +237,14 @@ export default function CustomCompanionApprovalDialog({
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <PawPrint className="w-5 h-5 text-amber-300" />
-                Custom companions need stats
+                Custom companions need approval
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
               <p className="text-sm text-slate-300">
                 {pending.length === 1
-                  ? `${head.characterName}'s character has a custom companion that needs stats.`
-                  : `${pending.length} player characters have custom companions that need stats before they can participate in combat.`}
+                  ? `${head.characterName} has a custom companion awaiting your approval.`
+                  : `${pending.length} custom companions are awaiting your approval before they can enter active play.`}
               </p>
               <ul className="space-y-2">
                 {pending.map((p) => (
@@ -188,20 +272,42 @@ export default function CustomCompanionApprovalDialog({
                         </p>
                       )}
                     </div>
-                    <Button
-                      size="sm"
-                      onClick={() => setEditing(p)}
-                      className="bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold"
-                    >
-                      Implement <ChevronRight className="w-3 h-3 ml-1" />
-                    </Button>
+                    {p.source === "table" ? (
+                      <div className="flex flex-col gap-1">
+                        <Button
+                          size="sm"
+                          onClick={() => approveRow.mutate({ rowId: p.rowId, key: p.key })}
+                          disabled={approveRow.isPending || rejectRow.isPending}
+                          className="bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold"
+                        >
+                          <Check className="w-3 h-3 mr-1" /> Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => rejectRow.mutate({ rowId: p.rowId, key: p.key })}
+                          disabled={approveRow.isPending || rejectRow.isPending}
+                          className="border-red-500/40 text-red-300 hover:bg-red-500/10"
+                        >
+                          <XIcon className="w-3 h-3 mr-1" /> Reject
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => setEditing(p)}
+                        className="bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold"
+                      >
+                        Implement <ChevronRight className="w-3 h-3 ml-1" />
+                      </Button>
+                    )}
                   </li>
                 ))}
               </ul>
               <div className="bg-amber-500/10 border border-amber-400/40 rounded-lg p-3 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-300 flex-shrink-0 mt-0.5" />
                 <p className="text-[11px] text-amber-100 leading-relaxed">
-                  Until you implement stats, these companions can't take combat actions.
+                  Until approved, these companions stay out of the party UI and can't take combat actions.
                 </p>
               </div>
             </div>

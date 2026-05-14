@@ -32,7 +32,7 @@ const TYPE_MAP = Object.fromEntries(TYPES.map((t) => [t.value, t]));
  * the only surface that reads/writes them; deletion cascades when
  * the owning character is removed.
  */
-export default function CompanionTab({ character, canEdit }) {
+export default function CompanionTab({ character, canEdit, isGM = false }) {
   const queryClient = useQueryClient();
 
   const { data: companions = [] } = useQuery({
@@ -49,21 +49,37 @@ export default function CompanionTab({ character, canEdit }) {
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["companions", character?.id] });
+    if (character?.campaign_id) {
+      queryClient.invalidateQueries({ queryKey: ["campaignCompanions", character.campaign_id] });
+    }
   };
 
+  // Player additions land in the GM approval queue. GMs auto-approve
+  // their own adds — same hand that would otherwise click approve.
   const addMutation = useMutation({
-    mutationFn: (entry) => base44.entities.Companion.create({
-      campaign_id: character.campaign_id,
-      character_id: character.id,
-      name: entry.name,
-      type: entry.type,
-      description: entry.description,
-      hp_current: entry.hp_current,
-      hp_max: entry.hp_max,
-      image_url: entry.image_url,
-      stats: entry.stats || {},
-    }),
-    onSuccess: () => { invalidate(); setAdding(false); toast.success("Companion added."); },
+    mutationFn: async (entry) => {
+      const me = await base44.auth.me().catch(() => null);
+      const nowApproved = isGM;
+      return base44.entities.Companion.create({
+        campaign_id: character.campaign_id,
+        character_id: character.id,
+        name: entry.name,
+        type: entry.type,
+        description: entry.description,
+        hp_current: entry.hp_current,
+        hp_max: entry.hp_max,
+        image_url: entry.image_url,
+        stats: entry.stats || {},
+        approval_status: nowApproved ? "approved" : "pending",
+        approved_at: nowApproved ? new Date().toISOString() : null,
+        approved_by: nowApproved && me?.id ? me.id : null,
+      });
+    },
+    onSuccess: () => {
+      invalidate();
+      setAdding(false);
+      toast.success(isGM ? "Companion added." : "Companion submitted for GM approval.");
+    },
     onError: (err) => toast.error(err?.message || "Couldn't save that companion."),
   });
 
@@ -134,6 +150,8 @@ export default function CompanionTab({ character, canEdit }) {
 
 function CompanionCard({ companion: c, canEdit, onEdit, onRemove }) {
   const typeStyle = TYPE_MAP[c.type] || TYPE_MAP.Beast;
+  const isPending = c.approval_status === "pending";
+  const isRejected = c.approval_status === "rejected";
   const stats = c?.stats || {};
   const hp = Number(c.hp_current ?? stats.hp ?? 0) || 0;
   const maxHp = Number(c.hp_max ?? stats.max_hp ?? stats.maxHp ?? hp) || 0;
@@ -155,6 +173,16 @@ function CompanionCard({ companion: c, canEdit, onEdit, onRemove }) {
           <div className="flex items-center gap-2 flex-wrap">
             <div className="text-base font-bold text-white truncate">{c.name || "Unnamed"}</div>
             <Badge variant="outline" className={`text-[10px] ${typeStyle.cls}`}>{c.type || "Beast"}</Badge>
+            {isPending && (
+              <Badge variant="outline" className="text-[10px] bg-amber-500/20 text-amber-300 border-amber-500/40">
+                Awaiting GM Approval
+              </Badge>
+            )}
+            {isRejected && (
+              <Badge variant="outline" className="text-[10px] bg-red-500/20 text-red-300 border-red-500/40">
+                Rejected
+              </Badge>
+            )}
           </div>
           <div className="text-[11px] text-slate-400">{species}</div>
 
