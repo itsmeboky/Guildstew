@@ -1,7 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronRight, Sparkles, Lock } from "lucide-react";
-import { motion } from "framer-motion";
+import { Sword, Sparkles, Lock } from "lucide-react";
 import {
   abilityModifier,
   proficiencyBonus,
@@ -11,6 +9,7 @@ import {
 import { getSpeciesById, getSubspecies } from "@/data/games/dnd5e_2024/species";
 import { getBackgroundById } from "@/data/games/dnd5e_2024/backgrounds";
 import { getClassByName } from "@/data/games/dnd5e_2024/classes";
+import { getSubclass } from "@/data/games/dnd5e_2024/subclassFeatures";
 import {
   getSpellsKnownEntry,
   spellsPrepared,
@@ -19,58 +18,27 @@ import {
   getPactSlots,
   weaponMasterySlots,
 } from "@/data/games/dnd5e_2024/rules";
+import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
 
-/**
- * 2024 D&D 5e — review step.
- *
- * Read-only summary of every selection the player made in the
- * preceding 2024 steps. Collapsible sections keep long lists out of
- * the player's face while still letting them double-check before
- * saving.
- *
- * Pulls exclusively from the 2024 adapters and from characterData
- * fields written by SpeciesStep2024 / AbilitiesStep2024 /
- * ClassStep2024 / SkillsStep2024 / SpellsStep2024.
- */
+// ============================================================================
+// 2024 D&D 5e — review step. Exact port of step-review.jsx with the 2024
+// adapter (species + background + class + subclass + spells) wired in
+// place of the prototype's local CLASSES / RACES / BACKGROUNDS lookups.
+// Read-only — no mutations.
+// ============================================================================
 
-const ABILITIES = [
-  { key: "str", name: "Strength" },
-  { key: "dex", name: "Dexterity" },
-  { key: "con", name: "Constitution" },
-  { key: "int", name: "Intelligence" },
-  { key: "wis", name: "Wisdom" },
-  { key: "cha", name: "Charisma" },
+const ABILITY_META = [
+  { key: "str", name: "Strength",     color: "#E74C3C", description: "Melee attacks, athletics, carrying capacity." },
+  { key: "dex", name: "Dexterity",    color: "#52C77E", description: "Ranged attacks, stealth, AC, initiative." },
+  { key: "con", name: "Constitution", color: "#E5688E", description: "Hit points, endurance, poison resistance." },
+  { key: "int", name: "Intelligence", color: "#5DA8E8", description: "Memory, magical theory, deduction." },
+  { key: "wis", name: "Wisdom",       color: "#E8C054", description: "Perception, insight, willpower." },
+  { key: "cha", name: "Charisma",     color: "#C9A3FF", description: "Persuasion, performance, social magic." },
 ];
 
-function Section({ title, defaultOpen = true, children, badge }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl border border-[#2A3441]">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between p-4 text-left"
-      >
-        <div className="flex items-center gap-2">
-          {open ? (
-            <ChevronDown className="w-4 h-4 text-[#37F2D1]" />
-          ) : (
-            <ChevronRight className="w-4 h-4 text-white/60" />
-          )}
-          <h3 className="text-base font-bold text-[#FFC6AA]">{title}</h3>
-          {badge}
-        </div>
-      </button>
-      {open && <div className="px-4 pb-4">{children}</div>}
-    </div>
-  );
-}
-
-function modSign(n) {
-  return n >= 0 ? `+${n}` : `${n}`;
-}
-
 export default function ReviewStep2024({ characterData }) {
+  const [hoveredItem, setHoveredItem] = useState(null);
+
   const className = characterData.class || "";
   const level = Number(characterData.level) || 1;
   const cls = className ? getClassByName(className) : null;
@@ -87,17 +55,15 @@ export default function ReviewStep2024({ characterData }) {
     ? getBackgroundById(characterData.background.backgroundId)
     : null;
 
-  const attributes = characterData.attributes || {};
+  const subclassRecord = characterData.subclass ? getSubclass(characterData.subclass) : null;
 
-  const savingThrows = useMemo(() => {
-    if (!cls?.savingThrows) return [];
-    return cls.savingThrows.map((name) => {
-      // savingThrows are full ability names; map to keys.
-      const lower = name.toLowerCase();
-      const key = lower.slice(0, 3);
-      return { ability: name, key, isProficient: true };
-    });
-  }, [cls]);
+  const attributes = characterData.attributes || {};
+  const conMod = abilityModifier(attributes.con || 10);
+  const dexMod = abilityModifier(attributes.dex || 10);
+  const hitDie = cls?.hitDie || 8;
+  const maxHP = (hitDie + conMod) + Math.max(0, level - 1) * (Math.floor(hitDie / 2) + 1 + conMod);
+  const ac = 10 + dexMod;
+  const speed = species?.speed || 30;
 
   const proficientSkills = useMemo(() => {
     const sel = characterData.skills || {};
@@ -106,10 +72,10 @@ export default function ReviewStep2024({ characterData }) {
       .map(([s]) => s)
       .sort();
   }, [characterData.skills]);
+  const backgroundSkills = characterData.background?.skillsGranted || [];
+  const expertise = Array.isArray(characterData.expertise) ? characterData.expertise : [];
 
-  const expertise = Array.isArray(characterData.expertise)
-    ? characterData.expertise
-    : [];
+  const classSaves = (cls?.savingThrows || []).map((s) => String(s).toLowerCase().slice(0, 3));
 
   const spellTable = getSpellsKnownEntry(className);
   const isCaster = !!spellTable;
@@ -119,338 +85,598 @@ export default function ReviewStep2024({ characterData }) {
   const alwaysPrepared = characterData.spells?.alwaysPrepared || [];
   const spellSlots = isCaster ? getSpellSlots(className, level) : [];
   const pactSlots = spellTable?.type === "pact" ? getPactSlots(level) : null;
-  const cantripCap = isCaster ? cantripsKnown(className, level) : 0;
-  const preparedCap = isCaster ? spellsPrepared(className, level) : 0;
 
   const masterySlotCount = className ? weaponMasterySlots(className, level) : 0;
+  const masteries = Array.isArray(characterData.weaponMasteries) ? characterData.weaponMasteries : [];
+
+  const inventory = Array.isArray(characterData.inventory) ? characterData.inventory : [];
+  const currency = characterData.currency || {};
+  const totalGoldEquiv =
+    (Number(currency.cp) || 0) / 100
+    + (Number(currency.sp) || 0) / 10
+    + (Number(currency.ep) || 0) / 2
+    + (Number(currency.gp) || 0)
+    + (Number(currency.pp) || 0) * 10;
+
+  const fullPortraitUrl = characterData.avatar_url;
+  const fullPos = characterData.avatar_position || { x: 0, y: 0 };
+  const fullZoom = characterData.avatar_zoom || 1;
+  const profileUrl = characterData.profile_avatar_url || characterData.avatar_url;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="max-w-5xl mx-auto space-y-4"
-    >
-      {/* Header card */}
-      <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#37F2D1]/40">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h2 className="text-3xl font-bold text-white">
-              {characterData.name || "Unnamed Hero"}
-            </h2>
-            <p className="text-white/70 text-sm mt-1">
-              Level {level} {species?.name || characterData.race || "—"}
-              {subspecies && <> ({subspecies.name})</>} {className || "—"}
-              {characterData.subclass && <> — {characterData.subclass}</>}
-            </p>
-            <p className="text-white/50 text-xs mt-1">
-              {bg?.name || "No background"} • {characterData.alignment || "—"}
-            </p>
-          </div>
-          <Badge className="bg-[#37F2D1] text-[#1E2430] text-xs font-black">
-            2024
-          </Badge>
-        </div>
-      </div>
+    <div>
+      <StepHeader
+        kicker="Chapter VIII · The Reckoning"
+        title="Review your hero"
+        subtitle="One last look. Spot something off? Hop back to any chapter from the top."
+      />
 
-      {/* Abilities */}
-      <Section title="Ability Scores" defaultOpen>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {ABILITIES.map((a) => {
-            const score = Number(attributes[a.key] || 10);
-            const mod = abilityModifier(score);
-            const save = savingThrows.find((s) => s.key === a.key);
-            const saveMod = save ? mod + profBonus : mod;
-            return (
-              <div key={a.key} className="bg-[#1E2430]/40 rounded p-3 text-center">
-                <p className="text-xs text-white/60 uppercase">{a.name}</p>
-                <p className="text-2xl font-bold text-[#37F2D1]">{score}</p>
-                <p className="text-sm text-white/70">{modSign(mod)}</p>
-                <p className="text-[10px] text-white/50 mt-1 uppercase">
-                  Save: {modSign(saveMod)}{save && " *"}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-        <p className="text-[10px] text-white/40 mt-2">* = proficient save</p>
-      </Section>
+      <HeroCard
+        name={characterData.name || 'Unnamed Hero'}
+        level={level}
+        className={className}
+        subclass={characterData.subclass}
+        species={species}
+        subspecies={subspecies}
+        background={bg}
+        alignment={characterData.alignment}
+        biography={characterData.description || characterData.biography}
+        portraitUrl={fullPortraitUrl}
+        portraitPos={fullPos}
+        portraitZoom={fullZoom}
+        profileUrl={profileUrl}
+        maxHP={maxHP}
+        ac={ac}
+        speed={speed}
+        profBonus={profBonus}
+      />
 
-      {/* Background ASI breakdown */}
-      {bg && (
-        <Section title={`Background — ${bg.name}`}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div>
-              <p className="text-xs uppercase text-white/50 mb-1">Ability bonus</p>
-              <p className="text-white/80">
-                {characterData.background?.asiDistribution || "—"}{" "}
-                <span className="text-white/50">across</span>{" "}
-                {Object.entries(characterData.background?.asiAssignment || {})
-                  .map(([ab, v]) => `${ab.toUpperCase()} +${v}`)
-                  .join(", ") || "—"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs uppercase text-white/50 mb-1">Skills granted</p>
-              <p className="text-white/80">
-                {(characterData.background?.skillsGranted || []).join(", ") || "—"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs uppercase text-white/50 mb-1">Tool granted</p>
-              <p className="text-white/80">
-                {characterData.background?.toolGranted || "—"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs uppercase text-white/50 mb-1">Origin Feat</p>
-              <p className="text-white/80">
-                {characterData.background?.originFeat || "—"}
-              </p>
-            </div>
-          </div>
-        </Section>
-      )}
-
-      {/* Species */}
-      {species && (
-        <Section title={`Species — ${species.name}${subspecies ? ` (${subspecies.name})` : ""}`}>
-          <div className="text-sm text-white/70 mb-2">
-            {species.type} • {species.size} • Speed {species.speed} ft
-          </div>
-          {Array.isArray(species.traits) && species.traits.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-2">
-              {species.traits.map((t) => (
-                <Badge
-                  key={t.index}
-                  className="bg-[#5B4B9E]/30 text-white text-[10px] border border-[#5B4B9E]/50"
-                >
-                  {t.name}
-                </Badge>
-              ))}
-            </div>
-          )}
-          {Array.isArray(subspecies?.traits) && subspecies.traits.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {subspecies.traits.map((t) => (
-                <Badge
-                  key={t.index}
-                  className="bg-[#1E2430] text-white/80 text-[10px] border border-white/10"
-                >
-                  {t.name}
-                </Badge>
-              ))}
-            </div>
-          )}
-        </Section>
-      )}
-
-      {/* Skills */}
-      {proficientSkills.length > 0 && (
-        <Section
-          title="Skills"
-          badge={
-            <span className="text-xs text-white/50">
-              {proficientSkills.length} proficient
-              {expertise.length > 0 && <> • {expertise.length} expertise</>}
-            </span>
-          }
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {ALL_SKILLS.filter((s) => proficientSkills.includes(s)).map((skill) => {
-              const ab = SKILL_ABILITIES[skill];
-              const score = Number(attributes[ab] || 10);
-              const hasExpertise = expertise.includes(skill);
-              const mod = abilityModifier(score)
-                + (hasExpertise ? profBonus * 2 : profBonus);
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 20,
+          marginTop: 24,
+        }}
+      >
+        <ReviewCard title="Ability Scores" icon="🎲">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {ABILITY_META.map((ab) => {
+              const value = attributes[ab.key] || 10;
+              const mod = abilityModifier(value);
               return (
                 <div
-                  key={skill}
-                  className="bg-[#1E2430]/40 rounded p-2 flex items-center justify-between text-sm"
+                  key={ab.key}
+                  style={{
+                    background: 'rgba(20, 12, 8, 0.45)',
+                    padding: '10px 8px',
+                    borderRadius: 8,
+                    textAlign: 'center',
+                    borderTop: `2px solid ${ab.color}`,
+                    position: 'relative',
+                    cursor: 'help',
+                  }}
+                  onMouseEnter={() => setHoveredItem(`ab-${ab.key}`)}
+                  onMouseLeave={() => setHoveredItem(null)}
                 >
-                  <span className="text-white">
-                    {skill}
-                    {hasExpertise && (
-                      <span className="text-yellow-400 ml-1 text-[10px]">★</span>
-                    )}
-                  </span>
-                  <span className="text-[#37F2D1] font-bold">{modSign(mod)}</span>
+                  <div className="label" style={{ fontSize: 9, color: ab.color, marginBottom: 2 }}>
+                    {ab.key.toUpperCase()}
+                  </div>
+                  <div
+                    className="display"
+                    style={{ fontSize: 24, color: 'var(--text)', lineHeight: 1.1 }}
+                  >
+                    {(mod >= 0 ? '+' : '') + mod}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{value}</div>
+                  {hoveredItem === `ab-${ab.key}` && (
+                    <ReviewTooltip color={ab.color} title={ab.name} body={ab.description} />
+                  )}
                 </div>
               );
             })}
           </div>
-        </Section>
-      )}
+        </ReviewCard>
 
-      {/* Weapon Mastery (martial classes only) */}
-      {masterySlotCount > 0 && (
-        <Section
-          title="Weapon Mastery"
-          badge={
-            <span className="text-xs text-white/50">
-              {masterySlotCount} weapon slot{masterySlotCount === 1 ? "" : "s"}
-            </span>
-          }
-        >
-          <p className="text-white/70 text-sm">
-            As a martial class, you can apply mastery properties to{" "}
-            {masterySlotCount} weapon{masterySlotCount === 1 ? "" : "s"} at a time
-            (changes with each Long Rest).
-          </p>
-        </Section>
-      )}
+        <ReviewCard title="Saving Throws" icon="🛡">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            {ABILITY_META.map((ab) => {
+              const isProf = classSaves.includes(ab.key);
+              const mod = abilityModifier(attributes[ab.key] || 10) + (isProf ? profBonus : 0);
+              return (
+                <div
+                  key={ab.key}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    padding: '6px 10px',
+                    background: 'rgba(20, 12, 8, 0.45)',
+                    borderRadius: 6,
+                    fontSize: 13,
+                  }}
+                >
+                  <span style={{ color: isProf ? 'var(--teal)' : 'var(--text-dim)' }}>
+                    {isProf ? '●' : '○'} {ab.name}
+                  </span>
+                  <span className="mono" style={{ color: 'var(--text)', fontWeight: 700 }}>
+                    {(mod >= 0 ? '+' : '') + mod}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </ReviewCard>
 
-      {/* Spellcasting */}
-      {isCaster && (
-        <Section
-          title="Spellcasting"
-          badge={
-            <span className="text-xs text-white/50">
-              {spellTable.type}
-              {cantripCap > 0 && <> • {cantrips.length}/{cantripCap} cantrips</>}
-              {preparedCap > 0 && <> • {prepared.length}/{preparedCap} prepared</>}
-            </span>
-          }
-        >
-          <div className="space-y-3 text-sm">
-            {/* Slots */}
-            <div>
-              <p className="text-xs uppercase text-white/50 mb-1">Spell slots</p>
-              <div className="flex gap-2 flex-wrap">
-                {spellSlots.map((slots, idx) => slots > 0 && (
+        <ReviewCard title={`Skills · ${proficientSkills.length}`} icon="🎯">
+          {proficientSkills.length === 0 ? (
+            <div className="italic-serif" style={{ fontSize: 13, color: 'var(--text-faint)' }}>
+              No skill proficiencies yet.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {proficientSkills.map((s) => {
+                const abilityKey = SKILL_ABILITIES[s];
+                const baseMod = abilityModifier(attributes[abilityKey] || 10);
+                const hasExpertise = expertise.includes(s);
+                const mod = baseMod + (hasExpertise ? profBonus * 2 : profBonus);
+                const isBg = backgroundSkills.includes(s);
+                return (
                   <span
-                    key={idx}
-                    className="bg-[#1E2430] rounded px-2 py-0.5 text-white/80 text-xs"
+                    key={s}
+                    className={`chip ${hasExpertise ? 'chip-gold' : isBg ? '' : 'chip-orange'}`}
+                    style={{
+                      background: isBg && !hasExpertise ? 'rgba(55,242,209,0.15)' : undefined,
+                      color: isBg && !hasExpertise ? 'var(--teal)' : undefined,
+                      borderColor: isBg && !hasExpertise ? 'rgba(55,242,209,0.3)' : undefined,
+                    }}
                   >
-                    L{idx + 1}: {slots}
+                    {s} {(mod >= 0 ? '+' : '') + mod}
+                    {hasExpertise && ' ★'}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </ReviewCard>
+
+        {cls && (
+          <ReviewCard title={`${cls.name} Build`} icon="⚔️">
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'auto 1fr',
+                rowGap: 6,
+                columnGap: 12,
+                fontSize: 13,
+              }}
+            >
+              <span className="label" style={{ color: 'var(--gold-soft)' }}>Hit Die</span>
+              <span style={{ color: 'var(--text)' }}>d{cls.hitDie}</span>
+              <span className="label" style={{ color: 'var(--gold-soft)' }}>Primary</span>
+              <span style={{ color: 'var(--text)' }}>{cls.primaryAbility || '—'}</span>
+              {characterData.subclass && (
+                <>
+                  <span className="label" style={{ color: 'var(--gold-soft)' }}>Subclass</span>
+                  <span style={{ color: 'var(--text)' }}>{characterData.subclass}</span>
+                </>
+              )}
+              {masterySlotCount > 0 && (
+                <>
+                  <span className="label" style={{ color: 'var(--gold-soft)' }}>Mastery slots</span>
+                  <span style={{ color: 'var(--text)' }}>
+                    {masteries.length} / {masterySlotCount}
+                  </span>
+                </>
+              )}
+            </div>
+            {masteries.length > 0 && (
+              <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {masteries.map((m) => (
+                  <span
+                    key={m}
+                    className="chip chip-purple"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                  >
+                    <Sword className="w-3 h-3" /> {m}
                   </span>
                 ))}
-                {pactSlots && (
-                  <span className="bg-[#5B4B9E]/30 rounded px-2 py-0.5 text-white text-xs border border-[#5B4B9E]/50">
-                    Pact: {pactSlots.slots} × L{pactSlots.level}
-                  </span>
-                )}
               </div>
+            )}
+          </ReviewCard>
+        )}
+
+        {species && (
+          <ReviewCard title="Species Traits" icon="🛡️">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+              {(species.traits || []).slice(0, 8).map((t) => (
+                <span key={t.index || t.name} className="chip chip-neutral">{t.name}</span>
+              ))}
             </div>
+            {subspecies && (
+              <div style={{ fontSize: 12, color: 'var(--gold-soft)' }}>
+                Lineage: <strong style={{ color: 'var(--text)' }}>{subspecies.name}</strong>
+              </div>
+            )}
+          </ReviewCard>
+        )}
 
+        {isCaster && (cantrips.length > 0 || prepared.length > 0 || spellbook.length > 0) && (
+          <ReviewCard title="Spellbook" icon="📖">
             {alwaysPrepared.length > 0 && (
-              <div>
-                <p className="text-xs uppercase text-white/50 mb-1 flex items-center gap-1">
+              <>
+                <div className="label" style={{ marginBottom: 6, color: 'var(--gold)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   <Lock className="w-3 h-3" /> Always prepared
-                </p>
-                <div className="flex flex-wrap gap-1">
-                  {alwaysPrepared.map((name) => (
-                    <Badge key={name} className="bg-yellow-400 text-[#1E2430] text-[10px]">
-                      {name}
-                    </Badge>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                  {alwaysPrepared.map((s) => (
+                    <span key={s} className="chip chip-gold">{s}</span>
                   ))}
                 </div>
-              </div>
+              </>
             )}
-
             {cantrips.length > 0 && (
-              <div>
-                <p className="text-xs uppercase text-white/50 mb-1">Cantrips</p>
-                <div className="flex flex-wrap gap-1">
-                  {cantrips.map((name) => (
-                    <Badge
-                      key={name}
-                      className="bg-[#37F2D1]/20 text-white text-[10px] border border-[#37F2D1]/40"
-                    >
-                      {name}
-                    </Badge>
+              <>
+                <div className="label" style={{ marginBottom: 6, color: 'var(--purple)' }}>Cantrips</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                  {cantrips.map((c) => (
+                    <span key={c} className="chip chip-purple">{c}</span>
                   ))}
                 </div>
-              </div>
+              </>
             )}
-
             {prepared.length > 0 && (
-              <div>
-                <p className="text-xs uppercase text-white/50 mb-1">Prepared</p>
-                <div className="flex flex-wrap gap-1">
-                  {prepared.map((name) => (
-                    <Badge
-                      key={name}
-                      className="bg-[#37F2D1]/20 text-white text-[10px] border border-[#37F2D1]/40"
-                    >
-                      {name}
-                    </Badge>
+              <>
+                <div className="label" style={{ marginBottom: 6, color: 'var(--orange-soft)' }}>Prepared</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                  {prepared.map((c) => (
+                    <span key={c} className="chip chip-orange">{c}</span>
                   ))}
                 </div>
-              </div>
+              </>
             )}
-
-            {spellbook.length > 0 && spellTable.type === "spellbook" && (
-              <div>
-                <p className="text-xs uppercase text-white/50 mb-1">Spellbook</p>
-                <div className="flex flex-wrap gap-1">
-                  {spellbook.map((name) => (
-                    <Badge
-                      key={name}
-                      className="bg-[#1E2430] text-white/80 text-[10px] border border-white/10"
+            {spellbook.length > 0 && spellbook.length !== prepared.length && (
+              <>
+                <div className="label" style={{ marginBottom: 6, color: 'var(--gold-soft)' }}>
+                  Spellbook · {spellbook.length}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {spellbook.map((c) => (
+                    <span
+                      key={c}
+                      className="chip"
+                      style={{
+                        opacity: prepared.includes(c) ? 1 : 0.65,
+                      }}
                     >
-                      {name}
-                    </Badge>
+                      {c}
+                    </span>
                   ))}
                 </div>
-              </div>
+              </>
             )}
-          </div>
-        </Section>
-      )}
+            <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {spellSlots.map((slots, idx) => slots > 0 && (
+                <span key={idx} className="chip" style={{ fontSize: 10 }}>
+                  L{idx + 1}: {slots}/day
+                </span>
+              ))}
+              {pactSlots && (
+                <span className="chip chip-purple" style={{ fontSize: 10 }}>
+                  Pact: {pactSlots.slots} × L{pactSlots.level}
+                </span>
+              )}
+            </div>
+          </ReviewCard>
+        )}
 
-      {/* Description / personality / appearance */}
-      {(characterData.description
-        || characterData.personality?.ideals
-        || characterData.personality?.bonds
-        || characterData.personality?.flaws
-        || Array.isArray(characterData.personality?.traits)) && (
-        <Section title="Roleplaying" defaultOpen={false}>
-          <div className="space-y-2 text-sm text-white/80">
-            {Array.isArray(characterData.personality?.traits)
-              && characterData.personality.traits.length > 0 && (
-              <div>
-                <p className="text-xs uppercase text-white/50">Traits</p>
-                <ul className="list-disc list-inside">
-                  {characterData.personality.traits.map((t, i) => (
-                    <li key={i}>{t}</li>
-                  ))}
-                </ul>
-              </div>
+        {bg && (
+          <ReviewCard title={`Background · ${bg.name}`} icon="📜">
+            <div style={{ fontSize: 12, color: 'var(--gold-soft)', marginBottom: 4 }}>Skills</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
+              {(characterData.background?.skillsGranted || []).map((s) => (
+                <span key={s} className="chip" style={{ background: 'rgba(55,242,209,0.15)', color: 'var(--teal)', borderColor: 'rgba(55,242,209,0.3)' }}>
+                  {s}
+                </span>
+              ))}
+            </div>
+            {characterData.background?.toolGranted && (
+              <>
+                <div style={{ fontSize: 12, color: 'var(--gold-soft)', marginBottom: 4 }}>Tool</div>
+                <div style={{ fontSize: 13, color: 'var(--text)', marginBottom: 10 }}>
+                  {characterData.background.toolGranted}
+                </div>
+              </>
             )}
-            {characterData.personality?.ideals && (
-              <div>
-                <p className="text-xs uppercase text-white/50">Ideals</p>
-                <p>{characterData.personality.ideals}</p>
-              </div>
+            {characterData.background?.originFeat && (
+              <>
+                <div style={{ fontSize: 12, color: 'var(--gold-soft)', marginBottom: 4 }}>Origin Feat</div>
+                <div style={{ fontSize: 13, color: 'var(--text)' }}>
+                  {characterData.background.originFeat}
+                </div>
+              </>
             )}
-            {characterData.personality?.bonds && (
-              <div>
-                <p className="text-xs uppercase text-white/50">Bonds</p>
-                <p>{characterData.personality.bonds}</p>
-              </div>
-            )}
-            {characterData.personality?.flaws && (
-              <div>
-                <p className="text-xs uppercase text-white/50">Flaws</p>
-                <p>{characterData.personality.flaws}</p>
-              </div>
-            )}
-            {characterData.description && (
-              <div>
-                <p className="text-xs uppercase text-white/50">Description</p>
-                <p>{characterData.description}</p>
-              </div>
-            )}
-          </div>
-        </Section>
-      )}
+          </ReviewCard>
+        )}
 
-      <div className="bg-[#37F2D1]/10 border border-[#37F2D1]/30 rounded-lg p-3 text-sm text-[#37F2D1] flex items-center gap-2">
-        <Sparkles className="w-4 h-4" />
-        Looks good? Click <span className="font-bold">Create Character</span> below
-        to save.
+        {subclassRecord && (
+          <ReviewCard title={subclassRecord.name} icon="✦">
+            {(subclassRecord.summary || subclassRecord.description) && (
+              <p
+                className="italic-serif"
+                style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.5, margin: 0 }}
+              >
+                {subclassRecord.summary || subclassRecord.description}
+              </p>
+            )}
+          </ReviewCard>
+        )}
+
+        {inventory.length > 0 && (
+          <ReviewCard title={`Equipment · ${inventory.length}`} icon="🎒">
+            <ul
+              style={{
+                margin: 0,
+                padding: '0 0 0 18px',
+                fontSize: 12,
+                color: 'var(--text-dim)',
+                lineHeight: 1.7,
+                maxHeight: 200,
+                overflowY: 'auto',
+              }}
+            >
+              {inventory.filter((i) => i?.name).map((it, i) => (
+                <li key={i}>
+                  {it.name}
+                  {it.quantity > 1 && (
+                    <span style={{ color: 'var(--text-faint)' }}> ×{it.quantity}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <div
+              style={{
+                marginTop: 12,
+                paddingTop: 12,
+                borderTop: '1px solid var(--border-faint)',
+                fontSize: 12,
+                color: 'var(--gold)',
+                fontWeight: 600,
+                textAlign: 'right',
+              }}
+            >
+              Treasury · {totalGoldEquiv.toFixed(1)} gp
+            </div>
+          </ReviewCard>
+        )}
+
+        {(characterData.description || characterData.biography) && (
+          <ReviewCard title="Biography" icon="✒️">
+            <p
+              className="italic-serif"
+              style={{
+                fontSize: 13.5,
+                color: 'var(--text)',
+                lineHeight: 1.6,
+                margin: 0,
+                whiteSpace: 'pre-line',
+              }}
+            >
+              {characterData.description || characterData.biography}
+            </p>
+          </ReviewCard>
+        )}
       </div>
-    </motion.div>
+
+      <div
+        style={{
+          marginTop: 28,
+          padding: 24,
+          borderRadius: 14,
+          background: 'linear-gradient(135deg, rgba(255,83,0,0.1), rgba(255,83,0,0.02))',
+          border: '1.5px solid rgba(255, 83, 0, 0.3)',
+          textAlign: 'center',
+        }}
+      >
+        <h3 className="display" style={{ fontSize: 24, color: 'var(--orange)', marginBottom: 8 }}>
+          Ready to play?
+        </h3>
+        <p style={{ color: 'var(--text-dim)', fontSize: 14, margin: 0 }}>
+          Save your character from the button at the bottom of the page. You can edit anything
+          later from your library.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// HeroCard — panel-strong with corner brackets, full-body portrait on the
+// left + identity chips + 4 stat boxes (HP / AC / Speed / Prof) on the right
+// + biography epigraph beneath. Profile avatar overlay in the bottom-right
+// of the portrait when present.
+// ============================================================================
+function HeroCard({
+  name, level, className, subclass, species, subspecies, background, alignment,
+  biography, portraitUrl, portraitPos, portraitZoom, profileUrl,
+  maxHP, ac, speed, profBonus,
+}) {
+  const speciesLabel = species
+    ? `${subspecies?.name ? subspecies.name + ' ' : ''}${species.name}`
+    : '';
+  return (
+    <div className="panel-strong" style={{ padding: 0, overflow: 'hidden', position: 'relative' }}>
+      <div className="tome-corner tr" />
+      <div className="tome-corner bl" />
+
+      <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 0 }}>
+        <div
+          style={{
+            width: 240,
+            height: 280,
+            background: portraitUrl
+              ? 'rgba(20, 12, 8, 0.4)'
+              : 'linear-gradient(135deg, rgba(255,83,0,0.1), rgba(55,242,209,0.05))',
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          {portraitUrl ? (
+            <img
+              src={portraitUrl}
+              alt={name}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                transform: `translate(${portraitPos.x}px, ${portraitPos.y}px) scale(${portraitZoom})`,
+                transformOrigin: 'center center',
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 80,
+                opacity: 0.3,
+              }}
+            >
+              🛡️
+            </div>
+          )}
+          {profileUrl && portraitUrl !== profileUrl && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 12,
+                right: 12,
+                width: 60,
+                height: 60,
+                borderRadius: '50%',
+                background: `url(${profileUrl}) center/cover`,
+                border: '3px solid var(--orange)',
+                boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+              }}
+            />
+          )}
+        </div>
+
+        <div style={{ padding: 24 }}>
+          <h2
+            className="display"
+            style={{ fontSize: 42, color: 'var(--orange)', lineHeight: 1, marginBottom: 8 }}
+          >
+            {name}
+          </h2>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+            <span className="chip chip-orange">Level {level}</span>
+            {speciesLabel && <span className="chip">{speciesLabel}</span>}
+            {className && <span className="chip chip-purple">{className}</span>}
+            {subclass && <span className="chip chip-gold">{subclass}</span>}
+            {background?.name && <span className="chip">{background.name}</span>}
+            {alignment && <span className="chip">{alignment}</span>}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            <StatBox label="HP" value={maxHP} tone="red" />
+            <StatBox label="AC" value={ac} tone="blue" />
+            <StatBox label="Speed" value={speed} suffix="ft" tone="green" />
+            <StatBox label="Prof" value={`+${profBonus}`} tone="orange" />
+          </div>
+
+          {biography && (
+            <p
+              className="italic-serif"
+              style={{
+                fontSize: 13,
+                color: 'var(--text-dim)',
+                margin: '14px 0 0',
+                lineHeight: 1.5,
+              }}
+            >
+              "{biography}"
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatBox({ label, value, suffix, tone }) {
+  const colors = { red: '#E74C3C', blue: '#3498DB', green: '#27AE60', orange: 'var(--orange)' };
+  const c = colors[tone] || 'var(--text)';
+  return (
+    <div
+      style={{
+        padding: '12px 8px',
+        background: 'rgba(20, 12, 8, 0.5)',
+        borderRadius: 10,
+        textAlign: 'center',
+        borderTop: `2px solid ${c}`,
+      }}
+    >
+      <div className="label" style={{ color: c, marginBottom: 4 }}>{label}</div>
+      <div className="display" style={{ fontSize: 28, color: 'var(--text)', lineHeight: 1 }}>
+        {value}
+        {suffix && (
+          <span style={{ fontSize: 14, color: 'var(--text-faint)', marginLeft: 2 }}>
+            {suffix}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReviewCard({ title, icon, children }) {
+  return (
+    <div className="panel" style={{ padding: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
+        <span style={{ fontSize: 16 }}>{icon}</span>
+        <h3 className="display" style={{ fontSize: 18, color: 'var(--text)' }}>{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ReviewTooltip({ color, title, body, width = 240 }) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        bottom: '110%',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 10,
+        background: '#14090A',
+        border: `1px solid ${color}`,
+        borderRadius: 6,
+        padding: 12,
+        width,
+        textAlign: 'left',
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6)',
+        pointerEvents: 'none',
+      }}
+    >
+      <div
+        className="display"
+        style={{ fontSize: 13, color, marginBottom: 4 }}
+      >
+        {title}
+      </div>
+      <div
+        className="italic-serif"
+        style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.5 }}
+      >
+        {body}
+      </div>
+    </div>
   );
 }
