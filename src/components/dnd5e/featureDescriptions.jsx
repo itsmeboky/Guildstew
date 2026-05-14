@@ -4,14 +4,14 @@ export const classFeatureDescriptions = {
   "Unarmored Defense": "While not wearing armor, your AC equals 10 + Dex modifier + Con modifier.",
   "Reckless Attack": "Gain advantage on melee weapon attacks using Strength, but attack rolls against you have advantage until your next turn.",
   "Danger Sense": "Advantage on Dexterity saving throws against effects you can see.",
-  "Primal Path": "Choose a path that shapes your rage: Berserker, Totem Warrior, etc.",
+  "Primal Path": "Choose a Primal Path that shapes the nature of your rage.",
   
   // Bard
   "Spellcasting": "You can cast spells using Charisma as your spellcasting ability.",
   "Bardic Inspiration": "Use a bonus action to grant an ally a d6 (scales with level) they can add to ability checks, attack rolls, or saving throws.",
   "Jack of All Trades": "Add half your proficiency bonus to ability checks that don't already include it.",
   "Song of Rest": "During a short rest, allies who use Hit Dice to heal regain extra hit points.",
-  "Bard College": "Choose a college that defines your bardic style: Lore, Valor, etc.",
+  "Bard College": "Choose a Bard College that defines your bardic style.",
   "Expertise": "Double your proficiency bonus for two skills you're proficient in.",
   
   // Cleric
@@ -22,45 +22,45 @@ export const classFeatureDescriptions = {
   // Druid
   "Druidic": "You know the secret language of druids, which you can use to leave hidden messages.",
   "Wild Shape": "Magically assume the shape of a beast you've seen before.",
-  "Druid Circle": "Choose a circle of druids: Land, Moon, etc.",
+  "Druid Circle": "Choose a Druid Circle that reflects your bond with nature.",
   
   // Fighter
   "Fighting Style": "Choose a combat specialty: Archery, Defense, Dueling, Great Weapon Fighting, Protection, or Two-Weapon Fighting.",
   "Second Wind": "Use a bonus action to regain 1d10 + fighter level hit points once per short rest.",
   "Action Surge": "Take an additional action on your turn once per short rest.",
-  "Martial Archetype": "Choose an archetype: Champion, Battle Master, or Eldritch Knight.",
+  "Martial Archetype": "Choose a Martial Archetype that you strive to emulate.",
   "Extra Attack": "Attack twice instead of once when you take the Attack action.",
   
   // Monk
   "Martial Arts": "Use Dexterity for unarmed strikes, roll martial arts die for damage, and make an unarmed strike as a bonus action.",
   "Ki": "Spend ki points to fuel special abilities like Flurry of Blows, Patient Defense, and Step of the Wind.",
   "Unarmored Movement": "Your speed increases by 10 feet while not wearing armor or wielding a shield.",
-  "Monastic Tradition": "Choose a tradition: Open Hand, Shadow, Four Elements, etc.",
+  "Monastic Tradition": "Choose a Monastic Tradition that shapes your practice.",
   
   // Paladin
   "Divine Sense": "Detect celestials, fiends, and undead within 60 feet as an action.",
   "Lay on Hands": "Heal wounds with a pool of hit points equal to paladin level × 5.",
   "Divine Smite": "Expend a spell slot when you hit with a melee weapon to deal extra radiant damage.",
-  "Sacred Oath": "Swear an oath that grants features and spells: Devotion, Ancients, or Vengeance.",
+  "Sacred Oath": "Swear a Sacred Oath that defines your divine purpose.",
   
   // Ranger
   "Favored Enemy": "Advantage on tracking and recalling information about a chosen enemy type.",
   "Natural Explorer": "Benefits when traveling in a chosen terrain type.",
-  "Ranger Archetype": "Choose an archetype: Hunter or Beast Master.",
+  "Ranger Archetype": "Choose a Ranger Archetype that reflects your specialty.",
   
   // Rogue
   "Sneak Attack": "Deal extra damage once per turn when you have advantage or an ally is within 5 feet of target.",
   "Thieves' Cant": "Secret language and code used by thieves to hide messages.",
   "Cunning Action": "Use Dash, Disengage, or Hide as a bonus action.",
-  "Roguish Archetype": "Choose an archetype: Thief, Assassin, or Arcane Trickster.",
+  "Roguish Archetype": "Choose a Roguish Archetype that defines your skills.",
   
   // Sorcerer
-  "Sorcerous Origin": "Choose the source of your magic: Draconic Bloodline or Wild Magic.",
+  "Sorcerous Origin": "Choose a Sorcerous Origin that describes the source of your magic.",
   "Font of Magic": "Tap into your magic to create sorcery points, which can be used to gain spell slots or fuel Metamagic.",
   "Metamagic": "Twist spells to suit your needs using options like Careful, Distant, Empowered, Extended, Heightened, Quickened, Subtle, or Twinned Spell.",
   
   // Warlock
-  "Otherworldly Patron": "Your pact with a powerful being grants you magic: Archfey, Fiend, or Great Old One.",
+  "Otherworldly Patron": "Choose an Otherworldly Patron with whom you forge a pact.",
   "Pact Magic": "Regain all spell slots on a short rest, but have fewer slots than other casters.",
   "Eldritch Invocations": "Fragments of forbidden knowledge that grant magical abilities.",
   "Pact Boon": "Your patron's gift: Pact of the Chain, Blade, or Tome.",
@@ -125,60 +125,38 @@ export const alignmentDescriptions = {
 export const subclassDescriptions = {
   // Barbarian
   "Path of the Berserker": "Untrammeled fury and reckless abandon. Enter a frenzy to make additional attacks.",
-  "Path of the Totem Warrior": "Spiritual journey guided by animal spirits. Gain animal-themed powers.",
   
   // Bard
   "College of Lore": "Know something about most things. Use Cutting Words to subtract from enemy rolls.",
-  "College of Valor": "Daring skalds who inspire courage. Grant combat benefits with Bardic Inspiration.",
   
   // Cleric Domains
-  "Knowledge Domain": "Value learning and understanding. Gain proficiencies and read thoughts.",
   "Life Domain": "Focus on healing and vitality. Your healing spells restore extra hit points.",
-  "Light Domain": "Promote truth and vigilance. Wield radiant damage and protective light.",
-  "Nature Domain": "Guardians of the natural world. Charm animals and plants.",
-  "Tempest Domain": "Control storms and weather. Deal maximum lightning or thunder damage.",
-  "Trickery Domain": "Mischief and deception. Create illusory duplicates and become invisible.",
-  "War Domain": "Watch over warriors. Make extra attacks and grant bonus to hit.",
   
   // Druid
   "Circle of the Land": "Mystics who safeguard ancient knowledge. Gain terrain-based spells and natural recovery.",
-  "Circle of the Moon": "Fierce guardians who transform into powerful beasts for combat.",
   
   // Fighter
   "Champion": "Focus on raw physical power and improved critical hits.",
-  "Battle Master": "Master of combat maneuvers and tactical superiority.",
-  "Eldritch Knight": "Combine martial prowess with wizard spells.",
   
   // Monk
   "Way of the Open Hand": "Ultimate masters of unarmed combat. Manipulate ki to heal and protect.",
-  "Way of Shadow": "Stealth and subterfuge. Teleport between shadows.",
-  "Way of the Four Elements": "Harness elemental power with ki.",
   
   // Paladin
   "Oath of Devotion": "Paladins of justice, virtue, and order. Cannot be charmed.",
-  "Oath of the Ancients": "Preserve life and light. Resistance to spell damage.",
-  "Oath of Vengeance": "Punish wrongdoers. Gain advantage on attacks against chosen foes.",
   
   // Ranger
   "Hunter": "Master of hunting techniques. Deal extra damage and use defensive tactics.",
-  "Beast Master": "Bond with an animal companion that fights alongside you.",
   
   // Rogue
   "Thief": "Master of larceny. Use items and climb with bonus actions.",
-  "Assassin": "Deadly killer. Gain advantage on creatures that haven't acted and auto-crit on surprised foes.",
-  "Arcane Trickster": "Blend stealth with magic. Use wizard spells and enhance mage hand.",
   
   // Sorcerer
   "Draconic Bloodline": "Magic from dragon ancestry. Increased HP, natural armor, and dragon wings.",
-  "Wild Magic": "Chaotic magic that can surge unpredictably. Manipulate fate with Tides of Chaos.",
   
   // Warlock
-  "The Archfey": "Pact with a fey lord. Charm and frighten with Fey Presence.",
   "The Fiend": "Pact with a devil or demon. Gain temporary HP when you kill enemies.",
-  "The Great Old One": "Pact with an incomprehensible entity. Telepathy and thought reading.",
   
   // Wizard
-  "School of Abjuration": "Master of protective magic. Create arcane wards.",
   "School of Evocation": "Master of destructive magic. Protect allies from your area spells."
 };
 

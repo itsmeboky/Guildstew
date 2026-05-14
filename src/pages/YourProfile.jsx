@@ -19,6 +19,8 @@ import StatusDot from "@/components/presence/StatusDot";
 import { statusMeta } from "@/lib/PresenceContext";
 import { Skeleton, CardSkeleton } from "@/components/ui/skeleton";
 import SocialHandlesDisplay from "@/components/profile/SocialHandlesDisplay";
+import { invalidateProfileQueries } from "@/lib/invalidateProfileQueries";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function YourProfile() {
   const sub = useSubscription();
@@ -35,6 +37,13 @@ export default function YourProfile() {
   const [editProfileOpen, setEditProfileOpen] = useState(false);
 
   const queryClient = useQueryClient();
+  // Source-of-truth for the signed-in user. The legacy ['currentUser']
+  // useQuery below depended on base44.auth.me() (undefined on the
+  // wrapper) and only worked because AuthContext side-stamped the
+  // cache via setQueryData. Stamping author fields off that racey
+  // value left NULLs in posts.author_id when the cache hadn't been
+  // populated yet — read from the context directly for writes.
+  const { user: authUser } = useAuth();
 
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
@@ -149,7 +158,7 @@ console.log('PROFILE PAGE USER:', user)
   const updateBioMutation = useMutation({
     mutationFn: (bio) => base44.auth.updateMe({ bio }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      invalidateProfileQueries(queryClient);
       setEditingBio(false);
     }
   });
@@ -157,7 +166,7 @@ console.log('PROFILE PAGE USER:', user)
   const updateGenresMutation = useMutation({
     mutationFn: (genres) => base44.auth.updateMe({ favorite_genres: genres }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      invalidateProfileQueries(queryClient);
     }
   });
 
@@ -166,7 +175,7 @@ console.log('PROFILE PAGE USER:', user)
   const updateLinksMutation = useMutation({
     mutationFn: (socialLinks) => base44.auth.updateMe({ social_links: socialLinks }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      invalidateProfileQueries(queryClient);
       setEditingLinks(false);
     }
   });
@@ -205,9 +214,13 @@ console.log('PROFILE PAGE USER:', user)
         }
       }
 
-      return base44.entities.Post.create({ 
-        profile_user_id: user.id,
-        content: data.content, 
+      if (!authUser?.id) throw new Error('Not authenticated');
+
+      return base44.entities.Post.create({
+        profile_user_id: authUser.id,
+        author_id: authUser.id,
+        created_by: authUser.id,
+        content: data.content,
         image_url: imageUrl,
         link_preview: linkPreview
       });
@@ -246,12 +259,15 @@ console.log('PROFILE PAGE USER:', user)
   // a new comment is a JSONB array set — read current, push, write.
   const addCommentMutation = useMutation({
     mutationFn: async ({ post, content }) => {
+      if (!authUser?.id) throw new Error('Not authenticated');
+      const myProfile = allUserProfiles.find((p) => p.user_id === authUser.id);
       const comments = Array.isArray(post.comments) ? post.comments : [];
       const next = [...comments, {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        user_id: user.id,
-        username: user.username || 'Anonymous',
-        avatar_url: user.avatar_url || null,
+        user_id: authUser.id,
+        author_id: authUser.id,
+        username: myProfile?.username || null,
+        avatar_url: myProfile?.avatar_url || null,
         content,
         created_at: new Date().toISOString(),
       }];
@@ -631,7 +647,8 @@ console.log('PROFILE PAGE USER:', user)
                   </>
                 )}
                 {displayedPosts.map(post => {
-                  const authorProfile = allUserProfiles.find(p => p.email === post.created_by);
+                  const authorUuid = post.author_id || post.created_by;
+                  const authorProfile = allUserProfiles.find(p => p.user_id === authorUuid);
                   const hasLiked = (post.likes || []).includes(user?.id);
                   const authorColor1 = user?.profile_color_1 || "#FF5722";
                   const authorColor2 = user?.profile_color_2 || "#37F2D1";
@@ -756,6 +773,7 @@ console.log('PROFILE PAGE USER:', user)
                       <PostComments
                         post={post}
                         currentUser={user}
+                        allUserProfiles={allUserProfiles}
                         onAddComment={(content) => addCommentMutation.mutate({ post, content })}
                         onDeleteComment={(commentId) => deleteCommentMutation.mutate({ post, commentId })}
                         adding={addCommentMutation.isPending}

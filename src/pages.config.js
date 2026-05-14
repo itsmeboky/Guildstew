@@ -61,6 +61,7 @@ import Cookies from './pages/Cookies';
 import Terms from './pages/Terms';
 import EULA from './pages/EULA';
 import PrivacySummary from './pages/PrivacySummary';
+import Attributions from './pages/Attributions';
 import Admin from './pages/Admin';
 import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
@@ -140,6 +141,7 @@ export const PAGES = {
     "Terms": Terms,
     "EULA": EULA,
     "PrivacySummary": PrivacySummary,
+    "Attributions": Attributions,
     "Admin": Admin,
     "ResetPassword": ResetPassword,
     "VerifyEmail": VerifyEmail,

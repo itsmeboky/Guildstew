@@ -13,6 +13,8 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { loadCampaignBans, findCharacterIncompatibilities } from "@/lib/campaignBans";
 import { getSpellSlots, getPactSlots } from "@/components/dnd5e/spellData";
 import { getSkillsCompletion } from "@/components/characterCreator/skillsCompletion";
+import { getSkillsCompletion2024 } from "@/components/characterCreator/skillsCompletion2024";
+import { getSpellsCompletion } from "@/components/characterCreator/spellsCompletion";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   calculateMaxHP, 
@@ -29,13 +31,25 @@ import {
 } from "@/components/dnd5e/characterMapping";
 
 import RaceStep from "@/components/characterCreator/RaceStep";
+import SpeciesStep2024 from "@/components/characterCreator/SpeciesStep2024";
 import ClassStep from "@/components/characterCreator/ClassStep";
+import ClassStep2024 from "@/components/characterCreator/ClassStep2024";
 import AbilityScoresStep from "@/components/characterCreator/AbilityScoresStep";
+import AbilitiesStep2024 from "@/components/characterCreator/AbilitiesStep2024";
 import ClassFeaturesStep from "@/components/characterCreator/ClassFeaturesStep";
+import ClassFeaturesStep2024 from "@/components/characterCreator/ClassFeaturesStep2024";
 import SkillsStep from "@/components/characterCreator/SkillsStep";
+import SkillsStep2024 from "@/components/characterCreator/SkillsStep2024";
 import SpellsStep from "@/components/characterCreator/SpellsStep";
+import SpellsStep2024 from "@/components/characterCreator/SpellsStep2024";
+import {
+  getSpellsKnownEntry as getSpellsKnownEntry2024,
+  spellsPrepared as spellsPrepared2024,
+  cantripsKnown as cantripsKnown2024,
+} from "@/data/games/dnd5e_2024/rules";
 import EquipmentStep from "@/components/characterCreator/EquipmentStep";
 import ReviewStep from "@/components/characterCreator/ReviewStep";
+import ReviewStep2024 from "@/components/characterCreator/ReviewStep2024";
 import QuickCreateDialog from "@/components/characterCreator/QuickCreateDialog";
 import ModeSelector from "@/components/characterCreator/ModeSelector";
 import QuickPickFlow from "@/components/characterCreator/QuickPickFlow";
@@ -95,6 +109,13 @@ export default function CharacterCreator() {
   const editCharacterId = urlParams.get('edit');
   const campaignId = urlParams.get('campaignId');
   const returnTo = urlParams.get('returnTo');
+  // gamePack is the rule system + edition the character is being
+  // built against. Defaults to dnd5e_2014; the picker in
+  // CreateCharacterDialog stamps the URL with the chosen pack id
+  // when the player has multiple owned. Persisted on the saved
+  // character row so subsequent loads dispatch to the right
+  // per-step UI.
+  const urlGamePack = urlParams.get('gamePack') || 'dnd5e_2014';
   // When the apply flow pushes the player into the creator it tags
   // the URL with ?forApply=1 so we save a PC (characters table) and
   // stamp mod_dependencies + campaign_origin instead of taking the
@@ -154,6 +175,8 @@ export default function CharacterCreator() {
     languages: [],
     features: [],
     feature_choices: {},
+    gamePack: urlGamePack,
+    game_pack: urlGamePack,
     multiclasses: [],
     // Per-class multiclass skill picks (Bard / Ranger / Rogue grant
     // 1 skill on entry per RAW). Keyed by class name; the SkillsStep
@@ -234,16 +257,17 @@ export default function CharacterCreator() {
           ...mapped,
         }));
       } else {
-        // Editing a PC: existing logic
+        // Editing a PC: existing logic.
+        // game_pack on the row is the persisted edition; mirror it
+        // into the camelCase `gamePack` the dispatcher reads.
+        const persistedPack =
+          existingCharacter.game_pack === 'dnd5e' ? 'dnd5e_2014'
+            : existingCharacter.game_pack || 'dnd5e_2014';
         setCharacterData(prev => ({
           ...prev,
           ...existingCharacter,
-          // Resolve legacy "dnd5e" slug → "dnd5e_2014" so editors
-          // launched against pre-Layer-4 records see the canonical
-          // current id.
-          gamePack: existingCharacter.gamePack === "dnd5e"
-            ? "dnd5e_2014"
-            : (existingCharacter.gamePack || prev.gamePack),
+          gamePack: persistedPack,
+          game_pack: persistedPack,
           attributes: existingCharacter.attributes || prev.attributes,
           baseAttributes: existingCharacter.baseAttributes || existingCharacter.attributes || prev.baseAttributes,
           skills: existingCharacter.skills || prev.skills,
@@ -471,9 +495,38 @@ export default function CharacterCreator() {
 
   const validateStep = (stepIndex) => {
     const step = STEPS[stepIndex];
-    
+
+    // Wrap the per-step branch in a try / catch so a bug in a
+    // completion helper can never crash the entire creator render —
+    // the worst case is the Next button stays disabled and the
+    // error is logged in dev. Without this guard, an exception in
+    // (e.g.) getSpellsCompletion would propagate up through the
+    // render and trip the page-level ErrorBoundary, replacing the
+    // creator with "Something went wrong".
+    try {
+      return validateStepImpl(step);
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.error(`validateStep[${step?.id}] threw:`, err);
+      }
+      return false;
+    }
+  };
+
+  const validateStepImpl = (step) => {
     switch (step.id) {
       case 'race':
+        // 2024 splits the legacy "race step" into species (this
+        // step) + background (chosen later in AbilitiesStep2024
+        // because the background grants the ASI). The gate here
+        // therefore drops the background requirement for 2024
+        // and validates the species selection instead — without
+        // this branch, 2024 chars couldn't proceed past the
+        // species step because background is empty until later.
+        if (characterData.gamePack === 'dnd5e_2024') {
+          return !!(characterData.name && characterData.species?.speciesId);
+        }
         return characterData.name && characterData.race && characterData.background;
       case 'class':
         return characterData.class && characterData.alignment;
@@ -489,34 +542,45 @@ export default function CharacterCreator() {
       case 'features':
         return true;
       case 'skills':
-        // Single source of truth shared with SkillsStep — registry-
-        // driven (CLASS_SKILL_CHOICES + getRaceSkillProficiencies +
-        // getBackgroundSkills) so fixed-racial grants don't get
-        // double-counted, racial bonus picks track the actual race
-        // (not just the old hardcoded Half-Elf/Human pair), and
-        // expertise-required classes (Rogue, Bard) can't slip past
-        // without selections.
-        return getSkillsCompletion(characterData).isComplete;
+        // 2024 reads from its own SRD-driven completion helper —
+        // background skills come from AbilitiesStep2024's selection,
+        // class skill choice count from the 2024 class adapter, and
+        // species "Skillful" trait grants a bonus pick. 2014 path
+        // still uses the registry-driven helper that handles legacy
+        // race / background / multiclass entries.
+        return (characterData.gamePack === 'dnd5e_2024'
+          ? getSkillsCompletion2024(characterData)
+          : getSkillsCompletion(characterData)
+        ).isComplete;
       case 'spells':
-        const spellSlots = getSpellSlots(characterData.class, characterData.level, characterData.multiclasses || []);
-        const pactSlots = getPactSlots(characterData.class, characterData.level, characterData.multiclasses || []);
-        
-        // Calculate total slots by level (standard + pact)
-        const totalSlots = { ...spellSlots };
-        if (pactSlots) {
-          const key = `level${pactSlots.slotLevel}`;
-          totalSlots[key] = (totalSlots[key] || 0) + pactSlots.slots;
+        if (characterData.gamePack === 'dnd5e_2024') {
+          const cls = characterData.class;
+          const lvl = Number(characterData.level) || 1;
+          const tableEntry = getSpellsKnownEntry2024(cls);
+          if (!tableEntry) return true; // non-caster
+          const cantripsTarget = cantripsKnown2024(cls, lvl);
+          const preparedTarget = spellsPrepared2024(cls, lvl);
+          const wizardSpellbookSize = tableEntry.type === 'spellbook'
+            ? (tableEntry.startingSpellbookSpells || 6)
+              + Math.max(0, lvl - 1) * (tableEntry.spellsPerLevel || 2)
+            : 0;
+          const s = characterData.spells || {};
+          const cantripsCount = Array.isArray(s.cantrips) ? s.cantrips.length : 0;
+          const preparedCountSel = Array.isArray(s.prepared) ? s.prepared.length : 0;
+          const spellbookCount = Array.isArray(s.spellbook) ? s.spellbook.length : 0;
+          if (cantripsCount !== cantripsTarget) return false;
+          if (preparedCountSel !== preparedTarget) return false;
+          if (tableEntry.type === 'spellbook' && spellbookCount !== wizardSpellbookSize) return false;
+          return true;
         }
-
-        // If no spell slots, step is valid
-        if (Object.values(totalSlots).every(slots => slots === 0)) return true;
-        
-        // Check if all available slots are filled
-        return Object.entries(totalSlots).every(([levelKey, slots]) => {
-          if (slots === 0) return true;
-          const selectedCount = (characterData.spells?.[levelKey] || []).length;
-          return selectedCount === slots;
-        });
+        // 2014 path — share the spell-completion helper with
+        // SpellsStep so the picker caps and the Next-button gate
+        // can never drift apart. The previous validator compared
+        // picks against per-level SLOTS (casts/day), which never
+        // matched the picker's prepared/known/spellbook caps for
+        // Bard / Cleric / Druid / Warlock / Wizard at L1, leaving
+        // every prepared/known caster stuck on this step.
+        return getSpellsCompletion(characterData).isComplete;
       case 'equipment':
         return true;
       case 'review':
@@ -589,6 +653,11 @@ const handleSubmit = () => {
     const stats = buildStatsFromCharacterData(characterData);
     stats.created_by = user?.email;
     stats.user_id = user?.id;
+    // Persist the game pack the character was built against. The
+    // dispatcher in this file (and downstream sheet display code)
+    // routes per-step UI on this field; without it, a 2024
+    // character would round-trip as 2014 on reload.
+    stats.game_pack = characterData.gamePack || characterData.game_pack || 'dnd5e_2014';
     createMutation.mutate(stats);
   };
 
@@ -674,7 +743,22 @@ const handleSubmit = () => {
     }
   };
 
-  const CurrentStepComponent = STEPS[currentStep].component;
+  // Per-step game-pack dispatch. 2024 currently ships its own class
+  // and class-features steps; other steps still use the legacy 2014
+  // components until commits 4-5 of the bundle land. The dispatcher
+  // is keyed off characterData.gamePack so a 2024 character
+  // round-trips through the right per-step UI on every reopen.
+  const _stepDef = STEPS[currentStep];
+  const _is2024 = characterData.gamePack === 'dnd5e_2024';
+  const CurrentStepComponent =
+    _is2024 && _stepDef.id === 'race' ? SpeciesStep2024 :
+    _is2024 && _stepDef.id === 'class' ? ClassStep2024 :
+    _is2024 && _stepDef.id === 'abilities' ? AbilitiesStep2024 :
+    _is2024 && _stepDef.id === 'features' ? ClassFeaturesStep2024 :
+    _is2024 && _stepDef.id === 'skills' ? SkillsStep2024 :
+    _is2024 && _stepDef.id === 'spells' ? SpellsStep2024 :
+    _is2024 && _stepDef.id === 'review' ? ReviewStep2024 :
+    _stepDef.component;
 
   // Mode selector — first screen before any creator steps render.
   // editCharacterId / campaignId flip us directly into 'full'

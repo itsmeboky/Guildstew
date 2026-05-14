@@ -106,7 +106,7 @@ export default function BlogTab() {
       const insert = {
         ...payload,
         author_id: user?.id || null,
-        author_name: user?.username || user?.full_name || user?.email || null,
+        author_name: user?.username || user?.email || null,
       };
       const { data, error } = await supabase.from("blog_posts").insert(insert).select().maybeSingle();
       if (error) throw error;

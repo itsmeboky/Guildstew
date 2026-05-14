@@ -9,6 +9,7 @@ import GamePackListing from './pages/GamePackListing';
 import AdminTools from "@/pages/AdminTools";
 import DiceCalibrator from "@/pages/DiceCalibrator";
 import GuildJoin from "@/pages/GuildJoin";
+import ForagerEntry from "@/maps/ui/ForagerEntry";
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { SubscriptionProvider } from '@/lib/SubscriptionContext';
 import { PresenceProvider } from '@/lib/PresenceContext';
@@ -65,6 +66,7 @@ const AuthenticatedApp = () => {
         <Route path="/EULA" element={<ErrorBoundary resetKeys={routeResetKeys}><Pages.EULA /></ErrorBoundary>} />
         <Route path="/Cookies" element={<ErrorBoundary resetKeys={routeResetKeys}><Pages.Cookies /></ErrorBoundary>} />
         <Route path="/PrivacySummary" element={<ErrorBoundary resetKeys={routeResetKeys}><Pages.PrivacySummary /></ErrorBoundary>} />
+        <Route path="/Attributions" element={<ErrorBoundary resetKeys={routeResetKeys}><Pages.Attributions /></ErrorBoundary>} />
         {/* Guild invite-link redemption — must be reachable while
             unauth so the page can render the "Sign in required"
             state instead of bouncing the visitor to the marketing
@@ -178,6 +180,11 @@ const AuthenticatedApp = () => {
       <Route path="/dice-calibrator" element={
         <ErrorBoundary resetKeys={routeResetKeys}>
           <DiceCalibrator />
+        </ErrorBoundary>
+      } />
+      <Route path="/maps" element={
+        <ErrorBoundary resetKeys={routeResetKeys}>
+          <ForagerEntry />
         </ErrorBoundary>
       } />
       {Object.entries(Pages).map(([path, Page]) => (

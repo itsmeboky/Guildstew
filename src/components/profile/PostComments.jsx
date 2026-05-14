@@ -6,18 +6,26 @@ import { Input } from "@/components/ui/input";
  * Inline comment list + input rendered under each post card.
  *
  * Props:
- *   post            — the posts row; comments live on `post.comments`
- *                     as a JSONB array of { id, user_id, username,
- *                     avatar_url, content, created_at }.
- *   currentUser     — the viewing user (from the parent's useQuery).
- *   onAddComment    — called with the trimmed new comment text.
- *   onDeleteComment — called with a comment id. Only surfaced when
- *                     the current user authored the comment or owns
- *                     the post.
- *   adding          — boolean; lets the parent disable the submit
- *                     button while the mutation is in flight.
+ *   post             — the posts row; comments live on `post.comments`
+ *                      as a JSONB array of { id, user_id, username,
+ *                      avatar_url, content, created_at }. The
+ *                      `username` / `avatar_url` fields are write-time
+ *                      snapshots and may be stale or missing — the
+ *                      live `user_profiles` lookup wins when present.
+ *   currentUser      — the viewing user (from the parent's useQuery).
+ *   allUserProfiles  — full user_profiles list. Used to render each
+ *                      comment under its author's CURRENT username +
+ *                      avatar instead of the snapshot stamped at
+ *                      write time. Optional — falls back to the
+ *                      snapshot when omitted.
+ *   onAddComment     — called with the trimmed new comment text.
+ *   onDeleteComment  — called with a comment id. Only surfaced when
+ *                      the current user authored the comment or owns
+ *                      the post.
+ *   adding           — boolean; lets the parent disable the submit
+ *                      button while the mutation is in flight.
  */
-export default function PostComments({ post, currentUser, onAddComment, onDeleteComment, adding = false }) {
+export default function PostComments({ post, currentUser, allUserProfiles = [], onAddComment, onDeleteComment, adding = false }) {
   const comments = Array.isArray(post?.comments) ? post.comments : [];
   const [draft, setDraft] = useState("");
   const [open, setOpen] = useState(false);
@@ -30,8 +38,11 @@ export default function PostComments({ post, currentUser, onAddComment, onDelete
     setOpen(true);
   };
 
-  const canDelete = (c) =>
-    currentUser?.id && (c.user_id === currentUser.id || post.profile_user_id === currentUser.id);
+  const canDelete = (c) => {
+    if (!currentUser?.id) return false;
+    const authorUuid = c.author_id || c.user_id || c.created_by || null;
+    return authorUuid === currentUser.id || post.profile_user_id === currentUser.id;
+  };
 
   return (
     <div className="pt-2 border-t border-gray-700/40 mt-2">
@@ -49,18 +60,25 @@ export default function PostComments({ post, currentUser, onAddComment, onDelete
           {comments.length === 0 ? (
             <p className="text-xs text-gray-500 italic">Be the first to comment.</p>
           ) : (
-            comments.map((c) => (
+            comments.map((c) => {
+              const commenterUuid = c.author_id || c.user_id || c.created_by || null;
+              const commenter = commenterUuid
+                ? allUserProfiles.find((p) => p.user_id === commenterUuid)
+                : null;
+              const username = commenter?.username || c.username || "Anonymous";
+              const avatarUrl = commenter?.avatar_url || c.avatar_url || null;
+              return (
               <div key={c.id || c.created_at} className="flex items-start gap-2 bg-[#0f1419] border border-gray-700/40 rounded-lg p-2">
-                {c.avatar_url ? (
-                  <img src={c.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
                 ) : (
                   <div className="w-7 h-7 rounded-full bg-[#37F2D1]/20 flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0">
-                    {(c.username || "?").slice(0, 1).toUpperCase()}
+                    {username.slice(0, 1).toUpperCase()}
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-white truncate">{c.username || "Unknown"}</span>
+                    <span className="text-xs font-bold text-white truncate">{username}</span>
                     <span className="text-[10px] text-gray-500 flex-shrink-0">
                       {c.created_at ? new Date(c.created_at).toLocaleString() : ""}
                     </span>
@@ -78,7 +96,8 @@ export default function PostComments({ post, currentUser, onAddComment, onDelete
                   <p className="text-sm text-gray-300 whitespace-pre-wrap mt-0.5">{c.content}</p>
                 </div>
               </div>
-            ))
+              );
+            })
           )}
 
           {currentUser?.id && (

@@ -133,7 +133,7 @@ export default function TheTavern() {
       if (creatorIds.length === 0) return [];
       const { data } = await supabase
         .from("user_profiles")
-        .select("user_id, username, full_name")
+        .select("user_id, username")
         .in("user_id", creatorIds);
       return data || [];
     },
