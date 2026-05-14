@@ -34,6 +34,8 @@ import {
 import SubclassPicker from "@/components/characterCreator/SubclassPicker";
 import InfoTip from "@/components/characterCreator/InfoTip";
 import { tipFor } from "@/components/characterCreator/creatorTips";
+import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
+import { Primer } from "@/components/characterCreator/chrome/Primer";
 
 /**
  * 2024 D&D 5e — class features step.
@@ -238,41 +240,45 @@ export default function ClassFeaturesStep2024({ characterData, updateCharacterDa
 
   if (!className) {
     return (
-      <div className="max-w-6xl mx-auto p-6 bg-[#2A3441] rounded-xl border-2 border-[#1E2430]">
-        <p className="text-white">Pick a class on the previous step before viewing features.</p>
+      <div>
+        <StepHeader
+          kicker="Chapter IV · The Gifts"
+          title="Class features"
+        />
+        <div className="tome" style={{ padding: 40, textAlign: 'center', marginTop: 20 }}>
+          <div className="italic-serif" style={{ fontSize: 16, color: 'var(--text-dim)' }}>
+            Pick a class first to reveal your features.
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
-      {/* Header + per-level gap banner */}
-      <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 mb-6 border border-[#2A3441]">
-        <h2 className="text-2xl font-bold text-[#FFC6AA] mb-3 flex items-center gap-2">
-          Class Features
-          <Badge className="bg-[#37F2D1] text-[#1E2430] text-[10px] font-black">
-            2024
-          </Badge>
-        </h2>
-        <p className="text-white text-sm leading-7">
-          Class basics (hit die, proficiencies, saving throws) and{" "}
-          <span className="font-semibold">subclass features at level 3+</span>{" "}
-          render below from the 2024 SRD.
+    <div>
+      <StepHeader
+        kicker="Chapter IV · The Gifts"
+        title="Class features"
+        subtitle="Special abilities your training has earned. Some automatic — some need your choice."
+      />
+
+      <Primer title="What this chapter is for">
+        Most class features are <strong>automatic</strong>. In 2024 the per-level feature progression
+        for base classes still ships as URL stubs in the SRD — those will land as the data layer
+        fills in. Subclass features at <strong>level 3+</strong> are wired through below.
+      </Primer>
+
+      <div className="primer" style={{ marginBottom: 20, padding: '14px 18px' }}>
+        <span className="label" style={{ color: 'var(--orange-soft)' }}>
+          ⚠ Per-level class features not available
+        </span>
+        <p className="italic-serif" style={{ fontSize: 14, color: 'var(--text-dim)', marginTop: 8, lineHeight: 1.55 }}>
+          The SRD does not include per-level class progression. Consult your rulebook of choice for the
+          full feature list as you level up — we'll surface them automatically once the SRD ships them.
         </p>
-        <div className="mt-4 p-4 bg-[#FF5722]/10 rounded-lg border border-[#FF5722]/40 text-sm text-white/90">
-          <p className="font-semibold text-[#FF5722] mb-1">
-            ⚠️ Per-level class features not available
-          </p>
-          <p>
-            The SRD does not include per-level class progression. Consult
-            your rulebook of choice for the full feature list as you
-            level up. We'll surface them automatically once the SRD
-            ships them.
-          </p>
-        </div>
       </div>
 
-      {/* Class basics card */}
+      <div className="tome" style={{ padding: '32px 36px', marginTop: 20 }}>
       {basics && (
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -528,6 +534,7 @@ export default function ClassFeaturesStep2024({ characterData, updateCharacterDa
           ⚠️ Choose a subclass above to see its features.
         </div>
       )}
+      </div>
     </div>
   );
 }
