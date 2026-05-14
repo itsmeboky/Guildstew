@@ -1,8 +1,5 @@
 import React, { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Sparkles, Loader2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Sparkles, Loader2, Check } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import {
   HoverCard,
@@ -21,7 +18,7 @@ import {
   spellIcons,
   fetchAllSpells,
   getPactSlots,
-  getMaxSpellLevelForCharacter
+  getMaxSpellLevelForCharacter,
 } from "@/components/dnd5e/spellData";
 import { getBreweryClassSpellSlots } from "@/lib/breweryClassApply";
 import {
@@ -32,41 +29,68 @@ import {
   abilityModifier,
   SPELLCASTING_ABILITY,
 } from "@/components/dnd5e/dnd5eRules";
-import { getSpellsCompletion } from "@/components/characterCreator/spellsCompletion";
+import { motion } from "framer-motion";
+import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
+import { Primer } from "@/components/characterCreator/chrome/Primer";
+import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
+
+// Per-spell-level palette: cantrips ride the gold/parchment vein
+// (free magic), leveled spells ride orange (slot-cost).
+function levelPalette(levelKey) {
+  if (levelKey === 'cantrips') {
+    return {
+      accent: 'var(--cc-gold)',
+      glow: 'rgba(212, 169, 81, 0.35)',
+      counter: 'cc-chip-gold',
+      label: 'Cantrips',
+    };
+  }
+  return {
+    accent: 'var(--cc-orange)',
+    glow: 'rgba(255, 83, 0, 0.35)',
+    counter: 'cc-chip-orange',
+    label: levelKey === 'level1'
+      ? '1st Level Spells'
+      : `${levelKey.replace('level', '')}${ordinalSuffix(parseInt(levelKey.replace('level', ''), 10))} Level Spells`,
+  };
+}
+
+function ordinalSuffix(n) {
+  return ['st', 'nd', 'rd'][n - 1] || 'th';
+}
 
 export default function SpellsStep({ characterData, updateCharacterData }) {
   const [hoveredEffect, setHoveredEffect] = useState(null);
   const [showRecommendation, setShowRecommendation] = useState(false);
 
-  // Fetch all spells from API to support higher levels
   const { data: fullSpellsList, isLoading } = useQuery({
     queryKey: ['dnd5e-spells'],
-    queryFn: () => fetchAllSpells().then(data => data.spells),
-    staleTime: 1000 * 60 * 60, // 1 hour
+    queryFn: () => fetchAllSpells().then((data) => data.spells),
+    staleTime: 1000 * 60 * 60,
   });
-  
-  // Brewery classes authored their own slot progression in the
-  // mod's spellcasting.slot_progression block — when the selected
-  // class is brewery-sourced, those slots win over the SRD lookup.
+
   const breweryClass = characterData._brewery_class || null;
   const spellSlots = breweryClass?.spellcasting?.enabled
     ? getBreweryClassSpellSlots(breweryClass, characterData.level)
     : getSpellSlots(characterData.class, characterData.level, characterData.multiclasses || []);
-  const availableSpells = getAllAvailableSpells(characterData.class, characterData.multiclasses || [], fullSpellsList);
+  const availableSpells = getAllAvailableSpells(
+    characterData.class,
+    characterData.multiclasses || [],
+    fullSpellsList,
+  );
 
   const selectedSpells = characterData.spells || {};
 
   const pactSlots = getPactSlots(
     characterData.class,
     characterData.level,
-    characterData.multiclasses || []
+    characterData.multiclasses || [],
   );
 
-  // Max spell level you’re allowed to learn/prepare based on each class’s own table
   const maxSpellLevel = getMaxSpellLevelForCharacter(
     characterData.class,
     characterData.level,
-    characterData.multiclasses || []
+    characterData.multiclasses || [],
   );
 
   // Per-spell-level SLOT count for display ("X casts/day"). Pact Magic
@@ -80,60 +104,14 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
     let slots = spellSlots[levelKey] || 0;
     if (pactSlots && levelKey.startsWith("level")) {
       const numericLevel = parseInt(levelKey.replace("level", ""), 10);
-      if (numericLevel === pactSlots.slotLevel) {
-        slots += pactSlots.slots;
-      }
+      if (numericLevel === pactSlots.slotLevel) slots += pactSlots.slots;
     }
     return slots;
   };
 
-  // Total prepared / known spell cap (excluding cantrips) summed
-  // across every spellcasting class. PHB 2014 model: prepared casters
-  // (Cleric/Druid/Paladin/Wizard) prepare ABILITY_MOD + class level
-  // (or Paladin's CHA + floor(lvl/2)) spells from their list, and
-  // known casters (Bard/Sorcerer/Warlock/Ranger) know a fixed table
-  // value. Either way, the cap is a TOTAL count distributable across
-  // any eligible spell level — NOT a per-spell-level slot cap (that's
-  // casts/day, a separate axis).
-  //
-  // Brewery classes are skipped here (their slot progression is
-  // author-defined and out of scope for the SRD-table cap).
-  const totalSelectedNonCantrips = Object.entries(selectedSpells).reduce(
-    (sum, [key, arr]) => (key === "cantrips" ? sum : sum + (Array.isArray(arr) ? arr.length : 0)),
-    0,
-  );
-  const totalSelectedCantrips = Array.isArray(selectedSpells.cantrips)
-    ? selectedSpells.cantrips.length
-    : 0;
-
-  const spellcastingEntries = (() => {
-    const multis = Array.isArray(characterData.multiclasses)
-      ? characterData.multiclasses.filter((mc) => mc?.class && mc?.level)
-      : [];
-    const primaryLevel = Math.max(
-      1,
-      (Number(characterData.level) || 1) - multis.reduce((s, m) => s + (Number(m.level) || 0), 0),
-    );
-    return [
-      { class: characterData.class, level: primaryLevel },
-      ...multis.map((m) => ({ class: m.class, level: Number(m.level) || 0 })),
-    ].filter((e) => e.class && e.level > 0 && SPELLS_KNOWN_TABLE[e.class]);
-  })();
-
-  // Cap math is shared with the Next-button validator via
-  // getSpellsCompletion() so the picker and gate can never disagree.
-  // Wizards specifically: at character creation the cap is the
-  // spellbook size (6 at L1, +2 per level), not the prepared formula
-  // — preparation is a daily in-game decision, not a creator choice.
-  const completion = getSpellsCompletion(characterData);
-  const cantripCap = completion.cantripCap;
-  const prepKnownCap = completion.nonCantripCap;
-
-  // Helper to merge API spell details with hardcoded ones (for icons/effects)
   const getSpellDetail = (spellName) => {
     const hardcoded = hardcodedSpellDetails[spellName];
-    const apiSpell = fullSpellsList?.find(s => s.name === spellName);
-    
+    const apiSpell = fullSpellsList?.find((s) => s.name === spellName);
     if (apiSpell) {
       return {
         ...apiSpell,
@@ -143,32 +121,21 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
       };
     }
     return hardcoded || {
-      level: "?",
-      school: "Unknown",
-      castingTime: "-",
-      range: "-",
-      components: "-",
-      duration: "-",
-      description: "No description available.",
-      effects: []
+      level: "?", school: "Unknown", castingTime: "-", range: "-",
+      components: "-", duration: "-",
+      description: "No description available.", effects: [],
     };
   };
 
-  // Determine which class provides spellcasting
   const getSpellcastingClass = () => {
     const spellcastingClasses = ["Bard", "Cleric", "Druid", "Sorcerer", "Wizard", "Warlock"];
     const halfCasters = ["Paladin", "Ranger"];
-    
-    // Check primary class first
     if (spellcastingClasses.includes(characterData.class)) {
       return { class: characterData.class, level: characterData.level };
     }
-    
     if (halfCasters.includes(characterData.class) && characterData.level >= 2) {
       return { class: characterData.class, level: characterData.level };
     }
-    
-    // Check multiclasses
     for (const mc of (characterData.multiclasses || [])) {
       if (spellcastingClasses.includes(mc.class)) {
         return { class: mc.class, level: mc.level };
@@ -177,7 +144,6 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
         return { class: mc.class, level: mc.level };
       }
     }
-    
     return null;
   };
 
@@ -185,26 +151,45 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
 
   if (spellSlots.cantrips === 0 && spellSlots.level1 === 0) {
     return (
-      <div className="max-w-4xl mx-auto text-center py-12 bg-[#2A3441] rounded-xl p-8 border-2 border-[#1E2430]">
-        <h2 className="text-2xl font-bold text-[#FFC6AA] mb-4">No Spells Available</h2>
-        <p className="text-white">
-          {characterData.class} at level {characterData.level} doesn't have spellcasting yet.
-        </p>
+      <div>
+        <StepHeader
+          kicker="Chapter VI · The Arcane"
+          title="Your spellbook"
+        />
+        <div
+          className="cc-tome"
+          style={{
+            padding: 50,
+            textAlign: 'center',
+            marginTop: 24,
+          }}
+        >
+          <div style={{ fontSize: 56, marginBottom: 16, opacity: 0.7 }}>⚔️</div>
+          <div
+            className="cc-display"
+            style={{ fontSize: 26, color: 'var(--cc-text)', marginBottom: 8 }}
+          >
+            No spells for {characterData.class || 'this class'}
+          </div>
+          <div
+            className="cc-italic-serif"
+            style={{ fontSize: 15, color: 'var(--cc-text-dim)' }}
+          >
+            {characterData.class || 'Your class'} doesn't wield arcane power at this level. Step
+            forward to equipment.
+          </div>
+        </div>
       </div>
     );
   }
 
   const useRecommended = () => {
-    // Find the first class that has recommendations
     let recommended = null;
     let recommendedClass = null;
-    
-    // Check primary class
     if (recommendedSpells[characterData.class]) {
       recommended = recommendedSpells[characterData.class];
       recommendedClass = characterData.class;
     } else {
-      // Check multiclasses
       for (const mc of (characterData.multiclasses || [])) {
         if (recommendedSpells[mc.class]) {
           recommended = recommendedSpells[mc.class];
@@ -213,286 +198,557 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
         }
       }
     }
-    
     if (recommended) {
       const newSpells = { ...selectedSpells };
-
-      // Auto-select up to the per-class TOTAL prepared/known cap
-      // (cantrips counted separately, against cantripCap). Walk
-      // levels in ascending order so the first 1st-level spells
-      // get auto-picked before higher levels eat the budget.
-      let cantripBudget = cantripCap;
-      let prepBudget = prepKnownCap;
-      const orderedKeys = Object.keys(spellSlots).sort((a, b) => {
-        if (a === "cantrips") return -1;
-        if (b === "cantrips") return 1;
-        const ai = parseInt(a.replace("level", ""), 10);
-        const bi = parseInt(b.replace("level", ""), 10);
-        return ai - bi;
-      });
-      orderedKeys.forEach((levelKey) => {
-        if (!recommended[levelKey] || (spellSlots[levelKey] || 0) <= 0) return;
-        const remaining = levelKey === "cantrips" ? cantripBudget : prepBudget;
-        if (remaining <= 0) {
-          newSpells[levelKey] = [];
-          return;
+      Object.keys(spellSlots).forEach((levelKey) => {
+        if (spellSlots[levelKey] > 0 && recommended[levelKey]) {
+          newSpells[levelKey] = recommended[levelKey].slice(0, spellSlots[levelKey]);
         }
         const taken = recommended[levelKey].slice(0, remaining);
         newSpells[levelKey] = taken;
         if (levelKey === "cantrips") cantripBudget -= taken.length;
         else prepBudget -= taken.length;
       });
-
       updateCharacterData({ spells: newSpells });
       setShowRecommendation(recommendedClass);
     }
   };
 
+  const headerClassName = spellcastingClass?.class || characterData.class;
+  const headerLevel = spellcastingClass?.level || characterData.level;
+
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="bg-[#2A3441] rounded-xl p-6 mb-6 border-2 border-[#1E2430]">
-        <div className="flex justify-between items-start">
-          <div>
-            <h2 className="text-2xl font-bold text-[#FFC6AA] mb-3 flex items-center gap-2">
-              Spellcasting
-              <InfoTip width="w-80">{tipFor("spell_prepared_vs_known")}</InfoTip>
-            </h2>
-            <div className="flex items-center gap-4 mb-3 text-xs text-white/70 flex-wrap">
-              <span className="inline-flex items-center gap-1">
-                Cantrips <InfoTip>{tipFor("spell_cantrip")}</InfoTip>
-              </span>
-              <span className="inline-flex items-center gap-1">
-                Spell Slots <InfoTip>{tipFor("spell_slots")}</InfoTip>
-              </span>
-            </div>
-            <p className="text-white mb-2">
-              {spellcastingClass ? (
-                <>
-                  As a level {spellcastingClass.level} <span className="text-[#5B4B9E] font-bold">{spellcastingClass.class}</span>, you can prepare the following spells:
-                </>
-              ) : (
-                <>As a level {characterData.level} {characterData.class}, you can prepare the following spells:</>
-              )}
-            </p>
-            <div className="flex gap-4 text-sm flex-wrap">
-              {/* Per-class TOTAL caps. PHB 2014: prepared/known is one
-                  pool per class; per-spell-level slot counts are
-                  casts/day, a separate axis. */}
-              {(cantripCap > 0 || prepKnownCap > 0) && (
-                <>
-                  {cantripCap > 0 && (
-                    <div className="text-[#37F2D1]">
-                      <span className="font-bold">Cantrips:</span> {totalSelectedCantrips}/{cantripCap}
-                    </div>
-                  )}
-                  {prepKnownCap > 0 && (
-                    <div className="text-[#37F2D1]">
-                      <span className="font-bold">Spells:</span> {totalSelectedNonCantrips}/{prepKnownCap}{" "}
-                      <span className="text-white/50">prepared/known</span>
-                    </div>
-                  )}
-                </>
-              )}
-              {/* Per-spell-level slot counts (casts/day) — separate
-                  from the prepared/known total. Pact slots merge into
-                  the matching row for display only. */}
-              {Object.keys(spellSlots).map((levelKey) => {
-                const slots = getSlotsForLevelKey(levelKey);
-                if (slots <= 0 || levelKey === "cantrips") return null;
-                const levelLabel = `Level ${levelKey.replace("level", "")}`;
-                return (
-                  <div key={levelKey} className="text-white/70">
-                    <span className="font-semibold">{levelLabel}:</span> {slots}{" "}
-                    <span className="text-white/40">casts/day</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          <Button
-            onClick={useRecommended}
-            className="bg-[#37F2D1] hover:bg-[#2dd9bd] text-[#1E2430]"
-          >
-            <Sparkles className="w-4 h-4 mr-2" />
-            Use Recommended
-          </Button>
+    <div>
+      <StepHeader
+        kicker="Chapter VI · The Arcane"
+        title="Your spellbook"
+        subtitle={
+          characterData.class === 'Warlock'
+            ? "Your patron gifts you magic — fewer slots, but they return on a short rest."
+            : "Cantrips cast at will. Leveled spells cost a slot each."
+        }
+      />
+
+      <Primer title={`How ${headerClassName} spellcasting works`}>
+        <strong>Cantrips</strong> are free magic — cast as often as you want.{' '}
+        <strong>Leveled spells</strong> cost a spell slot. As a level {headerLevel}{' '}
+        <strong>{headerClassName}</strong>, you can prepare or learn the selections below.
+      </Primer>
+
+      {/* Counters strip */}
+      <div
+        style={{
+          marginTop: 22,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 14,
+        }}
+      >
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {Object.keys(spellSlots).map((levelKey) => {
+            const slots = getSlotsForLevelKey(levelKey);
+            if (slots <= 0) return null;
+            const palette = levelPalette(levelKey);
+            const currentCount = (selectedSpells[levelKey] || []).length;
+            return (
+              <CounterChip
+                key={levelKey}
+                label={palette.label}
+                current={currentCount}
+                max={slots}
+                accent={palette.accent}
+                tip={
+                  levelKey === 'cantrips'
+                    ? tipFor("spell_cantrip")
+                    : tipFor("spell_slots")
+                }
+              />
+            );
+          })}
         </div>
+        <button
+          type="button"
+          onClick={useRecommended}
+          className="cc-btn-primary"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            background: 'linear-gradient(180deg, var(--cc-gold), color-mix(in srgb, var(--cc-gold), black 18%))',
+            border: '1px solid color-mix(in srgb, var(--cc-gold), black 30%)',
+            color: '#050816',
+          }}
+        >
+          <Sparkles className="w-4 h-4" />
+          Use recommended
+        </button>
       </div>
 
       <PerClassSpellsKnownPanel characterData={characterData} />
 
       {pactSlots && (
-        <div className="mb-6 bg-[#1E2430] border-2 border-[#5B4B9E] rounded-xl p-4">
-          <h3 className="text-lg font-bold text-[#5B4B9E] mb-1">Pact Magic (Warlock)</h3>
-          <p className="text-white text-sm">
-            Warlock {pactSlots.totalWarlockLevels} • 
-            {` ${pactSlots.slots} slot${pactSlots.slots > 1 ? 's' : ''}`} of 
-            {` ${pactSlots.slotLevel}${['st','nd','rd'][pactSlots.slotLevel - 1] || 'th'} level`}
-          </p>
-          <p className="text-xs text-white/70 mt-2">
-            You regain these slots on a short rest. All Pact Magic slots are cast at the level shown above.
-          </p>
-        </div>
+        <PactMagicBanner pactSlots={pactSlots} />
       )}
 
       {showRecommendation && recommendedSpells[showRecommendation] && (
-        <div className="bg-[#2A3441] border-2 border-[#37F2D1] rounded-xl p-4 mb-6">
-          <h3 className="text-[#37F2D1] font-bold text-lg mb-2">Recommended Spells for {showRecommendation}</h3>
-          <p className="text-white">{recommendedSpells[showRecommendation].reasoning}</p>
+        <div
+          style={{
+            background: 'rgba(55, 242, 209, 0.06)',
+            border: '1px solid rgba(55, 242, 209, 0.45)',
+            borderLeft: '3px solid var(--cc-teal)',
+            borderRadius: 8,
+            padding: '14px 18px',
+            marginTop: 16,
+          }}
+        >
+          <div className="cc-label" style={{ color: 'var(--cc-teal)', marginBottom: 4 }}>
+            Recommended for {showRecommendation}
+          </div>
+          <p
+            className="cc-italic-serif"
+            style={{
+              fontSize: 14,
+              color: 'var(--cc-text-dim)',
+              margin: 0,
+              lineHeight: 1.55,
+            }}
+          >
+            {recommendedSpells[showRecommendation].reasoning}
+          </p>
         </div>
       )}
 
-      {isLoading ? (
-        <div className="text-center py-12">
-          <Loader2 className="w-8 h-8 mx-auto text-[#37F2D1] animate-spin mb-4" />
-          <p className="text-white">Loading spell library...</p>
-        </div>
-      ) : (
-        <div className="space-y-8 h-[600px] overflow-y-auto pr-4 custom-scrollbar">
-          {Object.keys(spellSlots).map((levelKey) => {
-            const slots = getSlotsForLevelKey(levelKey);
-            if (slots <= 0) return null;
-
-            // Gate by what you’re actually allowed to learn
-            if (levelKey !== "cantrips") {
-              const numericLevel = parseInt(levelKey.replace("level", ""), 10);
-              if (numericLevel > maxSpellLevel) {
-                return null;
-              }
-            }
-
-            const levelLabel = levelKey === "cantrips" ? "Cantrips" : `${levelKey.replace("level", "")}${["st", "nd", "rd"][parseInt(levelKey.replace("level", "")) - 1] || "th"} Level Spells`;
-            const spellsForLevel = availableSpells[levelKey] || [];
-            const currentSelected = selectedSpells[levelKey] || [];
-
-            return (
-              <div key={levelKey}>
-                <h3 className="text-xl font-bold text-[#5B4B9E] mb-4">{levelLabel}</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  {spellsForLevel.length === 0 ? (
-                    <p className="text-white/60 col-span-2">No spells available for this level.</p>
-                  ) : (
-                    spellsForLevel.map((spell) => {
-                      const details = getSpellDetail(spell);
-                      const isSelected = currentSelected.includes(spell);
-                      // Cap by TOTAL prepared/known per class (PHB 2014),
-                      // not per-spell-level slot count. Cantrips and
-                      // non-cantrips share separate caps. Brewery
-                      // classes have no SRD-table cap; fall back to
-                      // the per-level slot count for them.
-                      const isCantrip = levelKey === "cantrips";
-                      const totalCap = breweryClass
-                        ? slots
-                        : isCantrip
-                          ? cantripCap
-                          : prepKnownCap;
-                      const totalSelected = breweryClass
-                        ? currentSelected.length
-                        : isCantrip
-                          ? totalSelectedCantrips
-                          : totalSelectedNonCantrips;
-                      const isDisabled = !isSelected && totalSelected >= totalCap;
-
-                      const handleToggle = (checked) => {
-                        const newSpells = checked
-                          ? [...currentSelected, spell]
-                          : currentSelected.filter(s => s !== spell);
-
-                        updateCharacterData({
-                          spells: { ...characterData.spells, [levelKey]: newSpells }
-                        });
-                      };
-
-                      return (
-                        <HoverCard key={spell} openDelay={150} closeDelay={100}>
-                          <HoverCardTrigger asChild>
-                            <div
-                              onClick={() => !isDisabled && handleToggle(!isSelected)}
-                              className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                                isSelected
-                                  ? 'bg-[#2A3441] border-[#37F2D1] border-4'
-                                  : 'bg-[#2A3441] border-[#1E2430]'
-                              } ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-[#37F2D1]/50'}`}
-                            >
-                              <div className="flex items-start gap-3 mb-2">
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={handleToggle}
-                                  disabled={isDisabled}
-                                  className="mt-1 border-white pointer-events-none"
-                                />
-                                {spellIcons[spell] && (
-                                  <img
-                                    src={spellIcons[spell]}
-                                    alt={spell}
-                                    className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border-2 border-[#37F2D1]/30"
-                                  />
-                                )}
-                                <div className="flex-1">
-                                  <h4 className="font-semibold text-[#FFC6AA]">{spell}</h4>
-                                  <div className="text-xs text-gray-400 mb-2">
-                                    {details.school} • {details.castingTime} • {details.range}
-                                  </div>
-                                  <p className="text-xs text-white leading-relaxed line-clamp-3">{details.description}</p>
-                                  {details.effects && details.effects.length > 0 && (
-                                    <div className="mt-2 flex flex-wrap gap-1">
-                                      {details.effects.map((effect, idx) => (
-                                        <div
-                                          key={idx}
-                                          className="relative"
-                                          onMouseEnter={() => setHoveredEffect(effect)}
-                                          onMouseLeave={() => setHoveredEffect(null)}
-                                        >
-                                          <Badge className="bg-[#FF5722] text-white text-xs cursor-help">
-                                            {effect}
-                                          </Badge>
-                                          {hoveredEffect === effect && effectDescriptions[effect] && (
-                                            <div className="absolute z-10 bottom-full left-0 mb-2 bg-[#1E2430] text-white p-3 rounded-lg text-xs w-64 shadow-lg border-2 border-[#FF5722]">
-                                              <div className="font-bold mb-1">{effect}</div>
-                                              {effectDescriptions[effect]}
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </HoverCardTrigger>
-                          <HoverCardContent
-                            side="right"
-                            align="start"
-                            sideOffset={8}
-                            className="w-96 max-h-[80vh] overflow-y-auto custom-scrollbar bg-[#1E2430] border-2 border-[#37F2D1]/50 text-white p-4"
-                          >
-                            <SpellFullDetail name={spell} spell={details} />
-                          </HoverCardContent>
-                        </HoverCard>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* Spellbook tome */}
+      <div className="cc-tome" style={{ padding: '32px 36px', marginTop: 22 }}>
+        {isLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Loader2
+              className="w-8 h-8 mx-auto animate-spin mb-3"
+              style={{ color: 'var(--cc-teal)' }}
+            />
+            <p
+              className="cc-italic-serif"
+              style={{ fontSize: 14, color: 'var(--cc-text-dim)' }}
+            >
+              Loading spell library…
+            </p>
+          </div>
+        ) : (
+          <SpellChapters
+            spellSlots={spellSlots}
+            availableSpells={availableSpells}
+            selectedSpells={selectedSpells}
+            getSlotsForLevelKey={getSlotsForLevelKey}
+            getSpellDetail={getSpellDetail}
+            maxSpellLevel={maxSpellLevel}
+            characterData={characterData}
+            updateCharacterData={updateCharacterData}
+            hoveredEffect={hoveredEffect}
+            setHoveredEffect={setHoveredEffect}
+          />
+        )}
+      </div>
     </div>
   );
 }
 
-/**
- * Full spell detail rendered in the hover popover. Untruncated
- * description plus all metadata (level, school, casting time, range,
- * components, duration, at-higher-levels scaling, eligible classes).
- *
- * Tolerates the slight shape variance between the API spell rows
- * (level: number, classes: array, higherLevel: string) and the
- * hardcoded fallback rows (level: "Cantrip" | string, no higherLevel
- * / classes). Missing fields drop their row instead of rendering "-".
- */
-function SpellFullDetail({ name, spell }) {
+// ============================================================================
+// Spell chapters — one OrnateHeading per spell level + grid of spell cards
+// ============================================================================
+function SpellChapters({
+  spellSlots, availableSpells, selectedSpells, getSlotsForLevelKey,
+  getSpellDetail, maxSpellLevel, characterData, updateCharacterData,
+  hoveredEffect, setHoveredEffect,
+}) {
+  const renderableLevels = Object.keys(spellSlots).filter((levelKey) => {
+    const slots = getSlotsForLevelKey(levelKey);
+    if (slots <= 0) return false;
+    if (levelKey !== "cantrips") {
+      const numericLevel = parseInt(levelKey.replace("level", ""), 10);
+      if (numericLevel > maxSpellLevel) return false;
+    }
+    return true;
+  });
+
+  if (renderableLevels.length === 0) {
+    return (
+      <div
+        className="cc-italic-serif"
+        style={{
+          fontSize: 14,
+          color: 'var(--cc-text-dim)',
+          textAlign: 'center',
+          padding: 24,
+        }}
+      >
+        No spell levels available yet.
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {renderableLevels.map((levelKey, idx) => {
+        const palette = levelPalette(levelKey);
+        const slots = getSlotsForLevelKey(levelKey);
+        const spellsForLevel = availableSpells[levelKey] || [];
+        const currentSelected = selectedSpells[levelKey] || [];
+
+        return (
+          <React.Fragment key={levelKey}>
+            {idx > 0 && <FleurDivider />}
+            <OrnateHeading color={palette.accent}>{palette.label}</OrnateHeading>
+            <div
+              className="cc-italic-serif"
+              style={{
+                textAlign: 'center',
+                color: 'var(--cc-text-dim)',
+                fontSize: 14,
+                marginBottom: 18,
+              }}
+            >
+              {currentSelected.length}/{slots} picked ·{' '}
+              {levelKey === 'cantrips'
+                ? 'cast unlimited times'
+                : 'each cast spends one slot'}
+            </div>
+
+            {spellsForLevel.length === 0 ? (
+              <p
+                className="cc-italic-serif"
+                style={{
+                  fontSize: 13,
+                  color: 'var(--cc-text-faint)',
+                  textAlign: 'center',
+                  padding: 16,
+                }}
+              >
+                No spells available for this level.
+              </p>
+            ) : (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: 10,
+                }}
+              >
+                {spellsForLevel.map((spell) => {
+                  const details = getSpellDetail(spell);
+                  const isSelected = currentSelected.includes(spell);
+                  const isDisabled = !isSelected && currentSelected.length >= slots;
+
+                  const handleToggle = () => {
+                    if (isDisabled) return;
+                    const newSpells = isSelected
+                      ? currentSelected.filter((s) => s !== spell)
+                      : [...currentSelected, spell];
+                    updateCharacterData({
+                      spells: { ...characterData.spells, [levelKey]: newSpells },
+                    });
+                  };
+
+                  return (
+                    <SpellCard
+                      key={spell}
+                      name={spell}
+                      details={details}
+                      isSelected={isSelected}
+                      isDisabled={isDisabled}
+                      accent={palette.accent}
+                      onToggle={handleToggle}
+                      hoveredEffect={hoveredEffect}
+                      setHoveredEffect={setHoveredEffect}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </>
+  );
+}
+
+// ============================================================================
+// Spell card — diamond checkbox + name + school/range + description + effects
+// ============================================================================
+function SpellCard({
+  name, details, isSelected, isDisabled, accent, onToggle,
+  hoveredEffect, setHoveredEffect,
+}) {
+  return (
+    <HoverCard openDelay={150} closeDelay={100}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          onClick={onToggle}
+          disabled={isDisabled}
+          style={{
+            all: 'unset',
+            cursor: isDisabled ? 'not-allowed' : 'pointer',
+            padding: 14,
+            borderRadius: 8,
+            background: isSelected
+              ? `linear-gradient(180deg, color-mix(in srgb, ${accent}, transparent 82%), transparent 70%)`
+              : 'rgba(20, 12, 8, 0.45)',
+            border: `1.5px solid ${isSelected ? accent : 'var(--cc-border)'}`,
+            opacity: isDisabled ? 0.4 : 1,
+            transition: 'all .15s',
+            boxShadow: isSelected ? `0 0 14px color-mix(in srgb, ${accent}, transparent 70%)` : 'none',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div
+              style={{
+                width: 22,
+                height: 22,
+                flexShrink: 0,
+                marginTop: 2,
+                background: isSelected ? accent : 'transparent',
+                border: `1.5px solid ${isSelected ? accent : 'var(--cc-border-strong)'}`,
+                clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {isSelected && (
+                <Check
+                  className="w-3 h-3"
+                  strokeWidth={3}
+                  style={{ color: '#050816' }}
+                />
+              )}
+            </div>
+
+            {spellIcons[name] && (
+              <img
+                src={spellIcons[name]}
+                alt=""
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 6,
+                  objectFit: 'cover',
+                  flexShrink: 0,
+                  border: `1px solid color-mix(in srgb, ${accent}, transparent 60%)`,
+                }}
+              />
+            )}
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  gap: 8,
+                  marginBottom: 4,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <span
+                  className="cc-display"
+                  style={{ fontSize: 17, color: 'var(--cc-text)' }}
+                >
+                  {name}
+                </span>
+                {(details.concentration || /concentration/i.test(details.duration || '')) && (
+                  <span className="cc-chip cc-chip-purple" style={{ fontSize: 9, padding: '1px 5px' }}>
+                    CONC
+                  </span>
+                )}
+              </div>
+              <div
+                className="cc-italic-serif"
+                style={{
+                  fontSize: 12,
+                  color: 'var(--cc-gold-soft)',
+                  marginBottom: 6,
+                }}
+              >
+                {[details.school, details.castingTime, details.range].filter(Boolean).join(' · ')}
+              </div>
+              <div
+                className="cc-italic-serif"
+                style={{
+                  fontSize: 13,
+                  color: 'var(--cc-text-dim)',
+                  lineHeight: 1.45,
+                  display: '-webkit-box',
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                }}
+              >
+                {details.description}
+              </div>
+
+              {details.effects && details.effects.length > 0 && (
+                <div
+                  style={{
+                    marginTop: 8,
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 4,
+                  }}
+                >
+                  {details.effects.map((effect, eIdx) => (
+                    <div
+                      key={eIdx}
+                      style={{ position: 'relative' }}
+                      onMouseEnter={() => setHoveredEffect(effect)}
+                      onMouseLeave={() => setHoveredEffect(null)}
+                    >
+                      <span
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 800,
+                          color: 'white',
+                          background: 'var(--cc-orange)',
+                          borderRadius: 3,
+                          padding: '2px 6px',
+                          textTransform: 'uppercase',
+                          letterSpacing: 0.4,
+                          cursor: 'help',
+                        }}
+                      >
+                        {effect}
+                      </span>
+                      {hoveredEffect === effect && effectDescriptions[effect] && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            zIndex: 10,
+                            bottom: '100%',
+                            left: 0,
+                            marginBottom: 6,
+                            background: 'var(--cc-bg-3)',
+                            color: 'var(--cc-text)',
+                            padding: 12,
+                            borderRadius: 6,
+                            fontSize: 11,
+                            width: 240,
+                            border: '1px solid var(--cc-orange)',
+                            boxShadow: '0 8px 20px rgba(0, 0, 0, 0.4)',
+                          }}
+                        >
+                          <div
+                            className="cc-display"
+                            style={{ fontSize: 12, color: 'var(--cc-orange-soft)', marginBottom: 4 }}
+                          >
+                            {effect}
+                          </div>
+                          <div className="cc-italic-serif">{effectDescriptions[effect]}</div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent
+        side="right"
+        align="start"
+        sideOffset={8}
+        className="w-96 max-h-[80vh] overflow-y-auto custom-scrollbar"
+        style={{
+          background: 'var(--cc-bg-3)',
+          border: `1px solid ${accent}`,
+          color: 'var(--cc-text)',
+          padding: 16,
+        }}
+      >
+        <SpellFullDetail name={name} spell={details} accent={accent} />
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
+// ============================================================================
+// Counter chip — top-of-step "X / Y picked" pill
+// ============================================================================
+function CounterChip({ label, current, max, accent, tip }) {
+  return (
+    <div
+      style={{
+        padding: '10px 16px',
+        background: `color-mix(in srgb, ${accent}, transparent 90%)`,
+        border: `1px solid color-mix(in srgb, ${accent}, transparent 60%)`,
+        borderRadius: 6,
+        minWidth: 110,
+      }}
+    >
+      <div
+        className="cc-label"
+        style={{
+          color: accent,
+          marginBottom: 2,
+          fontSize: 10,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+        }}
+      >
+        {label}
+        {tip && <InfoTip>{tip}</InfoTip>}
+      </div>
+      <div
+        className="cc-display"
+        style={{ fontSize: 22, color: 'var(--cc-text)', lineHeight: 1 }}
+      >
+        {current}
+        <span style={{ color: 'var(--cc-text-faint)', fontSize: 17 }}> / {max}</span>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Pact magic banner (Warlock)
+// ============================================================================
+function PactMagicBanner({ pactSlots }) {
+  return (
+    <div
+      style={{
+        marginTop: 16,
+        background: 'rgba(158, 91, 255, 0.08)',
+        border: '1px solid rgba(158, 91, 255, 0.40)',
+        borderLeft: '3px solid #9E5BFF',
+        borderRadius: 8,
+        padding: '14px 18px',
+      }}
+    >
+      <div className="cc-label" style={{ color: '#C9A3FF', marginBottom: 4 }}>
+        Pact Magic · Warlock {pactSlots.totalWarlockLevels}
+      </div>
+      <p
+        className="cc-italic-serif"
+        style={{
+          fontSize: 14,
+          color: 'var(--cc-text)',
+          margin: 0,
+          lineHeight: 1.5,
+        }}
+      >
+        {pactSlots.slots} slot{pactSlots.slots > 1 ? 's' : ''} of{' '}
+        {pactSlots.slotLevel}{ordinalSuffix(pactSlots.slotLevel)} level. You regain these on a
+        short rest. All Pact Magic slots are cast at the level shown.
+      </p>
+    </div>
+  );
+}
+
+// ============================================================================
+// Spell full-detail popover (preserved logic, restyled around .cc-* tokens)
+// ============================================================================
+function SpellFullDetail({ name, spell, accent }) {
   if (!spell) return null;
   const levelDisplay =
     spell.level === 0 || spell.level === "Cantrip"
@@ -511,39 +767,74 @@ function SpellFullDetail({ name, spell }) {
   ].filter(Boolean);
 
   return (
-    <div className="space-y-3">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div>
-        <h4 className="text-base font-bold text-[#FFC6AA] leading-tight">{name}</h4>
+        <h4
+          className="cc-display"
+          style={{ fontSize: 18, color: accent || 'var(--cc-orange-soft)', margin: 0, lineHeight: 1.2 }}
+        >
+          {name}
+        </h4>
         {meta.length > 0 && (
-          <p className="text-[11px] text-gray-400 mt-0.5">{meta.join(" • ")}</p>
+          <p
+            className="cc-italic-serif"
+            style={{ fontSize: 11, color: 'var(--cc-text-faint)', marginTop: 4 }}
+          >
+            {meta.join(" · ")}
+          </p>
         )}
       </div>
 
       {spell.description && (
-        <p className="text-xs text-white/90 leading-relaxed whitespace-pre-line">
+        <p
+          className="cc-italic-serif"
+          style={{
+            fontSize: 12,
+            color: 'var(--cc-text-dim)',
+            lineHeight: 1.55,
+            whiteSpace: 'pre-line',
+            margin: 0,
+          }}
+        >
           {spell.description}
         </p>
       )}
 
       {higher && (
-        <div className="border-l-2 border-[#37F2D1]/60 pl-3 py-1">
-          <p className="text-[10px] uppercase tracking-widest text-[#37F2D1] font-bold mb-1">
+        <div
+          style={{
+            borderLeft: `2px solid ${accent || 'var(--cc-teal)'}`,
+            paddingLeft: 10,
+          }}
+        >
+          <div className="cc-label" style={{ color: accent || 'var(--cc-teal)', marginBottom: 4 }}>
             At Higher Levels
+          </div>
+          <p
+            className="cc-italic-serif"
+            style={{
+              fontSize: 12,
+              color: 'var(--cc-text-dim)',
+              lineHeight: 1.55,
+              whiteSpace: 'pre-line',
+              margin: 0,
+            }}
+          >
+            {higher}
           </p>
-          <p className="text-xs text-white/85 leading-relaxed whitespace-pre-line">{higher}</p>
         </div>
       )}
 
       {classes.length > 0 && (
         <div>
-          <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-1">
+          <div className="cc-label" style={{ color: 'var(--cc-text-faint)', marginBottom: 4 }}>
             Classes
-          </p>
-          <div className="flex flex-wrap gap-1">
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {classes.map((c) => (
-              <Badge key={c} className="bg-[#1E2430] border border-[#37F2D1]/30 text-[#37F2D1] text-[10px]">
+              <span key={c} className="cc-chip cc-chip-teal" style={{ fontSize: 10 }}>
                 {c}
-              </Badge>
+              </span>
             ))}
           </div>
         </div>
@@ -552,30 +843,15 @@ function SpellFullDetail({ name, spell }) {
   );
 }
 
-/**
- * Per-class spells-known / spells-prepared reference panel for
- * multiclass casters. Today's spell picker selects from a unified
- * pool constrained by total slot count per level — it doesn't
- * track which class learned which spell, which means a Bard 3 /
- * Sorcerer 2 has no enforced per-class budget. Per RAW (PHB p.
- * 165), each class tracks its known/prepared spells separately:
- *   Bard 3 → 6 spells known
- *   Sorcerer 2 → 3 spells known + Sorcerer's cantrip count
- *
- * This panel surfaces the rules so player + GM can verify the
- * total count is consistent with each class's individual budget.
- * Renders nothing for single-class characters (the inline
- * Spellcasting summary already shows the right number) and for
- * non-caster classes (no spells to surface). Reads from the
- * existing SPELLS_KNOWN_TABLE so the rules data stays the single
- * source of truth.
- */
+// ============================================================================
+// PerClassSpellsKnownPanel — preserved logic, restyled around .cc-* tokens
+// ============================================================================
 function PerClassSpellsKnownPanel({ characterData }) {
   const primary = characterData?.class;
   const multiclasses = Array.isArray(characterData?.multiclasses)
     ? characterData.multiclasses.filter((mc) => mc?.class && mc?.level)
     : [];
-  if (multiclasses.length === 0) return null; // single-class — existing summary is sufficient
+  if (multiclasses.length === 0) return null;
 
   const primaryLevel =
     Math.max(1, Number(characterData?.level) || 1) -
@@ -591,20 +867,44 @@ function PerClassSpellsKnownPanel({ characterData }) {
   const attributes = characterData?.attributes || {};
 
   return (
-    <div className="mb-6 bg-[#1E2430] border-2 border-[#5B4B9E]/40 rounded-xl p-4">
-      <h3 className="text-[#5B4B9E] font-bold mb-1 flex items-center gap-2">
-        Multiclass Spells Reference
+    <div
+      style={{
+        marginTop: 16,
+        background: 'rgba(158, 91, 255, 0.06)',
+        border: '1px solid rgba(158, 91, 255, 0.32)',
+        borderLeft: '3px solid #9E5BFF',
+        borderRadius: 8,
+        padding: '14px 18px',
+      }}
+    >
+      <div
+        className="cc-label"
+        style={{
+          color: '#C9A3FF',
+          marginBottom: 4,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        Multiclass spells reference
         <InfoTip width="w-80">
-          Each class tracks its own spells known or prepared count.
-          The picker below shows the unified slot pool — these per-class
-          budgets are the RAW limits to keep your selections consistent
-          with.
+          Each class tracks its own spells known or prepared count. The picker below shows the
+          unified slot pool — these per-class budgets are the RAW limits to keep your selections
+          consistent with.
         </InfoTip>
-      </h3>
-      <p className="text-xs text-white/60 mb-3">
+      </div>
+      <p
+        className="cc-italic-serif"
+        style={{
+          fontSize: 12,
+          color: 'var(--cc-text-faint)',
+          margin: '0 0 10px',
+        }}
+      >
         Per PHB p. 165, multiclass casters track spells separately per class.
       </p>
-      <ul className="text-sm text-white space-y-1.5">
+      <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 13 }}>
         {allEntries.map(({ className: cls, level }) => {
           const data = SPELLS_KNOWN_TABLE[cls];
           if (!data) return null;
@@ -623,12 +923,25 @@ function PerClassSpellsKnownPanel({ characterData }) {
             }
           }
           return (
-            <li key={cls} className="flex items-center justify-between gap-2 flex-wrap">
+            <li
+              key={cls}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '4px 0',
+                gap: 8,
+                flexWrap: 'wrap',
+              }}
+            >
               <span>
-                <span className="font-bold text-white">{cls}</span>{" "}
-                <span className="text-white/60">level {level}</span>
+                <span style={{ fontWeight: 700, color: 'var(--cc-text)' }}>{cls}</span>{' '}
+                <span style={{ color: 'var(--cc-text-dim)' }}>level {level}</span>
               </span>
-              <span className="text-[#37F2D1] text-xs font-semibold">
+              <span
+                className="cc-label"
+                style={{ color: 'var(--cc-teal)' }}
+              >
                 {cantrips > 0 && `${cantrips} cantrips`}
                 {cantrips > 0 && spellsLine && " · "}
                 {spellsLine || (cantrips === 0 ? "—" : "")}

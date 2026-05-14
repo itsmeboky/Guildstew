@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Character Creator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cherry+Cream+Soda&family=Nunito:wght@400;500;600;700;800;900&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    /* Fire & magic accents — kept from brand */
+    --orange: #FF5300;
+    --orange-soft: #FF7A33;
+    --orange-glow: rgba(255, 83, 0, 0.4);
+    --orange-deep: #C73E00;
+    --teal: #37F2D1;
+    --teal-dark: #04685A;
+    --teal-deep: #0a3d36;
+    --burgundy: #8B2C1E;
+    --burgundy-deep: #5A1A10;
+    --purple: #C9A3FF;
+
+    /* Brass / gold / parchment — now derived from --page-accent so the
+       page's whole palette shifts when a class is picked. Default values
+       come from the @property initial-value declarations below. */
+    --gold: var(--page-accent);
+    --gold-soft: color-mix(in srgb, var(--page-accent) 70%, white);
+    --gold-deep: var(--page-accent-deep);
+    --gold-glow: color-mix(in srgb, var(--page-accent), transparent 75%);
+    --parchment: #F3E2BD;
+    --parchment-dim: #DCC893;
+
+    /* Body / panel backgrounds — derive from page-bg vars. */
+    --bg-0: var(--page-bg-1);
+    --bg-1: var(--page-bg-2);
+    --bg-2: color-mix(in srgb, var(--page-bg-2), white 6%);
+    --bg-3: color-mix(in srgb, var(--page-bg-2), white 12%);
+    --bg-4: color-mix(in srgb, var(--page-bg-2), white 20%);
+    --bg-leather: color-mix(in srgb, var(--page-bg-2), var(--page-accent) 8%);
+
+    --ink: #1F140C;
+    --text: #F5E6C2;
+    --text-dim: #C5B086;
+    --text-faint: #8A7559;
+    --danger: #E84A3A;
+    --warn: #F2B33D;
+
+    --border: color-mix(in srgb, var(--page-accent), transparent 84%);
+    --border-strong: color-mix(in srgb, var(--page-accent), transparent 68%);
+    --border-faint: color-mix(in srgb, var(--page-accent), transparent 92%);
+
+    --display: 'Cherry Cream Soda', 'Cream', cursive;
+    --serif: 'Cormorant Garamond', Georgia, serif;
+    --body: 'Nunito', system-ui, -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg-0); color: var(--text); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+  #root { min-height: 100vh; }
+  h1, h2, h3, h4 { font-family: var(--display); font-weight: 400; letter-spacing: 0.5px; margin: 0; }
+  button { font-family: var(--body); cursor: pointer; }
+  input, textarea, select { font-family: var(--body); color: var(--text); }
+  input:focus, textarea:focus, select:focus { outline: 2px solid var(--orange); outline-offset: 1px; }
+  ::selection { background: var(--orange); color: white; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--bg-4); }
+
+  .display { font-family: var(--display); letter-spacing: 0.5px; }
+  .serif { font-family: var(--serif); }
+  .mono { font-family: var(--mono); }
+  .italic-serif { font-family: var(--serif); font-style: italic; }
+
+  /* Animatable per-class palette — the page's WHOLE atmosphere shifts when
+     a class is picked. @property lets CSS variables of type <color> actually
+     transition between values instead of snapping. */
+  @property --page-bg-1 {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: #1A100A;
+  }
+  @property --page-bg-2 {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: #251710;
+  }
+  @property --page-accent {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: #D4A951;
+  }
+  @property --page-accent-deep {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: #8C6F3F;
+  }
+  @property --aura-tint {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: #FF5300;
+  }
+  @property --aura-deep {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: #5A1A10;
+  }
+  @property --aura-strength {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 0;
+  }
+  :root {
+    transition:
+      --page-bg-1 1.8s cubic-bezier(.4, 0, .2, 1),
+      --page-bg-2 1.8s cubic-bezier(.4, 0, .2, 1),
+      --page-accent 1.8s cubic-bezier(.4, 0, .2, 1),
+      --page-accent-deep 1.8s cubic-bezier(.4, 0, .2, 1),
+      --aura-tint 1.4s cubic-bezier(.4, 0, .2, 1),
+      --aura-deep 1.4s cubic-bezier(.4, 0, .2, 1),
+      --aura-strength 1.4s ease;
+  }
+
+  /* Atmospheric backdrop — base layer now driven by page palette,
+     so the whole room recolors when a class is picked. */
+  .backdrop {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse 80% 60% at 18% 0%, color-mix(in srgb, var(--page-accent), transparent 78%), transparent 60%),
+      radial-gradient(ellipse 70% 70% at 88% 100%, color-mix(in srgb, var(--page-accent-deep), transparent 78%), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 50% 50%, color-mix(in srgb, var(--page-accent-deep), transparent 88%), transparent 65%),
+      linear-gradient(180deg, var(--page-bg-1) 0%, var(--page-bg-2) 50%, var(--page-bg-1) 100%);
+  }
+
+  /* CLASS AURA — bleeds class color through the page when a class is picked.
+     Strong enough to register, soft enough to read text against. Multi-layer
+     for depth: top corner, bottom corner, ambient mid-glow. */
+  .class-aura {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    opacity: var(--aura-strength);
+    background:
+      radial-gradient(ellipse 70% 50% at 10% -10%, var(--aura-tint) 0%, transparent 45%),
+      radial-gradient(ellipse 80% 60% at 95% 110%, var(--aura-deep) 0%, transparent 55%),
+      radial-gradient(circle 800px at 50% 80%, var(--aura-deep) 0%, transparent 60%),
+      radial-gradient(circle 600px at 85% 25%, var(--aura-tint) 0%, transparent 60%);
+    mix-blend-mode: screen;
+  }
+  .class-aura::after {
+    /* slow pulse — candle wave-like */
+    content: ""; position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 50% 40% at 30% 30%, var(--aura-tint) 0%, transparent 50%),
+      radial-gradient(ellipse 40% 30% at 70% 70%, var(--aura-deep) 0%, transparent 50%);
+    opacity: 0.4;
+    animation: aura-pulse 10s ease-in-out infinite;
+    mix-blend-mode: overlay;
+  }
+  @keyframes aura-pulse {
+    0%, 100% { opacity: 0.30; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(1.08) translate(-2%, -1%); }
+  }
+
+  /* When class is picked, briefly show a "shockwave" overlay that expands
+     and fades. Lets the user see the swap happen, not just sense it. */
+  .class-arrival {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    opacity: 0;
+  }
+  .class-arrival.firing {
+    animation: arrival-flash 1.6s ease-out forwards;
+  }
+  .class-arrival::before {
+    content: ""; position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at center, var(--aura-tint) 0%, transparent 40%);
+    mix-blend-mode: screen;
+  }
+  @keyframes arrival-flash {
+    0% { opacity: 0; transform: scale(0.3); }
+    20% { opacity: 0.55; transform: scale(0.5); }
+    50% { opacity: 0.3; transform: scale(1.1); }
+    100% { opacity: 0; transform: scale(1.5); }
+  }
+
+  .backdrop::before {
+    /* parchment-fibre texture */
+    content: ""; position: absolute; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.85 0 0 0 0 0.6 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.5; mix-blend-mode: screen;
+  }
+  .backdrop::after {
+    /* flickering candle vignette */
+    content: ""; position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 0%, transparent 50%, rgba(0,0,0,0.55) 100%);
+  }
+
+  /* Surfaces — all derive from page palette so they recolor with class */
+  .panel {
+    background: linear-gradient(180deg,
+      color-mix(in srgb, var(--page-bg-2), white 5%) 0%,
+      var(--page-bg-2) 100%);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--page-accent), transparent 90%) inset, 0 8px 24px rgba(0, 0, 0, 0.3);
+  }
+  .panel-strong {
+    background:
+      radial-gradient(circle at top left, color-mix(in srgb, var(--page-accent), transparent 90%), transparent 50%),
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--page-bg-2), white 8%),
+        var(--page-bg-2));
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--page-accent), transparent 80%) inset, 0 12px 32px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Tome page — for big content like Identity/Class steps */
+  .tome {
+    background:
+      radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--page-accent), transparent 88%), transparent 40%),
+      radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--page-accent-deep), transparent 88%), transparent 40%),
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--page-bg-2), white 6%),
+        var(--page-bg-2));
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    position: relative;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 1px 0 color-mix(in srgb, var(--page-accent), transparent 84%) inset;
+  }
+  /* Ornamental corner brackets — use SVG mask so they tint with --page-accent */
+  .tome::before, .tome::after,
+  .tome-corner::before, .tome-corner::after {
+    content: ""; position: absolute; width: 28px; height: 28px;
+    background-color: var(--page-accent);
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cpath d='M2 8 L2 2 L8 2 M14 2 L14 4 M2 14 L4 14' stroke='black' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='4' cy='4' r='1.6' fill='black'/%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cpath d='M2 8 L2 2 L8 2 M14 2 L14 4 M2 14 L4 14' stroke='black' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='4' cy='4' r='1.6' fill='black'/%3E%3C/svg%3E");
+    mask-size: contain; -webkit-mask-size: contain;
+    mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat;
+    opacity: 0.85; pointer-events: none;
+  }
+  .tome::before { top: 8px; left: 8px; }
+  .tome::after { bottom: 8px; right: 8px; transform: rotate(180deg); }
+  .tome-corner.tr::before { top: 8px; right: 8px; transform: rotate(90deg); }
+  .tome-corner.bl::after { bottom: 8px; left: 8px; transform: rotate(-90deg); }
+
+  /* Labels */
+  .label {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.6px;
+    text-transform: uppercase; color: var(--gold);
+  }
+  .label-cream { color: var(--parchment); }
+  .label-faint { color: var(--text-faint); }
+
+  /* Section heading with ornamental flourish */
+  .ornate-heading {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 20px;
+  }
+  .ornate-heading::before, .ornate-heading::after {
+    content: ""; flex: 1; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold-deep) 30%, var(--gold-deep) 70%, transparent);
+  }
+  .ornate-heading h3 {
+    font-family: var(--display);
+    color: var(--text);
+    font-size: 26px;
+    padding: 0 4px;
+    letter-spacing: 1px;
+  }
+  .ornate-flourish {
+    width: 14px; height: 14px;
+    background: var(--gold);
+    transform: rotate(45deg);
+    flex-shrink: 0;
+    box-shadow: 0 0 12px var(--gold-glow);
+  }
+  .ornate-flourish.small { width: 8px; height: 8px; }
+  
+  /* Fleur divider — used inside panels between sections */
+  .fleur-divider {
+    display: flex; align-items: center; gap: 14px;
+    margin: 28px 0; opacity: 0.5;
+  }
+  .fleur-divider::before, .fleur-divider::after {
+    content: ""; flex: 1; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold-deep), transparent);
+  }
+  .fleur-divider svg { width: 22px; height: 22px; flex-shrink: 0; }
+
+  /* Chips */
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 3px;
+    background: rgba(55, 242, 209, 0.10); color: var(--teal);
+    border: 1px solid rgba(55, 242, 209, 0.28);
+    font-size: 12px; font-weight: 700; line-height: 1;
+    letter-spacing: 0.3px;
+  }
+  .chip-orange { background: rgba(255, 83, 0, 0.15); color: var(--orange-soft); border-color: rgba(255, 83, 0, 0.4); }
+  .chip-purple { background: rgba(201, 163, 255, 0.15); color: var(--purple); border-color: rgba(201, 163, 255, 0.32); }
+  .chip-gold { background: color-mix(in srgb, var(--page-accent), transparent 84%); color: var(--gold-soft); border-color: color-mix(in srgb, var(--page-accent), transparent 60%); }
+  .chip-burgundy { background: rgba(139, 44, 30, 0.22); color: #FFB39E; border-color: rgba(139, 44, 30, 0.5); }
+  .chip-neutral { background: rgba(245, 230, 194, 0.06); color: var(--text-dim); border-color: var(--border); }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 10px 18px; border-radius: 4px; border: 1px solid transparent;
+    font-weight: 700; font-size: 14px; transition: transform .12s, box-shadow .12s, background .12s, border-color .12s;
+    background: var(--bg-3); color: var(--text);
+    letter-spacing: 0.3px;
+  }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); background: var(--bg-4); }
+  .btn:active:not(:disabled) { transform: translateY(0); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-primary {
+    background: linear-gradient(180deg, var(--orange), var(--orange-deep));
+    color: white; box-shadow: 0 4px 14px var(--orange-glow), 0 1px 0 rgba(255,255,255,0.12) inset;
+    border: 1px solid rgba(0,0,0,0.2);
+  }
+  .btn-primary:hover:not(:disabled) { box-shadow: 0 6px 20px var(--orange-glow), 0 1px 0 rgba(255,255,255,0.18) inset; background: linear-gradient(180deg, #FF6E22, var(--orange)); }
+  .btn-ghost { background: transparent; border-color: var(--border-strong); color: var(--text); }
+  .btn-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--page-accent), transparent 94%); border-color: var(--page-accent); }
+  .btn-teal { background: rgba(55, 242, 209, 0.10); color: var(--teal); border-color: rgba(55, 242, 209, 0.34); }
+  .btn-teal:hover:not(:disabled) { background: rgba(55, 242, 209, 0.16); }
+  .btn-gold { background: color-mix(in srgb, var(--page-accent), transparent 86%); color: var(--gold-soft); border: 1px solid color-mix(in srgb, var(--page-accent), transparent 58%); }
+  .btn-gold:hover:not(:disabled) { background: color-mix(in srgb, var(--page-accent), transparent 78%); }
+
+  /* Pickable cards — class-tinted */
+  .pickable {
+    position: relative; cursor: pointer; transition: all .15s ease;
+    background: linear-gradient(180deg,
+      color-mix(in srgb, var(--page-bg-2), white 8%),
+      color-mix(in srgb, var(--page-bg-2), black 2%));
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .pickable:hover {
+    border-color: var(--page-accent);
+    background: linear-gradient(180deg,
+      color-mix(in srgb, var(--page-bg-2), white 14%),
+      color-mix(in srgb, var(--page-bg-2), white 4%));
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.45), 0 0 16px color-mix(in srgb, var(--page-accent), transparent 85%);
+  }
+  .pickable.selected {
+    border-color: var(--orange);
+    background: linear-gradient(180deg, rgba(255, 83, 0, 0.18), rgba(255, 83, 0, 0.06));
+    box-shadow: 0 0 0 1px var(--orange), 0 0 24px rgba(255, 83, 0, 0.3);
+  }
+  .pickable.selected-teal {
+    border-color: var(--teal);
+    background: linear-gradient(180deg, rgba(55, 242, 209, 0.12), rgba(55, 242, 209, 0.03));
+    box-shadow: 0 0 0 1px var(--teal), 0 0 20px rgba(55, 242, 209, 0.2);
+  }
+  .pickable.selected-gold {
+    border-color: var(--page-accent);
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--page-accent), transparent 80%),
+        color-mix(in srgb, var(--page-accent), transparent 94%));
+    box-shadow: 0 0 0 1px var(--page-accent), 0 0 24px color-mix(in srgb, var(--page-accent), transparent 70%);
+  }
+
+  .input {
+    width: 100%; padding: 11px 14px; border-radius: 4px;
+    background: color-mix(in srgb, var(--page-bg-1), black 30%);
+    border: 1px solid var(--border);
+    color: var(--text); font-size: 14px; font-weight: 500;
+  }
+  .input:focus { border-color: var(--orange); outline: none; box-shadow: 0 0 0 2px rgba(255, 83, 0, 0.18); }
+  .input::placeholder { color: var(--text-faint); }
+
+  /* Tooltips */
+  .help-tip {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: color-mix(in srgb, var(--page-accent), transparent 84%); color: var(--gold-soft);
+    font-size: 11px; font-weight: 800;
+    font-family: var(--body);
+    cursor: help; user-select: none; line-height: 1;
+    border: 1px solid var(--page-accent-deep);
+    position: relative; transition: background .12s;
+  }
+  .help-tip:hover { background: color-mix(in srgb, var(--page-accent), transparent 70%); }
+  .help-tip[data-tip]::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+    background: #14090A; color: var(--text);
+    border: 1px solid var(--gold-deep);
+    padding: 10px 14px; border-radius: 4px;
+    width: max-content; max-width: 300px; font-size: 12px; font-weight: 500;
+    text-align: left; line-height: 1.5; letter-spacing: 0;
+    opacity: 0; pointer-events: none; transition: opacity .15s;
+    z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  }
+  .help-tip[data-tip]:hover::after { opacity: 1; }
+
+  /* New-player primer banner — illuminated scroll */
+  .primer {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--page-accent), transparent 92%), color-mix(in srgb, var(--orange), transparent 96%));
+    border: 1px solid color-mix(in srgb, var(--page-accent), transparent 78%);
+    border-left: 3px solid var(--page-accent);
+    border-radius: 4px;
+    padding: 14px 18px;
+    font-size: 14px; line-height: 1.6;
+    color: var(--text);
+    font-family: var(--serif);
+    font-weight: 500;
+    position: relative;
+  }
+  .primer-title {
+    color: var(--gold-soft);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    font-family: var(--body);
+  }
+  .primer strong { color: var(--orange-soft); font-weight: 600; }
+  .primer-illuminated {
+    /* drop-cap style first letter for the fanciest version */
+  }
+
+  /* Initial-cap "illuminated manuscript" treatment for tome-page bodies */
+  .body-prose {
+    font-family: var(--serif); font-size: 16px; line-height: 1.6; color: var(--text);
+  }
+  .body-prose::first-letter {
+    font-family: var(--display); font-size: 48px;
+    color: var(--orange-soft); line-height: 0.9;
+    float: left; padding: 4px 8px 0 0;
+    text-shadow: 0 2px 8px rgba(255, 83, 0, 0.3);
+  }
+
+  /* Animations */
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 0 0 var(--orange-glow); } 50% { box-shadow: 0 0 0 8px rgba(255,83,0,0); } }
+  @keyframes flicker { 0%, 100% { opacity: 1; } 50% { opacity: 0.92; } }
+  .fade-in { animation: fadeUp .3s ease-out both; }
+  .pulse-orange { animation: pulseGlow 2s ease-in-out infinite; }
+  .flicker { animation: flicker 4s ease-in-out infinite; }
+
+  /* Step transition */
+  .step-content { animation: fadeUp .25s ease-out both; }
+</style>
+</head>
+<body>
+  <div class="backdrop"></div>
+  <div class="class-aura"></div>
+  <div class="class-arrival" id="class-arrival"></div>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="data.jsx"></script>
+  <script type="text/babel" src="ui.jsx"></script>
+  <script type="text/babel" src="step-identity.jsx"></script>
+  <script type="text/babel" src="step-class.jsx"></script>
+  <script type="text/babel" src="step-abilities.jsx"></script>
+  <script type="text/babel" src="step-features.jsx"></script>
+  <script type="text/babel" src="step-skills.jsx"></script>
+  <script type="text/babel" src="step-spells.jsx"></script>
+  <script type="text/babel" src="step-equipment.jsx"></script>
+  <script type="text/babel" src="step-review.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>

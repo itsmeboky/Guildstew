@@ -1,7 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Check, Star, HelpCircle, Lock } from "lucide-react";
+import { Check, Star, Lock } from "lucide-react";
 import { motion } from "framer-motion";
 import { getBackgroundSkills } from "@/components/dnd5e/backgroundData";
 import { getRaceSkillProficiencies } from "@/components/dnd5e/raceData";
@@ -14,15 +12,15 @@ import {
 } from '@/components/dnd5e/dnd5eRules';
 import InfoTip from "@/components/characterCreator/InfoTip";
 import { tipFor } from "@/components/characterCreator/creatorTips";
+import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
+import { Primer } from "@/components/characterCreator/chrome/Primer";
 
 // Derived from the registry so every component reads from one source.
 const allSkills = ALL_SKILLS;
 
 // CLASS_SKILL_CHOICES shape: { Barbarian: { count: 2, from: [...] }, ... }.
-// Bard's `from` is the literal string 'any' (RAW: bards pick from any
-// skill). Expand it to the full skill catalog here so downstream
-// `availableClassSkills.includes(skill)` is an array check, not the
-// String.prototype.includes substring lookup that always returned false.
+// Bard's `from` is the literal string 'any' — expand to the full skill
+// catalog so downstream `availableClassSkills.includes(skill)` works.
 const classSkillOptions = Object.fromEntries(
   Object.entries(CLASS_SKILL_CHOICES).map(([cls, v]) => [
     cls,
@@ -33,29 +31,18 @@ const classSkillCounts = Object.fromEntries(
   Object.entries(CLASS_SKILL_CHOICES).map(([cls, v]) => [cls, v.count || 2])
 );
 
-const classExpertiseCount = {
-  Rogue: 2,
-  Bard: 2
-};
+const classExpertiseCount = { Rogue: 2, Bard: 2 };
 
-// Re-use the registry's SKILL_ABILITIES (lowercase ability keys).
 const skillAbilityMap = SKILL_ABILITIES;
 
 export default function SkillsStep({ characterData, updateCharacterData }) {
   const [selectedSkills, setSelectedSkills] = useState(characterData.skills || {});
   const [expertise, setExpertise] = useState(characterData.expertise || []);
-  // Multiclass skill picks live in their own keyed map so the source
-  // of each proficiency is recoverable on re-edit and on multiclass
-  // removal. Shape: { [className]: ["Stealth", ...] }. Per RAW only
-  // Bard / Ranger / Rogue grant a skill on multiclass entry.
   const [multiclassSkills, setMulticlassSkills] = useState(
     characterData.multiclassSkills || {},
   );
-  const [showRecommendations, setShowRecommendations] = useState(false);
 
   const backgroundSkills = getBackgroundSkills(characterData.background);
-  // Racial skills: fixed rows are auto-granted + locked; choose slots
-  // are picked against `from` ("any" → ALL_SKILLS, or an explicit list).
   const raceRule = getRaceSkillProficiencies(characterData.race, characterData.subrace);
   const fixedRacialSkills = raceRule.fixed || [];
   const racialBonusSkills = raceRule.choose || 0;
@@ -65,20 +52,16 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
   const classSkillCount = classSkillCounts[characterData.class] || 2;
   const expertiseCount = classExpertiseCount[characterData.class] || 0;
 
-  // Auto-apply background skills
   useEffect(() => {
     if (backgroundSkills.length > 0) {
       const updatedSkills = { ...selectedSkills };
-      backgroundSkills.forEach(skill => {
+      backgroundSkills.forEach((skill) => {
         updatedSkills[skill] = true;
       });
       setSelectedSkills(updatedSkills);
     }
   }, [characterData.background]);
 
-  // Auto-apply fixed racial skills (Elf → Perception, Half-Orc →
-  // Intimidation, etc.) and drop the old ones whenever the race /
-  // subrace changes. This mirrors the racial-language swap pattern.
   const prevFixedRef = useRef(fixedRacialSkills);
   useEffect(() => {
     const prev = prevFixedRef.current || [];
@@ -89,8 +72,6 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
     setSelectedSkills((current) => {
       const updated = { ...current };
       remove.forEach((s) => {
-        // Don't remove if it's also granted by background/class — that
-        // claim survives the race swap.
         if (backgroundSkills.includes(s)) return;
         delete updated[s];
       });
@@ -100,12 +81,6 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
     prevFixedRef.current = next;
   }, [characterData.race, characterData.subrace, backgroundSkills, fixedRacialSkills]);
 
-  // Sync to characterData whenever skills, expertise, or
-  // multiclass picks change. The multiclass picks are persisted as
-  // their own field so editor reload can rehydrate the picker; the
-  // main `skills` map mirrors them so downstream consumers (sheet
-  // render, proficiency display, etc.) don't need to know about
-  // attribution.
   useEffect(() => {
     const proficiencies = Object.entries(selectedSkills)
       .filter(([, on]) => on)
@@ -118,10 +93,6 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
     });
   }, [selectedSkills, expertise, multiclassSkills]);
 
-  // Set of skills owned by SOME multiclass picker — used to lock
-  // them out of the main grid (the grid would otherwise let the
-  // user toggle a skill the multiclass picker is "responsible" for,
-  // dropping the picker out of sync).
   const multiclassOwnedSkills = React.useMemo(() => {
     const s = new Set();
     for (const arr of Object.values(multiclassSkills || {})) {
@@ -130,9 +101,6 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
     return s;
   }, [multiclassSkills]);
 
-  // Multiclass entries that actually grant a skill on entry. Filter
-  // out blank / no-grant rows up front so the picker section just
-  // iterates a clean list.
   const multiclassGrants = React.useMemo(() => {
     const entries = Array.isArray(characterData.multiclasses)
       ? characterData.multiclasses
@@ -143,12 +111,6 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
       .filter(({ grant }) => grant);
   }, [characterData.multiclasses]);
 
-  // Garbage-collect picks for multiclass classes the player removed
-  // upstream (in ClassFeaturesStep). Without this, an old pick for
-  // a now-removed Rogue dip would leak into both the picker state
-  // and the saved character. Skills removed from multiclassSkills
-  // are also unselected from the main grid unless another source
-  // grants them.
   useEffect(() => {
     const liveClasses = new Set(multiclassGrants.map((g) => g.class));
     const stale = Object.keys(multiclassSkills || {}).filter((cls) => !liveClasses.has(cls));
@@ -160,10 +122,6 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
         if (Array.isArray(next[cls])) orphanedSkills.push(...next[cls]);
         delete next[cls];
       }
-      // Only orphan a skill from selectedSkills if no other picker
-      // / source still owns it. background + fixed-racial wins keep
-      // the prof; primary-class re-pick claims it; another live
-      // multiclass picker re-claims it.
       if (orphanedSkills.length > 0) {
         const survivingMulticlass = new Set();
         for (const cls of Object.keys(next)) {
@@ -188,11 +146,6 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
 
   const availableClassSkills = classSkillOptions[characterData.class] || [];
 
-  // Count only skills selected from class list, excluding free
-  // grants (background, fixed-racial) and multiclass-owned picks
-  // — without the multiclass exclusion, a Bard 1 / Rogue 1 who
-  // picks Stealth via the Rogue picker would also see Stealth
-  // satisfy the Bard primary count (Bard's `from` is "any").
   const selectedFromClassList = Object.entries(selectedSkills)
     .filter(([skill, selected]) =>
       selected
@@ -203,8 +156,6 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
     )
     .length;
 
-  // Count skills selected that aren't from background / class list /
-  // fixed racial / multiclass — those are the racial-choice slots.
   const selectedFromRacialBonus = Object.entries(selectedSkills)
     .filter(([skill, selected]) =>
       selected
@@ -216,11 +167,12 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
     .length;
 
   const totalSelectedNonBackground = selectedFromClassList + selectedFromRacialBonus;
+  const totalNeeded = classSkillCount + racialBonusSkills;
 
   const handleSkillToggle = (skill) => {
-    if (backgroundSkills.includes(skill)) return; // Can't deselect background skills
-    if (fixedRacialSkills.includes(skill)) return; // Racial fixed skills are locked
-    if (multiclassOwnedSkills.has(skill)) return; // Owned by a multiclass picker
+    if (backgroundSkills.includes(skill)) return;
+    if (fixedRacialSkills.includes(skill)) return;
+    if (multiclassOwnedSkills.has(skill)) return;
 
     const isCurrentlySelected = selectedSkills[skill];
     const isClassSkill = availableClassSkills.includes(skill);
@@ -229,239 +181,251 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
       const updated = { ...selectedSkills };
       delete updated[skill];
       setSelectedSkills(updated);
-
       if (expertise.includes(skill)) {
-        setExpertise(expertise.filter(s => s !== skill));
+        setExpertise(expertise.filter((s) => s !== skill));
       }
       return;
     }
 
-    // Select — respect the racial `from` restriction if present.
     if (!isClassSkill && racialFromList && !racialFromList.includes(skill)) return;
-
-    const totalNeeded = classSkillCount + racialBonusSkills;
     if (totalSelectedNonBackground < totalNeeded) {
       setSelectedSkills({ ...selectedSkills, [skill]: true });
     }
   };
 
   const handleExpertiseToggle = (skill) => {
-    if (!selectedSkills[skill]) return; // Must be proficient first
-
+    if (!selectedSkills[skill]) return;
     if (expertise.includes(skill)) {
-      setExpertise(expertise.filter(s => s !== skill));
-    } else {
-      if (expertise.length < expertiseCount) {
-        setExpertise([...expertise, skill]);
-      }
+      setExpertise(expertise.filter((s) => s !== skill));
+    } else if (expertise.length < expertiseCount) {
+      setExpertise([...expertise, skill]);
     }
   };
 
-  const calculateModifier = (score) => abilityModifier(score);
   const proficiencyBonus = Math.floor((characterData.level - 1) / 4) + 2;
 
   const getSkillModifier = (skill) => {
     const abilityKey = skillAbilityMap[skill];
     const abilityScore = characterData.attributes?.[abilityKey] || 10;
-    const baseMod = calculateModifier(abilityScore);
-
+    const baseMod = abilityModifier(abilityScore);
     const isProficient = selectedSkills[skill];
     const hasExpertise = expertise.includes(skill);
-
     if (hasExpertise) return baseMod + (proficiencyBonus * 2);
     if (isProficient) return baseMod + proficiencyBonus;
     return baseMod;
   };
 
-  const totalNeeded = classSkillCount + racialBonusSkills;
-  const isComplete = totalSelectedNonBackground === totalNeeded && expertise.length === expertiseCount;
+  const totalProficient = Object.values(selectedSkills).filter(Boolean).length;
+
+  if (!characterData.class) {
+    return (
+      <div>
+        <StepHeader
+          kicker="Chapter V · The Talents"
+          title="Pick your skills"
+        />
+        <div
+          className="cc-tome"
+          style={{ padding: 40, textAlign: 'center', marginTop: 24 }}
+        >
+          <div
+            className="cc-italic-serif"
+            style={{ fontSize: 16, color: 'var(--cc-text-dim)' }}
+          >
+            Pick a class on Chapter II — your skill list comes from there.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]">
-        <h2 className="text-2xl font-bold text-white mb-2">Skill Proficiencies</h2>
-        <p className="text-white/70 mb-4">
-          Choose {classSkillCount} skills from your {characterData.class} list
-          {racialBonusSkills > 0 && (
-            racialFromList
-              ? `, plus ${racialBonusSkills} from ${racialFromList.join(", ")}`
-              : `, plus ${racialBonusSkills} from any skill`
-          )}
-        </p>
+    <div>
+      <StepHeader
+        kicker="Chapter V · The Talents"
+        title="Pick your skills"
+        subtitle="Proficiency means you add your proficiency bonus to rolls with that skill."
+      />
 
-        <div className="flex items-center gap-4 mb-4 flex-wrap">
-          <div className="bg-[#2A3441] rounded-lg px-4 py-2 inline-flex items-center gap-2">
-            <span className="text-white/60">Class Skills: </span>
-            <span className={`font-bold ${selectedFromClassList === classSkillCount ? 'text-[#37F2D1]' : 'text-[#FF5722]'}`}>
-              {selectedFromClassList}/{classSkillCount}
-            </span>
-            <InfoTip>{tipFor("skill_class")}</InfoTip>
-          </div>
+      <Primer title="Two sources of skill proficiency">
+        Your <strong>background</strong> gives you {backgroundSkills.length || 0} free skill
+        {backgroundSkills.length === 1 ? '' : 's'}. Your <strong>class</strong> lets you pick {classSkillCount}
+        {' '}more from its list. You can't pick the same skill twice — if your background already
+        gave you a skill that's on your class list, just pick a different one.
+      </Primer>
 
-          {racialBonusSkills > 0 && (
-            <div className="bg-[#2A3441] rounded-lg px-4 py-2">
-              <span className="text-white/60">Racial Bonus: </span>
-              <span className={`font-bold ${selectedFromRacialBonus === racialBonusSkills ? 'text-[#37F2D1]' : 'text-[#FF5722]'}`}>
-                {selectedFromRacialBonus}/{racialBonusSkills}
-              </span>
-            </div>
-          )}
-
-          {expertiseCount > 0 && (
-            <div className="bg-[#2A3441] rounded-lg px-4 py-2 inline-flex items-center gap-2">
-              <span className="text-white/60">Expertise: </span>
-              <span className={`font-bold ${expertise.length === expertiseCount ? 'text-[#37F2D1]' : 'text-[#FF5722]'}`}>
-                {expertise.length}/{expertiseCount}
-              </span>
-              <InfoTip>{tipFor("skill_expertise")}</InfoTip>
-            </div>
-          )}
-        </div>
-
-        {backgroundSkills.length > 0 && (
-          <div className="bg-[#37F2D1]/10 border border-[#37F2D1]/30 rounded-lg p-3 mb-4">
-            <p className="text-sm text-[#37F2D1] font-semibold mb-1 flex items-center gap-2">
-              🎁 Free Skills from {characterData.background}:
-              <InfoTip>{tipFor("skill_free")}</InfoTip>
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              {backgroundSkills.map(skill => (
-                <Badge key={skill} className="bg-[#37F2D1] text-[#1E2430]">
-                  {skill}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {fixedRacialSkills.length > 0 && (
-          <div className="bg-yellow-400/10 border border-yellow-400/30 rounded-lg p-3 mb-4">
-            <p className="text-sm text-yellow-400 font-semibold mb-1 flex items-center gap-1">
-              <Lock className="w-3.5 h-3.5" />
-              Granted by {characterData.subrace || characterData.race}:
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              {fixedRacialSkills.map((skill) => (
-                <Badge key={skill} className="bg-yellow-400 text-[#1E2430]">
-                  {skill}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'stretch',
+          gap: 12,
+          marginTop: 18,
+          marginBottom: 18,
+          flexWrap: 'wrap',
+        }}
+      >
+        <StatusCard
+          label="Class picks"
+          value={`${selectedFromClassList} / ${classSkillCount}`}
+          tone={selectedFromClassList === classSkillCount ? 'teal' : 'orange'}
+          icon="🎯"
+          tip={tipFor("skill_class")}
+        />
         {racialBonusSkills > 0 && (
-          <div className="bg-yellow-400/10 border border-yellow-400/30 rounded-lg p-3 mb-4">
-            <p className="text-sm text-yellow-400 font-semibold">
-              ✨ {characterData.subrace || characterData.race} grants {racialBonusSkills} bonus skill{racialBonusSkills > 1 ? "s" : ""}
-              {racialFromList
-                ? ` (pick from ${racialFromList.join(", ")})`
-                : " (pick any skill)"}
-            </p>
-          </div>
+          <StatusCard
+            label="Racial bonus"
+            value={`${selectedFromRacialBonus} / ${racialBonusSkills}`}
+            tone={selectedFromRacialBonus === racialBonusSkills ? 'teal' : 'orange'}
+            icon="✨"
+            sub={racialFromList ? `from ${racialFromList.join(', ')}` : 'any skill'}
+          />
         )}
+        <StatusCard
+          label="Background skills"
+          value={String(backgroundSkills.length || 0)}
+          tone="teal"
+          icon="🎒"
+          sub={backgroundSkills.join(', ') || 'No background picked'}
+        />
+        {expertiseCount > 0 && (
+          <StatusCard
+            label="Expertise"
+            value={`${expertise.length} / ${expertiseCount}`}
+            tone={expertise.length === expertiseCount ? 'gold' : 'orange'}
+            icon="⭐"
+            tip={tipFor("skill_expertise")}
+          />
+        )}
+        <StatusCard
+          label="Total proficient"
+          value={String(totalProficient)}
+          tone="teal"
+          icon="✓"
+        />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        {allSkills.map(skill => {
-          const isProficient = selectedSkills[skill];
-          const hasExpertise = expertise.includes(skill);
-          const isBackgroundSkill = backgroundSkills.includes(skill);
-          const isClassSkill = availableClassSkills.includes(skill);
-          const isFixedRacialSkill = fixedRacialSkills.includes(skill);
-          const isMulticlassSkill = multiclassOwnedSkills.has(skill);
-          const racialPickAllowed = !racialFromList || racialFromList.includes(skill);
+      {fixedRacialSkills.length > 0 && (
+        <SkillSourceBanner
+          icon={<Lock className="w-4 h-4" />}
+          label={`Granted by ${characterData.subrace || characterData.race}`}
+          skills={fixedRacialSkills}
+          tone="gold"
+        />
+      )}
 
-          // Determine if this skill can be selected as a fresh pick.
-          // Multiclass-owned skills are read-only here — the
-          // dedicated multiclass picker below owns the toggle.
-          let canSelect = false;
-          if (!isProficient && !isFixedRacialSkill && !isMulticlassSkill) {
-            if (isClassSkill && selectedFromClassList < classSkillCount) {
-              canSelect = true;
-            } else if (!isClassSkill && selectedFromRacialBonus < racialBonusSkills && racialPickAllowed) {
-              canSelect = true;
+      <div className="cc-panel" style={{ padding: 20, marginTop: 16 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            marginBottom: 14,
+            flexWrap: 'wrap',
+            gap: 10,
+          }}
+        >
+          <h3
+            className="cc-display"
+            style={{ fontSize: 22, color: 'var(--cc-text)', margin: 0 }}
+          >
+            All 18 skills
+          </h3>
+          <div style={{ display: 'flex', gap: 6, fontSize: 11, alignItems: 'center' }}>
+            <span className="cc-chip cc-chip-teal" style={{ fontSize: 10, padding: '2px 6px' }}>
+              ✓ Background
+            </span>
+            <span className="cc-chip cc-chip-orange" style={{ fontSize: 10, padding: '2px 6px' }}>
+              ✓ Class pick
+            </span>
+            <span className="cc-chip cc-chip-gold" style={{ fontSize: 10, padding: '2px 6px' }}>
+              ✓ Racial / Multiclass
+            </span>
+            <span className="cc-chip cc-chip-neutral" style={{ fontSize: 10, padding: '2px 6px' }}>
+              Locked
+            </span>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: 8,
+          }}
+        >
+          {allSkills.map((skill) => {
+            const isProficient = !!selectedSkills[skill];
+            const hasExpertise = expertise.includes(skill);
+            const isBackgroundSkill = backgroundSkills.includes(skill);
+            const isClassSkill = availableClassSkills.includes(skill);
+            const isFixedRacialSkill = fixedRacialSkills.includes(skill);
+            const isMulticlassSkill = multiclassOwnedSkills.has(skill);
+            const racialPickAllowed = !racialFromList || racialFromList.includes(skill);
+
+            let canSelect = false;
+            if (!isProficient && !isFixedRacialSkill && !isMulticlassSkill) {
+              if (isClassSkill && selectedFromClassList < classSkillCount) {
+                canSelect = true;
+              } else if (!isClassSkill && selectedFromRacialBonus < racialBonusSkills && racialPickAllowed) {
+                canSelect = true;
+              }
             }
-          }
 
-          const modifier = getSkillModifier(skill);
+            const modifier = getSkillModifier(skill);
+            const status = isFixedRacialSkill
+              ? 'racial'
+              : isMulticlassSkill
+                ? 'multiclass'
+                : isBackgroundSkill
+                  ? 'bg'
+                  : isProficient
+                    ? 'pick'
+                    : isClassSkill
+                      ? 'avail'
+                      : 'locked';
 
-          return (
-            <motion.div
-              key={skill}
-              whileHover={{ scale: (isFixedRacialSkill || isBackgroundSkill) ? 1 : 1.02 }}
-              className={`bg-[#2A3441] rounded-xl p-4 border-2 transition-all ${
-                isProficient
-                  ? hasExpertise
-                    ? 'border-yellow-400 bg-yellow-400/10'
-                    : 'border-[#37F2D1] bg-[#37F2D1]/10'
-                  : (canSelect || isBackgroundSkill)
-                    ? 'border-[#1E2430] hover:border-[#37F2D1]/50 cursor-pointer'
-                    : 'border-[#1E2430] opacity-50'
-              }`}
-              onClick={() => (canSelect || (isProficient && !isFixedRacialSkill && !isBackgroundSkill && !isMulticlassSkill)) && handleSkillToggle(skill)}
+            return (
+              <SkillRow
+                key={skill}
+                skill={skill}
+                ability={skillAbilityMap[skill]}
+                modifier={modifier}
+                status={status}
+                hasExpertise={hasExpertise}
+                disabled={
+                  isFixedRacialSkill
+                  || isBackgroundSkill
+                  || isMulticlassSkill
+                  || (!isProficient && !canSelect)
+                }
+                expertiseAllowed={expertiseCount > 0 && isProficient && !isFixedRacialSkill && !isMulticlassSkill && !isBackgroundSkill}
+                onToggle={() => handleSkillToggle(skill)}
+                onExpertiseToggle={() => handleExpertiseToggle(skill)}
+              />
+            );
+          })}
+        </div>
+
+        {availableClassSkills.length > 0
+          && availableClassSkills.length < ALL_SKILLS.length
+          && (
+            <div
+              className="cc-italic-serif"
+              style={{
+                fontSize: 12,
+                color: 'var(--cc-text-faint)',
+                marginTop: 12,
+                textAlign: 'center',
+              }}
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="text-white font-bold">{skill}</span>
-                    {isBackgroundSkill && (
-                      <Badge className="bg-[#37F2D1] text-[#1E2430] text-xs">Background</Badge>
-                    )}
-                    {isFixedRacialSkill && (
-                      <Badge className="bg-yellow-400 text-[#1E2430] text-xs flex items-center gap-1">
-                        <Lock className="w-3 h-3" /> Racial
-                      </Badge>
-                    )}
-                    {isMulticlassSkill && !isFixedRacialSkill && !isBackgroundSkill && (
-                      <Badge className="bg-purple-500 text-white text-xs flex items-center gap-1">
-                        <Lock className="w-3 h-3" /> Multiclass
-                      </Badge>
-                    )}
-                    {!isClassSkill && isProficient && !isBackgroundSkill && !isFixedRacialSkill && !isMulticlassSkill && (
-                      <Badge className="bg-yellow-400 text-[#1E2430] text-xs">Racial</Badge>
-                    )}
-                  </div>
-                  <div className="text-xs text-white/60 uppercase">{skillAbilityMap[skill]}</div>
-                </div>
-
-                <div className="flex flex-col items-end gap-2">
-                  <div className="text-2xl font-bold text-[#37F2D1]">
-                    {modifier >= 0 ? '+' : ''}{modifier}
-                  </div>
-
-                  <div className="flex gap-1">
-                    {isProficient && (
-                      <div className="w-6 h-6 rounded-full bg-[#37F2D1] flex items-center justify-center">
-                        <Check className="w-4 h-4 text-[#1E2430]" />
-                      </div>
-                    )}
-
-                    {expertiseCount > 0 && isProficient && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleExpertiseToggle(skill);
-                        }}
-                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                          hasExpertise
-                            ? 'bg-yellow-400 text-[#1E2430]'
-                            : 'bg-[#1E2430] text-white/40 hover:bg-[#1E2430]/50'
-                        }`}
-                      >
-                        <Star className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          );
-        })}
+              Greyed-out skills aren't on your {characterData.class} list. They appear here only to
+              show your full skill modifier (without proficiency).
+            </div>
+          )}
       </div>
 
       {multiclassGrants.length > 0 && (
-        <div className="space-y-3">
+        <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {multiclassGrants.map(({ class: mcClass, grant }) => (
             <MulticlassSkillPicker
               key={mcClass}
@@ -481,14 +445,40 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
       )}
 
       {expertiseCount > 0 && (
-        <div className="bg-yellow-400/10 border border-yellow-400/30 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Star className="w-5 h-5 text-yellow-400" />
-            <h3 className="text-yellow-400 font-bold">Expertise</h3>
+        <div
+          style={{
+            marginTop: 18,
+            background: 'rgba(212, 169, 81, 0.10)',
+            border: '1px solid rgba(212, 169, 81, 0.32)',
+            borderLeft: '3px solid var(--cc-gold)',
+            borderRadius: 8,
+            padding: '14px 18px',
+          }}
+        >
+          <div
+            className="cc-label"
+            style={{
+              color: 'var(--cc-gold)',
+              marginBottom: 6,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <Star className="w-4 h-4" /> Expertise
           </div>
-          <p className="text-white/70 text-sm">
-            Choose {expertiseCount} skill{expertiseCount > 1 ? 's' : ''} to gain expertise in.
-            Expertise doubles your proficiency bonus for those skills.
+          <p
+            className="cc-italic-serif"
+            style={{
+              fontSize: 13,
+              color: 'var(--cc-text-dim)',
+              margin: 0,
+              lineHeight: 1.55,
+            }}
+          >
+            Choose {expertiseCount} skill{expertiseCount > 1 ? 's' : ''} above to gain expertise in.
+            Expertise doubles your proficiency bonus on those rolls — click the gold star next to a
+            proficient skill to apply it.
           </p>
         </div>
       )}
@@ -496,18 +486,250 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
   );
 }
 
-/**
- * Compact picker for the per-class multiclass skill grant. Renders
- * the grant's `from` list as toggleable chips; chips for skills the
- * character already has from another source (background, fixed
- * racial, primary class picks, OTHER multiclass entries) are
- * disabled to enforce the no-double-dip rule.
- *
- * Special case: if every skill on the grant list is already known,
- * the picker shows a graceful "all granted elsewhere" notice and
- * doesn't block step advancement — getSkillsCompletion caps the
- * required count at the number of available picks.
- */
+// ============================================================================
+// Status card — top-of-page count summary
+// ============================================================================
+function StatusCard({ label, value, tone, icon, sub, tip }) {
+  const palettes = {
+    teal:   { bg: 'rgba(55, 242, 209, 0.08)', border: 'rgba(55, 242, 209, 0.32)', label: 'var(--cc-teal)' },
+    orange: { bg: 'rgba(255, 83, 0, 0.10)',   border: 'rgba(255, 83, 0, 0.40)',   label: 'var(--cc-orange-soft)' },
+    gold:   { bg: 'rgba(212, 169, 81, 0.10)', border: 'rgba(212, 169, 81, 0.40)', label: 'var(--cc-gold)' },
+  };
+  const p = palettes[tone] || palettes.teal;
+  return (
+    <div
+      style={{
+        flex: 1,
+        minWidth: 140,
+        padding: 14,
+        background: p.bg,
+        border: `1px solid ${p.border}`,
+        borderRadius: 10,
+      }}
+    >
+      <div
+        className="cc-label"
+        style={{
+          color: p.label,
+          marginBottom: 6,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        {label} {tip && <InfoTip>{tip}</InfoTip>}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <span style={{ fontSize: 18 }}>{icon}</span>
+        <span
+          className="cc-display"
+          style={{ fontSize: 22, color: 'var(--cc-text)' }}
+        >
+          {value}
+        </span>
+      </div>
+      {sub && (
+        <div
+          className="cc-italic-serif"
+          style={{
+            fontSize: 11,
+            color: 'var(--cc-text-dim)',
+            marginTop: 6,
+            lineHeight: 1.4,
+          }}
+        >
+          {sub}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Skill source banner — fixed racial banner above the grid
+// ============================================================================
+function SkillSourceBanner({ icon, label, skills, tone }) {
+  const palettes = {
+    teal: { bg: 'rgba(55, 242, 209, 0.06)', border: 'var(--cc-teal)' },
+    gold: { bg: 'rgba(212, 169, 81, 0.10)', border: 'var(--cc-gold)' },
+  };
+  const p = palettes[tone] || palettes.teal;
+  return (
+    <div
+      style={{
+        background: p.bg,
+        border: `1px solid ${p.border}`,
+        borderLeft: `3px solid ${p.border}`,
+        borderRadius: 8,
+        padding: '12px 16px',
+        marginTop: 10,
+      }}
+    >
+      <div
+        className="cc-label"
+        style={{
+          color: p.border,
+          marginBottom: 8,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        {icon} {label}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {skills.map((s) => (
+          <span key={s} className="cc-chip cc-chip-gold">{s}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Skill row — single 3-col grid cell
+// ============================================================================
+function SkillRow({
+  skill, ability, modifier, status, hasExpertise,
+  disabled, expertiseAllowed, onToggle, onExpertiseToggle,
+}) {
+  const palette = {
+    bg:         { bg: 'rgba(55, 242, 209, 0.12)',  border: 'var(--cc-teal)' },
+    pick:       { bg: 'rgba(255, 83, 0, 0.12)',    border: 'var(--cc-orange)' },
+    racial:     { bg: 'rgba(212, 169, 81, 0.10)',  border: 'var(--cc-gold)' },
+    multiclass: { bg: 'rgba(158, 91, 255, 0.10)',  border: '#9E5BFF' },
+    avail:      { bg: 'rgba(20, 12, 8, 0.45)',     border: 'var(--cc-border)' },
+    locked:     { bg: 'rgba(20, 12, 8, 0.30)',     border: 'var(--cc-border-faint)' },
+  };
+  const p = palette[status] || palette.avail;
+  const isProficient = status === 'bg' || status === 'pick' || status === 'racial' || status === 'multiclass';
+  const checkmarkBg =
+    status === 'bg' ? 'var(--cc-teal)'
+    : status === 'pick' ? 'var(--cc-orange)'
+    : status === 'racial' ? 'var(--cc-gold)'
+    : status === 'multiclass' ? '#9E5BFF'
+    : 'transparent';
+
+  return (
+    <motion.button
+      type="button"
+      whileHover={{ scale: disabled ? 1 : 1.02 }}
+      onClick={disabled ? undefined : onToggle}
+      disabled={disabled}
+      style={{
+        all: 'unset',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        padding: '10px 12px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        background: p.bg,
+        border: `1.5px solid ${p.border}`,
+        borderRadius: 8,
+        opacity: status === 'locked' ? 0.4 : 1,
+        transition: 'all .15s',
+      }}
+      title={ability ? `Roll with ${ability.toUpperCase()}` : skill}
+    >
+      <div
+        style={{
+          width: 20,
+          height: 20,
+          borderRadius: 4,
+          flexShrink: 0,
+          background: isProficient ? checkmarkBg : 'rgba(20, 12, 8, 0.6)',
+          border: `1.5px solid ${p.border}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: status === 'bg' || status === 'racial' ? '#050816' : 'white',
+        }}
+      >
+        {isProficient && <Check className="w-3 h-3" strokeWidth={3} />}
+      </div>
+
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: 'var(--cc-text)',
+            lineHeight: 1.2,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          {skill}
+          {hasExpertise && (
+            <span
+              className="cc-chip cc-chip-gold"
+              style={{ fontSize: 9, padding: '1px 5px' }}
+            >
+              EXPERT
+            </span>
+          )}
+        </div>
+        <div
+          className="cc-label"
+          style={{
+            fontSize: 9,
+            color: 'var(--cc-text-faint)',
+            marginTop: 2,
+          }}
+        >
+          {ability?.toUpperCase()}
+        </div>
+      </div>
+
+      <div
+        className="cc-display"
+        style={{
+          fontSize: 18,
+          color: hasExpertise
+            ? 'var(--cc-gold)'
+            : isProficient
+              ? 'var(--cc-teal)'
+              : 'var(--cc-text-dim)',
+          minWidth: 32,
+          textAlign: 'right',
+        }}
+      >
+        {modifier >= 0 ? '+' : ''}{modifier}
+      </div>
+
+      {expertiseAllowed && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onExpertiseToggle();
+          }}
+          style={{
+            all: 'unset',
+            cursor: 'pointer',
+            width: 22,
+            height: 22,
+            borderRadius: '50%',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: hasExpertise ? 'var(--cc-gold)' : 'rgba(20, 12, 8, 0.6)',
+            color: hasExpertise ? '#050816' : 'var(--cc-text-faint)',
+            border: `1px solid ${hasExpertise ? 'var(--cc-gold)' : 'var(--cc-border)'}`,
+          }}
+          title={hasExpertise ? 'Remove expertise' : 'Add expertise'}
+        >
+          <Star className="w-3 h-3" />
+        </button>
+      )}
+    </motion.button>
+  );
+}
+
+// ============================================================================
+// Multiclass skill picker (preserved logic, restyled)
+// ============================================================================
 function MulticlassSkillPicker({
   className,
   grant,
@@ -535,9 +757,6 @@ function MulticlassSkillPicker({
     return s;
   }, [multiclassSkills, className]);
 
-  // What's blocking each grant-list skill from being picked here
-  // (or null if the slot is open / already mine). Used both for the
-  // chip's disabled state and for the tooltip wording.
   const disabledReason = (skill) => {
     if (myPicks.includes(skill)) return null;
     if (backgroundSkills.includes(skill)) return "Already proficient from background";
@@ -547,14 +766,14 @@ function MulticlassSkillPicker({
     return null;
   };
 
-  const availableForPick = grantList.filter((s) => disabledReason(s) === null || myPicks.includes(s));
+  const availableForPick = grantList.filter(
+    (s) => disabledReason(s) === null || myPicks.includes(s),
+  );
 
   const togglePick = (skill) => {
     const isMine = myPicks.includes(skill);
     if (!isMine) {
-      // Block double-dip on add.
       if (disabledReason(skill)) return;
-      // Block over-count on add.
       if (myPicks.length >= grant.count) return;
     }
     const nextPicks = isMine
@@ -564,7 +783,6 @@ function MulticlassSkillPicker({
     setSelectedSkills((current) => {
       const updated = { ...current };
       if (isMine) {
-        // Only drop the proficiency if no OTHER source claims it.
         const stillClaimed =
           backgroundSkills.includes(skill)
           || fixedRacialSkills.includes(skill)
@@ -578,28 +796,69 @@ function MulticlassSkillPicker({
   };
 
   const noOptionsLeft = availableForPick.length === 0;
+  const wantedCount = Math.min(grant.count, availableForPick.length);
 
   return (
-    <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4">
-      <div className="flex items-center gap-2 mb-2 flex-wrap">
-        <Badge className="bg-purple-500 text-white text-xs">Multiclass: {className}</Badge>
-        <h3 className="text-purple-200 font-bold text-sm">
+    <div
+      style={{
+        background: 'rgba(158, 91, 255, 0.08)',
+        border: '1px solid rgba(158, 91, 255, 0.40)',
+        borderLeft: '3px solid #9E5BFF',
+        borderRadius: 10,
+        padding: '14px 18px',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          marginBottom: 10,
+          flexWrap: 'wrap',
+        }}
+      >
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 900,
+            color: 'white',
+            background: '#9E5BFF',
+            borderRadius: 4,
+            padding: '2px 8px',
+            letterSpacing: 0.4,
+            textTransform: 'uppercase',
+          }}
+        >
+          Multiclass · {className}
+        </span>
+        <h3
+          className="cc-display"
+          style={{ fontSize: 14, color: '#C9A3FF', margin: 0 }}
+        >
           Pick {grant.count} skill{grant.count > 1 ? "s" : ""}
-          {grant.from === "any"
-            ? " (any skill)"
-            : ` from the ${className} list`}
+          {grant.from === "any" ? " (any skill)" : ` from the ${className} list`}
         </h3>
-        <span className={`ml-auto text-xs font-bold ${myPicks.length === Math.min(grant.count, availableForPick.length) ? "text-[#37F2D1]" : "text-[#FF5722]"}`}>
-          {myPicks.length}/{Math.min(grant.count, availableForPick.length)}
+        <span
+          className="cc-label"
+          style={{
+            marginLeft: 'auto',
+            color: myPicks.length === wantedCount ? 'var(--cc-teal)' : 'var(--cc-orange-soft)',
+          }}
+        >
+          {myPicks.length}/{wantedCount}
         </span>
       </div>
 
       {noOptionsLeft ? (
-        <p className="text-xs text-white/60 italic">
-          All skills on the {className} list are already granted from other sources — the multiclass skill is wasted, but it doesn't block your character.
+        <p
+          className="cc-italic-serif"
+          style={{ fontSize: 12, color: 'var(--cc-text-dim)', margin: 0 }}
+        >
+          All skills on the {className} list are already granted from other sources — the
+          multiclass skill is wasted, but doesn't block your character.
         </p>
       ) : (
-        <div className="flex flex-wrap gap-2">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {grantList.map((skill) => {
             const isMine = myPicks.includes(skill);
             const reason = disabledReason(skill);
@@ -610,17 +869,34 @@ function MulticlassSkillPicker({
                 type="button"
                 onClick={() => togglePick(skill)}
                 disabled={blocked}
-                title={blocked ? reason : undefined}
-                className={`text-xs font-bold rounded-full px-3 py-1.5 border transition-colors ${
-                  isMine
-                    ? "bg-purple-500 text-white border-purple-300"
-                    : blocked
-                    ? "bg-[#1E2430] text-white/30 border-[#1E2430] cursor-not-allowed"
-                    : "bg-[#0b1220] text-white border-purple-500/40 hover:border-purple-300 cursor-pointer"
-                }`}
+                title={blocked ? reason : `${skill} (${skillAbilityMap[skill]?.toUpperCase()})`}
+                style={{
+                  all: 'unset',
+                  cursor: blocked ? 'not-allowed' : 'pointer',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: '6px 12px',
+                  borderRadius: 999,
+                  background: isMine ? '#9E5BFF' : 'rgba(20, 12, 8, 0.55)',
+                  color: isMine ? 'white' : blocked ? 'var(--cc-text-faint)' : 'var(--cc-text)',
+                  border: `1px solid ${isMine ? '#9E5BFF' : 'var(--cc-border)'}`,
+                  opacity: blocked ? 0.4 : 1,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
               >
                 {skill}
-                <span className="ml-1.5 text-[9px] uppercase opacity-60">{skillAbilityMap[skill]}</span>
+                <span
+                  style={{
+                    fontSize: 9,
+                    opacity: 0.7,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.3,
+                  }}
+                >
+                  {skillAbilityMap[skill]}
+                </span>
               </button>
             );
           })}
