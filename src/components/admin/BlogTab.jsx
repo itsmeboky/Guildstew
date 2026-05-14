@@ -336,14 +336,36 @@ function BlogEditor({ open, post, onClose, onSave }) {
   const { user } = useAuth();
   const [form, setForm] = useState(() => initForm(post));
   const [slugTouched, setSlugTouched] = useState(false);
+  const [tagDraft, setTagDraft] = useState("");
   const quillRef = useRef(null);
 
   React.useEffect(() => {
     if (open) {
       setForm(initForm(post));
       setSlugTouched(!!post?.slug);
+      setTagDraft("");
     }
   }, [open, post?.id]);
+
+  const addTag = (raw) => {
+    const tag = (raw || "").replace(/,+$/, "").trim();
+    setTagDraft("");
+    if (!tag) return;
+    if (form.tags.includes(tag)) return;
+    set({ tags: [...form.tags, tag] });
+  };
+
+  const removeTag = (tag) => set({ tags: form.tags.filter((t) => t !== tag) });
+
+  const onTagKeyDown = (e) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addTag(tagDraft);
+    } else if (e.key === "Backspace" && tagDraft === "" && form.tags.length > 0) {
+      e.preventDefault();
+      set({ tags: form.tags.slice(0, -1) });
+    }
+  };
 
   // Custom image handler — Quill's default inserts the file as
   // base64 inline, which bloats the saved content. Instead we
@@ -559,13 +581,36 @@ function BlogEditor({ open, post, onClose, onSave }) {
             userId={null}
           />
           <div>
-            <Label className="text-xs">Tags (comma-separated)</Label>
-            <Input
-              value={form.tags.join(", ")}
-              onChange={(e) => set({ tags: e.target.value.split(",").map((t) => t.trim()).filter(Boolean) })}
-              className="bg-[#050816] border-slate-700 text-white mt-1"
-              placeholder="tutorial, combat, dm-tips"
-            />
+            <Label className="text-xs">Tags</Label>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 bg-[#050816] border border-slate-700 rounded p-2 focus-within:border-slate-500 transition-colors">
+              {form.tags.map((t) => (
+                <span
+                  key={t}
+                  className="inline-flex items-center gap-1 text-[11px] bg-[#1E2430] border border-slate-700 text-slate-200 rounded px-2 py-0.5"
+                >
+                  {t}
+                  <button
+                    type="button"
+                    onClick={() => removeTag(t)}
+                    aria-label={`Remove tag ${t}`}
+                    className="text-slate-500 hover:text-red-400"
+                  >
+                    <XIcon className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              <input
+                value={tagDraft}
+                onChange={(e) => setTagDraft(e.target.value)}
+                onKeyDown={onTagKeyDown}
+                onBlur={() => addTag(tagDraft)}
+                placeholder={form.tags.length === 0 ? "tutorial, combat, dm-tips" : ""}
+                className="flex-1 min-w-[120px] bg-transparent outline-none text-white text-sm placeholder:text-slate-500"
+              />
+            </div>
+            <p className="text-[10px] text-slate-500 mt-1">
+              Press Enter or comma to add a tag. Backspace on empty input removes the last tag.
+            </p>
           </div>
           <div className="flex items-center justify-between bg-[#050816] border border-slate-700 rounded p-2">
             <Label className="text-xs text-slate-300">Featured (pinned to top)</Label>
