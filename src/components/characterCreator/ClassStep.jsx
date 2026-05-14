@@ -357,7 +357,7 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
   };
 
   const profileImageUrl = characterData.profile_avatar_url || characterData.avatar_url;
-  const accent = (selectedClass && CLASS_ACCENT[selectedClass.name]) || "var(--cc-orange)";
+  const accent = (selectedClass && CLASS_ACCENT[selectedClass.name]) || "var(--orange)";
 
   return (
     <div>
@@ -402,7 +402,7 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
           )}
 
           {selectedClass && (
-            <div className="cc-tome" style={{ padding: '32px 36px' }}>
+            <div className="tome" style={{ padding: '32px 36px' }}>
               <OrnateHeading>Alignment</OrnateHeading>
               <AlignmentGrid
                 value={characterData.alignment}
@@ -424,7 +424,7 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
 
               <OrnateHeading>Biography</OrnateHeading>
               <textarea
-                className="cc-input cc-italic-serif"
+                className="input italic-serif"
                 value={characterData.description || ''}
                 onChange={(e) => updateCharacterData({ description: e.target.value })}
                 placeholder="Their story so far — origins, scars, the moment they took up the call..."
@@ -432,7 +432,7 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
                 style={{
                   resize: 'vertical',
                   minHeight: 110,
-                  fontFamily: 'var(--cc-serif)',
+                  fontFamily: 'var(--serif)',
                   fontSize: 15,
                   lineHeight: 1.55,
                   fontStyle: 'italic',
@@ -523,7 +523,7 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
 function EmptyClassPrompt() {
   return (
     <div
-      className="cc-tome"
+      className="tome"
       style={{
         padding: '60px 36px',
         textAlign: 'center',
@@ -535,15 +535,15 @@ function EmptyClassPrompt() {
         gap: 16,
       }}
     >
-      <div style={{ fontSize: 56, opacity: 0.4, marginBottom: 8, color: 'var(--cc-gold)' }}>✦</div>
-      <div className="cc-display" style={{ fontSize: 32, color: 'var(--cc-text)' }}>
+      <div style={{ fontSize: 56, opacity: 0.4, marginBottom: 8, color: 'var(--gold)' }}>✦</div>
+      <div className="display" style={{ fontSize: 32, color: 'var(--text)' }}>
         Choose a calling
       </div>
       <div
-        className="cc-italic-serif"
+        className="italic-serif"
         style={{
           fontSize: 16,
-          color: 'var(--cc-text-dim)',
+          color: 'var(--text-dim)',
           maxWidth: 400,
           lineHeight: 1.5,
         }}
@@ -560,7 +560,7 @@ function EmptyClassPrompt() {
 function ClassFeaturedTome({ cls, accent }) {
   const family = CLASS_FAMILY[cls.name] || (cls._source === "brewery" ? "Brewery" : "Calling");
   return (
-    <div className="cc-tome" style={{ padding: '32px 36px' }}>
+    <div className="tome" style={{ padding: '32px 36px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginBottom: 20 }}>
         <div
           style={{
@@ -583,7 +583,7 @@ function ClassFeaturedTome({ cls, accent }) {
 
         <div style={{ flex: 1 }}>
           <div
-            className="cc-label"
+            className="label"
             style={{
               color: accent,
               marginBottom: 6,
@@ -601,7 +601,7 @@ function ClassFeaturedTome({ cls, accent }) {
                   fontWeight: 900,
                   letterSpacing: '0.12em',
                   color: '#050816',
-                  background: 'var(--cc-teal)',
+                  background: 'var(--teal)',
                   borderRadius: 4,
                   padding: '2px 6px',
                   display: 'inline-flex',
@@ -614,10 +614,10 @@ function ClassFeaturedTome({ cls, accent }) {
             )}
           </div>
           <div
-            className="cc-display"
+            className="display"
             style={{
               fontSize: 42,
-              color: 'var(--cc-text)',
+              color: 'var(--text)',
               lineHeight: 1,
               marginBottom: 10,
               letterSpacing: 1,
@@ -631,8 +631,8 @@ function ClassFeaturedTome({ cls, accent }) {
             <InfoTip>{tipFor("class")}</InfoTip>
           </div>
           <div
-            className="cc-italic-serif"
-            style={{ fontSize: 15, color: 'var(--cc-text-dim)' }}
+            className="italic-serif"
+            style={{ fontSize: 15, color: 'var(--text-dim)' }}
           >
             Hit Die <span style={{ color: accent }}>{cls.hitDie}</span>
             &nbsp;·&nbsp;
@@ -644,11 +644,11 @@ function ClassFeaturedTome({ cls, accent }) {
       </div>
 
       <p
-        className="cc-body-prose"
+        className="body-prose"
         style={{
           marginBottom: 18,
           fontSize: 15,
-          color: 'var(--cc-text)',
+          color: 'var(--text)',
           lineHeight: 1.65,
         }}
       >
@@ -664,14 +664,14 @@ function ClassFeaturedTome({ cls, accent }) {
             borderRadius: 4,
           }}
         >
-          <div className="cc-label" style={{ color: accent, marginBottom: 4 }}>
+          <div className="label" style={{ color: accent, marginBottom: 4 }}>
             ✦ Playstyle
           </div>
           <div
-            className="cc-italic-serif"
+            className="italic-serif"
             style={{
               fontSize: 15,
-              color: 'var(--cc-text)',
+              color: 'var(--text)',
               lineHeight: 1.55,
             }}
           >
@@ -682,7 +682,7 @@ function ClassFeaturedTome({ cls, accent }) {
 
       {(cls.features || []).length > 0 && (
         <div style={{ marginTop: 18 }}>
-          <div className="cc-label" style={{ color: accent, marginBottom: 8 }}>
+          <div className="label" style={{ color: accent, marginBottom: 8 }}>
             Level 1 Features
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -718,8 +718,8 @@ function ClassFeaturedTome({ cls, accent }) {
 // ============================================================================
 function ClassRoster({ combinedClasses, current, onPick }) {
   return (
-    <div className="cc-panel" style={{ padding: 16 }}>
-      <div className="cc-label" style={{ marginBottom: 12, color: 'var(--cc-gold-soft)' }}>
+    <div className="panel" style={{ padding: 16 }}>
+      <div className="label" style={{ marginBottom: 12, color: 'var(--gold-soft)' }}>
         The Twelve Callings
       </div>
       <div
@@ -731,7 +731,7 @@ function ClassRoster({ combinedClasses, current, onPick }) {
       >
         {combinedClasses.map((c) => {
           const active = c.name === current;
-          const accent = CLASS_ACCENT[c.name] || 'var(--cc-teal)';
+          const accent = CLASS_ACCENT[c.name] || 'var(--teal)';
           return (
             <button
               key={c.name}
@@ -777,7 +777,7 @@ function ClassRoster({ combinedClasses, current, onPick }) {
                 style={{
                   fontSize: 10,
                   fontWeight: 700,
-                  color: active ? accent : 'var(--cc-text-dim)',
+                  color: active ? accent : 'var(--text-dim)',
                   letterSpacing: 0.3,
                   lineHeight: 1.2,
                 }}
@@ -793,7 +793,7 @@ function ClassRoster({ combinedClasses, current, onPick }) {
                     fontSize: 8,
                     fontWeight: 900,
                     color: '#050816',
-                    background: 'var(--cc-teal)',
+                    background: 'var(--teal)',
                     borderRadius: 3,
                     padding: '1px 3px',
                     letterSpacing: 0.2,
@@ -815,17 +815,17 @@ function ClassRoster({ combinedClasses, current, onPick }) {
 // ============================================================================
 function ClassBuildSummary({ cls, accent }) {
   return (
-    <div className="cc-panel-strong" style={{ padding: 18, position: 'relative' }}>
-      <div className="cc-tome-corner cc-tr"></div>
-      <div className="cc-tome-corner cc-bl"></div>
+    <div className="panel-strong" style={{ padding: 18, position: 'relative' }}>
+      <div className="tome-corner tr"></div>
+      <div className="tome-corner bl"></div>
 
       <div
-        className="cc-ornate-heading"
+        className="ornate-heading"
         style={{ marginBottom: 16, '--ornate-color': accent }}
       >
-        <span className="cc-ornate-flourish small" style={{ background: accent }}></span>
-        <h3 style={{ fontSize: 18, color: 'var(--cc-text)' }}>{cls.name} build</h3>
-        <span className="cc-ornate-flourish small" style={{ background: accent }}></span>
+        <span className="ornate-flourish small" style={{ background: accent }}></span>
+        <h3 style={{ fontSize: 18, color: 'var(--text)' }}>{cls.name} build</h3>
+        <span className="ornate-flourish small" style={{ background: accent }}></span>
       </div>
 
       <SummaryRow label="Hit Die" value={cls.hitDie} accent={accent} />
@@ -834,7 +834,7 @@ function ClassBuildSummary({ cls, accent }) {
 
       {(cls.features || []).length > 0 && (
         <div style={{ marginTop: 16 }}>
-          <div className="cc-label" style={{ marginBottom: 8, color: 'var(--cc-gold-soft)' }}>
+          <div className="label" style={{ marginBottom: 8, color: 'var(--gold-soft)' }}>
             Level 1
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -843,7 +843,7 @@ function ClassBuildSummary({ cls, accent }) {
                 key={f}
                 style={{
                   fontSize: 13,
-                  color: 'var(--cc-text)',
+                  color: 'var(--text)',
                   display: 'flex',
                   alignItems: 'baseline',
                   gap: 6,
@@ -869,14 +869,14 @@ function SummaryRow({ label, value, accent }) {
         alignItems: 'baseline',
         gap: 12,
         padding: '6px 0',
-        borderBottom: '1px solid var(--cc-border-faint)',
+        borderBottom: '1px solid var(--border-faint)',
         fontSize: 13,
       }}
     >
-      <span className="cc-label" style={{ color: 'var(--cc-text-dim)', letterSpacing: 0.4 }}>
+      <span className="label" style={{ color: 'var(--text-dim)', letterSpacing: 0.4 }}>
         {label}
       </span>
-      <span style={{ color: 'var(--cc-text)', fontWeight: 600, textAlign: 'right' }}>
+      <span style={{ color: 'var(--text)', fontWeight: 600, textAlign: 'right' }}>
         {value}
       </span>
     </div>
@@ -890,10 +890,10 @@ function AlignmentGrid({ value, onChange, selectedAlignment }) {
   return (
     <>
       <div
-        className="cc-italic-serif"
+        className="italic-serif"
         style={{
           fontSize: 14,
-          color: 'var(--cc-text-dim)',
+          color: 'var(--text-dim)',
           marginBottom: 14,
           textAlign: 'center',
         }}
@@ -924,16 +924,16 @@ function AlignmentGrid({ value, onChange, selectedAlignment }) {
                 textAlign: 'center',
                 borderRadius: 6,
                 background: active ? 'rgba(255, 83, 0, 0.10)' : 'rgba(20, 12, 8, 0.4)',
-                border: `1px solid ${active ? 'var(--cc-orange)' : 'var(--cc-border)'}`,
-                boxShadow: active ? '0 0 12px var(--cc-orange-glow)' : 'none',
+                border: `1px solid ${active ? 'var(--orange)' : 'var(--border)'}`,
+                boxShadow: active ? '0 0 12px var(--orange-glow)' : 'none',
                 transition: 'all .15s',
               }}
             >
               <div
-                className="cc-display"
+                className="display"
                 style={{
                   fontSize: 13,
-                  color: active ? 'var(--cc-orange-soft)' : 'var(--cc-gold-soft)',
+                  color: active ? 'var(--orange-soft)' : 'var(--gold-soft)',
                   marginBottom: 2,
                 }}
               >
@@ -943,7 +943,7 @@ function AlignmentGrid({ value, onChange, selectedAlignment }) {
                 style={{
                   fontSize: 12,
                   fontWeight: 600,
-                  color: 'var(--cc-text)',
+                  color: 'var(--text)',
                   letterSpacing: 0.2,
                   lineHeight: 1.3,
                 }}
@@ -962,20 +962,20 @@ function AlignmentGrid({ value, onChange, selectedAlignment }) {
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
-          className="cc-italic-serif"
+          className="italic-serif"
           style={{
             marginTop: 16,
             textAlign: 'center',
             fontSize: 14,
-            color: 'var(--cc-text-dim)',
+            color: 'var(--text-dim)',
             lineHeight: 1.5,
             maxWidth: 540,
             margin: '16px auto 0',
           }}
         >
           <strong
-            className="cc-display"
-            style={{ color: 'var(--cc-orange-soft)', fontSize: 16, fontWeight: 'normal' }}
+            className="display"
+            style={{ color: 'var(--orange-soft)', fontSize: 16, fontWeight: 'normal' }}
           >
             {selectedAlignment.name}.
           </strong>{' '}
@@ -999,28 +999,28 @@ function PhysicalDetails({ appearance, onChange }) {
       }}
     >
       <div>
-        <div className="cc-label" style={{ marginBottom: 6 }}>Age</div>
+        <div className="label" style={{ marginBottom: 6 }}>Age</div>
         <input
           type="number"
-          className="cc-input"
+          className="input"
           value={appearance.age || ''}
           onChange={(e) => onChange({ age: parseInt(e.target.value, 10) })}
           placeholder="25"
         />
       </div>
       <div>
-        <div className="cc-label" style={{ marginBottom: 6 }}>Height</div>
+        <div className="label" style={{ marginBottom: 6 }}>Height</div>
         <input
-          className="cc-input"
+          className="input"
           value={appearance.height || ''}
           onChange={(e) => onChange({ height: e.target.value })}
           placeholder={"5'10\""}
         />
       </div>
       <div>
-        <div className="cc-label" style={{ marginBottom: 6 }}>Weight</div>
+        <div className="label" style={{ marginBottom: 6 }}>Weight</div>
         <input
-          className="cc-input"
+          className="input"
           value={appearance.weight || ''}
           onChange={(e) => onChange({ weight: e.target.value })}
           placeholder="180 lbs"
@@ -1031,7 +1031,7 @@ function PhysicalDetails({ appearance, onChange }) {
 }
 
 // ============================================================================
-// Portrait panel (full body) — drag/zoom positioning, restyled around .cc-*
+// Portrait panel (full body) — drag/zoom positioning, themed inline.
 // ============================================================================
 function PortraitPanel({
   label, avatarUrl, position, zoom, saved, uploading,
@@ -1039,18 +1039,17 @@ function PortraitPanel({
   inputId, aspectRatio,
 }) {
   return (
-    <div className="cc-panel-strong" style={{ padding: 16, position: 'relative' }}>
-      <div className="cc-label" style={{ marginBottom: 10, color: 'var(--cc-gold-soft)' }}>
+    <div className="panel-strong" style={{ padding: 16, position: 'relative' }}>
+      <div className="label" style={{ marginBottom: 10, color: 'var(--gold-soft)' }}>
         {label}
       </div>
       <div
-        className="cc-portrait-frame"
         style={{
           position: 'relative',
           overflow: 'hidden',
           borderRadius: 8,
           background: 'rgba(20, 12, 8, 0.5)',
-          border: '1px solid var(--cc-border)',
+          border: '1px solid var(--border)',
           aspectRatio,
           width: '100%',
         }}
@@ -1093,14 +1092,14 @@ function PortraitPanel({
                     alignItems: 'center',
                     gap: 6,
                     fontSize: 11,
-                    color: 'var(--cc-text)',
+                    color: 'var(--text)',
                   }}
                 >
                   <Move className="w-3 h-3" />
                   <span>Drag to reposition</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <ZoomOut className="w-3 h-3" style={{ color: 'var(--cc-text)' }} />
+                  <ZoomOut className="w-3 h-3" style={{ color: 'var(--text)' }} />
                   <Slider
                     value={[zoom]}
                     onValueChange={onZoomChange}
@@ -1109,7 +1108,7 @@ function PortraitPanel({
                     step={0.1}
                     className="flex-1"
                   />
-                  <ZoomIn className="w-3 h-3" style={{ color: 'var(--cc-text)' }} />
+                  <ZoomIn className="w-3 h-3" style={{ color: 'var(--text)' }} />
                 </div>
               </div>
             )}
@@ -1123,7 +1122,7 @@ function PortraitPanel({
                   position: 'absolute',
                   top: 10,
                   right: 10,
-                  background: 'var(--cc-orange)',
+                  background: 'var(--orange)',
                   color: 'white',
                   padding: 8,
                   borderRadius: 6,
@@ -1145,13 +1144,13 @@ function PortraitPanel({
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              color: 'var(--cc-text-faint)',
+              color: 'var(--text-faint)',
             }}
           >
             <User className="w-16 h-16" style={{ opacity: 0.35, marginBottom: 10 }} />
             <p
-              className="cc-italic-serif"
-              style={{ fontSize: 13, color: 'var(--cc-text-faint)' }}
+              className="italic-serif"
+              style={{ fontSize: 13, color: 'var(--text-faint)' }}
             >
               Drop your character art
             </p>
@@ -1163,7 +1162,7 @@ function PortraitPanel({
         <button
           type="button"
           onClick={onSave}
-          className="cc-btn-primary"
+          className="btn-primary"
           style={{
             marginTop: 10,
             width: '100%',
@@ -1181,7 +1180,7 @@ function PortraitPanel({
         type="button"
         onClick={() => document.getElementById(inputId).click()}
         disabled={uploading}
-        className="cc-btn-orange"
+        className="btn btn-primary"
         style={{
           marginTop: 10,
           width: '100%',
@@ -1214,8 +1213,8 @@ function ProfilePanel({
   onUpload, onMouseDown, onZoomChange, onSave, onEdit,
 }) {
   return (
-    <div className="cc-panel-strong" style={{ padding: 16 }}>
-      <div className="cc-label" style={{ marginBottom: 10, color: 'var(--cc-gold-soft)' }}>
+    <div className="panel-strong" style={{ padding: 16 }}>
+      <div className="label" style={{ marginBottom: 10, color: 'var(--gold-soft)' }}>
         Profile Avatar
       </div>
       <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -1227,7 +1226,7 @@ function ProfilePanel({
               borderRadius: '50%',
               overflow: 'hidden',
               background: 'rgba(20, 12, 8, 0.5)',
-              border: '2px solid var(--cc-orange)',
+              border: '2px solid var(--orange)',
               position: 'relative',
             }}
           >
@@ -1257,7 +1256,7 @@ function ProfilePanel({
                   justifyContent: 'center',
                 }}
               >
-                <User className="w-12 h-12" style={{ color: 'var(--cc-text-faint)', opacity: 0.45 }} />
+                <User className="w-12 h-12" style={{ color: 'var(--text-faint)', opacity: 0.45 }} />
               </div>
             )}
           </div>
@@ -1271,7 +1270,7 @@ function ProfilePanel({
                 position: 'absolute',
                 top: -4,
                 right: -4,
-                background: 'var(--cc-orange)',
+                background: 'var(--orange)',
                 color: 'white',
                 padding: 6,
                 borderRadius: '50%',
@@ -1293,7 +1292,7 @@ function ProfilePanel({
             background: 'rgba(20, 12, 8, 0.5)',
             borderRadius: 8,
             padding: 12,
-            border: '1px solid var(--cc-border)',
+            border: '1px solid var(--border)',
           }}
         >
           <div
@@ -1302,7 +1301,7 @@ function ProfilePanel({
               alignItems: 'center',
               gap: 6,
               fontSize: 11,
-              color: 'var(--cc-text-dim)',
+              color: 'var(--text-dim)',
               marginBottom: 8,
             }}
           >
@@ -1310,7 +1309,7 @@ function ProfilePanel({
             <span>Drag to reposition</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <ZoomOut className="w-3 h-3" style={{ color: 'var(--cc-text-dim)' }} />
+            <ZoomOut className="w-3 h-3" style={{ color: 'var(--text-dim)' }} />
             <Slider
               value={[zoom]}
               onValueChange={onZoomChange}
@@ -1319,12 +1318,12 @@ function ProfilePanel({
               step={0.1}
               className="flex-1"
             />
-            <ZoomIn className="w-3 h-3" style={{ color: 'var(--cc-text-dim)' }} />
+            <ZoomIn className="w-3 h-3" style={{ color: 'var(--text-dim)' }} />
           </div>
           <button
             type="button"
             onClick={onSave}
-            className="cc-btn-primary"
+            className="btn-primary"
             style={{
               width: '100%',
               display: 'inline-flex',
@@ -1344,7 +1343,7 @@ function ProfilePanel({
         type="button"
         onClick={() => document.getElementById('profile-upload').click()}
         disabled={uploading}
-        className="cc-btn-orange"
+        className="btn btn-primary"
         style={{
           marginTop: 10,
           width: '100%',
