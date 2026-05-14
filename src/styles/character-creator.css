@@ -1,0 +1,424 @@
+/* ============================================================================
+ * Character Creator — Design System Foundation
+ * ============================================================================
+ * Specialty CSS for the visual port. Includes:
+ *   - CSS variables (palette tokens, animated per-class variables)
+ *   - Panel surfaces (.cc-tome, .cc-panel)
+ *   - Ornament classes (.cc-ornate-heading, .cc-fleur-divider, etc.)
+ *   - Class aura backdrop (.cc-backdrop, .cc-class-aura)
+ *
+ * All classes are prefixed with .cc- to avoid colliding with global
+ * Tailwind/shadcn styles. Apply them ONLY inside the character creator
+ * tree; nothing here should leak into the rest of the app.
+ *
+ * Font mapping note:
+ *   --cc-display maps to the existing app brand fonts (Cream + Stack
+ *   Sans Notch). --cc-serif uses system serif italic for flavor text
+ *   (the design originally used Cormorant Garamond; we're not adding
+ *   another Google font for this).
+ * ============================================================================ */
+
+:root {
+  /* Static accent palette */
+  --cc-orange:        #FF5300;
+  --cc-orange-soft:   #FF7A33;
+  --cc-orange-deep:   #C73E00;
+  --cc-orange-glow:   rgba(255, 83, 0, 0.4);
+
+  --cc-teal:          #37F2D1;
+  --cc-teal-dark:     #04685A;
+  --cc-teal-deep:     #0a3d36;
+
+  --cc-burgundy:      #8B2C1E;
+  --cc-burgundy-deep: #5A1A10;
+  --cc-purple:        #C9A3FF;
+
+  /* Parchment / leather surfaces */
+  --cc-parchment:     #F3E2BD;
+  --cc-parchment-dim: #DCC893;
+  --cc-ink:           #1F140C;
+
+  --cc-text:          #F5E6C2;
+  --cc-text-dim:      #C5B086;
+  --cc-text-faint:    #8A7559;
+
+  --cc-danger:        #E84A3A;
+  --cc-warn:          #F2B33D;
+
+  /* Font roles — display uses the existing app fonts.
+     Serif/body fall back to system stacks; we are NOT adding new
+     Google fonts for this. */
+  --cc-display:       'Cream', 'Stack Sans Notch', 'Cinzel', sans-serif;
+  --cc-serif:         Georgia, 'Times New Roman', serif;
+  --cc-body:          system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --cc-mono:          ui-monospace, 'JetBrains Mono', Menlo, monospace;
+}
+
+/* ============================================================================
+ * Animatable per-class palette
+ * ============================================================================
+ * @property lets these CSS variables of type <color> transition smoothly
+ * between values when the picked class changes. Without @property, the
+ * variables would snap instead of fading.
+ * ============================================================================ */
+
+@property --cc-page-bg-1 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #1A100A;
+}
+@property --cc-page-bg-2 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #251710;
+}
+@property --cc-page-accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #D4A951;
+}
+@property --cc-page-accent-deep {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #8C6F3F;
+}
+@property --cc-aura-tint {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #FF5300;
+}
+@property --cc-aura-deep {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #5A1A10;
+}
+@property --cc-aura-strength {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+/* Derived variables — these snap with their parent. */
+:root {
+  --cc-gold:        var(--cc-page-accent);
+  --cc-gold-deep:   var(--cc-page-accent-deep);
+  --cc-gold-soft:   color-mix(in srgb, var(--cc-page-accent) 70%, white);
+  --cc-gold-glow:   color-mix(in srgb, var(--cc-page-accent), transparent 75%);
+
+  --cc-bg-0:        var(--cc-page-bg-1);
+  --cc-bg-1:        var(--cc-page-bg-2);
+  --cc-bg-2:        color-mix(in srgb, var(--cc-page-bg-2), white 6%);
+  --cc-bg-3:        color-mix(in srgb, var(--cc-page-bg-2), white 12%);
+  --cc-bg-4:        color-mix(in srgb, var(--cc-page-bg-2), white 20%);
+  --cc-bg-leather:  color-mix(in srgb, var(--cc-page-bg-2), var(--cc-page-accent) 8%);
+
+  --cc-border:        color-mix(in srgb, var(--cc-page-accent), transparent 84%);
+  --cc-border-strong: color-mix(in srgb, var(--cc-page-accent), transparent 68%);
+  --cc-border-faint:  color-mix(in srgb, var(--cc-page-accent), transparent 92%);
+}
+
+/* Transition definitions for the animated variables.
+   Scoped to .cc-root so the rest of the app isn't affected by these
+   long transitions. */
+.cc-root {
+  transition:
+    --cc-page-bg-1       1.8s cubic-bezier(.4, 0, .2, 1),
+    --cc-page-bg-2       1.8s cubic-bezier(.4, 0, .2, 1),
+    --cc-page-accent     1.8s cubic-bezier(.4, 0, .2, 1),
+    --cc-page-accent-deep 1.8s cubic-bezier(.4, 0, .2, 1),
+    --cc-aura-tint       1.4s cubic-bezier(.4, 0, .2, 1),
+    --cc-aura-deep       1.4s cubic-bezier(.4, 0, .2, 1),
+    --cc-aura-strength   1.4s ease;
+}
+
+/* ============================================================================
+ * Atmospheric backdrop
+ * ============================================================================ */
+
+.cc-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 80% 60% at 18% 0%, color-mix(in srgb, var(--cc-page-accent), transparent 78%), transparent 60%),
+    radial-gradient(ellipse 70% 70% at 88% 100%, color-mix(in srgb, var(--cc-page-accent-deep), transparent 78%), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 50% 50%, color-mix(in srgb, var(--cc-page-accent-deep), transparent 88%), transparent 65%),
+    linear-gradient(180deg, var(--cc-page-bg-1) 0%, var(--cc-page-bg-2) 50%, var(--cc-page-bg-1) 100%);
+}
+
+.cc-class-aura {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--cc-aura-strength);
+  background:
+    radial-gradient(ellipse 70% 50% at 10% -10%, var(--cc-aura-tint) 0%, transparent 45%),
+    radial-gradient(ellipse 80% 60% at 95% 110%, var(--cc-aura-deep) 0%, transparent 55%),
+    radial-gradient(circle 800px at 50% 80%, var(--cc-aura-deep) 0%, transparent 60%),
+    radial-gradient(circle 600px at 85% 25%, var(--cc-aura-tint) 0%, transparent 60%);
+  mix-blend-mode: screen;
+}
+
+@keyframes cc-aura-pulse {
+  0%, 100% { opacity: calc(var(--cc-aura-strength) * 1); }
+  50%      { opacity: calc(var(--cc-aura-strength) * 0.6); }
+}
+
+.cc-class-aura::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: inherit;
+  animation: cc-aura-pulse 6s ease-in-out infinite;
+}
+
+/* ============================================================================
+ * Panel surfaces
+ * ============================================================================ */
+
+.cc-tome {
+  background:
+    radial-gradient(ellipse 100% 80% at 50% 0%, color-mix(in srgb, var(--cc-parchment), transparent 92%), transparent 70%),
+    color-mix(in srgb, var(--cc-bg-leather), transparent 0%);
+  border: 1px solid var(--cc-border-strong);
+  border-radius: 14px;
+  box-shadow:
+    0 2px 0 color-mix(in srgb, var(--cc-page-accent), transparent 70%) inset,
+    0 24px 60px rgba(0, 0, 0, 0.4),
+    0 0 0 1px color-mix(in srgb, var(--cc-page-accent), transparent 88%);
+  position: relative;
+}
+
+.cc-panel {
+  background: color-mix(in srgb, var(--cc-bg-2), transparent 0%);
+  border: 1px solid var(--cc-border);
+  border-radius: 10px;
+}
+
+.cc-panel-strong {
+  background: var(--cc-bg-2);
+  border: 1px solid var(--cc-border-strong);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================================================
+ * Ornaments
+ * ============================================================================ */
+
+.cc-ornate-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 20px;
+}
+
+.cc-ornate-heading h3 {
+  font-family: var(--cc-display);
+  font-size: 28px;
+  font-weight: 400;
+  margin: 0;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.cc-ornate-flourish {
+  flex: 1;
+  height: 1px;
+  opacity: 0.5;
+}
+
+.cc-fleur-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 28px 0;
+  position: relative;
+}
+
+.cc-fleur-divider::before,
+.cc-fleur-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--cc-gold), transparent 40%),
+    transparent
+  );
+}
+
+.cc-fleur-divider svg {
+  margin: 0 14px;
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+ * Form primitives
+ * ============================================================================ */
+
+.cc-input {
+  width: 100%;
+  background: color-mix(in srgb, var(--cc-bg-1), transparent 0%);
+  border: 1px solid var(--cc-border-strong);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--cc-text);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.cc-input:focus {
+  outline: 2px solid var(--cc-orange);
+  outline-offset: 1px;
+  border-color: var(--cc-orange);
+}
+
+.cc-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--cc-text-faint);
+}
+
+/* ============================================================================
+ * Buttons (scoped)
+ * ============================================================================ */
+
+.cc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.3px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--cc-body);
+}
+
+.cc-btn-primary {
+  background: linear-gradient(180deg, var(--cc-orange-soft), var(--cc-orange));
+  color: white;
+  border-color: var(--cc-orange-deep);
+  box-shadow: 0 4px 14px var(--cc-orange-glow);
+}
+
+.cc-btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px var(--cc-orange-glow);
+}
+
+.cc-btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.cc-btn-ghost {
+  background: transparent;
+  color: var(--cc-text-dim);
+  border-color: var(--cc-border-strong);
+}
+
+.cc-btn-ghost:hover:not(:disabled) {
+  color: var(--cc-text);
+  border-color: var(--cc-orange);
+}
+
+.cc-btn-ghost:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+ * Primer (new-player tip banner)
+ * ============================================================================ */
+
+.cc-primer {
+  border-left: 4px solid var(--cc-teal);
+  border: 1px solid;
+  background: linear-gradient(135deg, rgba(55, 242, 209, 0.08), transparent);
+  padding: 14px 18px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--cc-text-dim);
+  margin: 18px 0;
+}
+
+.cc-primer-title {
+  font-family: var(--cc-display);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+/* ============================================================================
+ * Typography helpers
+ * ============================================================================ */
+
+.cc-display     { font-family: var(--cc-display); letter-spacing: 0.5px; }
+.cc-serif       { font-family: var(--cc-serif); }
+.cc-italic-serif { font-family: var(--cc-serif); font-style: italic; }
+.cc-mono        { font-family: var(--cc-mono); }
+
+/* ============================================================================
+ * Help tooltip
+ * ============================================================================ */
+
+.cc-help-tip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--cc-gold), transparent 70%);
+  color: var(--cc-gold);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: help;
+  position: relative;
+}
+
+.cc-help-tip:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 130%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--cc-bg-3);
+  color: var(--cc-text);
+  border: 1px solid var(--cc-border-strong);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: normal;
+  width: 220px;
+  z-index: 100;
+  pointer-events: none;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* ============================================================================
+ * Step transitions
+ * ============================================================================ */
+
+.cc-step-content {
+  animation: cc-step-in 0.4s ease-out;
+}
+
+@keyframes cc-step-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
