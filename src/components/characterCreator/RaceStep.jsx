@@ -414,7 +414,7 @@ export default function RaceStep({ characterData, updateCharacterData, campaignI
       >
         {/* LEFT — tome page with race, background, and (if applicable)
             brewery race pickers in flowing sections. */}
-        <div className="cc-tome" style={{ padding: '32px 36px' }}>
+        <div className="tome" style={{ padding: '32px 36px' }}>
           <RaceSection
             currentRace={currentRace}
             combinedRaces={combinedRaces}
@@ -476,15 +476,15 @@ function RaceSection({
         />
       ) : (
         <div
-          className="cc-italic-serif"
+          className="italic-serif"
           style={{
             textAlign: 'center',
             padding: 28,
-            color: 'var(--cc-text-dim)',
+            color: 'var(--text-dim)',
             fontSize: 16,
             background: 'rgba(20, 12, 8, 0.4)',
             borderRadius: 6,
-            border: '1px solid var(--cc-border-faint)',
+            border: '1px solid var(--border-faint)',
           }}
         >
           Choose a heritage from the line below to reveal their tale.
@@ -559,10 +559,10 @@ function FeaturedRace({
           />
         ) : (
           <div
-            className="cc-display"
+            className="display"
             style={{
               fontSize: 40,
-              color: 'var(--cc-gold)',
+              color: 'var(--gold)',
               lineHeight: 1,
             }}
           >
@@ -581,10 +581,10 @@ function FeaturedRace({
           }}
         >
           <div
-            className="cc-display"
+            className="display"
             style={{
               fontSize: 34,
-              color: 'var(--cc-orange-soft)',
+              color: 'var(--orange-soft)',
               lineHeight: 1,
               letterSpacing: 1,
             }}
@@ -601,7 +601,7 @@ function FeaturedRace({
                 letterSpacing: '0.12em',
                 textTransform: 'uppercase',
                 color: '#050816',
-                background: 'var(--cc-teal)',
+                background: 'var(--teal)',
                 borderRadius: 4,
                 padding: '2px 6px',
               }}
@@ -612,10 +612,10 @@ function FeaturedRace({
         </div>
 
         <p
-          className="cc-italic-serif"
+          className="italic-serif"
           style={{
             fontSize: 15,
-            color: 'var(--cc-text-dim)',
+            color: 'var(--text-dim)',
             margin: '0 0 14px',
             lineHeight: 1.55,
           }}
@@ -649,7 +649,7 @@ function FeaturedRace({
                     fontWeight: 700,
                     letterSpacing: 0.4,
                     textTransform: 'uppercase',
-                    color: 'var(--cc-orange-soft)',
+                    color: 'var(--orange-soft)',
                     background: 'rgba(255, 83, 0, 0.08)',
                     border: '1px solid rgba(255, 83, 0, 0.35)',
                     borderRadius: 4,
@@ -668,7 +668,7 @@ function FeaturedRace({
         {/* Subrace picker */}
         {race.subtypes.length > 1 && (
           <div>
-            <div className="cc-label" style={{ marginBottom: 8, color: 'var(--cc-gold-soft)' }}>
+            <div className="label" style={{ marginBottom: 8, color: 'var(--gold-soft)' }}>
               Choose a lineage
             </div>
             <div
@@ -706,25 +706,25 @@ function FeaturedRace({
                       background: active
                         ? 'rgba(55, 242, 209, 0.10)'
                         : 'rgba(20, 12, 8, 0.4)',
-                      border: `1px solid ${active ? 'var(--cc-teal)' : 'var(--cc-border)'}`,
+                      border: `1px solid ${active ? 'var(--teal)' : 'var(--border)'}`,
                       transition: 'border-color .15s, background .15s',
                     }}
                   >
                     <div
-                      className="cc-display"
+                      className="display"
                       style={{
                         fontSize: 16,
-                        color: active ? 'var(--cc-teal)' : 'var(--cc-text)',
+                        color: active ? 'var(--teal)' : 'var(--text)',
                         marginBottom: 4,
                       }}
                     >
                       {subtype}
                     </div>
                     <div
-                      className="cc-italic-serif"
+                      className="italic-serif"
                       style={{
                         fontSize: 13,
-                        color: 'var(--cc-text-dim)',
+                        color: 'var(--text-dim)',
                         lineHeight: 1.45,
                       }}
                     >
@@ -742,15 +742,15 @@ function FeaturedRace({
             so the layout stays consistent. */}
         {race.subtypes.length === 1 && selectedSubraceDesc && (
           <div
-            className="cc-italic-serif"
+            className="italic-serif"
             style={{
               fontSize: 14,
-              color: 'var(--cc-text-dim)',
+              color: 'var(--text-dim)',
               lineHeight: 1.5,
               padding: '12px 14px',
               background: 'rgba(20, 12, 8, 0.4)',
               borderRadius: 6,
-              borderLeft: '3px solid var(--cc-teal)',
+              borderLeft: '3px solid var(--teal)',
             }}
           >
             {selectedSubraceDesc}
@@ -778,8 +778,8 @@ function RaceMedallion({ race, active, onClick }) {
         borderRadius: 6,
         transition: 'all .15s',
         background: active ? 'rgba(255, 83, 0, 0.10)' : 'transparent',
-        border: `1px solid ${active ? 'var(--cc-orange)' : 'transparent'}`,
-        boxShadow: active ? '0 0 16px var(--cc-orange-glow)' : 'none',
+        border: `1px solid ${active ? 'var(--orange)' : 'transparent'}`,
+        boxShadow: active ? '0 0 16px var(--orange-glow)' : 'none',
       }}
       onMouseEnter={(e) => {
         if (!active) e.currentTarget.style.background = 'rgba(212, 169, 81, 0.06)';
@@ -805,10 +805,10 @@ function RaceMedallion({ race, active, onClick }) {
           <img src={race.icon} alt="" style={{ width: 34, height: 34, objectFit: 'contain' }} />
         ) : (
           <span
-            className="cc-display"
+            className="display"
             style={{
               fontSize: 22,
-              color: active ? 'var(--cc-orange-soft)' : 'var(--cc-gold-soft)',
+              color: active ? 'var(--orange-soft)' : 'var(--gold-soft)',
               lineHeight: 1,
             }}
           >
@@ -821,7 +821,7 @@ function RaceMedallion({ race, active, onClick }) {
           fontSize: 11,
           fontWeight: 700,
           letterSpacing: 0.5,
-          color: active ? 'var(--cc-orange-soft)' : 'var(--cc-text-dim)',
+          color: active ? 'var(--orange-soft)' : 'var(--text-dim)',
           textAlign: 'center',
           lineHeight: 1.2,
         }}
@@ -862,15 +862,15 @@ function BackgroundSection({ value, selectedBackground, onChange }) {
                 textAlign: 'left',
                 borderRadius: 6,
                 background: active ? 'rgba(212, 169, 81, 0.10)' : 'rgba(20, 12, 8, 0.4)',
-                border: `1px solid ${active ? 'var(--cc-gold)' : 'var(--cc-border)'}`,
+                border: `1px solid ${active ? 'var(--gold)' : 'var(--border)'}`,
                 transition: 'all .15s',
               }}
             >
               <div
-                className="cc-display"
+                className="display"
                 style={{
                   fontSize: 15,
-                  color: active ? 'var(--cc-gold)' : 'var(--cc-text)',
+                  color: active ? 'var(--gold)' : 'var(--text)',
                   letterSpacing: 0.3,
                 }}
               >
@@ -890,15 +890,15 @@ function BackgroundSection({ value, selectedBackground, onChange }) {
             padding: '16px 20px',
             background: 'rgba(20, 12, 8, 0.5)',
             borderRadius: 6,
-            borderLeft: '3px solid var(--cc-gold)',
+            borderLeft: '3px solid var(--gold)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
             <span
-              className="cc-display"
+              className="display"
               style={{
                 fontSize: 22,
-                color: 'var(--cc-orange-soft)',
+                color: 'var(--orange-soft)',
                 lineHeight: 1,
               }}
             >
@@ -907,10 +907,10 @@ function BackgroundSection({ value, selectedBackground, onChange }) {
             <InfoTip>{tipFor("background")}</InfoTip>
           </div>
           <p
-            className="cc-italic-serif"
+            className="italic-serif"
             style={{
               fontSize: 14,
-              color: 'var(--cc-text-dim)',
+              color: 'var(--text-dim)',
               margin: 0,
               lineHeight: 1.55,
             }}
@@ -929,15 +929,15 @@ function BackgroundSection({ value, selectedBackground, onChange }) {
 // ============================================================================
 function IdentityCodex({ name, level, updateCharacterData }) {
   return (
-    <div className="cc-panel-strong" style={{ padding: 24, position: 'relative' }}>
+    <div className="panel-strong" style={{ padding: 24, position: 'relative' }}>
       <OrnateHeading>Codex</OrnateHeading>
 
       <div style={{ marginBottom: 16 }}>
-        <div className="cc-label" style={{ marginBottom: 6 }}>
-          Character Name <span style={{ color: 'var(--cc-orange)' }}>*</span>
+        <div className="label" style={{ marginBottom: 6 }}>
+          Character Name <span style={{ color: 'var(--orange)' }}>*</span>
         </div>
         <input
-          className="cc-input"
+          className="input"
           value={name || ''}
           onChange={(e) => updateCharacterData({ name: e.target.value })}
           placeholder="e.g. Kael Stormwhisper"
@@ -947,11 +947,11 @@ function IdentityCodex({ name, level, updateCharacterData }) {
       </div>
 
       <div>
-        <div className="cc-label" style={{ marginBottom: 6 }}>
+        <div className="label" style={{ marginBottom: 6 }}>
           Level
         </div>
         <select
-          className="cc-input"
+          className="input"
           value={String(level || 1)}
           onChange={(e) => updateCharacterData({ level: parseInt(e.target.value, 10) })}
           style={{
@@ -972,11 +972,11 @@ function IdentityCodex({ name, level, updateCharacterData }) {
       </div>
 
       <div
-        className="cc-italic-serif"
+        className="italic-serif"
         style={{
           marginTop: 18,
           fontSize: 12,
-          color: 'var(--cc-text-faint)',
+          color: 'var(--text-faint)',
           lineHeight: 1.5,
         }}
       >
