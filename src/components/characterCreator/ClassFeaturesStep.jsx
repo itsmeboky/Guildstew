@@ -57,6 +57,16 @@ const AVAILABLE_CLASSES = [
   "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard",
 ];
 
+// Class-tinted accent — mirrors ClassStep's CLASS_ACCENT. Used for the
+// feature-scroll level emblem + OrnateHeading flourishes so a Wizard's
+// features come in blue, a Barbarian's in orange-brown, etc.
+const CLASS_ACCENT = {
+  Barbarian: "#D89860", Bard: "#FF4DA6", Cleric: "#FFF1D2", Druid: "#52D880",
+  Fighter: "#FF5040",  Monk: "#3FE0E8",  Paladin: "#FFD550", Ranger: "#D45A50",
+  Rogue: "#D8D5E0",    Sorcerer: "#FF9050", Warlock: "#B580FF", Wizard: "#5AA0FF",
+};
+const ACCENT_FALLBACK = "var(--gold)";
+
 export default function ClassFeaturesStep({ characterData, updateCharacterData }) {
   const [multiclasses, setMulticlasses] = useState(characterData.multiclasses || []);
   const [featureChoices, setFeatureChoices] = useState(characterData.feature_choices || {});
@@ -259,15 +269,48 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
 
           <FleurDivider />
 
-          <OrnateHeading>{characterData.class} · Level {primaryClassLevel}</OrnateHeading>
+          <OrnateHeading color={CLASS_ACCENT[characterData.class] || ACCENT_FALLBACK}>
+            {characterData.class} · Level {primaryClassLevel}
+          </OrnateHeading>
 
           <FeatureScroll
             features={primaryFeatures}
             characterClass={characterData.class}
             classLevel={primaryClassLevel}
-            featureChoices={featureChoices}
-            onChooseFeature={handleFeatureChoice}
+            color={CLASS_ACCENT[characterData.class] || ACCENT_FALLBACK}
           />
+
+          {primaryFeatures.filter((f) => f.choiceRequired).map((feature) => {
+            const featureKey = `${characterData.class}-${feature.level}-${feature.name}`;
+            const currentChoice = featureChoices[featureKey];
+            return (
+              <React.Fragment key={featureKey}>
+                <FleurDivider />
+                <RequiredChoice
+                  title={feature.name}
+                  help={feature.description}
+                  required={!currentChoice}
+                >
+                  {isSubclassFeature(feature) ? (
+                    <SubclassPicker
+                      choices={feature.choices}
+                      value={currentChoice || null}
+                      onSelect={(value) => handleFeatureChoice(featureKey, value)}
+                      featureName={feature.name}
+                      levelGained={feature.level}
+                    />
+                  ) : (
+                    <FeatureChoicePicker
+                      feature={feature}
+                      classLevel={primaryClassLevel}
+                      currentChoice={currentChoice}
+                      onChange={(value) => handleFeatureChoice(featureKey, value)}
+                    />
+                  )}
+                </RequiredChoice>
+              </React.Fragment>
+            );
+          })}
 
           {totalLevel >= 2 && primaryClassLevel >= 1 && !primaryPrereqMet && (
             <MulticlassPrereqWarning
@@ -408,17 +451,13 @@ function LevelPicker({ totalLevel, primaryClassName, primaryClassLevel, multicla
 // ============================================================================
 // Feature scroll — left-rail level emblem + feature body
 // ============================================================================
-function FeatureScroll({ features, characterClass, classLevel, featureChoices, onChooseFeature }) {
+function FeatureScroll({ features, color }) {
+  const accent = color || ACCENT_FALLBACK;
   if (features.length === 0) {
     return (
       <div
         className="italic-serif"
-        style={{
-          textAlign: 'center',
-          padding: 28,
-          color: 'var(--text-dim)',
-          fontSize: 14,
-        }}
+        style={{ textAlign: 'center', padding: 28, color: 'var(--text-dim)', fontSize: 14 }}
       >
         No features earned at this level yet.
       </div>
@@ -427,131 +466,128 @@ function FeatureScroll({ features, characterClass, classLevel, featureChoices, o
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {features.map((feature, idx) => {
-        const featureKey = `${characterClass}-${feature.level}-${feature.name}`;
-        const hasChoice = feature.choiceRequired;
-        const currentChoice = featureChoices[featureKey];
-        const requiresPick = hasChoice && !currentChoice;
-
-        return (
+      {features.map((feature, idx) => (
+        <div
+          key={idx}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '52px 1fr',
+            gap: 16,
+            alignItems: 'flex-start',
+          }}
+        >
+          {/* Level emblem — class-tinted hex */}
           <div
-            key={idx}
             style={{
-              display: 'grid',
-              gridTemplateColumns: '52px 1fr',
-              gap: 16,
-              alignItems: 'flex-start',
-              padding: requiresPick ? '14px 16px' : 0,
-              background: requiresPick
-                ? 'linear-gradient(135deg, rgba(255, 83, 0, 0.10), rgba(255, 83, 0, 0.02))'
-                : 'transparent',
-              border: requiresPick ? '1px solid var(--orange)' : 'none',
-              borderRadius: 8,
-              boxShadow: requiresPick ? '0 0 16px rgba(255, 83, 0, 0.18)' : 'none',
+              width: 52,
+              height: 52,
+              flexShrink: 0,
+              clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
+              background: `linear-gradient(180deg, ${accent}40, ${accent}10)`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: `1px solid ${accent}66`,
             }}
           >
-            <div
-              style={{
-                width: 52,
-                height: 52,
-                flexShrink: 0,
-                clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-                background: requiresPick
-                  ? 'linear-gradient(180deg, rgba(255, 83, 0, 0.4), rgba(255, 83, 0, 0.1))'
-                  : 'linear-gradient(180deg, rgba(212, 169, 81, 0.32), rgba(212, 169, 81, 0.08))',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginTop: 4,
-              }}
-            >
-              <div style={{ textAlign: 'center', lineHeight: 1 }}>
-                <div
-                  className="label"
-                  style={{
-                    fontSize: 8,
-                    color: requiresPick ? 'var(--orange-soft)' : 'var(--gold-soft)',
-                  }}
-                >
-                  LVL
-                </div>
-                <div
-                  className="display"
-                  style={{ fontSize: 18, color: 'var(--text)' }}
-                >
-                  {feature.level}
-                </div>
+            <div style={{ textAlign: 'center' }}>
+              <div className="label" style={{ fontSize: 8, color: accent, marginBottom: 0 }}>
+                LVL
               </div>
-            </div>
-
-            <div style={{ paddingTop: 2 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
-                <span
-                  className="display"
-                  style={{ fontSize: 20, color: 'var(--text)' }}
-                >
-                  {feature.name}
-                </span>
-                {feature.uses && (
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: '#050816',
-                      background: 'var(--teal)',
-                      borderRadius: 4,
-                      padding: '2px 6px',
-                      letterSpacing: 0.3,
-                    }}
-                  >
-                    {feature.uses}
-                  </span>
-                )}
-                {requiresPick && (
-                  <span
-                    className="label"
-                    style={{ color: 'var(--orange)', fontSize: 10 }}
-                  >
-                    · CHOICE REQUIRED
-                  </span>
-                )}
+              <div className="display" style={{ fontSize: 18, color: 'var(--text)', lineHeight: 1 }}>
+                {feature.level}
               </div>
-              <div
-                className="italic-serif"
-                style={{
-                  fontSize: 14.5,
-                  color: 'var(--text-dim)',
-                  lineHeight: 1.55,
-                  whiteSpace: 'pre-line',
-                }}
-              >
-                {feature.description}
-              </div>
-
-              {hasChoice && feature.choices && (
-                isSubclassFeature(feature) ? (
-                  <div style={{ marginTop: 12 }}>
-                    <SubclassPicker
-                      choices={feature.choices}
-                      value={currentChoice || null}
-                      onSelect={(value) => onChooseFeature(featureKey, value)}
-                      featureName={feature.name}
-                      levelGained={feature.level}
-                    />
-                  </div>
-                ) : (
-                  <FeatureChoicePicker
-                    feature={feature}
-                    classLevel={classLevel}
-                    currentChoice={currentChoice}
-                    onChange={(value) => onChooseFeature(featureKey, value)}
-                  />
-                )
-              )}
             </div>
           </div>
-        );
-      })}
+
+          <div style={{ paddingTop: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+              <span className="display" style={{ fontSize: 20, color: 'var(--text)' }}>
+                {feature.name}
+              </span>
+              {feature.uses && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: '#050816',
+                    background: 'var(--teal)',
+                    borderRadius: 4,
+                    padding: '2px 6px',
+                    letterSpacing: 0.3,
+                  }}
+                >
+                  {feature.uses}
+                </span>
+              )}
+              {feature.choiceRequired && (
+                <span className="label" style={{ color: 'var(--orange)', fontSize: 10 }}>
+                  · CHOICE REQUIRED
+                </span>
+              )}
+            </div>
+            <div
+              className="italic-serif"
+              style={{
+                fontSize: 14.5,
+                color: 'var(--text-dim)',
+                lineHeight: 1.55,
+                whiteSpace: 'pre-line',
+              }}
+            >
+              {feature.description}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ============================================================================
+// RequiredChoice — prototype's exact orange-flourish ornate heading +
+// help line + picker container. Renders below the FeatureScroll for each
+// choice-requiring feature (Fighting Style, Favored Enemy, Expertise,
+// Divine Domain subclass, etc.). Border + boxShadow create the
+// "orange-bordered chip picker" callout the brief mentions.
+// ============================================================================
+function RequiredChoice({ title, help, required, children }) {
+  return (
+    <div
+      style={{
+        padding: '18px 22px',
+        marginTop: 18,
+        background: 'linear-gradient(135deg, rgba(255, 83, 0, 0.10), rgba(255, 83, 0, 0.02))',
+        border: `1px solid ${required ? 'var(--orange)' : 'rgba(255, 83, 0, 0.4)'}`,
+        borderRadius: 8,
+        boxShadow: required ? '0 0 16px rgba(255, 83, 0, 0.18)' : 'none',
+      }}
+    >
+      <div className="ornate-heading" style={{ marginBottom: 8 }}>
+        <span className="ornate-flourish" style={{ background: 'var(--orange)' }} />
+        <h3 style={{ fontSize: 22, color: 'var(--orange-soft)' }}>{title}</h3>
+        <span className="ornate-flourish" style={{ background: 'var(--orange)' }} />
+      </div>
+      {help && (
+        <div
+          className="italic-serif"
+          style={{
+            fontSize: 14,
+            color: 'var(--text-dim)',
+            marginBottom: 14,
+            textAlign: 'center',
+            lineHeight: 1.5,
+          }}
+        >
+          {help}{' '}
+          {required && (
+            <span className="label" style={{ color: 'var(--orange)', fontSize: 10 }}>
+              · REQUIRED
+            </span>
+          )}
+        </div>
+      )}
+      {children}
     </div>
   );
 }
@@ -731,15 +767,45 @@ function MulticlassPanel({
 
       {mc.class && mc.level && <MulticlassProficienciesPanel className={mc.class} />}
 
-      {mc.class && mc.level && (
-        <FeatureScroll
-          features={getClassFeaturesForLevel(mc.class, mc.level) || []}
-          characterClass={mc.class}
-          classLevel={mc.level}
-          featureChoices={featureChoices}
-          onChooseFeature={onChooseFeature}
-        />
-      )}
+      {mc.class && mc.level && (() => {
+        const mcFeatures = getClassFeaturesForLevel(mc.class, mc.level) || [];
+        const mcAccent = CLASS_ACCENT[mc.class] || ACCENT_FALLBACK;
+        return (
+          <>
+            <FeatureScroll features={mcFeatures} color={mcAccent} />
+
+            {mcFeatures.filter((f) => f.choiceRequired).map((feature) => {
+              const featureKey = `${mc.class}-${feature.level}-${feature.name}`;
+              const currentChoice = featureChoices[featureKey];
+              return (
+                <RequiredChoice
+                  key={featureKey}
+                  title={feature.name}
+                  help={feature.description}
+                  required={!currentChoice}
+                >
+                  {isSubclassFeature(feature) ? (
+                    <SubclassPicker
+                      choices={feature.choices}
+                      value={currentChoice || null}
+                      onSelect={(value) => onChooseFeature(featureKey, value)}
+                      featureName={feature.name}
+                      levelGained={feature.level}
+                    />
+                  ) : (
+                    <FeatureChoicePicker
+                      feature={feature}
+                      classLevel={mc.level}
+                      currentChoice={currentChoice}
+                      onChange={(value) => onChooseFeature(featureKey, value)}
+                    />
+                  )}
+                </RequiredChoice>
+              );
+            })}
+          </>
+        );
+      })()}
     </div>
   );
 }
