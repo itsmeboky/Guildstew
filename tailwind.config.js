@@ -63,7 +63,21 @@ module.exports = {
   				'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
   				border: 'hsl(var(--sidebar-border))',
   				ring: 'hsl(var(--sidebar-ring))'
-  			}
+  			},
+  			creator: {
+  				orange:        '#FF5300',
+  				'orange-soft': '#FF7A33',
+  				'orange-deep': '#C73E00',
+  				teal:          '#37F2D1',
+  				'teal-dark':   '#04685A',
+  				'teal-deep':   '#0a3d36',
+  				burgundy:      '#8B2C1E',
+  				parchment:     '#F3E2BD',
+  				ink:           '#1F140C',
+  				text:          '#F5E6C2',
+  				'text-dim':    '#C5B086',
+  				'text-faint':  '#8A7559',
+  			},
   		},
   		keyframes: {
   			'accordion-down': {
