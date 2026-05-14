@@ -338,6 +338,155 @@
   cursor: not-allowed;
 }
 
+/* Orange alias — same look as primary, separate name so portrait
+ * upload affordances read as "orange" alongside teal "save" buttons. */
+.cc-btn-orange {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+  border: 1px solid var(--cc-orange-deep);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--cc-body);
+  background: linear-gradient(180deg, var(--cc-orange-soft), var(--cc-orange));
+  color: white;
+  box-shadow: 0 4px 14px var(--cc-orange-glow);
+}
+
+.cc-btn-orange:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px var(--cc-orange-glow);
+}
+
+.cc-btn-orange:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ============================================================================
+ * Tome ornamental corners — used on .cc-panel-strong sub-panels for the
+ * "illuminated manuscript" feel. Render as ::before / ::after with an
+ * SVG mask tinted by --cc-page-accent.
+ * ============================================================================ */
+
+.cc-tome-corner {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+  background-color: var(--cc-page-accent);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cpath d='M2 8 L2 2 L8 2 M14 2 L14 4 M2 14 L4 14' stroke='black' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='4' cy='4' r='1.6' fill='black'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cpath d='M2 8 L2 2 L8 2 M14 2 L14 4 M2 14 L4 14' stroke='black' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='4' cy='4' r='1.6' fill='black'/%3E%3C/svg%3E");
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  opacity: 0.85;
+}
+
+.cc-tome-corner.cc-tl { top: 8px; left: 8px; }
+.cc-tome-corner.cc-tr { top: 8px; right: 8px; transform: rotate(90deg); }
+.cc-tome-corner.cc-br { bottom: 8px; right: 8px; transform: rotate(180deg); }
+.cc-tome-corner.cc-bl { bottom: 8px; left: 8px; transform: rotate(-90deg); }
+
+/* ============================================================================
+ * Body prose with illuminated drop-cap — used inside .cc-tome bodies
+ * for class descriptions / lore paragraphs.
+ * ============================================================================ */
+
+.cc-body-prose {
+  font-family: var(--cc-serif);
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--cc-text);
+}
+
+.cc-body-prose::first-letter {
+  font-family: var(--cc-display);
+  font-size: 48px;
+  color: var(--cc-orange-soft);
+  line-height: 0.9;
+  float: left;
+  padding: 4px 8px 0 0;
+  text-shadow: 0 2px 8px rgba(255, 83, 0, 0.3);
+}
+
+/* ============================================================================
+ * Pickable card — "tome card" surface used by every grid-of-options
+ * (subraces, alignments, backgrounds, classes). Mirrors the prototype's
+ * .pickable / .pickable.selected / .selected-teal.
+ * ============================================================================ */
+
+.cc-pickable {
+  position: relative;
+  cursor: pointer;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--cc-bg-2), white 6%),
+    color-mix(in srgb, var(--cc-bg-2), black 2%)
+  );
+  border: 1px solid var(--cc-border);
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  color: inherit;
+}
+
+.cc-pickable:hover:not(:disabled) {
+  border-color: var(--cc-page-accent);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45),
+    0 0 16px color-mix(in srgb, var(--cc-page-accent), transparent 85%);
+}
+
+.cc-pickable.cc-selected {
+  border-color: var(--cc-orange);
+  background: linear-gradient(180deg, rgba(255, 83, 0, 0.18), rgba(255, 83, 0, 0.06));
+  box-shadow: 0 0 0 1px var(--cc-orange), 0 0 24px var(--cc-orange-glow);
+}
+
+.cc-pickable.cc-selected-teal {
+  border-color: var(--cc-teal);
+  background: linear-gradient(180deg, rgba(55, 242, 209, 0.12), rgba(55, 242, 209, 0.03));
+  box-shadow: 0 0 0 1px var(--cc-teal), 0 0 20px rgba(55, 242, 209, 0.2);
+}
+
+.cc-pickable.cc-selected-gold {
+  border-color: var(--cc-gold);
+  background: linear-gradient(180deg, rgba(212, 169, 81, 0.18), rgba(212, 169, 81, 0.04));
+  box-shadow: 0 0 0 1px var(--cc-gold), 0 0 22px rgba(212, 169, 81, 0.25);
+}
+
+/* ============================================================================
+ * Chips — small flavor tags inside featured tomes (ability bonuses,
+ * speed/size, racial trait names, class hit-die, etc.).
+ * ============================================================================ */
+
+.cc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  line-height: 1;
+  border: 1px solid;
+}
+
+.cc-chip-teal    { background: rgba(55, 242, 209, 0.10); color: var(--cc-teal); border-color: rgba(55, 242, 209, 0.35); }
+.cc-chip-orange  { background: rgba(255, 83, 0, 0.10);   color: var(--cc-orange-soft); border-color: rgba(255, 83, 0, 0.40); }
+.cc-chip-gold    { background: rgba(212, 169, 81, 0.10); color: var(--cc-gold);  border-color: rgba(212, 169, 81, 0.35); }
+.cc-chip-neutral { background: rgba(245, 230, 194, 0.06); color: var(--cc-text-dim); border-color: var(--cc-border); }
+.cc-chip-purple  { background: rgba(158, 91, 255, 0.10);  color: #C9A3FF; border-color: rgba(158, 91, 255, 0.32); }
+
 /* ============================================================================
  * Primer (new-player tip banner)
  * ============================================================================ */
