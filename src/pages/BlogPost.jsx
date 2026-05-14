@@ -176,7 +176,7 @@ export default function BlogPost() {
               src={decorativeImage}
               alt=""
               aria-hidden="true"
-              className="hidden md:block pointer-events-none absolute -bottom-[72px] -right-[72px] w-44 h-44 lg:w-56 lg:h-56 object-contain z-10 drop-shadow-[0_12px_30px_rgba(0,0,0,0.6)]"
+              className="hidden md:block pointer-events-none absolute -bottom-[72px] -right-[120px] w-44 h-44 lg:w-56 lg:h-56 object-contain z-10 drop-shadow-[0_12px_30px_rgba(0,0,0,0.6)]"
             />
           )}
         </div>
