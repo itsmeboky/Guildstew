@@ -1,21 +1,11 @@
 import React from "react";
 
-/**
- * Themed native <select>. Options can be plain strings or
- * { value, label } / { id, name } objects — the component normalizes.
- *
- * Ported from design-reference/character-creator/ui.jsx (~172-185).
- */
 export function Select({ value, onChange, options = [], label, placeholder }) {
   return (
     <div>
-      {label && (
-        <div className="cc-label" style={{ marginBottom: 6 }}>
-          {label}
-        </div>
-      )}
+      {label && <div className="label" style={{ marginBottom: 6 }}>{label}</div>}
       <select
-        className="cc-input"
+        className="input"
         value={value || ""}
         onChange={(e) => onChange?.(e.target.value)}
         style={{

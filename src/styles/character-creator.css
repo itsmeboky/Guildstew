@@ -1,573 +1,542 @@
 /* ============================================================================
- * Character Creator — Design System Foundation
+ * Character Creator — Full Visual System
  * ============================================================================
- * Specialty CSS for the visual port. Includes:
- *   - CSS variables (palette tokens, animated per-class variables)
- *   - Panel surfaces (.cc-tome, .cc-panel)
- *   - Ornament classes (.cc-ornate-heading, .cc-fleur-divider, etc.)
- *   - Class aura backdrop (.cc-backdrop, .cc-class-aura)
  *
- * All classes are prefixed with .cc- to avoid colliding with global
- * Tailwind/shadcn styles. Apply them ONLY inside the character creator
- * tree; nothing here should leak into the rest of the app.
+ * This is the complete prototype CSS, scoped to .cc-root so it can't leak
+ * into the rest of the app. All variables and styles only apply inside
+ * <div className="cc-root">...</div>.
  *
- * Font mapping note:
- *   --cc-display maps to the existing app brand fonts (Cream + Stack
- *   Sans Notch). --cc-serif uses system serif italic for flavor text
- *   (the design originally used Cormorant Garamond; we're not adding
- *   another Google font for this).
+ * Class names match the prototype EXACTLY (no .cc- prefix on classes
+ * themselves) — the parent scoping prevents collisions.
+ *
+ * Font adaptations from the prototype:
+ *   - --display uses 'Cream' as primary (was Cherry Cream Soda)
+ *   - --serif falls back to Georgia (was Cormorant Garamond)
+ *   - --body falls back to system stack (was Nunito)
+ *   No new Google Fonts loaded — Cream is already loaded via @font-face
+ *   from Supabase storage in src/index.css.
+ *
+ * Everything else is the prototype CSS verbatim.
  * ============================================================================ */
 
-:root {
-  /* Static accent palette */
-  --cc-orange:        #FF5300;
-  --cc-orange-soft:   #FF7A33;
-  --cc-orange-deep:   #C73E00;
-  --cc-orange-glow:   rgba(255, 83, 0, 0.4);
+.cc-root {
+  /* Fire & magic accents */
+  --orange: #FF5300;
+  --orange-soft: #FF7A33;
+  --orange-glow: rgba(255, 83, 0, 0.4);
+  --orange-deep: #C73E00;
+  --teal: #37F2D1;
+  --teal-dark: #04685A;
+  --teal-deep: #0a3d36;
+  --burgundy: #8B2C1E;
+  --burgundy-deep: #5A1A10;
+  --purple: #C9A3FF;
 
-  --cc-teal:          #37F2D1;
-  --cc-teal-dark:     #04685A;
-  --cc-teal-deep:     #0a3d36;
+  /* Brass / gold / parchment — derived from --page-accent so the
+     whole palette shifts when a class is picked */
+  --gold: var(--page-accent);
+  --gold-soft: color-mix(in srgb, var(--page-accent) 70%, white);
+  --gold-deep: var(--page-accent-deep);
+  --gold-glow: color-mix(in srgb, var(--page-accent), transparent 75%);
+  --parchment: #F3E2BD;
+  --parchment-dim: #DCC893;
 
-  --cc-burgundy:      #8B2C1E;
-  --cc-burgundy-deep: #5A1A10;
-  --cc-purple:        #C9A3FF;
+  /* Body / panel backgrounds */
+  --bg-0: var(--page-bg-1);
+  --bg-1: var(--page-bg-2);
+  --bg-2: color-mix(in srgb, var(--page-bg-2), white 6%);
+  --bg-3: color-mix(in srgb, var(--page-bg-2), white 12%);
+  --bg-4: color-mix(in srgb, var(--page-bg-2), white 20%);
+  --bg-leather: color-mix(in srgb, var(--page-bg-2), var(--page-accent) 8%);
 
-  /* Parchment / leather surfaces */
-  --cc-parchment:     #F3E2BD;
-  --cc-parchment-dim: #DCC893;
-  --cc-ink:           #1F140C;
+  --ink: #1F140C;
+  --text: #F5E6C2;
+  --text-dim: #C5B086;
+  --text-faint: #8A7559;
+  --danger: #E84A3A;
+  --warn: #F2B33D;
 
-  --cc-text:          #F5E6C2;
-  --cc-text-dim:      #C5B086;
-  --cc-text-faint:    #8A7559;
+  --border: color-mix(in srgb, var(--page-accent), transparent 84%);
+  --border-strong: color-mix(in srgb, var(--page-accent), transparent 68%);
+  --border-faint: color-mix(in srgb, var(--page-accent), transparent 92%);
 
-  --cc-danger:        #E84A3A;
-  --cc-warn:          #F2B33D;
+  /* Font roles — uses existing app fonts only */
+  --display: 'Cream', cursive;
+  --serif: Georgia, 'Times New Roman', serif;
+  --body: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, Menlo, monospace;
 
-  /* Font roles — display uses the existing app fonts.
-     Serif/body fall back to system stacks; we are NOT adding new
-     Google fonts for this. */
-  --cc-display:       'Cream', 'Cherry Cream Soda', 'Stack Sans Notch', 'Cinzel', sans-serif;
-  --cc-serif:         Georgia, 'Times New Roman', serif;
-  --cc-body:          system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --cc-mono:          ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  /* Make the root behave like its own page surface */
+  background: var(--bg-0);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100vh;
+  position: relative;
 }
+
+.cc-root *, .cc-root *::before, .cc-root *::after { box-sizing: border-box; }
+.cc-root h1, .cc-root h2, .cc-root h3, .cc-root h4 {
+  font-family: var(--display); font-weight: 400; letter-spacing: 0.5px; margin: 0;
+}
+.cc-root button { font-family: var(--body); cursor: pointer; }
+.cc-root input, .cc-root textarea, .cc-root select { font-family: var(--body); color: var(--text); }
+.cc-root input:focus, .cc-root textarea:focus, .cc-root select:focus { outline: 2px solid var(--orange); outline-offset: 1px; }
+.cc-root ::selection { background: var(--orange); color: white; }
+
+.cc-root .display { font-family: var(--display); letter-spacing: 0.5px; }
+.cc-root .serif { font-family: var(--serif); }
+.cc-root .mono { font-family: var(--mono); }
+.cc-root .italic-serif { font-family: var(--serif); font-style: italic; }
 
 /* ============================================================================
  * Animatable per-class palette
- * ============================================================================
- * @property lets these CSS variables of type <color> transition smoothly
- * between values when the picked class changes. Without @property, the
- * variables would snap instead of fading.
  * ============================================================================ */
 
-@property --cc-page-bg-1 {
+@property --page-bg-1 {
   syntax: '<color>';
   inherits: true;
   initial-value: #1A100A;
 }
-@property --cc-page-bg-2 {
+@property --page-bg-2 {
   syntax: '<color>';
   inherits: true;
   initial-value: #251710;
 }
-@property --cc-page-accent {
+@property --page-accent {
   syntax: '<color>';
   inherits: true;
   initial-value: #D4A951;
 }
-@property --cc-page-accent-deep {
+@property --page-accent-deep {
   syntax: '<color>';
   inherits: true;
   initial-value: #8C6F3F;
 }
-@property --cc-aura-tint {
+@property --aura-tint {
   syntax: '<color>';
   inherits: true;
   initial-value: #FF5300;
 }
-@property --cc-aura-deep {
+@property --aura-deep {
   syntax: '<color>';
   inherits: true;
   initial-value: #5A1A10;
 }
-@property --cc-aura-strength {
+@property --aura-strength {
   syntax: '<number>';
   inherits: true;
   initial-value: 0;
 }
 
-/* Derived variables — these snap with their parent. */
-:root {
-  --cc-gold:        var(--cc-page-accent);
-  --cc-gold-deep:   var(--cc-page-accent-deep);
-  --cc-gold-soft:   color-mix(in srgb, var(--cc-page-accent) 70%, white);
-  --cc-gold-glow:   color-mix(in srgb, var(--cc-page-accent), transparent 75%);
-
-  --cc-bg-0:        var(--cc-page-bg-1);
-  --cc-bg-1:        var(--cc-page-bg-2);
-  --cc-bg-2:        color-mix(in srgb, var(--cc-page-bg-2), white 6%);
-  --cc-bg-3:        color-mix(in srgb, var(--cc-page-bg-2), white 12%);
-  --cc-bg-4:        color-mix(in srgb, var(--cc-page-bg-2), white 20%);
-  --cc-bg-leather:  color-mix(in srgb, var(--cc-page-bg-2), var(--cc-page-accent) 8%);
-
-  --cc-border:        color-mix(in srgb, var(--cc-page-accent), transparent 84%);
-  --cc-border-strong: color-mix(in srgb, var(--cc-page-accent), transparent 68%);
-  --cc-border-faint:  color-mix(in srgb, var(--cc-page-accent), transparent 92%);
-}
-
-/* Transition definitions for the animated variables.
-   Scoped to .cc-root so the rest of the app isn't affected by these
-   long transitions. */
 .cc-root {
   transition:
-    --cc-page-bg-1       1.8s cubic-bezier(.4, 0, .2, 1),
-    --cc-page-bg-2       1.8s cubic-bezier(.4, 0, .2, 1),
-    --cc-page-accent     1.8s cubic-bezier(.4, 0, .2, 1),
-    --cc-page-accent-deep 1.8s cubic-bezier(.4, 0, .2, 1),
-    --cc-aura-tint       1.4s cubic-bezier(.4, 0, .2, 1),
-    --cc-aura-deep       1.4s cubic-bezier(.4, 0, .2, 1),
-    --cc-aura-strength   1.4s ease;
+    --page-bg-1 1.8s cubic-bezier(.4, 0, .2, 1),
+    --page-bg-2 1.8s cubic-bezier(.4, 0, .2, 1),
+    --page-accent 1.8s cubic-bezier(.4, 0, .2, 1),
+    --page-accent-deep 1.8s cubic-bezier(.4, 0, .2, 1),
+    --aura-tint 1.4s cubic-bezier(.4, 0, .2, 1),
+    --aura-deep 1.4s cubic-bezier(.4, 0, .2, 1),
+    --aura-strength 1.4s ease;
 }
 
 /* ============================================================================
  * Atmospheric backdrop
  * ============================================================================ */
 
-.cc-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
+.cc-root .backdrop {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
   background:
-    radial-gradient(ellipse 80% 60% at 18% 0%, color-mix(in srgb, var(--cc-page-accent), transparent 78%), transparent 60%),
-    radial-gradient(ellipse 70% 70% at 88% 100%, color-mix(in srgb, var(--cc-page-accent-deep), transparent 78%), transparent 60%),
-    radial-gradient(ellipse 70% 50% at 50% 50%, color-mix(in srgb, var(--cc-page-accent-deep), transparent 88%), transparent 65%),
-    linear-gradient(180deg, var(--cc-page-bg-1) 0%, var(--cc-page-bg-2) 50%, var(--cc-page-bg-1) 100%);
+    radial-gradient(ellipse 80% 60% at 18% 0%, color-mix(in srgb, var(--page-accent), transparent 78%), transparent 60%),
+    radial-gradient(ellipse 70% 70% at 88% 100%, color-mix(in srgb, var(--page-accent-deep), transparent 78%), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 50% 50%, color-mix(in srgb, var(--page-accent-deep), transparent 88%), transparent 65%),
+    linear-gradient(180deg, var(--page-bg-1) 0%, var(--page-bg-2) 50%, var(--page-bg-1) 100%);
 }
 
-.cc-class-aura {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: var(--cc-aura-strength);
+.cc-root .backdrop::before {
+  /* parchment-fibre texture */
+  content: ""; position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.85 0 0 0 0 0.6 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.5; mix-blend-mode: screen;
+}
+
+.cc-root .backdrop::after {
+  /* flickering candle vignette */
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 0%, transparent 50%, rgba(0,0,0,0.55) 100%);
+}
+
+.cc-root .class-aura {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  opacity: var(--aura-strength);
   background:
-    radial-gradient(ellipse 70% 50% at 10% -10%, var(--cc-aura-tint) 0%, transparent 45%),
-    radial-gradient(ellipse 80% 60% at 95% 110%, var(--cc-aura-deep) 0%, transparent 55%),
-    radial-gradient(circle 800px at 50% 80%, var(--cc-aura-deep) 0%, transparent 60%),
-    radial-gradient(circle 600px at 85% 25%, var(--cc-aura-tint) 0%, transparent 60%);
+    radial-gradient(ellipse 70% 50% at 10% -10%, var(--aura-tint) 0%, transparent 45%),
+    radial-gradient(ellipse 80% 60% at 95% 110%, var(--aura-deep) 0%, transparent 55%),
+    radial-gradient(circle 800px at 50% 80%, var(--aura-deep) 0%, transparent 60%),
+    radial-gradient(circle 600px at 85% 25%, var(--aura-tint) 0%, transparent 60%);
   mix-blend-mode: screen;
 }
 
-@keyframes cc-aura-pulse {
-  0%, 100% { opacity: calc(var(--cc-aura-strength) * 1); }
-  50%      { opacity: calc(var(--cc-aura-strength) * 0.6); }
-}
-
-.cc-class-aura::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: inherit;
-  animation: cc-aura-pulse 6s ease-in-out infinite;
-}
-
-/* ============================================================================
- * Panel surfaces
- * ============================================================================ */
-
-.cc-tome {
+.cc-root .class-aura::after {
+  content: ""; position: absolute; inset: 0;
   background:
-    radial-gradient(ellipse 100% 80% at 50% 0%, color-mix(in srgb, var(--cc-parchment), transparent 92%), transparent 70%),
-    color-mix(in srgb, var(--cc-bg-leather), transparent 0%);
-  border: 1px solid var(--cc-border-strong);
-  border-radius: 14px;
-  box-shadow:
-    0 2px 0 color-mix(in srgb, var(--cc-page-accent), transparent 70%) inset,
-    0 24px 60px rgba(0, 0, 0, 0.4),
-    0 0 0 1px color-mix(in srgb, var(--cc-page-accent), transparent 88%);
-  position: relative;
-}
-
-.cc-panel {
-  background: color-mix(in srgb, var(--cc-bg-2), transparent 0%);
-  border: 1px solid var(--cc-border);
-  border-radius: 10px;
-}
-
-.cc-panel-strong {
-  background: var(--cc-bg-2);
-  border: 1px solid var(--cc-border-strong);
-  border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
-}
-
-/* ============================================================================
- * Ornaments
- * ============================================================================ */
-
-.cc-ornate-heading {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 12px 0 20px;
-}
-
-.cc-ornate-heading h3 {
-  font-family: var(--cc-display);
-  font-size: 28px;
-  font-weight: 400;
-  margin: 0;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
-}
-
-.cc-ornate-flourish {
-  flex: 1;
-  height: 1px;
-  opacity: 0.5;
-}
-
-.cc-fleur-divider {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 28px 0;
-  position: relative;
-}
-
-.cc-fleur-divider::before,
-.cc-fleur-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--cc-gold), transparent 40%),
-    transparent
-  );
-}
-
-.cc-fleur-divider svg {
-  margin: 0 14px;
-  flex-shrink: 0;
-}
-
-/* ============================================================================
- * Form primitives
- * ============================================================================ */
-
-.cc-input {
-  width: 100%;
-  background: color-mix(in srgb, var(--cc-bg-1), transparent 0%);
-  border: 1px solid var(--cc-border-strong);
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-size: 14px;
-  color: var(--cc-text);
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.cc-input:focus {
-  outline: 2px solid var(--cc-orange);
-  outline-offset: 1px;
-  border-color: var(--cc-orange);
-}
-
-.cc-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  color: var(--cc-text-faint);
-}
-
-/* ============================================================================
- * Buttons (scoped)
- * ============================================================================ */
-
-.cc-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 22px;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 14px;
-  letter-spacing: 0.3px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: all 0.15s;
-  font-family: var(--cc-body);
-}
-
-.cc-btn-primary {
-  background: linear-gradient(180deg, var(--cc-orange-soft), var(--cc-orange));
-  color: white;
-  border-color: var(--cc-orange-deep);
-  box-shadow: 0 4px 14px var(--cc-orange-glow);
-}
-
-.cc-btn-primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px var(--cc-orange-glow);
-}
-
-.cc-btn-primary:disabled {
+    radial-gradient(ellipse 50% 40% at 30% 30%, var(--aura-tint) 0%, transparent 50%),
+    radial-gradient(ellipse 40% 30% at 70% 70%, var(--aura-deep) 0%, transparent 50%);
   opacity: 0.4;
-  cursor: not-allowed;
-  transform: none;
+  animation: aura-pulse 10s ease-in-out infinite;
+  mix-blend-mode: overlay;
 }
 
-.cc-btn-ghost {
-  background: transparent;
-  color: var(--cc-text-dim);
-  border-color: var(--cc-border-strong);
+@keyframes aura-pulse {
+  0%, 100% { opacity: 0.30; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(1.08) translate(-2%, -1%); }
 }
 
-.cc-btn-ghost:hover:not(:disabled) {
-  color: var(--cc-text);
-  border-color: var(--cc-orange);
+.cc-root .class-arrival {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  opacity: 0;
+}
+.cc-root .class-arrival.firing {
+  animation: arrival-flash 1.6s ease-out forwards;
+}
+.cc-root .class-arrival::before {
+  content: ""; position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at center, var(--aura-tint) 0%, transparent 40%);
+  mix-blend-mode: screen;
 }
 
-.cc-btn-ghost:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-/* Orange alias — same look as primary, separate name so portrait
- * upload affordances read as "orange" alongside teal "save" buttons. */
-.cc-btn-orange {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 13px;
-  letter-spacing: 0.3px;
-  border: 1px solid var(--cc-orange-deep);
-  cursor: pointer;
-  transition: all 0.15s;
-  font-family: var(--cc-body);
-  background: linear-gradient(180deg, var(--cc-orange-soft), var(--cc-orange));
-  color: white;
-  box-shadow: 0 4px 14px var(--cc-orange-glow);
-}
-
-.cc-btn-orange:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px var(--cc-orange-glow);
-}
-
-.cc-btn-orange:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  transform: none;
+@keyframes arrival-flash {
+  0% { opacity: 0; transform: scale(0.3); }
+  20% { opacity: 0.55; transform: scale(0.5); }
+  50% { opacity: 0.3; transform: scale(1.1); }
+  100% { opacity: 0; transform: scale(1.5); }
 }
 
 /* ============================================================================
- * Tome ornamental corners — used on .cc-panel-strong sub-panels for the
- * "illuminated manuscript" feel. Render as ::before / ::after with an
- * SVG mask tinted by --cc-page-accent.
+ * Surfaces
  * ============================================================================ */
 
-.cc-tome-corner {
-  position: absolute;
-  width: 28px;
-  height: 28px;
-  pointer-events: none;
-  background-color: var(--cc-page-accent);
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cpath d='M2 8 L2 2 L8 2 M14 2 L14 4 M2 14 L4 14' stroke='black' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='4' cy='4' r='1.6' fill='black'/%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cpath d='M2 8 L2 2 L8 2 M14 2 L14 4 M2 14 L4 14' stroke='black' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='4' cy='4' r='1.6' fill='black'/%3E%3C/svg%3E");
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  opacity: 0.85;
-}
-
-.cc-tome-corner.cc-tl { top: 8px; left: 8px; }
-.cc-tome-corner.cc-tr { top: 8px; right: 8px; transform: rotate(90deg); }
-.cc-tome-corner.cc-br { bottom: 8px; right: 8px; transform: rotate(180deg); }
-.cc-tome-corner.cc-bl { bottom: 8px; left: 8px; transform: rotate(-90deg); }
-
-/* ============================================================================
- * Body prose with illuminated drop-cap — used inside .cc-tome bodies
- * for class descriptions / lore paragraphs.
- * ============================================================================ */
-
-.cc-body-prose {
-  font-family: var(--cc-serif);
-  font-size: 15px;
-  line-height: 1.65;
-  color: var(--cc-text);
-}
-
-.cc-body-prose::first-letter {
-  font-family: var(--cc-display);
-  font-size: 48px;
-  color: var(--cc-orange-soft);
-  line-height: 0.9;
-  float: left;
-  padding: 4px 8px 0 0;
-  text-shadow: 0 2px 8px rgba(255, 83, 0, 0.3);
-}
-
-/* ============================================================================
- * Pickable card — "tome card" surface used by every grid-of-options
- * (subraces, alignments, backgrounds, classes). Mirrors the prototype's
- * .pickable / .pickable.selected / .selected-teal.
- * ============================================================================ */
-
-.cc-pickable {
-  position: relative;
-  cursor: pointer;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--cc-bg-2), white 6%),
-    color-mix(in srgb, var(--cc-bg-2), black 2%)
-  );
-  border: 1px solid var(--cc-border);
+.cc-root .panel {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--page-bg-2), white 5%) 0%,
+    var(--page-bg-2) 100%);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  transition: all 0.15s ease;
-  color: inherit;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--page-accent), transparent 90%) inset, 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
-.cc-pickable:hover:not(:disabled) {
-  border-color: var(--cc-page-accent);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45),
-    0 0 16px color-mix(in srgb, var(--cc-page-accent), transparent 85%);
+.cc-root .panel-strong {
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--page-accent), transparent 90%), transparent 50%),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--page-bg-2), white 8%),
+      var(--page-bg-2));
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--page-accent), transparent 80%) inset, 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
-.cc-pickable.cc-selected {
-  border-color: var(--cc-orange);
-  background: linear-gradient(180deg, rgba(255, 83, 0, 0.18), rgba(255, 83, 0, 0.06));
-  box-shadow: 0 0 0 1px var(--cc-orange), 0 0 24px var(--cc-orange-glow);
-}
-
-.cc-pickable.cc-selected-teal {
-  border-color: var(--cc-teal);
-  background: linear-gradient(180deg, rgba(55, 242, 209, 0.12), rgba(55, 242, 209, 0.03));
-  box-shadow: 0 0 0 1px var(--cc-teal), 0 0 20px rgba(55, 242, 209, 0.2);
-}
-
-.cc-pickable.cc-selected-gold {
-  border-color: var(--cc-gold);
-  background: linear-gradient(180deg, rgba(212, 169, 81, 0.18), rgba(212, 169, 81, 0.04));
-  box-shadow: 0 0 0 1px var(--cc-gold), 0 0 22px rgba(212, 169, 81, 0.25);
-}
-
-/* ============================================================================
- * Chips — small flavor tags inside featured tomes (ability bonuses,
- * speed/size, racial trait names, class hit-die, etc.).
- * ============================================================================ */
-
-.cc-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+.cc-root .tome {
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--page-accent), transparent 88%), transparent 40%),
+    radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--page-accent-deep), transparent 88%), transparent 40%),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--page-bg-2), white 6%),
+      var(--page-bg-2));
+  border: 1px solid var(--border-strong);
   border-radius: 4px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  line-height: 1;
-  border: 1px solid;
+  position: relative;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 1px 0 color-mix(in srgb, var(--page-accent), transparent 84%) inset;
 }
 
-.cc-chip-teal    { background: rgba(55, 242, 209, 0.10); color: var(--cc-teal); border-color: rgba(55, 242, 209, 0.35); }
-.cc-chip-orange  { background: rgba(255, 83, 0, 0.10);   color: var(--cc-orange-soft); border-color: rgba(255, 83, 0, 0.40); }
-.cc-chip-gold    { background: rgba(212, 169, 81, 0.10); color: var(--cc-gold);  border-color: rgba(212, 169, 81, 0.35); }
-.cc-chip-neutral { background: rgba(245, 230, 194, 0.06); color: var(--cc-text-dim); border-color: var(--cc-border); }
-.cc-chip-purple  { background: rgba(158, 91, 255, 0.10);  color: #C9A3FF; border-color: rgba(158, 91, 255, 0.32); }
+/* Tome ornamental corner brackets */
+.cc-root .tome::before,
+.cc-root .tome::after,
+.cc-root .tome-corner::before,
+.cc-root .tome-corner::after {
+  content: ""; position: absolute; width: 28px; height: 28px;
+  background-color: var(--page-accent);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cpath d='M2 8 L2 2 L8 2 M14 2 L14 4 M2 14 L4 14' stroke='black' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='4' cy='4' r='1.6' fill='black'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cpath d='M2 8 L2 2 L8 2 M14 2 L14 4 M2 14 L4 14' stroke='black' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='4' cy='4' r='1.6' fill='black'/%3E%3C/svg%3E");
+  mask-size: contain; -webkit-mask-size: contain;
+  mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat;
+  opacity: 0.85; pointer-events: none;
+}
+.cc-root .tome::before { top: 8px; left: 8px; }
+.cc-root .tome::after { bottom: 8px; right: 8px; transform: rotate(180deg); }
+.cc-root .tome-corner.tr::before { top: 8px; right: 8px; transform: rotate(90deg); }
+.cc-root .tome-corner.bl::after { bottom: 8px; left: 8px; transform: rotate(-90deg); }
 
 /* ============================================================================
- * Primer (new-player tip banner)
+ * Labels & headings
  * ============================================================================ */
 
-.cc-primer {
-  border-left: 4px solid var(--cc-teal);
-  border: 1px solid;
-  background: linear-gradient(135deg, rgba(55, 242, 209, 0.08), transparent);
-  padding: 14px 18px;
-  border-radius: 10px;
-  font-size: 13.5px;
-  line-height: 1.6;
-  color: var(--cc-text-dim);
-  margin: 18px 0;
+.cc-root .label {
+  font-size: 11px; font-weight: 700; letter-spacing: 1.6px;
+  text-transform: uppercase; color: var(--gold);
+}
+.cc-root .label-cream { color: var(--parchment); }
+.cc-root .label-faint { color: var(--text-faint); }
+
+.cc-root .ornate-heading {
+  display: flex; align-items: center; gap: 16px;
+  margin-bottom: 20px;
+}
+.cc-root .ornate-heading::before,
+.cc-root .ornate-heading::after {
+  content: ""; flex: 1; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-deep) 30%, var(--gold-deep) 70%, transparent);
+}
+.cc-root .ornate-heading h3 {
+  font-family: var(--display);
+  color: var(--text);
+  font-size: 26px;
+  padding: 0 4px;
+  letter-spacing: 1px;
 }
 
-.cc-primer-title {
-  font-family: var(--cc-display);
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  margin-bottom: 6px;
+.cc-root .ornate-flourish {
+  width: 14px; height: 14px;
+  background: var(--gold);
+  transform: rotate(45deg);
+  flex-shrink: 0;
+  box-shadow: 0 0 12px var(--gold-glow);
+}
+.cc-root .ornate-flourish.small { width: 8px; height: 8px; }
+
+.cc-root .fleur-divider {
+  display: flex; align-items: center; gap: 14px;
+  margin: 28px 0; opacity: 0.5;
+}
+.cc-root .fleur-divider::before,
+.cc-root .fleur-divider::after {
+  content: ""; flex: 1; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-deep), transparent);
+}
+.cc-root .fleur-divider svg { width: 22px; height: 22px; flex-shrink: 0; }
+
+/* ============================================================================
+ * Chips
+ * ============================================================================ */
+
+.cc-root .chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 3px;
+  background: rgba(55, 242, 209, 0.10); color: var(--teal);
+  border: 1px solid rgba(55, 242, 209, 0.28);
+  font-size: 12px; font-weight: 700; line-height: 1;
+  letter-spacing: 0.3px;
+}
+.cc-root .chip-orange  { background: rgba(255, 83, 0, 0.15); color: var(--orange-soft); border-color: rgba(255, 83, 0, 0.4); }
+.cc-root .chip-purple  { background: rgba(201, 163, 255, 0.15); color: var(--purple); border-color: rgba(201, 163, 255, 0.32); }
+.cc-root .chip-gold    { background: color-mix(in srgb, var(--page-accent), transparent 84%); color: var(--gold-soft); border-color: color-mix(in srgb, var(--page-accent), transparent 60%); }
+.cc-root .chip-burgundy { background: rgba(139, 44, 30, 0.22); color: #FFB39E; border-color: rgba(139, 44, 30, 0.5); }
+.cc-root .chip-neutral { background: rgba(245, 230, 194, 0.06); color: var(--text-dim); border-color: var(--border); }
+
+/* ============================================================================
+ * Buttons
+ * ============================================================================ */
+
+.cc-root .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 18px; border-radius: 4px; border: 1px solid transparent;
+  font-weight: 700; font-size: 14px;
+  transition: transform .12s, box-shadow .12s, background .12s, border-color .12s;
+  background: var(--bg-3); color: var(--text);
+  letter-spacing: 0.3px;
+}
+.cc-root .btn:hover:not(:disabled) { transform: translateY(-1px); background: var(--bg-4); }
+.cc-root .btn:active:not(:disabled) { transform: translateY(0); }
+.cc-root .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.cc-root .btn-primary {
+  background: linear-gradient(180deg, var(--orange), var(--orange-deep));
+  color: white;
+  box-shadow: 0 4px 14px var(--orange-glow), 0 1px 0 rgba(255,255,255,0.12) inset;
+  border: 1px solid rgba(0,0,0,0.2);
+}
+.cc-root .btn-primary:hover:not(:disabled) {
+  box-shadow: 0 6px 20px var(--orange-glow), 0 1px 0 rgba(255,255,255,0.18) inset;
+  background: linear-gradient(180deg, #FF6E22, var(--orange));
+}
+
+.cc-root .btn-ghost {
+  background: transparent; border-color: var(--border-strong); color: var(--text);
+}
+.cc-root .btn-ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--page-accent), transparent 94%);
+  border-color: var(--page-accent);
+}
+
+.cc-root .btn-teal {
+  background: rgba(55, 242, 209, 0.10); color: var(--teal);
+  border-color: rgba(55, 242, 209, 0.34);
+}
+.cc-root .btn-teal:hover:not(:disabled) { background: rgba(55, 242, 209, 0.16); }
+
+.cc-root .btn-gold {
+  background: color-mix(in srgb, var(--page-accent), transparent 86%);
+  color: var(--gold-soft);
+  border: 1px solid color-mix(in srgb, var(--page-accent), transparent 58%);
+}
+.cc-root .btn-gold:hover:not(:disabled) { background: color-mix(in srgb, var(--page-accent), transparent 78%); }
+
+/* ============================================================================
+ * Pickable cards
+ * ============================================================================ */
+
+.cc-root .pickable {
+  position: relative; cursor: pointer; transition: all .15s ease;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--page-bg-2), white 8%),
+    color-mix(in srgb, var(--page-bg-2), black 2%));
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.cc-root .pickable:hover {
+  border-color: var(--page-accent);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--page-bg-2), white 14%),
+    color-mix(in srgb, var(--page-bg-2), white 4%));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.45), 0 0 16px color-mix(in srgb, var(--page-accent), transparent 85%);
+}
+.cc-root .pickable.selected {
+  border-color: var(--orange);
+  background: linear-gradient(180deg, rgba(255, 83, 0, 0.18), rgba(255, 83, 0, 0.06));
+  box-shadow: 0 0 0 1px var(--orange), 0 0 24px rgba(255, 83, 0, 0.3);
+}
+.cc-root .pickable.selected-teal {
+  border-color: var(--teal);
+  background: linear-gradient(180deg, rgba(55, 242, 209, 0.12), rgba(55, 242, 209, 0.03));
+  box-shadow: 0 0 0 1px var(--teal), 0 0 20px rgba(55, 242, 209, 0.2);
+}
+.cc-root .pickable.selected-gold {
+  border-color: var(--page-accent);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--page-accent), transparent 80%),
+      color-mix(in srgb, var(--page-accent), transparent 94%));
+  box-shadow: 0 0 0 1px var(--page-accent), 0 0 24px color-mix(in srgb, var(--page-accent), transparent 70%);
 }
 
 /* ============================================================================
- * Typography helpers
+ * Inputs
  * ============================================================================ */
 
-.cc-display     { font-family: var(--cc-display); letter-spacing: 0.5px; }
-.cc-serif       { font-family: var(--cc-serif); }
-.cc-italic-serif { font-family: var(--cc-serif); font-style: italic; }
-.cc-mono        { font-family: var(--cc-mono); }
+.cc-root .input {
+  width: 100%; padding: 11px 14px; border-radius: 4px;
+  background: color-mix(in srgb, var(--page-bg-1), black 30%);
+  border: 1px solid var(--border);
+  color: var(--text); font-size: 14px; font-weight: 500;
+}
+.cc-root .input:focus {
+  border-color: var(--orange); outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 83, 0, 0.18);
+}
+.cc-root .input::placeholder { color: var(--text-faint); }
 
 /* ============================================================================
  * Help tooltip
  * ============================================================================ */
 
-.cc-help-tip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--cc-gold), transparent 70%);
-  color: var(--cc-gold);
-  font-size: 11px;
-  font-weight: 800;
-  cursor: help;
+.cc-root .help-tip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: color-mix(in srgb, var(--page-accent), transparent 84%); color: var(--gold-soft);
+  font-size: 11px; font-weight: 800;
+  font-family: var(--body);
+  cursor: help; user-select: none; line-height: 1;
+  border: 1px solid var(--page-accent-deep);
+  position: relative; transition: background .12s;
+}
+.cc-root .help-tip:hover { background: color-mix(in srgb, var(--page-accent), transparent 70%); }
+.cc-root .help-tip[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  background: #14090A; color: var(--text);
+  border: 1px solid var(--gold-deep);
+  padding: 10px 14px; border-radius: 4px;
+  width: max-content; max-width: 300px; font-size: 12px; font-weight: 500;
+  text-align: left; line-height: 1.5; letter-spacing: 0;
+  opacity: 0; pointer-events: none; transition: opacity .15s;
+  z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+}
+.cc-root .help-tip[data-tip]:hover::after { opacity: 1; }
+
+/* ============================================================================
+ * Primer banner
+ * ============================================================================ */
+
+.cc-root .primer {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--page-accent), transparent 92%), color-mix(in srgb, var(--orange), transparent 96%));
+  border: 1px solid color-mix(in srgb, var(--page-accent), transparent 78%);
+  border-left: 3px solid var(--page-accent);
+  border-radius: 4px;
+  padding: 14px 18px;
+  font-size: 14px; line-height: 1.6;
+  color: var(--text);
+  font-family: var(--serif);
+  font-weight: 500;
   position: relative;
 }
+.cc-root .primer-title {
+  color: var(--gold-soft);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  font-family: var(--body);
+}
+.cc-root .primer strong { color: var(--orange-soft); font-weight: 600; }
 
-.cc-help-tip:hover::after {
-  content: attr(data-tip);
-  position: absolute;
-  bottom: 130%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--cc-bg-3);
-  color: var(--cc-text);
-  border: 1px solid var(--cc-border-strong);
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  white-space: normal;
-  width: 220px;
-  z-index: 100;
-  pointer-events: none;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+/* ============================================================================
+ * Illuminated body prose
+ * ============================================================================ */
+
+.cc-root .body-prose {
+  font-family: var(--serif); font-size: 16px; line-height: 1.6; color: var(--text);
+}
+.cc-root .body-prose::first-letter {
+  font-family: var(--display); font-size: 48px;
+  color: var(--orange-soft); line-height: 0.9;
+  float: left; padding: 4px 8px 0 0;
+  text-shadow: 0 2px 8px rgba(255, 83, 0, 0.3);
 }
 
 /* ============================================================================
- * Step transitions
+ * Animations
  * ============================================================================ */
 
-.cc-step-content {
-  animation: cc-step-in 0.4s ease-out;
-}
-
-@keyframes cc-step-in {
+@keyframes fadeUp {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--orange-glow); }
+  50%      { box-shadow: 0 0 0 8px rgba(255,83,0,0); }
+}
+
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.92; }
+}
+
+.cc-root .fade-in { animation: fadeUp .3s ease-out both; }
+.cc-root .pulse-orange { animation: pulseGlow 2s ease-in-out infinite; }
+.cc-root .flicker { animation: flicker 4s ease-in-out infinite; }
+
+.cc-root .step-content { animation: fadeUp .25s ease-out both; }
+
+/* ============================================================================
+ * Scrollbar inside cc-root
+ * ============================================================================ */
+
+.cc-root ::-webkit-scrollbar { width: 10px; height: 10px; }
+.cc-root ::-webkit-scrollbar-track { background: transparent; }
+.cc-root ::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 5px; }
+.cc-root ::-webkit-scrollbar-thumb:hover { background: var(--bg-4); }

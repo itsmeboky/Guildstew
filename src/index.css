@@ -1,10 +1,6 @@
-/* Google Fonts: Cherry Cream Soda (display secondary, falls in after Cream).
-   @import must be the first non-comment rule in the file. */
-@import url('https://fonts.googleapis.com/css2?family=Cherry+Cream+Soda&display=swap');
-
-/* Character Creator design system foundation. Specialty CSS (variables,
-   ornament classes, panel surfaces) lives in its own file; everything is
-   .cc- prefixed so nothing applies until a component opts in. */
+/* Character Creator design system foundation. All rules are scoped to
+   .cc-root so nothing applies until a component opts in. Display font
+   uses 'Cream' (loaded via @font-face below) — no extra Google Fonts. */
 @import './styles/character-creator.css';
 
 /* === Font face declarations ===
