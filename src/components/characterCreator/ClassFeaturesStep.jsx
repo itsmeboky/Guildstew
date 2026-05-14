@@ -1,9 +1,6 @@
 
 import React, { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Plus, X, Sparkles } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, X } from "lucide-react";
 import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
 import SubclassPicker from "@/components/characterCreator/SubclassPicker";
 import InfoTip from "@/components/characterCreator/InfoTip";
@@ -22,18 +19,19 @@ import {
   asiKey,
   reachedAsiLevels,
   feasibleFeats,
-  bumpsForSelection,
   applyAsiBumps,
   validateSelection,
   fmtMod,
 } from "@/components/characterCreator/asiSelections";
+import { motion } from "framer-motion";
+import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
+import { Primer } from "@/components/characterCreator/chrome/Primer";
+import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
+import { CharacterSummary } from "@/components/characterCreator/chrome/CharacterSummary";
 
 // Canonical "choose your specialization" feature names per class.
 // When a feature's name lands in this set, render the arrow-pattern
-// SubclassPicker instead of the legacy Select dropdown. Other
-// choice-required features (Fighting Style, Expertise picks,
-// Eldritch Invocations, etc.) keep the dropdown — those are short
-// flat lists, not paragraph-rich subclass cards.
+// SubclassPicker instead of the legacy Select dropdown.
 const SUBCLASS_FEATURE_NAMES = new Set([
   "Primal Path",
   "Bard College",
@@ -54,57 +52,34 @@ function isSubclassFeature(feature) {
   return !!feature?.choiceRequired && SUBCLASS_FEATURE_NAMES.has(feature?.name);
 }
 
+const AVAILABLE_CLASSES = [
+  "Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk",
+  "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard",
+];
+
 export default function ClassFeaturesStep({ characterData, updateCharacterData }) {
   const [multiclasses, setMulticlasses] = useState(characterData.multiclasses || []);
   const [featureChoices, setFeatureChoices] = useState(characterData.feature_choices || {});
   const [asiSelections, setAsiSelections] = useState(characterData.asiSelections || {});
 
-  const availableClasses = ["Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk", "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard"];
-  const usedClasses = [characterData.class, ...multiclasses.map(mc => mc.class).filter(Boolean)];
-
+  const usedClasses = [characterData.class, ...multiclasses.map((mc) => mc.class).filter(Boolean)];
   const totalLevel = Number(characterData.level) || 1;
   const primaryClassLevel = totalLevel - multiclasses.reduce((sum, mc) => sum + (mc.level || 0), 0);
-
-  // Pre-ASI scores: written by AbilityScoresStep as
-  // baseAttributes = base + racial. The ASI picker below applies
-  // bumps relative to this baseline so re-picks don't compound.
-  // Falls back to attributes for editing legacy characters that
-  // never had a baseAttributes field saved.
   const baseAttributes = characterData.baseAttributes || characterData.attributes || {};
 
-  // Whenever asiSelections changes, recompute effective attributes
-  // (= base + racial + ASI bumps) and persist both the audit trail
-  // and the derived attributes. Downstream consumers (HP / skill /
-  // save DC) keep reading characterData.attributes and naturally
-  // see the post-ASI value.
   React.useEffect(() => {
     updateCharacterData({
       asiSelections,
       attributes: applyAsiBumps(baseAttributes, asiSelections),
     });
-    // baseAttributes intentionally omitted from deps — it's the
-    // source-of-truth for the recompute, not an input that should
-    // re-trigger when the user merely revisits this step.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asiSelections]);
 
-  // Reached ASI levels for the primary class only. Multiclass ASI
-  // distribution is filed as a smell (recon Layer 3) — the storage
-  // shape is multiclass-ready but the picker UI surfaces only the
-  // primary-class ASIs for now.
   const primaryAsiLevels = reachedAsiLevels(characterData.class, primaryClassLevel);
 
-  // Prune ASI selections at levels the player has retreated below
-  // (e.g. user picked level 8, took the level-4 ASI, then dropped
-  // back to level 5 — the level-4 pick stays, but if they drop to
-  // 3 it should disappear). We compare against the primary class's
-  // currently-reached ASI levels.
   React.useEffect(() => {
     const validKeys = new Set(primaryAsiLevels.map((lvl) => asiKey(characterData.class, lvl)));
     const stale = Object.keys(asiSelections || {}).filter((k) => {
-      // Only consider primary-class keys for pruning here. Multi-
-      // class ASI keys (e.g. "Fighter-4" while primary is Wizard)
-      // are left untouched — that's the smell flagged in the recon.
       const [keyClass] = k.split("-");
       return keyClass === characterData.class && !validKeys.has(k);
     });
@@ -118,10 +93,9 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
 
   const handleLevelChange = (newLevel) => {
     const lvl = Math.max(1, Math.min(20, Number(newLevel) || 1));
-    // Clamp multiclass entries so primary stays at least 1.
     const totalMc = multiclasses.reduce((sum, mc) => sum + (mc.level || 0), 0);
     const clampedMcs = totalMc > lvl - 1
-      ? multiclasses.map((mc) => ({ ...mc, level: 0 })).filter(() => false) // wipe if level can't fit
+      ? multiclasses.map((mc) => ({ ...mc, level: 0 })).filter(() => false)
       : multiclasses;
     if (clampedMcs !== multiclasses) setMulticlasses(clampedMcs);
     updateCharacterData({
@@ -134,37 +108,23 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
     const key = asiKey(characterData.class, level);
     setAsiSelections((current) => {
       const next = { ...current };
-      if (!nextSelection || (!nextSelection.kind)) {
-        delete next[key];
-      } else {
-        next[key] = nextSelection;
-      }
+      if (!nextSelection || !nextSelection.kind) delete next[key];
+      else next[key] = nextSelection;
       return next;
     });
   };
 
-  // Multiclass prereq gates (PHB p. 163). Both rules must pass:
-  //   (a) Player meets the prereq for their PRIMARY class.
-  //   (b) Player meets the prereq for the TARGET class being added.
-  // Rule (a) is computed once and shown as a banner — failing it
-  // hides the Add Class button entirely. Rule (b) disables
-  // individual class options in the per-multiclass dropdown so
-  // the player can see what's available without guessing.
   const attributes = characterData.attributes || {};
   const primaryPrereqMet = meetsMulticlassPrereqs(characterData.class, attributes);
   const primaryPrereqDesc = multiclassPrereqDescription(characterData.class);
-
-  const canMulticlass =
-    characterData.level >= 2 && primaryClassLevel >= 1 && primaryPrereqMet;
+  const canMulticlass = totalLevel >= 2 && primaryClassLevel >= 1 && primaryPrereqMet;
 
   const primaryFeatures = getClassFeaturesForLevel(characterData.class, primaryClassLevel) || [];
-
-  const multiclassFeatures = multiclasses.flatMap(mc => {
+  const multiclassFeatures = multiclasses.flatMap((mc) => {
     if (!mc.class || !mc.level) return [];
     const features = getClassFeaturesForLevel(mc.class, mc.level) || [];
-    return features.map(f => ({ ...f, multiclass: mc.class }));
+    return features.map((f) => ({ ...f, multiclass: mc.class }));
   });
-
   const allFeatures = [...primaryFeatures, ...multiclassFeatures];
 
   const handleAddMulticlass = () => {
@@ -181,12 +141,13 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
   const handleMulticlassChange = (index, field, value) => {
     const newMulticlasses = [...multiclasses];
     newMulticlasses[index][field] = value;
-    
     const totalMulticlassLevels = newMulticlasses.reduce((sum, mc) => sum + (mc.level || 0), 0);
-    if (characterData.level - totalMulticlassLevels < 1) {
-      newMulticlasses[index].level = Math.max(1, characterData.level - totalMulticlassLevels + (multiclasses[index].level || 1) - 1);
+    if (totalLevel - totalMulticlassLevels < 1) {
+      newMulticlasses[index].level = Math.max(
+        1,
+        totalLevel - totalMulticlassLevels + (multiclasses[index].level || 1) - 1,
+      );
     }
-    
     setMulticlasses(newMulticlasses);
     updateCharacterData({ multiclasses: newMulticlasses });
   };
@@ -197,333 +158,627 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
     updateCharacterData({ feature_choices: newChoices });
   };
 
-  const requiredChoices = allFeatures.filter(f => f.choiceRequired);
-  const allChoicesMade = requiredChoices.every(f => {
+  const requiredChoices = allFeatures.filter((f) => f.choiceRequired);
+  const allChoicesMade = requiredChoices.every((f) => {
     const key = `${f.multiclass || characterData.class}-${f.level}-${f.name}`;
     return featureChoices[key];
   });
 
-  return (
-    <div className="max-w-6xl mx-auto">
-      <div className="bg-[#2A3441] rounded-xl p-6 mb-6 border-2 border-[#1E2430]">
-        <h2 className="text-2xl font-bold text-[#FFC6AA] mb-3">Class Features</h2>
-        <p className="text-white mb-3">
-          Class features are special abilities you gain as you level up. Some features are granted automatically,
-          while others require you to make choices (like picking a subclass or fighting style).
-        </p>
-
-        <div className="flex items-center gap-3 mt-4 flex-wrap">
-          <label className="text-sm font-bold text-white">Character Level:</label>
-          <Select
-            value={String(totalLevel)}
-            onValueChange={handleLevelChange}
+  if (!characterData.class) {
+    return (
+      <div>
+        <StepHeader
+          kicker="Chapter IV · The Gifts"
+          title="Class features"
+          subtitle="Special abilities your training has earned."
+        />
+        <div
+          className="cc-tome"
+          style={{ padding: 40, textAlign: 'center', marginTop: 24 }}
+        >
+          <div
+            className="cc-italic-serif"
+            style={{ fontSize: 16, color: 'var(--cc-text-dim)' }}
           >
-            <SelectTrigger className="w-32 bg-[#1E2430] border-[#5B4B9E] text-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-[#1E2430] border-[#5B4B9E] text-white">
-              {Array.from({ length: 20 }, (_, i) => i + 1).map((l) => (
-                <SelectItem key={l} value={String(l)} className="text-white">
-                  Level {l}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <span className="text-xs text-white/60">
-            Your {characterData.class} level: <span className="font-bold text-[#37F2D1]">{primaryClassLevel}</span>
-            {multiclasses.filter((mc) => mc.class).length > 0 && (
-              <span className="ml-1">(total − multiclass levels)</span>
-            )}
-          </span>
+            Pick a class on the previous chapter to reveal your features.
+          </div>
         </div>
-
-        {totalLevel >= 2 && (
-          <p className="text-white flex items-start gap-2 flex-wrap mt-4">
-            💡 <span className="font-bold">Multiclassing:</span> At level 2+, you can multiclass into another class to gain abilities from multiple sources.
-            Each level you gain can be put into any of your classes.
-            <InfoTip>{tipFor("multiclass_prereqs")}</InfoTip>
-          </p>
-        )}
       </div>
+    );
+  }
 
-      {primaryAsiLevels.length > 0 && (
-        <div className="mb-6 space-y-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-amber-300" />
-            <h3 className="text-lg font-bold text-amber-200">
-              Ability Score Improvements
-            </h3>
-            <span className="text-xs text-white/60">
-              ({primaryAsiLevels.length} earned at {characterData.class} level{primaryAsiLevels.length > 1 ? "s" : ""} {primaryAsiLevels.join(", ")})
-            </span>
-          </div>
-          {primaryAsiLevels.map((lvl) => {
-            const key = asiKey(characterData.class, lvl);
-            return (
-              <AsiCard
-                key={key}
-                className={characterData.class}
-                level={lvl}
-                selection={asiSelections[key]}
-                baseAttributes={baseAttributes}
-                asiSelections={asiSelections}
-                ownKey={key}
-                onChange={(next) => handleAsiChange(lvl, next)}
-              />
-            );
-          })}
-        </div>
-      )}
+  return (
+    <div>
+      <StepHeader
+        kicker="Chapter IV · The Gifts"
+        title="Class features"
+        subtitle="Special abilities your training has earned. Some are automatic — some need your choice."
+      />
 
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <div className="bg-[#2A3441] border-2 border-[#5B4B9E] rounded-lg px-4 py-2">
-            <span className="text-[#5B4B9E] font-bold text-lg">{characterData.class}</span>
-            <span className="text-white ml-2">Level {primaryClassLevel}</span>
-          </div>
-          {multiclasses.filter(mc => mc.class).map((mc, idx) => (
-            <div key={idx} className="bg-[#2A3441] border-2 border-[#5B4B9E] rounded-lg px-4 py-2">
-              <span className="text-[#5B4B9E] font-bold text-lg">{mc.class}</span>
-              <span className="text-white ml-2">Level {mc.level}</span>
-            </div>
-          ))}
-        </div>
+      <Primer title="What this chapter is for">
+        Most class features are <strong>automatic</strong> — they appear on your sheet without
+        input. A handful (like a Fighter's combat style or your subclass at level 3) need a
+        decision. We've called those out below in <strong>orange</strong>. Everything else is
+        here so you know what your hero can already do.
+      </Primer>
 
-        <div className="grid grid-cols-1 gap-4">
-          {primaryFeatures.map((feature, idx) => {
-            const featureKey = `${characterData.class}-${feature.level}-${feature.name}`;
-            const hasChoice = feature.choiceRequired;
-            const currentChoice = featureChoices[featureKey];
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1.55fr 1fr',
+          gap: 28,
+          marginTop: 24,
+          alignItems: 'flex-start',
+        }}
+      >
+        {/* LEFT — features tome */}
+        <div className="cc-tome" style={{ padding: '32px 36px' }}>
+          <LevelPicker
+            totalLevel={totalLevel}
+            primaryClassName={characterData.class}
+            primaryClassLevel={primaryClassLevel}
+            multiclasses={multiclasses}
+            onChange={handleLevelChange}
+          />
 
-            return (
+          {primaryAsiLevels.length > 0 && (
+            <>
+              <FleurDivider />
+              <OrnateHeading>Ability Score Improvements</OrnateHeading>
               <div
-                key={idx}
-                className={`p-6 rounded-xl border-2 transition-all ${
-                  hasChoice && !currentChoice
-                    ? 'bg-[#2A3441] border-[#FF5722] border-4'
-                    : 'bg-[#2A3441] border-[#1E2430]'
-                }`}
+                className="cc-italic-serif"
+                style={{
+                  fontSize: 13,
+                  color: 'var(--cc-text-dim)',
+                  marginBottom: 14,
+                  textAlign: 'center',
+                }}
               >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <h4 className="text-lg font-bold text-[#FFC6AA]">{feature.name}</h4>
-                    {feature.uses && (
-                      <Badge className="bg-[#37F2D1] text-[#1E2430] text-xs">
-                        {feature.uses}
-                      </Badge>
-                    )}
-                    {feature.level && (
-                      <Badge className="bg-[#1E2430] text-white border border-white/20 text-xs">
-                        Gained at Level {feature.level}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-
-                <p className="text-white text-sm leading-7 whitespace-pre-line mb-4">
-                  {feature.description}
-                </p>
-
-                {hasChoice && feature.choices && (
-                  isSubclassFeature(feature) ? (
-                    <div className="mt-5">
-                      <SubclassPicker
-                        choices={feature.choices}
-                        value={currentChoice || null}
-                        onSelect={(value) => handleFeatureChoice(featureKey, value)}
-                        featureName={feature.name}
-                        levelGained={feature.level}
-                      />
-                    </div>
-                  ) : (
-                    <FeatureChoicePicker
-                      feature={feature}
-                      classLevel={primaryClassLevel}
-                      currentChoice={currentChoice}
-                      onChange={(value) => handleFeatureChoice(featureKey, value)}
+                {primaryAsiLevels.length} earned at {characterData.class} level
+                {primaryAsiLevels.length > 1 ? 's' : ''} {primaryAsiLevels.join(', ')}.
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {primaryAsiLevels.map((lvl) => {
+                  const key = asiKey(characterData.class, lvl);
+                  return (
+                    <AsiCard
+                      key={key}
+                      className={characterData.class}
+                      level={lvl}
+                      selection={asiSelections[key]}
+                      baseAttributes={baseAttributes}
+                      asiSelections={asiSelections}
+                      ownKey={key}
+                      onChange={(next) => handleAsiChange(lvl, next)}
                     />
-                  )
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          <FleurDivider />
+
+          <OrnateHeading>{characterData.class} · Level {primaryClassLevel}</OrnateHeading>
+
+          <FeatureScroll
+            features={primaryFeatures}
+            characterClass={characterData.class}
+            classLevel={primaryClassLevel}
+            featureChoices={featureChoices}
+            onChooseFeature={handleFeatureChoice}
+          />
+
+          {totalLevel >= 2 && primaryClassLevel >= 1 && !primaryPrereqMet && (
+            <MulticlassPrereqWarning
+              characterClass={characterData.class}
+              prereq={primaryPrereqDesc}
+            />
+          )}
+
+          {canMulticlass && (
+            <>
+              <FleurDivider />
+              <OrnateHeading>Multiclass Paths</OrnateHeading>
+
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  marginBottom: 14,
+                  gap: 8,
+                  alignItems: 'center',
+                }}
+              >
+                <InfoTip>{tipFor("multiclass_prereqs")}</InfoTip>
+                <button
+                  type="button"
+                  onClick={handleAddMulticlass}
+                  disabled={primaryClassLevel <= 1}
+                  className="cc-btn-primary"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 13,
+                    padding: '8px 14px',
+                  }}
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Class
+                </button>
+              </div>
+
+              {multiclasses.map((mc, index) => (
+                <MulticlassPanel
+                  key={index}
+                  index={index}
+                  mc={mc}
+                  attributes={attributes}
+                  totalLevel={totalLevel}
+                  usedClasses={usedClasses}
+                  featureChoices={featureChoices}
+                  onChange={handleMulticlassChange}
+                  onRemove={handleRemoveMulticlass}
+                  onChooseFeature={handleFeatureChoice}
+                />
+              ))}
+            </>
+          )}
+
+          {requiredChoices.length > 0 && !allChoicesMade && (
+            <RequiredChoicesBanner />
+          )}
+        </div>
+
+        {/* RIGHT — character snapshot + upcoming features */}
+        <div
+          style={{
+            position: 'sticky',
+            top: 20,
+            alignSelf: 'flex-start',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 14,
+          }}
+        >
+          <CharacterSummary data={characterData} />
+          <UpcomingFeatures
+            characterClass={characterData.class}
+            currentLevel={primaryClassLevel}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Level picker — top section of the tome
+// ============================================================================
+function LevelPicker({ totalLevel, primaryClassName, primaryClassLevel, multiclasses, onChange }) {
+  return (
+    <div>
+      <OrnateHeading>The Ledger</OrnateHeading>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+        }}
+      >
+        <div className="cc-label" style={{ color: 'var(--cc-text-dim)' }}>
+          Character Level
+        </div>
+        <select
+          value={String(totalLevel)}
+          onChange={(e) => onChange(e.target.value)}
+          className="cc-input"
+          style={{
+            width: 110,
+            textAlign: 'center',
+            fontSize: 16,
+            fontWeight: 700,
+            fontFamily: 'var(--cc-display)',
+          }}
+        >
+          {Array.from({ length: 20 }, (_, i) => i + 1).map((l) => (
+            <option key={l} value={String(l)}>Level {l}</option>
+          ))}
+        </select>
+        <div
+          className="cc-italic-serif"
+          style={{ fontSize: 13, color: 'var(--cc-text-dim)' }}
+        >
+          {primaryClassName}{' '}
+          <span style={{ color: 'var(--cc-teal)', fontWeight: 700 }}>L{primaryClassLevel}</span>
+          {multiclasses.filter((mc) => mc.class).length > 0 && (
+            <span style={{ marginLeft: 6, color: 'var(--cc-text-faint)' }}>
+              (total − multiclass levels)
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Feature scroll — left-rail level emblem + feature body
+// ============================================================================
+function FeatureScroll({ features, characterClass, classLevel, featureChoices, onChooseFeature }) {
+  if (features.length === 0) {
+    return (
+      <div
+        className="cc-italic-serif"
+        style={{
+          textAlign: 'center',
+          padding: 28,
+          color: 'var(--cc-text-dim)',
+          fontSize: 14,
+        }}
+      >
+        No features earned at this level yet.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {features.map((feature, idx) => {
+        const featureKey = `${characterClass}-${feature.level}-${feature.name}`;
+        const hasChoice = feature.choiceRequired;
+        const currentChoice = featureChoices[featureKey];
+        const requiresPick = hasChoice && !currentChoice;
+
+        return (
+          <div
+            key={idx}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '52px 1fr',
+              gap: 16,
+              alignItems: 'flex-start',
+              padding: requiresPick ? '14px 16px' : 0,
+              background: requiresPick
+                ? 'linear-gradient(135deg, rgba(255, 83, 0, 0.10), rgba(255, 83, 0, 0.02))'
+                : 'transparent',
+              border: requiresPick ? '1px solid var(--cc-orange)' : 'none',
+              borderRadius: 8,
+              boxShadow: requiresPick ? '0 0 16px rgba(255, 83, 0, 0.18)' : 'none',
+            }}
+          >
+            <div
+              style={{
+                width: 52,
+                height: 52,
+                flexShrink: 0,
+                clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
+                background: requiresPick
+                  ? 'linear-gradient(180deg, rgba(255, 83, 0, 0.4), rgba(255, 83, 0, 0.1))'
+                  : 'linear-gradient(180deg, rgba(212, 169, 81, 0.32), rgba(212, 169, 81, 0.08))',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 4,
+              }}
+            >
+              <div style={{ textAlign: 'center', lineHeight: 1 }}>
+                <div
+                  className="cc-label"
+                  style={{
+                    fontSize: 8,
+                    color: requiresPick ? 'var(--cc-orange-soft)' : 'var(--cc-gold-soft)',
+                  }}
+                >
+                  LVL
+                </div>
+                <div
+                  className="cc-display"
+                  style={{ fontSize: 18, color: 'var(--cc-text)' }}
+                >
+                  {feature.level}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ paddingTop: 2 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                <span
+                  className="cc-display"
+                  style={{ fontSize: 20, color: 'var(--cc-text)' }}
+                >
+                  {feature.name}
+                </span>
+                {feature.uses && (
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: '#050816',
+                      background: 'var(--cc-teal)',
+                      borderRadius: 4,
+                      padding: '2px 6px',
+                      letterSpacing: 0.3,
+                    }}
+                  >
+                    {feature.uses}
+                  </span>
+                )}
+                {requiresPick && (
+                  <span
+                    className="cc-label"
+                    style={{ color: 'var(--cc-orange)', fontSize: 10 }}
+                  >
+                    · CHOICE REQUIRED
+                  </span>
                 )}
               </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {characterData.level >= 2 && primaryClassLevel >= 1 && !primaryPrereqMet && (
-        <div className="mb-6 bg-[#2A3441] border-2 border-[#FF5722]/60 rounded-xl p-4">
-          <h3 className="text-[#FF5722] font-bold mb-1 flex items-center gap-2">
-            ⚠️ Multiclass locked — primary class prereq not met
-          </h3>
-          <p className="text-sm text-white/80">
-            To multiclass out of <span className="font-bold">{characterData.class}</span>,
-            your character needs <span className="text-[#FF5722] font-bold">{primaryPrereqDesc}</span>.
-            Adjust your ability scores on the previous step to unlock multiclassing.
-          </p>
-        </div>
-      )}
-
-      {canMulticlass && (
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-[#5B4B9E] flex items-center gap-2">
-              Multiclassing
-              <InfoTip>{tipFor("multiclass_prereqs")}</InfoTip>
-            </h3>
-            <Button
-              onClick={handleAddMulticlass}
-              disabled={primaryClassLevel <= 1}
-              className="bg-[#5B4B9E] hover:bg-[#4A3D8A] text-white disabled:opacity-50"
-              size="sm"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Class
-            </Button>
-          </div>
-
-          {multiclasses.map((mc, index) => (
-            <div key={index} className="bg-[#2A3441] rounded-xl p-5 mb-4 border-2 border-[#5B4B9E]">
-              <div className="flex items-center gap-4 mb-4">
-                <Select
-                  value={mc.class || ""}
-                  onValueChange={(value) => handleMulticlassChange(index, 'class', value)}
-                >
-                  <SelectTrigger className="bg-[#1E2430] border-white text-white flex-1">
-                    <SelectValue placeholder="Select class..." />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#2A3441] border-[#1E2430]">
-                    {availableClasses
-                      .filter(c => !usedClasses.includes(c) || c === mc.class)
-                      .map((cls) => {
-                        const meets = meetsMulticlassPrereqs(cls, attributes);
-                        const desc = multiclassPrereqDescription(cls);
-                        return (
-                          <SelectItem
-                            key={cls}
-                            value={cls}
-                            disabled={!meets}
-                            description={meets ? desc : `Requires ${desc} — ability scores too low`}
-                            className={
-                              meets
-                                ? "text-white hover:bg-[#1E2430]"
-                                : "text-slate-500 cursor-not-allowed"
-                            }
-                          >
-                            {cls}
-                          </SelectItem>
-                        );
-                      })}
-                  </SelectContent>
-                </Select>
-
-                <Select
-                  value={mc.level?.toString() || ""}
-                  onValueChange={(value) => handleMulticlassChange(index, 'level', parseInt(value))}
-                >
-                  <SelectTrigger className="bg-[#1E2430] border-white text-white w-32">
-                    <SelectValue placeholder="Level" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#2A3441] border-[#1E2430]">
-                    {Array.from({ length: Math.min(19, characterData.level - 1) }, (_, i) => i + 1).map((lvl) => (
-                      <SelectItem key={lvl} value={lvl.toString()} className="text-white hover:bg-[#1E2430]">
-                        Level {lvl}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Button
-                  onClick={() => handleRemoveMulticlass(index)}
-                  variant="outline"
-                  size="icon"
-                  className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
+              <div
+                className="cc-italic-serif"
+                style={{
+                  fontSize: 14.5,
+                  color: 'var(--cc-text-dim)',
+                  lineHeight: 1.55,
+                  whiteSpace: 'pre-line',
+                }}
+              >
+                {feature.description}
               </div>
 
-              {mc.class && mc.level && (
-                <MulticlassProficienciesPanel className={mc.class} />
-              )}
-
-              {mc.class && mc.level && (
-                <div className="grid grid-cols-1 gap-3">
-                  {(getClassFeaturesForLevel(mc.class, mc.level) || []).map((feature, fIdx) => {
-                    const featureKey = `${mc.class}-${feature.level}-${feature.name}`;
-                    const hasChoice = feature.choiceRequired;
-                    const currentChoice = featureChoices[featureKey];
-
-                    return (
-                      <div
-                        key={fIdx}
-                        className={`p-5 rounded-lg border-2 ${
-                          hasChoice && !currentChoice
-                            ? 'bg-[#2A3441] border-[#FF5722] border-4'
-                            : 'bg-[#2A3441] border-[#5B4B9E]/50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 mb-3 flex-wrap">
-                          <h5 className="font-semibold text-white text-sm">{feature.name}</h5>
-                          {feature.level && (
-                            <Badge className="bg-[#1E2430] text-gray-300 border border-white/20 text-xs">
-                              Lvl {feature.level}
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-white text-sm leading-7 whitespace-pre-line mb-3">
-                          {feature.description}
-                        </p>
-                        
-                        {hasChoice && feature.choices && (
-                          isSubclassFeature(feature) ? (
-                            <div className="mt-4">
-                              <SubclassPicker
-                                choices={feature.choices}
-                                value={currentChoice || null}
-                                onSelect={(value) => handleFeatureChoice(featureKey, value)}
-                                featureName={feature.name}
-                                levelGained={feature.level}
-                              />
-                            </div>
-                          ) : (
-                            <FeatureChoicePicker
-                              feature={feature}
-                              classLevel={mc.level}
-                              currentChoice={currentChoice}
-                              onChange={(value) => handleFeatureChoice(featureKey, value)}
-                            />
-                          )
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+              {hasChoice && feature.choices && (
+                isSubclassFeature(feature) ? (
+                  <div style={{ marginTop: 12 }}>
+                    <SubclassPicker
+                      choices={feature.choices}
+                      value={currentChoice || null}
+                      onSelect={(value) => onChooseFeature(featureKey, value)}
+                      featureName={feature.name}
+                      levelGained={feature.level}
+                    />
+                  </div>
+                ) : (
+                  <FeatureChoicePicker
+                    feature={feature}
+                    classLevel={classLevel}
+                    currentChoice={currentChoice}
+                    onChange={(value) => onChooseFeature(featureKey, value)}
+                  />
+                )
               )}
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
-      {requiredChoices.length > 0 && !allChoicesMade && (
-        <div className="bg-[#2A3441] border-2 border-[#FF5722] rounded-xl p-4 text-center">
-          <p className="text-white font-semibold">
-            ⚠️ Please make all required feature choices before proceeding
-          </p>
-        </div>
+// ============================================================================
+// Upcoming features — right-rail panel ("Coming up" preview)
+// ============================================================================
+function UpcomingFeatures({ characterClass, currentLevel }) {
+  // Read the next handful of unmet features from the rules table so
+  // the panel always reflects what's actually in the game data, not
+  // a hardcoded prototype list.
+  const milestones = [];
+  for (let lvl = currentLevel + 1; lvl <= 20 && milestones.length < 5; lvl++) {
+    const fs = getClassFeaturesForLevel(characterClass, lvl) || [];
+    for (const f of fs) {
+      if (f.level === lvl) {
+        milestones.push({ level: lvl, name: f.name });
+        if (milestones.length >= 5) break;
+      }
+    }
+  }
+
+  if (milestones.length === 0) return null;
+
+  return (
+    <div className="cc-panel" style={{ padding: 16 }}>
+      <div className="cc-label" style={{ marginBottom: 12, color: 'var(--cc-gold-soft)' }}>
+        Coming up
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {milestones.map((m, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'baseline',
+              fontSize: 13,
+              paddingBottom: 6,
+              borderBottom: '1px solid var(--cc-border-faint)',
+            }}
+          >
+            <span
+              className="cc-italic-serif"
+              style={{ color: 'var(--cc-text)' }}
+            >
+              {m.name}
+            </span>
+            <span className="cc-chip cc-chip-gold" style={{ fontSize: 10, padding: '1px 6px' }}>
+              L{m.level}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Multiclass prereq warning banner
+// ============================================================================
+function MulticlassPrereqWarning({ characterClass, prereq }) {
+  return (
+    <div
+      style={{
+        marginTop: 22,
+        background: 'rgba(255, 83, 0, 0.06)',
+        border: '1px solid rgba(255, 83, 0, 0.45)',
+        borderLeft: '3px solid var(--cc-orange)',
+        borderRadius: 6,
+        padding: '14px 18px',
+      }}
+    >
+      <div
+        className="cc-label"
+        style={{
+          color: 'var(--cc-orange)',
+          marginBottom: 4,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        ⚠ Multiclass locked
+      </div>
+      <p
+        className="cc-italic-serif"
+        style={{
+          fontSize: 14,
+          color: 'var(--cc-text-dim)',
+          margin: 0,
+          lineHeight: 1.55,
+        }}
+      >
+        To multiclass out of <strong style={{ color: 'var(--cc-text)' }}>{characterClass}</strong>,
+        your character needs <strong style={{ color: 'var(--cc-orange-soft)' }}>{prereq}</strong>.
+        Adjust your ability scores on the previous step to unlock multiclassing.
+      </p>
+    </div>
+  );
+}
+
+// ============================================================================
+// Multiclass panel — one entry per declared multiclass
+// ============================================================================
+function MulticlassPanel({
+  index, mc, attributes, totalLevel, usedClasses,
+  featureChoices, onChange, onRemove, onChooseFeature,
+}) {
+  return (
+    <div
+      className="cc-panel-strong"
+      style={{ padding: 18, marginBottom: 14, position: 'relative' }}
+    >
+      <div className="cc-tome-corner cc-tr"></div>
+      <div className="cc-tome-corner cc-bl"></div>
+
+      <div
+        style={{
+          display: 'flex',
+          gap: 12,
+          alignItems: 'center',
+          marginBottom: 14,
+        }}
+      >
+        <select
+          value={mc.class || ''}
+          onChange={(e) => onChange(index, 'class', e.target.value)}
+          className="cc-input"
+          style={{ flex: 1 }}
+        >
+          <option value="">Select class…</option>
+          {AVAILABLE_CLASSES
+            .filter((c) => !usedClasses.includes(c) || c === mc.class)
+            .map((cls) => {
+              const meets = meetsMulticlassPrereqs(cls, attributes);
+              return (
+                <option key={cls} value={cls} disabled={!meets}>
+                  {cls}{meets ? '' : ` — needs ${multiclassPrereqDescription(cls)}`}
+                </option>
+              );
+            })}
+        </select>
+
+        <select
+          value={String(mc.level || '')}
+          onChange={(e) => onChange(index, 'level', parseInt(e.target.value, 10))}
+          className="cc-input"
+          style={{ width: 110 }}
+        >
+          <option value="">Lvl</option>
+          {Array.from({ length: Math.min(19, totalLevel - 1) }, (_, i) => i + 1).map((lvl) => (
+            <option key={lvl} value={String(lvl)}>Level {lvl}</option>
+          ))}
+        </select>
+
+        <button
+          type="button"
+          onClick={() => onRemove(index)}
+          style={{
+            all: 'unset',
+            cursor: 'pointer',
+            width: 36,
+            height: 36,
+            borderRadius: 8,
+            border: '1px solid var(--cc-orange)',
+            color: 'var(--cc-orange)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          title="Remove this multiclass"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {mc.class && mc.level && <MulticlassProficienciesPanel className={mc.class} />}
+
+      {mc.class && mc.level && (
+        <FeatureScroll
+          features={getClassFeaturesForLevel(mc.class, mc.level) || []}
+          characterClass={mc.class}
+          classLevel={mc.level}
+          featureChoices={featureChoices}
+          onChooseFeature={onChooseFeature}
+        />
       )}
     </div>
   );
 }
 
-/**
- * Surfaces the LIMITED proficiencies a character gains by
- * multiclassing into `className`. Per RAW (PHB p. 164) this is a
- * subset of the class's primary list — players don't get the full
- * starting bundle on multiclass entry. Sourced from
- * MULTICLASS_PROFICIENCIES so the rules table stays the single
- * source of truth; updating the data here refreshes every UI
- * surface that reads it.
- */
+// ============================================================================
+// Required choices banner (sticky at the bottom of the tome)
+// ============================================================================
+function RequiredChoicesBanner() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      style={{
+        marginTop: 22,
+        background: 'rgba(255, 83, 0, 0.10)',
+        border: '1px solid var(--cc-orange)',
+        borderRadius: 8,
+        padding: '14px 18px',
+        textAlign: 'center',
+      }}
+    >
+      <p
+        className="cc-display"
+        style={{
+          color: 'var(--cc-orange-soft)',
+          fontSize: 16,
+          margin: 0,
+          letterSpacing: 0.3,
+        }}
+      >
+        ⚠ Resolve all orange-bordered choices above before continuing.
+      </p>
+    </motion.div>
+  );
+}
+
+// ============================================================================
+// Multiclass proficiencies — preserved verbatim, restyled around .cc-* tokens
+// ============================================================================
 function MulticlassProficienciesPanel({ className }) {
   const profs = multiclassProficienciesFor(className);
   const hasArmor = Array.isArray(profs.armor) && profs.armor.length > 0;
@@ -535,76 +790,83 @@ function MulticlassProficienciesPanel({ className }) {
 
   if (!grantsAnything && !hasNotes) {
     return (
-      <div className="mb-4 bg-[#1E2430]/80 border border-slate-700 rounded-lg p-3 text-sm text-slate-400">
-        Multiclassing into <span className="font-bold text-white">{className}</span>{" "}
+      <div
+        style={{
+          marginBottom: 14,
+          background: 'rgba(20, 12, 8, 0.4)',
+          border: '1px solid var(--cc-border)',
+          borderRadius: 8,
+          padding: 12,
+          fontSize: 13,
+          color: 'var(--cc-text-faint)',
+        }}
+      >
+        Multiclassing into <span style={{ fontWeight: 700, color: 'var(--cc-text)' }}>{className}</span>{' '}
         grants no additional proficiencies (you keep what you already have).
       </div>
     );
   }
 
   return (
-    <div className="mb-4 bg-[#1E2430]/80 border border-[#37F2D1]/30 rounded-lg p-3">
-      <p className="text-xs uppercase tracking-widest text-[#37F2D1] font-bold mb-2">
+    <div
+      style={{
+        marginBottom: 14,
+        background: 'rgba(20, 12, 8, 0.4)',
+        border: '1px solid rgba(55, 242, 209, 0.32)',
+        borderLeft: '3px solid var(--cc-teal)',
+        borderRadius: 8,
+        padding: 12,
+      }}
+    >
+      <div className="cc-label" style={{ color: 'var(--cc-teal)', marginBottom: 8 }}>
         Multiclass Proficiencies Gained
-      </p>
-      <ul className="text-sm text-white space-y-1">
+      </div>
+      <ul style={{ fontSize: 13, color: 'var(--cc-text)', margin: 0, padding: 0, listStyle: 'none' }}>
         {hasArmor && (
-          <li>
-            <span className="text-slate-400">Armor:</span>{" "}
-            <span className="font-semibold capitalize">{profs.armor.join(", ")}</span>
+          <li style={{ padding: '2px 0' }}>
+            <span style={{ color: 'var(--cc-text-faint)' }}>Armor:</span>{' '}
+            <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{profs.armor.join(', ')}</span>
           </li>
         )}
         {hasWeapons && (
-          <li>
-            <span className="text-slate-400">Weapons:</span>{" "}
-            <span className="font-semibold capitalize">{profs.weapons.join(", ")}</span>
+          <li style={{ padding: '2px 0' }}>
+            <span style={{ color: 'var(--cc-text-faint)' }}>Weapons:</span>{' '}
+            <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{profs.weapons.join(', ')}</span>
           </li>
         )}
         {skillCount > 0 && (
-          <li>
-            <span className="text-slate-400">Skills:</span>{" "}
-            <span className="font-semibold">
+          <li style={{ padding: '2px 0' }}>
+            <span style={{ color: 'var(--cc-text-faint)' }}>Skills:</span>{' '}
+            <span style={{ fontWeight: 600 }}>
               {skillCount} from the {className} skill list
             </span>
           </li>
         )}
-        {hasOther &&
-          profs.other.map((item, i) => (
-            <li key={i}>
-              <span className="text-slate-400">Also:</span>{" "}
-              <span className="font-semibold">{item}</span>
-            </li>
-          ))}
+        {hasOther && profs.other.map((item, i) => (
+          <li key={i} style={{ padding: '2px 0' }}>
+            <span style={{ color: 'var(--cc-text-faint)' }}>Also:</span>{' '}
+            <span style={{ fontWeight: 600 }}>{item}</span>
+          </li>
+        ))}
       </ul>
       {hasNotes && (
-        <p className="mt-2 text-[11px] italic text-slate-400">{profs.notes}</p>
+        <p
+          className="cc-italic-serif"
+          style={{ marginTop: 8, fontSize: 11, color: 'var(--cc-text-faint)' }}
+        >
+          {profs.notes}
+        </p>
       )}
     </div>
   );
 }
 
-/**
- * Picker card for a single ASI milestone. Three options:
- *   - +2 to one ability (cap 20)
- *   - +1 to two different abilities (cap 20 each)
- *   - A feat (PHB list, filtered by ability-score prerequisite)
- *
- * The card writes its selection back through `onChange`. The parent
- * step stores the result in characterData.asiSelections and
- * recomputes characterData.attributes via applyAsiBumps.
- *
- * Cap-20 is shown as a per-ability ceiling — the dropdown shows
- * the post-bump score next to each ability so the player can see
- * "STR 16 → 18" rather than guess. Abilities already at 20 get
- * disabled options.
- */
+// ============================================================================
+// ASI Card — preserved logic, restyled around .cc-* tokens
+// ============================================================================
 function AsiCard({ className, level, selection, baseAttributes, asiSelections, ownKey, onChange }) {
   const kind = selection?.kind || "";
 
-  // The "current" ability score to bump from — every ASI taken
-  // BEFORE this one stacks. We sum the bumps from sibling
-  // selections (excluding this card's own) so the player sees the
-  // running total, not the base.
   const otherSelections = React.useMemo(() => {
     const out = { ...(asiSelections || {}) };
     delete out[ownKey];
@@ -626,45 +888,85 @@ function AsiCard({ className, level, selection, baseAttributes, asiSelections, o
 
   return (
     <div
-      className={`rounded-xl p-4 border-2 ${
-        validation
-          ? "bg-amber-500/10 border-amber-500/40"
-          : "bg-emerald-500/10 border-emerald-500/40"
-      }`}
+      style={{
+        borderRadius: 12,
+        padding: 16,
+        border: `1px solid ${validation ? 'rgba(212, 169, 81, 0.45)' : 'rgba(55, 242, 209, 0.45)'}`,
+        background: validation
+          ? 'linear-gradient(135deg, rgba(212, 169, 81, 0.10), rgba(212, 169, 81, 0.02))'
+          : 'linear-gradient(135deg, rgba(55, 242, 209, 0.10), rgba(55, 242, 209, 0.02))',
+      }}
     >
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <Badge className="bg-amber-500 text-[#1E2430] text-xs font-black">
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 12,
+          flexWrap: 'wrap',
+          gap: 8,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 900,
+              color: '#050816',
+              background: 'var(--cc-gold)',
+              borderRadius: 4,
+              padding: '2px 8px',
+              letterSpacing: 0.5,
+            }}
+          >
             {className} L{level}
-          </Badge>
-          <span className="text-sm font-bold text-white">
+          </span>
+          <span
+            className="cc-display"
+            style={{ fontSize: 16, color: 'var(--cc-text)' }}
+          >
             Ability Score Improvement
           </span>
         </div>
         {validation && (
-          <span className="text-[11px] text-amber-300 font-semibold">{validation}</span>
+          <span
+            className="cc-italic-serif"
+            style={{ fontSize: 11, color: 'var(--cc-gold-soft)' }}
+          >
+            {validation}
+          </span>
         )}
       </div>
 
-      <div className="flex gap-2 flex-wrap mb-3">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
         {[
           { id: "plus2", label: "+2 to one" },
           { id: "split", label: "+1 to two" },
-          { id: "feat", label: "Feat" },
-        ].map(({ id, label }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setKind(id)}
-            className={`text-xs font-bold rounded-full px-3 py-1.5 border transition-colors ${
-              kind === id
-                ? "bg-amber-500 text-[#1E2430] border-amber-300"
-                : "bg-[#1E2430] text-white/70 border-slate-600 hover:border-amber-400"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+          { id: "feat",  label: "Feat" },
+        ].map(({ id, label }) => {
+          const active = kind === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setKind(id)}
+              style={{
+                all: 'unset',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 700,
+                padding: '6px 14px',
+                borderRadius: 999,
+                background: active ? 'var(--cc-gold)' : 'rgba(20, 12, 8, 0.55)',
+                color: active ? '#050816' : 'var(--cc-text-dim)',
+                border: `1px solid ${active ? 'var(--cc-gold)' : 'var(--cc-border)'}`,
+                transition: 'all .15s',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {kind === "plus2" && (
@@ -679,7 +981,7 @@ function AsiCard({ className, level, selection, baseAttributes, asiSelections, o
       )}
 
       {kind === "split" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <AbilitySelect
             label="Ability 1 (+1)"
             value={selection?.ability1 || ""}
@@ -701,33 +1003,35 @@ function AsiCard({ className, level, selection, baseAttributes, asiSelections, o
 
       {kind === "feat" && (
         <div>
-          <label className="text-xs uppercase tracking-wider font-bold text-white/70 block mb-1.5">
-            Pick a feat
-          </label>
-          <Select
+          <div className="cc-label" style={{ marginBottom: 6 }}>Pick a feat</div>
+          <select
             value={selection?.feat || ""}
-            onValueChange={setFeat}
+            onChange={(e) => setFeat(e.target.value)}
+            className="cc-input"
           >
-            <SelectTrigger className="bg-[#1E2430] border-slate-600 text-white">
-              <SelectValue placeholder="Choose a feat" />
-            </SelectTrigger>
-            <SelectContent className="bg-[#1E2430] border-slate-600 text-white max-h-72">
-              {featList.map((feat) => (
-                <SelectItem key={feat} value={feat} className="text-white">
-                  {feat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <option value="">Choose a feat</option>
+            {featList.map((feat) => (
+              <option key={feat} value={feat}>{feat}</option>
+            ))}
+          </select>
           {selection?.feat && FEATS[selection.feat]?.description && (
-            <p className="text-[11px] text-white/60 mt-2 italic">
+            <p
+              className="cc-italic-serif"
+              style={{ fontSize: 12, color: 'var(--cc-text-dim)', marginTop: 8, lineHeight: 1.5 }}
+            >
               {FEATS[selection.feat].description}
             </p>
           )}
-          <p className="text-[10px] text-white/50 mt-2">
-            Spellcasting / proficiency-prereq feats are listed and
-            assumed to be eligible for the player's build — verify
-            with your DM.
+          <p
+            style={{
+              fontSize: 10,
+              color: 'var(--cc-text-faint)',
+              marginTop: 8,
+              lineHeight: 1.5,
+            }}
+          >
+            Spellcasting / proficiency-prereq feats are listed and assumed to be eligible for
+            the player's build — verify with your DM.
           </p>
         </div>
       )}
@@ -738,60 +1042,35 @@ function AsiCard({ className, level, selection, baseAttributes, asiSelections, o
 function AbilitySelect({ label, value, onChange, attributes, bump, excludeAbility }) {
   return (
     <div>
-      <label className="text-xs uppercase tracking-wider font-bold text-white/70 block mb-1.5">
-        {label}
-      </label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="bg-[#1E2430] border-slate-600 text-white">
-          <SelectValue placeholder="Choose an ability" />
-        </SelectTrigger>
-        <SelectContent className="bg-[#1E2430] border-slate-600 text-white">
-          {ABILITY_KEYS.map((k) => {
-            const current = attributes?.[k] || 10;
-            const next = Math.min(MAX_ABILITY_SCORE, current + bump);
-            const wasted = next === current;
-            const isExcluded = excludeAbility === k;
-            return (
-              <SelectItem
-                key={k}
-                value={k}
-                disabled={wasted || isExcluded}
-                className="text-white"
-              >
-                {ABILITY_LABELS[k]}: {current} → {next} ({fmtMod(next)})
-                {wasted && " — at cap"}
-              </SelectItem>
-            );
-          })}
-        </SelectContent>
-      </Select>
+      <div className="cc-label" style={{ marginBottom: 6 }}>{label}</div>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="cc-input"
+      >
+        <option value="">Choose an ability</option>
+        {ABILITY_KEYS.map((k) => {
+          const current = attributes?.[k] || 10;
+          const next = Math.min(MAX_ABILITY_SCORE, current + bump);
+          const wasted = next === current;
+          const isExcluded = excludeAbility === k;
+          return (
+            <option key={k} value={k} disabled={wasted || isExcluded}>
+              {ABILITY_LABELS[k]}: {current} → {next} ({fmtMod(next)})
+              {wasted ? " — at cap" : ""}
+            </option>
+          );
+        })}
+      </select>
     </div>
   );
 }
 
-/**
- * Choice picker for a single class feature with `choiceRequired:
- * true`. Two render modes driven by multiPickCount(featureName,
- * classLevel):
- *
- *   - count === 1: single dropdown (Fighting Style, Pact Boon,
- *     Domain at L1, Otherworldly Patron, etc.). Stores the chosen
- *     option name as a string in feature_choices[key].
- *
- *   - count > 1: multi-chip picker (Sorcerer Metamagic at L3 = 2
- *     picks, L10 = 3, L17 = 4; Warlock Eldritch Invocations
- *     scaling per PHB table). Stores an array of option names.
- *
- * Backward compatibility: existing characters saved with the
- * legacy single-string shape still load — we coerce string ↔
- * array on read so the picker doesn't lose the old pick when a
- * level-up bumps the same feature into multi-pick territory.
- */
+// ============================================================================
+// FeatureChoicePicker — preserved logic, restyled around .cc-* tokens
+// ============================================================================
 function FeatureChoicePicker({ feature, classLevel, currentChoice, onChange }) {
   const pickCount = multiPickCount(feature.name, classLevel);
-
-  // Normalize legacy single-string shape to an array so the rest
-  // of this component is array-only.
   const selected = Array.isArray(currentChoice)
     ? currentChoice
     : currentChoice
@@ -800,51 +1079,61 @@ function FeatureChoicePicker({ feature, classLevel, currentChoice, onChange }) {
 
   if (pickCount <= 1) {
     return (
-      <div className="mt-5 p-5 bg-[#1E2430]/50 rounded-lg border-2 border-[#FF5722]">
-        <p className="text-[#FF5722] font-semibold mb-4 text-sm">
-          ⚠️ You must make a choice for this feature:
-        </p>
-        <Select
-          value={selected[0] || ""}
-          onValueChange={(value) => onChange(value)}
+      <div
+        style={{
+          marginTop: 12,
+          padding: '12px 14px',
+          background: 'rgba(20, 12, 8, 0.5)',
+          border: '1px solid var(--cc-orange)',
+          borderRadius: 8,
+        }}
+      >
+        <div
+          className="cc-label"
+          style={{ color: 'var(--cc-orange)', marginBottom: 8 }}
         >
-          <SelectTrigger className="h-auto min-h-11 w-full">
-            <SelectValue placeholder="Select option..." />
-          </SelectTrigger>
-          <SelectContent>
-            {feature.choices.map((choice, cIdx) => {
-              const choiceName = typeof choice === "string" ? choice : choice.name;
-              const choiceDesc = typeof choice === "object" ? choice.description : null;
-              return (
-                <SelectItem
-                  key={cIdx}
-                  value={choiceName}
-                  description={choiceDesc || undefined}
-                >
-                  {choiceName}
-                </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
+          Pick one option
+        </div>
+        <select
+          value={selected[0] || ""}
+          onChange={(e) => onChange(e.target.value)}
+          className="cc-input"
+        >
+          <option value="">Select option…</option>
+          {feature.choices.map((choice, cIdx) => {
+            const choiceName = typeof choice === "string" ? choice : choice.name;
+            return (
+              <option key={cIdx} value={choiceName}>{choiceName}</option>
+            );
+          })}
+        </select>
+        {selected[0] && (() => {
+          const found = feature.choices.find(
+            (c) => (typeof c === "string" ? c : c.name) === selected[0],
+          );
+          const desc = found && typeof found === "object" ? found.description : null;
+          if (!desc) return null;
+          return (
+            <p
+              className="cc-italic-serif"
+              style={{ fontSize: 12, color: 'var(--cc-text-dim)', marginTop: 8, lineHeight: 1.5 }}
+            >
+              {desc}
+            </p>
+          );
+        })()}
       </div>
     );
   }
 
-  // Multi-pick: chip toggles. Click to add until pickCount; click
-  // a selected chip to remove. Show running counter so the player
-  // can see how many slots remain at this level.
   const togglePick = (choiceName) => {
     const isSelected = selected.includes(choiceName);
     let next;
-    if (isSelected) {
-      next = selected.filter((s) => s !== choiceName);
-    } else {
+    if (isSelected) next = selected.filter((s) => s !== choiceName);
+    else {
       if (selected.length >= pickCount) return;
       next = [...selected, choiceName];
     }
-    // Always write as an array for multi-pick features so the
-    // shape is stable on reload.
     onChange(next);
   };
 
@@ -852,23 +1141,37 @@ function FeatureChoicePicker({ feature, classLevel, currentChoice, onChange }) {
 
   return (
     <div
-      className={`mt-5 p-5 rounded-lg border-2 ${
-        complete
-          ? "bg-emerald-500/10 border-emerald-500/40"
-          : "bg-[#1E2430]/50 border-[#FF5722]"
-      }`}
+      style={{
+        marginTop: 12,
+        padding: '12px 14px',
+        background: complete ? 'rgba(55, 242, 209, 0.10)' : 'rgba(20, 12, 8, 0.5)',
+        border: `1px solid ${complete ? 'var(--cc-teal)' : 'var(--cc-orange)'}`,
+        borderRadius: 8,
+      }}
     >
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <p className={`font-semibold text-sm ${complete ? "text-emerald-300" : "text-[#FF5722]"}`}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 10,
+          flexWrap: 'wrap',
+          gap: 6,
+        }}
+      >
+        <div
+          className="cc-label"
+          style={{ color: complete ? 'var(--cc-teal)' : 'var(--cc-orange)' }}
+        >
           {complete
-            ? `✓ Picked ${pickCount}/${pickCount}`
-            : `⚠️ Pick ${pickCount} option${pickCount > 1 ? "s" : ""} for this feature:`}
-        </p>
-        <span className="text-xs text-white/60">
+            ? `Picked ${pickCount}/${pickCount}`
+            : `Pick ${pickCount} option${pickCount > 1 ? "s" : ""}`}
+        </div>
+        <span style={{ fontSize: 11, color: 'var(--cc-text-faint)' }}>
           {selected.length}/{pickCount} selected
         </span>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {feature.choices.map((choice, cIdx) => {
           const choiceName = typeof choice === "string" ? choice : choice.name;
           const choiceDesc = typeof choice === "object" ? choice.description : "";
@@ -881,13 +1184,18 @@ function FeatureChoicePicker({ feature, classLevel, currentChoice, onChange }) {
               onClick={() => togglePick(choiceName)}
               disabled={blocked}
               title={choiceDesc || undefined}
-              className={`text-xs font-bold rounded-full px-3 py-1.5 border transition-colors ${
-                isSelected
-                  ? "bg-amber-500 text-[#1E2430] border-amber-300"
-                  : blocked
-                  ? "bg-[#1E2430] text-white/30 border-[#1E2430] cursor-not-allowed"
-                  : "bg-[#0b1220] text-white border-amber-500/40 hover:border-amber-300 cursor-pointer"
-              }`}
+              style={{
+                all: 'unset',
+                cursor: blocked ? 'not-allowed' : 'pointer',
+                fontSize: 11,
+                fontWeight: 700,
+                padding: '6px 12px',
+                borderRadius: 999,
+                background: isSelected ? 'var(--cc-gold)' : 'rgba(20, 12, 8, 0.55)',
+                color: isSelected ? '#050816' : blocked ? 'var(--cc-text-faint)' : 'var(--cc-text)',
+                border: `1px solid ${isSelected ? 'var(--cc-gold)' : 'var(--cc-border)'}`,
+                opacity: blocked ? 0.4 : 1,
+              }}
             >
               {choiceName}
             </button>
@@ -895,7 +1203,7 @@ function FeatureChoicePicker({ feature, classLevel, currentChoice, onChange }) {
         })}
       </div>
       {selected.length > 0 && (
-        <ul className="mt-3 space-y-2">
+        <ul style={{ marginTop: 12, padding: 0, listStyle: 'none' }}>
           {selected.map((choiceName) => {
             const choice = feature.choices.find(
               (c) => (typeof c === "string" ? c : c.name) === choiceName,
@@ -903,8 +1211,18 @@ function FeatureChoicePicker({ feature, classLevel, currentChoice, onChange }) {
             const desc = choice && typeof choice === "object" ? choice.description : null;
             if (!desc) return null;
             return (
-              <li key={choiceName} className="text-[11px] text-white/70 leading-relaxed">
-                <span className="font-bold text-amber-200">{choiceName}:</span> {desc}
+              <li
+                key={choiceName}
+                className="cc-italic-serif"
+                style={{
+                  fontSize: 12,
+                  color: 'var(--cc-text-dim)',
+                  marginBottom: 6,
+                  lineHeight: 1.5,
+                }}
+              >
+                <span style={{ fontWeight: 700, color: 'var(--cc-gold)' }}>{choiceName}:</span>{' '}
+                {desc}
               </li>
             );
           })}
