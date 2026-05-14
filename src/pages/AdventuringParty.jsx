@@ -182,6 +182,7 @@ export default function AdventuringParty() {
                   <CompanionTab
                     character={selected}
                     canEdit={isGM || ownsTarget}
+                    isGM={isGM}
                   />
                 </TabsContent>
                 <TabsContent value="notes" className="mt-0">

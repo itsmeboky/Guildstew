@@ -144,6 +144,7 @@ export default function AdventuringPartyContent({ campaignId, campaign }) {
                 <CompanionTab
                   character={selected}
                   canEdit={isGM || ownsTarget}
+                  isGM={isGM}
                 />
               </TabsContent>
               <TabsContent value="notes" className="mt-0">
