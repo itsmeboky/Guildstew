@@ -1,30 +1,29 @@
 import React, { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, User, Sparkles, Sword } from "lucide-react";
+import { Sword } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
-import InfoTip from "@/components/characterCreator/InfoTip";
-import { tipFor } from "@/components/characterCreator/creatorTips";
 import { getGamePack } from "@/data/games";
 import { getClassIcon } from "@/data/games/dnd5e_2024/assets";
 import { classCopy, ALIGNMENTS } from "@/data/games/dnd5e_2024/copy";
+import { getSubclassesForClass } from "@/data/games/dnd5e_2024/subclassFeatures";
+import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
+import { Primer } from "@/components/characterCreator/chrome/Primer";
+import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
 
 /**
  * 2024 D&D 5e — class step.
  *
- * Mirrors the 2014 ClassStep visual layout (2-column grid: class +
- * detail card on the left, alignment + portrait + name on the
- * right). Data wiring stays on the 2024 adapter — class list comes
- * from `getGamePack("dnd5e_2024").getClasses()` (SRD-sourced) and
- * descriptive copy comes from `classCopy(name)` which carries
- * 2024-edition flavor text for every class.
+ * Ported from design-reference/character-creator/step-class.jsx with
+ * the 2024 adapter (`getGamePack("dnd5e_2024").getClasses()`) wired
+ * in place of the prototype's local CLASSES array. classCopy() carries
+ * 2024 flavor; getClassIcon() supplies the medallion artwork.
+ *
+ * The 2024 SRD ships every base class without subclasses (subclasses
+ * unlock at level 3). When a future copy update introduces subclass
+ * cards into the adapter, ClassFeaturedTome will pick them up
+ * automatically — the prototype's SubclassChapter component renders
+ * directly from cls.subclasses.
  */
-
 export default function ClassStep2024({ characterData, updateCharacterData }) {
   const adapter = getGamePack("dnd5e_2024");
   const classes = adapter.getClasses();
@@ -33,10 +32,12 @@ export default function ClassStep2024({ characterData, updateCharacterData }) {
   const selectedAlignment = ALIGNMENTS.find((a) => a.name === characterData.alignment);
   const selectedCopy = selectedClass ? classCopy(selectedClass.name) : null;
 
+  const accent = "var(--page-accent)";
+
   const [uploading, setUploading] = useState(false);
 
-  const handleClassSelect = (value) => {
-    const cls = classes.find((c) => c.name === value);
+  const handleClassSelect = (clsName) => {
+    const cls = classes.find((c) => c.name === clsName);
     if (!cls) return;
     updateCharacterData({
       class: cls.name,
@@ -60,305 +61,637 @@ export default function ClassStep2024({ characterData, updateCharacterData }) {
     }
   };
 
+  const setAppearance = (patch) => {
+    updateCharacterData({ appearance: { ...(characterData.appearance || {}), ...patch } });
+  };
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.3 }}
-      className="grid grid-cols-2 gap-6"
-    >
-      <div className="space-y-4">
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
-        >
-          <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide flex items-center gap-2">
-            Class
-            <span className="inline-block bg-[#37F2D1] text-[#1E2430] text-[9px] font-black px-1.5 py-0.5 rounded">
-              2024
-            </span>
-            <InfoTip>{tipFor("class")}</InfoTip>
-          </Label>
-          <Select
-            value={characterData.class || ""}
-            onValueChange={handleClassSelect}
-          >
-            <SelectTrigger className="bg-[#2A3441]/80 border-[#37F2D1]/30 text-white text-base h-12 hover:border-[#37F2D1]/60 transition-colors">
-              <SelectValue placeholder="Select class" />
-            </SelectTrigger>
-            <SelectContent className="bg-[#1E2430] border-[#2A3441]">
-              {classes.map((cls) => (
-                <SelectItem
-                  key={cls.id}
-                  value={cls.name}
-                  className="text-white hover:bg-[#2A3441] focus:bg-[#2A3441]"
-                >
-                  <span className="inline-flex items-center gap-2">
-                    {cls.name}
-                    {cls.hasWeaponMastery && (
-                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1 py-0.5">
-                        <Sword className="w-2.5 h-2.5" /> Mastery
-                      </span>
-                    )}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </motion.div>
+    <div>
+      <StepHeader
+        kicker="Chapter II · The Calling"
+        title="Choose your path"
+        subtitle="What kind of hero is this? Each calling shapes your spells, your weapons, your destiny."
+      />
 
-        {selectedClass && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2 }}
-            className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
-          >
-            <div className="flex items-center gap-4 mb-4">
-              {getClassIcon(selectedClass.name) ? (
-                <img
-                  src={getClassIcon(selectedClass.name)}
-                  alt={selectedClass.name}
-                  className="w-20 h-20 object-contain"
-                />
-              ) : (
-                <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-[#37F2D1]/30 to-[#8B5CF6]/30 flex items-center justify-center">
-                  <Sparkles className="w-10 h-10 text-[#37F2D1]" />
-                </div>
-              )}
-              <div className="flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-2xl font-bold text-white">{selectedClass.name}</h3>
-                  {selectedClass.hasWeaponMastery && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-[#050816] bg-[#37F2D1] rounded px-1.5 py-0.5">
-                      <Sword className="w-3 h-3" /> Weapon Mastery
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-white/60 mt-1">Hit Die: d{selectedClass.hitDie}</p>
-              </div>
-            </div>
+      <Primer title="How to pick a class">
+        Pick the <strong>fantasy</strong> first — the kind of hero you want to be. The mechanics
+        will follow. In 2024, subclasses unlock at level 3 — for now, your class shapes your
+        hit die, primary ability, and starting skills.
+      </Primer>
 
-            <p className="text-white/80 mb-4 text-sm leading-relaxed">
-              {selectedCopy.description}
-            </p>
-
-            <div className="bg-[#37F2D1]/10 rounded-lg p-4 mb-4 border border-[#37F2D1]/20">
-              <p className="text-xs font-semibold text-[#37F2D1] mb-2">💡 PLAYSTYLE TIP</p>
-              <p className="text-sm text-white/80">{selectedCopy.playstyle}</p>
-            </div>
-
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-white/60">Primary Ability:</span>
-                <span className="text-[#37F2D1] font-semibold">
-                  {selectedClass.primaryAbility || "—"}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-white/60">Saving Throws:</span>
-                <span className="text-white">
-                  {(selectedClass.savingThrows || []).join(", ")}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-white/60">Skills:</span>
-                <span className="text-white">
-                  Choose {selectedClass.skillChoiceCount} of{" "}
-                  {selectedClass.skillChoices.length}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-white/60">Subclass at level:</span>
-                <span className="text-white">3</span>
-              </div>
-            </div>
-
-            {(selectedClass.multiclass?.prerequisites?.length ?? 0) > 0 && (
-              <div className="bg-[#37F2D1]/10 rounded-lg p-3 mt-4 border border-[#37F2D1]/20 text-xs">
-                <p className="font-semibold text-[#37F2D1] mb-1 uppercase tracking-wide">
-                  Multiclass prerequisites
-                </p>
-                <ul className="space-y-0.5 text-white/80">
-                  {selectedClass.multiclass.prerequisites.map((p) => (
-                    <li key={p.ability}>
-                      {p.abilityName} {p.minimumScore}+
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
-        >
-          <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide">
-            Alignment
-          </Label>
-          <Select
-            value={characterData.alignment || "True Neutral"}
-            onValueChange={(value) => updateCharacterData({ alignment: value })}
-          >
-            <SelectTrigger className="bg-[#2A3441]/80 border-[#37F2D1]/30 text-white h-12 hover:border-[#37F2D1]/60 transition-colors">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-[#1E2430] border-[#2A3441]">
-              {ALIGNMENTS.map((align) => (
-                <SelectItem
-                  key={align.name}
-                  value={align.name}
-                  className="text-white hover:bg-[#2A3441] focus:bg-[#2A3441]"
-                >
-                  {align.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {selectedAlignment && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              className="bg-[#2A3441]/50 rounded-lg p-3 mt-3 border border-[#37F2D1]/20"
-            >
-              <p className="text-sm text-white/80">{selectedAlignment.description}</p>
-            </motion.div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1.55fr 1fr',
+          gap: 28,
+          alignItems: 'flex-start',
+          marginTop: 28,
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+          {selectedClass ? (
+            <ClassFeaturedTome
+              cls={selectedClass}
+              copy={selectedCopy}
+              accent={accent}
+              level={characterData.level || 1}
+              subclass={characterData.subclass}
+              onPickSubclass={(name) => updateCharacterData({ subclass: name })}
+            />
+          ) : (
+            <EmptyClassPrompt />
           )}
-        </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
+          <AlignmentTome
+            value={characterData.alignment}
+            onChange={(name) => updateCharacterData({ alignment: name })}
+            selected={selectedAlignment}
+          />
+
+          <PortraitTome
+            avatarUrl={characterData.avatar_url}
+            uploading={uploading}
+            onUpload={handleImageUpload}
+            name={characterData.name}
+            onName={(v) => updateCharacterData({ name: v })}
+            description={characterData.description}
+            onDescription={(v) => updateCharacterData({ description: v })}
+            appearance={characterData.appearance}
+            onAppearance={setAppearance}
+          />
+        </div>
+
+        <div
+          style={{
+            position: 'sticky',
+            top: 20,
+            alignSelf: 'flex-start',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+          }}
         >
-          <Label className="text-white/70 mb-4 block text-sm uppercase tracking-wide">
-            Physical Details
-          </Label>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <Label className="text-white/50 text-xs mb-1 block">Age</Label>
-              <Input
-                type="number"
-                value={characterData.appearance?.age || ""}
-                onChange={(e) => updateCharacterData({
-                  appearance: { ...characterData.appearance, age: parseInt(e.target.value) },
-                })}
-                placeholder="25"
-                className="bg-[#2A3441]/80 border-[#37F2D1]/20 text-white h-10 focus:border-[#37F2D1]"
-              />
-            </div>
-            <div>
-              <Label className="text-white/50 text-xs mb-1 block">Height</Label>
-              <Input
-                value={characterData.appearance?.height || ""}
-                onChange={(e) => updateCharacterData({
-                  appearance: { ...characterData.appearance, height: e.target.value },
-                })}
-                placeholder="5'10&quot;"
-                className="bg-[#2A3441]/80 border-[#37F2D1]/20 text-white h-10 focus:border-[#37F2D1]"
-              />
-            </div>
-            <div>
-              <Label className="text-white/50 text-xs mb-1 block">Weight</Label>
-              <Input
-                value={characterData.appearance?.weight || ""}
-                onChange={(e) => updateCharacterData({
-                  appearance: { ...characterData.appearance, weight: e.target.value },
-                })}
-                placeholder="180 lbs"
-                className="bg-[#2A3441]/80 border-[#37F2D1]/20 text-white h-10 focus:border-[#37F2D1]"
-              />
-            </div>
-          </div>
-        </motion.div>
+          <ClassRoster classes={classes} current={selectedClass?.name} onPick={handleClassSelect} />
+          {selectedClass && <ClassBuildSummary cls={selectedClass} accent={accent} />}
+        </div>
       </div>
+    </div>
+  );
+}
 
-      <div className="space-y-4">
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
-        >
-          <Label className="text-white/70 mb-3 block text-sm uppercase tracking-wide">
-            Character Portrait
-          </Label>
+function EmptyClassPrompt() {
+  return (
+    <div
+      className="tome"
+      style={{
+        padding: '60px 36px',
+        textAlign: 'center',
+        minHeight: 400,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 16,
+      }}
+    >
+      <div style={{ fontSize: 56, opacity: 0.4, marginBottom: 8 }}>✦</div>
+      <div className="display" style={{ fontSize: 32, color: 'var(--text)' }}>Choose a calling</div>
+      <div
+        className="italic-serif"
+        style={{ fontSize: 16, color: 'var(--text-dim)', maxWidth: 400, lineHeight: 1.5 }}
+      >
+        Pick one of the callings from the roster — the chapter will unfurl with its lore.
+      </div>
+    </div>
+  );
+}
+
+function ClassFeaturedTome({ cls, copy, accent, level, subclass, onPickSubclass }) {
+  const icon = getClassIcon(cls.name);
+  const subclasses = getSubclassesForClass(cls.id);
+  return (
+    <div className="tome" style={{ padding: '32px 36px' }}>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginBottom: 20 }}>
           <div
-            className="relative overflow-hidden rounded-xl bg-[#2A3441]/50 mx-auto border border-[#37F2D1]/20"
-            style={{ aspectRatio: "2/3", width: "100%" }}
+            style={{
+              width: 100,
+              height: 100,
+              background: `radial-gradient(circle, ${accent}55 0%, ${accent}11 50%, transparent 75%)`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 64,
+              lineHeight: 1,
+              flexShrink: 0,
+              filter: `drop-shadow(0 4px 16px ${accent}66)`,
+            }}
           >
-            {characterData.avatar_url ? (
+            {icon ? (
               <img
-                src={characterData.avatar_url}
-                alt="Character"
-                className="w-full h-full object-cover"
+                src={icon}
+                alt={cls.name}
+                style={{ width: 80, height: 80, objectFit: 'contain', filter: 'sepia(0.1)' }}
               />
             ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center">
-                <User className="w-20 h-20 text-white/20 mb-3" />
-                <p className="text-white/40 text-center px-4 text-sm">Upload character portrait</p>
+              <span style={{ filter: 'sepia(0.1)' }}>✦</span>
+            )}
+          </div>
+
+          <div style={{ flex: 1 }}>
+            <div className="label" style={{ color: accent, marginBottom: 6, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <span>The {cls.name}</span>
+              {cls.hasWeaponMastery && (
+                <span
+                  className="chip chip-orange"
+                  style={{ padding: '2px 8px', fontSize: 9, letterSpacing: 1 }}
+                >
+                  <Sword className="w-2.5 h-2.5" /> Mastery
+                </span>
+              )}
+            </div>
+            <div
+              className="display"
+              style={{
+                fontSize: 44,
+                color: 'var(--text)',
+                lineHeight: 1,
+                marginBottom: 8,
+                letterSpacing: 1,
+                textShadow: `0 2px 16px ${accent}44`,
+              }}
+            >
+              {cls.name}
+            </div>
+            <div className="italic-serif" style={{ fontSize: 15, color: 'var(--text-dim)' }}>
+              Hit Die <span style={{ color: accent }}>d{cls.hitDie}</span> &nbsp;·&nbsp;
+              Primary <span style={{ color: accent }}>{cls.primaryAbility || '—'}</span> &nbsp;·&nbsp;
+              Saves <span style={{ color: accent }}>{(cls.savingThrows || []).join(', ')}</span>
+            </div>
+          </div>
+        </div>
+
+        {copy?.description && (
+          <p className="body-prose" style={{ marginBottom: 18 }}>
+            {copy.description}
+          </p>
+        )}
+
+        {copy?.playstyle && (
+          <div
+            style={{
+              padding: 16,
+              borderLeft: `3px solid ${accent}`,
+              background: `linear-gradient(90deg, ${accent}14, transparent 80%)`,
+              borderRadius: 4,
+            }}
+          >
+            <div className="label" style={{ color: accent, marginBottom: 4 }}>✦ Playstyle</div>
+            <div className="italic-serif" style={{ fontSize: 15, color: 'var(--text)', lineHeight: 1.55 }}>
+              {copy.playstyle}
+            </div>
+          </div>
+        )}
+
+        {(cls.multiclass?.prerequisites?.length ?? 0) > 0 && (
+          <>
+            <FleurDivider />
+            <div>
+              <div className="label" style={{ color: accent, marginBottom: 6 }}>
+                Multiclass prerequisites
+              </div>
+              <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--text)', fontSize: 14, lineHeight: 1.6 }}>
+                {cls.multiclass.prerequisites.map((p) => (
+                  <li key={p.ability}>
+                    {p.abilityName} {p.minimumScore}+
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </>
+        )}
+
+        {subclasses.length > 0 && (
+          <>
+            <FleurDivider />
+            <SubclassChapter
+              subclasses={subclasses}
+              accent={accent}
+              level={level}
+              subclass={subclass}
+              onPick={onPickSubclass}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SubclassChapter({ subclasses, accent, level, subclass, onPick }) {
+  const availableNow = (level || 1) >= 3;
+  return (
+    <div>
+      <OrnateHeading color={accent}>Subclass</OrnateHeading>
+      <div
+        className="italic-serif"
+        style={{
+          fontSize: 14,
+          textAlign: 'center',
+          color: availableNow ? 'var(--teal)' : 'var(--text-dim)',
+          marginBottom: 18,
+        }}
+      >
+        {availableNow
+          ? `Active at your current level (${level || 1}).`
+          : `Unlocks at level 3 — pick now to plan your build.`}
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: subclasses.length === 1 ? '1fr' : subclasses.length === 2 ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+          gap: 12,
+        }}
+      >
+        {subclasses.map((s) => {
+          const active = subclass === s.name;
+          const desc = s.summary || s.description || '';
+          return (
+            <button
+              key={s.index || s.name}
+              type="button"
+              onClick={() => onPick(s.name)}
+              className={`pickable ${active ? 'selected' : ''}`}
+              style={{
+                padding: 16,
+                textAlign: 'left',
+                color: 'inherit',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+              }}
+            >
+              <div className="display" style={{ fontSize: 18, color: 'var(--text)' }}>
+                {s.name}
+              </div>
+              {desc && (
+                <div
+                  className="italic-serif"
+                  style={{ fontSize: 14, color: 'var(--text-dim)', lineHeight: 1.5, flex: 1 }}
+                >
+                  {desc}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AlignmentTome({ value, onChange, selected }) {
+  const current = value || 'True Neutral';
+  return (
+    <div className="tome" style={{ padding: '32px 36px' }}>
+      <OrnateHeading>Alignment</OrnateHeading>
+      <div
+        className="italic-serif"
+        style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 14, textAlign: 'center' }}
+      >
+        Roleplay only — no mechanics depend on alignment.
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: 6,
+          maxWidth: 540,
+          margin: '0 auto',
+        }}
+      >
+        {ALIGNMENTS.map((a) => {
+          const active = current === a.name;
+          const short = (a.name.match(/\b(\w)\w*/g) || []).map((s) => s[0]).join('');
+          const [w1, w2] = a.name.split(' ');
+          return (
+            <button
+              key={a.name}
+              type="button"
+              onClick={() => onChange(a.name)}
+              className={`pickable ${active ? 'selected' : ''}`}
+              style={{ padding: '12px 8px', textAlign: 'center', color: 'inherit' }}
+            >
+              <div
+                className="display"
+                style={{
+                  fontSize: 13,
+                  color: active ? 'var(--orange-soft)' : 'var(--gold-soft)',
+                  marginBottom: 2,
+                }}
+              >
+                {short}
+              </div>
+              <div
+                style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', letterSpacing: 0.2 }}
+              >
+                {w1}
+                <br />
+                {w2 || ' '}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {selected && (
+        <div
+          className="italic-serif fade-in"
+          style={{
+            marginTop: 16,
+            textAlign: 'center',
+            fontSize: 14,
+            color: 'var(--text-dim)',
+            lineHeight: 1.5,
+            maxWidth: 540,
+            margin: '16px auto 0',
+          }}
+        >
+          <strong
+            className="display"
+            style={{ color: 'var(--orange-soft)', fontSize: 16, fontWeight: 'normal' }}
+          >
+            {selected.name}.
+          </strong>{' '}
+          {selected.description}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PortraitTome({
+  avatarUrl,
+  uploading,
+  onUpload,
+  name,
+  onName,
+  description,
+  onDescription,
+  appearance,
+  onAppearance,
+}) {
+  return (
+    <div className="tome" style={{ padding: '32px 36px' }}>
+      <OrnateHeading>Portrait &amp; Identity</OrnateHeading>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 22, alignItems: 'flex-start' }}>
+        <div>
+          <div
+            style={{
+              position: 'relative',
+              overflow: 'hidden',
+              borderRadius: 8,
+              background: 'rgba(20, 12, 8, 0.5)',
+              border: '1px solid var(--border)',
+              aspectRatio: '2 / 3',
+              width: '100%',
+            }}
+          >
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt="Character"
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            ) : (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--text-faint)',
+                  textAlign: 'center',
+                  padding: 16,
+                }}
+              >
+                <div style={{ fontSize: 40, opacity: 0.4, marginBottom: 8 }}>⊕</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)' }}>
+                  Upload your hero
+                </div>
               </div>
             )}
           </div>
-          <Button
-            onClick={() => document.getElementById("avatar-upload-2024").click()}
+          <button
+            type="button"
+            onClick={() => document.getElementById('avatar-upload-2024').click()}
             disabled={uploading}
-            className="w-full mt-3 bg-[#FF5722]/90 hover:bg-[#FF5722] text-white border-0"
+            className="btn btn-primary"
+            style={{ width: '100%', marginTop: 10 }}
           >
-            <Upload className="w-4 h-4 mr-2" />
-            {uploading ? "Uploading..." : "Upload Portrait"}
-          </Button>
+            {uploading ? 'Uploading…' : 'Upload Portrait'}
+          </button>
           <input
             type="file"
             id="avatar-upload-2024"
             accept="image/*"
-            onChange={handleImageUpload}
-            className="hidden"
+            onChange={onUpload}
+            style={{ display: 'none' }}
           />
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
-        >
-          <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide">
-            Character Name
-          </Label>
-          <Input
-            value={characterData.name || ""}
-            onChange={(e) => updateCharacterData({ name: e.target.value })}
-            placeholder="Enter character name"
-            className="bg-[#2A3441]/80 border-[#37F2D1]/20 text-white text-lg h-12 placeholder:text-white/30 focus:border-[#37F2D1]"
-          />
-        </motion.div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <div className="label" style={{ marginBottom: 6 }}>
+              Character Name <span style={{ color: 'var(--orange)' }}>*</span>
+            </div>
+            <input
+              className="input"
+              value={name || ''}
+              onChange={(e) => onName(e.target.value)}
+              placeholder="e.g. Kael Stormwhisper"
+              maxLength={40}
+              style={{ fontSize: 16 }}
+            />
+          </div>
 
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.5 }}
-          className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]"
-        >
-          <Label className="text-white/70 mb-2 block text-sm uppercase tracking-wide">
-            Description
-          </Label>
-          <Textarea
-            value={characterData.description || ""}
-            onChange={(e) => updateCharacterData({ description: e.target.value })}
-            placeholder="Tell us about your character's backstory, personality, and motivations..."
-            className="bg-[#2A3441]/80 border-[#37F2D1]/20 text-white min-h-[120px] focus:border-[#37F2D1]"
-          />
-        </motion.div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+            <div>
+              <div className="label" style={{ marginBottom: 6 }}>Age</div>
+              <input
+                type="number"
+                className="input"
+                value={appearance?.age ?? ''}
+                onChange={(e) => onAppearance({ age: e.target.value === '' ? undefined : parseInt(e.target.value, 10) })}
+                placeholder="25"
+              />
+            </div>
+            <div>
+              <div className="label" style={{ marginBottom: 6 }}>Height</div>
+              <input
+                className="input"
+                value={appearance?.height || ''}
+                onChange={(e) => onAppearance({ height: e.target.value })}
+                placeholder={`5'10"`}
+              />
+            </div>
+            <div>
+              <div className="label" style={{ marginBottom: 6 }}>Weight</div>
+              <input
+                className="input"
+                value={appearance?.weight || ''}
+                onChange={(e) => onAppearance({ weight: e.target.value })}
+                placeholder="180 lbs"
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="label" style={{ marginBottom: 6 }}>
+              Biography <span style={{ color: 'var(--text-faint)', fontWeight: 600, letterSpacing: 0 }}>(optional)</span>
+            </div>
+            <textarea
+              className="input italic-serif"
+              value={description || ''}
+              onChange={(e) => onDescription(e.target.value)}
+              placeholder="Their story so far..."
+              rows={4}
+              style={{
+                resize: 'vertical',
+                minHeight: 90,
+                fontFamily: 'var(--serif)',
+                fontSize: 15,
+                lineHeight: 1.5,
+                fontStyle: 'italic',
+              }}
+            />
+          </div>
+        </div>
       </div>
-    </motion.div>
+    </div>
+  );
+}
+
+function ClassRoster({ classes, current, onPick }) {
+  return (
+    <div className="panel" style={{ padding: 16 }}>
+      <div className="label" style={{ marginBottom: 12 }}>The Callings</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+        {classes.map((c) => {
+          const active = c.name === current;
+          const icon = getClassIcon(c.name);
+          return (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => onPick(c.name)}
+              title={c.name}
+              style={{
+                all: 'unset',
+                cursor: 'pointer',
+                padding: '10px 4px',
+                textAlign: 'center',
+                borderRadius: 4,
+                transition: 'all .2s',
+                background: active ? 'rgba(255, 83, 0, 0.12)' : 'transparent',
+                border: `1px solid ${active ? 'var(--orange)' : 'transparent'}`,
+                boxShadow: active ? '0 0 14px var(--orange-glow)' : 'none',
+              }}
+              onMouseEnter={(e) => {
+                if (!active) e.currentTarget.style.background = 'rgba(212, 169, 81, 0.06)';
+              }}
+              onMouseLeave={(e) => {
+                if (!active) e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <div
+                style={{
+                  height: 28,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 4,
+                  filter: active ? 'none' : 'grayscale(0.4) opacity(0.75)',
+                  transition: 'filter .2s',
+                }}
+              >
+                {icon ? (
+                  <img src={icon} alt="" style={{ width: 26, height: 26, objectFit: 'contain' }} />
+                ) : (
+                  <span style={{ fontSize: 22 }}>✦</span>
+                )}
+              </div>
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: active ? 'var(--orange-soft)' : 'var(--text-dim)',
+                  letterSpacing: 0.3,
+                }}
+              >
+                {c.name}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ClassBuildSummary({ cls, accent }) {
+  return (
+    <div className="panel-strong" style={{ padding: 18, position: 'relative' }}>
+      <div className="tome-corner tr" />
+      <div className="tome-corner bl" />
+
+      <div className="ornate-heading" style={{ marginBottom: 16 }}>
+        <span className="ornate-flourish small" style={{ background: accent }} />
+        <h3 style={{ fontSize: 18, color: 'var(--text)' }}>{cls.name} build</h3>
+        <span className="ornate-flourish small" style={{ background: accent }} />
+      </div>
+
+      <SummaryRow label="Hit Die" value={`d${cls.hitDie}`} />
+      <SummaryRow label="Primary" value={cls.primaryAbility || '—'} />
+      <SummaryRow label="Saves" value={(cls.savingThrows || []).join(', ') || '—'} />
+      <SummaryRow
+        label="Skills"
+        value={`Choose ${cls.skillChoiceCount} of ${cls.skillChoices?.length || 0}`}
+      />
+      <SummaryRow label="Subclass at" value="Level 3" />
+    </div>
+  );
+}
+
+function SummaryRow({ label, value }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        padding: '6px 0',
+        borderBottom: '1px solid var(--border)',
+        fontSize: 13,
+      }}
+    >
+      <span
+        style={{
+          color: 'var(--text-faint)',
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: 1,
+          textTransform: 'uppercase',
+        }}
+      >
+        {label}
+      </span>
+      <span style={{ color: 'var(--text)', fontWeight: 600, textAlign: 'right', maxWidth: '60%' }}>
+        {value}
+      </span>
+    </div>
   );
 }

@@ -207,22 +207,22 @@ export default function ReviewStep({ characterData }) {
                   onMouseLeave={() => setHoveredItem(null)}
                 >
                   <div
-                    className="cc-label"
+                    className="label"
                     style={{ fontSize: 9, color: ab.color, marginBottom: 2 }}
                   >
                     {ab.key.toUpperCase()}
                   </div>
                   <div
-                    className="cc-display"
+                    className="display"
                     style={{
                       fontSize: 24,
-                      color: 'var(--cc-text)',
+                      color: 'var(--text)',
                       lineHeight: 1.1,
                     }}
                   >
                     {(mod >= 0 ? '+' : '') + mod}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--cc-text-faint)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>
                     {value}
                   </div>
                   {hoveredItem === `ab-${ab.key}` && (
@@ -253,14 +253,14 @@ export default function ReviewStep({ characterData }) {
                 >
                   <span
                     style={{
-                      color: isProf ? 'var(--cc-teal)' : 'var(--cc-text-dim)',
+                      color: isProf ? 'var(--teal)' : 'var(--text-dim)',
                     }}
                   >
                     {isProf ? '●' : '○'} {ab.name}
                   </span>
                   <span
-                    className="cc-mono"
-                    style={{ color: 'var(--cc-text)', fontWeight: 700 }}
+                    className="mono"
+                    style={{ color: 'var(--text)', fontWeight: 700 }}
                   >
                     {(mod >= 0 ? '+' : '') + mod}
                   </span>
@@ -273,8 +273,8 @@ export default function ReviewStep({ characterData }) {
         <ReviewCard title={`Skills · ${skillEntries.length}`} icon="🎯">
           {skillEntries.length === 0 ? (
             <div
-              className="cc-italic-serif"
-              style={{ fontSize: 13, color: 'var(--cc-text-faint)' }}
+              className="italic-serif"
+              style={{ fontSize: 13, color: 'var(--text-faint)' }}
             >
               No skill proficiencies yet.
             </div>
@@ -290,20 +290,20 @@ export default function ReviewStep({ characterData }) {
                     onMouseLeave={() => setHoveredItem(null)}
                   >
                     <span
-                      className={`cc-chip ${hasExpertise ? 'cc-chip-gold' : 'cc-chip-teal'}`}
+                      className={`chip ${hasExpertise ? 'chip-gold' : ''}`}
                       style={{ cursor: 'help' }}
                     >
                       {skill} {hasExpertise && '★'}
                     </span>
                     {hoveredItem === `skill-${skill}` && SKILL_DESCRIPTIONS[skill] && (
                       <ReviewTooltip
-                        color={hasExpertise ? 'var(--cc-gold)' : 'var(--cc-teal)'}
+                        color={hasExpertise ? 'var(--gold)' : 'var(--teal)'}
                         title={skill}
                         body={
                           <>
                             {SKILL_DESCRIPTIONS[skill]}
                             {hasExpertise && (
-                              <div style={{ marginTop: 6, color: 'var(--cc-gold)', fontWeight: 700 }}>
+                              <div style={{ marginTop: 6, color: 'var(--gold)', fontWeight: 700 }}>
                                 ★ Expertise: doubles your proficiency bonus
                               </div>
                             )}
@@ -346,23 +346,23 @@ export default function ReviewStep({ characterData }) {
                       flexWrap: 'wrap',
                     }}
                   >
-                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cc-text)' }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
                       {feature.name}
                     </span>
                     {feature.multiclass && (
-                      <span className="cc-chip cc-chip-purple" style={{ fontSize: 9 }}>
+                      <span className="chip chip-purple" style={{ fontSize: 9 }}>
                         {feature.multiclass}
                       </span>
                     )}
                     {feature.level && (
-                      <span className="cc-chip cc-chip-neutral" style={{ fontSize: 9 }}>
+                      <span className="chip chip-neutral" style={{ fontSize: 9 }}>
                         L{feature.level}
                       </span>
                     )}
                   </div>
                   {hoveredItem === `cf-${idx}` && feature.description && (
                     <ReviewTooltip
-                      color="var(--cc-gold)"
+                      color="var(--gold)"
                       title={feature.name}
                       body={feature.description}
                       width={320}
@@ -390,21 +390,21 @@ export default function ReviewStep({ characterData }) {
                   onMouseEnter={() => setHoveredItem(`rt-${idx}`)}
                   onMouseLeave={() => setHoveredItem(null)}
                 >
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--cc-text)' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
                     {trait.name}
                   </div>
                   {hoveredItem === `rt-${idx}` && (
-                    <ReviewTooltip color="var(--cc-orange)" title={trait.name} body={trait.description} />
+                    <ReviewTooltip color="var(--orange)" title={trait.name} body={trait.description} />
                   )}
                 </div>
               ))}
             </div>
             {Array.isArray(characterData.languages) && characterData.languages.length > 0 && (
               <div
-                className="cc-italic-serif"
+                className="italic-serif"
                 style={{
                   fontSize: 12,
-                  color: 'var(--cc-text-faint)',
+                  color: 'var(--text-faint)',
                   marginTop: 10,
                 }}
               >
@@ -423,30 +423,30 @@ export default function ReviewStep({ characterData }) {
         {characterData.background && (
           <ReviewCard title={`Background · ${characterData.background}`} icon="📜">
             <div
-              className="cc-italic-serif"
-              style={{ fontSize: 13, color: 'var(--cc-text-dim)', lineHeight: 1.5 }}
+              className="italic-serif"
+              style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.5 }}
             >
               {characterData.alignment && (
                 <div>
-                  <span style={{ color: 'var(--cc-gold-soft)', fontWeight: 700 }}>Alignment:</span>{' '}
+                  <span style={{ color: 'var(--gold-soft)', fontWeight: 700 }}>Alignment:</span>{' '}
                   {characterData.alignment}
                 </div>
               )}
               {characterData.appearance?.age && (
                 <div>
-                  <span style={{ color: 'var(--cc-gold-soft)', fontWeight: 700 }}>Age:</span>{' '}
+                  <span style={{ color: 'var(--gold-soft)', fontWeight: 700 }}>Age:</span>{' '}
                   {characterData.appearance.age}
                 </div>
               )}
               {characterData.appearance?.height && (
                 <div>
-                  <span style={{ color: 'var(--cc-gold-soft)', fontWeight: 700 }}>Height:</span>{' '}
+                  <span style={{ color: 'var(--gold-soft)', fontWeight: 700 }}>Height:</span>{' '}
                   {characterData.appearance.height}
                 </div>
               )}
               {characterData.appearance?.weight && (
                 <div>
-                  <span style={{ color: 'var(--cc-gold-soft)', fontWeight: 700 }}>Weight:</span>{' '}
+                  <span style={{ color: 'var(--gold-soft)', fontWeight: 700 }}>Weight:</span>{' '}
                   {characterData.appearance.weight}
                 </div>
               )}
@@ -476,10 +476,10 @@ export default function ReviewStep({ characterData }) {
                       borderRadius: 6,
                     }}
                   >
-                    <span className="cc-label" style={{ color: 'var(--cc-gold-soft)' }}>
+                    <span className="label" style={{ color: 'var(--gold-soft)' }}>
                       {featureName}
                     </span>
-                    <span style={{ color: 'var(--cc-text)', marginLeft: 8 }}>
+                    <span style={{ color: 'var(--text)', marginLeft: 8 }}>
                       {choiceText}
                     </span>
                   </div>
@@ -499,7 +499,7 @@ export default function ReviewStep({ characterData }) {
                 flexDirection: 'column',
                 gap: 4,
                 fontSize: 13,
-                color: 'var(--cc-text)',
+                color: 'var(--text)',
                 maxHeight: 240,
                 overflowY: 'auto',
               }}
@@ -508,7 +508,7 @@ export default function ReviewStep({ characterData }) {
                 <div key={idx}>
                   • {safeText(item.name)}
                   {item.quantity > 1 && (
-                    <span style={{ color: 'var(--cc-text-faint)' }}>
+                    <span style={{ color: 'var(--text-faint)' }}>
                       {' '}×{safeText(item.quantity)}
                     </span>
                   )}
@@ -516,10 +516,10 @@ export default function ReviewStep({ characterData }) {
               ))}
               {characterData.inventory.length > 12 && (
                 <div
-                  className="cc-italic-serif"
+                  className="italic-serif"
                   style={{
                     fontSize: 12,
-                    color: 'var(--cc-text-faint)',
+                    color: 'var(--text-faint)',
                     marginTop: 6,
                   }}
                 >
@@ -533,10 +533,10 @@ export default function ReviewStep({ characterData }) {
         {characterData.description && (
           <ReviewCard title="Biography" icon="✒️">
             <p
-              className="cc-italic-serif"
+              className="italic-serif"
               style={{
                 fontSize: 14,
-                color: 'var(--cc-text-dim)',
+                color: 'var(--text-dim)',
                 lineHeight: 1.55,
                 margin: 0,
                 whiteSpace: 'pre-wrap',
@@ -559,15 +559,15 @@ export default function ReviewStep({ characterData }) {
         }}
       >
         <h3
-          className="cc-display"
-          style={{ fontSize: 24, color: 'var(--cc-orange)', margin: '0 0 8px' }}
+          className="display"
+          style={{ fontSize: 24, color: 'var(--orange)', margin: '0 0 8px' }}
         >
           Ready to play?
         </h3>
         <p
-          className="cc-italic-serif"
+          className="italic-serif"
           style={{
-            color: 'var(--cc-text-dim)',
+            color: 'var(--text-dim)',
             fontSize: 14,
             margin: 0,
             lineHeight: 1.55,
@@ -591,7 +591,7 @@ function HeroCard({
 }) {
   return (
     <div
-      className="cc-panel-strong"
+      className="panel-strong"
       style={{
         marginTop: 24,
         padding: 0,
@@ -599,8 +599,8 @@ function HeroCard({
         position: 'relative',
       }}
     >
-      <div className="cc-tome-corner cc-tl"></div>
-      <div className="cc-tome-corner cc-br"></div>
+      <div className="tome-corner tr"></div>
+      <div className="tome-corner bl"></div>
 
       <div
         style={{
@@ -618,7 +618,7 @@ function HeroCard({
             background: 'linear-gradient(135deg, rgba(255,83,0,0.08), rgba(55,242,209,0.04))',
             position: 'relative',
             overflow: 'hidden',
-            borderRight: '1px solid var(--cc-border)',
+            borderRight: '1px solid var(--border)',
           }}
         >
           {fullPortraitUrl ? (
@@ -642,7 +642,7 @@ function HeroCard({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: 'var(--cc-text-faint)',
+                color: 'var(--text-faint)',
                 opacity: 0.4,
               }}
             >
@@ -660,7 +660,7 @@ function HeroCard({
                 height: 64,
                 borderRadius: '50%',
                 background: 'rgba(20, 12, 8, 0.7)',
-                border: '3px solid var(--cc-orange)',
+                border: '3px solid var(--orange)',
                 boxShadow: '0 4px 14px rgba(0, 0, 0, 0.4)',
                 overflow: 'hidden',
               }}
@@ -682,10 +682,10 @@ function HeroCard({
 
         <div style={{ padding: 24, display: 'flex', flexDirection: 'column' }}>
           <h2
-            className="cc-display"
+            className="display"
             style={{
               fontSize: 42,
-              color: 'var(--cc-orange-soft)',
+              color: 'var(--orange-soft)',
               lineHeight: 1,
               margin: '0 0 10px',
               letterSpacing: 1,
@@ -702,23 +702,23 @@ function HeroCard({
               marginBottom: 18,
             }}
           >
-            <span className="cc-chip cc-chip-orange">Level {characterData.level || 1}</span>
+            <span className="chip chip-orange">Level {characterData.level || 1}</span>
             {characterData.race && (
-              <span className="cc-chip cc-chip-neutral">
+              <span className="chip chip-neutral">
                 {characterData.subrace ? `${characterData.subrace} ` : ''}{characterData.race}
               </span>
             )}
             {characterData.class && (
-              <span className="cc-chip cc-chip-purple">{characterData.class}</span>
+              <span className="chip chip-purple">{characterData.class}</span>
             )}
             {characterData.subclass && (
-              <span className="cc-chip cc-chip-gold">{characterData.subclass}</span>
+              <span className="chip chip-gold">{characterData.subclass}</span>
             )}
             {characterData.background && (
-              <span className="cc-chip cc-chip-neutral">{characterData.background}</span>
+              <span className="chip chip-neutral">{characterData.background}</span>
             )}
             {characterData.alignment && (
-              <span className="cc-chip cc-chip-neutral">{characterData.alignment}</span>
+              <span className="chip chip-neutral">{characterData.alignment}</span>
             )}
           </div>
 
@@ -750,8 +750,8 @@ function HeroCard({
               }}
             >
               <span
-                className="cc-label"
-                style={{ color: 'var(--cc-text-dim)' }}
+                className="label"
+                style={{ color: 'var(--text-dim)' }}
               >
                 Class breakdown
               </span>
@@ -770,9 +770,9 @@ function HeroCard({
                       padding: '2px 10px',
                       background: 'rgba(20, 12, 8, 0.5)',
                       borderRadius: 4,
-                      border: '1px solid var(--cc-border)',
+                      border: '1px solid var(--border)',
                       fontSize: 12,
-                      color: 'var(--cc-text)',
+                      color: 'var(--text)',
                     }}
                   >
                     {icon && <img src={icon} alt="" style={{ width: 18, height: 18 }} />}
@@ -796,9 +796,9 @@ function StatBox({ label, value, suffix, tone }) {
     red:    '#E74C3C',
     blue:   '#3498DB',
     green:  '#52C77E',
-    orange: 'var(--cc-orange)',
+    orange: 'var(--orange)',
   };
-  const color = colors[tone] || 'var(--cc-text)';
+  const color = colors[tone] || 'var(--text)';
   return (
     <div
       style={{
@@ -809,14 +809,14 @@ function StatBox({ label, value, suffix, tone }) {
         borderTop: `2px solid ${color}`,
       }}
     >
-      <div className="cc-label" style={{ color, marginBottom: 4 }}>
+      <div className="label" style={{ color, marginBottom: 4 }}>
         {label}
       </div>
       <div
-        className="cc-display"
+        className="display"
         style={{
           fontSize: 28,
-          color: 'var(--cc-text)',
+          color: 'var(--text)',
           lineHeight: 1,
         }}
       >
@@ -825,7 +825,7 @@ function StatBox({ label, value, suffix, tone }) {
           <span
             style={{
               fontSize: 14,
-              color: 'var(--cc-text-faint)',
+              color: 'var(--text-faint)',
               marginLeft: 2,
             }}
           >
@@ -838,11 +838,11 @@ function StatBox({ label, value, suffix, tone }) {
 }
 
 // ============================================================================
-// Review card — generic .cc-panel wrapper with title row
+// Review card — generic .panel wrapper with title row
 // ============================================================================
 function ReviewCard({ title, icon, iconIsImage, children }) {
   return (
-    <div className="cc-panel" style={{ padding: 18 }}>
+    <div className="panel" style={{ padding: 18 }}>
       <div
         style={{
           display: 'flex',
@@ -857,10 +857,10 @@ function ReviewCard({ title, icon, iconIsImage, children }) {
           <span style={{ fontSize: 18 }}>{icon}</span>
         )}
         <h3
-          className="cc-display"
+          className="display"
           style={{
             fontSize: 18,
-            color: 'var(--cc-text)',
+            color: 'var(--text)',
             margin: 0,
             letterSpacing: 0.3,
           }}
@@ -886,8 +886,8 @@ function ReviewTooltip({ color, title, body, width = 240 }) {
         left: '50%',
         transform: 'translateX(-50%)',
         marginBottom: 6,
-        background: 'var(--cc-bg-3)',
-        color: 'var(--cc-text)',
+        background: 'var(--bg-3)',
+        color: 'var(--text)',
         padding: 12,
         borderRadius: 8,
         fontSize: 12,
@@ -899,12 +899,12 @@ function ReviewTooltip({ color, title, body, width = 240 }) {
       }}
     >
       <div
-        className="cc-display"
+        className="display"
         style={{ color, fontSize: 13, marginBottom: 4 }}
       >
         {title}
       </div>
-      <div className="cc-italic-serif" style={{ lineHeight: 1.5 }}>{body}</div>
+      <div className="italic-serif" style={{ lineHeight: 1.5 }}>{body}</div>
     </div>
   );
 }
@@ -936,10 +936,10 @@ function SpellbookReviewCard({ spells, hoveredItem, setHoveredItem }) {
           return (
             <div key={levelKey} style={{ marginBottom: 12 }}>
               <div
-                className="cc-label"
+                className="label"
                 style={{
                   marginBottom: 6,
-                  color: isCantrip ? 'var(--cc-gold)' : 'var(--cc-orange-soft)',
+                  color: isCantrip ? 'var(--gold)' : 'var(--orange-soft)',
                 }}
               >
                 {labelText}
@@ -955,13 +955,13 @@ function SpellbookReviewCard({ spells, hoveredItem, setHoveredItem }) {
                       onMouseLeave={() => setHoveredItem(null)}
                     >
                       <span
-                        className={`cc-chip ${isCantrip ? 'cc-chip-gold' : 'cc-chip-orange'}`}
+                        className={`chip ${isCantrip ? 'chip-gold' : 'chip-orange'}`}
                         style={{ cursor: info ? 'help' : 'default' }}
                       >
                         {spell}
                       </span>
                       {hoveredItem === `spell-${levelKey}-${idx}` && info && (
-                        <SpellTooltip name={spell} info={info} accent={isCantrip ? 'var(--cc-gold)' : 'var(--cc-orange)'} />
+                        <SpellTooltip name={spell} info={info} accent={isCantrip ? 'var(--gold)' : 'var(--orange)'} />
                       )}
                     </div>
                   );
@@ -985,8 +985,8 @@ function SpellTooltip({ name, info, accent }) {
         left: '50%',
         transform: 'translateX(-50%)',
         marginBottom: 6,
-        background: 'var(--cc-bg-3)',
-        color: 'var(--cc-text)',
+        background: 'var(--bg-3)',
+        color: 'var(--text)',
         padding: 12,
         borderRadius: 8,
         fontSize: 11,
@@ -1000,26 +1000,26 @@ function SpellTooltip({ name, info, accent }) {
       }}
     >
       <div
-        className="cc-display"
+        className="display"
         style={{ color: accent, fontSize: 13, marginBottom: 4 }}
       >
         {name}
       </div>
       <div
-        className="cc-italic-serif"
-        style={{ fontSize: 11, color: 'var(--cc-text-faint)', marginBottom: 6 }}
+        className="italic-serif"
+        style={{ fontSize: 11, color: 'var(--text-faint)', marginBottom: 6 }}
       >
         {info.level} {info.school}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 6 }}>
-        <div><span style={{ color: 'var(--cc-text-faint)' }}>Casting Time:</span> {info.castingTime}</div>
-        <div><span style={{ color: 'var(--cc-text-faint)' }}>Range:</span> {info.range}</div>
-        <div><span style={{ color: 'var(--cc-text-faint)' }}>Components:</span> {info.components}</div>
-        <div><span style={{ color: 'var(--cc-text-faint)' }}>Duration:</span> {info.duration}</div>
+        <div><span style={{ color: 'var(--text-faint)' }}>Casting Time:</span> {info.castingTime}</div>
+        <div><span style={{ color: 'var(--text-faint)' }}>Range:</span> {info.range}</div>
+        <div><span style={{ color: 'var(--text-faint)' }}>Components:</span> {info.components}</div>
+        <div><span style={{ color: 'var(--text-faint)' }}>Duration:</span> {info.duration}</div>
       </div>
       <p
-        className="cc-italic-serif"
-        style={{ lineHeight: 1.5, color: 'var(--cc-text-dim)', margin: 0 }}
+        className="italic-serif"
+        style={{ lineHeight: 1.5, color: 'var(--text-dim)', margin: 0 }}
       >
         {info.description}
       </p>
