@@ -1,22 +1,12 @@
 import React from "react";
 
-/**
- * Themed number input. Empty string is preserved as a valid value so
- * the caller can distinguish "user cleared the field" from "user typed 0".
- *
- * Ported from design-reference/character-creator/ui.jsx (~157-170).
- */
 export function NumberInput({ value, onChange, min, max, label, placeholder }) {
   return (
     <div>
-      {label && (
-        <div className="cc-label" style={{ marginBottom: 6 }}>
-          {label}
-        </div>
-      )}
+      {label && <div className="label" style={{ marginBottom: 6 }}>{label}</div>}
       <input
         type="number"
-        className="cc-input"
+        className="input"
         value={value ?? ""}
         min={min}
         max={max}

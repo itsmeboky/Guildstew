@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Sparkles, Lock, BookOpen } from "lucide-react";
-import { motion } from "framer-motion";
+import { Lock } from "lucide-react";
 import {
   getSpellsForClass,
   getCantripsForClass,
@@ -15,46 +13,53 @@ import {
 } from "@/data/games/dnd5e_2024/rules";
 import { getClassByName } from "@/data/games/dnd5e_2024/classes";
 import InfoTip from "@/components/characterCreator/InfoTip";
+import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
+import { Primer } from "@/components/characterCreator/chrome/Primer";
+import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
 
 /**
- * 2024 D&D 5e — spells step.
+ * 2024 D&D 5e — spells step (exact port of step-spells.jsx).
  *
- * Spell preparation model in 2024: every spellcasting class prepares
- * from a fixed table (no "known" spells); the only differences are
- * the swap rule and prep source.
- *
+ * Preparation model in 2024:
  *   - prepared casters (Bard / Cleric / Druid / Paladin / Ranger /
- *     Sorcerer / Warlock): prepare from the class's full spell list
- *     up to the prep cap.
- *   - spellbook caster (Wizard): prepare from the player's spellbook
- *     (6 spells at L1, +2 on level-up). Spellbook contents are picked
- *     from the wizard list; prep cap is the wizard prepared table.
- *   - always-prepared: features that grant a spell that doesn't count
- *     against the prep cap. Paladin: Divine Smite. Ranger: Hunter's
- *     Mark. The names are SRD-permissible; mechanics are encoded
- *     in SPELLS_KNOWN_TABLE.alwaysPrepared.
- *
- * Non-spellcasters (Barbarian, Fighter, Monk, Rogue baseline) render
- * a short "no spells at this level" notice and validate as complete.
+ *     Sorcerer / Warlock): prepare from the class list up to the
+ *     prep cap.
+ *   - spellbook caster (Wizard): pick {6 + 2*(L-1)} spells for the
+ *     spellbook, then prepare a subset.
+ *   - always-prepared: feature-granted spells that don't count
+ *     against the prep cap (Paladin Divine Smite, Ranger Hunter's
+ *     Mark, etc.).
  *
  * Persistence shape (under characterData.spells):
  *   { cantrips: [name], prepared: [name], spellbook: [name],
  *     alwaysPrepared: [name] }
  */
 
-const ABILITIES_NAME = {
-  bard: "Charisma",
-  cleric: "Wisdom",
-  druid: "Wisdom",
-  paladin: "Charisma",
-  ranger: "Wisdom",
-  sorcerer: "Charisma",
-  warlock: "Charisma",
-  wizard: "Intelligence",
+const CASTING_ABILITY_NAME = {
+  bard: 'Charisma',
+  cleric: 'Wisdom',
+  druid: 'Wisdom',
+  paladin: 'Charisma',
+  ranger: 'Wisdom',
+  sorcerer: 'Charisma',
+  warlock: 'Charisma',
+  wizard: 'Intelligence',
 };
 
 function classIdLower(name) {
-  return String(name || "").toLowerCase();
+  return String(name || '').toLowerCase();
+}
+
+function levelLabel(lvl) {
+  if (lvl === 0) return 'Cantrips';
+  if (lvl === 1) return 'First-level Spells';
+  if (lvl === 2) return 'Second-level Spells';
+  if (lvl === 3) return 'Third-level Spells';
+  return `Level ${lvl} Spells`;
+}
+
+function headingAccent(lvl) {
+  return lvl === 0 ? 'var(--purple)' : 'var(--orange)';
 }
 
 export default function SpellsStep2024({ characterData, updateCharacterData }) {
@@ -64,38 +69,34 @@ export default function SpellsStep2024({ characterData, updateCharacterData }) {
   const tableEntry = getSpellsKnownEntry(className);
 
   const isCaster = !!tableEntry;
-  const shape = tableEntry?.type || "none"; // 'prepared' | 'spellbook' | 'pact' | 'none'
+  const shape = tableEntry?.type || 'none';
   const classKey = cls?.id || classIdLower(className);
+  const abilityName = CASTING_ABILITY_NAME[classKey];
 
   const cantripCount = isCaster ? cantripsKnown(className, classLevel) : 0;
   const preparedCount = isCaster ? spellsPrepared(className, classLevel) : 0;
-  const wizardSpellbookSize = shape === "spellbook"
-    ? (tableEntry.startingSpellbookSpells || 6)
-      + Math.max(0, classLevel - 1) * (tableEntry.spellsPerLevel || 2)
+  const wizardSpellbookSize = shape === 'spellbook'
+    ? (tableEntry.startingSpellbookSpells || 6) + Math.max(0, classLevel - 1) * (tableEntry.spellsPerLevel || 2)
     : 0;
 
-  // Spell pools
+  // Pools
   const cantripPool = useMemo(
     () => (isCaster ? getCantripsForClass(classKey) : []),
     [isCaster, classKey],
   );
   const spellPool = useMemo(
     () => (isCaster
-      ? getSpellsForClass(classKey, classLevel).filter(
-          (s) => Number(s.level ?? 0) > 0,
-        )
+      ? getSpellsForClass(classKey, classLevel).filter((s) => Number(s.level ?? 0) > 0)
       : []),
     [isCaster, classKey, classLevel],
   );
 
-  // Always-prepared (free) spells from the SRD-encoded list.
   const alwaysPrepared = useMemo(() => {
     if (!tableEntry?.alwaysPrepared) return [];
     return tableEntry.alwaysPrepared;
   }, [tableEntry]);
 
-  // Current selections — keep canonical names (matches what
-  // getSpellById returns as `.name`).
+  // Current selections — array state mirrored back into characterData.spells.
   const initial = characterData.spells || {};
   const [cantrips, setCantrips] = useState(
     Array.isArray(initial.cantrips) ? initial.cantrips : [],
@@ -107,17 +108,16 @@ export default function SpellsStep2024({ characterData, updateCharacterData }) {
     Array.isArray(initial.spellbook) ? initial.spellbook : [],
   );
 
-  // Spell slots (for "casts per day" display)
+  // Spell slots (display-only)
   const spellSlots = useMemo(
     () => (isCaster ? getSpellSlots(className, classLevel) : []),
     [isCaster, className, classLevel],
   );
-  const pactSlots = shape === "pact" ? getPactSlots(classLevel) : null;
+  const pactSlots = shape === 'pact' ? getPactSlots(classLevel) : null;
 
-  // Persist whenever picks change.
+  // Mirror picks into characterData.spells so downstream steps see them.
   useEffect(() => {
     if (!isCaster) {
-      // Wipe stale spells when switching to a non-caster class.
       if (cantrips.length || prepared.length || spellbook.length) {
         updateCharacterData({
           spells: { cantrips: [], prepared: [], spellbook: [], alwaysPrepared: [] },
@@ -126,72 +126,37 @@ export default function SpellsStep2024({ characterData, updateCharacterData }) {
       return;
     }
     updateCharacterData({
-      spells: {
-        cantrips,
-        prepared,
-        spellbook,
-        alwaysPrepared,
-      },
+      spells: { cantrips, prepared, spellbook, alwaysPrepared },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cantrips, prepared, spellbook, isCaster]);
 
-  // ── Render — non-spellcaster ─────────────────────────────
+  // ── Empty state — non-caster ────────────────────────────────
   if (!isCaster) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="max-w-3xl mx-auto"
-      >
-        <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]">
-          <h2 className="text-2xl font-bold text-[#FFC6AA] mb-2 flex items-center gap-2">
-            Spells
-            <Badge className="bg-[#37F2D1] text-[#1E2430] text-[10px] font-black">
-              2024
-            </Badge>
-          </h2>
-          <p className="text-white/80 text-sm">
-            {className || "This class"} doesn't gain spellcasting at level
-            {" "}
-            {classLevel} in 2024. Skip ahead — there's nothing to pick here.
-          </p>
+      <div>
+        <StepHeader kicker="Chapter VI" title="The Arcane" />
+        <div className="tome" style={{ padding: 50, textAlign: 'center', marginTop: 28 }}>
+          <div style={{ fontSize: 56, marginBottom: 16, filter: 'sepia(0.2)' }}>⚔️</div>
+          <div className="display" style={{ fontSize: 26, color: 'var(--text)', marginBottom: 8 }}>
+            No spells for {className || 'this class'}
+          </div>
+          <div className="italic-serif" style={{ fontSize: 15, color: 'var(--text-dim)' }}>
+            {className || 'Your class'} doesn't gain spellcasting at level {classLevel} in 2024.
+            Step forward to equipment.
+          </div>
         </div>
-      </motion.div>
+      </div>
     );
   }
 
-  // ── Render — spellcaster ─────────────────────────────────
-
-  const toggle = (list, setList, max) => (name) => {
-    const has = list.includes(name);
-    if (has) {
-      setList(list.filter((n) => n !== name));
-    } else if (list.length < max) {
-      setList([...list, name]);
-    }
-  };
-
-  const toggleCantrip = toggle(cantrips, setCantrips, cantripCount);
-  const toggleSpellbook = toggle(spellbook, setSpellbook, wizardSpellbookSize);
-
-  // Wizard prep pool = spellbook contents (not the whole class list).
-  const prepPool = shape === "spellbook"
+  // Group the prep pool by level. For Wizard, the prep list is the
+  // spellbook contents; for everyone else, it's the full class list.
+  const prepPool = shape === 'spellbook'
     ? spellPool.filter((s) => spellbook.includes(s.name))
     : spellPool;
 
-  const togglePrepared = (name) => {
-    if (alwaysPrepared.includes(name)) return; // locked
-    const has = prepared.includes(name);
-    if (has) {
-      setPrepared(prepared.filter((n) => n !== name));
-    } else if (prepared.length < preparedCount) {
-      setPrepared([...prepared, name]);
-    }
-  };
-
-  const groupedSpellPool = useMemo(() => {
+  const groupedPrepPool = useMemo(() => {
     const groups = new Map();
     for (const s of prepPool) {
       const lvl = Number(s.level ?? 0);
@@ -201,266 +166,459 @@ export default function SpellsStep2024({ characterData, updateCharacterData }) {
     return Array.from(groups.entries()).sort(([a], [b]) => a - b);
   }, [prepPool]);
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="max-w-5xl mx-auto space-y-6"
-    >
-      <div className="bg-[#1E2430]/90 backdrop-blur-sm rounded-2xl p-6 border border-[#2A3441]">
-        <h2 className="text-2xl font-bold text-[#FFC6AA] mb-2 flex items-center gap-2">
-          Spells
-          <Badge className="bg-[#37F2D1] text-[#1E2430] text-[10px] font-black">
-            2024
-          </Badge>
-          <InfoTip width="w-80">
-            2024 unifies spellcasting under a fixed prepared table. The
-            casting ability for {className} is {ABILITIES_NAME[classKey]}.
-          </InfoTip>
-        </h2>
-        <p className="text-white/80 text-sm">
-          {shape === "spellbook"
-            ? `Pick ${wizardSpellbookSize} spells for your spellbook, then prepare up to ${preparedCount} from it.`
-            : `Prepare up to ${preparedCount} spell${preparedCount === 1 ? "" : "s"} from the ${className} list.`}
-        </p>
+  const toggleCantrip = (name) => {
+    if (cantrips.includes(name)) setCantrips(cantrips.filter((n) => n !== name));
+    else if (cantrips.length < cantripCount) setCantrips([...cantrips, name]);
+  };
+  const toggleSpellbook = (name) => {
+    if (spellbook.includes(name)) {
+      setSpellbook(spellbook.filter((n) => n !== name));
+      // Drop a prepared spell that's no longer in the spellbook.
+      if (prepared.includes(name)) setPrepared(prepared.filter((n) => n !== name));
+    } else if (spellbook.length < wizardSpellbookSize) {
+      setSpellbook([...spellbook, name]);
+    }
+  };
+  const togglePrepared = (name) => {
+    if (alwaysPrepared.includes(name)) return; // locked
+    if (prepared.includes(name)) setPrepared(prepared.filter((n) => n !== name));
+    else if (prepared.length < preparedCount) setPrepared([...prepared, name]);
+  };
 
-        <div className="flex items-center gap-3 mt-4 flex-wrap text-sm">
+  // Recommended pre-fill — for 2024 we don't have a curated table, so
+  // just fill cantrips / spellbook / prepared from the front of each
+  // pool up to their caps. Players can always swap individual picks.
+  const useRecommended = () => {
+    const recCantrips = cantripPool.slice(0, cantripCount).map((s) => s.name);
+    const recSpellbook = shape === 'spellbook'
+      ? spellPool.slice(0, wizardSpellbookSize).map((s) => s.name)
+      : spellbook;
+    const recSource = shape === 'spellbook' ? recSpellbook : spellPool.map((s) => s.name);
+    const recPrepared = recSource.slice(0, preparedCount);
+    setCantrips(recCantrips);
+    if (shape === 'spellbook') setSpellbook(recSpellbook);
+    setPrepared(recPrepared);
+  };
+
+  return (
+    <div>
+      <StepHeader
+        kicker="Chapter VI · The Arcane"
+        title="Your spellbook"
+        subtitle={
+          shape === 'pact'
+            ? 'Your patron gifts you magic — fewer slots, but they return on a short rest.'
+            : shape === 'spellbook'
+              ? 'Build a spellbook. Prepare a subset each day.'
+              : 'Cantrips cast at will. Leveled spells cost a slot each.'
+        }
+      />
+
+      <Primer title={`How 2024 ${className} spellcasting works`}>
+        <strong>Cantrips</strong> are free magic. <strong>Leveled spells</strong> cost a slot.{' '}
+        {shape === 'spellbook'
+          ? `Pick ${wizardSpellbookSize} spells for your spellbook, then prepare up to ${preparedCount} of them.`
+          : `Prepare up to ${preparedCount} spell${preparedCount === 1 ? '' : 's'} from the ${className} list.`}{' '}
+        You use <strong>{abilityName || 'your casting ability'}</strong> for spell attacks &amp; save DCs.
+      </Primer>
+
+      {/* Counters strip + Use Recommended CTA */}
+      <div
+        style={{
+          marginTop: 22,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 14,
+        }}
+      >
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           {cantripCount > 0 && (
-            <div className="bg-[#1E2430]/60 rounded-lg px-3 py-1.5">
-              <span className="text-white/60">Cantrips: </span>
-              <span className={`font-bold ${cantrips.length === cantripCount ? "text-[#37F2D1]" : "text-[#FF5722]"}`}>
-                {cantrips.length}/{cantripCount}
-              </span>
-            </div>
+            <CounterChip
+              label="Cantrips"
+              current={cantrips.length}
+              max={cantripCount}
+              color="purple"
+            />
           )}
-          {shape === "spellbook" && (
-            <div className="bg-[#1E2430]/60 rounded-lg px-3 py-1.5">
-              <span className="text-white/60">Spellbook: </span>
-              <span className={`font-bold ${spellbook.length === wizardSpellbookSize ? "text-[#37F2D1]" : "text-[#FF5722]"}`}>
-                {spellbook.length}/{wizardSpellbookSize}
-              </span>
-            </div>
+          {shape === 'spellbook' && (
+            <CounterChip
+              label="Spellbook"
+              current={spellbook.length}
+              max={wizardSpellbookSize}
+              color="orange"
+            />
           )}
           {preparedCount > 0 && (
-            <div className="bg-[#1E2430]/60 rounded-lg px-3 py-1.5">
-              <span className="text-white/60">Prepared: </span>
-              <span className={`font-bold ${prepared.length === preparedCount ? "text-[#37F2D1]" : "text-[#FF5722]"}`}>
-                {prepared.length}/{preparedCount}
-              </span>
-            </div>
+            <CounterChip
+              label="Prepared"
+              current={prepared.length}
+              max={preparedCount}
+              color="orange"
+            />
+          )}
+          {pactSlots && (
+            <CounterChip
+              label="Pact slots"
+              current={pactSlots.slots}
+              max={pactSlots.slots}
+              color="teal"
+              isStatic
+            />
           )}
         </div>
+        <button type="button" className="btn btn-gold" onClick={useRecommended}>
+          ✦ Use recommended
+        </button>
+      </div>
 
-        {/* Slots — display only */}
-        <div className="flex items-center gap-2 mt-3 flex-wrap text-[11px]">
-          {spellSlots.length > 0 && spellSlots.map((slots, idx) => slots > 0 && (
-            <span key={idx} className="bg-[#1E2430] rounded px-2 py-1 text-white/70">
-              L{idx + 1}: {slots}/day
+      {/* Slots display */}
+      {(spellSlots.length > 0 || pactSlots) && (
+        <div
+          style={{
+            marginTop: 14,
+            display: 'flex',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 8,
+            fontSize: 11,
+          }}
+        >
+          <span className="label" style={{ color: 'var(--text-faint)' }}>Slots / day</span>
+          {spellSlots.map((slots, idx) => slots > 0 && (
+            <span key={idx} className="chip" style={{ fontSize: 10 }}>
+              L{idx + 1}: {slots}
             </span>
           ))}
           {pactSlots && (
-            <span className="bg-[#5B4B9E]/30 rounded px-2 py-1 text-white border border-[#5B4B9E]/50">
+            <span className="chip chip-purple" style={{ fontSize: 10 }}>
               Pact: {pactSlots.slots} × L{pactSlots.level}
             </span>
           )}
         </div>
-      </div>
+      )}
 
-      {/* Always-prepared spells */}
+      {/* Always-prepared callout */}
       {alwaysPrepared.length > 0 && (
-        <div className="bg-yellow-400/10 border border-yellow-400/30 rounded-xl p-4">
-          <h3 className="text-yellow-400 font-bold text-sm mb-2 flex items-center gap-2">
-            <Lock className="w-4 h-4" />
-            Always Prepared (free — doesn't count against your cap)
-          </h3>
-          <div className="flex flex-wrap gap-2">
+        <div
+          style={{
+            marginTop: 16,
+            background: 'rgba(212, 169, 81, 0.08)',
+            border: '1px solid rgba(212, 169, 81, 0.32)',
+            borderLeft: '3px solid var(--gold)',
+            borderRadius: 8,
+            padding: '14px 18px',
+          }}
+        >
+          <div
+            className="label"
+            style={{ color: 'var(--gold)', marginBottom: 6, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <Lock className="w-3 h-3" /> Always prepared — free, doesn't count against your cap
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {alwaysPrepared.map((name) => (
-              <Badge key={name} className="bg-yellow-400 text-[#1E2430]">
+              <span key={name} className="chip chip-gold" style={{ fontSize: 11 }}>
                 {name}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Cantrips */}
-      {cantripCount > 0 && (
-        <SpellPicker
-          title={`Cantrips (${cantrips.length}/${cantripCount})`}
-          spells={cantripPool}
-          selected={cantrips}
-          onToggle={toggleCantrip}
-          atMax={cantrips.length >= cantripCount}
-        />
-      )}
-
-      {/* Wizard — spellbook contents */}
-      {shape === "spellbook" && (
-        <div>
-          <h3 className="text-lg font-bold text-[#FFC6AA] mb-3 flex items-center gap-2">
-            <BookOpen className="w-5 h-5" />
-            Spellbook ({spellbook.length}/{wizardSpellbookSize})
-            <InfoTip>
-              Your spellbook holds every spell you can prepare. Wizards
-              start with 6 spells at L1 and add 2 per level on level-up.
-            </InfoTip>
-          </h3>
-          <SpellGrid
-            spells={spellPool}
-            selected={spellbook}
-            onToggle={toggleSpellbook}
-            atMax={spellbook.length >= wizardSpellbookSize}
-            groupByLevel
-          />
-        </div>
-      )}
-
-      {/* Prepared spells */}
-      {preparedCount > 0 && (
-        <div>
-          <h3 className="text-lg font-bold text-[#FFC6AA] mb-3">
-            Prepared spells ({prepared.length}/{preparedCount})
-            {shape === "spellbook" && (
-              <span className="text-xs text-white/50 ml-2 font-normal">
-                (from your spellbook)
               </span>
-            )}
-          </h3>
-          {groupedSpellPool.length === 0 ? (
-            <p className="text-sm text-white/50 italic">
-              {shape === "spellbook"
-                ? "Pick spells for your spellbook above first."
-                : "No spells available for this class at this level."}
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {groupedSpellPool.map(([lvl, list]) => (
-                <div key={lvl}>
-                  <p className="text-xs uppercase text-white/50 mb-2">
-                    Level {lvl}
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {list.map((s) => {
-                      const isSelected = prepared.includes(s.name);
-                      const isLocked = alwaysPrepared.includes(s.name);
-                      const atMax = !isSelected && prepared.length >= preparedCount;
-                      return (
-                        <button
-                          key={s.index}
-                          type="button"
-                          onClick={() => togglePrepared(s.name)}
-                          disabled={isLocked || atMax}
-                          title={isLocked ? "Always prepared" : undefined}
-                          className={`text-left p-2 rounded border-2 text-sm transition-all ${
-                            isSelected
-                              ? "bg-[#37F2D1]/20 border-[#37F2D1] text-white"
-                              : isLocked
-                              ? "bg-yellow-400/10 border-yellow-400/40 text-white/80 cursor-not-allowed"
-                              : atMax
-                              ? "bg-[#1E2430]/40 border-[#1E2430] text-white/30 cursor-not-allowed"
-                              : "bg-[#2A3441] border-[#1E2430] text-white/80 hover:border-[#37F2D1]/50"
-                          }`}
-                        >
-                          <span className="font-semibold">{s.name}</span>
-                          {isSelected && (
-                            <Sparkles className="w-3 h-3 inline ml-1 text-[#37F2D1]" />
-                          )}
-                          {isLocked && (
-                            <Lock className="w-3 h-3 inline ml-1 text-yellow-400" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </motion.div>
-  );
-}
-
-/* ── Sub-components ───────────────────────────────────────── */
-
-function SpellPicker({ title, spells, selected, onToggle, atMax }) {
-  return (
-    <div>
-      <h3 className="text-lg font-bold text-[#FFC6AA] mb-3">{title}</h3>
-      <SpellGrid
-        spells={spells}
-        selected={selected}
-        onToggle={onToggle}
-        atMax={atMax}
-      />
-    </div>
-  );
-}
-
-function SpellGrid({ spells, selected, onToggle, atMax, groupByLevel = false }) {
-  if (!groupByLevel) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-        {spells.map((s) => (
-          <SpellChip
-            key={s.index}
-            spell={s}
-            isSelected={selected.includes(s.name)}
-            onToggle={() => onToggle(s.name)}
-            disabled={!selected.includes(s.name) && atMax}
-          />
-        ))}
-      </div>
-    );
-  }
-  const groups = new Map();
-  for (const s of spells) {
-    const lvl = Number(s.level ?? 0);
-    if (!groups.has(lvl)) groups.set(lvl, []);
-    groups.get(lvl).push(s);
-  }
-  return (
-    <div className="space-y-4">
-      {Array.from(groups.entries()).sort(([a], [b]) => a - b).map(([lvl, list]) => (
-        <div key={lvl}>
-          <p className="text-xs uppercase text-white/50 mb-2">
-            {lvl === 0 ? "Cantrips" : `Level ${lvl}`}
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {list.map((s) => (
-              <SpellChip
-                key={s.index}
-                spell={s}
-                isSelected={selected.includes(s.name)}
-                onToggle={() => onToggle(s.name)}
-                disabled={!selected.includes(s.name) && atMax}
-              />
             ))}
           </div>
         </div>
-      ))}
+      )}
+
+      {/* Spellbook tome */}
+      <div className="tome" style={{ padding: '32px 36px', marginTop: 22 }}>
+        {/* Cantrips chapter */}
+        {cantripCount > 0 && (
+          <>
+            <OrnateHeading color={headingAccent(0)}>{levelLabel(0)}</OrnateHeading>
+            <div
+              className="italic-serif"
+              style={{ textAlign: 'center', color: 'var(--text-dim)', fontSize: 14, marginBottom: 18 }}
+            >
+              {cantrips.length}/{cantripCount} picked · cast unlimited times
+            </div>
+            {cantripPool.length === 0 ? (
+              <EmptyChapter />
+            ) : (
+              <ScrollableSpellArea maxHeight={cantripPool.length > 8 ? 440 : null}>
+                <SpellGrid
+                  spells={cantripPool}
+                  picked={cantrips}
+                  cantrip
+                  maxReached={cantrips.length >= cantripCount}
+                  onToggle={toggleCantrip}
+                />
+              </ScrollableSpellArea>
+            )}
+          </>
+        )}
+
+        {/* Wizard spellbook chapter */}
+        {shape === 'spellbook' && (
+          <>
+            {cantripCount > 0 && <FleurDivider />}
+            <OrnateHeading color={headingAccent(1)}>Spellbook</OrnateHeading>
+            <div
+              className="italic-serif"
+              style={{ textAlign: 'center', color: 'var(--text-dim)', fontSize: 14, marginBottom: 18 }}
+            >
+              {spellbook.length}/{wizardSpellbookSize} picked ·{' '}
+              every spell here can be prepared
+            </div>
+            {spellPool.length === 0 ? (
+              <EmptyChapter />
+            ) : (
+              <ScrollableSpellArea maxHeight={spellPool.length > 8 ? 440 : null}>
+                <SpellGrid
+                  spells={spellPool}
+                  picked={spellbook}
+                  maxReached={spellbook.length >= wizardSpellbookSize}
+                  onToggle={toggleSpellbook}
+                />
+              </ScrollableSpellArea>
+            )}
+          </>
+        )}
+
+        {/* Prepared chapters — grouped by spell level */}
+        {preparedCount > 0 && groupedPrepPool.length > 0 && groupedPrepPool.map(([lvl, list], idx) => (
+          <React.Fragment key={lvl}>
+            <FleurDivider />
+            <OrnateHeading color={headingAccent(lvl)}>
+              {idx === 0 ? `Prepared · ${levelLabel(lvl)}` : levelLabel(lvl)}
+            </OrnateHeading>
+            <div
+              className="italic-serif"
+              style={{ textAlign: 'center', color: 'var(--text-dim)', fontSize: 14, marginBottom: 18 }}
+            >
+              {prepared.filter((n) => list.some((s) => s.name === n)).length} of {list.length}{' '}
+              {shape === 'spellbook' ? 'in your spellbook' : 'available'} · {prepared.length}/{preparedCount}{' '}
+              total prepared
+            </div>
+            <ScrollableSpellArea maxHeight={list.length > 8 ? 440 : null}>
+              <SpellGrid
+                spells={list}
+                picked={prepared}
+                lockedNames={alwaysPrepared}
+                maxReached={prepared.length >= preparedCount}
+                onToggle={togglePrepared}
+              />
+            </ScrollableSpellArea>
+          </React.Fragment>
+        ))}
+
+        {/* Empty prep pool for wizard before they pick a spellbook */}
+        {preparedCount > 0 && groupedPrepPool.length === 0 && (
+          <>
+            <FleurDivider />
+            <OrnateHeading color={headingAccent(1)}>Prepared</OrnateHeading>
+            <p
+              className="italic-serif"
+              style={{ textAlign: 'center', color: 'var(--text-faint)', fontSize: 13, padding: 16 }}
+            >
+              {shape === 'spellbook'
+                ? 'Pick spells for your spellbook above first.'
+                : 'No spells available for this class at this level.'}
+            </p>
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
-function SpellChip({ spell, isSelected, onToggle, disabled }) {
+function EmptyChapter() {
+  return (
+    <p
+      className="italic-serif"
+      style={{ fontSize: 13, color: 'var(--text-faint)', textAlign: 'center', padding: 16 }}
+    >
+      No spells available for this level.
+    </p>
+  );
+}
+
+// ============================================================================
+// Counter chip — same palette as the 2014 step
+// ============================================================================
+function CounterChip({ label, current, max, color, tip, isStatic }) {
+  const accent =
+    color === 'orange' ? 'var(--orange-soft)'
+    : color === 'purple' ? 'var(--purple)'
+    : 'var(--teal)';
+  const bg =
+    color === 'orange' ? 'rgba(255, 83, 0, 0.10)'
+    : color === 'purple' ? 'rgba(201, 163, 255, 0.10)'
+    : 'rgba(55, 242, 209, 0.10)';
+  const border =
+    color === 'orange' ? 'rgba(255, 83, 0, 0.40)'
+    : color === 'purple' ? 'rgba(201, 163, 255, 0.40)'
+    : 'rgba(55, 242, 209, 0.40)';
+  return (
+    <div style={{ padding: '10px 16px', background: bg, border: `1px solid ${border}`, borderRadius: 4 }}>
+      <div
+        className="label"
+        style={{ color: accent, marginBottom: 2, fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+      >
+        {label}
+        {tip && <InfoTip>{tip}</InfoTip>}
+      </div>
+      <div className="display" style={{ fontSize: 22, color: 'var(--text)' }}>
+        {isStatic ? max : (
+          <>
+            {current}
+            <span style={{ color: 'var(--text-faint)', fontSize: 17 }}> / {max}</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// ScrollableSpellArea — soft mask at the bottom edge when overflowing
+// ============================================================================
+function ScrollableSpellArea({ children, maxHeight }) {
+  if (!maxHeight) return children;
+  return (
+    <div
+      style={{
+        maxHeight,
+        overflowY: 'auto',
+        paddingRight: 10,
+        marginRight: -10,
+        maskImage: 'linear-gradient(to bottom, black 0%, black 92%, transparent 100%)',
+        WebkitMaskImage: 'linear-gradient(to bottom, black 0%, black 92%, transparent 100%)',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ============================================================================
+// SpellGrid — 2-col grid of SpellCard buttons (prototype's exact layout)
+// ============================================================================
+function SpellGrid({ spells, picked, cantrip, lockedNames, maxReached, onToggle }) {
+  const locked = new Set(lockedNames || []);
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+      {spells.map((spell) => {
+        const name = spell.name;
+        const isPicked = picked.includes(name);
+        const isLocked = locked.has(name);
+        const disabled = isLocked || (!isPicked && maxReached);
+        return (
+          <SpellCard
+            key={spell.index || name}
+            spell={spell}
+            isPicked={isPicked || isLocked}
+            isLocked={isLocked}
+            disabled={disabled}
+            cantrip={cantrip}
+            onToggle={() => !disabled && onToggle(name)}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================================================================
+// SpellCard — prototype's exact layout: diamond checkmark, name, school/range
+// subtitle, 3-line description, CONC chip. Locked (always-prepared) spells
+// render with a gold lock icon and can't be toggled.
+// ============================================================================
+function SpellCard({ spell, isPicked, isLocked, disabled, cantrip, onToggle }) {
+  const accent = isLocked ? 'var(--gold)' : cantrip ? 'var(--gold)' : 'var(--orange)';
+  const checkColor = (cantrip || isLocked) ? 'var(--ink)' : 'white';
+  const selectedClass = isLocked ? 'selected-gold' : cantrip ? 'selected-gold' : 'selected';
+  const isConcentration =
+    spell.concentration || /concentration/i.test(spell.duration || '');
+  const subtitle = [
+    spell.school?.name || spell.school,
+    spell.casting_time || spell.castingTime,
+    spell.range,
+  ].filter(Boolean).join(' · ');
+  const description = Array.isArray(spell.desc) ? spell.desc.join(' ') : (spell.description || spell.desc || '');
+
   return (
     <button
       type="button"
       onClick={onToggle}
       disabled={disabled}
-      className={`text-left p-2 rounded border-2 text-sm transition-all ${
-        isSelected
-          ? "bg-[#37F2D1]/20 border-[#37F2D1] text-white"
-          : disabled
-          ? "bg-[#1E2430]/40 border-[#1E2430] text-white/30 cursor-not-allowed"
-          : "bg-[#2A3441] border-[#1E2430] text-white/80 hover:border-[#37F2D1]/50"
-      }`}
+      className={`pickable ${isPicked ? selectedClass : ''}`}
+      style={{
+        padding: 14,
+        textAlign: 'left',
+        color: 'inherit',
+        opacity: disabled && !isLocked ? 0.4 : 1,
+        cursor: disabled && !isLocked ? 'not-allowed' : isLocked ? 'default' : 'pointer',
+      }}
+      title={isLocked ? 'Always prepared' : undefined}
     >
-      <span className="font-semibold">{spell.name}</span>
-      {isSelected && <Sparkles className="w-3 h-3 inline ml-1 text-[#37F2D1]" />}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div
+          style={{
+            width: 22,
+            height: 22,
+            flexShrink: 0,
+            marginTop: 2,
+            background: isPicked ? accent : 'transparent',
+            border: `1.5px solid ${isPicked ? accent : 'var(--border-strong)'}`,
+            clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {isPicked && !isLocked && (
+            <span style={{ color: checkColor, fontSize: 10, fontWeight: 800 }}>✓</span>
+          )}
+          {isLocked && (
+            <Lock className="w-2.5 h-2.5" style={{ color: checkColor }} />
+          )}
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+            <span className="display" style={{ fontSize: 17, color: 'var(--text)' }}>
+              {spell.name}
+            </span>
+            {isConcentration && (
+              <span className="chip chip-burgundy" style={{ fontSize: 9, padding: '1px 5px' }}>
+                CONC
+              </span>
+            )}
+          </div>
+          {subtitle && (
+            <div
+              className="italic-serif"
+              style={{ fontSize: 12, color: 'var(--gold-soft)', marginBottom: 6 }}
+            >
+              {subtitle}
+            </div>
+          )}
+          {description && (
+            <div
+              className="italic-serif"
+              style={{
+                fontSize: 13.5,
+                color: 'var(--text-dim)',
+                lineHeight: 1.45,
+                display: '-webkit-box',
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}
+            >
+              {description}
+            </div>
+          )}
+        </div>
+      </div>
     </button>
   );
 }
