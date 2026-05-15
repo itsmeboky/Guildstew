@@ -1,11 +1,14 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { Upload, User } from "lucide-react";
+import { base44 } from "@/api/base44Client";
+import { toast } from "sonner";
 import {
   getSpeciesList,
   getSubspeciesForSpecies,
   getSubspecies,
 } from "@/data/games/dnd5e_2024/species";
 import { getSpeciesIcon } from "@/data/games/dnd5e_2024/assets";
-import { speciesCopy, subspeciesCopy } from "@/data/games/dnd5e_2024/copy";
+import { speciesCopy, subspeciesCopy, ALIGNMENTS } from "@/data/games/dnd5e_2024/copy";
 import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
 import { Primer } from "@/components/characterCreator/chrome/Primer";
 import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
@@ -25,7 +28,7 @@ import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrom
  *   characterData.race      = species.name (legacy field for review)
  *   characterData.subrace   = subspecies.name (legacy)
  */
-export default function SpeciesStep2024({ characterData, updateCharacterData }) {
+export default function IdentityStep2024({ characterData, updateCharacterData }) {
   const speciesList = getSpeciesList();
 
   const selectedSpeciesIndex = useMemo(() => {
@@ -80,6 +83,27 @@ export default function SpeciesStep2024({ characterData, updateCharacterData }) 
 
   const speciesDesc = speciesCopy(currentSpecies?.name)?.description || "";
   const subspeciesDesc = selectedSubspeciesId ? subspeciesCopy(selectedSubspeciesId) : "";
+  const selectedAlignment = ALIGNMENTS.find((a) => a.name === characterData.alignment) || null;
+
+  // Portrait upload (single avatar in 2024 — no separate profile pic)
+  const [uploading, setUploading] = useState(false);
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      updateCharacterData({ avatar_url: file_url });
+      toast.success("Portrait uploaded!");
+    } catch {
+      toast.error("Failed to upload image");
+    } finally {
+      setUploading(false);
+    }
+  };
+  const setAppearance = (patch) => {
+    updateCharacterData({ appearance: { ...(characterData.appearance || {}), ...patch } });
+  };
 
   return (
     <div>
@@ -153,48 +177,21 @@ export default function SpeciesStep2024({ characterData, updateCharacterData }) 
 
           <FleurDivider />
 
-          <div>
-            <OrnateHeading>Identity</OrnateHeading>
-            <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 14 }}>
-              <div>
-                <div className="label" style={{ marginBottom: 6 }}>
-                  Character Name <span style={{ color: 'var(--orange)' }}>*</span>
-                </div>
-                <input
-                  className="input"
-                  value={characterData.name || ''}
-                  onChange={(e) => updateCharacterData({ name: e.target.value })}
-                  placeholder="e.g. Kael Stormwhisper"
-                  maxLength={40}
-                  style={{ fontSize: 16 }}
-                />
-              </div>
-              <div>
-                <div className="label" style={{ marginBottom: 6 }}>Level</div>
-                <select
-                  className="input"
-                  value={characterData.level || 1}
-                  onChange={(e) => updateCharacterData({ level: parseInt(e.target.value, 10) || 1 })}
-                  style={{
-                    appearance: 'none',
-                    backgroundImage:
-                      "url(\"data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237B8AA0' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 12px center',
-                    paddingRight: 36,
-                  }}
-                >
-                  {Array.from({ length: 20 }, (_, i) => i + 1).map((lv) => (
-                    <option key={lv} value={lv}>Level {lv}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
+          <AlignmentSection2024
+            value={characterData.alignment}
+            selected={selectedAlignment}
+            onPick={(name) => updateCharacterData({ alignment: name })}
+          />
         </div>
 
         <div style={{ position: 'sticky', top: 20, alignSelf: 'flex-start' }}>
-          <BackgroundContextCodex />
+          <IdentityCodex2024
+            characterData={characterData}
+            updateCharacterData={updateCharacterData}
+            uploading={uploading}
+            onUpload={handleImageUpload}
+            setAppearance={setAppearance}
+          />
         </div>
       </div>
     </div>
@@ -379,23 +376,272 @@ function SpeciesMedallion({ species, active, onClick }) {
   );
 }
 
-function BackgroundContextCodex() {
+function AlignmentSection2024({ value, selected, onPick }) {
   return (
-    <div className="panel-strong" style={{ padding: 24, position: 'relative' }}>
+    <div>
+      <OrnateHeading>Alignment</OrnateHeading>
+      <div
+        className="italic-serif"
+        style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 14, textAlign: 'center' }}
+      >
+        Roleplay only — no mechanics depend on alignment.
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: 6,
+          maxWidth: 540,
+          margin: '0 auto',
+        }}
+      >
+        {ALIGNMENTS.map((a) => {
+          const active = value === a.name;
+          const short = (a.name.match(/\b(\w)\w*/g) || []).map((s) => s[0]).join('');
+          const [w1, w2] = a.name.split(' ');
+          return (
+            <button
+              key={a.name}
+              type="button"
+              onClick={() => onPick(a.name)}
+              className={`pickable ${active ? 'selected' : ''}`}
+              style={{ padding: '12px 8px', textAlign: 'center', color: 'inherit' }}
+            >
+              <div
+                className="display"
+                style={{
+                  fontSize: 13,
+                  color: active ? 'var(--orange-soft)' : 'var(--gold-soft)',
+                  marginBottom: 2,
+                }}
+              >
+                {short}
+              </div>
+              <div
+                style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', letterSpacing: 0.2 }}
+              >
+                {w1}
+                <br />
+                {w2 || ' '}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {selected && (
+        <div
+          className="italic-serif fade-in"
+          style={{
+            marginTop: 16,
+            textAlign: 'center',
+            fontSize: 14,
+            color: 'var(--text-dim)',
+            lineHeight: 1.5,
+            maxWidth: 540,
+            margin: '16px auto 0',
+          }}
+        >
+          <strong
+            className="display"
+            style={{ color: 'var(--orange-soft)', fontSize: 16, fontWeight: 'normal' }}
+          >
+            {selected.name}.
+          </strong>{' '}
+          {selected.description}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IdentityCodex2024({ characterData, updateCharacterData, uploading, onUpload, setAppearance }) {
+  const appearance = characterData.appearance || {};
+  return (
+    <div
+      className="panel-strong"
+      style={{
+        padding: 24,
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 20,
+      }}
+    >
       <div className="tome-corner tr" />
       <div className="tome-corner bl" />
 
-      <div className="ornate-heading" style={{ marginBottom: 20 }}>
+      <div className="ornate-heading" style={{ marginBottom: 0 }}>
         <span className="ornate-flourish small" />
         <h3 style={{ fontSize: 22, color: 'var(--text)' }}>Codex</h3>
         <span className="ornate-flourish small" />
       </div>
 
-      <p className="italic-serif" style={{ fontSize: 14, color: 'var(--text-dim)', lineHeight: 1.55, margin: 0 }}>
-        In 2024, your <strong style={{ color: 'var(--orange-soft)' }}>background</strong> grants ability score bonuses,
-        two skills, a tool proficiency, and an Origin Feat. You'll pick it on the next step
-        (Abilities & Background) — species no longer grants ASI.
-      </p>
+      {/* THE BASICS */}
+      <div>
+        <div className="label" style={{ marginBottom: 8, color: 'var(--gold-soft)' }}>
+          The Basics
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <div className="label" style={{ marginBottom: 6 }}>
+              Character Name <span style={{ color: 'var(--orange)' }}>*</span>
+            </div>
+            <input
+              className="input"
+              value={characterData.name || ''}
+              onChange={(e) => updateCharacterData({ name: e.target.value })}
+              placeholder="e.g. Kael Stormwhisper"
+              maxLength={40}
+              style={{ fontSize: 16 }}
+            />
+          </div>
+          <div>
+            <div className="label" style={{ marginBottom: 6 }}>Starting Level</div>
+            <select
+              className="input"
+              value={characterData.level || 1}
+              onChange={(e) => updateCharacterData({ level: parseInt(e.target.value, 10) || 1 })}
+              style={{
+                appearance: 'none',
+                backgroundImage:
+                  "url(\"data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237B8AA0' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 12px center',
+                paddingRight: 36,
+              }}
+            >
+              {Array.from({ length: 20 }, (_, i) => i + 1).map((lv) => (
+                <option key={lv} value={lv}>Level {lv}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* PHYSICAL */}
+      <div>
+        <div className="label" style={{ marginBottom: 8, color: 'var(--gold-soft)' }}>Physical</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+          <div>
+            <div className="label" style={{ marginBottom: 6 }}>Age</div>
+            <input
+              type="number"
+              className="input"
+              value={appearance.age ?? ''}
+              onChange={(e) => setAppearance({
+                age: e.target.value === '' ? '' : parseInt(e.target.value, 10),
+              })}
+              placeholder="25"
+            />
+          </div>
+          <div>
+            <div className="label" style={{ marginBottom: 6 }}>Height</div>
+            <input
+              className="input"
+              value={appearance.height || ''}
+              onChange={(e) => setAppearance({ height: e.target.value })}
+              placeholder={"5'10\""}
+            />
+          </div>
+          <div>
+            <div className="label" style={{ marginBottom: 6 }}>Weight</div>
+            <input
+              className="input"
+              value={appearance.weight || ''}
+              onChange={(e) => setAppearance({ weight: e.target.value })}
+              placeholder="180 lbs"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* CHARACTER PORTRAIT */}
+      <div>
+        <div className="label" style={{ marginBottom: 10, color: 'var(--gold-soft)' }}>
+          Character Portrait
+        </div>
+        <div
+          style={{
+            position: 'relative',
+            overflow: 'hidden',
+            borderRadius: 8,
+            background: 'rgba(20, 12, 8, 0.5)',
+            border: '1px solid var(--border)',
+            aspectRatio: '2/3',
+            width: '100%',
+          }}
+        >
+          {characterData.avatar_url ? (
+            <img
+              src={characterData.avatar_url}
+              alt="Character"
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          ) : (
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-faint)',
+              }}
+            >
+              <User className="w-16 h-16" style={{ opacity: 0.35, marginBottom: 10 }} />
+              <p className="italic-serif" style={{ fontSize: 13, color: 'var(--text-faint)' }}>
+                Drop your character art
+              </p>
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => document.getElementById('avatar-upload-2024').click()}
+          disabled={uploading}
+          className="btn btn-primary"
+          style={{
+            marginTop: 10,
+            width: '100%',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            opacity: uploading ? 0.6 : 1,
+          }}
+        >
+          <Upload className="w-4 h-4" />
+          {uploading ? 'Uploading…' : 'Upload portrait'}
+        </button>
+        <input
+          type="file"
+          id="avatar-upload-2024"
+          accept="image/*"
+          onChange={onUpload}
+          className="hidden"
+        />
+      </div>
+
+      {/* BIOGRAPHY */}
+      <div>
+        <div className="label" style={{ marginBottom: 8, color: 'var(--gold-soft)' }}>Biography</div>
+        <textarea
+          className="input italic-serif"
+          value={characterData.description || ''}
+          onChange={(e) => updateCharacterData({ description: e.target.value })}
+          placeholder="Their story so far — origins, scars, the moment they took up the call..."
+          rows={5}
+          style={{
+            resize: 'vertical',
+            minHeight: 110,
+            fontFamily: 'var(--serif)',
+            fontSize: 14,
+            lineHeight: 1.55,
+            fontStyle: 'italic',
+          }}
+        />
+      </div>
     </div>
   );
 }
