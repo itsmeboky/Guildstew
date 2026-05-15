@@ -30,8 +30,8 @@ import {
   characterDataFromNpcForEditor,
 } from "@/components/dnd5e/characterMapping";
 
-import RaceStep from "@/components/characterCreator/RaceStep";
-import SpeciesStep2024 from "@/components/characterCreator/SpeciesStep2024";
+import IdentityStep from "@/components/characterCreator/IdentityStep";
+import IdentityStep2024 from "@/components/characterCreator/IdentityStep2024";
 import ClassStep from "@/components/characterCreator/ClassStep";
 import ClassStep2024 from "@/components/characterCreator/ClassStep2024";
 import AbilityScoresStep from "@/components/characterCreator/AbilityScoresStep";
@@ -59,8 +59,8 @@ import { StepNav } from "@/components/characterCreator/chrome/StepNav";
 import { themeForClass } from "@/data/character-creator-class-themes";
 
 const STEPS = [
-  { id: 'race', label: 'Race', component: RaceStep },
-  { id: 'class', label: 'Class', component: ClassStep },
+  { id: 'identity', label: 'Identity', component: IdentityStep },
+  { id: 'class', label: 'Class & Path', component: ClassStep },
   { id: 'abilities', label: 'Abilities', component: AbilityScoresStep },
   { id: 'features', label: 'Features', component: ClassFeaturesStep },
   { id: 'skills', label: 'Skills', component: SkillsStep },
@@ -546,7 +546,7 @@ export default function CharacterCreator() {
 
   const validateStepImpl = (step) => {
     switch (step.id) {
-      case 'race':
+      case 'identity':
         // 2024 splits the legacy "race step" into species (this
         // step) + background (chosen later in AbilitiesStep2024
         // because the background grants the ASI). The gate here
@@ -555,11 +555,11 @@ export default function CharacterCreator() {
         // this branch, 2024 chars couldn't proceed past the
         // species step because background is empty until later.
         if (characterData.gamePack === 'dnd5e_2024') {
-          return !!(characterData.name && characterData.species?.speciesId);
+          return !!(characterData.name && characterData.species?.speciesId && characterData.alignment);
         }
-        return characterData.name && characterData.race && characterData.background;
+        return characterData.name && characterData.race && characterData.background && characterData.alignment;
       case 'class':
-        return characterData.class && characterData.alignment;
+        return !!characterData.class;
       case 'abilities':
         // Effective post-racial / post-ASI scores cap at 20 per RAW
         // (PHB p. 15). The base-score caps (rolled / point-buy /
@@ -629,15 +629,15 @@ export default function CharacterCreator() {
     if (canProceed) return null;
     const step = STEPS[currentStep];
     switch (step?.id) {
-      case 'race':
+      case 'identity':
         if (!characterData.name) return 'Name your character';
-        if (!characterData.race) return 'Pick a race';
-        if (!characterData.background) return 'Pick a background';
+        if (!characterData.race && !characterData.species?.speciesId) return 'Pick a race';
+        if (characterData.gamePack !== 'dnd5e_2024' && !characterData.background) return 'Pick a background';
+        if (!characterData.alignment) return 'Pick an alignment';
         return 'Complete the identity fields';
       case 'class':
         if (!characterData.class) return 'Pick a class';
-        if (!characterData.alignment) return 'Pick an alignment';
-        return 'Complete your class & alignment';
+        return 'Pick a class';
       case 'abilities':
         return 'Set every ability score between 3 and 20';
       case 'skills':
@@ -781,7 +781,7 @@ const handleSubmit = () => {
   const _stepDef = STEPS[currentStep];
   const _is2024 = characterData.gamePack === 'dnd5e_2024';
   const CurrentStepComponent =
-    _is2024 && _stepDef.id === 'race' ? SpeciesStep2024 :
+    _is2024 && _stepDef.id === 'identity' ? IdentityStep2024 :
     _is2024 && _stepDef.id === 'class' ? ClassStep2024 :
     _is2024 && _stepDef.id === 'abilities' ? AbilitiesStep2024 :
     _is2024 && _stepDef.id === 'features' ? ClassFeaturesStep2024 :

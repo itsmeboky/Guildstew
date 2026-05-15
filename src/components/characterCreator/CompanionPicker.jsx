@@ -175,13 +175,17 @@ export default function CompanionPicker({ characterData, updateCharacterData, ca
                   : "border-slate-700 bg-[#0b1220]/60 hover:border-[#5B4B9E]/60"
               }`}
             >
-              <div className="aspect-square rounded overflow-hidden bg-[#050816] border border-slate-800 mb-2">
-                {opt.image ? (
-                  <img src={opt.image} alt={opt.species} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-slate-700">
-                    <Sparkles className="w-6 h-6" />
-                  </div>
+              <div className="aspect-square rounded overflow-hidden bg-[#050816] border border-slate-800 mb-2 relative">
+                <div className="absolute inset-0 flex items-center justify-center text-slate-700">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                {opt.image && (
+                  <img
+                    src={opt.image}
+                    alt={opt.species}
+                    className="relative w-full h-full object-cover"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
                 )}
               </div>
               <div className="flex items-center justify-between gap-1">
@@ -257,13 +261,17 @@ function CompanionEditor({ current, onChange, onPortraitFile }) {
   return (
     <div className="border-t border-slate-800 pt-4 space-y-3">
       <div className="flex items-center gap-3">
-        <div className="w-16 h-16 rounded overflow-hidden bg-[#050816] border border-slate-700 flex-shrink-0">
-          {current.image ? (
-            <img src={current.image} alt={current.name} className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-slate-600">
-              <Sparkles className="w-5 h-5" />
-            </div>
+        <div className="w-16 h-16 rounded overflow-hidden bg-[#050816] border border-slate-700 flex-shrink-0 relative">
+          <div className="absolute inset-0 flex items-center justify-center text-slate-600">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          {current.image && (
+            <img
+              src={current.image}
+              alt={current.name}
+              className="relative w-full h-full object-cover"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
           )}
         </div>
         <div className="flex-1">
@@ -334,13 +342,17 @@ function CustomCompanionEditor({ current, onChange, onPortraitFile }) {
       </div>
 
       <div className="flex items-start gap-3">
-        <div className="w-20 h-20 rounded overflow-hidden bg-[#050816] border border-amber-400/30 flex-shrink-0">
-          {current.image ? (
-            <img src={current.image} alt={current.name || "Custom companion"} className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-amber-300/40">
-              <PenLine className="w-6 h-6" />
-            </div>
+        <div className="w-20 h-20 rounded overflow-hidden bg-[#050816] border border-amber-400/30 flex-shrink-0 relative">
+          <div className="absolute inset-0 flex items-center justify-center text-amber-300/40">
+            <PenLine className="w-6 h-6" />
+          </div>
+          {current.image && (
+            <img
+              src={current.image}
+              alt={current.name || "Custom companion"}
+              className="relative w-full h-full object-cover"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
           )}
         </div>
         <div className="flex-1 space-y-2">

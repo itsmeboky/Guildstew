@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Upload, User, Move, ZoomIn, ZoomOut, Save, Pencil } from "lucide-react";
+import { base44 } from "@/api/base44Client";
+import { toast } from "sonner";
+import { Slider } from "@/components/ui/slider";
 import { RACES, BACKGROUNDS as SRD_BACKGROUNDS } from "@/components/dnd5e/dnd5eRules";
 import { getModdedRaces } from "@/lib/modEngine";
 import {
@@ -10,6 +14,19 @@ import {
 import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
 import { Primer } from "@/components/characterCreator/chrome/Primer";
 import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
+
+// Alignment lore — moved from ClassStep (per prototype step-identity.jsx).
+const ALIGNMENTS = [
+  { name: "Lawful Good",    short: "LG", desc: "Honest and honorable. Acts for justice within rules.", example: "A paladin who never breaks oath." },
+  { name: "Neutral Good",   short: "NG", desc: "Does the right thing — laws bend when people need help.", example: "A healer who shelters refugees." },
+  { name: "Chaotic Good",   short: "CG", desc: "Free spirit fighting for the little guy.", example: "A thief who steals from tyrants." },
+  { name: "Lawful Neutral", short: "LN", desc: "Order above all. Rules are sacred.", example: "A monk who keeps the code." },
+  { name: "True Neutral",   short: "N",  desc: "Balance. Doesn't lean toward law, chaos, good, or evil.", example: "A druid protecting natural balance." },
+  { name: "Chaotic Neutral",short: "CN", desc: "Acts on impulse. Personal freedom above all.", example: "A wandering rogue chasing the next thrill." },
+  { name: "Lawful Evil",    short: "LE", desc: "Methodical, ambitious, willing to harm to win.", example: "A tyrant who keeps the trains running." },
+  { name: "Neutral Evil",   short: "NE", desc: "Self-interest, no loyalty, no scruples.", example: "An assassin loyal only to gold." },
+  { name: "Chaotic Evil",   short: "CE", desc: "Cruelty and destruction for their own sake.", example: "A berserker who burns it all down." },
+];
 
 // ============================================================================
 // Step 1: Identity — race + background, with a sticky right rail for the
@@ -260,7 +277,7 @@ function fixedLanguagesFor(raceName, subraceName) {
   return [...new Set([...baseLangs, ...subLangs].filter((l) => l && l !== "+1 choice"))];
 }
 
-export default function RaceStep({ characterData, updateCharacterData, campaignId }) {
+export default function IdentityStep({ characterData, updateCharacterData, campaignId }) {
   const { data: moddedRaces = [] } = useQuery({
     queryKey: ["characterCreator", "moddedRaces", campaignId],
     queryFn: () => getModdedRaces(campaignId),
@@ -277,6 +294,94 @@ export default function RaceStep({ characterData, updateCharacterData, campaignI
     combinedRaces.find((r) => r.name === characterData.race) || null;
   const currentSubrace = characterData.subrace || currentRace?.subtypes?.[0] || "";
   const selectedBackground = BACKGROUND_LORE.find((b) => b.name === characterData.background) || null;
+  const selectedAlignment = ALIGNMENTS.find((a) => a.name === characterData.alignment) || null;
+
+  // Portrait + profile drag-zoom state — moved from ClassStep per prototype
+  // step-identity.jsx IdentityCodex.
+  const [uploading, setUploading] = useState(false);
+  const [uploadingProfile, setUploadingProfile] = useState(false);
+  const [fullBodyPosition, setFullBodyPosition] = useState(characterData.avatar_position || { x: 0, y: 0 });
+  const [fullBodyZoom, setFullBodyZoom] = useState(characterData.avatar_zoom || 1);
+  const [profilePosition, setProfilePosition] = useState(characterData.profile_position || { x: 0, y: 0 });
+  const [profileZoom, setProfileZoom] = useState(characterData.profile_zoom || 1);
+  const [isDraggingFull, setIsDraggingFull] = useState(false);
+  const [isDraggingProfile, setIsDraggingProfile] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [fullBodySaved, setFullBodySaved] = useState(!!characterData.avatar_position);
+  const [profileSaved, setProfileSaved] = useState(!!characterData.profile_position);
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      updateCharacterData({ avatar_url: file_url });
+      setFullBodyPosition({ x: 0, y: 0 });
+      setFullBodyZoom(1);
+      setFullBodySaved(false);
+      toast.success("Portrait uploaded!");
+    } catch {
+      toast.error("Failed to upload image");
+    } finally {
+      setUploading(false);
+    }
+  };
+  const handleProfileImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingProfile(true);
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      updateCharacterData({ profile_avatar_url: file_url });
+      setProfilePosition({ x: 0, y: 0 });
+      setProfileZoom(1);
+      setProfileSaved(false);
+      toast.success("Profile picture uploaded!");
+    } catch {
+      toast.error("Failed to upload image");
+    } finally {
+      setUploadingProfile(false);
+    }
+  };
+  const handleMouseDown = (e, type) => {
+    e.preventDefault();
+    if (type === "full" && !fullBodySaved) {
+      setIsDraggingFull(true);
+      setDragStart({ x: e.clientX, y: e.clientY });
+    } else if (type === "profile" && !profileSaved) {
+      setIsDraggingProfile(true);
+      setDragStart({ x: e.clientX, y: e.clientY });
+    }
+  };
+  const handleMouseMove = (e) => {
+    if (isDraggingFull) {
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
+      setFullBodyPosition((p) => ({ x: p.x + dx, y: p.y + dy }));
+      setDragStart({ x: e.clientX, y: e.clientY });
+    } else if (isDraggingProfile) {
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
+      setProfilePosition((p) => ({ x: p.x + dx, y: p.y + dy }));
+      setDragStart({ x: e.clientX, y: e.clientY });
+    }
+  };
+  const handleMouseUp = () => {
+    setIsDraggingFull(false);
+    setIsDraggingProfile(false);
+  };
+  useEffect(() => {
+    if (isDraggingFull || isDraggingProfile) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+      return () => {
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDraggingFull, isDraggingProfile, dragStart]);
 
   // ── Race selection ───────────────────────────────────────────
   const buildRaceUpdates = (race) => {
@@ -378,17 +483,135 @@ export default function RaceStep({ characterData, updateCharacterData, campaignI
             selected={selectedBackground}
             onPick={(name) => updateCharacterData({ background: name })}
           />
+
+          <FleurDivider />
+
+          <AlignmentSection
+            value={characterData.alignment}
+            selected={selectedAlignment}
+            onPick={(name) => updateCharacterData({ alignment: name })}
+          />
         </div>
 
-        {/* RIGHT — character codex */}
+        {/* RIGHT — character codex with name + level + physical +
+            portrait + avatar + biography per prototype IdentityCodex */}
         <div style={{ position: 'sticky', top: 20, alignSelf: 'flex-start' }}>
           <IdentityCodex
-            name={characterData.name}
-            level={characterData.level}
+            characterData={characterData}
             updateCharacterData={updateCharacterData}
+            uploading={uploading}
+            uploadingProfile={uploadingProfile}
+            fullBodyPosition={fullBodyPosition}
+            fullBodyZoom={fullBodyZoom}
+            fullBodySaved={fullBodySaved}
+            profilePosition={profilePosition}
+            profileZoom={profileZoom}
+            profileSaved={profileSaved}
+            onImageUpload={handleImageUpload}
+            onProfileImageUpload={handleProfileImageUpload}
+            onMouseDown={handleMouseDown}
+            setFullBodyZoom={setFullBodyZoom}
+            setProfileZoom={setProfileZoom}
+            onSaveFullBody={() => {
+              setFullBodySaved(true);
+              updateCharacterData({
+                avatar_position: fullBodyPosition,
+                avatar_zoom: fullBodyZoom,
+              });
+            }}
+            onEditFullBody={() => setFullBodySaved(false)}
+            onSaveProfile={() => {
+              setProfileSaved(true);
+              updateCharacterData({
+                profile_position: profilePosition,
+                profile_zoom: profileZoom,
+              });
+            }}
+            onEditProfile={() => setProfileSaved(false)}
           />
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// AlignmentSection — 3x3 .pickable grid per prototype step-identity.jsx
+// ============================================================================
+function AlignmentSection({ value, selected, onPick }) {
+  return (
+    <div>
+      <OrnateHeading>Alignment</OrnateHeading>
+      <div
+        className="italic-serif"
+        style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 14, textAlign: 'center' }}
+      >
+        Roleplay only — no mechanics depend on alignment.
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: 6,
+          maxWidth: 540,
+          margin: '0 auto',
+        }}
+      >
+        {ALIGNMENTS.map((a) => {
+          const active = value === a.name;
+          const [w1, w2] = a.name.split(' ');
+          return (
+            <button
+              key={a.name}
+              type="button"
+              onClick={() => onPick(a.name)}
+              className={`pickable ${active ? 'selected' : ''}`}
+              style={{ padding: '12px 8px', textAlign: 'center', color: 'inherit' }}
+            >
+              <div
+                className="display"
+                style={{
+                  fontSize: 13,
+                  color: active ? 'var(--orange-soft)' : 'var(--gold-soft)',
+                  marginBottom: 2,
+                }}
+              >
+                {a.short}
+              </div>
+              <div
+                style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', letterSpacing: 0.2 }}
+              >
+                {w1}
+                <br />
+                {w2 || ' '}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {selected && (
+        <div
+          className="italic-serif fade-in"
+          style={{
+            marginTop: 16,
+            textAlign: 'center',
+            fontSize: 14,
+            color: 'var(--text-dim)',
+            lineHeight: 1.5,
+            maxWidth: 540,
+            margin: '16px auto 0',
+          }}
+        >
+          <strong
+            className="display"
+            style={{ color: 'var(--orange-soft)', fontSize: 16, fontWeight: 'normal' }}
+          >
+            {selected.name}.
+          </strong>{' '}
+          {selected.desc}{' '}
+          <span style={{ color: 'var(--text-faint)' }}>— {selected.example}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -432,8 +655,8 @@ function RaceSection({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${Math.min(9, Math.max(6, combinedRaces.length))}, 1fr)`,
-          gap: 8,
+          gridTemplateColumns: `repeat(3, 1fr)`,
+          gap: 10,
           marginTop: 18,
         }}
       >
@@ -819,59 +1042,496 @@ function BackgroundDetail({ bg }) {
 // IDENTITY CODEX — right rail (Name + Level only — portrait & appearance
 // live on the Class step in this codebase, kept intentionally compact)
 // ============================================================================
-function IdentityCodex({ name, level, updateCharacterData }) {
+function IdentityCodex({
+  characterData, updateCharacterData,
+  uploading, uploadingProfile,
+  fullBodyPosition, fullBodyZoom, fullBodySaved,
+  profilePosition, profileZoom, profileSaved,
+  onImageUpload, onProfileImageUpload,
+  onMouseDown,
+  setFullBodyZoom, setProfileZoom,
+  onSaveFullBody, onEditFullBody,
+  onSaveProfile, onEditProfile,
+}) {
+  const appearance = characterData.appearance || {};
+  const setAppearance = (patch) => {
+    updateCharacterData({ appearance: { ...appearance, ...patch } });
+  };
   return (
-    <div className="panel-strong" style={{ padding: 24, position: 'relative' }}>
+    <div
+      className="panel-strong"
+      style={{
+        padding: 24,
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 20,
+      }}
+    >
       <div className="tome-corner tr" />
       <div className="tome-corner bl" />
 
-      <div className="ornate-heading" style={{ marginBottom: 20 }}>
+      <div className="ornate-heading" style={{ marginBottom: 0 }}>
         <span className="ornate-flourish small" />
         <h3 style={{ fontSize: 22, color: 'var(--text)' }}>Codex</h3>
         <span className="ornate-flourish small" />
       </div>
 
-      <div style={{ marginBottom: 16 }}>
-        <div className="label" style={{ marginBottom: 6 }}>
-          Character Name <span style={{ color: 'var(--orange)' }}>*</span>
+      {/* THE BASICS — name + level */}
+      <div>
+        <div className="label" style={{ marginBottom: 8, color: 'var(--gold-soft)' }}>
+          The Basics
         </div>
-        <input
-          className="input"
-          value={name || ''}
-          onChange={(e) => updateCharacterData({ name: e.target.value })}
-          placeholder="e.g. Kael Stormwhisper"
-          maxLength={40}
-          style={{ fontSize: 16 }}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <div className="label" style={{ marginBottom: 6 }}>
+              Character Name <span style={{ color: 'var(--orange)' }}>*</span>
+            </div>
+            <input
+              className="input"
+              value={characterData.name || ''}
+              onChange={(e) => updateCharacterData({ name: e.target.value })}
+              placeholder="e.g. Kael Stormwhisper"
+              maxLength={40}
+              style={{ fontSize: 16 }}
+            />
+          </div>
+          <div>
+            <div className="label" style={{ marginBottom: 6 }}>Starting Level</div>
+            <select
+              className="input"
+              value={String(characterData.level || 1)}
+              onChange={(e) => updateCharacterData({ level: parseInt(e.target.value, 10) || 1 })}
+              style={{
+                appearance: 'none',
+                backgroundImage:
+                  "url(\"data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237B8AA0' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 12px center',
+                paddingRight: 36,
+              }}
+            >
+              {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => (
+                <option key={lvl} value={String(lvl)}>Level {lvl}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* PHYSICAL — age + height + weight */}
+      <div>
+        <div className="label" style={{ marginBottom: 8, color: 'var(--gold-soft)' }}>
+          Physical
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+          <div>
+            <div className="label" style={{ marginBottom: 6 }}>Age</div>
+            <input
+              type="number"
+              className="input"
+              value={appearance.age ?? ''}
+              onChange={(e) => setAppearance({
+                age: e.target.value === '' ? '' : parseInt(e.target.value, 10),
+              })}
+              placeholder="25"
+            />
+          </div>
+          <div>
+            <div className="label" style={{ marginBottom: 6 }}>Height</div>
+            <input
+              className="input"
+              value={appearance.height || ''}
+              onChange={(e) => setAppearance({ height: e.target.value })}
+              placeholder={"5'10\""}
+            />
+          </div>
+          <div>
+            <div className="label" style={{ marginBottom: 6 }}>Weight</div>
+            <input
+              className="input"
+              value={appearance.weight || ''}
+              onChange={(e) => setAppearance({ weight: e.target.value })}
+              placeholder="180 lbs"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* CHARACTER PORTRAIT — full-body drag-zoom */}
+      <PortraitPanel
+        label="Character Portrait"
+        avatarUrl={characterData.avatar_url}
+        position={fullBodyPosition}
+        zoom={fullBodyZoom}
+        saved={fullBodySaved}
+        uploading={uploading}
+        onUpload={onImageUpload}
+        onMouseDown={(e) => onMouseDown(e, 'full')}
+        onZoomChange={(val) => setFullBodyZoom(val[0])}
+        onSave={onSaveFullBody}
+        onEdit={onEditFullBody}
+        inputId="avatar-upload"
+        aspectRatio="2/3"
+      />
+
+      {/* PROFILE AVATAR — circular drag-zoom */}
+      <ProfilePanel
+        avatarUrl={characterData.profile_avatar_url || characterData.avatar_url}
+        position={profilePosition}
+        zoom={profileZoom}
+        saved={profileSaved}
+        uploading={uploadingProfile}
+        onUpload={onProfileImageUpload}
+        onMouseDown={(e) => onMouseDown(e, 'profile')}
+        onZoomChange={(val) => setProfileZoom(val[0])}
+        onSave={onSaveProfile}
+        onEdit={onEditProfile}
+      />
+
+      {/* BIOGRAPHY */}
+      <div>
+        <div className="label" style={{ marginBottom: 8, color: 'var(--gold-soft)' }}>
+          Biography
+        </div>
+        <textarea
+          className="input italic-serif"
+          value={characterData.description || ''}
+          onChange={(e) => updateCharacterData({ description: e.target.value })}
+          placeholder="Their story so far — origins, scars, the moment they took up the call..."
+          rows={5}
+          style={{
+            resize: 'vertical',
+            minHeight: 110,
+            fontFamily: 'var(--serif)',
+            fontSize: 14,
+            lineHeight: 1.55,
+            fontStyle: 'italic',
+          }}
         />
       </div>
+    </div>
+  );
+}
 
-      <div>
-        <div className="label" style={{ marginBottom: 6 }}>Level</div>
-        <select
-          className="input"
-          value={String(level || 1)}
-          onChange={(e) => updateCharacterData({ level: parseInt(e.target.value, 10) || 1 })}
+// ============================================================================
+// PortraitPanel — full-body uploader with drag-zoom positioning. Moved
+// verbatim from ClassStep per prototype step-identity.jsx IdentityCodex.
+// ============================================================================
+function PortraitPanel({
+  label, avatarUrl, position, zoom, saved, uploading,
+  onUpload, onMouseDown, onZoomChange, onSave, onEdit,
+  inputId, aspectRatio,
+}) {
+  return (
+    <div>
+      <div className="label" style={{ marginBottom: 10, color: 'var(--gold-soft)' }}>
+        {label}
+      </div>
+      <div
+        style={{
+          position: 'relative',
+          overflow: 'hidden',
+          borderRadius: 8,
+          background: 'rgba(20, 12, 8, 0.5)',
+          border: '1px solid var(--border)',
+          aspectRatio,
+          width: '100%',
+        }}
+      >
+        {avatarUrl ? (
+          <>
+            <img
+              src={avatarUrl}
+              alt="Character"
+              className={saved ? 'absolute' : 'absolute cursor-move'}
+              style={{
+                transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+                transformOrigin: 'center center',
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                pointerEvents: saved ? 'none' : 'auto',
+              }}
+              onMouseDown={onMouseDown}
+              draggable={false}
+            />
+            {!saved && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: 12,
+                  left: 12,
+                  right: 12,
+                  background: 'rgba(5, 8, 22, 0.78)',
+                  borderRadius: 8,
+                  padding: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text)' }}>
+                  <Move className="w-3 h-3" />
+                  <span>Drag to reposition</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ZoomOut className="w-3 h-3" style={{ color: 'var(--text)' }} />
+                  <Slider
+                    value={[zoom]}
+                    onValueChange={onZoomChange}
+                    min={0.5}
+                    max={3}
+                    step={0.1}
+                    className="flex-1"
+                  />
+                  <ZoomIn className="w-3 h-3" style={{ color: 'var(--text)' }} />
+                </div>
+              </div>
+            )}
+            {saved && (
+              <button
+                type="button"
+                onClick={onEdit}
+                style={{
+                  all: 'unset',
+                  cursor: 'pointer',
+                  position: 'absolute',
+                  top: 10,
+                  right: 10,
+                  background: 'var(--orange)',
+                  color: 'white',
+                  padding: 8,
+                  borderRadius: 6,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            )}
+          </>
+        ) : (
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--text-faint)',
+            }}
+          >
+            <User className="w-16 h-16" style={{ opacity: 0.35, marginBottom: 10 }} />
+            <p className="italic-serif" style={{ fontSize: 13, color: 'var(--text-faint)' }}>
+              Drop your character art
+            </p>
+          </div>
+        )}
+      </div>
+
+      {avatarUrl && !saved && (
+        <button
+          type="button"
+          onClick={onSave}
+          className="btn btn-primary"
           style={{
-            appearance: 'none',
-            backgroundImage:
-              "url(\"data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237B8AA0' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
-            backgroundRepeat: 'no-repeat',
-            backgroundPosition: 'right 12px center',
-            paddingRight: 36,
+            marginTop: 10,
+            width: '100%',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
           }}
         >
-          {Array.from({ length: 20 }, (_, i) => i + 1).map((lvl) => (
-            <option key={lvl} value={String(lvl)}>Level {lvl}</option>
-          ))}
-        </select>
+          <Save className="w-4 h-4" />
+          Save position
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => document.getElementById(inputId).click()}
+        disabled={uploading}
+        className="btn btn-primary"
+        style={{
+          marginTop: 10,
+          width: '100%',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          opacity: uploading ? 0.6 : 1,
+        }}
+      >
+        <Upload className="w-4 h-4" />
+        {uploading ? 'Uploading…' : 'Upload portrait'}
+      </button>
+      <input
+        type="file"
+        id={inputId}
+        accept="image/*"
+        onChange={onUpload}
+        className="hidden"
+      />
+    </div>
+  );
+}
+
+// ============================================================================
+// ProfilePanel — circular avatar uploader with drag-zoom positioning.
+// Moved verbatim from ClassStep per prototype step-identity.jsx IdentityCodex.
+// ============================================================================
+function ProfilePanel({
+  avatarUrl, position, zoom, saved, uploading,
+  onUpload, onMouseDown, onZoomChange, onSave, onEdit,
+}) {
+  return (
+    <div>
+      <div className="label" style={{ marginBottom: 10, color: 'var(--gold-soft)' }}>
+        Profile Avatar
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <div style={{ position: 'relative' }}>
+          <div
+            style={{
+              width: 128,
+              height: 128,
+              borderRadius: '50%',
+              overflow: 'hidden',
+              background: 'rgba(20, 12, 8, 0.5)',
+              border: '2px solid var(--orange)',
+              position: 'relative',
+            }}
+          >
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt="Profile"
+                className={saved ? 'absolute' : 'absolute cursor-move'}
+                style={{
+                  transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+                  transformOrigin: 'center center',
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  pointerEvents: saved ? 'none' : 'auto',
+                }}
+                onMouseDown={onMouseDown}
+                draggable={false}
+              />
+            ) : (
+              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <User className="w-12 h-12" style={{ color: 'var(--text-faint)', opacity: 0.45 }} />
+              </div>
+            )}
+          </div>
+          {saved && avatarUrl && (
+            <button
+              type="button"
+              onClick={onEdit}
+              style={{
+                all: 'unset',
+                cursor: 'pointer',
+                position: 'absolute',
+                top: -4,
+                right: -4,
+                background: 'var(--orange)',
+                color: 'white',
+                padding: 6,
+                borderRadius: '50%',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       </div>
 
-      <div
-        className="italic-serif"
-        style={{ marginTop: 18, fontSize: 12, color: 'var(--text-faint)', lineHeight: 1.5 }}
+      {avatarUrl && !saved && (
+        <div
+          style={{
+            marginTop: 12,
+            background: 'rgba(20, 12, 8, 0.5)',
+            borderRadius: 8,
+            padding: 12,
+            border: '1px solid var(--border)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 11,
+              color: 'var(--text-dim)',
+              marginBottom: 8,
+            }}
+          >
+            <Move className="w-3 h-3" />
+            <span>Drag to reposition</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <ZoomOut className="w-3 h-3" style={{ color: 'var(--text-dim)' }} />
+            <Slider
+              value={[zoom]}
+              onValueChange={onZoomChange}
+              min={0.5}
+              max={3}
+              step={0.1}
+              className="flex-1"
+            />
+            <ZoomIn className="w-3 h-3" style={{ color: 'var(--text-dim)' }} />
+          </div>
+          <button
+            type="button"
+            onClick={onSave}
+            className="btn btn-primary"
+            style={{
+              width: '100%',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              fontSize: 12,
+            }}
+          >
+            <Save className="w-3 h-3" />
+            Save position
+          </button>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => document.getElementById('profile-upload').click()}
+        disabled={uploading}
+        className="btn btn-primary"
+        style={{
+          marginTop: 10,
+          width: '100%',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          fontSize: 12,
+          opacity: uploading ? 0.6 : 1,
+        }}
       >
-        Portrait, age, height, weight, and biography are set on the Class step.
-      </div>
+        <Upload className="w-3 h-3" />
+        {uploading ? 'Uploading…' : 'Upload profile photo'}
+      </button>
+      <input
+        type="file"
+        id="profile-upload"
+        accept="image/*"
+        onChange={onUpload}
+        className="hidden"
+      />
     </div>
   );
 }
