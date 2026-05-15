@@ -1,8 +1,8 @@
 import React from "react";
 
 export const STEP_DEFS = [
-  { id: "race", label: "Race" },
-  { id: "class", label: "Class" },
+  { id: "identity", label: "Identity" },
+  { id: "class", label: "Class & Path" },
   { id: "abilities", label: "Abilities" },
   { id: "features", label: "Features" },
   { id: "skills", label: "Skills" },
