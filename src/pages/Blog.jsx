@@ -23,6 +23,25 @@ export default function Blog() {
     },
   });
 
+  // Category catalog — supplies the pill's label + color on each card.
+  const { data: categories = [] } = useQuery({
+    queryKey: ["blogCategoriesPublic"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("blog_categories")
+        .select("slug, label, color");
+      return data || [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const categoryFor = (slug) => {
+    const found = slug ? categories.find((c) => c.slug === slug) : null;
+    return {
+      label: found?.label || (slug || "article").replace(/_/g, " "),
+      color: found?.color || "#37F2D1",
+    };
+  };
+
   return (
     <div className="min-h-screen bg-[#050816] text-white">
       <div className="max-w-5xl mx-auto px-4 md:px-8 py-10">
@@ -48,9 +67,17 @@ export default function Blog() {
                 )}
                 <div className="p-4 flex flex-col flex-1">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-[#050816] border border-slate-700 text-[#37F2D1]">
-                      {(p.category || "article").replace(/_/g, " ")}
-                    </span>
+                    {(() => {
+                      const c = categoryFor(p.category);
+                      return (
+                        <span
+                          className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-[#050816] border"
+                          style={{ borderColor: `${c.color}55`, color: c.color }}
+                        >
+                          {c.label}
+                        </span>
+                      );
+                    })()}
                     {p.is_featured && (
                       <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-amber-500 text-amber-950">
                         Featured

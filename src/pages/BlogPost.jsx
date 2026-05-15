@@ -45,6 +45,26 @@ export default function BlogPost() {
     enabled: !!slug,
   });
 
+  // Live category catalog — drives the pill's label + color. Returns
+  // null when the table is missing or empty so the legacy slug-based
+  // rendering kicks in gracefully.
+  const { data: categories = [] } = useQuery({
+    queryKey: ["blogCategoriesPublic"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("blog_categories")
+        .select("slug, label, color");
+      return data || [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const categoryRecord = post?.category
+    ? categories.find((c) => c.slug === post.category)
+    : null;
+  const categoryLabel = categoryRecord?.label
+    || (post?.category || "article").replace(/_/g, " ");
+  const categoryColor = categoryRecord?.color || "#37F2D1";
+
   // Fire the view-count increment once per post view. The RPC
   // is idempotent from the client's POV — if the slug doesn't
   // match a published post, it no-ops.
@@ -127,8 +147,11 @@ export default function BlogPost() {
         {/* Meta row — category, date, author, views — sits between
             the header banner and the content box. */}
         <div className="flex items-center gap-2 flex-wrap mb-4">
-          <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-[#1E2430] border border-slate-700 text-[#37F2D1]">
-            {(post.category || "article").replace(/_/g, " ")}
+          <span
+            className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-[#1E2430] border"
+            style={{ borderColor: `${categoryColor}55`, color: categoryColor }}
+          >
+            {categoryLabel}
           </span>
           {post.published_at && (
             <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
@@ -176,7 +199,7 @@ export default function BlogPost() {
               src={decorativeImage}
               alt=""
               aria-hidden="true"
-              className="hidden md:block pointer-events-none absolute -bottom-[72px] -right-[120px] w-44 h-44 lg:w-56 lg:h-56 object-contain z-10 drop-shadow-[0_12px_30px_rgba(0,0,0,0.6)]"
+              className="hidden lg:block pointer-events-none absolute -bottom-[120px] -right-[260px] w-44 h-44 xl:w-56 xl:h-56 object-contain z-10 drop-shadow-[0_12px_30px_rgba(0,0,0,0.6)]"
             />
           )}
         </div>
