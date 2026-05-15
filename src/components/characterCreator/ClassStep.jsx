@@ -131,7 +131,7 @@ const CLASSES_DATA = [
     hitDie: "d8", primaryAbility: "Dexterity & Wisdom",
     savingThrows: ["Strength", "Dexterity"],
     features: ["Unarmored Defense", "Martial Arts"],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/4ee7d7898_Monk1.png",
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/f2e85e13a_Monk1.png",
     spellcaster: false, spellAbility: null,
     subclassName: "Monastic Tradition", subclassLevel: 3,
     subclasses: [
@@ -146,7 +146,7 @@ const CLASSES_DATA = [
     hitDie: "d10", primaryAbility: "Strength & Charisma",
     savingThrows: ["Wisdom", "Charisma"],
     features: ["Divine Sense", "Lay on Hands"],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/f4a25cc1f_Paladin1.png",
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/1eb7cd2f2_Paladin1.png",
     spellcaster: "half", spellAbility: "cha", hasDeity: true, hasMount: true,
     subclassName: "Sacred Oath", subclassLevel: 3,
     subclasses: [
@@ -162,7 +162,7 @@ const CLASSES_DATA = [
     hitDie: "d10", primaryAbility: "Dexterity & Wisdom",
     savingThrows: ["Strength", "Dexterity"],
     features: ["Favored Enemy", "Natural Explorer"],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/eed59ea36_Ranger1.png",
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/748e5be38_Ranger1.png",
     spellcaster: "half", spellAbility: "wis", hasCompanion: true,
     subclassName: "Ranger Archetype", subclassLevel: 3,
     subclasses: [
@@ -184,7 +184,7 @@ const CLASSES_DATA = [
     hitDie: "d8", primaryAbility: "Dexterity",
     savingThrows: ["Dexterity", "Intelligence"],
     features: ["Expertise", "Sneak Attack", "Thieves' Cant"],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/eddae7d4e_Rogue1.png",
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/a66f2aac1_Rogue1.png",
     spellcaster: false, spellAbility: null,
     subclassName: "Roguish Archetype", subclassLevel: 3,
     subclasses: [
@@ -200,7 +200,7 @@ const CLASSES_DATA = [
     hitDie: "d6", primaryAbility: "Charisma",
     savingThrows: ["Constitution", "Charisma"],
     features: ["Spellcasting", "Sorcerous Origin"],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/bcebcaf04_Sorcerer1.png",
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/6f5b501db_Sorceror1.png",
     spellcaster: "full", spellAbility: "cha", hasOrigin: true,
     subclassName: "Sorcerous Origin", subclassLevel: 1,
     subclasses: [
@@ -215,7 +215,7 @@ const CLASSES_DATA = [
     hitDie: "d8", primaryAbility: "Charisma",
     savingThrows: ["Wisdom", "Charisma"],
     features: ["Otherworldly Patron", "Pact Magic"],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/3eb6d8a78_Warlock1.png",
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/184c98268_Warlock1.png",
     spellcaster: "pact", spellAbility: "cha", hasPatron: true, hasFamiliar: true,
     subclassName: "Otherworldly Patron", subclassLevel: 1,
     subclasses: [
@@ -237,7 +237,7 @@ const CLASSES_DATA = [
     hitDie: "d6", primaryAbility: "Intelligence",
     savingThrows: ["Intelligence", "Wisdom"],
     features: ["Spellcasting", "Arcane Recovery"],
-    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/a8da4ae3c_Wizard1.png",
+    icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/94cfaa28a_Wizard1.png",
     spellcaster: "full", spellAbility: "int",
     subclassName: "Arcane Tradition", subclassLevel: 2,
     subclasses: [
