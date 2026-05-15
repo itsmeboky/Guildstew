@@ -1,10 +1,8 @@
-import React, { useState } from "react";
+import React from "react";
 import { Sword } from "lucide-react";
-import { base44 } from "@/api/base44Client";
-import { toast } from "sonner";
 import { getGamePack } from "@/data/games";
 import { getClassIcon } from "@/data/games/dnd5e_2024/assets";
-import { classCopy, ALIGNMENTS } from "@/data/games/dnd5e_2024/copy";
+import { classCopy } from "@/data/games/dnd5e_2024/copy";
 import { getSubclassesForClass } from "@/data/games/dnd5e_2024/subclassFeatures";
 import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
 import { Primer } from "@/components/characterCreator/chrome/Primer";
@@ -29,12 +27,9 @@ export default function ClassStep2024({ characterData, updateCharacterData }) {
   const classes = adapter.getClasses();
 
   const selectedClass = classes.find((c) => c.name === characterData.class) || null;
-  const selectedAlignment = ALIGNMENTS.find((a) => a.name === characterData.alignment);
   const selectedCopy = selectedClass ? classCopy(selectedClass.name) : null;
 
   const accent = "var(--page-accent)";
-
-  const [uploading, setUploading] = useState(false);
 
   const handleClassSelect = (clsName) => {
     const cls = classes.find((c) => c.name === clsName);
@@ -44,25 +39,6 @@ export default function ClassStep2024({ characterData, updateCharacterData }) {
       features: [],
       _gamePackClassId: cls.id,
     });
-  };
-
-  const handleImageUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      updateCharacterData({ avatar_url: file_url });
-      toast.success("Portrait uploaded!");
-    } catch {
-      toast.error("Failed to upload image");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const setAppearance = (patch) => {
-    updateCharacterData({ appearance: { ...(characterData.appearance || {}), ...patch } });
   };
 
   return (
@@ -102,23 +78,8 @@ export default function ClassStep2024({ characterData, updateCharacterData }) {
             <EmptyClassPrompt />
           )}
 
-          <AlignmentTome
-            value={characterData.alignment}
-            onChange={(name) => updateCharacterData({ alignment: name })}
-            selected={selectedAlignment}
-          />
-
-          <PortraitTome
-            avatarUrl={characterData.avatar_url}
-            uploading={uploading}
-            onUpload={handleImageUpload}
-            name={characterData.name}
-            onName={(v) => updateCharacterData({ name: v })}
-            description={characterData.description}
-            onDescription={(v) => updateCharacterData({ description: v })}
-            appearance={characterData.appearance}
-            onAppearance={setAppearance}
-          />
+          {/* Alignment, physical details, biography, portrait, profile
+              avatar moved to IdentityStep2024 per prototype step-class.jsx. */}
         </div>
 
         <div
@@ -351,229 +312,6 @@ function SubclassChapter({ subclasses, accent, level, subclass, onPick }) {
   );
 }
 
-function AlignmentTome({ value, onChange, selected }) {
-  const current = value || 'True Neutral';
-  return (
-    <div className="tome" style={{ padding: '32px 36px' }}>
-      <OrnateHeading>Alignment</OrnateHeading>
-      <div
-        className="italic-serif"
-        style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 14, textAlign: 'center' }}
-      >
-        Roleplay only — no mechanics depend on alignment.
-      </div>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: 6,
-          maxWidth: 540,
-          margin: '0 auto',
-        }}
-      >
-        {ALIGNMENTS.map((a) => {
-          const active = current === a.name;
-          const short = (a.name.match(/\b(\w)\w*/g) || []).map((s) => s[0]).join('');
-          const [w1, w2] = a.name.split(' ');
-          return (
-            <button
-              key={a.name}
-              type="button"
-              onClick={() => onChange(a.name)}
-              className={`pickable ${active ? 'selected' : ''}`}
-              style={{ padding: '12px 8px', textAlign: 'center', color: 'inherit' }}
-            >
-              <div
-                className="display"
-                style={{
-                  fontSize: 13,
-                  color: active ? 'var(--orange-soft)' : 'var(--gold-soft)',
-                  marginBottom: 2,
-                }}
-              >
-                {short}
-              </div>
-              <div
-                style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', letterSpacing: 0.2 }}
-              >
-                {w1}
-                <br />
-                {w2 || ' '}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-      {selected && (
-        <div
-          className="italic-serif fade-in"
-          style={{
-            marginTop: 16,
-            textAlign: 'center',
-            fontSize: 14,
-            color: 'var(--text-dim)',
-            lineHeight: 1.5,
-            maxWidth: 540,
-            margin: '16px auto 0',
-          }}
-        >
-          <strong
-            className="display"
-            style={{ color: 'var(--orange-soft)', fontSize: 16, fontWeight: 'normal' }}
-          >
-            {selected.name}.
-          </strong>{' '}
-          {selected.description}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PortraitTome({
-  avatarUrl,
-  uploading,
-  onUpload,
-  name,
-  onName,
-  description,
-  onDescription,
-  appearance,
-  onAppearance,
-}) {
-  return (
-    <div className="tome" style={{ padding: '32px 36px' }}>
-      <OrnateHeading>Portrait &amp; Identity</OrnateHeading>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 22, alignItems: 'flex-start' }}>
-        <div>
-          <div
-            style={{
-              position: 'relative',
-              overflow: 'hidden',
-              borderRadius: 8,
-              background: 'rgba(20, 12, 8, 0.5)',
-              border: '1px solid var(--border)',
-              aspectRatio: '2 / 3',
-              width: '100%',
-            }}
-          >
-            {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt="Character"
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            ) : (
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--text-faint)',
-                  textAlign: 'center',
-                  padding: 16,
-                }}
-              >
-                <div style={{ fontSize: 40, opacity: 0.4, marginBottom: 8 }}>⊕</div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-dim)' }}>
-                  Upload your hero
-                </div>
-              </div>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => document.getElementById('avatar-upload-2024').click()}
-            disabled={uploading}
-            className="btn btn-primary"
-            style={{ width: '100%', marginTop: 10 }}
-          >
-            {uploading ? 'Uploading…' : 'Upload Portrait'}
-          </button>
-          <input
-            type="file"
-            id="avatar-upload-2024"
-            accept="image/*"
-            onChange={onUpload}
-            style={{ display: 'none' }}
-          />
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div>
-            <div className="label" style={{ marginBottom: 6 }}>
-              Character Name <span style={{ color: 'var(--orange)' }}>*</span>
-            </div>
-            <input
-              className="input"
-              value={name || ''}
-              onChange={(e) => onName(e.target.value)}
-              placeholder="e.g. Kael Stormwhisper"
-              maxLength={40}
-              style={{ fontSize: 16 }}
-            />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-            <div>
-              <div className="label" style={{ marginBottom: 6 }}>Age</div>
-              <input
-                type="number"
-                className="input"
-                value={appearance?.age ?? ''}
-                onChange={(e) => onAppearance({ age: e.target.value === '' ? undefined : parseInt(e.target.value, 10) })}
-                placeholder="25"
-              />
-            </div>
-            <div>
-              <div className="label" style={{ marginBottom: 6 }}>Height</div>
-              <input
-                className="input"
-                value={appearance?.height || ''}
-                onChange={(e) => onAppearance({ height: e.target.value })}
-                placeholder={`5'10"`}
-              />
-            </div>
-            <div>
-              <div className="label" style={{ marginBottom: 6 }}>Weight</div>
-              <input
-                className="input"
-                value={appearance?.weight || ''}
-                onChange={(e) => onAppearance({ weight: e.target.value })}
-                placeholder="180 lbs"
-              />
-            </div>
-          </div>
-
-          <div>
-            <div className="label" style={{ marginBottom: 6 }}>
-              Biography <span style={{ color: 'var(--text-faint)', fontWeight: 600, letterSpacing: 0 }}>(optional)</span>
-            </div>
-            <textarea
-              className="input italic-serif"
-              value={description || ''}
-              onChange={(e) => onDescription(e.target.value)}
-              placeholder="Their story so far..."
-              rows={4}
-              style={{
-                resize: 'vertical',
-                minHeight: 90,
-                fontFamily: 'var(--serif)',
-                fontSize: 15,
-                lineHeight: 1.5,
-                fontStyle: 'italic',
-              }}
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function ClassRoster({ classes, current, onPick }) {
   return (
