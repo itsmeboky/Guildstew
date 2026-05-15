@@ -136,8 +136,8 @@ export default function SpeciesStep2024({ characterData, updateCharacterData }) 
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(9, 1fr)',
-              gap: 8,
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: 10,
               marginTop: 18,
             }}
           >

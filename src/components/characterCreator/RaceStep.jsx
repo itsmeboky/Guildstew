@@ -432,8 +432,8 @@ function RaceSection({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${Math.min(9, Math.max(6, combinedRaces.length))}, 1fr)`,
-          gap: 8,
+          gridTemplateColumns: `repeat(3, 1fr)`,
+          gap: 10,
           marginTop: 18,
         }}
       >
