@@ -282,7 +282,16 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
 
           {primaryFeatures.filter((f) => f.choiceRequired).map((feature) => {
             const featureKey = `${characterData.class}-${feature.level}-${feature.name}`;
-            const currentChoice = featureChoices[featureKey];
+            const isSubcls = isSubclassFeature(feature);
+            // Subclass-equivalent picks (Warlock patron, Sorcerer origin,
+            // Cleric domain, Paladin oath, Druid circle, etc.) live on
+            // characterData.subclass — written by ClassStep's
+            // SubclassChapter. The RequiredChoice here mirrors that field
+            // so the orange-bordered "select" panel clears the moment a
+            // subclass is set on the previous step.
+            const currentChoice = isSubcls
+              ? (characterData.subclass || null)
+              : featureChoices[featureKey];
             return (
               <React.Fragment key={featureKey}>
                 <FleurDivider />
@@ -291,11 +300,11 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
                   help={feature.description}
                   required={!currentChoice}
                 >
-                  {isSubclassFeature(feature) ? (
+                  {isSubcls ? (
                     <SubclassPicker
                       choices={feature.choices}
                       value={currentChoice || null}
-                      onSelect={(value) => handleFeatureChoice(featureKey, value)}
+                      onSelect={(value) => updateCharacterData({ subclass: value })}
                       featureName={feature.name}
                       levelGained={feature.level}
                     />
@@ -364,6 +373,8 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
                   onChange={handleMulticlassChange}
                   onRemove={handleRemoveMulticlass}
                   onChooseFeature={handleFeatureChoice}
+                  characterData={characterData}
+                  updateCharacterData={updateCharacterData}
                 />
               ))}
             </>
@@ -696,6 +707,7 @@ function MulticlassPrereqWarning({ characterClass, prereq }) {
 function MulticlassPanel({
   index, mc, attributes, totalLevel, usedClasses,
   featureChoices, onChange, onRemove, onChooseFeature,
+  characterData, updateCharacterData,
 }) {
   return (
     <div
@@ -776,7 +788,14 @@ function MulticlassPanel({
 
             {mcFeatures.filter((f) => f.choiceRequired).map((feature) => {
               const featureKey = `${mc.class}-${feature.level}-${feature.name}`;
-              const currentChoice = featureChoices[featureKey];
+              const isSubcls = isSubclassFeature(feature);
+              // Multiclass subclass-equivalent picks also live on
+              // characterData.subclass (per-class subclass storage is
+              // a separate future concern — for now the dispatcher
+              // only tracks the primary subclass).
+              const currentChoice = isSubcls
+                ? (characterData.subclass || null)
+                : featureChoices[featureKey];
               return (
                 <RequiredChoice
                   key={featureKey}
@@ -784,11 +803,11 @@ function MulticlassPanel({
                   help={feature.description}
                   required={!currentChoice}
                 >
-                  {isSubclassFeature(feature) ? (
+                  {isSubcls ? (
                     <SubclassPicker
                       choices={feature.choices}
                       value={currentChoice || null}
-                      onSelect={(value) => onChooseFeature(featureKey, value)}
+                      onSelect={(value) => updateCharacterData({ subclass: value })}
                       featureName={feature.name}
                       levelGained={feature.level}
                     />
