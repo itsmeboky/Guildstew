@@ -1,7 +1,0 @@
-const DIFFICULT_TERRAIN_GRADES = {
-    NONE: 0,
-    DIFFICULT: 1,
-    GREATER: 2,
-} as const;
-
-export { DIFFICULT_TERRAIN_GRADES };
