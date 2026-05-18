@@ -14,12 +14,14 @@ import {
   ANCESTRY_FEATS,
   ANCESTRY_FEAT_LEVELS,
 } from '../../data/index.js';
+import { getAncestryTip } from '../../content/ancestryTips.js';
 import { STEPS } from '../../config/steps.js';
 
 const StepAncestry = ({ data, update }) => {
   const selected = ANCESTRIES.find(a => a.id === data.ancestry) || ANCESTRIES[0];
   const heritages = HERITAGES_BY_ANCESTRY[selected.id] || [];
   const Icon = selected.icon;
+  const tipEntry = getAncestryTip(selected.id);
 
   // auto-select first ancestry on mount if none picked
   useEffect(() => {
@@ -50,7 +52,7 @@ const StepAncestry = ({ data, update }) => {
           <div className="col-span-12 md:col-span-4 flex flex-col gap-3 md:border-r md:border-pf-brass-dim/20 md:pr-6">
             {Icon && <Icon size={48} className="text-pf-brass" strokeWidth={1.2} />}
             <h3 className="font-display text-3xl text-pf-bone">{selected.name}</h3>
-            <ComplexityBadge level={selected.complexity} />
+            <ComplexityBadge level={tipEntry.complexity} />
             <p className="font-body text-sm text-pf-parchment leading-relaxed">{selected.description}</p>
           </div>
 
@@ -86,7 +88,7 @@ const StepAncestry = ({ data, update }) => {
           <div className="col-span-12 md:col-span-4">
             <SectionHeader>For New Players</SectionHeader>
             <p className="font-body text-sm text-pf-parchment leading-relaxed italic">
-              "{selected.tip}"
+              "{tipEntry.tip}"
             </p>
           </div>
         </div>
