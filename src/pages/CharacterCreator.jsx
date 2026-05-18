@@ -831,19 +831,33 @@ const handleSubmit = () => {
             <h1 className="text-4xl font-bold text-white">Character Creator</h1>
             <p className="text-white/60">Pick how you want to build your next hero.</p>
           </motion.div>
-          <ModeSelector onSelect={(next) => {
-            // Edits + NPCs bypass the limit (handled earlier).
-            // For brand-new PCs, enforce the tier's character cap.
-            const limit = sub.maxCharacters;
-            if (Number.isFinite(limit) && existingCharacterCount >= limit) {
-              toast.error(
-                `You've reached your ${limit} character limit. Upgrade to create more!`,
-              );
-              navigate(createPageUrl('Settings') + '?tab=subscription');
-              return;
-            }
-            setMode(next);
-          }} />
+          <ModeSelector
+            initialGamePack={characterData.gamePack}
+            onSelect={({ mode: next, gamePack: pickedPack }) => {
+              // Edits + NPCs bypass the limit (handled earlier).
+              // For brand-new PCs, enforce the tier's character cap.
+              const limit = sub.maxCharacters;
+              if (Number.isFinite(limit) && existingCharacterCount >= limit) {
+                toast.error(
+                  `You've reached your ${limit} character limit. Upgrade to create more!`,
+                );
+                navigate(createPageUrl('Settings') + '?tab=subscription');
+                return;
+              }
+              // Persist the player's game-pack choice onto
+              // characterData so the rest of the creator (and the
+              // save handler) sees it. Mirror to both shapes the
+              // codebase reads.
+              if (pickedPack) {
+                setCharacterData((prev) => ({
+                  ...prev,
+                  gamePack: pickedPack,
+                  game_pack: pickedPack,
+                }));
+              }
+              setMode(next);
+            }}
+          />
         </div>
       </div>
     );
@@ -890,6 +904,72 @@ const handleSubmit = () => {
             onBack={() => setMode(null)}
             onComplete={saveAiGenerated}
           />
+        </div>
+      </div>
+    );
+  }
+
+  // Pathfinder 2e — testing slot. The pack picker on the ModeSelector
+  // surfaces this as an option for all players, but no
+  // src/data/games/pathfinder_2e/ data module ships yet. Short-circuit
+  // to a friendly "Coming soon" tome instead of routing the player
+  // through the D&D step components (which would crash trying to
+  // resolve PF2e classes / spells against an empty data adapter).
+  if (mode === 'full' && characterData.gamePack === 'pathfinder_2e') {
+    return (
+      <div className="cc-root">
+        <div className="backdrop" aria-hidden />
+        <div className="class-aura" aria-hidden />
+        <div className="relative z-10 max-w-3xl mx-auto p-6 pt-16">
+          <div
+            className="tome"
+            style={{
+              padding: '48px 36px',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 16,
+            }}
+          >
+            <div style={{ fontSize: 56, opacity: 0.7 }}>⚔️</div>
+            <h2
+              className="display"
+              style={{ fontSize: 38, color: 'var(--text)', lineHeight: 1.1 }}
+            >
+              Pathfinder 2e — coming soon
+            </h2>
+            <p
+              className="italic-serif"
+              style={{
+                fontSize: 16,
+                color: 'var(--text-dim)',
+                maxWidth: 520,
+                lineHeight: 1.55,
+                margin: 0,
+              }}
+            >
+              The Pathfinder picker is live so testers can verify the game-pack
+              flow end-to-end. The actual species / class / spell / equipment
+              data modules haven't landed yet — pick a D&D 5e pack to build
+              a character today.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setMode(null);
+                setCharacterData((prev) => ({
+                  ...prev,
+                  gamePack: 'dnd5e_2014',
+                  game_pack: 'dnd5e_2014',
+                }));
+              }}
+              className="btn btn-primary"
+              style={{ marginTop: 8 }}
+            >
+              ← Back to pack picker
+            </button>
+          </div>
         </div>
       </div>
     );

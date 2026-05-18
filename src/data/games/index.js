@@ -63,6 +63,13 @@ import {
 
 import * as dnd5e_2024_rules from "./dnd5e_2024/rules.js";
 
+import {
+  getEquipment as getEquipment_pf2e,
+  getEquipmentByCategory as getEquipmentByCategory_pf2e,
+  getEquipmentByName as getEquipmentByName_pf2e,
+  getEquipmentById as getEquipmentById_pf2e,
+} from "./pathfinder_2e/equipment.js";
+
 const ADAPTERS = {
   dnd5e_2014: {
     id: "dnd5e_2014",
@@ -93,6 +100,18 @@ const ADAPTERS = {
     hasPerLevelFeatures: hasPerLevelFeatures_2024,
     getSubclassFeaturesAtLevel: getSubclassFeaturesAtLevel_2024,
     rules: dnd5e_2024_rules,
+  },
+  // Pathfinder 2e — testing-only stub. No data module ships yet;
+  // CharacterCreator.jsx short-circuits picks to a "Coming soon"
+  // tome before any step tries to render against this adapter.
+  // Registered so `getGamePack('pathfinder_2e')` returns a valid
+  // adapter instead of falling back to dnd5e_2014.
+  pathfinder_2e: {
+    id: "pathfinder_2e",
+    getEquipment: getEquipment_pf2e,
+    getEquipmentByCategory: getEquipmentByCategory_pf2e,
+    getEquipmentByName: getEquipmentByName_pf2e,
+    getEquipmentById: getEquipmentById_pf2e,
   },
 };
 
