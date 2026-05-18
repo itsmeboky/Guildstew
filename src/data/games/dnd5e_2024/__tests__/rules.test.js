@@ -605,9 +605,12 @@ test("Mystic Arcanum: grants 1 free cast per spell level at 11/13/15/17", () => 
   assert.deepEqual(rules2024.mysticArcanumLevels(20), [6, 7, 8, 9]);
 });
 
-test("Eldritch Invocations: 1 at L1 (2024 starts earlier than 2014), 10 by L18", () => {
-  // 2024 grants the first Invocation at level 1; 2014 started at L2.
-  assert.equal(rules2024.eldritchInvocationsKnown(1),  1);
+test("Eldritch Invocations: 2 at L1 (2024 PHB grants two at L1), 10 by L18", () => {
+  // 2024 grants TWO Invocations at L1 (PHB 2024 Warlock features
+  // table); 2014 started at L2 with 2 Invocations. Off-by-one in
+  // the legacy table left the displayed count short by one for any
+  // 2024 Warlock from L1 through L4.
+  assert.equal(rules2024.eldritchInvocationsKnown(1),  2);
   assert.equal(rules2024.eldritchInvocationsKnown(2),  3);
   assert.equal(rules2024.eldritchInvocationsKnown(5),  5);
   assert.equal(rules2024.eldritchInvocationsKnown(7),  6);
