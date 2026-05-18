@@ -91,6 +91,51 @@ test("2014 Wizard L5 spellbook = 14 (6 starting + 4 level-ups × 2)", () => {
 });
 
 // ──────────────────────────────────────────────────────────
+// 2014 — picker / validator parity. The validator
+// (spellsCompletion.js) reads from the same SPELLS_KNOWN_TABLE
+// helpers tested above; the picker (SpellsStep.jsx) now calls
+// getSpellsCompletion() to derive its caps so the two can't
+// drift. The previous bug had the picker cap by SLOTS, leaving
+// Bard / Cleric / Druid / Warlock / Wizard stuck at L1 — these
+// assertions lock the canonical L1 caps so a regression flips
+// the test, not the user's Next button.
+// ──────────────────────────────────────────────────────────
+
+test("2014 L1 Wizard picker cap = 3 cantrips + 6 spellbook spells (not 2 L1 slots)", () => {
+  const cantripCap = cantripsKnown("Wizard", 1);
+  const data = SPELLS_KNOWN_TABLE.Wizard;
+  const nonCantripCap = data.startingSpells; // L1 = startingSpells exactly
+  assert.equal(cantripCap, 3);
+  assert.equal(nonCantripCap, 6,
+    "Wizard L1 spellbook cap must be 6 — capping by 2 L1 slots is the legacy bug");
+});
+
+test("2014 L1 Bard picker cap = 2 cantrips + 4 spells known (not 2 L1 slots)", () => {
+  const cantripCap = cantripsKnown("Bard", 1);
+  const nonCantripCap = spellsKnown("Bard", 1);
+  assert.equal(cantripCap, 2);
+  assert.equal(nonCantripCap, 4,
+    "Bard L1 must allow 4 spell picks — capping by 2 slots is the legacy bug");
+});
+
+test("2014 L1 Warlock picker cap = 2 cantrips + 2 spells known (NOT 1 pact slot)", () => {
+  const cantripCap = cantripsKnown("Warlock", 1);
+  const nonCantripCap = spellsKnown("Warlock", 1);
+  assert.equal(cantripCap, 2);
+  assert.equal(nonCantripCap, 2,
+    "Warlock L1 must allow 2 spell picks — pact slots (1) are casts/day, not the pick cap");
+});
+
+test("2014 L1 Cleric picker cap = 3 cantrips + (WIS_mod + level) prepared (not 2 slots)", () => {
+  const wis = CASTER_ATTRS.wis;
+  const cantripCap = cantripsKnown("Cleric", 1);
+  const nonCantripCap = spellsPrepared("Cleric", 1, abilityModifier(wis));
+  assert.equal(cantripCap, 3);
+  assert.equal(nonCantripCap, 4,
+    "Cleric L1 with WIS 16 must allow 4 prepared — capping by 2 slots is the legacy bug");
+});
+
+// ──────────────────────────────────────────────────────────
 // 2024 — expected L1 caps per class
 // ──────────────────────────────────────────────────────────
 
