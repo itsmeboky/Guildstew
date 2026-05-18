@@ -1,0 +1,86 @@
+{{#if traditions}}<p><strong>{{localize "PF2E.SpellTraditionsLabel"}}</strong> {{traditions}}</p>{{/if}}
+{{#if (or cast cost secondaryCasters)}}
+    <p class="item-block-line">
+        {{#if cast}}
+            <span>
+                <strong>{{localize "PF2E.Item.Spell.Cast.Noun"}}</strong>
+                <span>{{cast}}</span>
+                {{~#if (or cost secondaryCasters)}}{{localize "PF2E.Item.Spell.LineSplit"}}{{/if}}
+            </span>
+        {{/if}}
+        {{#if cost}}
+            <span>
+                <strong>{{localize "PF2E.Item.Spell.Cost"}}</strong>
+                <span>{{cost}}</span>
+                {{~#if secondaryCasters}}{{localize "PF2E.Item.Spell.LineSplit"}}{{/if}}
+            </span>
+        {{/if}}
+        {{#if secondaryCasters}}
+            <span>
+                <strong>{{localize "PF2E.Item.Spell.Ritual.SecondaryCasters"}}</strong>
+                <span>{{secondaryCasters}}</span>
+            </span>
+        {{/if}}
+    </p>
+{{/if}}
+{{#if (or primaryCheck secondaryChecks)}}
+    <p class="item-block-line">
+        {{#if primaryCheck}}
+            <span>
+                <strong>{{localize "PF2E.Item.Spell.Ritual.PrimaryCheck"}}</strong>
+                <span>{{primaryCheck}}</span>
+                {{~#if secondaryChecks}}{{localize "PF2E.Item.Spell.LineSplit"}}{{/if}}
+            </span>
+        {{/if}}
+        {{#if secondaryChecks}}
+            <span>
+                <strong>{{localize "PF2E.Item.Spell.Ritual.SecondaryChecks"}}</strong>
+                <span>{{secondaryChecks}}</span>
+            </span>
+        {{/if}}
+    </p>
+{{/if}}
+{{#if (or range targets area)}}
+    <p class="item-block-line{{#unless (or defense duration)}} last{{/unless}}">
+        {{#if range}}
+            <span>
+                <strong>{{localize "PF2E.TraitRange"}}</strong>
+                {{range}}
+                {{~#if (or area targets)}}{{localize "PF2E.Item.Spell.LineSplit"}}{{/if}}
+            </span>
+        {{/if}}
+        {{#if area}}
+            <span>
+                <strong>{{localize "PF2E.Area.Label"}}</strong>
+                <span {{#unless (eq area.label area.baseLabel)}}class="adjusted" data-tooltip="{{localize "PF2E.Item.Spell.BaseValue" value=area.baseLabel}}"{{/unless}}>
+                    {{area.label}}
+                </span>
+            </span>
+        {{/if}}
+        {{#if targets}}
+            <span>
+                <strong>{{localize "PF2E.SpellTargetLabel"}}</strong>
+                {{targets}}
+            </span>
+        {{/if}}
+    </p>
+{{/if}}
+{{#if (or defense duration)}}
+    <p class="item-block-line">
+        {{#if defense}}
+            <span>
+                <strong>{{localize "PF2E.Item.Spell.Defense.Label"}}</strong>
+                {{defense}}
+                {{~#if duration}}{{localize "PF2E.Item.Spell.LineSplit"}}{{/if}}
+            </span>
+        {{/if}}
+        {{#if duration}}
+            <span>
+                <strong>{{localize "PF2E.Time.Duration"}}</strong>
+                {{duration}}
+            </span>
+        {{/if}}
+    </p>
+{{/if}}
+
+{{#if (or traditions cast cost secondaryCasters primaryCheck secondaryChecks range targets area defense duration)}}<hr class="item-block-divider" />{{/if}}

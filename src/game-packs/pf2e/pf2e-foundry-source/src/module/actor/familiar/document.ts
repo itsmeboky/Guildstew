@@ -1,0 +1,235 @@
+import { CreaturePF2e, type CharacterPF2e } from "@actor";
+import type { ActorPF2e } from "@actor/base.ts";
+import type { CreatureUpdateCallbackOptions } from "@actor/creature/index.ts";
+import { CreatureSaves } from "@actor/creature/saves.ts";
+import { createEncounterRollOptions, setHitPointsRollOptions } from "@actor/helpers.ts";
+import { Modifier, applyStackingRules } from "@actor/modifiers.ts";
+import { SAVE_TYPES } from "@actor/values.ts";
+import type { DatabaseDeleteCallbackOptions } from "@common/abstract/_types.d.mts";
+import type { ActorUUID } from "@common/documents/_module.d.mts";
+import type { ItemType } from "@item/types.ts";
+import type { CombatantPF2e, EncounterPF2e } from "@module/encounter/index.ts";
+import type { RuleElement } from "@module/rules/index.ts";
+import type { TokenDocumentPF2e } from "@scene";
+import { Predicate } from "@system/predication.ts";
+import { ArmorStatistic, HitPointsStatistic, PerceptionStatistic, Statistic } from "@system/statistic/index.ts";
+import * as R from "remeda";
+import type { FamiliarSource, FamiliarSystemData } from "./data.ts";
+
+class FamiliarPF2e<TParent extends TokenDocumentPF2e | null = TokenDocumentPF2e | null> extends CreaturePF2e<TParent> {
+    /** The familiar's attack statistic, for the rare occasion it must make an attack roll */
+    declare attackStatistic: Statistic;
+
+    override get allowedItemTypes(): (ItemType | "physical")[] {
+        return [...super.allowedItemTypes, "action"];
+    }
+
+    /** The familiar's master, if selected */
+    get master(): CharacterPF2e | null {
+        // The Actors world collection needs to be initialized for data preparation
+        if (!this.system.master.id) return null;
+
+        const master = game.actors.get(this.system.master.id);
+        if (master?.isOfType("character")) {
+            master.familiar ??= this;
+            return master;
+        }
+
+        return null;
+    }
+
+    /** Returns attribute modifier value from the master, or 0 if no attribute */
+    get masterAttributeModifier(): number {
+        const attribute = this.system.master.ability;
+        return attribute ? (this.master?.system.abilities[attribute].mod ?? 0) : 0;
+    }
+
+    /** @deprecated for internal use but not rule elements referencing it until a migration is in place. */
+    get masterAbilityModifier(): number {
+        return this.masterAttributeModifier;
+    }
+
+    override get combatant(): CombatantPF2e<EncounterPF2e> | null {
+        return this.master?.combatant ?? null;
+    }
+
+    /** Re-render the sheet if data preparation is called from the familiar's master */
+    override reset({ fromMaster = false } = {}): void {
+        super.reset();
+        if (fromMaster) this.sheet.render();
+    }
+
+    /** Set base emphemeral data for later updating by derived-data preparation. */
+    override prepareBaseData(): void {
+        super.prepareBaseData();
+
+        // A familiar "[...] can never benefit from item bonuses." (CRB pg 217)
+        const isItemBonus = new Predicate(["bonus:type:item"]);
+        this.synthetics.modifierAdjustments.all.push({
+            slug: null,
+            test: (options) => isItemBonus.test(options),
+            suppress: true,
+        });
+
+        // Set encounter roll options from the master's perspective
+        const master = this.master;
+        if (master) {
+            this.flags[SYSTEM_ID].rollOptions.all = fu.mergeObject(
+                this.flags[SYSTEM_ID].rollOptions.all,
+                createEncounterRollOptions(master),
+            );
+        }
+    }
+
+    /** Skip rule-element preparation if there is no master */
+    protected override prepareRuleElements(): RuleElement[] {
+        return this.master ? super.prepareRuleElements() : [];
+    }
+
+    override prepareDerivedData(): void {
+        super.prepareDerivedData();
+        const { level, master, masterAttributeModifier, system } = this;
+        const attributeModifier =
+            masterAttributeModifier > 2
+                ? new Modifier(`PF2E.MasterAbility.${system.master.ability}`, masterAttributeModifier, "untyped")
+                : new Modifier(`PF2E.Actor.Familiar.MinimumAttributeModifier`, 3, "untyped");
+
+        // Hit Points
+        const hitPoints = new HitPointsStatistic(this, { baseMax: level * 5 });
+        this.system.attributes.hp = hitPoints.getTraceData();
+        setHitPointsRollOptions(this);
+
+        // Armor Class
+        const masterModifier = master
+            ? new Modifier({
+                  label: "PF2E.Actor.Familiar.Master.ArmorClass",
+                  slug: "base",
+                  modifier: master.armorClass.modifiers
+                      .filter((m) => m.enabled && !["status", "circumstance"].includes(m.type))
+                      .reduce((total, modifier) => total + modifier.value, 0),
+              })
+            : null;
+        const statistic = new ArmorStatistic(this, { modifiers: [masterModifier].filter(R.isTruthy) });
+        this.armorClass = statistic.dc;
+        system.attributes.ac = fu.mergeObject(statistic.getTraceData(), { attribute: statistic.attribute ?? "dex" });
+
+        // Saving Throws
+        const saves = R.mapToObj(SAVE_TYPES, (saveType) => {
+            const save = master?.saves[saveType];
+            const source = save?.modifiers.filter((m) => !["status", "circumstance"].includes(m.type)) ?? [];
+            const totalMod = applyStackingRules(source);
+            const attribute = CONFIG.PF2E.savingThrowDefaultAttributes[saveType];
+            const selectors = [saveType, `${attribute}-based`, "saving-throw", "all"];
+            const statistic = new Statistic(this, {
+                slug: saveType,
+                label: _loc(CONFIG.PF2E.saves[saveType]),
+                domains: selectors,
+                modifiers: [new Modifier(`PF2E.MasterSavingThrow.${saveType}`, totalMod, "untyped")],
+                check: { type: "saving-throw" },
+            });
+            return [saveType, statistic];
+        });
+        this.saves = new CreatureSaves(saves);
+        system.saves = R.mapToObj(SAVE_TYPES, (t) => [t, this.saves[t].getTraceData()]);
+
+        // Attack
+        const masterLevel = game.pf2e.settings.variants.pwol.enabled ? 0 : level;
+        this.attackStatistic = new Statistic(this, {
+            slug: "attack-roll",
+            label: "PF2E.Familiar.AttackRoll",
+            modifiers: [new Modifier("PF2E.MasterLevel", masterLevel, "untyped")],
+            check: { type: "attack-roll" },
+        });
+        system.attack = this.attackStatistic.getTraceData();
+
+        // Perception
+        this.perception = new PerceptionStatistic(this, {
+            slug: "perception",
+            label: "PF2E.PerceptionLabel",
+            attribute: "wis",
+            domains: ["perception", "wis-based", "all"],
+            modifiers: [new Modifier("PF2E.MasterLevel", masterLevel, "untyped"), attributeModifier],
+            check: { type: "perception-check" },
+            senses: system.perception.senses,
+        });
+        system.perception = fu.mergeObject(this.perception.getTraceData(), { attribute: "wis" as const });
+
+        // Skills
+        this.skills = R.mapToObj(R.entries(CONFIG.PF2E.skills), ([skill, { label, attribute }]) => {
+            const modifiers = [new Modifier("PF2E.MasterLevel", masterLevel, "untyped")];
+            if (["acrobatics", "stealth"].includes(skill)) {
+                modifiers.push(attributeModifier);
+            }
+
+            const domains = [skill, `${attribute}-based`, "skill-check", "all"];
+            const statistic = new Statistic(this, {
+                slug: skill,
+                label,
+                attribute,
+                domains,
+                modifiers,
+                lore: false,
+                check: { type: "skill-check" },
+            });
+
+            // Create trace data in system data
+            this.system.skills[skill] = fu.mergeObject(statistic.getTraceData(), { attribute });
+
+            return [skill, statistic];
+        });
+
+        this.prepareMovementData();
+    }
+
+    /* -------------------------------------------- */
+    /*  Event Listeners and Handlers                */
+    /* -------------------------------------------- */
+
+    /** Detect if a familiar is being reassigned from a master */
+    protected override async _preUpdate(
+        changed: DeepPartial<this["_source"]>,
+        options: CreatureUpdateCallbackOptions & { previousMaster?: ActorUUID },
+        user: fd.BaseUser,
+    ): Promise<boolean | void> {
+        const newId = changed.system?.master?.id ?? this.system.master.id;
+        if (newId !== this.system.master.id) {
+            options.previousMaster = this.master?.uuid;
+        }
+
+        if (changed.system?.master) {
+            changed.system.master.ability ||= null;
+        }
+
+        return super._preUpdate(changed, options, user);
+    }
+
+    /** Remove familiar from former master if the master changed */
+    protected override _onUpdate(
+        changed: DeepPartial<this["_source"]>,
+        options: CreatureUpdateCallbackOptions & { previousMaster?: ActorUUID },
+        userId: string,
+    ): void {
+        super._onUpdate(changed, options, userId);
+        if (options.previousMaster && options.previousMaster !== this.master?.uuid) {
+            const previousMaster = fromUuidSync<ActorPF2e>(options.previousMaster);
+            if (previousMaster?.isOfType("character")) {
+                previousMaster.familiar = null;
+            }
+        }
+    }
+
+    /** Remove the master's reference to this familiar */
+    protected override _onDelete(options: DatabaseDeleteCallbackOptions, userId: string): void {
+        if (this.master) this.master.familiar = null;
+        super._onDelete(options, userId);
+    }
+}
+
+interface FamiliarPF2e<
+    TParent extends TokenDocumentPF2e | null = TokenDocumentPF2e | null,
+> extends CreaturePF2e<TParent> {
+    readonly _source: FamiliarSource;
+    system: FamiliarSystemData;
+}
+
+export { FamiliarPF2e };

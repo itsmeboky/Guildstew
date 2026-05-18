@@ -1,0 +1,35 @@
+<section class="tab feats feats-pane" data-group="primary" data-tab="feats">
+    {{#each feats as |section|}}
+        <section class="feat-section major" data-group-id="{{section.id}}">
+            <header>
+                {{localize section.label}}
+                {{#with section.customLimit}}
+                    <span class="limit">
+                        ({{localize label}} <input type="number"
+                                                   name="{{concat "flags." @root.systemId ".featLimits." section.id}}"
+                                                   value="{{section.limit}}" min="{{min}}" max="{{max}}" step="1" />)
+                    </span>
+                {{/with}}
+                <div class="controls">
+                    {{#if (eq section.id "bonus")}}
+                        <button type="button" data-action="create-feat">
+                            <i class="fa-solid fa-fw fa-plus"></i>{{localize "PF2E.Actor.Character.CreateFeat"}}
+                        </button>
+                    {{/if}}
+                    <button
+                        type="button"
+                        data-action="browse-feats"
+                        data-type="feat"
+                    >
+                        <i class="fa-solid fa-fw fa-search"></i>{{localize "PF2E.BrowseLabel"}}
+                    </button>
+                </div>
+            </header>
+            <ol class="feats-list" data-foundry-list>
+                {{#each section.feats as |featSlot|}}
+                    {{> (resolvePath "templates/actors/character/partials/feat-slot.hbs") featSlot=featSlot featFilter=section.featFilter}}
+                {{/each}}
+            </ol>
+        </section>
+    {{/each}}
+</section>

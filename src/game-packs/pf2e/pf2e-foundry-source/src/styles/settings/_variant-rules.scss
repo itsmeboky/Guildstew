@@ -1,0 +1,45 @@
+#variant-rules-settings form {
+    .form-group:first-child {
+        margin-top: 0;
+    }
+
+    .pwol-modifiers {
+        flex-wrap: nowrap;
+        justify-content: start;
+
+        .form-group {
+            flex-wrap: nowrap;
+
+            label {
+                flex: 0;
+                padding: 0 0.5rem;
+                text-align: center;
+
+                &:has(+ .form-fields input:not(:disabled)) {
+                    color: var(--color-light-2);
+                }
+            }
+
+            .form-fields {
+                justify-content: start;
+                flex: 0;
+            }
+
+            &:nth-child(1) label:has(+ .form-fields input:not(:disabled)) {
+                background: var(--color-proficiency-untrained);
+            }
+            &:nth-child(2) label:has(+ .form-fields input:not(:disabled)) {
+                background: var(--color-proficiency-trained);
+            }
+            &:nth-child(3) label:has(+ .form-fields input:not(:disabled)) {
+                background: var(--color-proficiency-expert);
+            }
+            &:nth-child(4) label:has(+ .form-fields input:not(:disabled)) {
+                background: var(--color-proficiency-master);
+            }
+            &:nth-child(5) label:has(+ .form-fields input:not(:disabled)) {
+                background: var(--color-proficiency-legendary);
+            }
+        }
+    }
+}

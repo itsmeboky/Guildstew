@@ -1,0 +1,309 @@
+import type { CompendiumUUID } from "@client/utils/helpers.d.mts";
+import type { ConditionSource } from "@item/base/data/index.ts";
+import { svelte as sveltePlugin } from "@sveltejs/vite-plugin-svelte";
+import { execSync } from "child_process";
+import esbuild from "esbuild";
+import fs from "fs-extra";
+import { globSync } from "glob";
+import path from "path";
+import Peggy from "peggy";
+import * as Vite from "vite";
+import checker from "vite-plugin-checker";
+import { viteStaticCopy } from "vite-plugin-static-copy";
+import { sluggify } from "./src/util/misc.ts";
+import pf2eManifest from "./system.pf2e.json" with { type: "json" };
+import sf2eManifest from "./system.sf2e.json" with { type: "json" };
+
+const [SYSTEM_ID, systemJSON] =
+    process.env.SYSTEM_ID === "pf2e" ? (["pf2e", pf2eManifest] as const) : (["sf2e", sf2eManifest] as const);
+const CONDITION_SOURCES = ((): ConditionSource[] => {
+    const output = execSync(`pnpm run build:conditions --system=${SYSTEM_ID}`, { encoding: "utf-8" });
+    return JSON.parse(output.slice(output.indexOf("[")));
+})();
+const EN_JSON = JSON.parse(fs.readFileSync("./static/lang/en.json", { encoding: "utf-8" }));
+
+/** Get UUID redirects from JSON file, converting names to IDs. */
+function getUuidRedirects({ systemId }: { systemId: SystemId }): Record<CompendiumUUID, CompendiumUUID> {
+    const redirectJSON = JSON.parse(
+        fs.readFileSync(path.resolve(__dirname, "build", "uuid-redirects", `${systemId}.json`), "utf-8"),
+    );
+    for (const [from, to] of Object.entries<string>(redirectJSON)) {
+        const [, , pack, documentType, name] = to.split(".", 5);
+        const packDir = systemJSON.packs
+            .find((p) => p.type === documentType && p.name === pack)
+            ?.path.replace(/^packs/, `packs/${systemId}`);
+        const dirPath = path.resolve(__dirname, packDir ?? "");
+        const filename = `${sluggify(name)}.json`;
+        const jsonPath = fs.existsSync(path.resolve(dirPath, filename))
+            ? path.resolve(dirPath, filename)
+            : globSync(path.resolve(dirPath, "**", filename), { windowsPathsNoEscape: true }).at(0);
+        if (!jsonPath) throw new Error(`Failure looking up pack JSON for ${to}`);
+        const docJSON = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
+        const id = docJSON._id;
+        if (!id) throw new Error(`No UUID redirect match found for ${documentType} ${name} in ${pack}`);
+        redirectJSON[from] = `Compendium.${systemId}.${pack}.${documentType}.${id}`;
+    }
+
+    return redirectJSON;
+}
+
+const config = Vite.defineConfig(({ command, mode }): Vite.UserConfig => {
+    const buildMode = mode === "production" ? "production" : "development";
+    const outDir = `dist/${SYSTEM_ID}`;
+    const rollGrammar = fs.readFileSync("roll-grammar.peggy", { encoding: "utf-8" });
+    const ROLL_PARSER = Peggy.generate(rollGrammar, { output: "source" }).replace(
+        'return {\n    StartRules: ["Expression"],\n    SyntaxError: peg$SyntaxError,\n    parse: peg$parse,\n  };',
+        'AbstractDamageRoll.parser = { StartRules: ["Expression"], SyntaxError: peg$SyntaxError, parse: peg$parse };',
+    );
+
+    const { foundryPort, serverPort } =
+        command === "serve"
+            ? (() => {
+                  // Load foundry config if available to potentially use a different port
+                  const FOUNDRY_CONFIG = fs.existsSync("./foundryconfig.json")
+                      ? JSON.parse(fs.readFileSync("./foundryconfig.json", { encoding: "utf-8" }))
+                      : null;
+                  const foundryPort = Number(FOUNDRY_CONFIG?.foundryPort) || 30000;
+                  const serverPort = Number(FOUNDRY_CONFIG?.port) || 30001;
+                  console.log(`Connecting to foundry hosted at http://localhost:${foundryPort}/`);
+                  return { foundryPort, serverPort };
+              })()
+            : { foundryPort: 30000, serverPort: 30001 };
+
+    // Add system layer to svelte CSS in HMR
+    const hmrPreprocess = {
+        name: "svelte-hmr-layer",
+        style: ({ content }: { content: string }) => ({ code: `@layer system { ${content} }` }),
+    };
+
+    const plugins = [
+        checker({ typescript: true }),
+        sveltePlugin({
+            preprocess: command === "serve" ? hmrPreprocess : undefined,
+        }),
+    ];
+    const packUUIDPattern = /Compendium\.pf2e\.[^\]]+/g;
+    const adjustUUIDForSF2e = (s: string): string =>
+        s.replace(packUUIDPattern, (uuid) =>
+            uuid
+                .replace("Compendium.pf2e.", "Compendium.sf2e.")
+                .replace(".actionspf2e.", ".actions.")
+                .replace(".ancestryfeatures.", ".ancestry-features.")
+                .replace(".classfeatures.", ".class-features.")
+                .replace(".conditionitems.", ".conditions.")
+                .replace("-srd.", "."),
+        );
+    if (buildMode === "production") {
+        plugins.push(
+            // Handle minification after build to allow for tree-shaking and whitespace minification
+            // "Note the build.minify option does not minify whitespaces when using the 'es' format in lib mode, as it
+            // removes pure annotations and breaks tree-shaking."
+            {
+                name: "minify",
+                renderChunk: {
+                    order: "post",
+                    handler: async (code, chunk) =>
+                        chunk.fileName.endsWith(".mjs")
+                            ? esbuild.transform(code, {
+                                  keepNames: true,
+                                  minifyIdentifiers: false,
+                                  minifySyntax: true,
+                                  minifyWhitespace: true,
+                              })
+                            : code,
+                },
+            },
+            // Replace pf2e UUIDs with sf2e ones
+            {
+                name: "transformLangFile",
+                renderStart: {
+                    order: "post",
+                    handler: async (outputOptions) => {
+                        if (SYSTEM_ID === "pf2e") return;
+                        const langDir = path.join(outputOptions.dir ?? "", "lang");
+                        const langFilenames = fs.readdirSync(langDir);
+                        for (const filename of langFilenames) {
+                            const filePath = path.join(langDir, filename);
+                            const content = fs.readFileSync(filePath, { encoding: "utf-8" });
+                            fs.writeFileSync(filePath, adjustUUIDForSF2e(content));
+                        }
+                    },
+                },
+            },
+            // Move system banners into place and delete other system's
+            {
+                name: "moveSystemBanners",
+                renderStart: {
+                    handler: async (outputOptions) => {
+                        const outDir = outputOptions.dir ?? "";
+                        const otherSystemId = SYSTEM_ID === "pf2e" ? "sf2e" : "pf2e";
+                        const bannersDir = path.join(outDir, "assets", "system-banners");
+                        await fs.promises.rm(path.join(bannersDir, otherSystemId), { recursive: true, force: true });
+                        for (const filename of await fs.promises.readdir(path.join(bannersDir, SYSTEM_ID))) {
+                            const prebuildPath = path.join(bannersDir, SYSTEM_ID, filename);
+                            await fs.promises.rename(prebuildPath, path.join(bannersDir, filename));
+                        }
+                        await fs.promises.rm(path.join(bannersDir, SYSTEM_ID), { recursive: true, force: true });
+                    },
+                },
+            },
+            ...viteStaticCopy({
+                targets: [
+                    { src: `system.${SYSTEM_ID}.json`, dest: ".", rename: "system.json" },
+                    { src: "CHANGELOG.md", dest: "." },
+                    { src: "README.md", dest: "." },
+                    { src: "CONTRIBUTING.md", dest: "." },
+                ],
+            }),
+        );
+    } else {
+        plugins.push(
+            // Foundry expects all esm files listed in system.json to exist: create empty vendor module when in dev mode
+            {
+                name: "touch-vendor-mjs",
+                apply: "build",
+                writeBundle: {
+                    async handler() {
+                        fs.closeSync(fs.openSync(path.resolve(outDir, "vendor.mjs"), "w"));
+                    },
+                },
+            },
+            // Vite HMR is only preconfigured for css files: add handler for HBS templates and localization JSON
+            {
+                name: "hmr-handler",
+                apply: "serve",
+                handleHotUpdate(context) {
+                    if (context.file.startsWith(outDir)) return;
+                    if (context.file.endsWith("en.json")) {
+                        const basePath = context.file.slice(context.file.indexOf("lang/"));
+                        console.debug(`Updating lang file at ${basePath}`);
+                        const content = fs.readFileSync(context.file, { encoding: "utf-8" });
+                        const adjusted = SYSTEM_ID === "sf2e" ? adjustUUIDForSF2e(content) : content;
+                        fs.writeFileSync(path.join(outDir, basePath), adjusted);
+                        context.server.ws.send({
+                            type: "custom",
+                            event: "lang-update",
+                            data: { path: `systems/${SYSTEM_ID}/${basePath}` },
+                        });
+                    } else if (context.file.endsWith(".hbs")) {
+                        const basePath = context.file.slice(context.file.indexOf("templates/"));
+                        console.debug(`Updating template file at ${basePath}`);
+                        fs.promises.copyFile(context.file, `${outDir}/${basePath}`).then(() => {
+                            context.server.ws.send({
+                                type: "custom",
+                                event: "template-update",
+                                data: { path: `systems/${SYSTEM_ID}/${basePath}` },
+                            });
+                        });
+                    }
+                },
+            },
+        );
+
+        // Add system CSS layer for HMR
+        const mainCss = path.resolve(__dirname, "src/pf2e.ts").split(path.sep).join("/");
+        plugins.push({
+            name: "hmr-layers",
+            apply: "serve",
+            transform: (code, id) => {
+                if (id === mainCss) {
+                    return code.replace("styles/main.scss", "styles/vite-hmr.scss");
+                } else if (/node_modules\/.+\.css$/.test(id)) {
+                    return `@layer system { ${code} }`;
+                }
+                return;
+            },
+        });
+    }
+
+    // Create dummy files for vite dev server
+    if (command === "serve") {
+        const message = "This file is for a running vite dev server and is not copied to a build.";
+        fs.writeFileSync("./index.html", `<h1>${message}</h1>\n`);
+        if (!fs.existsSync("./styles")) fs.mkdirSync("./styles");
+        fs.writeFileSync(`./styles/${SYSTEM_ID}.css`, `/** ${message} */\n`);
+        fs.writeFileSync(`./${SYSTEM_ID}.mjs`, `/** ${message} */\n\nimport "./src/pf2e.ts";\n`);
+        fs.writeFileSync("./vendor.mjs", `/** ${message} */\n`);
+    }
+
+    const codeSplitting: Vite.Rolldown.CodeSplittingOptions =
+        buildMode === "production"
+            ? {
+                  groups: [
+                      {
+                          name: "vendor",
+                          test: /node_modules/,
+                      },
+                  ],
+              }
+            : {};
+
+    return {
+        base: command === "build" ? "./" : `/systems/${SYSTEM_ID}/`,
+        publicDir: "static",
+        define: {
+            SYSTEM_ID: JSON.stringify(SYSTEM_ID),
+            BUILD_MODE: JSON.stringify(buildMode),
+            CONDITION_SOURCES: JSON.stringify(CONDITION_SOURCES),
+            EN_JSON: JSON.stringify(EN_JSON),
+            ROLL_PARSER: JSON.stringify(ROLL_PARSER),
+            UUID_REDIRECTS: JSON.stringify(getUuidRedirects({ systemId: SYSTEM_ID })),
+            fa: "foundry.applications",
+            fav1: "foundry.appv1",
+            fc: "foundry.canvas",
+            fd: "foundry.documents",
+            fh: "foundry.helpers",
+            fu: "foundry.utils",
+        },
+        esbuild: { keepNames: true },
+        resolve: { tsconfigPaths: true },
+        build: {
+            outDir,
+            emptyOutDir: false, // Fails if world is running due to compendium locks: handled with `npm run clean`
+            minify: false,
+            sourcemap: buildMode === "development",
+            lib: {
+                name: SYSTEM_ID,
+                entry: "src/pf2e.ts",
+                formats: ["es"],
+                fileName: SYSTEM_ID,
+            },
+            rolldownOptions: {
+                external: /(?:\.\.\/icons\/[a-z]+\/[-a-z/]+\.webp|ui\/parchment\.jpg)$/,
+                output: {
+                    assetFileNames: `styles/${SYSTEM_ID}.css`,
+                    chunkFileNames: "[name].mjs",
+                    entryFileNames: `${SYSTEM_ID}.mjs`,
+                    codeSplitting,
+                },
+                watch: { buildDelay: 100 },
+            },
+            target: "es2024",
+        },
+        server: {
+            port: serverPort,
+            open: "/game",
+            proxy: {
+                [`^(?!/systems/${SYSTEM_ID}/)`]: `http://localhost:${foundryPort}/`,
+                [`^/systems/${SYSTEM_ID}/(?:assets|lang)`]: `http://localhost:${foundryPort}/`,
+                "/socket.io": {
+                    target: `ws://localhost:${foundryPort}`,
+                    ws: true,
+                },
+            },
+        },
+        plugins,
+        css: {
+            devSourcemap: buildMode === "development",
+            preprocessorOptions: {
+                scss: {
+                    additionalData: (existing: string) => {
+                        return SYSTEM_ID === "sf2e" ? `${existing}\n@import "sf2e/index";` : existing;
+                    },
+                },
+            },
+        },
+    };
+});
+
+export default config;

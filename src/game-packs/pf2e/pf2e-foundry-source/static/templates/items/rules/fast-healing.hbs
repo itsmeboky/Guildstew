@@ -1,0 +1,26 @@
+
+<div class="form-group">
+    <label class="short">{{localize "PF2E.RuleEditor.General.Value"}}</label>
+    <div class="form-fields">
+        {{{form.resolvableValue "value"}}}
+        <select name="system.rules.{{index}}.type" class="short">
+            {{selectOptions types selected=rule.type localize=true}}
+        </select>
+    </div>
+</div>
+
+{{#if (eq rule.type "regeneration")}}
+    <div class="form-group">
+        <label class="short">{{localize "PF2E.RuleEditor.FastHealing.DeactivatedBy"}}</label>
+        <tagify-tags class="pf2e-tagify deactivated-by" name="system.rules.{{index}}.deactivatedBy" value="{{json rule.deactivatedBy}}" />
+    </div>
+{{else}}
+    <div class="form-group">
+        <label class="short">{{localize "PF2E.Details"}}</label>
+        <input type="text" class="details" name="system.rules.{{index}}.details" value="{{rule.details}}"/>
+    </div>
+{{/if}}
+<div class="form-group">
+    <label class="short">{{localize "PF2E.RuleEditor.General.Predicate"}}</label>
+    <input type="text" name="system.rules.{{index}}.predicate" value="{{json rule.predicate}}" />
+</div>

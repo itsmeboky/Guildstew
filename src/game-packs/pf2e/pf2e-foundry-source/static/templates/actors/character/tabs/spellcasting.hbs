@@ -1,0 +1,115 @@
+<div class="tab spellcasting spellbook-pane" data-group="primary" data-tab="spellcasting">
+    <nav class="sub-nav" data-group="spell-collections">
+        <a data-tab="known-spells" data-group="spell-collections">{{localize "PF2E.Actor.Character.Spellcasting.Tab.KnownSpells"}}</a>
+        <a class="rituals" data-tab="rituals" data-group="spell-collections">{{localize "PF2E.Actor.Character.Spellcasting.Tab.Rituals"}}</a>
+        <a data-tab="activations" data-group="spell-collections">{{localize "PF2E.Actor.Character.Spellcasting.Tab.Activations"}}</a>
+    </nav>
+
+    <div class="spell-collections" data-panels>
+        {{#if toggles.spellcasting}}{{> (resolvePath "templates/actors/partials/toggles.hbs") toggles=toggles.spellcasting}}{{/if}}
+
+        {{#each spellCollectionGroups as |group tab|}}
+            <div class="tab {{tab}}" data-group="spell-collections" data-tab="{{tab}}">
+                {{> collectionGroup collections=group tab=tab}}
+            </div>
+        {{/each}}
+    </div>
+</div>
+
+{{#*inline "collectionGroup"}}
+    <ol class="spellcastingEntry-list directory-list"{{#unless (eq tab "activations")}} data-foundry-list{{/unless}}>
+        {{#each collections as |entry|}}
+            <li class="item item-container spellcasting-entry" data-item-id="{{entry.id}}" {{#if entry.hasCollection}}data-container-type="spellcastingEntry" data-container-id="{{entry.id}}"{{/if}}>
+                <div class="action-header">
+                    {{#unless entry.isEphemeral}}
+                        <a class="drag-handle" data-drag-handle><i class="fa-solid fa-bars"></i></a>
+                    {{/unless}}
+
+                    <h3 class="item-name">
+                        <input type="text" data-item-id="{{entry.id}}" data-item-property="name" class="item-name-input" value="{{entry.name}}"{{#if entry.isEphemeral}} readonly{{/if}} />
+                    </h3>
+
+                    {{#if @root.editable}}
+                        <div class="item-controls">
+                            {{#if (or entry.isFocusPool entry.isRitual)}}
+                                <a
+                                    data-action="browse-spells"
+                                    data-tooltip="PF2E.OpenSpellBrowserTitle"
+                                    data-location="{{entry.id}}"
+                                    data-rank="{{entry.highestRank}}"
+                                ><i class="fa-solid fa-fw fa-search"></i></a>
+                            {{/if}}
+                            {{#if (or entry.isPrepared entry.isSpontaneous entry.isInnate)}}
+                                <a data-action="toggle-show-slotless-ranks" data-tooltip="PF2E.ToggleSlotlessSpellLevelsTitle">
+                                    <i class="{{#if entry.showSlotlessRanks}}fa-solid{{else}}fa-regular{{/if}} fa-fw fa-list-alt"></i>
+                                </a>
+                            {{/if}}
+                            {{#unless entry.isEphemeral}}
+                                <a data-action="spellcasting-edit" data-tooltip="PF2E.EditItemTitle"><i class="fa-solid fa-fw fa-edit"></i></a>
+                                <a data-action="spellcasting-remove" data-tooltip="PF2E.RemoveSpellcastingEntryTitle"><i class="fa-solid fa-fw fa-trash"></i></a>
+                            {{/unless}}
+                        </div>
+                    {{/if}}
+                </div>
+
+                {{#unless entry.isRitual}}
+                    <div class="spell-ability-data">
+                        <div class="statistic-values">
+                            <section class="skill-data" data-tooltip="{{entry.statistic.dc.breakdown}}">
+                                <span class="skill-score spellcasting">{{entry.statistic.dc.value}}</span>
+                                <h4>{{localize "PF2E.Actor.Creature.Spellcasting.DC"}}</h4>
+                            </section>
+                            <section>
+                                (
+                                    <a
+                                        class="skill-data rollable"
+                                        data-action="roll-check"
+                                        data-statistic="{{entry.statistic.slug}}"
+                                        data-tooltip="{{entry.statistic.check.breakdown}}"
+                                    >
+                                        {{> (resolvePath "templates/actors/character/icons/d20.hbs")}}
+                                        <span class="skill-score">{{numberFormat entry.statistic.check.mod decimals=0 sign=true}}</span>
+                                    </a>
+                                )
+                            </section>
+                        </div>
+
+                        {{#if entry.isPrepared}}
+                            <button type="button" class="prepare-spells blue" data-action="open-spell-preparation">
+                                <i class="fa-duotone fa-book-sparkles"></i>
+                                {{localize "PF2E.ToggleSpellVisibilityTitle"}}
+                            </button>
+                        {{/if}}
+
+                        {{#if entry.isFocusPool}}
+                            <section class="focus-pool" data-action="adjust-resource" data-resource="focus">
+                                <span class="pips">
+                                    {{#times @root.data.resources.focus.max}}
+                                        <i class="{{#if (gt @root.data.resources.focus.value this)}}fa-solid fa-circle-dot{{else}}fa-regular fa-circle{{/if}}"></i>
+                                    {{/times}}
+                                </span>
+                                <h4>{{localize "PF2E.Focus.Pool"}}</h4>
+                            </section>
+                        {{/if}}
+
+                        <section class="spell-ability">
+                            <span class="spell-tradition">{{localize entry.statistic.label}}</span>
+                            <div class="spellcasting-prof button-group">
+                                <span class="pf-rank" data-rank="{{entry.statistic.rank}}">{{lookup @root.numberToRank entry.statistic.rank}}</span>
+                            </div>
+                        </section>
+                    </div>
+                {{/unless}}
+                {{#if entry.hasCollection}}
+                    {{> (resolvePath "templates/actors/partials/spell-collection.hbs") entry=entry}}
+                {{/if}}
+            </li>
+        {{/each}}
+    </ol>
+
+    {{#if (eq tab "known-spells")}}
+        <button type="button" class="blue create-entry" data-action="spellcasting-create">
+            <i class="fa-solid fa-plus"></i>{{localize "PF2E.AddSpellcastingEntryTitle"}}
+        </button>
+    {{/if}}
+{{/inline}}

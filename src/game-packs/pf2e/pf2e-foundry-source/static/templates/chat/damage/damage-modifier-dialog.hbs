@@ -1,0 +1,149 @@
+<form class="check-modifiers-content" autocomplete="off" spellcheck="off" data-tooltip-class="pf2e" data-tooltip-direction="UP">
+    <div class="dialog-row header">
+        <span class="mod">{{localize "PF2E.Roll.Dialog.Damage.DiceHeader"}}</span>
+    </div>
+    <div class="modifier-container dice">
+        <div class="dialog-row base-damage">
+            <div class="mod">{{localize "PF2E.Roll.Dialog.Damage.BaseDamage"}}</div>
+            <div class="value">
+                {{{baseFormula}}}
+            </div>
+            <div class="exclude"></div>
+        </div>
+        {{#each overrides as |die|}}
+            {{> dice-row dice=die}}
+        {{/each}}
+        {{#each dice as |die|}}
+            {{> dice-row dice=die}}
+        {{/each}}
+    </div>
+    <hr/>
+
+    <section class="add-entry-row add-dice-panel">
+        <input type="text" class="add-dice-name" placeholder="{{localize "PF2E.Roll.Dialog.Damage.Label"}}">
+        <input type="text" class="add-dice-count" placeholder="1">
+        <select class="add-dice-faces">
+            <option value="d4">{{localize "PF2E.DamageDieD4"}}</option>
+            <option value="d6">{{localize "PF2E.DamageDieD6"}}</option>
+            <option value="d8">{{localize "PF2E.DamageDieD8"}}</option>
+            <option value="d10">{{localize "PF2E.DamageDieD10"}}</option>
+            <option value="d12">{{localize "PF2E.DamageDieD12"}}</option>
+        </select>
+        <select class="add-dice-category">
+            <option value="" selected></option>
+            {{#each damageSubtypes as |name type|}}
+                <option value="{{type}}">{{localize name}}</option>
+            {{/each}}
+        </select>
+        <select class="add-dice-type">
+            {{#each damageTypes as |name type|}}
+                <option value="{{type}}">{{localize name}}</option>
+            {{/each}}
+        </select>
+        <button type="button" class="add-dice">+{{localize "PF2E.Roll.Add"}}</button>
+    </section>
+    <hr />
+
+    <div class="dialog-row header">
+        <span class="mod">{{localize "PF2E.Roll.Modifier"}}</span>
+        <span class="type">{{localize "PF2E.Roll.Type"}}</span>
+        <span class="value"></span>
+        <span class="exclude"></span>
+    </div>
+    <div class="modifier-container modifiers">
+        {{#if modifiers}}
+            {{#each modifiers as |modifier|}}
+                {{> modifier-row modifier=modifier}}
+            {{/each}}
+        {{else}}
+            <div class="dialog-row">
+                <span class="no-mod">{{localize "PF2E.Roll.Dialog.Damage.None"}}</span>
+            </div>
+        {{/if}}
+    </div>
+    <hr />
+
+    <section class="add-entry-row add-modifier-panel">
+        <input type="text" class="add-modifier-name" placeholder={{localize "PF2E.Roll.Dialog.Damage.Label"}}>
+        <input type="number" class="add-modifier-value" placeholder="+1">
+        <select class="add-modifier-type">
+            <option value="circumstance">{{localize "PF2E.ModifierType.circumstance"}}</option>
+            <option value="item">{{localize "PF2E.ModifierType.item"}}</option>
+            <option value="status">{{localize "PF2E.ModifierType.status"}}</option>
+            <option value="untyped" selected>{{localize "PF2E.ModifierType.untyped"}}</option>
+            <option value="ability">{{localize "PF2E.ModifierType.ability"}}</option>
+            <option value="proficiency">{{localize "PF2E.ModifierType.proficiency"}}</option>
+        </select>
+        <select class="add-modifier-category">
+            <option value=""></option>
+            {{#each damageSubtypes as |name type|}}
+                <option value="{{type}}">{{localize name}}</option>
+            {{/each}}
+        </select>
+        <select class="add-modifier-damage-type">
+            {{#each damageTypes as |name type|}}
+                <option value="{{type}}">{{localize name}}</option>
+            {{/each}}
+        </select>
+        <button type="button" class="add-modifier">+{{localize "PF2E.Roll.Add"}}</button>
+    </section>
+
+    <hr />
+
+    <div class="roll-mode-panel flexcol">
+        <div class="form-group roll-mode">
+            <label for="{{appId}}-messageMode">{{localize "CHAT.RollVisibility"}}</label>
+            <div class="form-fields">
+                <select name="messageMode" id="{{appId}}-messageMode">
+                    {{selectOptions messageModes selected=messageMode localize=true}}
+                </select>
+            </div>
+        </div>
+        <div class="form-group" data-tooltip aria-label="{{localize "PF2E.Roll.Dialog.ShowDefaultHint"}}">
+            <label for="{{appId}}-showDefault">{{localize "PF2E.Roll.Dialog.ShowDefault"}}</label>
+            <div class="form-fields">
+                <input id="{{appId}}-showDefault" data-action="change-show-default" type="checkbox"
+                       {{checked showDamageDialogs}} />
+            </div>
+        </div>
+    </div>
+
+    <hr />
+
+    <button type="submit">{{{formula}}}</button>
+</form>
+
+{{#*inline "modifier-row"}}
+    <div class="dialog-row{{#unless modifier.enabled}} off{{#if modifier.hideIfDisabled}} hidden{{/if}}{{/unless}}">
+        <span class="mod">{{modifier.label}}</span>
+        <span class="type"><span class="tag">{{localize (concat "PF2E.ModifierType." modifier.type)}}</span></span>
+        <div class="value" data-tooltip="{{modifier.typeLabel}}">
+            <div class="modifier-type{{#if modifier.damageType}} damage color {{modifier.damageType}}{{/if}}">
+                {{numberFormat modifier.modifier decimals=0 sign=true}} {{{modifier.icon}}}
+            </div>
+        </div>
+        <div class="exclude">
+            <label class="toggle">
+                <input type="checkbox" data-modifier-index="{{modifier.idx}}" {{checked modifier.enabled}} />
+                <span class="widget"></span>
+            </label>
+        </div>
+    </div>
+{{/inline}}
+
+{{#*inline "dice-row"}}
+    <div class="dialog-row{{#unless dice.enabled}} off{{#if dice.hideIfDisabled}} hidden{{/if}}{{/unless}}">
+        <span class="mod">{{dice.label}}</span>
+        <div class="value" data-tooltip="{{dice.typeLabel}}">
+            <span class="dice-type damage color{{#if dice.damageType}} {{dice.damageType}}{{/if}}">
+                {{dice.diceLabel}} {{{dice.icon}}}
+            </span>
+        </div>
+        <div class="exclude">
+            <label class="toggle">
+                <input type="checkbox" data-dice-index="{{dice.idx}}" data-slug="{{dice.slug}}" {{checked dice.enabled}} />
+                <span class="widget"></span>
+            </label>
+        </div>
+    </div>
+{{/inline}}

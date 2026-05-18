@@ -1,0 +1,27 @@
+#world-clock {
+    section.window-content {
+        gap: 0.2rem;
+
+        header {
+            font-size: var(--font-size-16);
+            font-family: var(--font-sans);
+            text-align: center;
+            border-bottom: 2px solid var(--color-tabs-border);
+            margin-bottom: 0.5rem;
+        }
+
+        .form-group {
+            font-size: var(--font-size-14);
+            gap: 0.2rem;
+
+            .sign {
+                font-family: var(--sans-serif-monospace);
+                font-size: inherit;
+            }
+
+            &.time-of-day {
+                margin-top: 0.5rem;
+            }
+        }
+    }
+}

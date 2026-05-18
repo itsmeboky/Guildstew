@@ -1,0 +1,39 @@
+{{#each effects as |effect|}}
+    {{#if (or effect.isIdentified @root.user.isGM)}}
+        <li class="item effects{{#unless effect.isIdentified}} unidentified{{/unless}}" data-item-type="{{effect.type}}" data-item-id="{{effect.id}}">
+            <div class="item-name rollable">
+                <a class="item-image framed" data-action="item-to-chat">
+                    <img class="item-icon" src="{{effect.img}}" alt="{{effect.name}}" />
+                    <i class="fa-solid fa-message"></i>
+                </a>
+                <h4 class="action-name name">
+                    <a data-action="toggle-summary">{{effect.name}}</a>
+                    {{#if (and (eq effect.type "effect") (eq effect.badge.type "counter"))}}
+                        ({{coalesce effect.badge.label effect.badge.value}})
+                    {{/if}}
+                    {{#if (eq effect.type "condition")}}{{#unless effect.active}}<span> (Inactive)</span>{{/unless}}{{/if}}
+                </h4>
+            </div>
+
+            <div class="item-controls">
+                {{#if (and @root.options.editable (not effect.readonly))}}
+                    {{#if (eq effect.badge.type "counter")}}
+                        <a class="increment" data-tooltip="PF2E.IncrementEffectTitle"><i class="fa-solid fa-fw fa-plus"></i></a>
+                        <a class="decrement" data-tooltip="PF2E.DecrementEffectTitle"><i class="fa-solid fa-fw fa-minus"></i></a>
+                    {{/if}}
+                    {{#if (and (eq effect.type "effect") @root.user.isGM)}}
+                        <a data-action="effect-toggle-unidentified" data-tooltip="PF2E.ToggleEffectUnidentified"><i class="fa-solid fa-fw fa-eye"></i></a>
+                    {{/if}}
+                    {{#if (eq effect.type "effect")}}
+                        <a data-action="edit-item" data-tooltip="PF2E.EditItemTitle"><i class="fa-solid fa-fw fa-edit"></i></a>
+                    {{/if}}
+                    <a data-action="delete-item" data-tooltip="PF2E.DeleteItemTitle"><i class="fa-solid fa-fw fa-trash"></i></a>
+                {{else if effect.readonly}}
+                    <a class="info-only" data-tooltip="{{effect.breakdown}}"><i class="fa-solid fa-fw fa-info-circle"></i></a>
+                {{/if}}
+            </div>
+
+            <div class="item-summary" hidden="hidden"></div>
+        </li>
+    {{/if}}
+{{/each}}

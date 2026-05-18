@@ -1,0 +1,6 @@
+{{> (resolvePath "templates/items/partials/ability-activation.hbs")}}
+
+<div class="form-group stacked">
+    <label>{{localize "PF2E.FeatPrereqLabel"}}</label>
+    <tagify-tags class="pf2e-tagify" name="system.prerequisites.value" value="{{prerequisites}}" />
+</div>

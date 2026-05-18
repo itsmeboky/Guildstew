@@ -1,0 +1,88 @@
+<div class="pf2e chat-card item-card"
+    data-cast-rank="{{data.castRank}}"
+    data-actor-id="{{actor.id}}"
+    data-item-id="{{item.id}}"
+    {{#if tokenId}}data-token-id="{{tokenId}}"{{/if}}
+>
+    <header class="card-header flexrow">
+        <img src="{{item.img}}" alt="{{item.name}}" />
+        <h3>{{item.name}}{{#if item.actionGlyph}} <span class="action-glyph">{{item.actionGlyph}}</span>{{/if}}</h3>
+        <h4 class="rank">{{data.rankLabel}}</h4>
+        <section class="tags paizo-style" data-tooltip-class="pf2e">
+            {{#each data.traits as |trait|}}
+                <span class="tag" data-trait="{{trait.name}}" data-tooltip="{{trait.description}}">{{trait.label}}</span>
+            {{/each}}
+        </section>
+    </header>
+
+    <section class="card-content">
+        {{{data.description.value}}}
+        {{#if data.materials.value}}
+            <p><strong>{{localize "PF2E.SpellRequirementsLabel"}}</strong> {{data.materials.value}}</p>
+        {{/if}}
+    </section>
+
+    <section class="card-buttons">
+        {{#each data.variants as |variant|}}
+            <button type="button" data-variant="{{json variant}}" data-action="spell-variant" data-visibility="owner" data-overlay-ids="{{variant.overlayIds}}">
+                <span>{{variant.name}}</span>
+                {{#if variant.actionGlyph}}<span class="action-glyph">{{variant.actionGlyph}}</span>{{/if}}
+            </button>
+        {{else}}
+            {{#if data.isSave}}
+                <button type="button" data-action="spell-save" data-save="{{data.save.type}}" data-dc="{{data.save.value}}" data-owner-title="{{data.save.breakdown}}">
+                    {{{data.save.label}}}
+                </button>
+            {{/if}}
+            {{#if (or data.check data.hasDamage data.counteraction data.area.type)}}
+                <section class="owner-buttons">
+                    {{#if data.check}}
+                        <div class="spell-attack-buttons">
+                            <button type="button" data-action="spell-attack" data-visibility="owner">{{localize "PF2E.AttackLabel"}}</button>
+                            <button type="button" data-action="spell-attack-2" data-visibility="owner">{{localize "PF2E.MAPAbbreviationLabel" penalty=data.check.map1}}</button>
+                            <button type="button" data-action="spell-attack-3" data-visibility="owner">{{localize "PF2E.MAPAbbreviationLabel" penalty=data.check.map2}}</button>
+                        </div>
+                    {{/if}}
+                    {{#if data.hasDamage}}
+                        <div class="spell-button">
+                            <button type="button" data-action="spell-damage" data-visibility="owner">{{localize data.damageLabel}}</button>
+                        </div>
+                    {{/if}}
+                    {{#if data.counteraction}}
+                        <div class="spell-button">
+                            <button type="button" data-action="spell-counteract" data-visibility="owner">{{localize "PF2E.Item.Spell.Counteract.Label"}}</button>
+                        </div>
+                    {{/if}}
+                    {{#if (and data.area (not data.isAura))}}
+                        <div class="spell-button" data-tooltip-class="pf2e">
+                            <button
+                                type="button"
+                                data-action="spell-template"
+                                data-visibility="owner"
+                                {{#if (or (eq data.area.type "cone") (eq data.area.type "line"))}}
+                                    data-tooltip="PF2E.Item.Spell.MeasuredTemplate.PlacementTooltip"
+                                {{/if}}
+                            >
+                                {{localize "PF2E.Item.Spell.MeasuredTemplate.Place" area=data.area.label}}
+                            </button>
+                            <button class="small hidden" type="button" data-action="spell-template-clear" data-visibility="owner" data-tooltip="{{localize "PF2E.Item.Spell.MeasuredTemplate.Clear"}}">
+                                <i class="fa-solid fa-fw fa-trash"></i>
+                            </button>
+                        </div>
+                    {{/if}}
+                    {{#if (gt item.appliedOverlays.size 0)}}
+                        <button type="button" data-action="spell-variant" data-visibility="owner" data-original-id="{{item.original.id}}">{{localize "PF2E.Item.Spell.Variants.SelectOtherVariantLabel"}}</button>
+                    {{/if}}
+                </section>
+            {{/if}}
+        {{/each}}
+    </section>
+
+    {{#if data.properties}}
+        <footer>
+            {{#each data.properties as |property|}}
+                <span>{{localize property}}</span>
+            {{/each}}
+        </footer>
+    {{/if}}
+</div>

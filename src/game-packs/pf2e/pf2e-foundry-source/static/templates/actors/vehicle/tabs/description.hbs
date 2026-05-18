@@ -1,0 +1,14 @@
+<section class="tab description" data-tab="description">
+    <div class="description">
+        <header class="details-label">{{localize "PF2E.vehicle.DescriptionHeading"}}</header>
+        {{formInput systemFields.details.fields.description value=data.details.description
+                    enriched=enrichedDescription toggled=true editable=editable}}
+    </div>
+
+    <div class="publication">
+        <header class="details-label">{{localize "PF2E.Publication.Label"}}</header>
+        <div class="content">
+            {{> (resolvePath "templates/partials/publication-data.hbs") path="system.details.publication" data=data.details.publication}}
+        </div>
+    </div>
+</section>

@@ -1,0 +1,202 @@
+<form class="{{cssClass}}{{#if editing}} editing{{/if}}" autocomplete="off" spellcheck="false" data-tooltip-class="pf2e">
+    {{> (resolvePath "templates/actors/hazard/partials/header.hbs")}}
+    <div class="container">
+        {{> (resolvePath "templates/actors/hazard/partials/sidebar.hbs")}}
+        {{!-- BODY --}}
+        <section class="content">
+            {{#if toggles.actions}}
+                <section class="toggles section-container">
+                    {{> (resolvePath "templates/actors/partials/toggles.hbs") toggles=toggles.actions}}
+                </section>
+            {{/if}}
+
+            {{#if (or hasStealth editing)}}
+                <div class="section-container stealth">
+                    <div class="section-header">
+                        <h4>
+                            <span
+                                {{#if (ne data.attributes.stealth.value null)}}data-tooltip="{{data.attributes.stealth.breakdown}}"{{/if}}
+                            >{{localize "PF2E.Check.DC.Specific.stealth"}}</span>
+                            <input
+                                type="number"
+                                value="{{data.attributes.stealth.dc}}"
+                                data-property="system.attributes.stealth.value"
+                                data-nullable
+                                placeholder="N/A"
+                            />
+                        </h4>
+                        <div class="controls">
+                            {{#if editing}}
+                                <a data-action="edit-section"><i class="fa-solid fa-pen-to-square"></i></a>
+                            {{/if}}
+                        </div>
+                    </div>
+                    <div class="section-body hazard-editor">
+                        {{editor enrichedContent.stealthDetails target="system.attributes.stealth.details" button=true owner=owner editable=editable engine="prosemirror"}}
+                    </div>
+                </div>
+            {{/if}}
+
+            {{#if (or hasDescription editing)}}
+                <div class="section-container">
+                    <div class="section-header">
+                        <h4>{{localize "PF2E.HazardDescriptionLabel"}}</h4>
+                        <div class="controls">
+                            {{#if editing}}
+                                <a data-action="edit-section"><i class="fa-solid fa-pen-to-square"></i></a>
+                            {{/if}}
+                        </div>
+                    </div>
+                    <div class="section-body hazard-editor">
+                        {{editor enrichedContent.description target="system.details.description" button=true owner=owner editable=editable engine="prosemirror"}}
+                    </div>
+                </div>
+            {{/if}}
+
+            {{#if (or hasDisable editing)}}
+                <div class="section-container">
+                    <div class="section-header">
+                        <h4>{{localize "PF2E.HazardDisableLabel"}}</h4>
+                        <div class="controls">
+                            {{#if editing}}
+                                <a data-action="edit-section"><i class="fa-solid fa-pen-to-square"></i></a>
+                            {{/if}}
+                        </div>
+                    </div>
+                    <div class="section-body hazard-editor">
+                        {{editor enrichedContent.disable target="system.details.disable" button=true owner=owner editable=editable engine="prosemirror"}}
+                    </div>
+                </div>
+            {{/if}}
+
+            {{#if (or hasRoutineDetails editing)}}
+                <div class="section-container">
+                    <div class="section-header">
+                        <h4>{{localize "PF2E.HazardRoutineLabel"}}</h4>
+                        <div class="controls">
+                            {{#if editing}}
+                                <a data-action="edit-section"><i class="fa-solid fa-pen-to-square"></i></a>
+                            {{/if}}
+                        </div>
+                    </div>
+                    <div class="section-body hazard-editor">
+                        {{editor enrichedContent.routine target="system.details.routine" button=true owner=owner editable=editable engine="prosemirror"}}
+                    </div>
+                </div>
+            {{/if}}
+
+            {{#if (or hasResetDetails editing)}}
+                <div class="section-container">
+                    <div class="section-header">
+                        <h4>{{localize "PF2E.HazardResetLabel"}}</h4>
+                        <div class="controls">
+                            {{#if editing}}
+                                <a data-action="edit-section"><i class="fa-solid fa-pen-to-square"></i></a>
+                            {{/if}}
+                        </div>
+                    </div>
+                    <div class="section-body hazard-editor">
+                        {{editor enrichedContent.reset target="system.details.reset" button=true owner=owner editable=editable engine="prosemirror"}}
+                    </div>
+                </div>
+            {{/if}}
+
+            <div class="section-container">
+                <div class="section-header">
+                    <h4>{{localize "PF2E.ActionActionsLabel"}}</h4>
+                    <div class="controls">
+                        {{#if editing}}
+                            <a data-action="create-item" data-tooltip="PF2E.CreateActionTitle" data-type="action" data-action-type="action"><i class="fa-solid fa-fw fa-plus"></i> {{localize "TYPES.Item.action"}}</a>
+                            <a data-action="create-item" data-type="melee" data-action-type="melee"><i class="fa-solid fa-fw fa-plus"></i> {{localize "PF2E.NPCAttackMelee"}}</a>
+                            <a data-action="create-item" data-type="melee" data-action-type="ranged"><i class="fa-solid fa-fw fa-plus"></i> {{localize "PF2E.NPCAttackRanged"}}</a>
+                        {{/if}}
+                    </div>
+                </div>
+
+                <div class="section-body">
+                    {{#each actions as |section sid|}}
+                        {{#if section}}
+                            <ol class="actions-list attacks-list item-list">
+                                {{!-- Actions --}}
+                                {{#each section as |action|}}
+                                     <li class="item action flexrow" data-item-id="{{action.id}}">
+                                        <h4 class="item-name">
+                                            <a data-action="toggle-summary">{{action.name}} {{{actionGlyph action.actionCost}}}</a>
+                                        </h4>
+                                        <div class="controls">
+                                            <a
+                                                class="chat"
+                                                data-action="item-to-chat"
+                                                title="{{localize "PF2E.NPC.SendToChat"}}"
+                                            ><i class="fa-solid fa-fw fa-message"></i></a>
+                                            {{#if @root.editing}}
+                                                <a data-action="edit-item" data-tooltip="PF2E.EditItemTitle"><i class="fa-solid fa-fw fa-edit"></i></a>
+                                                <a data-action="delete-item" data-tooltip="PF2E.DeleteItemTitle"><i class="fa-solid fa-fw fa-trash"></i></a>
+                                            {{/if}}
+                                        </div>
+                                        <div class="item-summary" hidden></div>
+                                    </li>
+                                {{/each}}
+                            </ol>
+                        {{/if}}
+                    {{/each}}
+
+                    {{#if attacks}}
+                        {{!-- Attacks --}}
+                        <ol class="actions-list attacks-list strikes-list item-list">
+                            {{#each attacks as |action index|}}
+                                <li class="item action" data-action-index="{{index}}" data-strike="" data-item-id="{{action.item.id}}">
+                                    <h4 class="attack-name tags">
+                                        <span>
+                                            <strong>{{localize action.attackRollType}}</strong>
+                                            <span class="action-glyph">{{action.glyph}}</span>
+                                            {{action.label}}
+                                        </span>
+                                        {{#each action.traitsAndTags as |trait|}}
+                                            <li class="tag tag_transparent" {{#if trait.description}} data-tooltip="{{trait.description}}"{{/if}}>{{trait.label}}</li>
+                                        {{/each}}
+                                        {{#each action.additionalEffects as |effect|}}
+                                            <div class="tag tag_transparent" data-tag="{{effect.tag}}">{{localize effect.label}}</div>
+                                        {{/each}}
+                                    </h4>
+                                    <div class="controls">
+                                        {{#if @root.editing}}
+                                            <a data-action="edit-item" data-tooltip="CONTROLS.CommonEdit"><i class="fa-solid fa-fw fa-edit"></i></a>
+                                            <a data-action="delete-item" data-tooltip="Delete"><i class="fa-solid fa-fw fa-trash"></i></a>
+                                        {{/if}}
+                                    </div>
+
+                                    <div class="button-group">
+                                        <div class="subsection attack">
+                                            {{#each action.variants as |variant vi|}}
+                                                <button type="button" class="btn attack-button" {{#if (eq vi 0)}}title="{{action.breakdown}}"{{/if}} data-action="strike-attack" data-variant-index="{{vi}}">{{variant.label}}</button>
+                                            {{/each}}
+                                        </div>
+                                        {{#if action.item.dealsDamage}}
+                                            <div class="subsection damage">
+                                                <button type="button" class="damage-button" data-action="strike-damage">{{action.damageFormula}}</button>
+                                                <button type="button" class="critical-button" data-action="strike-critical">{{localize "PF2E.CriticalDamageLabel"}}</button>
+                                            </div>
+                                        {{/if}}
+                                    </div>
+                                    <div class="item-summary">
+                                        {{{action.description}}}
+                                    </div>
+                                </li>
+                            {{/each}}
+                        </ol>
+                    {{/if}}
+                </div>
+            </div>
+
+            <div class="section-container publication">
+                <div class="section-header">
+                    <h4>{{localize "PF2E.Publication.Label"}}</h4>
+                </div>
+                <div class="section-body">
+                    {{> (resolvePath "templates/partials/publication-data.hbs") path="system.details.publication" data=data.details.publication}}
+                </div>
+            </div>
+        </section>
+    </div>
+</form>

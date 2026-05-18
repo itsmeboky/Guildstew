@@ -1,0 +1,102 @@
+<section class="skills">
+    <section class="control-dc" data-tooltip="{{kingdom.control.dc.breakdown}}">
+        <span class="mod">{{kingdom.control.dc}}</span>
+        {{localize "PF2E.Kingmaker.Kingdom.ControlDC"}}
+    </section>
+    <div class="skill-list">
+        {{#each skills as |skill|}}
+            <section class="skill" data-skill="{{skill.slug}}">
+                <a class="mod rollable" data-statistic="{{skill.slug}}" data-tooltip="{{skill.check.breakdown}}">
+                    <i class="fa-solid fa-dice-d20"></i>{{numberFormat skill.mod decimals=0 sign=true}}
+                </a>
+                <span class="name">{{skill.label}}</span>
+                <div class="button-group">
+                    {{> proficiencySelect property=(concat "build.skills." skill.slug ".rank") rank=skill.rank}}
+                    <button type="button" class="hover small-button modifiers" data-tooltip-content="#{{@root.options.id}}-{{skill.slug}}-modifiers">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+
+                {{#with skill}}
+                    {{> (resolvePath "templates/actors/partials/modifiers-tooltip.hbs") title=label}}
+                {{/with}}
+            </section>
+        {{/each}}
+    </div>
+</section>
+<section class="actions major">
+    <header>
+        {{localize "PF2E.Kingmaker.Kingdom.Activities"}}
+        <span class="tags filters">
+            {{#each actionFilterChoices}}
+                <span class="tag choice" data-slug="{{value}}">{{label}}</span>
+            {{/each}}
+            <span class="tag choice"><i class="fa-solid fa-cancel"></i></span>
+        </span>
+    </header>
+    <ol class="actions-list item-list directory-list">
+        <div class="phase-summary" data-phase="commerce">
+            <header>{{localize "PF2E.Kingmaker.Kingdom.Phases.commerce.Header"}}</header>
+            <p>{{localize "PF2E.Kingmaker.Kingdom.Phases.commerce.Description"}}</p>
+            <ol>
+                <li>{{{localize "PF2E.Kingmaker.Kingdom.Phases.commerce.Step1"}}}</li>
+                <li>{{{localize "PF2E.Kingmaker.Kingdom.Phases.commerce.Step2"}}}</li>
+                <li>{{{localize "PF2E.Kingmaker.Kingdom.Phases.commerce.Step3"}}}</li>
+                <li>{{{localize "PF2E.Kingmaker.Kingdom.Phases.commerce.Step4"}}}</li>
+            </ol>
+        </div>
+            <div class="phase-summary" data-phase="leadership">
+            <header>{{localize "PF2E.Kingmaker.Kingdom.Phases.leadership.Header"}}</header>
+            <p>{{localize "PF2E.Kingmaker.Kingdom.Phases.leadership.Description"}}</p>
+        </div>
+        </div>
+            <div class="phase-summary" data-phase="region">
+            <header>{{localize "PF2E.Kingmaker.Kingdom.Phases.region.Header"}}</header>
+            <p>{{localize "PF2E.Kingmaker.Kingdom.Phases.region.Description"}}</p>
+        </div>
+        </div>
+        <div class="phase-summary" data-phase="civic">
+            <header>{{localize "PF2E.Kingmaker.Kingdom.Phases.civic.Header"}}</header>
+            <p>{{localize "PF2E.Kingmaker.Kingdom.Phases.civic.Description"}}</p>
+        </div>
+        <div class="phase-summary" data-phase="army">
+            <header>{{localize "PF2E.Kingmaker.Kingdom.Phases.army.Header"}}</header>
+            <p>{{localize "PF2E.Kingmaker.Kingdom.Phases.army.Description"}}</p>
+        </div>
+        {{#each actions}}
+            <li class="action item" data-item-id="{{item.id}}">
+                <a class="item-image framed" data-action="item-to-chat">
+                    <img class="item-icon" src="{{item.img}}" alt="{{item.name}}">
+                    <i class="fa-solid fa-message"></i>
+                </a>
+                <div class="item-name">
+                    <h4 class="name"><a data-action="toggle-summary">{{item.name}}</a></h4>
+                    <div class="tags">
+                        {{#each traits}}
+                            <span class="tag" data-slug="{{value}}">{{label}}</span>
+                        {{/each}}
+                    </div>
+                </div>
+                <div class="item-controls">
+                    {{#if @root.editable}}
+                        <a data-action="edit-item" data-tooltip="PF2E.EditItemTitle"><i class="fa-solid fa-fw fa-edit"></i></a>
+                        <a data-action="delete-item" data-tooltip="PF2E.DeleteItemTitle"><i class="fa-solid fa-fw fa-trash"></i></a>
+                    {{/if}}
+                </div>
+                <div class="item-summary" hidden="hidden"></div>
+            </li>
+        {{/each}}
+    </ol>
+</section>
+
+{{#*inline "proficiencySelect"}}
+    {{#if @root.editable}}
+        <select data-property="{{property}}" class="proficiency" data-rank="{{rank}}">
+            {{selectOptions @root.proficiencyOptions selected=rank localize=true}}
+        </select>
+    {{else}}
+        <span class="proficiency" data-rank="{{rank}}">
+            {{localize (concat "PF2E.ProficiencyLevel" rank)}}
+        </span>
+    {{/if}}
+{{/inline}}

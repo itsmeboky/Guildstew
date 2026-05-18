@@ -1,0 +1,151 @@
+{
+    "_id": "QLeMH5mQgh28sa5o",
+    "folder": "admZiPs6ML6NgwMt",
+    "img": "systems/sf2e/icons/default-icons/feats-sf2e.webp",
+    "name": "Specialty Crafting",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "skill",
+        "description": {
+            "value": "<p>Your training focused on Crafting one particular kind of item. Select one of the specialties listed below; you gain a +1 circumstance bonus to Crafting checks to Craft items of that type. If you are a master in Crafting, this bonus increases to +2. If it's unclear whether the specialty applies, the GM decides. Some specialties might apply only partially. For example, if you were making an Abadarcorp travel suit and had specialty in textiles, the GM might give you half your bonus because the item requires both armorsmithing and textiles to craft.</p><table class=\"pf2e\" style=\"white-space:nowrap\"><thead><tr><th>Specialty</th><th>Applicable Items</th></tr></thead><tbody><tr><td>Armorsmithing</td><td>Armor, shields and upgrades</td></tr><tr><td>Artistry</td><td>Fine art, including jewelry and solarian crystals</td></tr><tr><td>Automotives</td><td>Vehicles, including spaceships</td></tr><tr><td>Chemicals</td><td>Alcohol, ammunition, explosives, and fuel</td></tr><tr><td>Computer</td><td>Comm units, datapads, and virtual items</td></tr><tr><td>Engineering</td><td>Tech gadgets and accessories</td></tr><tr><td>Gunsmithing</td><td>Firearms and firearm upgrades</td></tr><tr><td>Life Science</td><td>Biotechnology and some pharmaceuticals</td></tr><tr><td>Robotics</td><td>Drones, mechs, and robots</td></tr><tr><td>Textiles</td><td>Clothing, leather, and polymer armor</td></tr></tbody></table>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": [
+                {
+                    "value": "trained in Crafting"
+                }
+            ]
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Starfinder Player Core"
+        },
+        "rules": [
+            {
+                "choices": [
+                    {
+                        "label": "PF2E.SpecificRule.SpecialtyCrafting.Armorsmithing",
+                        "predicate": [
+                            {
+                                "not": "feat:specialty-crafting:armorsmithing"
+                            }
+                        ],
+                        "value": "armorsmithing"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.SpecialtyCrafting.Artistry",
+                        "predicate": [
+                            {
+                                "not": "feat:specialty-crafting:artistry"
+                            }
+                        ],
+                        "value": "artistry"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.SpecialtyCrafting.Automotives",
+                        "predicate": [
+                            {
+                                "not": "feat:specialty-crafting:automotives"
+                            }
+                        ],
+                        "value": "automotives"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.SpecialtyCrafting.Chemicals",
+                        "predicate": [
+                            {
+                                "not": "feat:specialty-crafting:chemicals"
+                            }
+                        ],
+                        "value": "chemicals"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.SpecialtyCrafting.Computer",
+                        "predicate": [
+                            {
+                                "not": "feat:specialty-crafting:computer"
+                            }
+                        ],
+                        "value": "computer"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.SpecialtyCrafting.Engineering",
+                        "predicate": [
+                            {
+                                "not": "feat:specialty-crafting:engineering"
+                            }
+                        ],
+                        "value": "engineering"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.SpecialtyCrafting.Gunsmithing",
+                        "predicate": [
+                            {
+                                "not": "feat:specialty-crafting:gunsmithing"
+                            }
+                        ],
+                        "value": "gunsmithing"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.SpecialtyCrafting.LifeScience",
+                        "predicate": [
+                            {
+                                "not": "feat:specialty-crafting:life-science"
+                            }
+                        ],
+                        "value": "life-science"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.SpecialtyCrafting.Robotics",
+                        "predicate": [
+                            {
+                                "not": "feat:specialty-crafting:robotics"
+                            }
+                        ],
+                        "value": "robotics"
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.SpecialtyCrafting.Textiles",
+                        "predicate": [
+                            {
+                                "not": "feat:specialty-crafting:textiles"
+                            }
+                        ],
+                        "value": "textiles"
+                    }
+                ],
+                "flag": "specialtyCrafting",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.SpecialtyCrafting.Prompt",
+                "rollOption": "feat:specialty-crafting"
+            },
+            {
+                "key": "FlatModifier",
+                "predicate": [
+                    "action:craft",
+                    "{item|flags.system.rulesSelections.specialtyCrafting}"
+                ],
+                "selector": "crafting",
+                "type": "circumstance",
+                "value": "ternary(gte(@actor.system.skills.crafting.rank,3),2,1)"
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "general",
+                "skill"
+            ]
+        }
+    },
+    "type": "feat"
+}

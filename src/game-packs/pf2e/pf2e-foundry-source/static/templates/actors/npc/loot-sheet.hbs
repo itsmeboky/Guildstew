@@ -1,0 +1,15 @@
+<form class="npc-sheet dead" autocomplete="off">
+    <section class="sidebar">
+        <div class="profile" style="background-image: url('{{actor.img}}')">
+            <img src="/icons/svg/skull.svg" />
+        </div>
+        <h2 class="name">{{actor.name}}</h2>
+    </section>
+    <section class="npc-body">
+        <div class="sheet-body">
+            <div class="tab inventory item-container active" data-container-type="actorInventory" data-group="primary" data-tab="inventory">
+                {{> (resolvePath "templates/actors/partials/inventory.hbs")}}
+            </div>
+        </div>
+    </section>
+</form>

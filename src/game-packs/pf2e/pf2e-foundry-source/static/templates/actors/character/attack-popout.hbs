@@ -1,0 +1,20 @@
+<div class="content">
+    <div class="tab actions active" data-tab="actions">
+        {{#if (eq popoutType "blast")}}
+            <div class="actions-container">
+                <div class="actions-panels">
+                    {{> (resolvePath "templates/actors/partials/toggles.hbs") toggles=toggles.actions}}
+                </div>
+            </div>
+            <ol class="actions-list" data-elemental-blasts>
+                {{#each elementalBlasts as |blast|}}
+                    {{> (resolvePath "templates/actors/character/partials/elemental-blast.hbs") action=blast omitName=true}}
+                {{/each}}
+            </ol>
+        {{else}}
+            <ol class="actions-list item-list strikes-list" data-strikes>
+                {{> (resolvePath "templates/actors/character/partials/strike.hbs") action=attack index=index omitName=true}}
+            </ol>
+        {{/if}}
+    </div>
+</div>

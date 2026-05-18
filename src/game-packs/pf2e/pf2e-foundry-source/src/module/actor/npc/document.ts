@@ -1,0 +1,616 @@
+import { CreaturePF2e } from "@actor";
+import type { ActorUpdateCallbackOptions, ActorUpdateOperation } from "@actor/base.ts";
+import type { Abilities } from "@actor/creature/data.ts";
+import { getHpAdjustment } from "@actor/creature/helpers.ts";
+import type { CreatureUpdateCallbackOptions } from "@actor/creature/index.ts";
+import { CreatureSaves } from "@actor/creature/saves.ts";
+import { ActorSizePF2e } from "@actor/data/size.ts";
+import { attackFromMeleeItem, setHitPointsRollOptions } from "@actor/helpers.ts";
+import { ActorInitiative } from "@actor/initiative.ts";
+import { Modifier, StatisticModifier } from "@actor/modifiers.ts";
+import type { MovementType } from "@actor/types.ts";
+import { SAVE_TYPES } from "@actor/values.ts";
+import type { UserAction } from "@common/constants.d.mts";
+import type { ItemPF2e, MeleePF2e } from "@item";
+import type { ItemType } from "@item/types.ts";
+import { calculateDC } from "@module/dc.ts";
+import { RollNotePF2e } from "@module/notes.ts";
+import { CreatureIdentificationData, creatureIdentificationDCs } from "@module/recall-knowledge.ts";
+import { extractModifierAdjustments, extractModifiers } from "@module/rules/helpers.ts";
+import type { TokenDocumentPF2e } from "@scene";
+import { ArmorStatistic, PerceptionStatistic, Statistic } from "@system/statistic/index.ts";
+import { TextEditorPF2e } from "@system/text-editor.ts";
+import { createHTMLElement, signedInteger, sluggify } from "@util";
+import * as R from "remeda";
+import type { NPCFlags, NPCSource, NPCSystemData } from "./data.ts";
+import { ResetBatch } from "./reset-batch.ts";
+import type { VariantCloneParams } from "./types.ts";
+
+class NPCPF2e<TParent extends TokenDocumentPF2e | null = TokenDocumentPF2e | null> extends CreaturePF2e<TParent> {
+    declare initiative: ActorInitiative;
+    /** If this is a troop, contains the actors of the other troop segments in the current scene */
+    declare otherSegments: NPCPF2e[] | null;
+
+    static #resetBatch = new ResetBatch();
+
+    override get allowedItemTypes(): (ItemType | "physical")[] {
+        return [...super.allowedItemTypes, "physical", "spellcastingEntry", "spell", "action", "melee", "lore"];
+    }
+
+    /** The level of this creature without elite/weak adjustments */
+    get baseLevel(): number {
+        return this._source.system.details.level.value;
+    }
+
+    /** This NPC's attribute modifiers */
+    override get abilities(): Abilities {
+        return fu.deepClone(this.system.abilities);
+    }
+
+    get description(): string {
+        return this.system.details.publicNotes;
+    }
+
+    /** Does this NPC have the Elite adjustment? */
+    get isElite(): boolean {
+        return this.attributes.adjustment === "elite";
+    }
+
+    /** Does this NPC have the Weak adjustment? */
+    get isWeak(): boolean {
+        return this.attributes.adjustment === "weak";
+    }
+
+    get identificationDCs(): CreatureIdentificationData {
+        const pwol = game.pf2e.settings.variants.pwol.enabled;
+        return creatureIdentificationDCs(this, { pwol });
+    }
+
+    /** A user can see an unlinked NPC in the actor directory only if they have at least Observer permission */
+    override get visible(): boolean {
+        return (
+            (super.visible && this.prototypeToken.actorLink) ||
+            this.permission >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER
+        );
+    }
+
+    /** Non-owning users may be able to loot a dead NPC. */
+    override canUserModify(user: fd.BaseUser, action: UserAction): boolean {
+        return (
+            super.canUserModify(user, action) ||
+            (action === "update" &&
+                this.isDead &&
+                (this.flags[SYSTEM_ID].lootable || game.settings.get(SYSTEM_ID, "automation.lootableNPCs")))
+        );
+    }
+
+    /** Setup base ephemeral data to be modified by active effects and derived-data preparation */
+    override prepareBaseData(): void {
+        super.prepareBaseData();
+
+        const token = this.getActiveTokens().at(0)?.document;
+        this.otherSegments =
+            token?.segments?.map((t) => t.actor).filter((a): a is NPCPF2e => !!a?.isOfType("npc")) ?? null;
+
+        this.flags[SYSTEM_ID].lootable ??= false;
+        this.system.actions = [];
+        for (const key of SAVE_TYPES) {
+            this.system.saves[key].attribute = CONFIG.PF2E.savingThrowDefaultAttributes[key];
+        }
+        const { attributes, details } = this.system;
+        if (details.alliance === undefined) {
+            details.alliance = this.hasPlayerOwner ? "party" : "opposition";
+        }
+
+        // Ensure undead have void healing
+        attributes.hp.negativeHealing = this.system.traits.value.includes("undead");
+
+        // Exclude troops from being flankable
+        attributes.flanking.flankable = !this.system.traits.value.includes("troop");
+
+        // NPC level needs to be known before the rest of the weak/elite adjustments
+        const level = details.level;
+        level.base = Math.clamp(level.value, -1, 100);
+
+        // Elite: Increase the creature's level by 1; if the creature is -1 or 0, instead increase its level by 2
+        // Weak : Decrease the creature's level by 1; if the creature is level 1, instead decrease its level by 2
+        level.value = this.isElite
+            ? level.base < 1
+                ? level.base + 2
+                : level.base + 1
+            : this.isWeak
+              ? level.base === 1
+                  ? level.base - 2
+                  : level.base - 1
+              : level.base;
+        this.rollOptions.all[`self:level:${level.value}`] = true;
+
+        attributes.spellDC = null;
+        attributes.classDC = ((): { value: number } => {
+            const pwol = game.pf2e.settings.variants.pwol.enabled;
+            const levelBasedDC = calculateDC(level.base, { pwol, rarity: this.rarity });
+            const adjusted = this.isElite ? levelBasedDC + 2 : this.isWeak ? levelBasedDC - 2 : levelBasedDC;
+            return { value: adjusted };
+        })();
+        attributes.classOrSpellDC = { value: attributes.classDC.value };
+        this.system.spellcasting = fu.mergeObject({ rituals: { dc: 0 } }, this.system.spellcasting);
+
+        const resources = this.system.resources;
+        resources.focus = fu.mergeObject({ value: 0, max: 0, cap: 3 }, resources.focus);
+        resources.mythicPoints = {
+            value: resources.mythicPoints?.value ?? 3,
+            max: this.system.traits.value.includes("mythic") ? 3 : 0,
+        };
+
+        // Base movement data
+        const speeds: Record<MovementType, { value: number; base: number } | null> = this.system.movement.speeds;
+        const sourceSpeeds = this._source.system.attributes.speed;
+        speeds.land = { value: sourceSpeeds.value, base: sourceSpeeds.value };
+        const otherSpeeds = sourceSpeeds.otherSpeeds;
+        for (const speed of otherSpeeds) {
+            speeds[speed.type] = { value: speed.value, base: speed.value };
+        }
+    }
+
+    override prepareDerivedData(): void {
+        super.prepareDerivedData();
+
+        const { system, synthetics } = this;
+        const modifierAdjustments = synthetics.modifierAdjustments;
+        const baseLevel = system.details.level.base;
+        synthetics.modifiers.hp ??= [];
+
+        if (this.isElite) {
+            modifierAdjustments.all.push({
+                slug: "base",
+                getNewValue: (base: number) => base + 2,
+                test: () => true,
+            });
+            synthetics.modifiers.hp.push(
+                () => new Modifier("PF2E.NPC.Adjustment.EliteLabel", getHpAdjustment(baseLevel, "elite"), "untyped"),
+            );
+        } else if (this.isWeak) {
+            modifierAdjustments.all.push({
+                slug: "base",
+                getNewValue: (base: number) => base - 2,
+                test: () => true,
+            });
+            synthetics.modifiers.hp.push(
+                () => new Modifier("PF2E.NPC.Adjustment.WeakLabel", getHpAdjustment(baseLevel, "weak"), "untyped"),
+            );
+        }
+        system.details.level.base = baseLevel;
+
+        for (const attribute of Object.values(system.abilities)) {
+            attribute.mod = Math.trunc(Number(attribute.mod)) || 0;
+        }
+
+        // Hit Points
+        {
+            const base = system.attributes.hp.max;
+            const modifiers: Modifier[] = [
+                extractModifiers(synthetics, ["hp"], { test: this.getRollOptions(["hp"]) }),
+                extractModifiers(synthetics, ["hp-per-level"], {
+                    test: this.getRollOptions(["hp-per-level"]),
+                }).map((modifier) => {
+                    modifier.modifier *= this.level;
+                    return modifier;
+                }),
+                // Grab HP
+                this.otherSegments?.flatMap((a) => [
+                    ...extractModifiers(a.synthetics, ["hp"], { test: a.getRollOptions(["hp"]) }),
+                ]) ?? [],
+            ].flat();
+
+            const hpData = fu.deepClone(system.attributes.hp);
+            const stat = fu.mergeObject(new StatisticModifier("hp", modifiers), hpData, { overwrite: false });
+
+            stat.base = base;
+            stat.max = stat.max + stat.totalModifier;
+            stat.value = Math.min(stat.value, stat.max); // Make sure the current HP isn't higher than the max HP
+            stat.breakdown = [
+                _loc("PF2E.MaxHitPointsBaseLabel", { base }),
+                ...stat.modifiers.filter((m) => m.enabled).map((m) => `${m.label} ${signedInteger(m.modifier)}`),
+            ].join(", ");
+            system.attributes.hp = stat;
+            setHitPointsRollOptions(this);
+
+            // Troop Thresholds
+            const hpMax = stat.max;
+            system.attributes.hp.thresholds = null;
+            if (this.system.traits.value.includes("troop") && hpMax >= 3) {
+                system.attributes.hp.thresholds = [
+                    { hp: hpMax, segments: 4 },
+                    { hp: Math.floor((hpMax * 2) / 3), segments: 3 },
+                    { hp: Math.floor(hpMax / 3), segments: 2 },
+                ];
+                this.system.traits.size.wide = 10;
+                this.system.traits.size.long = 10;
+            }
+        }
+
+        this.prepareMovementData();
+
+        // Armor Class
+        const armorStatistic = new ArmorStatistic(this, {
+            modifiers: [
+                new Modifier({
+                    slug: "base",
+                    label: "PF2E.ModifierTitle",
+                    modifier: system.attributes.ac.value - 10,
+                    adjustments: extractModifierAdjustments(modifierAdjustments, ["all", "ac", "dex-based"], "base"),
+                }),
+            ],
+            details: system.attributes.ac.details,
+        });
+        this.armorClass = armorStatistic.dc;
+        system.attributes.ac = fu.mergeObject(armorStatistic.getTraceData(), {
+            attribute: armorStatistic.attribute ?? "dex",
+        });
+
+        this.prepareSaves();
+
+        // Perception
+        {
+            const domains = ["perception", "wis-based", "all"];
+            this.perception = new PerceptionStatistic(this, {
+                slug: "perception",
+                label: "PF2E.PerceptionLabel",
+                attribute: "wis",
+                domains,
+                modifiers: [
+                    new Modifier({
+                        slug: "base",
+                        label: "PF2E.ModifierTitle",
+                        modifier: system.perception.mod,
+                        adjustments: extractModifierAdjustments(modifierAdjustments, domains, "base"),
+                    }),
+                ],
+                check: { type: "perception-check" },
+                senses: system.perception.senses,
+                vision: system.perception.vision,
+            });
+            system.perception = fu.mergeObject(this.perception.getTraceData(), {
+                attribute: this.perception.attribute ?? "wis",
+                details: system.perception.details,
+                mod: this.perception.mod,
+            });
+        }
+
+        this.prepareSkills();
+
+        // Process strikes
+        const syntheticWeapons = Object.values(synthetics.strikes)
+            .map((s) => s())
+            .filter(R.isNonNull);
+        const generatedMelee = syntheticWeapons.flatMap((w) => w.toNPCAttacks({ keepId: true }));
+        const meleeItems = R.sortBy(
+            [this.itemTypes.melee, generatedMelee].flat(),
+            (m) => (m.system.action === "strike" ? 0 : 1),
+            (m) => m.name,
+            (m) => m.sort,
+        );
+        for (const item of meleeItems) {
+            system.actions.push(attackFromMeleeItem(item));
+        }
+
+        // Initiative
+        this.initiative = new ActorInitiative(this, R.pick(system.initiative, ["statistic", "tiebreakPriority"]));
+        system.initiative = this.initiative.getTraceData();
+    }
+
+    private prepareSaves(): void {
+        const system = this.system;
+        const modifierAdjustments = this.synthetics.modifierAdjustments;
+        const saves = R.mapToObj(SAVE_TYPES, (saveType) => {
+            const save = system.saves[saveType];
+            const saveName = _loc(CONFIG.PF2E.saves[saveType]);
+            const base = save.value;
+            const attribute = save.attribute;
+            const domains = [saveType, `${attribute}-based`, "saving-throw", "all"];
+            const statistic = new Statistic(this, {
+                slug: saveType,
+                label: saveName,
+                domains: domains,
+                modifiers: [
+                    new Modifier({
+                        slug: "base",
+                        label: "PF2E.ModifierTitle",
+                        modifier: base,
+                        adjustments: extractModifierAdjustments(modifierAdjustments, domains, "base"),
+                    }),
+                ],
+                check: {
+                    type: "saving-throw",
+                },
+            });
+            fu.mergeObject(system.saves[saveType], statistic.getTraceData());
+            system.saves[saveType].base = base;
+            return [saveType, statistic];
+        });
+        this.saves = new CreatureSaves(saves);
+    }
+
+    private prepareSkills() {
+        const modifierAdjustments = this.synthetics.modifierAdjustments;
+
+        this.skills = R.mapToObj(R.entries(CONFIG.PF2E.skills), ([skillSlug, { attribute, label }]) => {
+            const skill = this._source.system.skills[skillSlug];
+            const domains = [skillSlug, `${attribute}-based`, "skill-check", `${attribute}-skill-check`, "all"];
+
+            // Get predicated variants as modifiers that trigger when the predicate is met.
+            // This is only necessary if there are predicates. Direct clicking is handled separately.
+            const specialModifiers =
+                skill?.special
+                    ?.filter((v) => v.predicate?.length)
+                    .map(
+                        (special) =>
+                            new Modifier({
+                                slug: "variant",
+                                label: special.label,
+                                modifier: special.base - skill.base,
+                                predicate: special.predicate,
+                                hideIfDisabled: true,
+                                domains,
+                            }),
+                    ) ?? [];
+
+            const statistic = new Statistic(this, {
+                slug: skillSlug,
+                label,
+                attribute,
+                domains,
+                modifiers: [
+                    new Modifier({
+                        slug: "base",
+                        label: "PF2E.ModifierTitle",
+                        modifier: skill?.base ?? this.system.abilities[attribute].mod,
+                        adjustments: extractModifierAdjustments(modifierAdjustments, domains, "base"),
+                    }),
+                    ...specialModifiers,
+                ],
+                lore: false,
+                proficient: skillSlug in this._source.system.skills,
+                check: { type: "skill-check" },
+            });
+
+            return [skillSlug, statistic];
+        });
+
+        // Assemble lore items, key'd by a normalized slug
+        const loreItems = R.mapToObj(this.itemTypes.lore, (loreItem) => [loreItem.slug, loreItem]);
+
+        // Add Lore skills to skill statistics
+        for (const [slug, loreItem] of Object.entries(loreItems)) {
+            const domains = [slug, "skill-check", "lore-skill-check", "int-skill-check", "all"];
+            const statistic = new Statistic(this, {
+                slug,
+                label: loreItem.name,
+                attribute: "int",
+                domains,
+                modifiers: [
+                    new Modifier({
+                        slug: "base",
+                        label: "PF2E.ModifierTitle",
+                        modifier: loreItem.system.mod.value,
+                        adjustments: extractModifierAdjustments(modifierAdjustments, domains, "base"),
+                    }),
+                ],
+                lore: true,
+                proficient: true,
+                check: { type: "skill-check" },
+            });
+
+            this.skills[slug] = statistic;
+        }
+
+        // Create trace data in system data and omit unprepared skills
+        this.system.skills = R.mapToObj(Object.entries(this.skills), ([key, statistic]) => {
+            const loreItem = statistic.lore ? loreItems[statistic.slug] : null;
+            const baseData = this.system.skills[key] ?? { base: loreItem?.system.mod.value ?? 0 };
+            const data = fu.mergeObject(baseData, {
+                ...statistic.getTraceData(),
+                mod: statistic.check.mod,
+                itemId: loreItem?.id ?? null,
+                lore: !!statistic.lore,
+                visible: statistic.proficient,
+            });
+
+            // Recalculate displayed variant modifiers, accounting for already enabled ones
+            const enabledVariantMod =
+                statistic.check.modifiers.find((m) => m.slug === "variant" && m.enabled)?.modifier ?? 0;
+            data.special ??= [];
+            for (const variant of data.special) {
+                variant.mod = variant.base + (statistic.check.mod - baseData.base - enabledVariantMod);
+            }
+
+            return [key, data];
+        });
+    }
+
+    async getAttackEffects(attack: MeleePF2e): Promise<RollNotePF2e[]> {
+        const notes: RollNotePF2e[] = [];
+        if (attack.description) {
+            notes.push(
+                new RollNotePF2e({
+                    selector: "all",
+                    visibility: "gm",
+                    text: attack.description,
+                }),
+            );
+        }
+        const formatItemName = (item: ItemPF2e<this | null>): string => {
+            if (item.isOfType("consumable")) {
+                const button = createHTMLElement("button", { dataset: { action: "consume", item: item.id } });
+                button.style.width = "auto";
+                button.style.lineHeight = "14px";
+                button.innerHTML = _loc("PF2E.Item.Consumable.Uses.Use");
+                return `${item.name} - ${_loc("TYPES.Item.consumable")} (${item.quantity}) ${button.outerHTML}`;
+            }
+            return item.name;
+        };
+        const formatNoteText = (item: ItemPF2e<this | null>): Promise<string> => {
+            // Call enrichHTML with the correct item context
+            const rollData = item.getRollData();
+            return TextEditorPF2e.enrichHTML(item.description, { rollData });
+        };
+
+        for (const attackEffect of attack.attackEffects) {
+            const item = this.items.find(
+                (i) => i.type !== "melee" && (i.slug ?? sluggify(i.name)) === sluggify(attackEffect),
+            );
+            if (item) {
+                // Get description from the actor item.
+                const note = new RollNotePF2e({
+                    selector: "all",
+                    visibility: "gm",
+                    title: formatItemName(item),
+                    text: await formatNoteText(item),
+                });
+                notes.push(note);
+            } else {
+                // Get description from the bestiary glossary compendium.
+                const compendium = game.packs.get(`${SYSTEM_ID}.bestiary-ability-glossary-srd`, { strict: true });
+                const packItem = (await compendium.getDocuments({ system: { slug: attackEffect } }))[0];
+                if (packItem instanceof Item) {
+                    const note = new RollNotePF2e({
+                        selector: "all",
+                        visibility: "gm",
+                        title: formatItemName(packItem),
+                        text: await formatNoteText(packItem),
+                    });
+                    notes.push(note);
+                }
+            }
+        }
+
+        return notes;
+    }
+
+    /** Make the NPC elite, weak, or normal */
+    async applyAdjustment(adjustment: "elite" | "weak" | null): Promise<void> {
+        const { isElite, isWeak } = this;
+        if (
+            (isElite && adjustment === "elite") ||
+            (isWeak && adjustment === "weak") ||
+            (!isElite && !isWeak && !adjustment)
+        ) {
+            return;
+        }
+
+        const currentHPAdjustment = getHpAdjustment(this.baseLevel, this.system.attributes.adjustment);
+        const newHPAdjustment = getHpAdjustment(this.baseLevel, adjustment);
+        const currentHP = this.system.attributes.hp.value;
+        const newHP = currentHP - currentHPAdjustment + newHPAdjustment;
+        await this.update({
+            "system.attributes.hp.value": Math.max(0, newHP),
+            "system.attributes.adjustment": adjustment,
+        });
+    }
+
+    /** Create a variant clone of this NPC, adjusting any of name, description, and images */
+    variantClone(params: VariantCloneParams & { save?: false }): this;
+    variantClone(params: VariantCloneParams & { save: true }): Promise<this>;
+    variantClone(params: VariantCloneParams): this | Promise<this>;
+    variantClone(params: VariantCloneParams): this | Promise<this> {
+        const source = this._source;
+        const changes: DeepPartial<NPCSource> = {
+            name: params.name ?? this.name,
+            system: {
+                details: { publicNotes: params.description ?? source.system.details.publicNotes },
+            },
+            img: params.img?.actor ?? source.img,
+            prototypeToken: {
+                texture: {
+                    src: params.img?.token ?? source.prototypeToken.texture.src,
+                },
+            },
+        };
+
+        return this.clone(changes, { save: params.save, keepId: params.keepId });
+    }
+
+    protected override async _preUpdate(
+        changed: DeepPartial<this["_source"]>,
+        options: CreatureUpdateCallbackOptions & { fromTroop?: boolean },
+        user: fd.BaseUser,
+    ): Promise<boolean | void> {
+        const result = await super._preUpdate(changed, options, user);
+        const isFullReplace = !((options.diff ?? true) && (options.recursive ?? true));
+        if (isFullReplace || result === false || !changed.system) return result;
+
+        this.#updatePrototypeToken(changed);
+
+        // Propagate certain actor updates to all sibling segments as well
+        if (!options.fromTroop && this.otherSegments) {
+            const update: Record<string, unknown> = {};
+            if (changed.system.attributes) {
+                const attributes = changed.system.attributes;
+                if (attributes.hp) update["system.attributes.hp"] = attributes.hp;
+                if ("adjustment" in attributes) update["system.attributes.adjustment"] = attributes.adjustment;
+            }
+            if (!R.isEmpty(update)) {
+                const damageTaken = options.damageTaken;
+                for (const actor of this.otherSegments) {
+                    if (actor?.isOfType("npc")) {
+                        actor.update(fu.deepClone(update), { fromTroop: true, damageTaken });
+                    }
+                }
+            }
+        }
+
+        if (changed.system.skills) {
+            for (const skill of Object.values(changed.system.skills)) {
+                if (skill?.note === "") {
+                    fu.mergeObject(skill, { note: _del });
+                }
+            }
+        }
+    }
+
+    override _onUpdate(
+        changed: DeepPartial<this["_source"]>,
+        options: ActorUpdateCallbackOptions,
+        userId: string,
+    ): void {
+        super._onUpdate(changed, options, userId);
+        for (const troop of this.otherSegments ?? []) {
+            NPCPF2e.#resetBatch.reset(troop);
+        }
+    }
+
+    protected override _onEmbeddedDocumentChange(): void {
+        super._onEmbeddedDocumentChange();
+        for (const troop of this.otherSegments ?? []) {
+            NPCPF2e.#resetBatch.reset(troop);
+        }
+    }
+
+    /** Update the prototype token dimensions along with this actor's size category. */
+    async #updatePrototypeToken(changes: DeepPartial<this["_source"]>): Promise<void> {
+        const linkToActorSize = this.prototypeToken.flags[SYSTEM_ID].linkToActorSize;
+        if (this.isToken || !linkToActorSize || !changes.system?.traits?.size?.value) {
+            return;
+        }
+        const newSize = new ActorSizePF2e({ value: changes.system.traits.size.value });
+        const currentSize = this.system.traits.size;
+        if (newSize.wide !== currentSize.wide || newSize.long !== currentSize.long) {
+            const prototypeToken = (changes.prototypeToken ??= {});
+            prototypeToken.width = newSize.wide / 5;
+            prototypeToken.height = newSize.long / 5;
+        }
+    }
+}
+
+interface NPCPF2e<TParent extends TokenDocumentPF2e | null = TokenDocumentPF2e | null> extends CreaturePF2e<TParent> {
+    flags: NPCFlags;
+    readonly _source: NPCSource;
+    system: NPCSystemData;
+
+    update(
+        data: Record<string, unknown>,
+        operation?: Partial<ActorUpdateOperation<TParent>> & { fromTroop?: boolean },
+    ): Promise<this | undefined>;
+}
+
+export { NPCPF2e };

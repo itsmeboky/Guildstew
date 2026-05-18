@@ -1,0 +1,44 @@
+{
+    "_id": "EI7E0QBPW6IqMDPV",
+    "folder": "Qp1m86m0gIoj2ch5",
+    "img": "systems/sf2e/icons/ancestries/xenometric-android.webp",
+    "name": "Xenometric Android",
+    "system": {
+        "ancestry": null,
+        "description": {
+            "value": "<p>You're a constructed version of a non-human ancestry. You gain the android trait, in addition to the trait associated with the ancestry you resemble. You gain the @UUID[Compendium.sf2e.ancestry-features.Item.Constructed] ability but not the low-light vision ability of androids. In addition, your size category and reach changes to match the chosen ancestry. You can select from android feats up to 13th level, any of the feats of the ancestry you resemble, or xenometric android feats whenever you gain an ancestry feat. Choose a heritage from your ancestry, but you don't gain its mechanical benefits. The xenometric android heritage shouldn't be taken by a member of a constructed ancestry, such as android, or a human.</p>"
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Starfinder Galactic Ancestries"
+        },
+        "rules": [
+            {
+                "key": "ActiveEffectLike",
+                "mode": "override",
+                "path": "flags.system.standardizedAncestryFeats",
+                "priority": 10,
+                "value": {
+                    "standardizedAncestryFeats": {
+                        "ancestralSkills": {
+                            "skillOne": "crafting",
+                            "skillTwo": "society"
+                        }
+                    }
+                }
+            },
+            {
+                "key": "GrantItem",
+                "uuid": "Compendium.sf2e.ancestry-features.Item.Constructed"
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "android"
+            ]
+        }
+    },
+    "type": "heritage"
+}

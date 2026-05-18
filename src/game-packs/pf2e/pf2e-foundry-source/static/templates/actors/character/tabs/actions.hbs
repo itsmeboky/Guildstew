@@ -1,0 +1,131 @@
+<div class="tab actions actions-pane" data-group="primary" data-tab="actions">
+    <nav class="actions-nav sub-nav" data-group="actions-tabs">
+        <a class="tab" data-tab="encounter" data-group="actions-tabs">{{localize "PF2E.TabActionsEncounterLabel"}}</a>
+        <a class="tab" data-tab="exploration" data-group="actions-tabs">{{localize "PF2E.TabActionsExplorationLabel"}}</a>
+        <a class="tab" data-tab="downtime" data-group="actions-tabs">{{localize "PF2E.TabActionsDowntimeLabel"}}</a>
+    </nav>
+
+    <div class="actions-container tab-content">
+        <div class="actions-tabs-wrapper">
+            <section class="actions-panels">
+                <section class="actions-panel tab major" data-tab="encounter" data-group="actions-tabs">
+                    {{#if toggles.actions}}{{> (resolvePath "templates/actors/partials/toggles.hbs") toggles=toggles.actions}}{{/if}}
+
+                    <header>
+                        {{localize "PF2E.Actor.Attacks"}}
+                        {{#if inventory.hasStowedWeapons}}
+                            <button
+                                type="button"
+                                data-action="toggle-hide-stowed"
+                                {{#if systemFlags.hideStowed}}class="inactive"{{/if}}>
+                                <input type="checkbox" {{checked (not systemFlags.hideStowed)}} />
+                                {{localize "PF2E.CarryType.stowed"}}
+                            </button>
+                        {{/if}}
+                    </header>
+
+                    {{#if elementalBlasts}}
+                        {{!-- ELEMENTAL BLASTS --}}
+                        <ol class="actions-list directory-list elemental-blasts" data-elemental-blasts>
+                            {{#each elementalBlasts as |blast|}}
+                                {{> (resolvePath "templates/actors/character/partials/elemental-blast.hbs") action=blast}}
+                            {{/each}}
+                        </ol>
+                    {{/if}}
+
+                    <ol class="actions-list item-list directory-list strikes-list" data-strikes>
+                        {{#each data.actions as |strike ai|}}
+                            {{> (resolvePath "templates/actors/character/partials/strike.hbs") action=strike index=ai}}
+                        {{/each}}
+                    </ol>
+
+                    {{#each actions.encounter as |section sid|}}
+                        <header>
+                            {{section.label}}
+                            {{#if @root.options.editable}}
+                                <div class="controls">
+                                    <button type="button" data-action="create-item" data-type="action" data-action-type="{{sid}}">
+                                        <i class="fa-solid fa-fw fa-plus"></i>{{localize "PF2E.CreateActionTitle"}}
+                                    </button>
+                                    <button type="button" data-action="browse-abilities" data-action-type="{{sid}}">
+                                        <i class="fa-solid fa-fw fa-search"></i>{{localize "PF2E.BrowseLabel"}}
+                                    </button>
+                                </div>
+                            {{/if}}
+                        </header>
+
+                        <ol class="actions-list item-list directory-list">
+                            {{#each section.actions as |action|}}
+                                {{> (resolvePath "templates/actors/partials/action.hbs") action=action}}
+                            {{/each}}
+                        </ol>
+                    {{/each}}
+                </section>
+
+                <section class="actions-panel tab major" data-tab="exploration" data-group="actions-tabs">
+                    {{!# Active exploration activities are only shown if one exists}}
+                    {{#if actions.exploration.active}}
+                        <header>
+                            {{localize "PF2E.Actor.Character.ActiveHeader"}}
+                            {{#if @root.options.editable}}
+                                <div class="controls">
+                                    <button type="button" data-action="clear-exploration">
+                                        <i class="fa-solid fa-fw fa-times"></i>{{localize "PF2E.Actor.Character.Clear"}}
+                                    </button>
+                                </div>
+                            {{/if}}
+                        </header>
+
+                        <ol class="actions-list item-list directory-list">
+                            {{#each actions.exploration.active as |action|}}
+                                {{> (resolvePath "templates/actors/partials/action.hbs") action=action}}
+                            {{/each}}
+                        </ol>
+                    {{/if}}
+
+                    <header>
+                        {{localize "PF2E.ActionsActionsHeader"}}
+                        {{#if @root.editable}}
+                            <div class="controls">
+                                <button type="button" data-action="create-item" data-type="action" data-action-type="free" data-traits="exploration">
+                                    <i class="fa-solid fa-fw fa-plus"></i>{{localize "PF2E.CreateActionTitle"}}
+                                </button>
+                                <button type="button" data-action="browse-abilities" data-action-trait="exploration">
+                                    <i class="fa-solid fa-fw fa-search"></i>{{localize "PF2E.BrowseLabel"}}
+                                </button>
+                            </div>
+                        {{/if}}
+                    </header>
+
+                    <ol class="actions-list item-list directory-list">
+                        {{#each actions.exploration.other as |action|}}
+                            {{> (resolvePath "templates/actors/partials/action.hbs") action=action}}
+                        {{/each}}
+                    </ol>
+                </section>
+
+                <section class="actions-panel tab major" data-tab="downtime" data-group="actions-tabs">
+                    <header>
+                        {{localize "PF2E.ActionsActionsHeader"}}
+                        {{#if @root.editable}}
+                            <div class="controls">
+                                <button type="button" data-action="create-item" data-type="action" data-action-type="free" data-traits="downtime">
+                                    <i class="fa-solid fa-fw fa-plus"></i>{{localize "PF2E.CreateActionTitle"}}
+                                </button>
+                                <button type="button" data-action="browse-abilities" data-action-trait="downtime">
+                                    <i class="fa-solid fa-fw fa-search"></i>{{localize "PF2E.BrowseLabel"}}
+                                </button>
+                            </div>
+                        {{/if}}
+                    </header>
+
+                    <ol class="actions-list item-list directory-list">
+                        {{#each actions.downtime as |action aid|}}
+                            {{> (resolvePath "templates/actors/partials/action.hbs") action=action}}
+                        {{/each}}
+                    </ol>
+                </section>
+            </section>
+        </div>
+    </div>
+</div>

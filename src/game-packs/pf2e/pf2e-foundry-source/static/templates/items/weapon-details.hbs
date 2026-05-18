@@ -1,0 +1,307 @@
+<fieldset class="basics">
+    {{> (resolvePath "templates/items/partials/apex.hbs")}}
+
+    <div class="form-group">
+        <label for="{{fieldIdPrefix}}category">{{localize "PF2E.Category"}}</label>
+        <select name="system.category" id="{{fieldIdPrefix}}category">
+            {{selectOptions categories selected=data.category localize=true}}
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="{{fieldIdPrefix}}group">{{localize "PF2E.WeaponGroupLabel"}}</label>
+        <select id="{{fieldIdPrefix}}group" data-property="system.group">
+            {{selectOptions groups selected=data.group blank=""}}
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="{{fieldIdPrefix}}base">{{localize "PF2E.WeaponBaseLabel"}}</label>
+        <select id="{{fieldIdPrefix}}base" data-property="system.baseItem">
+            {{selectOptions baseTypes selected=data.baseItem blank=""}}
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="{{fieldIdPrefix}}range">
+            {{localize "PF2E.TraitRange"}}
+            {{#if mandatoryMelee}}
+                <i class="fa-solid fa-circle-info" data-tooltip="PF2E.Item.Weapon.MandatoryMelee"></i>
+            {{/if}}
+        </label>
+        <select name="system.range" id="{{fieldIdPrefix}}range" data-dtype="Number" {{disabled mandatoryMelee}}>
+            {{#if (not mandatoryRanged)}}
+                {{selectOptions weaponRanges selected=item._source.system.range blank="PF2E.Item.Weapon.NoRangeMelee" localize=true}}
+            {{else}}
+                {{selectOptions weaponRanges selected=item._source.system.range}}
+            {{/if}}
+        </select>
+    </div>
+    {{#if data.range}}
+        <div class="form-group">
+            <label for="{{fieldIdPrefix}}reload">{{localize "PF2E.WeaponReloadLabel"}}</label>
+            <select name="system.reload.value" id="{{fieldIdPrefix}}reload">
+                {{selectOptions weaponReload selected=data.reload.value blank="" localize=true}}
+            </select>
+        </div>
+
+        {{#if data.ammo}}
+            <div class="form-group">
+                <label for="{{fieldIdPrefix}}ammo.builtIn">
+                    {{localize "PF2E.Item.Weapon.FIELDS.ammo.builtIn.label"}}
+                </label>
+                <div class="form-fields">
+                    <input
+                        type="checkbox"
+                        name="system.ammo.builtIn"
+                        id="{{fieldIdPrefix}}ammo.builtIn"
+                        {{checked data.ammo.builtIn}}
+                    />
+                </div>
+            </div>
+            {{#unless data.ammo.builtIn}}
+                <div class="form-group">
+                    <label for="{{fieldIdPrefix}}ammo.baseType">
+                        {{localize "PF2E.Item.Weapon.FIELDS.ammo.baseType.label"}}
+                    </label>
+                    <select id="{{fieldIdPrefix}}ammo.baseType" name="system.ammo.baseType" class="force-fit">
+                        {{selectOptions ammoTypes selected=data.ammo.baseType}}
+                    </select>
+                </div>
+            {{/unless}}
+        {{/if}}
+
+        {{#if expend}}
+            <div class="form-group">
+                <label for="{{fieldIdPrefix}}expend">
+                    {{localize "PF2E.Item.Weapon.FIELDS.expend.label"}}
+                    <i class="fa-solid fa-circle-info" data-tooltip="PF2E.Item.Weapon.FIELDS.expend.hint"></i>
+                </label>
+                <input type="number" id="{{fieldIdPrefix}}expend" class="{{expend.adjustmentClass}}" data-property="system.expend" value="{{expend.value}}" min="1">
+            </div>
+        {{/if}}
+
+        {{#if (and data.ammo.capacity canHaveCapacity)}}
+            <div class="form-group">
+                <label for="{{fieldIdPrefix}}capacity">
+                    {{localize "PF2E.Item.Weapon.FIELDS.ammo.capacity.label"}}
+                </label>
+                <input type="number" id="{{fieldIdPrefix}}capacity" data-property="system.ammo.capacity" value="{{data.ammo.capacity}}" min="1">
+            </div>
+        {{/if}}
+    {{/if}}
+
+    {{#if isBomb}}
+        <div class="form-group">
+            <label for="{{fieldIdPrefix}}bomb-bonus">{{localize "PF2E.WeaponBonusAttackLabel"}}</label>
+            <input type="number" name="system.bonus.value" id="{{fieldIdPrefix}}bomb-bonus" value="{{data.bonus.value}}" />
+        </div>
+    {{/if}}
+</fieldset>
+
+{{#unless isBomb}}
+    <fieldset class="material-runes">
+        <legend>{{localize "PF2E.Item.Physical.MaterialRunes.Label"}}</legend>
+
+        <div class="form-group precious-material">
+            <label for="{{fieldIdPrefix}}material">{{localize "PF2E.PreciousMaterialLabel"}}</label>
+            <select
+                id="{{fieldIdPrefix}}material"
+                class="force-fit"
+                data-property="system.material"
+                data-value-base="{{json item._source.system.material}}"
+                data-dtype="JSON"
+            >
+                {{selectOptions preciousMaterials.materials selected=preciousMaterials.value}}
+            </select>
+        </div>
+
+        {{#unless abpEnabled}}
+            {{#if data.grade}}
+                <div class="form-group">
+                    <label for="{{fieldIdPrefix}}grade">{{localize "PF2E.Item.Physical.FIELDS.grade.label"}}</label>
+                    <select data-property="system.grade" id="{{fieldIdPrefix}}grade">
+                        {{selectOptions grades selected=data.grade}}
+                    </select>
+                </div>
+            {{else}}
+                <div class="form-group">
+                    <label for="{{fieldIdPrefix}}rune-potency">{{localize "PF2E.PotencyRuneLabel"}}</label>
+                    <select data-property="system.runes.potency" id="{{fieldIdPrefix}}rune-potency" data-dtype="Number">
+                        <option value="0"></option>
+                        {{selectOptions (omit runeTypes.potency 0) selected=data.runes.potency labelAttr="name" localize=true}}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="{{fieldIdPrefix}}rune-striking">{{localize "PF2E.StrikingRuneLabel"}}</label>
+                    <select data-property="system.runes.striking" id="{{fieldIdPrefix}}rune-striking" data-dtype="Number">
+                        <option value="0"></option>
+                        {{selectOptions (omit runeTypes.striking 0) selected=data.runes.striking labelAttr="name" localize=true}}
+                    </select>
+                </div>
+            {{/if}}
+        {{/unless}}
+
+        {{#each propertyRuneSlots as |slot index|}}
+            <div class="form-group">
+                <label
+                    for="{{../fieldIdPrefix}}runes-property-{{index}}"
+                    {{#if slot.disabled}}class="disabled"{{/if}}
+                >
+                    {{localize (concat "PF2E.PropertyRuneLabel" (add index 1))}}
+                </label>
+                <select
+                    name="system.runes.property.{{index}}"
+                    id="{{../fieldIdPrefix}}runes-property-{{index}}"
+                    {{disabled slot.disabled}}
+                    class="{{#if @root.item.isSpecific}}readonly{{/if}}{{#if slot.adjusted}} adjusted{{/if}}"
+                >
+                    {{selectOptions
+                        @root.runeTypes.property
+                        selected=slot.slug
+                        valueAttr="slug"
+                        labelAttr="name"
+                        blank=""
+                        localize=true}}
+                </select>
+            </div>
+        {{/each}}
+
+        <div class="form-group">
+            <label for="{{fieldIdPrefix}}specific" class="large">
+                {{localize "PF2E.Item.Weapon.SpecificMagicWeapon.Label"}}
+                <i class="fa-solid fa-circle-info" data-tooltip="PF2E.Item.Weapon.SpecificMagicWeapon.Hint"></i>
+            </label>
+            <input
+                type="checkbox"
+                name="system.specific"
+                id="{{fieldIdPrefix}}specific"
+                value="{{json specificMagicData}}"
+                data-dtype="JSON"
+                {{checked data.specific}}
+            />
+        </div>
+    </fieldset>
+{{/unless}}
+
+{{> (resolvePath "templates/items/partials/modular.hbs")}}
+
+<fieldset>
+    <legend>
+        {{localize "PF2E.DamageLabel"}}
+        <i class="fa-solid fa-circle-info" data-tooltip="PF2E.WeaponBaseDamageTitle"></i>
+    </legend>
+
+    <div class="form-group">
+        <label for="{{fieldIdPrefix}}damage-dice-number">
+            {{localize "PF2E.WeaponBaseLabel"}}
+            {{#if adjustedDiceHint}}<i class="fa-solid fa-circle-info" data-tooltip="{{adjustedDiceHint}}"></i>{{/if}}
+        </label>
+
+        <div class="dice-data">
+            <input type="number"
+                {{#if adjustedDiceHint}} class="adjusted"{{/if}}
+                id="{{fieldIdPrefix}}damage-dice-number"
+                data-property="system.damage.dice"
+                value="{{data.damage.dice}}"
+            />
+            <select data-property="system.damage.die">
+                {{selectOptions damageDie selected=data.damage.die blank="" localize=true}}
+            </select>
+
+            <select data-property="system.damage.damageType">
+                {{selectOptions (omit damageTypes "bleed") selected=data.damage.damageType localize=true}}
+            </select>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label{{#unless data.splashDamage.value}} class="no-data"{{/unless}} for="{{fieldIdPrefix}}damage-splash">
+            {{localize "PF2E.TraitSplash"}}
+        </label>
+        <input type="number" name="system.splashDamage.value" id="{{fieldIdPrefix}}damage-splash" value="{{data.splashDamage.value}}" />
+    </div>
+
+    <div class="form-group">
+        <label{{#unless data.damage.persistent}} class="no-data"{{/unless}} for="{{fieldIdPrefix}}damage-persistent">
+            {{localize "PF2E.ConditionTypePersistentShort"}}
+        </label>
+
+        <div class="dice-data">
+            <input type="number"
+                id="{{fieldIdPrefix}}damage-persistent"
+                data-action="update-persistent"
+                data-persistent-field="number"
+                value="{{coalesce data.damage.persistent.number 0}}"
+            />
+
+            <select data-action="update-persistent" data-persistent-field="faces">
+                {{selectOptions damageDieFaces selected=data.damage.persistent.faces blank="" localize=true}}
+            </select>
+
+            <select data-action="update-persistent" data-persistent-field="type" value="{{data.damage.persistent.damageType}}">
+                {{selectOptions damageTypes selected=data.damage.persistent.type blank="" localize=true}}
+            </select>
+        </div>
+    </div>
+</fieldset>
+
+{{#if isComboWeapon}}
+    <ol class="form-list">
+        <h3>
+            {{localize "PF2E.Item.Weapon.MeleeUsage.Label"}}
+            <i class="fa-solid fa-circle-info" data-tooltip="PF2E.Item.Weapon.MeleeUsage.Hint"></i>
+        </h3>
+        <div class="form-group">
+            <label>{{localize "PF2E.WeaponGroupLabel"}}</label>
+            <select name="system.meleeUsage.group">
+                {{selectOptions meleeGroups selected=meleeUsage.group}}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>{{localize "PF2E.WeaponDamageLabel"}}</label>
+            <div class="details-container-three-columns">
+                <select name="system.meleeUsage.damage.die">
+                    {{selectOptions meleeUsageBaseDamage selected=meleeUsage.damage.die}}
+                </select>
+                <select name="system.meleeUsage.damage.type">
+                    {{selectOptions damageTypes selected=meleeUsage.damage.type}}
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>
+                {{localize "PF2E.TraitsLabel"}}
+                <a class="tag-selector" data-tag-selector="basic" data-config-types="weaponTraits" data-property="system.meleeUsage.traits" data-no-custom="true" data-flat="true">
+                    <i class="fa-solid fa-edit"></i>
+                </a>
+            </label>
+            <ul class="traits-list tags">
+                {{#each meleeUsageTraits as |trait|}}
+                    <li class="tag">{{trait.label}}</li>
+                {{/each}}
+            </ul>
+        </div>
+    </ol>
+{{/if}}
+
+<div class="form-group stacked">
+    <label>
+        {{localize "PF2E.Item.Physical.OtherTags.Label"}}
+        <i class="fa-solid fa-circle-info" data-tooltip="PF2E.Item.Physical.OtherTags.Hint"></i>
+        {{#if editable}}
+            <a class="tag-selector" data-tag-selector="basic" data-config-types="otherWeaponTags" data-title="PF2E.Item.Physical.OtherTags.Label" data-property="system.traits.otherTags"><i class="fa-solid fa-edit"></i></a>
+        {{/if}}
+    </label>
+    <ul class="traits-list tags">
+        {{#each otherTags as |tag|}}
+            <li class="tag tag_alt">{{tag.label}}</li>
+        {{/each}}
+    </ul>
+</div>
+{{#if item.isThrowable}}
+    <div class="form-group">
+        <label>
+            {{localize "PF2E.Item.Weapon.CanBeAmmo.Label"}}
+            <i class="fa-solid fa-circle-info" data-tooltip-width="300" data-tooltip="PF2E.Item.Weapon.CanBeAmmo.Hint"></i>
+        </label>
+        <input type="checkbox" name="system.usage.canBeAmmo" {{checked item.system.usage.canBeAmmo}} />
+    </div>
+{{/if}}

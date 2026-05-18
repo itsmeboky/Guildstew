@@ -1,0 +1,9 @@
+{{#unless (eq mode "object")}}
+    <div class="attached-input resolvable">
+        {{#if fileInput}}
+            <file-picker name="{{path}}" value="{{value}}" type="imagevideo"></file-picker>
+        {{else}}
+            <input type="text" name="{{path}}" id="{{inputId}}" value="{{value}}" />
+        {{/if}}
+    </div>
+{{/unless}}

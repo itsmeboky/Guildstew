@@ -1,0 +1,34 @@
+{
+    "_id": "YeWT4MjQ8vDmSThs",
+    "img": "systems/pf2e/icons/deities/nocticula.webp",
+    "name": "Nocticula - Major Curse",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "curse",
+        "description": {
+            "value": "<p>You are exiled from companionship. You can't communicate with any other creature, nor can you feel other creatures' touch.</p>"
+        },
+        "level": {
+            "value": 0
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens Gods & Magic"
+        },
+        "rules": [],
+        "traits": {
+            "rarity": "common",
+            "value": []
+        }
+    },
+    "type": "feat"
+}

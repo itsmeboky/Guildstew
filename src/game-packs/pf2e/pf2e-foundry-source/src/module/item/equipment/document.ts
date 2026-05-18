@@ -1,0 +1,53 @@
+import type { ActorPF2e } from "@actor";
+import type { RawItemChatData } from "@item/base/data/index.ts";
+import { PhysicalItemPF2e } from "@item/physical/index.ts";
+import { EnrichmentOptionsPF2e } from "@system/text-editor.ts";
+import { objectHasKey } from "@util";
+import type { EquipmentSource, EquipmentSystemData, EquipmentTrait } from "./data.ts";
+
+class EquipmentPF2e<TParent extends ActorPF2e | null = ActorPF2e | null> extends PhysicalItemPF2e<TParent> {
+    static override get validTraits(): Record<EquipmentTrait, string> {
+        return CONFIG.PF2E.equipmentTraits;
+    }
+
+    /** Whether the item has an attached (or affixed, applied, etc.) usage */
+    override get isAttachable(): boolean {
+        return this.system.usage.type === "installed";
+    }
+
+    override async getChatData(
+        this: EquipmentPF2e<ActorPF2e>,
+        htmlOptions: EnrichmentOptionsPF2e = {},
+    ): Promise<RawItemChatData> {
+        return this.processChatData(htmlOptions, {
+            ...(await super.getChatData()),
+            traits: this.traitChatData(CONFIG.PF2E.equipmentTraits),
+        });
+    }
+
+    override generateUnidentifiedName({ typeOnly = false }: { typeOnly?: boolean } = { typeOnly: false }): string {
+        const identificationConfig = CONFIG.PF2E.identification;
+        const slotType = /book\b/.test(this.slug ?? "")
+            ? "Book"
+            : /\bring\b/.test(this.slug ?? "")
+              ? "Ring"
+              : (this.system.usage.value?.replace(/^worn/, "").capitalize() ?? "");
+
+        const itemType = objectHasKey(identificationConfig.UnidentifiedType, slotType)
+            ? _loc(identificationConfig.UnidentifiedType[slotType])
+            : _loc(identificationConfig.UnidentifiedType.Object);
+
+        if (typeOnly) return itemType;
+
+        return _loc(identificationConfig.UnidentifiedItem, { item: itemType });
+    }
+}
+
+interface EquipmentPF2e<TParent extends ActorPF2e | null = ActorPF2e | null> extends PhysicalItemPF2e<TParent> {
+    readonly _source: EquipmentSource;
+    system: EquipmentSystemData;
+
+    get traits(): Set<EquipmentTrait>;
+}
+
+export { EquipmentPF2e };

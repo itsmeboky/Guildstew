@@ -1,0 +1,88 @@
+<li class="strike item {{#if action.ready}} ready{{/if}}"
+    data-element="{{action.element}}"
+    data-damage-type={{action.damageType}}
+    data-item-id="{{action.item.id}}"
+    data-item-type="{{action.item.type}}"
+>
+    <div class="item-image framed">
+        <img src="{{action.img}}" /> <i class="fa-solid fa-message"></i>
+    </div>
+    <section class="button-groups">
+        {{#unless omitName}}
+            <h4 class="name" data-tooltip-direction="UP">
+                <a data-action="toggle-summary">{{localize action.label}}</a>
+                <div class="item-controls">
+                    {{#if (and @root.editable (eq @index 0))}}
+                        <a data-action="edit-item" data-tooltip="PF2E.EditItemTitle"><i class="fa-solid fa-fw fa-edit"></i></a>
+                    {{/if}}
+                </div>
+            </h4>
+        {{/unless}}
+
+        {{#if action.ready}}
+            {{#> attackDamage action=action melee=true}}{{/attackDamage}}
+
+            <div class="alt-usage" data-tooltip-direction="UP">
+                <i class="fa-regular fa-meteor fa-rotate-180 alt-usage-icon" data-tooltip="{{action.range.label}}"></i>
+                {{#> attackDamage action=action melee=false}}{{/attackDamage}}
+            </div>
+        {{else}}
+            <div class="auxiliary-actions">
+                <button type="button" class="use-action" data-action="channel-elements">
+                    <span>{{localize "PF2E.SpecificRule.Kineticist.Impulse.ElementalBlast.Channel"}}</span>
+                    <span class="action-glyph">1</span>
+                </button>
+            </div>
+        {{/if}}
+    </section>
+    <div class="item-summary" hidden="hidden"></div>
+</li>
+
+{{#*inline "attackDamage"}}
+    <div class="button-group tags">
+        <button type="button" class="tag tag_secondary" data-action="roll-attack" data-melee="{{melee}}">
+            {{localize "PF2E.SpecificRule.Kineticist.Impulse.ElementalBlast.ShortLabel"}}
+            <span class="action-glyph">{{action.actionCost}}</span>
+            {{#if melee}}{{action.maps.melee.map0}}{{else}}{{action.maps.ranged.map0}}{{/if}}
+        </button>
+        <button type="button" class="tag tag_secondary" data-action="roll-attack" data-melee="{{melee}}" data-map-increases="1">
+            {{#if melee}}{{action.maps.melee.map1}}{{else}}{{action.maps.ranged.map1}}{{/if}}
+        </button>
+        <button type="button" class="tag tag_secondary" data-action="roll-attack" data-melee="{{melee}}" data-map-increases="2">
+            {{#if melee}}{{action.maps.melee.map2}}{{else}}{{action.maps.ranged.map2}}{{/if}}
+        </button>
+        <button type="button" class="tag damage"
+            data-action="roll-damage"
+            data-melee="{{melee}}"
+            data-outcome="success"
+            data-tooltip="{{#if melee}}{{action.formula.melee.damage}}{{else}}{{action.formula.ranged.damage}}{{/if}}"
+        >
+            {{localize "PF2E.DamageLabel"}}
+        </button>
+        <button type="button" class="tag damage"
+            data-action="roll-damage"
+            data-melee="{{melee}}"
+            data-outcome="critical-success"
+            data-tooltip="{{#if melee}}{{action.formula.melee.critical}}{{else}}{{action.formula.ranged.critical}}{{/if}}"
+        >
+            {{localize "PF2E.CriticalDamageLabel"}}
+        </button>
+
+        {{#if (and melee (not (eq action.damageTypes.length 1)))}}
+            <div class="toggles flexrow">
+                {{#each action.damageTypes as |damageType|}}
+                    <button
+                        type="button"
+                        class="damage color {{damageType.value}}{{#if damageType.selected}} selected{{/if}}"
+                        value="{{damageType.value}}"
+                        {{disabled damageType.selected}}
+                        data-tooltip="{{damageType.label}}"
+                        data-action="set-damage-type"
+                    >
+                        <i class="fa-solid fa-fw fa-{{damageType.icon}}"></i>
+                    </button>
+                {{/each}}
+            </div>
+        {{/if}}
+    </div>
+{{/inline}}

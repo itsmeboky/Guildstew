@@ -1,0 +1,195 @@
+<fieldset class="basics">
+    {{formGroup systemFields.hp value=data.hp}}
+
+    <div class="form-group form-group-trait">
+        <label class="pf-title">
+            {{localize "PF2E.Actor.Character.Attribute.Key"}}
+            <a
+                class="tag-selector"
+                data-tag-selector="basic"
+                data-title="PF2E.Actor.Character.Attribute.Key"
+                data-config-types="abilities"
+                data-property="system.keyAbility"
+                data-no-custom="true"
+            ><i class="fa-solid fa-edit"></i></a>
+        </label>
+
+        <ul class="abc-traits-list">
+            {{#each selectedKeyAbility}}
+                <span class="tag-legacy {{@key}}">{{localize this}}</span>
+            {{/each}}
+        </ul>
+    </div>
+
+    {{formGroup systemFields.perception value=data.perception choices=proficiencyChoices}}
+</fieldset>
+
+<fieldset>
+    <legend>{{localize "PF2E.SavesHeader"}}</legend>
+    {{formGroup systemFields.savingThrows.fields.fortitude value=data.savingThrows.fortitude choices=proficiencyChoices}}
+    {{formGroup systemFields.savingThrows.fields.reflex value=data.savingThrows.reflex choices=proficiencyChoices}}
+    {{formGroup systemFields.savingThrows.fields.will value=data.savingThrows.will choices=proficiencyChoices}}
+</fieldset>
+
+<fieldset>
+    <legend>{{localize "PF2E.Actor.Character.Proficiency.Attack.Title"}}</legend>
+
+    {{formGroup systemFields.attacks.fields.simple value=data.attacks.simple choices=proficiencyChoices}}
+    {{formGroup systemFields.attacks.fields.martial value=data.attacks.martial choices=proficiencyChoices}}
+    {{formGroup systemFields.attacks.fields.advanced value=data.attacks.advanced choices=proficiencyChoices}}
+    {{formGroup systemFields.attacks.fields.unarmed value=data.attacks.unarmed choices=proficiencyChoices}}
+
+    <div class="form-group other-weapons">
+        <label>{{localize "PF2E.WeaponTypeSpecial"}}</label>
+        {{formInput systemFields.attacks.fields.other.fields.name value=data.attacks.other.name}}
+        {{formInput systemFields.attacks.fields.other.fields.rank value=data.attacks.other.rank choices=proficiencyChoices}}
+    </div>
+</fieldset>
+
+<fieldset>
+    <legend>{{localize "PF2E.Actor.Character.Proficiency.Defense.Title"}}</legend>
+
+    {{formGroup systemFields.defenses.fields.light value=data.defenses.light choices=proficiencyChoices}}
+    {{formGroup systemFields.defenses.fields.medium value=data.defenses.medium choices=proficiencyChoices}}
+    {{formGroup systemFields.defenses.fields.heavy value=data.defenses.heavy choices=proficiencyChoices}}
+    {{formGroup systemFields.defenses.fields.unarmored value=data.defenses.unarmored choices=proficiencyChoices}}
+</fieldset>
+
+<fieldset>
+    <legend>{{localize "PF2E.Item.Spell.Plural"}}</legend>
+    {{formGroup systemFields.spellcasting value=data.spellcasting choices=proficiencyChoices}}
+</fieldset>
+
+<fieldset>
+    <legend>{{localize "PF2E.SkillsLabel"}}</legend>
+
+    <div class="form-group form-group-trait">
+        <label class="pf-title">
+            {{localize "PF2E.TrainedSkillsLabel"}}
+            <a class="tag-selector" data-tag-selector="basic" data-title="PF2E.TrainedSkillsLabel" data-config-types="skills" data-property="system.trainedSkills"><i class="fa-solid fa-edit"></i></a>
+        </label>
+
+        <ul class="abc-traits-list">
+            {{#each trainedSkills}}
+                {{#if this.selected}}
+                    <span class="tag-legacy {{@key}}">{{this.label}}</span>
+                {{/if}}
+            {{/each}}
+        </ul>
+    </div>
+
+    <div class="form-group form-group-trait">
+        <label class="pf-title">
+            {{localize "PF2E.SkillIncreaseLevels"}}
+            <a
+                class="tag-selector"
+                data-tag-selector="basic"
+                data-title="PF2E.SkillIncreaseLevels"
+                data-config-types="levels"
+                data-property="system.skillIncreaseLevels"
+                data-no-custom="true"
+            ><i class="fa-solid fa-edit"></i></a>
+        </label>
+
+        <ul class="abc-traits-list">
+            {{#each skillIncreaseLevels}}
+                <span class="tag-legacy {{@key}}">{{this.label}}</span>
+            {{/each}}
+        </ul>
+    </div>
+
+    <div class="form-group additional-language">
+        <label>{{localize "PF2E.AdditionalSkills"}}</label>
+        {{formInput systemFields.trainedSkills.fields.additional value=data.trainedSkills.additional}}
+        <span>{{localize "PF2E.AdditionalLanguagePlusInt"}}</span>
+    </div>
+</fieldset>
+
+<fieldset>
+    <legend>{{localize "PF2E.Item.Feat.Plural"}}</legend>
+    <div class="form-group form-group-trait">
+        <label class="pf-title">
+            {{localize "PF2E.AncestryFeatLevels"}}
+            <a class="tag-selector" data-tag-selector="basic" data-title="PF2E.AncestryFeatLevels" data-config-types="levels" data-property="system.ancestryFeatLevels" data-no-custom="true"><i class="fa-solid fa-edit"></i></a>
+        </label>
+
+        <ul class="abc-traits-list">
+            {{#each ancestryFeatLevels}}
+                {{#if this.selected}}
+                    <span class="tag-legacy {{@key}}">{{this.label}}</span>
+                {{/if}}
+            {{/each}}
+        </ul>
+    </div>
+
+    <div class="form-group form-group-trait">
+        <label class="pf-title">
+            {{localize "PF2E.ClassFeatLevels"}}
+            <a class="tag-selector" data-tag-selector="basic" data-title="PF2E.ClassFeatLevels" data-config-types="levels" data-property="system.classFeatLevels" data-no-custom="true"><i class="fa-solid fa-edit"></i></a>
+        </label>
+
+        <ul class="abc-traits-list">
+            {{#each classFeatLevels}}
+                <span class="tag-legacy {{@key}}">{{this.label}}</span>
+            {{/each}}
+        </ul>
+    </div>
+
+    <div class="form-group form-group-trait">
+        <label class="pf-title">
+            {{localize "PF2E.GeneralFeatLevels"}}
+            <a class="tag-selector" data-tag-selector="basic" data-title="PF2E.GeneralFeatLevels" data-config-types="levels" data-property="system.generalFeatLevels" data-no-custom="true"><i class="fa-solid fa-edit"></i></a>
+        </label>
+
+        <ul class="abc-traits-list">
+            {{#each generalFeatLevels}}
+                <span class="tag-legacy {{@key}}">{{this.label}}</span>
+            {{/each}}
+        </ul>
+    </div>
+
+    <div class="form-group form-group-trait">
+        <label class="pf-title">
+            {{localize "PF2E.SkillFeatLevels"}}
+            <a class="tag-selector" data-tag-selector="basic" data-title="PF2E.SkillFeatLevels" data-config-types="levels" data-property="system.skillFeatLevels" data-no-custom="true"><i class="fa-solid fa-edit"></i></a>
+        </label>
+
+        <ul class="abc-traits-list">
+            {{#each skillFeatLevels}}
+                <span class="tag-legacy {{@key}}">{{this.label}}</span>
+            {{/each}}
+        </ul>
+    </div>
+</fieldset>
+
+<fieldset data-valid-drops="classfeature">
+    <legend>{{localize "PF2E.ClassFeatures"}}</legend>
+    <div class="item-ref-group">
+        {{#> abcItems}}{{/abcItems}}
+        {{#unless data.items}}{{localize PF2E.DragDropFeats}}{{/unless}}
+    </div>
+</fieldset>
+
+{{~#*inline "abcItem"~}}
+    <li data-pack-id="{{item.pack}}" data-index="{{i}}" data-item-uuid="{{item.uuid}}">
+        <img src="{{item.img}}">
+        <a class="name">
+            {{item.name}}{{#if item.fromWorld}}<i class="fa-solid fa-globe" data-tooltip="PF2E.Item.WorldItemWarning"></i>{{/if}}
+        </a>
+        <input type="number" class="level" value="{{item.level}}" name="system.items.{{i}}.level" />
+        <input value="{{item.uuid}}" name="system.items.{{i}}.uuid" type="hidden" data-dtype="String" />
+        <input value="{{item.name}}" name="system.items.{{i}}.name" type="hidden" data-dtype="String" />
+        <a class="remove" data-action="remove"><i class="fa-solid fa-xmark"></i></a>
+        {{#if item.items~}}
+            {{#> abcItems item}}{{@partial-block}}items.{{i}}.{{/abcItems}}
+        {{~/if}}
+    </li>
+{{~/inline~}}
+
+{{~#*inline "abcItems"~}}
+<ul class="item-refs">
+    {{#each features}}
+        {{#> abcItem item=this.item i=this.key}}{{@partial-block}}{{/abcItem}}
+    {{/each}}
+</ul>
+{{~/inline~}}

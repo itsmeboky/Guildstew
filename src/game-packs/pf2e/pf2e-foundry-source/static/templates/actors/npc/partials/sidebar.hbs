@@ -1,0 +1,352 @@
+<div class="image-container">
+    <img
+        class="profile-img"
+        src="{{actor.img}}"
+        {{#if editable}}data-edit="img"{{/if}}
+        alt="{{actor.name}}"
+    />
+    <a class="hover-icon" data-action="show-image"
+       data-tooltip aria-label="{{localize "SIDEBAR.CharArt"}}"><i class="fa-solid fa-image fa-fw"></i></a>
+</div>
+
+{{!-- Armor Class --}}
+<div class="subsection armor-class">
+    {{#with data.attributes.ac as |ac|}}
+        <header>
+            <label for="{{../document.uuid}}-ac" data-tooltip="{{ac.breakdown}}">
+                <i class="fa-solid fa-fw fa-shield-alt"></i>
+                <span>{{localize "PF2E.ArmorClassShortLabel"}}</span>
+            </label>
+            <input type="number"
+                class="armor-value adjustable{{#if ac.adjustedHigher}} adjusted-higher{{else if ac.adjustedLower}} adjusted-lower{{/if}}"
+                id="{{../document.uuid}}-ac"
+                data-property="system.attributes.ac.value"
+                value="{{ac.value}}"
+                placeholder="0"
+            />
+        </header>
+
+        <div class="side-bar-section-content">
+            <input type="text" name="system.attributes.ac.details" value="{{ac.details}}" class="armor-details" placeholder="{{localize "PF2E.NPC.ArmorExtraInfoLabelPlaceholder"}}" />
+        </div>
+    {{/with}}
+    <div class="side-bar-section-content">
+        {{#if hasHardness}}
+            <div class="armor-base labeled-field">
+                <label>{{localize "PF2E.HardnessLabel"}}</label>
+                <input type="number" data-property="system.attributes.hardness.value" value="{{data.attributes.hardness.value}}" placeholder="0" />
+            </div>
+        {{/if}}
+    </div>
+</div>
+
+{{#if hasShield}}
+    {{!-- Shield --}}
+    <div class="subsection shield{{#if data.attributes.shield.broken}} broken{{/if}}"
+         {{#if data.attributes.shield.broken}}data-tooltip aria-label="{{localize "PF2E.Item.Physical.Broken"}}"{{/if}}>
+        <header>
+            <label>
+                <i class="fa-solid fa-user-shield fa-fw{{#if data.attributes.shield.broken}} broken{{/if}}" inert></i>
+                <span>{{localize "PF2E.ShieldLabel"}}</span>
+            </label>
+
+            <div class="hit-points">
+                <input type="number" name="system.attributes.shield.hp.value" value="{{data.attributes.shield.hp.value}}"
+                       class="current" placeholder="0" />
+                <span class="slash">/</span>
+                <div class="max"
+                     data-tooltip aria-label="{{localize "PF2E.Actor.Creature.Shield.HitPoints.Max"}}"
+                >{{data.attributes.shield.hp.max}}</div>
+            </div>
+        </header>
+
+        <div class="side-bar-section-content">
+            <div class="shield-details">
+                <label class="label" data-tooltip="PF2E.Actor.Creature.Shield.ACBonus">{{localize "PF2E.ArmorClassShortLabel"}}</label>
+                <label class="value">{{data.attributes.shield.ac}}</label>
+                <label class="label" data-tooltip="PF2E.Actor.Creature.Shield.Hardness.Hint">{{localize "PF2E.Actor.Creature.Shield.Hardness.Label"}}</label>
+                <label class="value">{{data.attributes.shield.hardness}}</label>
+                <label class="label" data-tooltip="PF2E.Actor.Creature.Shield.BrokenThreshold">{{localize "PF2E.Item.Physical.BrokenThreshold.ShortLabel"}}</label>
+                <label class="value">{{data.attributes.shield.brokenThreshold}}</label>
+            </div>
+        </div>
+    </div>
+{{/if}}
+
+{{!-- Hit Points --}}
+<div class="subsection health">
+    <header>
+        <label for="{{document.uuid}}-hp" data-tooltip="{{data.attributes.hp.breakdown}}">
+            <i class="fa-solid fa-fw fa-heart"></i>
+            <span>{{localize "PF2E.HitPointsShortLabel"}}</span>
+        </label>
+
+        <span class="hit-points">
+            {{#with data.attributes.hp as |hp|}}
+                <input
+                    type="number"
+                    name="system.attributes.hp.value"
+                    class="current"
+                    id="{{../document.uuid}}-hp"
+                    value="{{hp.value}}"
+                    placeholder="0"
+                />
+                <span class="slash">/</span>
+                <input
+                    type="number"
+                    class="max adjustable{{#if (lt hp.max 10)}} lt10{{else if (lt hp.max 100)}} lt100{{else}} lt1000{{/if}}{{#if hp.adjustedHigher}} adjusted-higher{{else if hp.adjustedLower}} adjusted-lower{{/if}}"
+                    data-property="system.attributes.hp.max"
+                    value="{{hp.max}}"
+                    placeholder="0"
+                />
+            {{/with}}
+        </span>
+    </header>
+
+    {{!-- Temp HP --}}
+    <div class="side-bar-section-content">
+        <div class="hp-temp labeled-field">
+            <label for="{{document.uuid}}-temp-hp">{{localize "PF2E.RuleElement.TempHPShortLabel"}}</label>
+            <input
+                class="hp-temp-value"
+                type="number"
+                name="system.attributes.hp.temp"
+                id="{{document.uuid}}-temp-hp"
+                value="{{data.attributes.hp.temp}}"
+                placeholder="0"
+            />
+        </div>
+    </div>
+    <div class="side-bar-section-content">
+        <input
+            class="hp-details"
+            type="text"
+            name="system.attributes.hp.details"
+            value="{{data.attributes.hp.details}}"
+            placeholder="{{localize "PF2E.NPC.HPExtraInfoLabelPlaceholder"}}"
+        />
+    </div>
+</div>
+
+{{#if hp.thresholds}}
+    {{!-- Troop Thresholds --}}
+    <div class="subsection">
+        <header>
+            <label>
+                <i class="fa-solid fa-fw fa-people-group"></i>
+                <span>{{localize "PF2E.Actor.NPC.Thresholds"}}</span>
+            </label>
+        </header>
+        <div class="side-bar-section-content">
+            {{#each hp.thresholds as |t|}}
+                <div class="threshold {{#if t.selected}}selected{{/if}}">
+                    <span>{{localize "PF2E.Actor.NPC.SegmentsN" n=t.segments}}</span>
+                    <span>{{t.hp}}{{localize "PF2E.HitPointsShortLabel"}}</span>
+                </div>
+            {{/each}}
+        </div>
+    </div>
+{{/if}}
+
+{{!-- INITIATIVE --}}
+<div class="subsection initiative">
+    <header>
+        <label>
+            <i class="fa-solid fa-swords fa-fw" inert></i>
+            <span data-tooltip="{{data.initiative.breakdown}}">{{localize "PF2E.InitiativeLabel"}}</span>
+        </label>
+        <a class="roll{{#unless editable}} disabled{{/unless}}" data-action="roll-initiative" data-tooltip="{{data.initiative.breakdown}}">
+            {{> (resolvePath "templates/actors/character/icons/d20.hbs")}}
+            <span>{{numberFormat data.initiative.totalModifier sign=true}}</span>
+        </a>
+    </header>
+
+    <div class="side-bar-section-content">
+        <select name="system.initiative.statistic">
+            {{selectOptions initiativeOptions selected=data.initiative.statistic localize=true sort=true}}
+        </select>
+    </div>
+</div>
+
+{{!-- Resources and Mythic Points --}}
+{{#if specialResources}}
+    <div class="subsection resources">
+        <header>
+            <label>
+                <i class="fa-solid fa-toolbox fa-fw" inert></i>
+                <span>{{localize "PF2E.Actor.Resources"}}</span>
+            </label>
+        </header>
+        <ol>
+            {{#each specialResources as |resource|}}
+                <li class="special-resource">
+                    <span class="label">{{resource.label}}</span>
+                    {{#if (eq resource.slug "mythic-points")}}
+                        <span class="pips" data-action="adjust-resource" data-resource="{{resource.slug}}">
+                            {{#times resource.max as |idx|}}
+                                {{#if (gt resource.value idx)}}
+                                    <i class="fa-solid fa-circle"></i>
+                                {{else}}
+                                    <i class="fa-regular fa-circle"></i>
+                                {{/if}}
+                            {{/times}}
+                        </span>
+                    {{else}}
+                        <input type="text" data-resource="{{resource.slug}}" value="{{resource.value}}" />
+                        / {{resource.max}}
+                    {{/if}}
+                </li>
+            {{/each}}
+        </ol>
+    </div>
+{{/if}}
+
+{{!-- IWR --}}
+<div class="subsection iwr">
+    <header>
+        <label{{#unless data.attributes.immunities}} class="empty"{{/unless}}>
+            <i class="fa-solid fa-ankh fa-fw" inert></i>
+            <span>{{localize "PF2E.ImmunitiesLabel"}}</span>
+        </label>
+        {{#if editable}}
+            <div class="controls">
+                <a data-action="edit-immunities" data-tooltip="PF2E.NPC.EditImmunities"><i class="fa-solid fa-pen-to-square"></i></a>
+            </div>
+        {{/if}}
+    </header>
+
+    <ul class="comma-separated">
+        {{#each data.attributes.immunities as |immunity|}}
+            <li data-immunity="{{immunity.type}}">{{immunity.label}}</li>
+        {{/each}}
+    </ul>
+</div>
+
+<div class="subsection iwr">
+    <header>
+        <label{{#unless data.attributes.weaknesses}} class="empty"{{/unless}}>
+            <i class="fa-solid fa-heart-crack fa-fw" inert></i>
+            <span>{{localize "PF2E.WeaknessesLabel"}}</span>
+        </label>
+        {{#if editable}}
+            <div class="controls">
+                <a data-action="edit-weaknesses" data-tooltip="PF2E.NPC.EditWeaknesses"><i class="fa-solid fa-pen-to-square"></i></a>
+            </div>
+        {{/if}}
+    </header>
+
+    <ul class="comma-separated">
+        {{#each data.attributes.weaknesses as |weakness|}}
+            <li data-weakness="{{weakness.type}}">{{weakness.label}}</li>
+        {{/each}}
+    </ul>
+</div>
+
+<div class="subsection iwr">
+    <header>
+        <label{{#unless data.attributes.resistances}} class="empty"{{/unless}}>
+            <i class="fa-solid fa-shield-virus fa-fw" inert></i>
+            <span>{{localize "PF2E.ResistancesLabel"}}</span>
+        </label>
+        {{#if editable}}
+            <div class="controls">
+                <a data-action="edit-resistances" data-tooltip="PF2E.NPC.EditResistances"><i class="fa-solid fa-pen-to-square"></i></a>
+            </div>
+        {{/if}}
+    </header>
+
+    <ul class="comma-separated">
+        {{#each data.attributes.resistances as |resistance|}}
+            <li data-resistance="{{resistance.type}}">{{resistance.label}}</li>
+        {{/each}}
+    </ul>
+</div>
+
+{{!--SAVES --}}
+<div class="subsection saves">
+    <header>
+        <label>
+            <i class="fa-solid fa-fw fa-heart-pulse"></i>
+            <span>{{localize "PF2E.SavesHeader"}}</span>
+        </label>
+    </header>
+
+    <ul>
+        {{#each data.saves as |save saveType|}}
+            <li>
+                <a
+                    class="roll"
+                    data-action="roll-check"
+                    data-statistic="{{saveType}}"
+                    data-tooltip="{{save.breakdown}}"
+                >{{localize save.labelShort}}</a>
+                <input
+                    type="text"
+                    value="{{numberFormat save.value decimals=0 sign=true}}"
+                    class="modifier adjustable{{#if save.adjustedHigher}} adjusted-higher{{else if save.adjustedLower}} adjusted-lower{{/if}}"
+                    placeholder="0"
+                    data-property="system.saves.{{saveType}}.value"
+                    data-dtype="Number"
+                    area-label="{{localize save.labelShort}}"
+                />
+            </li>
+        {{/each}}
+    </ul>
+    <input
+        type="text"
+        name="system.attributes.allSaves.value"
+        class="details"
+        value="{{data.attributes.allSaves.value}}"
+        placeholder="{{localize "PF2E.NPC.SavesExtraInfoLabelPlaceholder"}}"
+    />
+</div>
+
+{{!-- SPEEDS --}}
+<div class="subsection speeds">
+    <header>
+        <label>
+            <i class="fa-solid fa-fw fa-shoe-prints"></i>
+            <span>{{localize "PF2E.Actor.Speed.Plural"}}</span>
+        </label>
+        {{#if editable}}
+            <div class="speed-controls controls">
+                <a
+                    class="tag-selector edit"
+                    data-tag-selector="speed-types"
+                    data-options="speedTypes"
+                    data-has-values="true"
+                    data-tooltip aria-label="{{localize "PF2E.NPC.EditSpeed"}}"
+                ><i class="fa-solid fa-pen-to-square"></i></a>
+            </div>
+        {{/if}}
+    </header>
+
+    <div class="side-bar-section-content">
+        <div class="land-speed flexrow">
+            <input type="number"
+                class="land-speed-value adjustable{{#if speeds.land.adjustedHigher}} adjusted-higher{{else if speeds.land.adjustedLower}} adjusted-lower{{/if}}"
+                data-property="system.attributes.speed.value"
+                value="{{speeds.land.value}}"
+                placeholder="0" />
+            <input
+                type="text"
+                class="speed-details"
+                name="system.attributes.speed.details"
+                value="{{speeds.land.details}}"
+                placeholder="{{localize "PF2E.NPC.SpeedExtraInfoLabelPlaceholder"}}"
+            />
+        </div>
+        <div class="other-speeds">
+            {{#each speeds as |speed type|}}
+                {{#if (and speed (not (eq type "land")))}}
+                    <div class="tag-legacy speed" data-speed="{{type}}">
+                        {{localize speed.label}}
+                        <span class="adjustable{{#if speed.adjustedHigher}} adjusted-higher{{else if speed.adjustedLower}} adjusted-lower{{/if}}">
+                            {{speed.value}}
+                        </span>
+                    </div>
+                {{/if}}
+            {{/each}}
+        </div>
+    </div>
+</div>

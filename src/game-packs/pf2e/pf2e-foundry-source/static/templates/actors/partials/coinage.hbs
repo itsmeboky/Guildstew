@@ -1,0 +1,49 @@
+<div class="coinage">
+    <div class="currency">
+        <li class="label">{{localize "PF2E.CurrencyLabel"}}</li>
+        {{#each currency.units as |value unit|}}
+            <li class="denomination {{unit}}">
+                <div class="currency-image" data-tooltip="{{localize value.label}}"></div>
+                <span>{{value.value}}</span>
+            </li>
+        {{/each}}
+        {{#if editable}}
+            <li>
+                <button type="button" data-action="add-coins" data-tooltip="{{localize "PF2E.AddCoinsTitle"}}">
+                    <i class="fa-solid fa-plus fa-fw"></i>
+                </button>
+            </li>
+            <li>
+                <button type="button" data-action="remove-coins" data-tooltip="{{localize "PF2E.RemoveCoinsTitle"}}">
+                    <i class="fa-solid fa-minus fa-fw"></i>
+                </button>
+            </li>
+            {{#if (or isLoot (eq @root.document.type "character"))}}
+                <li data-tooltip="{{localize "PF2E.SellAllTreasureTitle"}}">
+                    <button type="button" data-action="sell-all-treasure">
+                        <i class="fa-solid fa-coins fa-fw"></i>
+                    </button>
+                </li>
+            {{/if}}
+            {{#if canDistributeCoins}}
+                <li>
+                    <button type="button" data-action="distribute-coins" data-tooltip="{{localize "PF2E.Actor.Inventory.DistributeCoins"}}" {{disabled (not canDistributeCoins.enabled)}}>
+                        <i class="fa-solid fa-share-all fa-fw"></i>
+                    </button>
+                </li>
+            {{/if}}
+        {{/if}}
+    </div>
+    <div class="wealth">
+        <div class="item-name">
+            <i class="fa-solid fa-coins fa-fw"></i>
+            {{localize "PF2E.TotalCurrency"}}
+            <span>{{currency.totalCurrency}}</span>
+        </div>
+        <div class="item-name">
+            <i class="fa-solid fa-scale-unbalanced fa-fw"></i>
+            {{localize "PF2E.TotalWealth"}}
+            <span>{{currency.totalWealth}}</span>
+        </div>
+    </div>
+</div>

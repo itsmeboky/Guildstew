@@ -1,0 +1,25 @@
+<form class="{{cssClass}}" autocomplete="off" data-tooltip-class="pf2e">
+    <!-- SIDEBAR -->
+    {{> (resolvePath "templates/actors/loot/sidebar.hbs")}}
+
+    <section class="content">
+        <!-- HEADER -->
+        <div class="sheet-header">
+            <h1 class="charname">
+                {{formInput fields.name value=actor.name aria=(object label=fields.name.label) placeholder=(localize "PF2E.loot.LootNamePlaceholder")}}
+            </h1>
+            <section class="sheet-type">
+                <i
+                    class="fa-solid fa-circle-info"
+                    data-tooltip="{{localize "PF2E.loot.LootLabel"}}: {{localize "PF2E.loot.LootDescription"}}</div><div>{{localize "PF2E.loot.MerchantLabel"}}: {{localize "PF2E.loot.MerchantDescription"}}</div>"
+                    data-tooltip-direction="LEFT"
+                ></i>
+                {{formInput systemFields.lootSheetType classes="type" value=data.lootSheetType options=lootSheetTypeOptions}}
+            </section>
+        </div>
+
+        <!-- BODY -->
+        {{> (resolvePath "templates/actors/loot/inventory.hbs")}}
+    </section>
+
+</form>

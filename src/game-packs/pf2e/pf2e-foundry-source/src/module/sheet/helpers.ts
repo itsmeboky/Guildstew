@@ -1,0 +1,384 @@
+import { ActorPF2e } from "@actor";
+import type Application from "@client/appv1/api/application-v1.d.mts";
+import { ChatMessageMode } from "@client/config.mjs";
+import type { TooltipDirection } from "@client/helpers/interaction/tooltip-manager.d.mts";
+import type { ImageFilePath } from "@common/constants.mjs";
+import type { ItemUUID } from "@common/documents/_module.d.mts";
+import { ItemPF2e, ItemProxyPF2e, MeleePF2e, PhysicalItemPF2e } from "@item";
+import type { ActionCost, TraitChatData } from "@item/base/data/index.ts";
+import { createEffectAreaLabel } from "@item/helpers.ts";
+import type { ItemType } from "@item/types.ts";
+import type { Rarity } from "@module/data.ts";
+import { htmlClosest, htmlQuery, objectHasKey, sortLabeledRecord } from "@util";
+import { traitSlugToObject } from "@util/tags.ts";
+import * as R from "remeda";
+
+/** Prepare form options on an item or actor sheet */
+function createSheetOptions(
+    options: Record<string, string | { label: string }>,
+    selections: SheetSelections = [],
+    { selected = false } = {},
+): SheetOptions {
+    const sheetOptions = Object.entries(options).reduce((compiledOptions: SheetOptions, [stringKey, value]) => {
+        const selectionList = Array.isArray(selections) ? selections : selections.value;
+        const key = typeof selectionList[0] === "number" ? Number(stringKey) : stringKey;
+        const isSelected = selectionList.includes(key);
+        if (isSelected || !selected) {
+            compiledOptions[key] = {
+                label: _loc(R.isObjectType(value) ? value.label : value),
+                value: stringKey,
+                selected: isSelected,
+            };
+        }
+
+        return compiledOptions;
+    }, {});
+
+    return sortLabeledRecord(sheetOptions);
+}
+
+function createSheetTags(
+    options: Record<string, string | { label: string }>,
+    selections: SheetSelections,
+): SheetOptions {
+    return createSheetOptions(options, selections, { selected: true });
+}
+
+function createTagifyTraits(traits: Iterable<string>, { sourceTraits, record }: TagifyTraitOptions): TagifyEntry[] {
+    const sourceSet = new Set(sourceTraits ?? traits);
+    const traitSlugs = new Set(traits);
+    const readonlyTraits = traitSlugs.filter((t) => !sourceSet.has(t));
+    const hiddenTraits = sourceSet.filter((t) => !traitSlugs.has(t));
+    return [...traitSlugs, ...hiddenTraits]
+        .map((slug) => {
+            const label = _loc(record?.[slug] ?? slug);
+            const traitDescriptions: Record<string, string | undefined> = CONFIG.PF2E.traitsDescriptions;
+            const tooltip = traitDescriptions[slug];
+            return {
+                id: slug,
+                value: label,
+                readonly: readonlyTraits.has(slug),
+                // Must be undefined for tagify to work
+                hidden: !traitSlugs.has(slug) || undefined,
+                "data-tooltip": tooltip,
+            };
+        })
+        .sort((t1, t2) => t1.value.localeCompare(t2.value));
+}
+
+/**
+ * Get a CSS class for an adjusted value
+ * @param value A value from prepared/derived data
+ * @param base A value from base/source data
+ * @param options.better Which value is "better" in the context of the data: default is "higher"
+ **/
+function getAdjustment(
+    value: number,
+    base: number,
+    { better = "higher" }: { better?: "higher" | "lower" } = {},
+): "adjusted-higher" | "adjusted-lower" | null {
+    if (value === base) return null;
+    const isBetter = better === "higher" ? value > base : value < base;
+    return isBetter ? "adjusted-higher" : "adjusted-lower";
+}
+
+function getAdjustedValue(value: number, reference: number, options?: { better?: "higher" | "lower" }): AdjustedValue {
+    const adjustmentClass = getAdjustment(value, reference, options);
+    return {
+        value,
+        adjustmentClass,
+        adjustedHigher: adjustmentClass === "adjusted-higher",
+        adjustedLower: adjustmentClass === "adjusted-lower",
+    };
+}
+
+interface AdjustedValue {
+    value: number;
+    adjustedHigher: boolean;
+    adjustedLower: boolean;
+    adjustmentClass: "adjusted-higher" | "adjusted-lower" | null;
+}
+
+/** Override to refocus tagify elements in _render() to workaround handlebars full re-render */
+async function maintainFocusInRender(sheet: Application, renderLogic: () => Promise<void>): Promise<void> {
+    const element = sheet.element.get(0);
+    const { activeElement } = document;
+    const activeWasHere = element?.contains(activeElement);
+    await renderLogic();
+    if (!activeElement || !activeWasHere) return;
+
+    // If the active element was a tagify that is part of this sheet, re-render
+    if (activeElement instanceof HTMLInputElement && activeElement.dataset.property) {
+        const sameInput = htmlQuery(element, `input[data-property="${activeElement.dataset.property}"]`);
+        sameInput?.focus();
+    } else if (activeElement.classList.contains("tagify__input")) {
+        const name = htmlClosest(activeElement, "tags")?.dataset.name;
+        if (name) {
+            htmlQuery(element, `tags[data-name="${name}"] span[contenteditable]`)?.focus();
+        }
+    }
+}
+
+async function getItemFromDragEvent(event: DragEvent): Promise<ItemPF2e | null> {
+    try {
+        const dataString = event.dataTransfer?.getData("text/plain");
+        const dropData = JSON.parse(dataString ?? "");
+        return (await ItemPF2e.fromDropData(dropData)) ?? null;
+    } catch {
+        return null;
+    }
+}
+
+/** Returns statistic dialog roll parameters based on held keys */
+type ParamsFromEvent = { skipDialog: boolean; messageMode?: ChatMessageMode };
+
+function isRelevantEvent(event: Maybe<Event>): event is PointerEvent | TouchEvent | KeyboardEvent | WheelEvent {
+    return !!event && "ctrlKey" in event && "metaKey" in event && "shiftKey" in event;
+}
+
+/** Set roll mode and dialog skipping from a user's input */
+function eventToRollParams(event: Maybe<Event>, rollType: { type: "check" | "damage" }): ParamsFromEvent {
+    const key = rollType.type === "check" ? "showCheckDialogs" : "showDamageDialogs";
+    const skipDefault = !game.user.settings[key];
+    if (!isRelevantEvent(event)) return { skipDialog: skipDefault };
+    const params: ParamsFromEvent = { skipDialog: event.shiftKey ? !skipDefault : skipDefault };
+    if (event.ctrlKey || event.metaKey) params.messageMode = game.user.isGM ? "gm" : "blind";
+    return params;
+}
+
+/** Set roll mode from a user's input: used for messages that are not actually rolls. */
+function eventToMessageMode(event: Maybe<Event>): ChatMessageMode | undefined {
+    if (!isRelevantEvent(event) || !isControlDown(event)) return undefined;
+    return game.user.isGM ? "gm" : "blind";
+}
+
+/** Returns true if the control key is held down, handling mac */
+function isControlDown(event: PointerEvent | KeyboardEvent | TouchEvent | WheelEvent): boolean {
+    return fh.interaction.KeyboardManager.CONTROL_KEY_STRING === "⌘" ? event.metaKey : event.ctrlKey;
+}
+
+/** Given a uuid, loads the item and sends it to chat, potentially recontextualizing it with a given actor */
+async function sendItemToChat(itemUuid: ItemUUID, options: { event?: Event; actor?: ActorPF2e }): Promise<void> {
+    const itemLoaded = await fromUuid<ItemPF2e>(itemUuid);
+    if (!itemLoaded) return;
+
+    const item =
+        options.actor && itemLoaded.actor?.uuid !== options.actor.uuid
+            ? new ItemProxyPF2e(itemLoaded.toObject(), { parent: options.actor })
+            : itemLoaded;
+    item.toMessage(options.event);
+}
+
+function getBasePhysicalItemViewData(item: PhysicalItemPF2e): BasePhysicalItemViewData {
+    return {
+        ...R.pick(item, ["id", "uuid", "img", "name"]),
+        type: item.type as ItemType,
+        level: item.level,
+        rarity: item.rarity,
+        traits: item.traitChatData(),
+        isTemporary: item.isTemporary,
+    };
+}
+
+/** Creates a listener that can be used to create tooltips with dynamic content */
+function createTooltipListener(
+    element: HTMLElement,
+    options: {
+        /** Controls if the top edge of this tooltip aligns with the top edge of the target */
+        align?: "top";
+        /** If given, the tooltip will spawn on elements that match this selector */
+        selector?: string;
+        locked?: boolean;
+        direction?: TooltipDirection;
+        cssClass?: string;
+        render: (element: HTMLElement) => Promise<HTMLElement | null>;
+    },
+): void {
+    const tooltipOptions = R.pick(options, ["cssClass", "direction", "locked"]);
+
+    element.addEventListener(
+        "pointerenter",
+        async (event) => {
+            const target = options.selector ? htmlClosest(event.target, options.selector) : element;
+            if (!target) return;
+            const html = await options.render(target);
+            if (!html) return;
+
+            if (options.locked) {
+                game.tooltip.dismissLockedTooltips();
+            }
+            game.tooltip.activate(target, { html, ...tooltipOptions });
+
+            // A very crude implementation only designed for align top. Make it more flexible if we need to later
+            if (options.align === "top") {
+                const pad = fh.interaction.TooltipManager.TOOLTIP_MARGIN_PX;
+                const actualTooltip = options.locked ? html.closest("aside") : game.tooltip.tooltip;
+                if (actualTooltip) {
+                    const bounds = target.getBoundingClientRect();
+                    const maxH = window.innerHeight - actualTooltip.offsetHeight;
+                    actualTooltip.style.top = `${Math.clamp(bounds.top, pad, maxH - pad)}px`;
+
+                    // Circumvent https://github.com/foundryvtt/foundryvtt/issues/14237
+                    // by keeping the global tooltip behind the locked one
+                    if (options.locked) game.tooltip.tooltip.style.top = actualTooltip.style.top;
+                }
+            }
+        },
+        true,
+    );
+}
+
+function createNPCAttackTraitsAndTags(item: MeleePF2e): NPCAttackTraitOrTag[] {
+    const tags: NPCAttackTraitOrTag[] = item.system.traits.value.map((t) =>
+        traitSlugToObject(t, CONFIG.PF2E.npcAttackTraits),
+    );
+
+    // Area/Auto fire adds a tag to the traits list
+    if (item.system.action !== "strike" && item.system.area) {
+        tags.push({ label: createEffectAreaLabel(item.system.area) });
+    }
+
+    // Include range data with traits.
+    const range = item.range;
+    if (range && !item.system.traits.config?.thrown) {
+        const description = _loc("PF2E.TraitDescriptionRange");
+        if (range.increment) {
+            tags.push({
+                label: _loc("PF2E.Item.NPCAttack.Tags.RangeIncrementN", {
+                    n: range.increment,
+                }),
+                description,
+            });
+        } else if (range.max) {
+            const label = _loc("PF2E.Item.NPCAttack.Tags.RangeN", { n: range.max });
+            tags.push({ label, description });
+        }
+    }
+
+    // Include magazine size of linked weapon
+    const actor = item.actor;
+    const weapon = item.linkedWeapon;
+    if (actor && weapon && !weapon.system.traits.config.capacity && weapon.system.ammo) {
+        const weaponAmmoData = objectHasKey(CONFIG.PF2E.ammoTypes, weapon.system.ammo.baseType)
+            ? CONFIG.PF2E.ammoTypes[weapon.system.ammo.baseType]
+            : null;
+        const magazine = (() => {
+            // If not a magazine, just return the capcity
+            if (!weaponAmmoData?.magazine) return weapon.system.ammo.capacity ?? 0;
+
+            // First try to check existing ammo
+            const ammo = weapon.ammo;
+            if (ammo?.isOfType("ammo") && ammo.isMagazine) return ammo.system.uses.max;
+
+            // Get the best possible magazine ammo size that *could* be loaded, or the default magazine size
+            const choices = actor.itemTypes.ammo.filter((a) => a.isAmmoFor(weapon)).map((a) => a.system.uses.max);
+            const maxChoice = Math.max(0, ...choices);
+            return maxChoice || weaponAmmoData.magazine;
+        })();
+        const minShownMagazine = SYSTEM_ID === "pf2e" ? 2 : 1;
+        if (magazine > minShownMagazine) {
+            const label = _loc("PF2E.Item.NPCAttack.Tags.MagN", { n: magazine });
+            tags.push({ label });
+        }
+    }
+
+    return tags.sort((a, b) => a.label.localeCompare(b.label, game.i18n.lang));
+}
+
+const actionImgMap: Record<string, ImageFilePath> = {
+    0: `systems/${SYSTEM_ID}/icons/actions/FreeAction.webp`,
+    free: `systems/${SYSTEM_ID}/icons/actions/FreeAction.webp`,
+    1: `systems/${SYSTEM_ID}/icons/actions/OneAction.webp`,
+    2: `systems/${SYSTEM_ID}/icons/actions/TwoActions.webp`,
+    3: `systems/${SYSTEM_ID}/icons/actions/ThreeActions.webp`,
+    "1 or 2": `systems/${SYSTEM_ID}/icons/actions/OneTwoActions.webp`,
+    "1 to 3": `systems/${SYSTEM_ID}/icons/actions/OneThreeActions.webp`,
+    "2 or 3": `systems/${SYSTEM_ID}/icons/actions/TwoThreeActions.webp`,
+    reaction: `systems/${SYSTEM_ID}/icons/actions/Reaction.webp`,
+    passive: `systems/${SYSTEM_ID}/icons/actions/Passive.webp`,
+};
+
+function getActionIcon(actionType: string | ActionCost | null, fallback: ImageFilePath): ImageFilePath;
+function getActionIcon(actionType: string | ActionCost | null, fallback: ImageFilePath | null): ImageFilePath | null;
+function getActionIcon(actionType: string | ActionCost | null): ImageFilePath;
+function getActionIcon(
+    action: string | ActionCost | null,
+    fallback: ImageFilePath | null = `systems/${SYSTEM_ID}/icons/actions/Empty.webp`,
+): ImageFilePath | null {
+    if (action === null) return actionImgMap.passive;
+    const value = typeof action !== "object" ? action : action.type === "action" ? action.value : action.type;
+    const sanitized = String(value ?? "")
+        .toLowerCase()
+        .trim();
+    return actionImgMap[sanitized] ?? fallback;
+}
+
+interface SheetOption {
+    value: string;
+    label: string;
+    selected: boolean;
+}
+
+type SheetOptions = Record<string, SheetOption>;
+
+type SheetSelections = { value: (string | number)[] } | (string[] & { custom?: never });
+
+interface TagifyTraitOptions {
+    sourceTraits?: Iterable<string>;
+    record?: Record<string, string>;
+}
+
+interface TagifyEntry {
+    id: string;
+    value: string;
+    /** If true, the tag will exist in tagify but unremovable. */
+    readonly: boolean;
+    /**
+     * If true, it will be hidden from tagify itself but exist in submit data.
+     * Tagify treats any value as true, even false or null.
+     */
+    hidden?: true;
+    "data-tooltip"?: string;
+}
+
+/**
+ * An NPC trait or tag to show next to a strike (or area/auto fire in SF2e).
+ * Sometimes Paizo will include a non-trait in the traits list.
+ * "As Melee, but also lists range or range increment *with* traits" - Monster Core Pg 5
+ */
+interface NPCAttackTraitOrTag {
+    name?: string;
+    label: string;
+    description?: string | null;
+}
+
+interface BasePhysicalItemViewData {
+    id: string;
+    uuid: ItemUUID;
+    type: ItemType;
+    img: string;
+    name: string;
+    traits: TraitChatData[];
+    level: number | null;
+    rarity: Rarity | null;
+    isTemporary: boolean;
+}
+
+export {
+    createNPCAttackTraitsAndTags,
+    createSheetOptions,
+    createSheetTags,
+    createTagifyTraits,
+    createTooltipListener,
+    eventToMessageMode,
+    eventToRollParams,
+    getActionIcon,
+    getAdjustedValue,
+    getAdjustment,
+    getBasePhysicalItemViewData,
+    getItemFromDragEvent,
+    isControlDown,
+    maintainFocusInRender,
+    sendItemToChat,
+};
+export type { AdjustedValue, BasePhysicalItemViewData, NPCAttackTraitOrTag, SheetOption, SheetOptions, TagifyEntry };

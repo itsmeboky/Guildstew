@@ -1,0 +1,184 @@
+<li
+    data-uuid="{{item.uuid}}"
+    {{#if isSubitem}}data-subitem-id{{else}}data-item-id{{/if}}="{{item.id}}"
+    {{#if isContainer}}data-is-container{{/if}}
+    {{#if item.isInContainer}}data-item-type="{{item.type}}"{{/if}}
+    {{#if hidden}}class="hidden-item"{{/if}}
+>
+    <div class="data{{#if item.isTemporary}} temporary-item{{/if}}">
+        <div class="item-name{{#if (and (ne @root.actor.type "loot") (not @root.owner))}} long{{/if}}">
+            <a class="item-image" data-action="item-to-chat">
+                <img class="item-icon" src="{{item.img}}" alt="{{item.name}}"/>
+                <i class="fa-solid fa-message"></i>
+            </a>
+            {{#if isContainer}}
+                <a data-action="toggle-container" data-tooltip="PF2E.OpenItemTitle"><i class="fa-solid fa-box{{#unless item.isCollapsed}}-open{{/unless}} fa-fw"></i></a>
+            {{/if}}
+            <h4{{#if (or @root.user.isGM item.isIdentified)}} class="name rarity-{{item.system.traits.rarity}}"{{/if}}>
+                <a data-action="toggle-summary">{{item.name}}</a>
+                {{#if (and @root.user.isGM (not item.isIdentified))}}<span class="gm-mystified-data">({{item.system.identification.identified.name}})</span>{{/if}}
+                {{#if itemSize}}<span class="size">({{itemSize}})</span>{{/if}}
+                {{#if item.isTemporary}}<i class="fa-solid fa-stopwatch" data-tooltip="PF2E.TemporaryItemToolTip"></i>{{/if}}
+            </h4>
+            {{#if (and item.uses.max (or (gt item.uses.max 1) (eq item.category "wand")))}}
+                <span class="uses">({{item.uses.value}}/{{item.uses.max}})</span>
+            {{/if}}
+        </div>
+        {{#if (or @root.inventory.showValueAlways (and (eq item.type "treasure") (not item.container)))}}
+            <span class="price">
+                {{#if (and @root.editable (eq item.system.category "credstick"))}}
+                    <a
+                        class="decrease"
+                        data-action="decrease-credits"
+                        title="{{localize "PF2E.Actor.Inventory.ItemQuantity.Decrease.Click"}}&#013;{{localize "PF2E.Actor.Inventory.ItemQuantity.Decrease.ShiftClick"}}&#013;{{localize "PF2E.Actor.Inventory.ItemQuantity.Decrease.ControlClick"}}"
+                    >&ndash;</a>
+                {{/if}}
+                {{#if (or item.isIdentified @root.user.isGM)}}
+                    <span data-visibility="{{#if item.isIdentified}}all{{else}}gm{{/if}}">
+                        {{#if @root.inventory.showUnitBulkPrice}}
+                            {{unitPrice}}
+                            {{#if (gt item.price.per 1)}}
+                                <span class="per">/ {{item.price.per}}</span>
+                            {{/if}}
+                        {{else}}
+                            {{assetValue}}
+                        {{/if}}
+                    </span>
+                {{/if}}
+                {{#if (and @root.editable (eq item.system.category "credstick"))}}
+                <a
+                    class="increase"
+                    data-action="increase-credits"
+                    title="{{localize "PF2E.Actor.Inventory.ItemQuantity.Increase.Click"}}&#013;{{localize "PF2E.Actor.Inventory.ItemQuantity.Increase.ShiftClick"}}&#013;{{localize "PF2E.Actor.Inventory.ItemQuantity.Increase.ControlClick"}}"
+                >+</a>
+                {{/if}}
+            </span>
+        {{/if}}
+        <span class="quantity">
+            {{#if (and canEditQuantity @root.editable (not isSubitem))}}
+                <a
+                    class="decrease"
+                    data-action="decrease-quantity"
+                    title="{{localize "PF2E.Actor.Inventory.ItemQuantity.Decrease.Click"}}&#013;{{localize "PF2E.Actor.Inventory.ItemQuantity.Decrease.ShiftClick"}}&#013;{{localize "PF2E.Actor.Inventory.ItemQuantity.Decrease.ControlClick"}}"
+                >&ndash;</a>
+            {{/if}}
+            <span>{{item.quantity}}</span>
+            {{#if (and canEditQuantity @root.editable (not isSubitem))}}
+                <a
+                    class="increase"
+                    data-action="increase-quantity"
+                    title="{{localize "PF2E.Actor.Inventory.ItemQuantity.Increase.Click"}}&#013;{{localize "PF2E.Actor.Inventory.ItemQuantity.Increase.ShiftClick"}}&#013;{{localize "PF2E.Actor.Inventory.ItemQuantity.Increase.ControlClick"}}"
+                >+</a>
+            {{/if}}
+        </span>
+
+        <span class="bulk">{{#if @root.inventory.showUnitBulkPrice}}{{unitBulk}}{{else}}{{item.bulk}}{{/if}}</span>
+
+        {{#if @root.editable}}
+            <div class="item-controls">
+                {{#if (and canBeEquipped isInvestable)}}
+                    <a class="invested {{#if item.isInvested}} active{{/if}}{{#if notifyInvest}} notify{{/if}}" data-action="toggle-invested" data-tooltip="PF2E.ui.equipmentInvested">
+                        <i class="fa-solid fa-gem fa-fw"></i>
+                    </a>
+                {{/if}}
+                {{#if (and isSubitem (or item.isIdentified @root.user.isGM))}}
+                    <a
+                        class="item-carry-type active detach"
+                        data-action="detach-subitem"
+                        data-tooltip="PF2E.Item.Physical.Attach.Detach.Label"
+                    >
+                        <span class="fa-stack fa-fw fa-2xs">
+                            <i class="fa-solid fa-paperclip fa-stack-2x"></i>
+                            <i class="fa-solid fa-slash fa-stack-2x"></i>
+                        </span>
+                    </a>
+                {{else if (or (eq @root.actor.type "character") (eq @root.actor.type "npc"))}}
+                    <a
+                        class="item-carry-type{{#if item.isEquipped}} active{{/if}}{{#if notifyEquip}} notify{{/if}}"
+                        data-tooltip="PF2E.Actor.Inventory.CarryType.OpenMenu"
+                        data-action="open-carry-type-menu"
+                    >
+                        {{> equipIcon equipped=item.system.equipped}}
+                    </a>
+                {{/if}}
+                {{#if item.isDamaged}}
+                    <a data-action="repair-item" data-tooltip="PF2E.RepairItemTitle"><i class="fa-solid fa-hammer fa-fw"></i></a>
+                {{/if}}
+                {{#if @root.user.isGM}}
+                    {{#if item.isIdentified}}
+                        <a data-action="toggle-identified" data-tooltip="PF2E.identification.Mystify"><i class="fa-regular fa-circle-question fa-fw"></i></a>
+                    {{else}}
+                        <a data-action="toggle-identified" data-tooltip="PF2E.identification.Identify"><i class="fa-solid fa-question-circle fa-fw"></i></a>
+                    {{/if}}
+                {{/if}}
+                {{#if (and isSellable (ne @root.actor.type "loot"))}}
+                    <a class="item-sell-treasure" data-action="sell-treasure" data-tooltip="PF2E.ui.sell"><i class="fa-solid fa-coins fa-fw"></i></a>
+                {{/if}}
+                {{#if (and (eq item.type "weapon") (eq @root.actor.type "npc"))}}
+                    <a data-action="generate-attack" data-tooltip="PF2E.Actor.NPC.GenerateAttack.Label"><i class="fa-solid fa-bolt fa-fw"></i></a>
+                {{/if}}
+                {{#if (or @root.user.isGM item.isIdentified)}}
+                    <a data-action="edit-item" data-tooltip="PF2E.EditItemTitle"><i class="fa-solid fa-fw fa-edit"></i></a>
+                {{/if}}
+                {{#if (or @root.owner (ne @root.actor.type "loot"))}}
+                    <a data-action="delete-item" data-tooltip="PF2E.DeleteItemTitle"><i class="fa-solid fa-fw fa-trash"></i></a>
+                {{/if}}
+            </div>
+        {{else if (ne @root.actor.type "loot")}}
+            <div class="item-controls readonly">
+                {{#if (and canBeEquipped isInvestable)}}
+                    <span class="invested {{#if item.isInvested}} active{{/if}}" data-tooltip="PF2E.InvestedLabel">
+                        <i class="fa-solid fa-gem fa-fw"></i>
+                    </span>
+                {{/if}}
+                {{#unless item.isStowed}}
+                    <span class="item-carry-type {{#if item.isEquipped}} active{{/if}}">
+                        {{#if isSubitem}}
+                            <i class="fa-solid fa-paperclip"></i>
+                        {{else if (not item.isStowed)}}
+                            {{> equipIcon equipped=item.system.equipped}}
+                        {{/if}}
+                    </span>
+                {{/unless}}
+            </div>
+        {{/if}}
+
+        <div class="item-summary" hidden="hidden"></div>
+
+        {{#if isContainer}}
+            <div class="container-metadata" data-item-id="{{item.id}}" data-is-container>
+                {{#if isContainer}}
+                    <div class="capacity {{#if (gt item.percentFull 100)}}over-limit{{/if}}">
+                        <span class="bar" style="width:{{item.percentFull}}%"></span>
+                        <span class="label">{{localize "PF2E.CapacityBarLabel"}}: {{item.capacity.value}} / {{item.capacity.max}}</span>
+                    </div>
+                {{/if}}
+            </div>
+        {{/if}}
+    </div>
+
+    {{#if subitems.length}}
+        <ul class="items subitems">
+            {{#each subitems as |subitem|}}
+                {{> (resolvePath "templates/actors/partials/item-line.hbs") item=subitem isSubitem=true}}
+            {{/each}}
+        </ul>
+    {{/if}}
+
+    {{#if (and isContainer (not item.isCollapsed))}}
+        <ul class="items container-contents" data-item-list data-container-id="{{item.id}}">
+            {{#each heldItems as |containedItem|}}
+                {{> (resolvePath "templates/actors/partials/item-line.hbs") this=containedItem}}
+            {{/each}}
+        </ul>
+    {{/if}}
+</li>
+
+{{#*inline "equipIcon"}}
+    {{~#if (and (eq equipped.carryType "held") (eq equipped.handsHeld 1))}}<span class="fa-stack fa-fw fa-2xs"><i class="fa-solid fa-hand-back-fist fa-stack-2x"></i><i class="fa-solid fa-1 fa-inverse fa-stack-1x"></i></span>
+    {{~else if (and (eq equipped.carryType "held") (eq equipped.handsHeld 2))}}<span class="fa-stack fa-fw fa-2xs"><i class="fa-solid fa-hand-back-fist fa-stack-2x"></i><i class="fa-solid fa-2 fa-inverse fa-stack-1x"></i></span>
+    {{~else if (eq equipped.carryType "stowed")}}<i class="fa-solid fa-box fa-fw"></i>
+    {{~else if (eq equipped.carryType "dropped")}}<i class="fa-solid fa-grip-lines fa-fw"></i>
+    {{~else if (eq equipped.carryType "implanted")}}<i class="fa-solid fa-plug fa-fw"></i>
+    {{~else}}<i class="fa-solid fa-shirt fa-fw"></i>{{/if~}}
+{{/inline}}

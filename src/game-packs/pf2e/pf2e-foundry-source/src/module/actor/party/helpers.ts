@@ -1,0 +1,24 @@
+import { ActorPF2e } from "@actor";
+
+/** Create the first party actor in this (typically new) world */
+async function createFirstParty(): Promise<void> {
+    if (!game.user.isActiveGM || game.settings.get(SYSTEM_ID, "createdFirstParty")) {
+        return;
+    }
+
+    if (!game.actors.some((a) => a.isOfType("party"))) {
+        await ActorPF2e.create(
+            {
+                _id: CONFIG.PF2E.defaultPartyId,
+                type: "party",
+                name: _loc("PF2E.Actor.Party.DefaultName"),
+            },
+            { keepId: true },
+        );
+        await game.settings.set(SYSTEM_ID, "activeParty", CONFIG.PF2E.defaultPartyId);
+    }
+
+    await game.settings.set(SYSTEM_ID, "createdFirstParty", true);
+}
+
+export { createFirstParty };

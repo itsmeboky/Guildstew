@@ -1,0 +1,153 @@
+{
+    "_id": "AJHMnoK9Xp1DTj4g",
+    "folder": "kTu1AMjR6p5abNSc",
+    "img": "icons/sundries/books/book-red-exclamation.webp",
+    "name": "Clan Lore",
+    "system": {
+        "actionType": {
+            "value": "passive"
+        },
+        "actions": {
+            "value": null
+        },
+        "category": "ancestry",
+        "description": {
+            "value": "<p>Your identity as a member of your clan is as central to your sense of self as your dwarven ancestry. You gain the trained proficiency rank in the two skills of your clan. If you would automatically become trained in one of these skills (from your background or class, for example), you instead become trained in a skill of your choice. You also become trained in the listed Lore for your clan. If you come from a clan not listed here, you become trained in an appropriate selection of skills as determined by your GM. Since the trade of a clan takes a while to learn, these skills don't automatically change should you ever leave your clan and join another, though your GM might allow you to change these skills as part of retraining during downtime.</p><table border=\"1\" class=\"pf2e\"><thead><tr><th><p>Clan</p></th><th><p>Skills</p></th><th><p>Lore</p></th></tr></thead><tbody><tr><td><p>Clan Aringeld</p></td><td><p>Diplomacy and Society</p></td><td><p>Mercantile Lore</p></td></tr><tr><td><p>Clan Breakiron</p></td><td><p>Crafting and Survival</p></td><td><p>Alchemy Lore</p></td></tr><tr><td><p>Clan Firecask</p></td><td><p>Crafting and Nature</p></td><td><p>Alcohol Lore</p></td></tr><tr><td><p>Clan Gelderon</p></td><td><p>Athletics and Nature</p></td><td><p>Farming Lore</p></td></tr><tr><td><p>Clan Grimmark</p></td><td><p>Crafting and Society</p></td><td><p>Architecture Lore</p></td></tr><tr><td><p>Clan Ironfist</p></td><td><p>Crafting and Medicine</p></td><td><p>Smelting Lore</p></td></tr><tr><td><p>Clan Molgrade</p></td><td><p>Crafting and Thievery</p></td><td><p>Smithing Lore</p></td></tr><tr><td><p>Clan Oriddus</p></td><td><p>Religion and Society</p></td><td><p>Dwarven Pantheon Lore</p></td></tr><tr><td><p>Clan Runebinder</p></td><td><p>Arcana and Occultism</p></td><td><p>Academia Lore</p></td></tr><tr><td><p>Clan Stonefist</p></td><td><p>Athletics and Intimidation</p></td><td><p>Warfare Lore</p></td></tr><tr><td><p>Clan Tolorr</p></td><td><p>Diplomacy and Society</p></td><td><p>Library Lore</p></td></tr><tr><td><p>Clan Vanderholl</p></td><td><p>Athletics and Crafting</p></td><td><p>Labor Lore</p></td></tr></tbody></table>"
+        },
+        "level": {
+            "value": 1
+        },
+        "prerequisites": {
+            "value": []
+        },
+        "publication": {
+            "license": "OGL",
+            "remaster": false,
+            "title": "Pathfinder Lost Omens Highhelm"
+        },
+        "rules": [
+            {
+                "choices": [
+                    {
+                        "label": "PF2E.SpecificRule.Dwarf.DwarvenClan.Aringeld",
+                        "value": {
+                            "clan": "aringeld",
+                            "skillOne": "diplomacy",
+                            "skillTwo": "society"
+                        }
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Dwarf.DwarvenClan.Breakiron",
+                        "value": {
+                            "clan": "breakiron",
+                            "skillOne": "crafting",
+                            "skillTwo": "survival"
+                        }
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Dwarf.DwarvenClan.Firecask",
+                        "value": {
+                            "clan": "firecask",
+                            "skillOne": "crafting",
+                            "skillTwo": "nature"
+                        }
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Dwarf.DwarvenClan.Gelderon",
+                        "value": {
+                            "clan": "gelderon",
+                            "skillOne": "athletics",
+                            "skillTwo": "survival"
+                        }
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Dwarf.DwarvenClan.Grimmark",
+                        "value": {
+                            "clan": "grimmark",
+                            "skillOne": "crafting",
+                            "skillTwo": "society"
+                        }
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Dwarf.DwarvenClan.Ironfist",
+                        "value": {
+                            "clan": "ironfist",
+                            "skillOne": "crafting",
+                            "skillTwo": "medicine"
+                        }
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Dwarf.DwarvenClan.Molgrade",
+                        "value": {
+                            "clan": "molgrade",
+                            "skillOne": "crafting",
+                            "skillTwo": "thievery"
+                        }
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Dwarf.DwarvenClan.Oriddus",
+                        "value": {
+                            "clan": "oriddus",
+                            "skillOne": "religion",
+                            "skillTwo": "society"
+                        }
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Dwarf.DwarvenClan.Runebinder",
+                        "value": {
+                            "clan": "runebinder",
+                            "skillOne": "arcana",
+                            "skillTwo": "occultism"
+                        }
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Dwarf.DwarvenClan.Stonefist",
+                        "value": {
+                            "clan": "stonefist",
+                            "skillOne": "athletics",
+                            "skillTwo": "intimidation"
+                        }
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Dwarf.DwarvenClan.Tolorr",
+                        "value": {
+                            "clan": "tolorr",
+                            "skillOne": "diplomacy",
+                            "skillTwo": "society"
+                        }
+                    },
+                    {
+                        "label": "PF2E.SpecificRule.Dwarf.DwarvenClan.Vanderholl",
+                        "value": {
+                            "clan": "vanderholl",
+                            "skillOne": "athletics",
+                            "skillTwo": "crafting"
+                        }
+                    }
+                ],
+                "flag": "clan",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Dwarf.DwarvenClan.Prompt"
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "upgrade",
+                "path": "system.skills.{item|flags.system.rulesSelections.clan.skillOne}.rank",
+                "value": 1
+            },
+            {
+                "key": "ActiveEffectLike",
+                "mode": "upgrade",
+                "path": "system.skills.{item|flags.system.rulesSelections.clan.skillTwo}.rank",
+                "value": 1
+            }
+        ],
+        "traits": {
+            "rarity": "common",
+            "value": [
+                "dwarf"
+            ]
+        }
+    },
+    "type": "feat"
+}

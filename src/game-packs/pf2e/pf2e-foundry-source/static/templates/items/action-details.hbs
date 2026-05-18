@@ -1,0 +1,8 @@
+{{> (resolvePath "templates/items/partials/ability-activation.hbs")}}
+
+{{#unless (eq item.system.actionType.value "passive")}}
+    {{> (resolvePath "templates/items/partials/self-applied-effect.hbs")}}
+{{/unless}}
+{{formGroup fields.deathNote value=data.deathNote rootId=fieldRootId}}
+
+{{> (resolvePath "templates/items/partials/other-tags.hbs")}}

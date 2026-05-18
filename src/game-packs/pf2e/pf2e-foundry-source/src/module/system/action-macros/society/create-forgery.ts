@@ -1,0 +1,169 @@
+import { CreaturePF2e } from "@actor";
+import {
+    SingleCheckAction,
+    SingleCheckActionUseOptions,
+    SingleCheckActionVariant,
+    SingleCheckActionVariantData,
+} from "@actor/actions/index.ts";
+import { Modifier, RawModifier } from "@actor/modifiers.ts";
+import { CheckResultCallback } from "@system/action-macros/types.ts";
+import { ActionMacroHelpers, SkillActionOptions } from "../index.ts";
+
+interface ChatMessageCheckFlags {
+    context: {
+        options: string[];
+    };
+    modifiers: RawModifier[];
+}
+
+async function createForgeryCallback(
+    result: CheckResultCallback,
+    callback?: (result: CheckResultCallback) => void,
+): Promise<void> {
+    // consider any modifiers enabled in the roll dialog
+    const societyDC = (() => {
+        if (result.actor instanceof CreaturePF2e) {
+            const systemFlags = result.message?.flags[SYSTEM_ID] as unknown as ChatMessageCheckFlags;
+            const modifiers = (systemFlags.modifiers as RawModifier[])
+                .filter((modifier) => modifier.enabled)
+                .map((modifier) => {
+                    return { ...modifier, predicate: [] };
+                })
+                .map((modifier) => new Modifier(modifier));
+            return result.actor.skills.society
+                .extend({
+                    slug: result.actor.skills.society.slug,
+                    modifiers,
+                })
+                .withRollOptions({
+                    extraRollOptions: systemFlags.context.options,
+                    origin: result.actor,
+                }).dc;
+        }
+        return null;
+    })();
+    const gmNotes = (() => {
+        if (["criticalSuccess", "success"].includes(result.outcome ?? "")) {
+            return _loc("PF2E.Actions.CreateForgery.ForgedDocument.SuccessGmNote", {
+                societyDC: societyDC?.value ?? null,
+            });
+        } else if (["criticalFailure", "failure"].includes(result.outcome ?? "")) {
+            return _loc("PF2E.Actions.CreateForgery.ForgedDocument.FailureGmNote", {
+                failure: _loc("PF2E.Actions.CreateForgery.Notes.failure"),
+                success: _loc("PF2E.Actions.CreateForgery.Notes.success"),
+                total: result.roll.total,
+            });
+        }
+        return "";
+    })();
+
+    // create forged document item
+    await Item.create(
+        {
+            img: `systems/${SYSTEM_ID}/icons/equipment/adventuring-gear/scroll-case.webp`,
+            name: _loc("PF2E.Actions.CreateForgery.ForgedDocument.Name"),
+            type: "equipment",
+            system: {
+                description: {
+                    gm: gmNotes,
+                    value: _loc("PF2E.Actions.CreateForgery.ForgedDocument.Description", {
+                        societyDC: societyDC?.value ?? null,
+                    }),
+                },
+            },
+        },
+        {
+            parent: result.actor,
+        },
+    );
+
+    // remind user that an item was created in the actor's inventory
+    const notification = _loc("PF2E.Actions.CreateForgery.ForgedDocumentCreatedNotification", {
+        name: result.actor.name,
+    });
+    ui.notifications.info(notification);
+
+    callback?.(result);
+}
+
+function createForgery(options: SkillActionOptions): Promise<void> {
+    const modifiers = [
+        new Modifier({
+            label: "PF2E.Actions.CreateForgery.UnspecificHandwriting",
+            modifier: 4,
+            predicate: ["action:create-forgery:unspecific-handwriting"],
+            type: "circumstance",
+        }),
+    ].concat(options?.modifiers ?? []);
+    const slug = options?.skill ?? "society";
+    const rollOptions = ["action:create-forgery"];
+    return ActionMacroHelpers.simpleRollActionCheck({
+        actors: options.actors,
+        actionGlyph: options.glyph,
+        title: "PF2E.Actions.CreateForgery.Title",
+        checkContext: (opts) => ActionMacroHelpers.defaultCheckContext(opts, { modifiers, rollOptions, slug }),
+        traits: ["downtime", "secret"],
+        event: options.event,
+        callback: async (result: CheckResultCallback) => createForgeryCallback(result, options?.callback),
+        difficultyClass: options.difficultyClass ?? { value: 20 },
+        extraNotes: (selector: string) => [
+            ActionMacroHelpers.note(selector, "PF2E.Actions.CreateForgery", "criticalSuccess"),
+            ActionMacroHelpers.note(selector, "PF2E.Actions.CreateForgery", "success"),
+            ActionMacroHelpers.note(selector, "PF2E.Actions.CreateForgery", "failure"),
+            ActionMacroHelpers.note(selector, "PF2E.Actions.CreateForgery", "criticalFailure"),
+        ],
+    }).catch((error: Error) => {
+        ui.notifications.error(error.message);
+        throw error;
+    });
+}
+
+class CreateForgeryActionVariant extends SingleCheckActionVariant {
+    override async use(options: Partial<SingleCheckActionUseOptions> = {}): Promise<CheckResultCallback[]> {
+        return super.use(options).then(async (results) => {
+            for (const result of results) {
+                await createForgeryCallback(result);
+            }
+            return results;
+        });
+    }
+}
+
+class CreateForgeryAction extends SingleCheckAction {
+    constructor() {
+        super({
+            description: "PF2E.Actions.CreateForgery.Description",
+            difficultyClass: {
+                value: 20,
+            },
+            img: "icons/skills/social/theft-pickpocket-bribery-brown.webp",
+            modifiers: [
+                {
+                    label: "PF2E.Actions.CreateForgery.UnspecificHandwriting",
+                    modifier: 4,
+                    predicate: ["action:create-forgery:unspecific-handwriting"],
+                    type: "circumstance",
+                },
+            ],
+            name: "PF2E.Actions.CreateForgery.Title",
+            notes: [
+                { outcome: ["criticalSuccess"], text: "PF2E.Actions.CreateForgery.Notes.criticalSuccess" },
+                { outcome: ["success"], text: "PF2E.Actions.CreateForgery.Notes.success" },
+                { outcome: ["failure"], text: "PF2E.Actions.CreateForgery.Notes.failure" },
+                { outcome: ["criticalFailure"], text: "PF2E.Actions.CreateForgery.Notes.criticalFailure" },
+            ],
+            section: "skill",
+            slug: "create-forgery",
+            statistic: "society",
+            traits: ["downtime", "secret"],
+        });
+    }
+
+    protected override toActionVariant(data?: SingleCheckActionVariantData): SingleCheckActionVariant {
+        return new CreateForgeryActionVariant(this, data);
+    }
+}
+
+const action = new CreateForgeryAction();
+
+export { action, createForgery as legacy };

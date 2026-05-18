@@ -1,0 +1,13 @@
+import { SimpleAction } from "@actor/actions/index.ts";
+
+const takeCover = new SimpleAction({
+    cost: 1,
+    description: "PF2E.Actions.TakeCover.Description",
+    effect: `Compendium.${SYSTEM_ID}.other-effects.I9lfZUiCwMiGogVi`, // Effect: Cover
+    img: `systems/${SYSTEM_ID}/icons/conditions-2/status_acup.webp`,
+    name: "PF2E.Actions.TakeCover.Title",
+    section: "basic",
+    slug: "take-cover",
+});
+
+export { takeCover };

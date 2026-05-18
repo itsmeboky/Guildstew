@@ -1,0 +1,58 @@
+{
+    "_id": "l9sm9MVVzWlx010m",
+    "img": "icons/magic/unholy/projectile-helix-blood-red.webp",
+    "name": "Effect: Consumed by Bloodlust",
+    "system": {
+        "description": {
+            "value": "<p>You gain a +2 status bonus to attacks and damage with your dagger, but are stupefied 2.</p>"
+        },
+        "duration": {
+            "expiry": null,
+            "sustained": false,
+            "unit": "unlimited",
+            "value": -1
+        },
+        "level": {
+            "value": 20
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Pathfinder #206: Bring the House Down"
+        },
+        "rules": [
+            {
+                "key": "FlatModifier",
+                "selector": [
+                    "dagger-attack-roll",
+                    "dagger-damage"
+                ],
+                "type": "status",
+                "value": 2
+            },
+            {
+                "alterations": [
+                    {
+                        "mode": "override",
+                        "property": "badge-value",
+                        "value": 2
+                    }
+                ],
+                "inMemoryOnly": true,
+                "key": "GrantItem",
+                "uuid": "Compendium.pf2e.conditionitems.Item.Stupefied"
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

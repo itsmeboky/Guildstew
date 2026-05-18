@@ -1,0 +1,19 @@
+<form autocomplete="off">
+    <ul class="speeds">
+        {{#each choices as |choice key|}}
+            <li>
+                <label>
+                    <input type="checkbox" name="{{key}}" {{checked choice.selected}} {{disabled choice.disabled}} />
+                    {{localize choice.label}}
+                </label>
+                <input type="number" name="{{key}}" value="{{choice.value}}" placeholder="0" {{disabled choice.disabled}} />
+            </li>
+        {{/each}}
+    </ul>
+
+    <footer>
+        <button type="submit" class="trait-footer">
+            <i class="fa-regular fa-floppy-disk"></i>{{localize "DOCUMENT.Update" type=(localize documentType)}}
+        </button>
+    </footer>
+</form>

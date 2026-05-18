@@ -1,0 +1,45 @@
+<section class="sidebar major">
+    <header>{{localize "PF2E.Kingmaker.WorkSites.Label"}}</header>
+    <section class="work-sites">
+        {{#each commodities as |commodity|}}
+            <div class="row">
+                <label class="value">
+                    <span data-tooltip="{{commodity.workSites.description}}">{{commodity.workSites.label}}</span>
+                    <input type="number" value="{{commodity.workSites.value}}" name="resources.workSites.{{commodity.type}}.value" />
+                </label>
+                {{#if commodity.workSites.hasResource}}
+                    <label class="resource">
+                        <span data-tooltip="{{localize "PF2E.Kingmaker.WorkSites.Resource"}}">2x</span>
+                        <input type="number" value="{{commodity.workSites.resource}}" name="resources.workSites.{{commodity.type}}.resource" />
+                    </label>
+                {{/if}}
+            </div>
+        {{/each}}
+    </section>
+
+    <header class="army-header">
+        {{localize "PF2E.Kingmaker.Kingdom.ArmyConsumption"}}
+        <span class="consumption">{{kingdom.consumption.army}}</span>
+    </header>
+    <section class="armies">
+        {{#each armies as |army|}}
+            <div class="army">
+                {{{army.link}}}
+                <span class="{{army.consumption.adjustmentClass}}">{{army.consumption.value}}</span>
+            </div>
+        {{/each}}
+    </section>
+</section>
+<section class="content major">
+    <header>
+        {{localize "PF2E.Kingmaker.Settlement.Header"}}
+        <button type="button" data-action="add-settlement">
+            <i class="fa-solid fa-fw fa-plus"></i>{{localize "PF2E.AddShortLabel"}}
+        </button>
+    </header>
+    <ol class="directory-list settlement-list">
+        {{#each settlements as |settlement|}}
+            {{> (resolvePath "templates/actors/party/kingdom/partials/settlement.hbs") settlement=settlement }}
+        {{/each}}
+    </ol>
+</section>

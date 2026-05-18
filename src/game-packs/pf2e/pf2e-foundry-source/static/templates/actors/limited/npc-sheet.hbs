@@ -1,0 +1,55 @@
+<form autocomplete="off">
+    <div class="sidebar">
+        <div class="image-container">
+            <img
+                class="profile-img"
+                src="{{actor.img}}"
+                {{#if editable}}data-edit="img"{{/if}}
+                alt="{{actor.name}}"
+            />
+            <a class="hover-icon" data-action="show-image" data-tooltip="SIDEBAR.CharArt"><i class="fa-solid fa-image fa-fw"></i></a>
+        </div>
+
+        <div class="side-bar-section effects">
+            <div class="side-bar-section-header">
+                <div class="side-bar-label">
+                    <i class="fa-solid fa-circle-half-stroke"></i>
+                    <h4>{{localize "PF2E.EffectsLabel"}}</h4>
+                </div>
+            </div>
+            <div class="side-bar-section-content">
+                <div class="effects-list inventory-list">
+                    {{#each document.conditions.active as |condition index|}}
+                        <div class="item item-name effect" title="{{condition.name}}" data-item-id="{{condition._id}}" data-action-index="{{index}}">
+                            <a class="item-image" data-action="item-to-chat" style="background-image: url({{condition.img}})"></a>
+                        </div>
+                    {{/each}}
+                    {{#each document.itemTypes.effect as |effect|}}
+                        {{#if @first}}<div class="separator"></div>{{/if}}
+                        <div class="item effect" title="{{effect.name}}" data-item-id="{{effect._id}}">
+                            <a
+                                class="item-image"
+                                data-action="item-to-chat"
+                                style="background-image: url({{effect.img}})"
+                            ><i class="fa-solid fa-message"></i></a>
+                        </div>
+                    {{/each}}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="npc-body">
+        <header class="npc-sheet-header">
+            <div class="name flexrow">
+                <span class="non-editable name-value">{{actor.name}}</span>
+            </div>
+            <div class="description flexrow" >{{data.details.blurb}}</div>
+        </header>
+        <hr />
+        <section class="sheet-body">
+            <div class="public-notes">
+                {{{enrichedContent.publicNotes}}}
+            </div>
+        </section>
+    </div>
+</form>

@@ -1,0 +1,10 @@
+<div>
+    <h4><img src="{{unidentified.img}}" height="24" width="24" /> {{unidentified.name}}</h4>
+</div>
+<div data-visibility="gm">{{identifiedName}}</div>
+
+<p>{{localize "PF2E.identification.PostSkillsToChatText"}}</p>
+
+{{#each skills as |dc slug|}}
+    <p>[[/act {{@root.action}} dc={{dc}} stat={{slug}} show-dc=gm item={{@root.uuid}}]]</p>
+{{/each}}

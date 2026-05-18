@@ -1,0 +1,60 @@
+<li class="action item" data-item-id="{{action.id}}" data-uuid="{{action.uuid}}"
+    data-item-summary-id="action-{{action.id}}">
+    <a class="icon item-image framed" data-action="item-to-chat">
+        <img src="{{action.img}}" />
+        <i class="fa-solid fa-message"></i>
+    </a>
+
+    <h4 class="name">
+        <a data-action="toggle-summary">{{action.name}}</a>
+        <div class="toggles" data-tooltip-direction="UP">
+            {{#each action.toggles as |toggle|}}
+                <button
+                    type="button"
+                    class="{{toggle.classes}}{{#if toggle.selected}} selected{{/if}}"
+                    data-tooltip="{{toggle.tooltip}}"
+                    data-action="toggle-trait"
+                    data-trait="{{toggle.trait}}"
+                ><i class="fa-solid fa-fw fa-{{toggle.icon}}"></i></button>
+            {{/each}}
+        </div>
+    </h4>
+
+    <div class="button-group">
+        {{#if action.usable}}
+            <button type="button" class="use-action" data-action="use-action">
+                <span>{{localize "PF2E.Action.Use"}}</span>
+                <span class="action-glyph">{{action.glyph}}</span>
+            </button>
+        {{/if}}
+    </div>
+
+    {{#if action.frequency}}
+        <div class="frequency">
+            <input type="number" value="{{action.frequency.value}}" data-item-id="{{action.id}}" data-item-property="system.frequency.value" />
+            <span>
+                /
+                {{action.frequency.max}}
+                {{localize "PF2E.Frequency.per"}}
+                {{localize (lookup @root.frequencies action.frequency.per)}}
+            </span>
+        </div>
+    {{/if}}
+
+    {{#if (and action.exploration (or action.exploration.active @root.document.parties.size))}}
+        <button type="button" class="activate {{#if action.exploration.active}}active{{/if}}" data-action="toggle-exploration">
+            {{localize "PF2E.Actor.Character.Active"}}
+        </button>
+    {{/if}}
+
+    <div class="item-controls" data-tooltip-direction="UP">
+        {{#if @root.editable}}
+            <a data-action="edit-item" data-tooltip="PF2E.EditItemTitle"><i class="fa-solid fa-fw fa-edit"></i></a>
+            {{#unless action.feat~}}
+                <a data-action="delete-item" data-tooltip="PF2E.DeleteItemTitle"><i class="fa-solid fa-fw fa-trash"></i></a>
+            {{~/unless}}
+        {{/if}}
+    </div>
+
+    <div class="item-summary" hidden="hidden"></div>
+</li>

@@ -1,0 +1,104 @@
+<form autocomplete="off">
+    <h2>{{localize "PF2E.TravelSpeed.PartySpeed"}}</h2>
+    <table>
+        <tbody>
+            <tr>
+                <th>{{localize "PF2E.TravelSpeed.Name"}}</th>
+                <th>{{localize "PF2E.Actor.Speed.Label"}}</th>
+                <th>{{localize "PF2E.TravelSpeed.ExplorationActivity"}}</th>
+                <th>{{localize "PF2E.TravelSpeed.DetectionMode"}}</th>
+                <th>{{localize "PF2E.TravelSpeed.ExplorationSpeed"}}</th>
+            </tr>
+            {{#each actors}}
+                <tr>
+                    <td>{{name}}</td>
+                    <td class="centered"><input class="speed-input" name="actors.{{@index}}.speed" type="number" value="{{speed}}" data-dtype="Number"> {{localize "PF2E.TravelSpeed.FeetAcronym"}}</td>
+                    <td class="centered">
+                        <select name="actors.{{@index}}.explorationActivity">
+                            {{selectOptions ../explorationActivityOptions selected=explorationActivity localize=true}}
+                        </select>
+                    </td>
+                    <td class="centered">
+                        <select name="actors.{{@index}}.detectionMode" {{#unless requiresDetectionMode}}hidden{{/unless}}>
+                            {{selectOptions ../detectionModeOptions selected=actor.detectionMode localize=true}}
+                        </select>
+                    </td>
+                    <td>{{explorationSpeed}} {{localize "PF2E.TravelSpeed.FeetAcronym"}}</td>
+                </tr>
+            {{/each}}
+        </tbody>
+    </table>
+    <div class="form-group">
+        <label>{{localize "PF2E.TravelSpeed.HustleMinutes"}}</label>
+        <input name="hustleMinutes" value="{{hustleMinutes}}" type="number" data-dtype="Number">
+    </div>
+    <h2>{{localize "PF2E.TravelSpeed.Journey"}}</h2>
+    <div class="form-group">
+        <label>{{localize "PF2E.TravelSpeed.Distance"}}</label>
+        <div class="journey-input">
+            <input name="distance" value="{{distance}}" type="number" data-dtype="Number">
+            <select name="distanceUnit">
+                {{selectOptions distanceUnitOptions selected=distanceUnit localize=true}}
+            </select>
+            <select name="terrain">
+                {{selectOptions terrainOptions selected=terrain localize=true}}
+            </select>
+        </div>
+    </div>
+    <div class="form-group">
+        <label>{{localize "PF2E.TravelSpeed.HoursPerDay"}}</label>
+        <input name="hoursPerDay" value="{{hoursPerDay}}" type="number" data-dtype="Number">
+    </div>
+    <div>
+        <table>
+            <tbody>
+                <tr>
+                    <th>{{localize "PF2E.TravelSpeed.NormalTerrain"}}</th>
+                    <th>{{localize "PF2E.TravelSpeed.DifficultTerrain"}}</th>
+                    <th>{{localize "PF2E.TravelSpeed.GreaterDifficultTerrain"}}</th>
+                </tr>
+                <tr>
+                    <td class="fraction-input">
+                        <select name="normalTerrainSlowdown.denominator" data-dtype="Number">
+                            {{selectOptions oneToFour selected=normalTerrainSlowdown.denominator}}
+                        </select>
+                        <span class="fraction-separator">/</span>
+                        <select name="normalTerrainSlowdown.numerator" data-dtype="Number">
+                            {{selectOptions oneToFour selected=normalTerrainSlowdown.numerator}}
+                        </select>
+                    </td>
+                    <td class="fraction-input">
+                        <select name="difficultTerrainSlowdown.denominator" data-dtype="Number">
+                            {{selectOptions oneToFour selected=difficultTerrainSlowdown.denominator}}
+                        </select>
+                        <span class="fraction-separator">/</span>
+                        <select name="difficultTerrainSlowdown.numerator" data-dtype="Number">
+                            {{selectOptions oneToFour selected=difficultTerrainSlowdown.numerator}}
+                        </select>
+                    </td>
+                    <td class="fraction-input">
+                        <select name="greaterDifficultTerrainSlowdown.denominator" data-dtype="Number">
+                            {{selectOptions oneToFour selected=greaterDifficultTerrainSlowdown.denominator}}
+                        </select>
+                        <span class="fraction-separator">/</span>
+                        <select name="greaterDifficultTerrainSlowdown.numerator" data-dtype="Number">
+                            {{selectOptions oneToFour selected=greaterDifficultTerrainSlowdown.numerator}}
+                        </select>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+</form>
+<h2>{{localize "PF2E.Actor.Speed.Label"}}</h2>
+<table>
+    <tbody>
+        <tr>
+            <th>{{localize "PF2E.TravelSpeed.PartySpeed"}}</th>
+            <th>{{localize "PF2E.TravelSpeed.TravelDuration"}}</th>
+        </tr>
+        <tr>
+            <td class="centered">{{partySpeedInFeet}} {{localize "PF2E.TravelSpeed.Feet"}}</td>
+            <td class="centered">{{#if travelDuration.weeks}}{{travelDuration.weeks}} {{localize "PF2E.TravelSpeed.Weeks"}}, {{/if}}{{#if travelDuration.days}}{{travelDuration.days}} {{localize "PF2E.TravelSpeed.Days"}}, {{/if}}{{pad travelDuration.hours 2 "0"}}:{{pad travelDuration.minutes 2 "0"}} {{localize "PF2E.TravelSpeed.Hours"}}</td>
+        </tr>
+    </tbody>
+</table>

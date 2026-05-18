@@ -1,0 +1,60 @@
+<li class="item action" data-action-index="{{index}}" data-item-type="melee" data-item-id="{{action.id}}" data-strike>
+    <h4>
+        {{#if action.description}}
+            <a class="name" data-action="toggle-summary">
+                <strong>{{localize action.attackType}}</strong>
+                <span class="action-glyph">{{action.glyph}}</span>
+                {{action.name}}
+            </a>
+        {{else}}
+            <span class="name">
+                <strong>{{localize action.attackType}}</strong>
+                <span class="action-glyph">{{action.glyph}}</span>
+                {{action.name}}
+            </span>
+        {{/if}}
+
+        {{#if action.traitsAndTags}}
+            <span class="traits">
+                {{#each action.traitsAndTags as |trait|}}
+                    {{#if @first}}<span class="parenthesis">(</span><ul class="comma-separated">{{/if~}}
+                    <li{{#if trait.description}} data-tooltip="{{trait.description}}"{{/if}}>{{trait.label}}</li>
+                    {{~#if @last}}</ul><span class="parenthesis">)</span>{{/if}}
+                {{/each}}
+            </span>
+        {{/if}}
+    </h4>
+
+    <div class="controls">
+        {{#if @root.editable}}
+            <a data-action="edit-item" data-tooltip="CONTROLS.CommonEdit"><i class="fa-solid fa-fw fa-edit"></i></a>
+            <a data-action="delete-item" data-tooltip="Delete"><i class="fa-solid fa-fw fa-trash"></i></a>
+        {{/if}}
+    </div>
+
+    <div class="button-group">
+        <div class="subsection attack">
+            {{#each action.variants as |variant index|}}
+                <button type="button" class="attack-button" {{#if variant.breakdown}}data-tooltip="{{variant.breakdown}}"{{/if}} data-action="strike-attack" data-variant-index="{{index}}">{{variant.label}}</button>
+            {{/each}}
+        </div>
+        {{#if action.damageFormula}}
+            <div class="subsection damage">
+                <button type="button" data-action="strike-damage">{{action.damageFormula}}</button>
+                <button type="button" data-action="strike-critical">{{localize "PF2E.CriticalDamageLabel"}}</button>
+            </div>
+        {{/if}}
+    </div>
+
+    {{#if action.effects~}}
+        <div class="effects">
+            {{~localize "PF2E.Actor.AttackEffects.PlusList" list=action.effects~}}
+        </div>
+    {{~/if}}
+
+    {{#if action.description}}
+        <div class="item-summary">
+            {{{action.description}}}
+        </div>
+    {{/if}}
+</li>

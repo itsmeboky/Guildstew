@@ -1,0 +1,102 @@
+<div class="form-group">
+    <label>{{localize "PF2E.Category"}}</label>
+    <select name="system.category">
+        {{selectOptions categories selected=data.category localize=true}}
+    </select>
+</div>
+
+<div class="form-group">
+    <label for="{{fieldIdPrefix}}uses-value">{{localize "PF2E.Item.Consumable.Uses.Label"}}</label>
+    <div class="form-fields">
+        <input id="{{fieldIdPrefix}}uses-value" type="number" name="system.uses.value" value="{{data.uses.value}}" />
+        /
+        <input type="number" name="system.uses.max" value="{{data.uses.max}}" />
+    </div>
+</div>
+
+<div class="form-group">
+    <label for="{{fieldIdPrefix}}uses-auto-destroy">{{localize "PF2E.Item.Consumable.Uses.AutoDestroy"}}</label>
+    <input type="checkbox" name="system.uses.autoDestroy" id="{{fieldIdPrefix}}uses-auto-destroy" {{checked data.uses.autoDestroy}} />
+</div>
+
+{{#if canHaveDamageOrHealing}}
+    <div class="form-group damage">
+        <label for="{{fieldIdPrefix}}damage">{{localize "PF2E.Item.Consumable.Damage.Label"}}</label>
+        {{#if data.damage}}
+            <div class="form-fields">
+                <input type="text" name="system.damage.formula" id="{{fieldIdPrefix}}damage" value="{{data.damage.formula}}" />
+                <select name="system.damage.type">
+                     {{selectOptions @root.damageTypes selected=data.damage.type localize=true}}
+                </select>
+                <select class="kinds" name="system.damage.kind" {{disabled (not canHaveHealing)}}>
+                    {{selectOptions @root.damageKindOptions selected=data.damage.kind localize=true}}
+                </select>
+                <a data-action="remove-damage" data-tooltip="PF2E.DeleteShortLabel"><i class="fa-solid fa-trash"></i></a>
+            </div>
+        {{else}}
+            <button type="button" id="{{fieldIdPrefix}}damage" data-action="add-damage">
+                <i class="fa-regular fa-plus"></i>
+                {{localize "PF2E.AddShortLabel"}}
+            </button>
+        {{/if}}
+    </div>
+{{/if}}
+
+{{#unless (eq data.damage.kind "healing")}}
+    <div class="form-group stacked">
+        <label>
+            <span>{{localize "PF2E.Item.MaterialEffects.Label"}}</span>
+            <i class="fa-solid fa-circle-info" data-tooltip="PF2E.Item.MaterialEffects.Hint"></i>
+            {{#if editable}}
+                <a
+                    class="tag-selector"
+                    data-tag-selector="basic"
+                    data-title="PF2E.Item.MaterialEffects.Label"
+                    data-config-types="materialDamageEffects"
+                    data-property="system.material.effects"
+                ><i class="fa-solid fa-fw fa-edit"></i></a>
+            {{/if}}
+        </label>
+        <ul class="traits-list tags">
+            {{#each materialEffects as |material|}}
+                <li class="tag tag_material" data-slug="{{material.value}}">{{material.label}}</li>
+            {{/each}}
+        </ul>
+    </div>
+{{/unless}}
+
+{{#if embeddedSpell}}
+    <div class="form-group">
+        <label>{{localize "PF2E.Item.Consumable.Spell.Label"}}</label>
+        <div class="item-ref {{#unless embeddedSpell.uuid}}empty{{/unless}}">
+            {{#if embeddedSpell.uuid}}
+                <img src="{{embeddedSpell.img}}" />
+                <span class="name">{{embeddedSpell.name}}</span>
+                <span class="rank">{{ordinal embeddedSpell.rank}}</span>
+            {{else}}
+                {{localize "PF2E.Item.Consumable.Spell.Empty"}}
+            {{/if}}
+        </div>
+    </div>
+{{/if}}
+
+<div class="form-group stacked">
+    <label>
+        <span>{{localize "PF2E.Item.Physical.OtherTags.Label"}}</span>
+        <i class="fa-solid fa-circle-info" data-tooltip="PF2E.Item.Physical.OtherTags.Hint"></i>
+        {{#if editable}}
+            <a
+                class="tag-selector"
+                data-tag-selector="basic"
+                data-config-types="otherConsumableTags"
+                data-title="PF2E.Item.Physical.OtherTags.Label"
+                data-property="system.traits.otherTags"
+            ><i class="fa-solid fa-edit"></i></a>
+        {{/if}}
+    </label>
+    <ul class="traits-list tags">
+        {{#each otherTags as |tag|}}
+            <li class="tag tag_alt">{{tag.label}}</li>
+        {{/each}}
+    </ul>
+</div>

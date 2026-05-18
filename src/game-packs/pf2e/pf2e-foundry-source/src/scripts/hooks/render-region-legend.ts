@@ -1,0 +1,21 @@
+import { htmlQuery } from "@util";
+
+export const RenderRegionLegend = {
+    listen: (): void => {
+        Hooks.on("renderRegionLegend", async (_app, html) => {
+            const environmentTypes = canvas.scene?.flags[SYSTEM_ID].environmentTypes;
+            if (!environmentTypes || environmentTypes.length === 0) return;
+
+            const template = await (async () => {
+                const markup = await fa.handlebars.renderTemplate(
+                    `systems/${SYSTEM_ID}/templates/scene/region-legend-partial.hbs`,
+                    { environmentTypes: environmentTypes.map((t) => _loc(CONFIG.PF2E.environmentTypes[t])) },
+                );
+                const tempElem = document.createElement("div");
+                tempElem.innerHTML = markup;
+                return tempElem.firstElementChild instanceof HTMLTemplateElement ? tempElem.firstElementChild : null;
+            })();
+            htmlQuery(html, "div.region-filters")?.before(...(template?.content.children ?? []));
+        });
+    },
+};

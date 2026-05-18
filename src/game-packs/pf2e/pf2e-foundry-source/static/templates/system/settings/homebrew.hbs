@@ -1,0 +1,174 @@
+<form autocomplete="off" spellcheck="false">
+    <nav class="sheet-tabs tabs">
+        <a class="item" data-tab="languages">{{localize "PF2E.Actor.Creature.Language.Plural"}}</a>
+        <a class="item" data-tab="campaign">{{localize "PF2E.SETTINGS.Homebrew.Tabs.Campaign"}}</a>
+        <a class="item" data-tab="traits">{{localize "PF2E.SETTINGS.Homebrew.Tabs.Traits"}}</a>
+        <a class="item" data-tab="taxonomies">{{localize "PF2E.SETTINGS.Homebrew.Tabs.Taxonomies"}}</a>
+        <a class="item" data-tab="damage">{{localize "PF2E.SETTINGS.Homebrew.Tabs.Damage"}}</a>
+    </nav>
+
+    <section class="tab" data-tab="languages"></div>
+        <div class="form-group setting">
+            <label for="{{options.id}}-languages">{{localize settings.languages.name}}</label>
+            <div class="form-fields">
+                <input type="text" name="languages" class="homebrew pf2e-tagify" data-dtype="JSON" value="{{json settings.languages.value}}">
+            </div>
+            <p class="hint">{{localize settings.languages.hint}}</p>
+        </div>
+
+        <div class="form-group common-language">
+            <label for="{{options.id}}-common">{{localize "PF2E.SETTINGS.Homebrew.Languages.CommonLanguage.Label"}}</label>
+            <select id="{{options.id}}-common" data-common-language>
+                {{selectOptions languageRarities.common selected=languageRarities.commonLanguage valueAttr="slug" blank="" localize=true}}
+            </select>
+            <p class="hint">{{localize "PF2E.SETTINGS.Homebrew.Languages.CommonLanguage.Hint"}}</p>
+        </div>
+
+        <div class="form-group stacked language-rarity common">
+            <label class="tags paizo-style"></label>
+            <ul class="tags light" data-languages data-rarity="common">
+                {{#each languageRarities.common as |language|~}}
+                    <li class="tag" data-slug="{{language.slug}}" data-rarity="common">{{language.label}}</li>
+                {{~/each}}
+            </ul>
+        </div>
+
+        <div class="form-group stacked language-rarity uncommon">
+            <label class="tags paizo-style"></label>
+            <ul class="tags light" data-languages data-rarity="uncommon">
+                {{#each languageRarities.uncommon as |language|~}}
+                    <li class="tag" data-slug="{{language.slug}}" data-rarity="uncommon">{{language.label}}</li>
+                {{~/each}}
+            </ul>
+        </div>
+
+        <div class="form-group stacked language-rarity rare">
+            <label class="tags paizo-style"></label>
+            <ul class="tags light" data-languages data-rarity="rare">
+                {{#each languageRarities.rare as |language|~}}
+                    <li class="tag" data-slug="{{language.slug}}" data-rarity="rare">{{language.label}}</li>
+                {{~/each}}
+            </ul>
+        </div>
+
+        <div class="form-group stacked language-rarity secret">
+            <label class="tags paizo-style"></label>
+            <ul class="tags light" data-languages data-rarity="secret">
+                {{#each languageRarities.secret as |language|~}}
+                    <li class="tag" data-slug="{{language.slug}}" data-rarity="secret">{{language.label}}</li>
+                {{~/each}}
+            </ul>
+        </div>
+
+        <div class="form-group stacked language-rarity unavailable">
+            <label>{{localize "PF2E.SETTINGS.Homebrew.Languages.Rarities.Unavailable.Label"}}</label>
+            <p class="hint">{{localize "PF2E.SETTINGS.Homebrew.Languages.Rarities.Unavailable.Hint"}}</p>
+            <ul class="tags light" data-languages data-rarity="unavailable">
+                {{#each languageRarities.unavailable as |language|~}}
+                    <li class="tag" data-slug="{{language.slug}}" data-rarity="unavailable">{{language.label}}</li>
+                {{~/each}}
+            </ul>
+        </div>
+    </section>
+
+    <section class="tab" data-tab="campaign">
+        {{#each settings as |setting|}}
+            {{#if (eq setting.tab "campaign")}}
+                {{> (resolvePath "templates/system/settings/basic-setting.hbs") setting=setting}}
+            {{/if}}
+        {{/each}}
+    </section>
+
+    <section class="tab" data-tab="traits"></div>
+        <p class="hint">{{localize "PF2E.SETTINGS.Homebrew.Instructions"}}</p>
+
+        {{#each settings as |setting|}}
+            {{#if (eq setting.tab "traits")~}}
+                <div class="form-group setting">
+                    <label for="{{options.id}}-{{setting.key}}">{{localize setting.name}}</label>
+                    <div class="form-fields">
+                        <input
+                            type="text"
+                            name="{{setting.key}}"
+                            id="{{options.id}}-{{setting.key}}"
+                            class="homebrew pf2e-tagify"
+                            data-dtype="JSON"
+                            value="{{json setting.value}}"
+                        />
+                    </div>
+                    <p class="hint">{{localize setting.hint}}</p>
+                </div>
+            {{~/if}}
+        {{/each}}
+    </section>
+
+    <section class="tab" data-tab="taxonomies"></div>
+    <p class="hint">{{localize "PF2E.SETTINGS.Homebrew.Instructions"}}</p>
+
+    {{#each settings as |setting|}}
+        {{#if (eq setting.tab "taxonomies")~}}
+            <div class="form-group setting">
+                <label for="{{options.id}}-{{setting.key}}">{{localize setting.name}}</label>
+                <div class="form-fields">
+                    <input
+                        type="text"
+                        name="{{setting.key}}"
+                        id="{{options.id}}-{{setting.key}}"
+                        class="homebrew pf2e-tagify"
+                        data-dtype="JSON"
+                        value="{{json setting.value}}"
+                    />
+                </div>
+                <p class="hint">{{localize setting.hint}}</p>
+            </div>
+        {{~/if}}
+    {{/each}}
+</section>
+
+
+    <section class="tab" data-tab="damage">
+        {{#if customDamageTypes}}
+            <table class="damage-types">
+                <tr>
+                    <th>{{localize "PF2E.SETTINGS.Homebrew.DamageTypes.Label"}}</th>
+                    <th>{{localize "PF2E.Slug"}}</th>
+                    <th>{{localize "PF2E.Category"}}</th>
+                    <th>{{localize "PF2E.SETTINGS.Homebrew.DamageTypes.Icon"}}</th>
+                    <th class="delete-cell"></th>
+                </tr>
+                {{#each customDamageTypes as |type idx|}}
+                    <tr>
+                        <td>
+                            <input name="damageTypes.{{idx}}.label" type="text" required minlength="3" value="{{type.label}}" />
+                        </td>
+                        <td>{{type.slug}}</td>
+                        <td>
+                            <select name="damageTypes.{{idx}}.category">
+                                {{selectOptions @root.damageCategories selected=type.category blank="" localize=true}}
+                            </select>
+                        </td>
+                        <td>
+                            <div class="icon-preview">
+                                <input name="damageTypes.{{idx}}.icon" type="text" value="{{type.icon}}" />
+                                <i class="fa-solid fa-fw {{type.icon}}"></i>
+                            </div>
+                        </td>
+                        <td class="delete-cell"><i class="fa-solid fa-times" data-action="damage-delete" data-idx="{{idx}}"></i></td>
+                    </tr>
+                {{/each}}
+            </table>
+        {{/if}}
+        <button type="button" data-action="damage-add">
+            <i class="fa-regular fa-plus"></i>{{localize "PF2E.SETTINGS.Homebrew.DamageTypes.Add"}}
+        </button>
+    </section>
+
+    <footer>
+        <button type="submit">
+            <i class="fa-regular fa-floppy-disk"></i> {{localize "SETTINGS.Save"}}
+        </button>
+        <button type="reset">
+            <i class="fa-solid fa-arrow-rotate-left"></i> {{localize "PF2E.SETTINGS.ResetChanges"}}
+        </button>
+    </footer>
+</form>

@@ -1,0 +1,10 @@
+{{#if isApex}}
+    <div class="form-group">
+        <label>{{localize "PF2E.Actor.Character.Attribute.Apex"}}</label>
+        <div class="form-fields">
+            <select name="system.apex.attribute">
+                {{selectOptions attributes selected=item.system.apex.attribute localize=true}}
+            </select>
+        </div>
+    </div>
+{{/if}}

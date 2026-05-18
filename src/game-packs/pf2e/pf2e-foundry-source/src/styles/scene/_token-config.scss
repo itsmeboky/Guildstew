@@ -1,0 +1,10 @@
+.application.token-config {
+    label.managed-by-rbv,
+    fieldset.size label,
+    fieldset.size span.label {
+        flex: 0;
+        flex-wrap: nowrap;
+        gap: 0.25rem;
+        white-space: nowrap;
+    }
+}

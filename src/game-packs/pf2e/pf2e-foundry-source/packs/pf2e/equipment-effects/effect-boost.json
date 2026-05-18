@@ -1,0 +1,78 @@
+{
+    "_id": "YVm3rVSAYxoSrOvb",
+    "img": "systems/pf2e/icons/abilities/blue-battery.webp",
+    "name": "Effect: Boost",
+    "system": {
+        "description": {
+            "value": "<p>The weapon is currently boosted.</p>"
+        },
+        "duration": {
+            "expiry": "turn-end",
+            "sustained": false,
+            "unit": "rounds",
+            "value": 1
+        },
+        "fromSpell": false,
+        "level": {
+            "value": 1
+        },
+        "publication": {
+            "license": "ORC",
+            "remaster": true,
+            "title": "Starfinder Player Core"
+        },
+        "rules": [
+            {
+                "choices": {
+                    "ownedItems": true,
+                    "predicate": [
+                        {
+                            "or": [
+                                {
+                                    "and": [
+                                        "self:type:npc",
+                                        "item:type:melee"
+                                    ]
+                                },
+                                {
+                                    "and": [
+                                        "self:type:character",
+                                        "item:type:weapon"
+                                    ]
+                                }
+                            ]
+                        },
+                        "item:trait:boost"
+                    ],
+                    "types": [
+                        "melee",
+                        "weapon"
+                    ]
+                },
+                "flag": "weapon",
+                "rollOption": "item:boosted",
+                "key": "ChoiceSet",
+                "prompt": "PF2E.SpecificRule.Prompt.Weapon",
+                "predicate": [
+                    {
+                        "or": [
+                            "self:type:npc",
+                            "self:type:character"
+                        ]
+                    }
+                ]
+            }
+        ],
+        "start": {
+            "initiative": null,
+            "value": 0
+        },
+        "tokenIcon": {
+            "show": true
+        },
+        "traits": {
+            "value": []
+        }
+    },
+    "type": "effect"
+}

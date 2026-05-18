@@ -1,0 +1,21 @@
+<li class="directory-item entry document {{@root.documentCls}} flexrow" data-entry-id="{{id}}">
+    {{#if thumbnail~}}
+        <img class="thumbnail" src="{{thumbnail}}" alt="{{name}}" loading="lazy" />
+    {{~/if}}
+    <a class="entry-name ellipsis" data-action="activateEntry">
+        <span>{{name}}</span>
+        {{~#if (isNumber level)}}
+            <span class="item-level">
+                {{~#if (eq type "feat")}}
+                    {{localize "PF2E.Item.Feat.LevelN" level=level}}</span>
+                {{~else if (eq type "spell")}}
+                    {{localize "PF2E.Item.Spell.LevelN" level=level}}</span>
+                {{~else if (eq type "effect")}}
+                    {{localize "PF2E.LevelN" level=level}}</span>
+                {{~else}}
+                    {{localize "PF2E.Item.Physical.LevelLabel" level=level}}</span>
+                {{/if~}}
+            </span>
+        {{/if}}
+    </a>
+</li>
