@@ -94,7 +94,7 @@ const StepIdentity = ({ data, update, setData }) => {
     if (!setData) return;
     const base = {
       ...data,
-      catchphrase: '', alliesEnemies: '',
+      catchphrase: '',
       classFeats: {}, ancestryFeats: {}, skillFeats: {}, generalFeats: {},
       skillIncreases: {}, skillTiers: {}, languages: [],
       cantripsKnown: [], rank1Known: [], spellsByRank: {}, spellbook: [],
@@ -308,16 +308,29 @@ const StepIdentity = ({ data, update, setData }) => {
           />
         </div>
 
-        <div>
-          <label className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase block mb-1.5">Allies & Enemies <span className="text-pf-stone normal-case lowercase tracking-normal italic">(optional)</span></label>
-          <textarea
-            rows={2}
-            value={data.alliesEnemies || ''}
-            onChange={e => update({ alliesEnemies: e.target.value })}
-            placeholder="Family, mentors, rivals, debts owed and owed-to."
-            className="w-full bg-pf-bg-elev border border-pf-brass-dim/30 px-4 py-2.5 text-pf-bone font-body text-sm
-                       focus:border-pf-brass focus:outline-none transition-all resize-none"
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase block mb-1.5">Allies <span className="text-pf-stone normal-case lowercase tracking-normal italic">(optional)</span></label>
+            <textarea
+              rows={2}
+              value={systemData.allies || ''}
+              onChange={e => setSystemField('allies', e.target.value)}
+              placeholder="Family, mentors, debts owed-to..."
+              className="w-full bg-pf-bg-elev border border-pf-brass-dim/30 px-4 py-2.5 text-pf-bone font-body text-sm
+                         focus:border-pf-brass focus:outline-none transition-all resize-none"
+            />
+          </div>
+          <div>
+            <label className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase block mb-1.5">Enemies <span className="text-pf-stone normal-case lowercase tracking-normal italic">(optional)</span></label>
+            <textarea
+              rows={2}
+              value={systemData.enemies || ''}
+              onChange={e => setSystemField('enemies', e.target.value)}
+              placeholder="Rivals, debts owed, grudges..."
+              className="w-full bg-pf-bg-elev border border-pf-brass-dim/30 px-4 py-2.5 text-pf-bone font-body text-sm
+                         focus:border-pf-brass focus:outline-none transition-all resize-none"
+            />
+          </div>
         </div>
 
       </div>
