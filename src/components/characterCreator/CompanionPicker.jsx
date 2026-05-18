@@ -29,9 +29,18 @@ import { resolveCompanionContext } from "@/config/companionCatalog";
  * character has `needs_gm_approval: true` on a companion entry.
  */
 export default function CompanionPicker({ characterData, updateCharacterData, campaignId }) {
+  // Pact Boon (Warlock L3) lives on feature_choices keyed by
+  // `${class}-${level}-${featureName}` — see ClassFeaturesStep.
+  // resolveCompanionContext needs it to know whether to surface the
+  // Pact-of-the-Chain familiar upgrades; without it the trigger used
+  // to fall back to characterData.subclass (always the Patron name)
+  // and Chain warlocks never got their imp / pseudodragon / quasit /
+  // sprite options.
+  const pactBoon = characterData?.feature_choices?.['Warlock-3-Pact Boon'] || null;
   const ctx = resolveCompanionContext({
     className: characterData.class,
     subclass: characterData.subclass,
+    pactBoon,
   });
   const current = Array.isArray(characterData.companions) && characterData.companions[0]
     ? characterData.companions[0]
