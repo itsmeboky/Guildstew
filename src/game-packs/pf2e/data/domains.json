@@ -1,0 +1,22 @@
+[
+  { "id": "air",         "name": "Air",         "focusSpell": "Pushing Gust",          "desc": "Wind, lightning, and sky. Initial focus: Pushing Gust." },
+  { "id": "ambition",    "name": "Ambition",    "focusSpell": "Blind Ambition",        "desc": "Goals, drive, and the will to climb. Initial focus: Blind Ambition." },
+  { "id": "cities",      "name": "Cities",      "focusSpell": "Face in the Crowd",     "desc": "Urban life, trade, and crowds. Initial focus: Face in the Crowd." },
+  { "id": "death",       "name": "Death",       "focusSpell": "Touch of Undeath",      "desc": "Endings, undeath, and the afterlife. Initial focus: Touch of Undeath." },
+  { "id": "destruction", "name": "Destruction", "focusSpell": "Cry of Destruction",    "desc": "Wrath, ruin, and unmaking. Initial focus: Cry of Destruction." },
+  { "id": "fate",        "name": "Fate",        "focusSpell": "Read Fate",             "desc": "Prophecy, omens, and luck. Initial focus: Read Fate." },
+  { "id": "fire",        "name": "Fire",        "focusSpell": "Fire Ray",              "desc": "Flame, heat, and the forge. Initial focus: Fire Ray." },
+  { "id": "freedom",     "name": "Freedom",     "focusSpell": "Unimpeded Stride",      "desc": "Liberation, escape, and resistance. Initial focus: Unimpeded Stride." },
+  { "id": "healing",     "name": "Healing",     "focusSpell": "Soothing Words",        "desc": "Restoration, mercy, and care. Initial focus: Soothing Words." },
+  { "id": "knowledge",   "name": "Knowledge",   "focusSpell": "Scholarly Recollection","desc": "Lore, secrets, and learning. Initial focus: Scholarly Recollection." },
+  { "id": "magic",       "name": "Magic",       "focusSpell": "Magic's Vessel",        "desc": "Arcane mystery and bound power. Initial focus: Magic's Vessel." },
+  { "id": "might",       "name": "Might",       "focusSpell": "Athletic Rush",         "desc": "Strength, prowess, and martial victory. Initial focus: Athletic Rush." },
+  { "id": "moon",        "name": "Moon",        "focusSpell": "Moonbeam",              "desc": "Tides, night, and lycanthropic curses. Initial focus: Moonbeam." },
+  { "id": "nature",      "name": "Nature",      "focusSpell": "Vibrant Thorns",        "desc": "Wilderness, growth, and the seasons. Initial focus: Vibrant Thorns." },
+  { "id": "protection",  "name": "Protection",  "focusSpell": "Practiced Defender",    "desc": "Defense, sanctuary, and warding. Initial focus: Practiced Defender." },
+  { "id": "sun",         "name": "Sun",         "focusSpell": "Dazzling Flash",        "desc": "Light, day, and revelation. Initial focus: Dazzling Flash." },
+  { "id": "trickery",    "name": "Trickery",    "focusSpell": "Sudden Shift",          "desc": "Deception, misdirection, and shadows. Initial focus: Sudden Shift." },
+  { "id": "truth",       "name": "Truth",       "focusSpell": "Word of Truth",         "desc": "Honesty, integrity, and revelation. Initial focus: Word of Truth." },
+  { "id": "tyranny",     "name": "Tyranny",     "focusSpell": "Command",               "desc": "Domination, oppression, and rule. Initial focus: Command." },
+  { "id": "water",       "name": "Water",       "focusSpell": "Tidal Surge",           "desc": "Oceans, rivers, and rain. Initial focus: Tidal Surge." }
+]

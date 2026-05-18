@@ -1,0 +1,34 @@
+{
+  "acolyte": {
+    "loreOptions": ["Specific deity Lore", "Specific temple Lore", "Religious history Lore"],
+    "skillFeat": { "name": "Student of the Canon", "desc": "Attempt Religion checks to Recall Knowledge about your or any other faith. Critical failures only fail normally." }
+  },
+  "criminal": {
+    "loreOptions": ["Underworld Lore", "Thieves' guild Lore", "Specific city Lore"],
+    "skillFeat": { "name": "Experienced Smuggler", "desc": "When you Conceal an item, treat your Stealth as if you rolled 10 or higher." }
+  },
+  "scout": {
+    "loreOptions": ["Wilderness Lore", "Specific region Lore"],
+    "skillFeat": { "name": "Forager", "desc": "Subsist in wild on a success provides food for yourself + 2 (or 4 on crit success)." }
+  },
+  "soldier": {
+    "loreOptions": ["Warfare Lore", "Specific battle/campaign Lore"],
+    "skillFeat": { "name": "Intimidating Glare", "desc": "You can Demoralize with a fierce stare without needing a shared language." }
+  },
+  "noble": {
+    "loreOptions": ["Genealogy Lore", "Heraldry Lore", "Specific noble house Lore"],
+    "skillFeat": { "name": "Courtly Graces", "desc": "Use Society to pretend to be a noble or navigate courtly etiquette." }
+  },
+  "sailor": {
+    "loreOptions": ["Sailing Lore", "Specific sea/ocean Lore"],
+    "skillFeat": { "name": "Underwater Marauder", "desc": "Not flat-footed in water; can use bludgeoning/slashing weapons normally underwater." }
+  },
+  "scholar": {
+    "loreOptions": ["Academia Lore", "Specific field of study Lore"],
+    "skillFeat": { "name": "Assurance", "desc": "In a chosen skill, treat checks as if you rolled a 10 (no roll)." }
+  },
+  "hermit": {
+    "loreOptions": ["Wilderness Lore", "Specific terrain Lore"],
+    "skillFeat": { "name": "Dubious Knowledge", "desc": "On a failed Recall Knowledge, learn one true and one false piece of info." }
+  }
+}

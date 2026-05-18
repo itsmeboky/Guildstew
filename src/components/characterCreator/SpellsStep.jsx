@@ -28,6 +28,7 @@ import {
   abilityModifier,
   SPELLCASTING_ABILITY,
 } from "@/components/dnd5e/dnd5eRules";
+import { getSpellsCompletion } from "@/components/characterCreator/spellsCompletion";
 import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
 import { Primer } from "@/components/characterCreator/chrome/Primer";
 import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
@@ -95,6 +96,10 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
     characterData.class,
     characterData.multiclasses || [],
     fullSpellsList,
+    // Subclass + level enable patron-expanded spell merging (e.g.
+    // a Fiend warlock at L1 gains burning hands / command even
+    // though they aren't on the base warlock list).
+    { subclass: characterData.subclass, level: characterData.level },
   );
   const selectedSpells = characterData.spells || {};
   const pactSlots = getPactSlots(
@@ -108,10 +113,9 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
     characterData.multiclasses || [],
   );
 
-  // Per-spell-level SLOT count (drives both the counter chip cap and the
-  // "X / Y picked" headline inside each chapter). Pact Magic slots merge
-  // into the matching spell-level row for the SLOTS display only — they
-  // used to drive the pick cap too, which conflated non-fungible pools.
+  // Per-spell-level SLOT count for the slots-info chip / displays.
+  // Pact Magic slots merge into the matching spell-level row for the
+  // SLOTS display.
   const getSlotsForLevelKey = (levelKey) => {
     let slots = spellSlots[levelKey] || 0;
     if (pactSlots && levelKey.startsWith("level")) {
@@ -120,6 +124,41 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
     }
     return slots;
   };
+
+  // Picker caps — single source of truth shared with the Next-button
+  // validator (spellsCompletion.js). Spells slots count CASTS / DAY,
+  // which is a different quantity from how many spells the class
+  // KNOWS / PREPARES / has in their SPELLBOOK. Capping the picker by
+  // slot count (the old behavior) left every prepared / spellbook /
+  // multi-known caster stuck on this step at L1 — e.g. Wizard caps
+  // at 2 (L1 slots) but the validator wanted 6 (spellbook), and Bard
+  // caps at 2 but the validator wanted 4 (spells known). Routing
+  // both sides through getSpellsCompletion() keeps them aligned.
+  const completion = getSpellsCompletion(characterData);
+  const cantripCap = completion.cantripCap || 0;
+  const nonCantripCap = completion.nonCantripCap || 0;
+  const cantripsSelected = Array.isArray(selectedSpells.cantrips)
+    ? selectedSpells.cantrips.length : 0;
+  const totalNonCantripSelected = Object.entries(selectedSpells)
+    .reduce((s, [k, v]) =>
+      k === "cantrips" ? s : s + (Array.isArray(v) ? v.length : 0), 0);
+
+  // Label for the non-cantrip pool chip — matches caster type so the
+  // player sees "Spellbook" for Wizard, "Spells prepared" for prepared
+  // casters, "Spells known" for known casters. Multiclass / brewery
+  // falls back to a neutral "Spells" label.
+  const nonCantripLabel = (() => {
+    if (completion.brewery) return 'Spells';
+    const multis = Array.isArray(characterData.multiclasses)
+      ? characterData.multiclasses.filter((mc) => mc?.class && mc?.level)
+      : [];
+    if (multis.length > 0) return 'Spells';
+    const entry = SPELLS_KNOWN_TABLE[characterData.class];
+    if (!entry) return 'Spells';
+    if (entry.type === 'spellbook') return 'Spellbook';
+    if (entry.type === 'prepared') return 'Spells prepared';
+    return 'Spells known';
+  })();
 
   const getSpellDetail = (spellName) => {
     const hardcoded = hardcodedSpellDetails[spellName];
@@ -142,7 +181,10 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
   const spellcastingClass = resolveSpellcastingClass(characterData);
 
   // ── Empty state — non-caster ────────────────────────────────
-  if ((spellSlots.cantrips || 0) === 0 && (spellSlots.level1 || 0) === 0) {
+  // Empty when the player has no spells to PICK (cantrip and
+  // non-cantrip caps both zero). Paladin / Ranger at L1 in 2014 land
+  // here (half-casters start at L2), as do all martial classes.
+  if (cantripCap === 0 && nonCantripCap === 0) {
     return (
       <div>
         <StepHeader kicker="Chapter VI" title="The Arcane" />
@@ -161,7 +203,10 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
 
   // Recommended pre-fill — picks the recommended list for the primary
   // class (falling through to the first multiclass with a recommendation
-  // table), capped per spell level by the current slot count.
+  // table). Cantrips fill up to cantripCap; leveled picks share the
+  // single non-cantrip pool (filled L1 → L9 in order until nonCantripCap
+  // is exhausted) so the resulting selection lines up with what the
+  // validator will accept.
   const useRecommended = () => {
     let recommended = null;
     let recommendedClass = null;
@@ -179,11 +224,20 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
     }
     if (!recommended) return;
     const newSpells = { ...selectedSpells };
-    Object.keys(spellSlots).forEach((levelKey) => {
-      const slotsForLevel = spellSlots[levelKey] || 0;
-      if (slotsForLevel > 0 && Array.isArray(recommended[levelKey])) {
-        newSpells[levelKey] = recommended[levelKey].slice(0, slotsForLevel);
+    if (Array.isArray(recommended.cantrips)) {
+      newSpells.cantrips = recommended.cantrips.slice(0, cantripCap);
+    }
+    let remaining = nonCantripCap;
+    const leveledKeys = Object.keys(spellSlots).filter((k) => k !== 'cantrips');
+    leveledKeys.forEach((levelKey) => {
+      if (remaining <= 0) {
+        newSpells[levelKey] = [];
+        return;
       }
+      const recList = Array.isArray(recommended[levelKey]) ? recommended[levelKey] : [];
+      const take = recList.slice(0, remaining);
+      newSpells[levelKey] = take;
+      remaining -= take.length;
     });
     updateCharacterData({ spells: newSpells });
     setShowRecommendation(recommendedClass);
@@ -194,15 +248,19 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
   const isPactPrimary = characterData.class === 'Warlock';
   const spellAbility = SPELLCASTING_ABILITY[headerClassName];
 
-  // Build the rendered chapters: cantrips first, then any non-empty
-  // leveled chapter up to the character's max spell level.
+  // Build the rendered chapters: cantrips first, then any leveled
+  // chapter the character could cast at. Cantrips render only when
+  // the class actually knows cantrips (cantripCap > 0) — slots alone
+  // don't grant cantrips. Leveled chapters render whenever the
+  // character has slots for them (so the player can spend their
+  // single non-cantrip pool across L1+ pickers as appropriate).
   const renderableLevels = Object.keys(spellSlots).filter((levelKey) => {
+    if (levelKey === 'cantrips') return cantripCap > 0;
+    if (nonCantripCap <= 0) return false;
     const slots = getSlotsForLevelKey(levelKey);
     if (slots <= 0) return false;
-    if (levelKey !== 'cantrips') {
-      const numericLevel = parseInt(levelKey.replace('level', ''), 10);
-      if (numericLevel > maxSpellLevel) return false;
-    }
+    const numericLevel = parseInt(levelKey.replace('level', ''), 10);
+    if (numericLevel > maxSpellLevel) return false;
     return true;
   });
 
@@ -238,24 +296,24 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
         }}
       >
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {renderableLevels.map((levelKey) => {
-            const slots = getSlotsForLevelKey(levelKey);
-            const currentCount = (selectedSpells[levelKey] || []).length;
-            return (
-              <CounterChip
-                key={levelKey}
-                label={levelKey === 'cantrips' ? 'Cantrips' : `Level ${levelKey.replace('level', '')} spells`}
-                current={currentCount}
-                max={slots}
-                color={levelKey === 'cantrips' ? 'purple' : 'orange'}
-                tip={
-                  levelKey === 'cantrips'
-                    ? tipFor('spell_cantrip')
-                    : tipFor('spell_slots')
-                }
-              />
-            );
-          })}
+          {cantripCap > 0 && (
+            <CounterChip
+              label="Cantrips"
+              current={cantripsSelected}
+              max={cantripCap}
+              color="purple"
+              tip={tipFor('spell_cantrip')}
+            />
+          )}
+          {nonCantripCap > 0 && (
+            <CounterChip
+              label={nonCantripLabel}
+              current={totalNonCantripSelected}
+              max={nonCantripCap}
+              color="orange"
+              tip={tipFor('spell_slots')}
+            />
+          )}
           {pactSlots && (
             <CounterChip
               label="Pact slots"
@@ -310,11 +368,18 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
           </div>
         ) : (
           renderableLevels.map((levelKey, idx) => {
-            const slots = getSlotsForLevelKey(levelKey);
             const currentSelected = selectedSpells[levelKey] || [];
             const spellsForLevel = availableSpells[levelKey] || [];
             const cantrip = levelKey === 'cantrips';
             const accent = headingAccent(levelKey);
+            // Cantrips have their own pool; leveled picks share a
+            // single non-cantrip pool across L1..L9, so the cap that
+            // matters here is the GLOBAL cap, not per-level slots.
+            const sectionCap = cantrip ? cantripCap : nonCantripCap;
+            const totalForSection = cantrip
+              ? cantripsSelected
+              : totalNonCantripSelected;
+            const sectionMaxReached = totalForSection >= sectionCap;
             return (
               <React.Fragment key={levelKey}>
                 {idx > 0 && <FleurDivider />}
@@ -323,8 +388,9 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
                   className="italic-serif"
                   style={{ textAlign: 'center', color: 'var(--text-dim)', fontSize: 14, marginBottom: 18 }}
                 >
-                  {currentSelected.length}/{slots} picked ·{' '}
-                  {cantrip ? 'cast unlimited times' : 'each cast spends one slot'}
+                  {cantrip
+                    ? `${cantripsSelected}/${cantripCap} picked · cast unlimited times`
+                    : `${currentSelected.length} picked here · ${totalNonCantripSelected}/${nonCantripCap} ${nonCantripLabel.toLowerCase()}`}
                 </div>
 
                 {spellsForLevel.length === 0 ? (
@@ -340,13 +406,14 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
                       spells={spellsForLevel}
                       picked={currentSelected}
                       cantrip={cantrip}
-                      maxReached={currentSelected.length >= slots}
+                      maxReached={sectionMaxReached}
                       getSpellDetail={getSpellDetail}
                       onToggle={(name) => {
-                        const next = currentSelected.includes(name)
-                          ? currentSelected.filter((s) => s !== name)
-                          : [...currentSelected, name];
-                        if (!currentSelected.includes(name) && next.length > slots) return;
+                        const isAdd = !currentSelected.includes(name);
+                        if (isAdd && totalForSection >= sectionCap) return;
+                        const next = isAdd
+                          ? [...currentSelected, name]
+                          : currentSelected.filter((s) => s !== name);
                         updateCharacterData({
                           spells: { ...characterData.spells, [levelKey]: next },
                         });

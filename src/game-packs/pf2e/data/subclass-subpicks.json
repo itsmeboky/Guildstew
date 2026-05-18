@@ -1,0 +1,14 @@
+{
+  "animal": {
+    "label": "Animal Aspect",
+    "options": ["Ape", "Bear", "Bull", "Cat", "Deer", "Frog", "Shark", "Snake", "Wolf"]
+  },
+  "dragon": {
+    "label": "Dragon Type",
+    "options": ["Adamantine", "Conspirator", "Diabolic", "Empyreal", "Fortune", "Horned", "Mirage", "Omen"]
+  },
+  "spirit": {
+    "label": "Spirit Type",
+    "options": ["Ancestral", "Vengeful", "Wandering", "Wrathful"]
+  }
+}
