@@ -14,12 +14,14 @@ import {
   ANCESTRY_FEATS,
   ANCESTRY_FEAT_LEVELS,
 } from '../../data/index.js';
+import { getAncestryTip } from '../../content/ancestryTips.js';
 import { STEPS } from '../../config/steps.js';
 
 const StepAncestry = ({ data, update }) => {
   const selected = ANCESTRIES.find(a => a.id === data.ancestry) || ANCESTRIES[0];
   const heritages = HERITAGES_BY_ANCESTRY[selected.id] || [];
   const Icon = selected.icon;
+  const tipEntry = getAncestryTip(selected.id);
 
   // auto-select first ancestry on mount if none picked
   useEffect(() => {
@@ -50,7 +52,7 @@ const StepAncestry = ({ data, update }) => {
           <div className="col-span-12 md:col-span-4 flex flex-col gap-3 md:border-r md:border-pf-brass-dim/20 md:pr-6">
             {Icon && <Icon size={48} className="text-pf-brass" strokeWidth={1.2} />}
             <h3 className="font-display text-3xl text-pf-bone">{selected.name}</h3>
-            <ComplexityBadge level={selected.complexity} />
+            <ComplexityBadge level={tipEntry.complexity} />
             <p className="font-body text-sm text-pf-parchment leading-relaxed">{selected.description}</p>
           </div>
 
@@ -86,7 +88,7 @@ const StepAncestry = ({ data, update }) => {
           <div className="col-span-12 md:col-span-4">
             <SectionHeader>For New Players</SectionHeader>
             <p className="font-body text-sm text-pf-parchment leading-relaxed italic">
-              "{selected.tip}"
+              "{tipEntry.tip}"
             </p>
           </div>
         </div>
@@ -135,25 +137,27 @@ const StepAncestry = ({ data, update }) => {
                     <p className="font-display text-[10px] tracking-[0.2em] text-pf-brass uppercase mb-2">
                       Level {fLvl} Ancestry Feat
                     </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {featOptions.map(feat => {
-                        const active = picked === feat.name;
-                        return (
-                          <button
-                            key={feat.name}
-                            onClick={() => update({ ancestryFeats: { ...ancestryFeats, [fLvl]: feat.name } })}
-                            className={`relative p-3 bg-pf-bg-card border text-left transition-all
-                                        ${active ? 'border-pf-brass bg-pf-brass/5' : 'border-pf-brass-dim/30 hover:border-pf-brass-dim'}`}
-                          >
-                            {active && <CornerBrackets active />}
-                            <div className="flex items-baseline justify-between mb-1">
-                              <span className="font-display text-sm text-pf-bone">{feat.name}</span>
-                              <ThreeActionGlyph count={feat.actions} />
-                            </div>
-                            <p className="font-body text-[11px] text-pf-stone leading-snug">{feat.desc}</p>
-                          </button>
-                        );
-                      })}
+                    <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                      <div className="grid grid-cols-3 gap-3">
+                        {featOptions.map(feat => {
+                          const active = picked === feat.name;
+                          return (
+                            <button
+                              key={feat.name}
+                              onClick={() => update({ ancestryFeats: { ...ancestryFeats, [fLvl]: feat.name } })}
+                              className={`relative p-4 min-h-[120px] bg-pf-bg-card border text-left transition-all
+                                          ${active ? 'border-pf-brass bg-pf-brass/5' : 'border-pf-brass-dim/30 hover:border-pf-brass-dim'}`}
+                            >
+                              {active && <CornerBrackets active />}
+                              <div className="flex items-baseline justify-between mb-2 gap-2">
+                                <span className="font-display text-base text-pf-bone">{feat.name}</span>
+                                <ThreeActionGlyph count={feat.actions} />
+                              </div>
+                              <p className="font-body text-[13px] text-pf-stone leading-snug">{feat.desc}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                     {fLvl > 1 && (
                       <p className="text-[10px] text-pf-stone/70 font-body italic mt-1">

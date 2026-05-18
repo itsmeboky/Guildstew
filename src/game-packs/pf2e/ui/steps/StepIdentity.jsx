@@ -1,11 +1,16 @@
-// Step I — Who Walks Into the Story? (level + bio + house-rule toggles).
-// Verbatim from the PF2eCharacterForge prototype.
+// Step I — Who Walks Into the Story? (level + bio).
+//
+// House rules read from active campaign.system_data.variant_rules —
+// see CampaignSettings.jsx. Variant toggles (Free Archetype, Ancestry
+// Paragon, Voluntary Flaws, Proficiency w/o Level, Dual-Class,
+// Gradual Boosts) are campaign-scoped, not character-scoped.
 
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import GMWhisper from '../components/GMWhisper.jsx';
 import CornerBrackets from '../components/CornerBrackets.jsx';
 import PortraitUpload from '../components/PortraitUpload.jsx';
 import { LevelStat } from '../components/BottomBar.jsx';
+import { useAuth } from '@/lib/AuthContext';
 import {
   ANCESTRIES,
   HERITAGES_BY_ANCESTRY,
@@ -22,8 +27,28 @@ import {
 import { STEPS } from '../../config/steps.js';
 
 const StepIdentity = ({ data, update, setData }) => {
+  const { user } = useAuth();
   const level = data.level || 1;
   const setLevel = (n) => update({ level: Math.max(1, Math.min(20, n)) });
+
+  // Stable draft id for storage paths so portrait/token re-uploads
+  // overwrite the same key instead of accumulating orphans. Generated
+  // once per draft and persisted on the in-memory creator state.
+  const tempId = useMemo(() => {
+    if (data.tempId) return data.tempId;
+    return (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `pf2e-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }, [data.tempId]);
+
+  useEffect(() => {
+    if (!data.tempId) update({ tempId });
+  }, [tempId, data.tempId, update]);
+
+  const systemData = data.system_data || {};
+  const setSystemField = (key, value) => update({
+    system_data: { ...systemData, [key]: value },
+  });
 
   // Quick preview of what this level grants
   const classFeatCount = STANDARD_CLASS_FEAT_LEVELS.filter(l => l <= level).length;
@@ -69,7 +94,7 @@ const StepIdentity = ({ data, update, setData }) => {
     if (!setData) return;
     const base = {
       ...data,
-      catchphrase: '', edicts: '', anathema: '', alliesEnemies: '',
+      catchphrase: '',
       classFeats: {}, ancestryFeats: {}, skillFeats: {}, generalFeats: {},
       skillIncreases: {}, skillTiers: {}, languages: [],
       cantripsKnown: [], rank1Known: [], spellsByRank: {}, spellbook: [],
@@ -100,7 +125,7 @@ const StepIdentity = ({ data, update, setData }) => {
       'iconic-cleric': {
         ...base, name: 'Kyra', ancestry: 'human', heritage: 'skilled', background: 'acolyte',
         class: 'cleric', subclass: 'warpriest', classFeats: { 1: 'Domain Initiate' },
-        domain: 'sun', sanctification: 'holy', healHarmFont: 'heal',
+        domain: 'sun', healHarmFont: 'heal',
         trainedSkills: ['Religion', 'Medicine'],
         boostBatches: { 1: { Constitution: 1, Strength: 1, Charisma: 1 } },
         kitTaken: 'cleric',
@@ -186,12 +211,29 @@ const StepIdentity = ({ data, update, setData }) => {
       {/* Left: avatar + portrait */}
       <div className="col-span-12 md:col-span-4 space-y-4">
         <div className="grid grid-cols-2 gap-3 items-start">
-          <PortraitUpload value={data.avatar} onChange={v => update({ avatar: v })} label="Token Avatar" aspect="aspect-square" round />
+          <PortraitUpload
+            value={systemData.token_url}
+            onChange={v => setSystemField('token_url', v)}
+            label="Token Avatar"
+            aspect="aspect-square"
+            round
+            userId={user?.id}
+            tempId={tempId}
+            kind="token"
+          />
           <div className="text-[10px] text-pf-stone font-body leading-relaxed pt-6">
             Small circular image shown on maps and chat rolls. Crop tight to the face.
           </div>
         </div>
-        <PortraitUpload value={data.portrait} onChange={v => update({ portrait: v })} label="Full Portrait" aspect="aspect-[3/4]" />
+        <PortraitUpload
+          value={systemData.portrait_url}
+          onChange={v => setSystemField('portrait_url', v)}
+          label="Full Portrait"
+          aspect="aspect-[3/4]"
+          userId={user?.id}
+          tempId={tempId}
+          kind="portrait"
+        />
         <p className="text-[10px] text-pf-stone font-body leading-relaxed italic">
           Portrait shows on the character sheet and in scene panels. Upload yours, or generate one in the studio.
         </p>
@@ -266,92 +308,31 @@ const StepIdentity = ({ data, update, setData }) => {
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase block mb-1.5">Sanctification</label>
-            <select
-              value={data.sanctification || 'none'}
-              onChange={e => update({ sanctification: e.target.value })}
-              className="w-full bg-pf-bg-elev border border-pf-brass-dim/30 px-4 py-2.5 text-pf-bone font-body
-                         focus:border-pf-brass focus:outline-none transition-all"
-            >
-              <option value="none">None</option>
-              <option value="holy">Holy</option>
-              <option value="unholy">Unholy</option>
-            </select>
-            <p className="text-[10px] text-pf-stone italic mt-1">Replaces alignment. Required by some deities/classes.</p>
-          </div>
-          <div className="md:col-span-2">
-            <label className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase block mb-1.5">Edicts <span className="text-pf-stone normal-case lowercase tracking-normal italic">(what your character upholds)</span></label>
-            <input
-              value={data.edicts || ''}
-              onChange={e => update({ edicts: e.target.value })}
-              placeholder="Protect the helpless. Honor sworn debts. Never refuse a guest's hospitality."
+            <label className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase block mb-1.5">Allies <span className="text-pf-stone normal-case lowercase tracking-normal italic">(optional)</span></label>
+            <textarea
+              rows={2}
+              value={systemData.allies || ''}
+              onChange={e => setSystemField('allies', e.target.value)}
+              placeholder="Family, mentors, debts owed-to..."
               className="w-full bg-pf-bg-elev border border-pf-brass-dim/30 px-4 py-2.5 text-pf-bone font-body text-sm
-                         focus:border-pf-brass focus:outline-none transition-all"
+                         focus:border-pf-brass focus:outline-none transition-all resize-none"
+            />
+          </div>
+          <div>
+            <label className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase block mb-1.5">Enemies <span className="text-pf-stone normal-case lowercase tracking-normal italic">(optional)</span></label>
+            <textarea
+              rows={2}
+              value={systemData.enemies || ''}
+              onChange={e => setSystemField('enemies', e.target.value)}
+              placeholder="Rivals, debts owed, grudges..."
+              className="w-full bg-pf-bg-elev border border-pf-brass-dim/30 px-4 py-2.5 text-pf-bone font-body text-sm
+                         focus:border-pf-brass focus:outline-none transition-all resize-none"
             />
           </div>
         </div>
 
-        <div>
-          <label className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase block mb-1.5">Anathema <span className="text-pf-stone normal-case lowercase tracking-normal italic">(what your character refuses)</span></label>
-          <input
-            value={data.anathema || ''}
-            onChange={e => update({ anathema: e.target.value })}
-            placeholder="Never lie to a child. Never strike from behind. Never break bread with a slaver."
-            className="w-full bg-pf-bg-elev border border-pf-brass-dim/30 px-4 py-2.5 text-pf-bone font-body text-sm
-                       focus:border-pf-brass focus:outline-none transition-all"
-          />
-        </div>
-
-        <div>
-          <label className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase block mb-1.5">Allies & Enemies <span className="text-pf-stone normal-case lowercase tracking-normal italic">(optional)</span></label>
-          <textarea
-            rows={2}
-            value={data.alliesEnemies || ''}
-            onChange={e => update({ alliesEnemies: e.target.value })}
-            placeholder="Family, mentors, rivals, debts owed and owed-to."
-            className="w-full bg-pf-bg-elev border border-pf-brass-dim/30 px-4 py-2.5 text-pf-bone font-body text-sm
-                       focus:border-pf-brass focus:outline-none transition-all resize-none"
-          />
-        </div>
-
-        {/* House Rules / Optional Variants */}
-        <div className="border-t border-pf-brass-dim/20 pt-4 mt-2">
-          <label className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase block mb-2">House Rules <span className="text-pf-stone normal-case lowercase tracking-normal italic">(GM-toggled variants)</span></label>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {[
-              { id: 'freeArchetype',          label: 'Free Archetype',         desc: 'Bonus archetype feat at every even level — most-requested PF2e variant.' },
-              { id: 'ancestryParagon',        label: 'Ancestry Paragon',       desc: 'Ancestry feats at levels 1, 3, 7, 11, 15 (instead of 1, 5, 9, 13, 17).' },
-              { id: 'voluntaryFlaws',         label: 'Voluntary Flaws',        desc: 'Accept two extra ability flaws in exchange for one bonus boost.' },
-              { id: 'proficiencyWithoutLevel',label: 'Proficiency w/o Level',  desc: 'Drop level from proficiency math. Lower-magic feel.' },
-              { id: 'dualClass',              label: 'Dual-Class',             desc: 'Level two classes in parallel. High-power variant.' },
-              { id: 'gradualBoosts',          label: 'Gradual Ability Boosts', desc: 'Spread each batch of 4 boosts across 4 levels instead of one.' },
-            ].map(rule => {
-              const houseRules = data.houseRules || {};
-              const active = !!houseRules[rule.id];
-              return (
-                <button
-                  key={rule.id}
-                  onClick={() => update({ houseRules: { ...houseRules, [rule.id]: !active } })}
-                  className={`relative text-left p-3 bg-pf-bg-elev border transition-all
-                              ${active ? 'border-pf-brass bg-pf-brass/5' : 'border-pf-brass-dim/30 hover:border-pf-brass-dim'}`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-display text-xs text-pf-bone tracking-wider">{rule.label}</span>
-                    <span className={`font-mono text-[10px] ${active ? 'text-pf-sage' : 'text-pf-stone'}`}>
-                      {active ? '✓ ON' : '○ OFF'}
-                    </span>
-                  </div>
-                  <p className="font-body text-[10px] text-pf-stone leading-snug">{rule.desc}</p>
-                </button>
-              );
-            })}
-          </div>
-          <p className="font-body text-[10px] text-pf-stone italic mt-2">
-            These propagate to the Boosts and Class steps automatically. Toggle with your GM before play.
-          </p>
-        </div>
       </div>
     </div>
   </div>

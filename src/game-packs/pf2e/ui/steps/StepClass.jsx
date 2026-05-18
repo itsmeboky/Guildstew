@@ -1,5 +1,19 @@
 // Step IV — Path of Power (class, subclass, sub-pick, deity, proficiencies,
 // class feats, optional companion/familiar). Verbatim from the prototype.
+//
+// Post-Step-3 crash diagnosis (2026-05-18):
+//   Uncaught TypeError: Cannot read properties of undefined (reading 'fortitude')
+//     at StepClass (StepClass.jsx:82)
+//
+// Root cause: the prototype expected a flattened class shape
+// ({ perception, saves: {...}, firstFeats: [...] }) but the SRD importer
+// emits the Foundry-native nested shape ({ proficiencies: { perception,
+// saves: {...}, ... } }) and no `firstFeats` array. The Identity-step
+// template loader still writes slug ids (`'fighter'`, `'wizard'`, ...)
+// while CLASSES uses Foundry random ids, so the `.find` fallback drops
+// every templated character onto Alchemist — making the crash universal.
+// Bindings below now read through `selected.proficiencies?.…` and
+// guard `firstFeats` with an empty-array fallback.
 
 import React, { useEffect } from 'react';
 import { Sparkles, Crown } from 'lucide-react';
@@ -25,6 +39,9 @@ import { STEPS } from '../../config/steps.js';
 const StepClass = ({ data, update, openDeityModal }) => {
   const selected = CLASSES.find(c => c.id === data.class) || CLASSES[0];
   const Icon = selected.icon;
+  const prof = selected.proficiencies || {};
+  const saves = prof.saves || {};
+  const firstFeats = selected.firstFeats || [];
 
   useEffect(() => {
     if (!data.class) update({ class: CLASSES[0].id });
@@ -60,7 +77,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
               </div>
             </div>
             <ComplexityBadge level={selected.complexity} />
-            <p className="font-body text-sm text-pf-parchment leading-relaxed my-4">{selected.blurb}</p>
+            <p className="font-body text-sm text-pf-parchment leading-relaxed my-4">{selected.blurb || selected.desc}</p>
             {selected.spellcasting && (
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles size={14} className="text-pf-brass" />
@@ -77,10 +94,10 @@ const StepClass = ({ data, update, openDeityModal }) => {
           <div className="col-span-12 lg:col-span-4">
             <SectionHeader>Initial Proficiencies</SectionHeader>
             <div className="space-y-1.5 text-xs font-body">
-              <ProfRow label="Perception" tier={selected.perception} />
-              <ProfRow label="Fortitude" tier={selected.saves.fortitude} />
-              <ProfRow label="Reflex" tier={selected.saves.reflex} />
-              <ProfRow label="Will" tier={selected.saves.will} />
+              <ProfRow label="Perception" tier={prof.perception} />
+              <ProfRow label="Fortitude" tier={saves.fortitude} />
+              <ProfRow label="Reflex" tier={saves.reflex} />
+              <ProfRow label="Will" tier={saves.will} />
             </div>
             <div className="mt-4 grid grid-cols-2 gap-1.5 text-[10px] font-body">
               <span className="font-display tracking-[0.15em] text-pf-brass uppercase col-span-2 mt-2">Hit Points / Level</span>
@@ -164,7 +181,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
                         key={fLvl}
                         fLvl={fLvl}
                         picked={classFeats[fLvl]}
-                        classOptions={selected.firstFeats}
+                        classOptions={firstFeats}
                         dedicationOptions={CLASS_DEDICATIONS.filter(d => d.forbidden !== selected.id)}
                         dedicationLocked={!canTakeNewDedication && (!classFeats[fLvl] || !dedicationNames.includes(classFeats[fLvl]))}
                         onPick={(name) => update({ classFeats: { ...classFeats, [fLvl]: name } })}
