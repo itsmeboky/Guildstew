@@ -12,12 +12,28 @@ import MechanicRow from '../components/MechanicRow.jsx';
 import { BACKGROUNDS, BACKGROUND_DETAILS } from '../../data/index.js';
 import { STEPS } from '../../config/steps.js';
 
+const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+const firstSentence = (text) => {
+  if (!text) return '';
+  const trimmed = text.trim();
+  const idx = trimmed.search(/[.!?](\s|$)/);
+  return idx > -1 ? trimmed.slice(0, idx + 1) : trimmed;
+};
+
 const StepBackground = ({ data, update }) => {
   const selected = BACKGROUNDS.find(b => b.id === data.background) || BACKGROUNDS[0];
 
   useEffect(() => {
     if (!data.background) update({ background: BACKGROUNDS[0].id });
   }, []);
+
+  const flavor = selected.desc || '';
+  // Until curated GM tips ship per background, fall back to the
+  // first sentence of the SRD description so the whisper panel
+  // never renders blank.
+  const gmWhisper = selected.tip || firstSentence(flavor);
+  const trainedSkill = (selected.trainedSkills || [])[0];
+  const grantedFeat = selected.grantedFeat || selected.feat;
 
   return (
     <div>
@@ -44,11 +60,11 @@ const StepBackground = ({ data, update }) => {
               <h3 className="font-display text-3xl text-pf-bone">{selected.name}</h3>
               <ComplexityBadge level={selected.complexity} />
             </div>
-            <p className="font-body text-base text-pf-parchment italic leading-relaxed mb-4">"{selected.flavor}"</p>
+            <p className="font-body text-sm text-pf-parchment italic leading-relaxed mb-4">{flavor}</p>
 
             <div className="mt-6">
               <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-2">GM's Whisper</p>
-              <p className="font-body text-sm text-pf-parchment leading-relaxed italic">{selected.tip}</p>
+              <p className="font-body text-sm text-pf-parchment leading-relaxed italic">{gmWhisper}</p>
             </div>
           </div>
 
@@ -56,10 +72,9 @@ const StepBackground = ({ data, update }) => {
           <div className="col-span-12 md:col-span-7">
             <SectionHeader>Grants</SectionHeader>
             <div className="space-y-3 text-sm font-body">
-              <MechanicRow label="Ability Boosts" value={selected.boosts.join(' · ')} />
-              <MechanicRow label="Trained Skill" value={selected.skill} highlight />
-              <MechanicRow label="Lore Skill" value={selected.lore} />
-              <MechanicRow label="Skill Feat" value={selected.feat} highlight />
+              <MechanicRow label="Ability Boosts" value={(selected.boosts || []).map(cap).join(' · ')} />
+              <MechanicRow label="Trained Skill" value={cap(trainedSkill)} highlight />
+              <MechanicRow label="Skill Feat" value={grantedFeat} highlight />
             </div>
           </div>
         </div>
