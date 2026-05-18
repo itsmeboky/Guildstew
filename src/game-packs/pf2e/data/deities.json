@@ -1,0 +1,200 @@
+[
+  {
+    "id": "forge-father",
+    "name": "Forge-Father",
+    "title": "the Anvil Beneath the Mountain",
+    "areasOfConcern": ["craft", "endurance", "oaths", "stone"],
+    "edicts": [
+      "Honor every promise you make, no matter how small",
+      "Repair what others would discard",
+      "Pass craft and lore to apprentices who have earned it"
+    ],
+    "anathema": [
+      "Break an oath sworn in your name",
+      "Destroy a masterwork that could be mended"
+    ],
+    "divineFont": "heal",
+    "sanctification": { "allowed": ["holy"], "default": "holy" },
+    "divineSkill": "Crafting",
+    "favoredWeapon": "warhammer",
+    "domains": ["earth", "fire", "might"],
+    "alternateDomains": ["protection", "truth"],
+    "divineSpells": {
+      "1": "Mystic Armor",
+      "2": "Enlarge",
+      "3": "Earthbind",
+      "4": "Weapon Storm",
+      "5": "Wall of Fire",
+      "6": "Repulsion",
+      "7": "Magnificent Mansion",
+      "8": "Earthquake",
+      "9": "Unfettering Strike"
+    },
+    "desc": "Patron of smiths, miners, and oathkeepers. Worshipped wherever hammer meets anvil and where families remember the names of those who built their walls. Forge-Father's clergy bind wounds in temple-forges and refuse no honest commission."
+  },
+  {
+    "id": "veiled-dancer",
+    "name": "Veiled Dancer",
+    "title": "the Step Between Worlds",
+    "areasOfConcern": ["dreams", "mystery", "moonlight", "thresholds"],
+    "edicts": [
+      "Honor the threshold — never refuse a guest at your door, nor cross one uninvited",
+      "Preserve secrets entrusted to you",
+      "Find the truth no one is meant to see"
+    ],
+    "anathema": [
+      "Betray a secret kept under oath",
+      "Drag a hidden truth into the noonday sun without cause"
+    ],
+    "divineFont": "heal",
+    "sanctification": { "allowed": ["holy", "unholy"], "default": null },
+    "divineSkill": "Stealth",
+    "favoredWeapon": "rapier",
+    "domains": ["moon", "trickery", "fate"],
+    "alternateDomains": ["dreams", "secrecy"],
+    "divineSpells": {
+      "1": "Mirror Image",
+      "2": "Invisibility",
+      "3": "Hypnotize",
+      "4": "Veil",
+      "5": "Mind Probe",
+      "6": "Mislead",
+      "7": "Visions of Danger",
+      "8": "Scintillating Pattern",
+      "9": "Weird"
+    },
+    "desc": "The Veiled Dancer walks the seams between waking and dreaming, public face and private heart. Mystics, scouts, diplomats, and thieves invoke the Dancer when they must move unseen — but the Dancer's true demand is honesty with oneself."
+  },
+  {
+    "id": "eternal-flame",
+    "name": "Eternal Flame",
+    "title": "the Lamp That Does Not Gutter",
+    "areasOfConcern": ["dawn", "healing", "perseverance", "truth"],
+    "edicts": [
+      "Bring light to dark places",
+      "Heal the wounded without weighing their merit",
+      "Speak truth even when it costs you"
+    ],
+    "anathema": [
+      "Refuse aid to the wounded out of malice or convenience",
+      "Knowingly spread a lie that harms the innocent"
+    ],
+    "divineFont": "heal",
+    "sanctification": { "allowed": ["holy"], "default": "holy" },
+    "divineSkill": "Religion",
+    "favoredWeapon": "longsword",
+    "domains": ["sun", "healing", "truth"],
+    "alternateDomains": ["fire", "ambition"],
+    "divineSpells": {
+      "1": "Heal",
+      "2": "See the Unseen",
+      "3": "Searing Light",
+      "4": "Fire Shield",
+      "5": "Flame Strike",
+      "6": "Sunburst",
+      "7": "Solid Fog",
+      "8": "Heroism",
+      "9": "Foresight"
+    },
+    "desc": "The Eternal Flame is the lamp every traveler hopes to see at the end of the road. Healers, watchwomen, judges, and field medics carry its rites. Its clergy run free infirmaries in the worst quarters of any city that will tolerate them."
+  },
+  {
+    "id": "pale-hunter",
+    "name": "Pale Hunter",
+    "title": "the Stalker in Winter",
+    "areasOfConcern": ["the hunt", "death", "patience", "the wild"],
+    "edicts": [
+      "Take only what you can use — never more",
+      "Show respect for the worthy prey, in life and in death",
+      "Let the slow death of winter teach the proud"
+    ],
+    "anathema": [
+      "Waste a kill",
+      "Hunt a creature that has surrendered or that you cannot kill cleanly"
+    ],
+    "divineFont": "either",
+    "sanctification": { "allowed": ["holy", "unholy"], "default": null },
+    "divineSkill": "Survival",
+    "favoredWeapon": "composite longbow",
+    "domains": ["death", "moon", "nature"],
+    "alternateDomains": ["destruction", "fate"],
+    "divineSpells": {
+      "1": "Phantom Pain",
+      "2": "Animal Form",
+      "3": "Wall of Thorns",
+      "4": "Freezing Rain",
+      "5": "Cone of Cold",
+      "6": "Vampiric Exsanguination",
+      "7": "Plane Shift",
+      "8": "Frostbite",
+      "9": "Wail of the Banshee"
+    },
+    "desc": "The Pale Hunter does not bargain. Rangers, undertakers, executioners, and grieving widows leave offerings at frostbitten cairns. The Hunter teaches that every end is owed — only the manner of arriving is yours to choose."
+  },
+  {
+    "id": "tidemother",
+    "name": "Tidemother",
+    "title": "She Who Returns",
+    "areasOfConcern": ["the sea", "renewal", "storms", "family"],
+    "edicts": [
+      "Return what the tide brings",
+      "Shelter those swept off course",
+      "Honor the rhythm — what is given will be drawn back"
+    ],
+    "anathema": [
+      "Refuse a shipwrecked stranger food and dry ground",
+      "Pollute or poison a body of fresh water"
+    ],
+    "divineFont": "heal",
+    "sanctification": { "allowed": ["holy"], "default": "holy" },
+    "divineSkill": "Nature",
+    "favoredWeapon": "trident",
+    "domains": ["water", "healing", "nature"],
+    "alternateDomains": ["moon", "freedom"],
+    "divineSpells": {
+      "1": "Soothing Mist",
+      "2": "Mist",
+      "3": "Aqueous Orb",
+      "4": "Hydraulic Torrent",
+      "5": "Crashing Wave",
+      "6": "Vital Beacon",
+      "7": "Field of Life",
+      "8": "Tsunami",
+      "9": "Storm of Vengeance"
+    },
+    "desc": "Sailors, midwives, river-folk, and farmers downstream of any flood-prone valley pray to the Tidemother. Her clergy run the lighthouses, the freshwater wells, and the orphanages — and they remember every face the tide once brought them."
+  },
+  {
+    "id": "shadowed-throne",
+    "name": "Shadowed Throne",
+    "title": "the Crown Beneath the Mountain",
+    "areasOfConcern": ["dominion", "hierarchy", "secrets of state", "the long game"],
+    "edicts": [
+      "Honor the chain of command — above you and below you",
+      "Repay loyalty with loyalty, and treachery in kind",
+      "Make the law serve those it was written to serve"
+    ],
+    "anathema": [
+      "Break a binding contract you signed in good faith",
+      "Squander an inherited authority through neglect"
+    ],
+    "divineFont": "harm",
+    "sanctification": { "allowed": ["unholy"], "default": "unholy" },
+    "divineSkill": "Society",
+    "favoredWeapon": "mace",
+    "domains": ["tyranny", "cities", "death"],
+    "alternateDomains": ["ambition", "knowledge"],
+    "divineSpells": {
+      "1": "Command",
+      "2": "Enlarge",
+      "3": "Paralyze",
+      "4": "Suggestion",
+      "5": "Crushing Despair",
+      "6": "Dominate",
+      "7": "Eclipse Burst",
+      "8": "Discern Location",
+      "9": "Cataclysm"
+    },
+    "desc": "The Shadowed Throne does not require love. Magistrates, tax-collectors, infernal lawyers, and dynastic schemers find its rites where the law has teeth. Its temples are built into courthouses and counting-houses; its priests are the ones who write the contracts no one reads but everyone signs."
+  }
+]
