@@ -14,7 +14,7 @@ import { quickPick, generatePortrait } from "@/api/aiClient";
 import { uploadFile } from "@/utils/uploadFile";
 import { trackEvent } from "@/utils/analytics";
 import { useAuth } from "@/lib/AuthContext";
-import RaceStep from "@/components/characterCreator/RaceStep";
+import IdentityStep from "@/components/characterCreator/IdentityStep";
 import ClassStep from "@/components/characterCreator/ClassStep";
 
 const BACKGROUNDS = [
@@ -141,7 +141,7 @@ export default function QuickPickFlow({ onBack, onComplete, campaignId, busy = f
     return (
       <Shell title="Quick Pick — Step 1 of 3" subtitle="Pick your race." onBack={onBack}>
         <div className="bg-[#1E2430]/70 rounded-2xl p-4 border border-[#2A3441] max-h-[65vh] overflow-y-auto custom-scrollbar">
-          <RaceStep characterData={draft} updateCharacterData={updateDraft} />
+          <IdentityStep characterData={draft} updateCharacterData={updateDraft} />
         </div>
         <StepFooter
           backLabel="Back"
