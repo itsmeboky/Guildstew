@@ -1,0 +1,26 @@
+{
+  "common": [
+    "Common",
+    "Chthonian",
+    "Draconic",
+    "Dwarven",
+    "Elven",
+    "Empyrean",
+    "Fey",
+    "Gnomish",
+    "Goblin",
+    "Halfling",
+    "Jotun",
+    "Orcish",
+    "Sakvroth",
+    "Thalassic"
+  ],
+  "byAncestry": {
+    "human":    { "base": ["Common"] },
+    "dwarf":    { "base": ["Common", "Dwarven"] },
+    "elf":      { "base": ["Common", "Elven"] },
+    "orc":      { "base": ["Common", "Orcish"] },
+    "halfling": { "base": ["Common", "Halfling"] },
+    "gnome":    { "base": ["Common", "Fey", "Gnomish"] }
+  }
+}
