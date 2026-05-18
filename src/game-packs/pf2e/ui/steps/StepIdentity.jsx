@@ -94,7 +94,7 @@ const StepIdentity = ({ data, update, setData }) => {
     if (!setData) return;
     const base = {
       ...data,
-      catchphrase: '', edicts: '', anathema: '', alliesEnemies: '',
+      catchphrase: '', alliesEnemies: '',
       classFeats: {}, ancestryFeats: {}, skillFeats: {}, generalFeats: {},
       skillIncreases: {}, skillTiers: {}, languages: [],
       cantripsKnown: [], rank1Known: [], spellsByRank: {}, spellbook: [],
@@ -125,7 +125,7 @@ const StepIdentity = ({ data, update, setData }) => {
       'iconic-cleric': {
         ...base, name: 'Kyra', ancestry: 'human', heritage: 'skilled', background: 'acolyte',
         class: 'cleric', subclass: 'warpriest', classFeats: { 1: 'Domain Initiate' },
-        domain: 'sun', sanctification: 'holy', healHarmFont: 'heal',
+        domain: 'sun', healHarmFont: 'heal',
         trainedSkills: ['Religion', 'Medicine'],
         boostBatches: { 1: { Constitution: 1, Strength: 1, Charisma: 1 } },
         kitTaken: 'cleric',
@@ -304,44 +304,6 @@ const StepIdentity = ({ data, update, setData }) => {
             onChange={e => update({ catchphrase: e.target.value })}
             placeholder="&quot;Tides take you.&quot;  /  &quot;For the queen — and her gold.&quot;"
             className="w-full bg-pf-bg-elev border border-pf-brass-dim/30 px-4 py-2.5 text-pf-bone font-body italic
-                       focus:border-pf-brass focus:outline-none transition-all"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <label className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase block mb-1.5">Sanctification</label>
-            <select
-              value={data.sanctification || 'none'}
-              onChange={e => update({ sanctification: e.target.value })}
-              className="w-full bg-pf-bg-elev border border-pf-brass-dim/30 px-4 py-2.5 text-pf-bone font-body
-                         focus:border-pf-brass focus:outline-none transition-all"
-            >
-              <option value="none">None</option>
-              <option value="holy">Holy</option>
-              <option value="unholy">Unholy</option>
-            </select>
-            <p className="text-[10px] text-pf-stone italic mt-1">Replaces alignment. Required by some deities/classes.</p>
-          </div>
-          <div className="md:col-span-2">
-            <label className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase block mb-1.5">Edicts <span className="text-pf-stone normal-case lowercase tracking-normal italic">(what your character upholds)</span></label>
-            <input
-              value={data.edicts || ''}
-              onChange={e => update({ edicts: e.target.value })}
-              placeholder="Protect the helpless. Honor sworn debts. Never refuse a guest's hospitality."
-              className="w-full bg-pf-bg-elev border border-pf-brass-dim/30 px-4 py-2.5 text-pf-bone font-body text-sm
-                         focus:border-pf-brass focus:outline-none transition-all"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase block mb-1.5">Anathema <span className="text-pf-stone normal-case lowercase tracking-normal italic">(what your character refuses)</span></label>
-          <input
-            value={data.anathema || ''}
-            onChange={e => update({ anathema: e.target.value })}
-            placeholder="Never lie to a child. Never strike from behind. Never break bread with a slaver."
-            className="w-full bg-pf-bg-elev border border-pf-brass-dim/30 px-4 py-2.5 text-pf-bone font-body text-sm
                        focus:border-pf-brass focus:outline-none transition-all"
           />
         </div>
