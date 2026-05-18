@@ -1,0 +1,112 @@
+{
+  "fighter": {
+    "subclasses": null,
+    "proficiencies": {
+      "perception": "expert",
+      "saves": { "fortitude": "expert", "reflex": "expert", "will": "trained" },
+      "weapons": { "simple": "expert", "martial": "expert", "advanced": "trained", "unarmed": "expert" },
+      "armor": { "unarmored": "trained", "light": "trained", "medium": "trained", "heavy": "trained" },
+      "classDC": "trained",
+      "note": "Fighters have no formal subclass. Your weapon group focus and feats define your fighting style."
+    }
+  },
+  "wizard": {
+    "subclasses": {
+      "label": "Thesis",
+      "help": "Your magical specialty — the unique angle of arcane study that defines your wizardly career.",
+      "options": [
+        { "id": "spell-blending",       "name": "Spell Blending",              "desc": "Trade two lower-rank slots to gain one slot two ranks higher. Specialist of resource conversion." },
+        { "id": "spell-substitution",   "name": "Spell Substitution",          "desc": "Spend 10 minutes to swap a prepared spell for another from your spellbook. The classic adaptive wizard." },
+        { "id": "familiar-attunement",  "name": "Improved Familiar Attunement","desc": "Your familiar gains an extra ability and can recall a prepared spell once per day." },
+        { "id": "staff-nexus",          "name": "Staff Nexus",                 "desc": "Bind extra spells into your staff. Start with a stronger spell-storing staff." }
+      ]
+    },
+    "proficiencies": {
+      "perception": "trained",
+      "saves": { "fortitude": "trained", "reflex": "trained", "will": "expert" },
+      "weapons": { "simple": "trained", "staff": "trained" },
+      "armor": { "unarmored": "trained" },
+      "classDC": "trained",
+      "arcaneSpellcasting": "trained"
+    }
+  },
+  "rogue": {
+    "subclasses": {
+      "label": "Racket",
+      "help": "How you operate. Your racket shapes your bonus skill, your damage ability for sneak attack, and your starting feel.",
+      "options": [
+        { "id": "mastermind",         "name": "Mastermind",         "desc": "Studious manipulator. INT-based; bonus to Society and Diplomacy; sneak attack damage from your wits." },
+        { "id": "ruffian",            "name": "Ruffian",            "desc": "Brutal back-alley enforcer. Wear medium armor and use martial weapons for sneak attack. STR-favored." },
+        { "id": "scoundrel",          "name": "Scoundrel",          "desc": "Charming liar. CHA-based; bonus to Deception and Diplomacy; expert of misdirection and feint." },
+        { "id": "thief",              "name": "Thief",              "desc": "Classic burglar. Use DEX for melee damage instead of STR. Trained in Thievery as bonus skill." },
+        { "id": "eldritch-trickster", "name": "Eldritch Trickster", "desc": "Mixes spellcasting and sneak attack. Caster multiclass synergies." }
+      ]
+    },
+    "proficiencies": {
+      "perception": "expert",
+      "saves": { "fortitude": "trained", "reflex": "expert", "will": "expert" },
+      "weapons": { "simple": "trained", "martial": "trained (rapier, sap, shortbow, shortsword)", "unarmed": "trained" },
+      "armor": { "unarmored": "trained", "light": "trained" },
+      "classDC": "trained"
+    }
+  },
+  "cleric": {
+    "subclasses": {
+      "label": "Doctrine",
+      "help": "Your relationship to your deity. Determines your starting weapon and spell focus.",
+      "options": [
+        { "id": "cloistered", "name": "Cloistered Cleric", "desc": "Scholar-priest. Faster spellcasting progression (expert by level 11). Trained in your deity's favored weapon plus simple weapons. No armor training increase." },
+        { "id": "warpriest",  "name": "Warpriest",         "desc": "Battle-priest. Medium armor proficiency. Trained in martial weapons. Slower spellcasting (expert by level 13) but tougher in melee." }
+      ]
+    },
+    "proficiencies": {
+      "perception": "trained",
+      "saves": { "fortitude": "trained", "reflex": "trained", "will": "expert" },
+      "weapons": { "simple": "trained", "favoredWeapon": "trained" },
+      "armor": { "unarmored": "trained", "light": "trained", "medium": "trained" },
+      "classDC": "trained",
+      "divineSpellcasting": "trained"
+    }
+  },
+  "barbarian": {
+    "subclasses": {
+      "label": "Instinct",
+      "help": "The primal force you channel into your rage. Determines damage type, special features, and anathema.",
+      "options": [
+        { "id": "animal",       "name": "Animal Instinct",      "desc": "Take on bestial fury. Pick an animal aspect (ape, bear, bull, cat, deer, frog, shark, snake, wolf). Unarmed attacks deal 1d10 damage." },
+        { "id": "dragon",       "name": "Dragon Instinct",      "desc": "Channel a draconic ancestor. Pick a dragon type — your rage damage matches its breath. Eventually gain a draconic breath weapon." },
+        { "id": "fury",         "name": "Fury Instinct",        "desc": "Pure unfocused rage. Bonus class feat at level 1 in exchange for no thematic abilities. The most freeform Instinct." },
+        { "id": "giant",        "name": "Giant Instinct",       "desc": "Channel titanic forebears. Wield weapons two sizes larger than you. Massive damage at a cost to AC during rage." },
+        { "id": "spirit",       "name": "Spirit Instinct",      "desc": "Channel ancestor spirits. Your rage adds negative or positive damage and you can disrupt undead." },
+        { "id": "superstition", "name": "Superstition Instinct","desc": "Anti-magic fury. Bonus to saves against spells while raging; you can't willingly receive magical help." }
+      ]
+    },
+    "proficiencies": {
+      "perception": "expert",
+      "saves": { "fortitude": "expert", "reflex": "trained", "will": "expert" },
+      "weapons": { "simple": "trained", "martial": "trained", "unarmed": "trained" },
+      "armor": { "unarmored": "trained", "light": "trained", "medium": "trained" },
+      "classDC": "trained"
+    }
+  },
+  "bard": {
+    "subclasses": {
+      "label": "Muse",
+      "help": "The source of your inspiration. Determines your composition cantrip and bonus spell list.",
+      "options": [
+        { "id": "enigma",   "name": "Enigma",   "desc": "Scholar of mysteries. INT-favored. Gain Bardic Lore — automatic checks to recall obscure knowledge." },
+        { "id": "maestro",  "name": "Maestro",  "desc": "Classic inspirer. Composition cantrip Inspire Courage. CHA-favored — the bard everyone thinks of." },
+        { "id": "polymath", "name": "Polymath", "desc": "Versatile gatherer of lore. Gain Versatile Performance — sub Performance for other skills socially. Eclectic spell list." },
+        { "id": "warrior",  "name": "Warrior",  "desc": "Martial troubadour. Trained in martial weapons. Composition cantrip Lingering Composition stretches inspirations." }
+      ]
+    },
+    "proficiencies": {
+      "perception": "expert",
+      "saves": { "fortitude": "trained", "reflex": "trained", "will": "expert" },
+      "weapons": { "simple": "trained", "longsword": "trained", "rapier": "trained", "sap": "trained", "shortbow": "trained", "shortsword": "trained", "whip": "trained", "unarmed": "trained" },
+      "armor": { "unarmored": "trained", "light": "trained" },
+      "classDC": "trained",
+      "occultSpellcasting": "trained"
+    }
+  }
+}
