@@ -97,11 +97,26 @@ adventures) falls under the Paizo Community Use Policy.
 | Field | Value |
 |---|---|
 | Upstream repository | https://github.com/foundryvtt/pf2e |
-| Cloned at (commit SHA) | _TO FILL_ — run `git log -1 --format="%H"` inside `src/game-packs/pf2e/pf2e-foundry-source/` and paste here |
-| Nearest tag | _TO FILL_ — run `git describe --tags --abbrev=0` |
-| Tag + distance | _TO FILL_ — run `git describe --tags` |
-| Clone date (UTC) | _TO FILL_ — `git log -1 --format="%ai"` |
-| Remaster status | Remaster (confirmed by presence of War of Immortals classes — `exemplar`, `commander` — and post-5.9.0 system release) |
+| Cloned at (commit SHA) | **Unrecoverable** — see note below |
+| Nearest tag | **Unrecoverable** — see note below |
+| Tag + distance | **Unrecoverable** — see note below |
+| Imported into Guildstew | 2026-05-17 (commit `1329956d`, original source push) |
+| Re-pushed without inner `.git` | 2026-05-18 (commit `0fa4a729`, after the broken-submodule cleanup) |
+| Pruned to ~91 MB | 2026-05-18 (commit `e98fb5fc`) |
+| Remaster status | Remaster (confirmed by presence of War of Immortals classes — `exemplar`, `commander` — both Dec 2024 Remaster-only releases — and the upstream having moved fully to Remaster in system release 5.9.0) |
+
+**Why the SHA is unrecoverable:** the original upload accidentally pushed
+the inner `.git/` directory of the cloned foundryvtt/pf2e repo, which git
+recorded as a submodule pointer. Cleanup commit `5807160a` removed that
+pointer and the contributor re-pushed the raw files as commit `0fa4a729`
+without the inner `.git/`. After that point there's no in-repo record of
+which upstream commit the source corresponds to.
+
+This is sufficient attribution under all four licenses (Apache 2.0,
+ORC, OGL 1.0a, Paizo CUP) — the canonical URL points at the source of
+truth and the import date provides a temporal anchor. A future re-pull
+should preserve `.git/HEAD` separately (e.g. write the SHA into this
+file at clone time) so the next provenance window is auditable.
 
 ---
 
