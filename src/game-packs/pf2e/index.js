@@ -55,11 +55,16 @@ export const PACK_META = {
   ready: true,
   source: {
     repo: "https://github.com/foundryvtt/pf2e",
-    // SHA / tag filled in by `node scripts/inscribe-pf2e-source-version.mjs`
-    // — for now placeholders that match the LICENSES/PATHFINDER_2E.md
-    // "Source provenance" table values.
+    // Upstream commit SHA / tag are unrecoverable — the original
+    // upload bundled the cloned .git/ as a submodule pointer; the
+    // cleanup commit (5807160a) dropped that pointer, and the re-
+    // push (0fa4a729) was raw files only with no .git/ inside the
+    // source tree. Full explanation in LICENSES/PATHFINDER_2E.md.
     commit: null,
     tag: null,
+    // What IS known: the source represents a Remaster-era release
+    // (War of Immortals classes present), imported on this date.
+    importedAt: "2026-05-17",
   },
   licenses: ["Apache-2.0", "ORC", "OGL-1.0a", "Paizo-CUP"],
 };
