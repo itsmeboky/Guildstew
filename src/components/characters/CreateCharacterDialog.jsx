@@ -78,11 +78,17 @@ export default function CreateCharacterDialog({ open, onClose }) {
 
   const handleFullCreator = () => {
     onClose();
-    // Stamp the chosen pack on the URL so CharacterCreator's
-    // dispatcher routes the per-step UI to the right edition.
-    const url = createPageUrl("CharacterCreator");
+    // Table-driven dispatch — each pack opts in via `creatorRoute`
+    // (PF2e: PathfinderCharacterCreator). Packs that omit it fall
+    // through to the shared dnd5e creator. Stamp the chosen pack on
+    // the URL so per-step UI still dispatches on `?gamePack=` once
+    // we're inside the route.
+    const packId = chosenPack || "dnd5e_2014";
+    const pack = getGamePack(packId);
+    const route = pack?.creatorRoute || "CharacterCreator";
+    const url = createPageUrl(route);
     const sep = url.includes("?") ? "&" : "?";
-    navigate(`${url}${sep}gamePack=${encodeURIComponent(chosenPack || "dnd5e_2014")}`);
+    navigate(`${url}${sep}gamePack=${encodeURIComponent(packId)}`);
   };
 
   const handleQuickCreate = () => {

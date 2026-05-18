@@ -34,15 +34,17 @@ import { uploadFile } from "@/utils/uploadFile";
  * renderBlogMarkdown path for posts authored before this commit.
  */
 
-const CATEGORIES = [
-  { value: "tutorial",     label: "Tutorial" },
-  { value: "article",      label: "Article" },
-  { value: "announcement", label: "Announcement" },
-  { value: "patch_notes",  label: "Patch Notes" },
-  { value: "community",    label: "Community" },
+// Legacy seed list — kept as a fallback only for the brief moment
+// before the categories useQuery resolves. The live category catalog
+// is loaded from blog_categories via useCategories() below; admins
+// edit it through the Categories section at the top of the page.
+const CATEGORY_SEEDS = [
+  { slug: "tutorial",     label: "Tutorial",     color: "#37F2D1" },
+  { slug: "article",      label: "Article",      color: "#37F2D1" },
+  { slug: "announcement", label: "Announcement", color: "#37F2D1" },
+  { slug: "patch_notes",  label: "Patch Notes",  color: "#37F2D1" },
+  { slug: "community",    label: "Community",    color: "#37F2D1" },
 ];
-
-const CATEGORY_LABEL = CATEGORIES.reduce((acc, c) => { acc[c.value] = c.label; return acc; }, {});
 
 function slugify(s) {
   return (s || "")
@@ -73,10 +75,41 @@ export default function BlogTab() {
     },
   });
 
-  const categorySuggestions = useMemo(() => {
-    const fromPosts = posts.map((p) => p.category).filter(Boolean);
-    const seeded = CATEGORIES.map((c) => c.value);
-    return Array.from(new Set([...seeded, ...fromPosts])).sort();
+  // Live category catalog from the blog_categories table. Empty
+  // array until the query resolves; the legacy seed list backs the
+  // first render so existing posts don't briefly render with raw
+  // slug labels.
+  const { data: categories = CATEGORY_SEEDS } = useQuery({
+    queryKey: ["blogCategories"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("blog_categories")
+        .select("id, slug, label, color, sort_order")
+        .order("sort_order", { ascending: true })
+        .order("label", { ascending: true });
+      return (data && data.length > 0) ? data : CATEGORY_SEEDS;
+    },
+  });
+
+  // Look up a category record by slug. Falls through to the raw
+  // slug + default teal color when the slug isn't in the catalog
+  // (covers legacy posts whose category was free-text typed).
+  const categoryFor = useCallback((slug) => {
+    if (!slug) return { slug: "article", label: "Article", color: "#37F2D1" };
+    const found = categories.find((c) => c.slug === slug);
+    if (found) return found;
+    return { slug, label: slug.replace(/_/g, " "), color: "#37F2D1" };
+  }, [categories]);
+
+  // Per-category post counts — used by the Delete-category guard
+  // ("4 posts use this category. Reassign first.").
+  const postCountByCategory = useMemo(() => {
+    const counts = {};
+    for (const p of posts) {
+      if (!p.category) continue;
+      counts[p.category] = (counts[p.category] || 0) + 1;
+    }
+    return counts;
   }, [posts]);
 
   const filtered = useMemo(() => {
@@ -230,6 +263,11 @@ export default function BlogTab() {
         </div>
       </div>
 
+      <CategoriesManager
+        categories={categories}
+        postCountByCategory={postCountByCategory}
+      />
+
       {selected.size > 0 && (
         <div className="bg-[#1E2430] border border-slate-700 rounded-lg p-2 flex items-center gap-2 flex-wrap">
           <span className="text-xs text-slate-400">{selected.size} selected</span>
@@ -278,9 +316,17 @@ export default function BlogTab() {
                     </div>
                   </td>
                   <td className="px-3 py-2">
-                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-[#050816] border border-slate-700 text-slate-300">
-                      {CATEGORY_LABEL[p.category] || p.category}
-                    </span>
+                    {(() => {
+                      const c = categoryFor(p.category);
+                      return (
+                        <span
+                          className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-[#050816] border"
+                          style={{ borderColor: `${c.color}55`, color: c.color }}
+                        >
+                          {c.label}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-3 py-2">
                     <span className={`text-[10px] font-bold uppercase rounded px-2 py-0.5 ${
@@ -328,7 +374,7 @@ export default function BlogTab() {
       <BlogEditor
         open={editor.open}
         post={editor.post}
-        categorySuggestions={categorySuggestions}
+        categories={categories}
         onClose={() => setEditor({ open: false, post: null })}
         onSave={(row) => savePost.mutate(row)}
       />
@@ -336,7 +382,254 @@ export default function BlogTab() {
   );
 }
 
-function BlogEditor({ open, post, categorySuggestions = [], onClose, onSave }) {
+// ============================================================================
+// CategoriesManager — list / add / edit / delete blog_categories rows.
+// Mounted at the top of the BlogTab so it can sit collapsed by default.
+// ============================================================================
+function CategoriesManager({ categories, postCountByCategory }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null); // { id?, slug, label, color, sort_order }
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["blogCategories"] });
+    queryClient.invalidateQueries({ queryKey: ["adminBlogPosts"] });
+  };
+
+  const saveCategory = useMutation({
+    mutationFn: async (row) => {
+      const trimmedSlug = (row.slug || "").trim().toLowerCase().replace(/\s+/g, "_");
+      const trimmedLabel = (row.label || "").trim();
+      if (!trimmedSlug) throw new Error("Slug is required");
+      if (!trimmedLabel) throw new Error("Label is required");
+      const payload = {
+        slug: trimmedSlug,
+        label: trimmedLabel,
+        color: row.color || "#37F2D1",
+        sort_order: Number(row.sort_order) || 100,
+        updated_at: new Date().toISOString(),
+      };
+      if (row.id) {
+        const { error } = await supabase.from("blog_categories").update(payload).eq("id", row.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("blog_categories").insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast.success("Category saved");
+      setEditing(null);
+      invalidate();
+    },
+    onError: (err) => toast.error(err?.message || "Save failed"),
+  });
+
+  const deleteCategory = useMutation({
+    mutationFn: async ({ id }) => {
+      const { error } = await supabase.from("blog_categories").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success("Category deleted"); invalidate(); },
+    onError: (err) => toast.error(err?.message || "Delete failed"),
+  });
+
+  const handleDelete = (cat) => {
+    const count = postCountByCategory[cat.slug] || 0;
+    if (count > 0) {
+      toast.error(
+        `${count} post${count === 1 ? '' : 's'} still use "${cat.label}". Reassign them in the post editor before deleting.`,
+      );
+      return;
+    }
+    if (!confirm(`Delete category "${cat.label}"? This cannot be undone.`)) return;
+    deleteCategory.mutate({ id: cat.id });
+  };
+
+  return (
+    <div className="bg-[#0b1220] border border-slate-800 rounded-lg overflow-hidden mb-4">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-[#050816]/40"
+      >
+        <span className="text-sm font-bold text-white inline-flex items-center gap-2">
+          <FileText className="w-4 h-4 text-[#37F2D1]" />
+          Categories
+          <span className="text-[11px] font-normal text-slate-500">
+            · {categories.length} defined
+          </span>
+        </span>
+        <span className="text-[11px] text-slate-500">{open ? "Hide" : "Manage"}</span>
+      </button>
+      {open && (
+        <div className="border-t border-slate-800 p-4 space-y-3">
+          <div className="grid grid-cols-[auto_1fr_1fr_auto_auto] items-center gap-2 text-[10px] uppercase tracking-widest text-slate-500 font-bold px-2">
+            <span>Color</span>
+            <span>Label</span>
+            <span>Slug</span>
+            <span className="text-right">Posts</span>
+            <span />
+          </div>
+          {categories.map((cat) => {
+            const count = postCountByCategory[cat.slug] || 0;
+            return (
+              <div
+                key={cat.id || cat.slug}
+                className="grid grid-cols-[auto_1fr_1fr_auto_auto] items-center gap-2 px-2 py-1.5 bg-[#050816] border border-slate-800 rounded text-sm"
+              >
+                <span
+                  className="inline-block w-4 h-4 rounded border border-slate-700"
+                  style={{ background: cat.color }}
+                  title={cat.color}
+                />
+                <span className="text-white font-medium">{cat.label}</span>
+                <span className="text-slate-500 text-[12px] font-mono">{cat.slug}</span>
+                <span className="text-slate-400 text-[11px] text-right">{count}</span>
+                <span className="inline-flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setEditing({ ...cat })}
+                    disabled={!cat.id}
+                    title={cat.id ? "Edit" : "Seed entry — apply the migration first"}
+                  >
+                    <Edit3 className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDelete(cat)}
+                    disabled={!cat.id}
+                    className="border-red-500/50 text-red-400"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </span>
+              </div>
+            );
+          })}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setEditing({ slug: "", label: "", color: "#37F2D1", sort_order: 100 })}
+            className="border-[#37F2D1]/50 text-[#37F2D1]"
+          >
+            <Plus className="w-3 h-3 mr-1" /> New category
+          </Button>
+        </div>
+      )}
+
+      <CategoryEditor
+        editing={editing}
+        onClose={() => setEditing(null)}
+        onSave={(row) => saveCategory.mutate(row)}
+        saving={saveCategory.isPending}
+      />
+    </div>
+  );
+}
+
+function CategoryEditor({ editing, onClose, onSave, saving }) {
+  const [form, setForm] = useState({ slug: "", label: "", color: "#37F2D1", sort_order: 100 });
+  React.useEffect(() => {
+    if (editing) {
+      setForm({
+        id: editing.id,
+        slug: editing.slug || "",
+        label: editing.label || "",
+        color: editing.color || "#37F2D1",
+        sort_order: editing.sort_order ?? 100,
+      });
+    }
+  }, [editing]);
+  if (!editing) return null;
+  const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+  return (
+    <Dialog open={!!editing} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="bg-[#0b1220] border-slate-800 text-white max-w-md">
+        <DialogHeader>
+          <DialogTitle>{form.id ? "Edit category" : "New category"}</DialogTitle>
+          <DialogDescription className="text-slate-400">
+            The slug is the stable identifier stored on each blog post. The label and color
+            are what readers see.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs">Label</Label>
+            <Input
+              value={form.label}
+              onChange={(e) => {
+                const next = { label: e.target.value };
+                if (!form.id && !form.slug) {
+                  next.slug = e.target.value.trim().toLowerCase().replace(/\s+/g, "_");
+                }
+                set(next);
+              }}
+              className="bg-[#050816] border-slate-700 text-white mt-1"
+              placeholder="Announcement"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Slug</Label>
+            <Input
+              value={form.slug}
+              onChange={(e) => set({ slug: e.target.value.trim().toLowerCase().replace(/\s+/g, "_") })}
+              className="bg-[#050816] border-slate-700 text-white mt-1 font-mono"
+              placeholder="announcement"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Pill color</Label>
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                type="color"
+                value={form.color}
+                onChange={(e) => set({ color: e.target.value })}
+                className="w-12 h-9 rounded border border-slate-700 bg-[#050816] cursor-pointer"
+              />
+              <Input
+                value={form.color}
+                onChange={(e) => set({ color: e.target.value })}
+                className="bg-[#050816] border-slate-700 text-white font-mono flex-1"
+                placeholder="#37F2D1"
+              />
+            </div>
+            <div className="mt-2">
+              <span
+                className="inline-block text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-[#050816] border"
+                style={{ borderColor: `${form.color}55`, color: form.color }}
+              >
+                {form.label || "Preview"}
+              </span>
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Sort order</Label>
+            <Input
+              type="number"
+              value={form.sort_order}
+              onChange={(e) => set({ sort_order: parseInt(e.target.value, 10) || 0 })}
+              className="bg-[#050816] border-slate-700 text-white mt-1"
+            />
+            <p className="text-[10px] text-slate-500 mt-1">
+              Lower numbers list first. Existing seeds: 10 (Tutorial) → 50 (Community).
+            </p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={() => onSave(form)} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function BlogEditor({ open, post, categories = [], onClose, onSave }) {
   const { user } = useAuth();
   const [form, setForm] = useState(() => initForm(post));
   const [slugTouched, setSlugTouched] = useState(false);
@@ -529,19 +822,24 @@ function BlogEditor({ open, post, categorySuggestions = [], onClose, onSave }) {
             </div>
             <div>
               <Label className="text-xs">Category</Label>
-              <Input
-                list="blog-category-suggestions"
+              <select
                 value={form.category}
                 onChange={(e) => set({ category: e.target.value })}
-                onBlur={(e) => set({ category: e.target.value.trim() })}
-                className="bg-[#050816] border-slate-700 text-white mt-1"
-                placeholder="article"
-              />
-              <datalist id="blog-category-suggestions">
-                {categorySuggestions.map((c) => (
-                  <option key={c} value={c}>{CATEGORY_LABEL[c] || c}</option>
+                className="w-full bg-[#050816] border border-slate-700 text-white mt-1 rounded h-9 px-2 text-sm"
+              >
+                {categories.map((c) => (
+                  <option key={c.slug} value={c.slug}>{c.label}</option>
                 ))}
-              </datalist>
+                {/* If the post's saved category isn't in the live
+                    catalog (legacy free-text entry), keep it visible
+                    in the dropdown so saving doesn't silently flip it. */}
+                {form.category && !categories.some((c) => c.slug === form.category) && (
+                  <option value={form.category}>{form.category} (legacy)</option>
+                )}
+              </select>
+              <p className="text-[10px] text-slate-500 mt-1">
+                Manage categories from the Categories panel at the top of the Blog tab.
+              </p>
             </div>
           </div>
           <div>

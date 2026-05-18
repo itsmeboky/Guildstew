@@ -152,7 +152,6 @@ export default function CharacterCreator() {
     // dnd5e_2024 (filled in by commits 2-4). Legacy characters
     // saved without this field default to dnd5e_2014 in the
     // editCharacter loader below.
-    gamePack: "dnd5e_2014",
     race: "",
     subrace: "",
     class: "",
