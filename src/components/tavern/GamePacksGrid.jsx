@@ -5,6 +5,8 @@ import { Package, Check, Lock, Sparkles } from "lucide-react";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { TAVERN_PALETTE as P } from "@/config/tavernPalette";
+import { formatSpice } from "@/config/spiceConfig";
+import SpiceIcon from "@/components/tavern/SpiceIcon";
 
 /**
  * Game Packs — real-money TTRPG system bundles.
@@ -68,10 +70,68 @@ export default function GamePacksGrid() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ownedGamePacks", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["userOwnedGamePackSlugs", user?.id] });
     },
     onError: (err) => {
       console.error("Buy game pack", err);
       toast.error(`Checkout unavailable: ${err?.message || err}`);
+    },
+  });
+
+  // Spice purchase path. Atomic spend_spice RPC debits the wallet
+  // and writes the spice_transactions audit row in one DEFINER body;
+  // we then INSERT the game_pack_purchases row so entitlements light up.
+  // If the INSERT fails after spice debit, we surface it loudly — the
+  // wallet is already drained and a refund needs human attention.
+  const buyWithSpice = useMutation({
+    mutationFn: async (pack) => {
+      if (!user?.id) throw new Error("Sign in first.");
+      if (!pack.price_spice) throw new Error("This pack has no spice price.");
+
+      const { error: spendError } = await supabase.rpc("spend_spice", {
+        p_user_id: user.id,
+        p_amount: pack.price_spice,
+        p_type: "game_pack_purchase",
+        p_description: `Game pack: ${pack.name}`,
+        p_reference_id: pack.id,
+      });
+      if (spendError) {
+        // 'Insufficient Spice balance' is the documented exception.
+        const msg = spendError.message?.includes("Insufficient")
+          ? "Not enough Spice in your wallet."
+          : spendError.message || "Spice debit failed.";
+        throw new Error(msg);
+      }
+
+      const { error: insertError } = await supabase
+        .from("game_pack_purchases")
+        .insert({
+          user_id: user.id,
+          pack_id: pack.id,
+          paid_with: "spice",
+          spice_paid: pack.price_spice,
+          price_paid_usd: null,
+        });
+      if (insertError) {
+        console.error("game_pack_purchases insert failed AFTER spice debit", insertError);
+        throw new Error(
+          "Spice debited but ownership row didn't save. Contact support with this pack id: " + pack.id,
+        );
+      }
+
+      return pack;
+    },
+    onSuccess: (pack) => {
+      toast.success(`Acquired ${pack.name}`, {
+        description: `${formatSpice(pack.price_spice)} Spice spent. Pack unlocked.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["ownedGamePacks", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["userOwnedGamePackSlugs", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["spiceWallet", user?.id] });
+    },
+    onError: (err) => {
+      console.error("Buy game pack with spice", err);
+      toast.error(err?.message || "Spice purchase failed.");
     },
   });
 
@@ -107,8 +167,9 @@ export default function GamePacksGrid() {
             key={pack.id}
             pack={pack}
             owned={ownedSet.has(pack.id)}
-            busy={buy.isPending}
+            busy={buy.isPending || buyWithSpice.isPending}
             onBuy={() => buy.mutate(pack)}
+            onBuyWithSpice={() => buyWithSpice.mutate(pack)}
           />
         ))}
       </div>
@@ -116,8 +177,9 @@ export default function GamePacksGrid() {
   );
 }
 
-function GamePackCard({ pack, owned, busy, onBuy }) {
+function GamePackCard({ pack, owned, busy, onBuy, onBuyWithSpice }) {
   const isFree = !!pack.is_free;
+  const hasSpicePrice = !isFree && !owned && Number(pack.price_spice) > 0;
 
   return (
     <div
@@ -186,20 +248,38 @@ function GamePackCard({ pack, owned, busy, onBuy }) {
               <Lock className="w-3 h-3" /> Unlocked
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={onBuy}
-              disabled={busy}
-              className="inline-flex items-center gap-1 text-sm font-black rounded-md px-4 py-2 transition-colors disabled:opacity-60"
-              style={{
-                background: "linear-gradient(135deg, #635BFF 0%, #00D4FF 100%)",
-                color: "#ffffff",
-                boxShadow: "0 0 12px rgba(99, 91, 255, 0.2)",
-              }}
-            >
-              {busy ? "…" : "Buy"}
-              <span className="text-[10px] opacity-80 ml-1">via Stripe</span>
-            </button>
+            <div className="flex flex-col gap-2 items-end">
+              <button
+                type="button"
+                onClick={onBuy}
+                disabled={busy}
+                className="inline-flex items-center gap-1 text-sm font-black rounded-md px-4 py-2 transition-colors disabled:opacity-60"
+                style={{
+                  background: "linear-gradient(135deg, #635BFF 0%, #00D4FF 100%)",
+                  color: "#ffffff",
+                  boxShadow: "0 0 12px rgba(99, 91, 255, 0.2)",
+                }}
+              >
+                {busy ? "…" : "Buy"}
+                <span className="text-[10px] opacity-80 ml-1">via Stripe</span>
+              </button>
+              {hasSpicePrice && (
+                <button
+                  type="button"
+                  onClick={onBuyWithSpice}
+                  disabled={busy}
+                  className="inline-flex items-center gap-1.5 text-xs font-black rounded-md px-3 py-1.5 transition-colors disabled:opacity-60"
+                  style={{
+                    backgroundColor: "#fbbf24",
+                    color: "#1f2937",
+                    boxShadow: "0 0 10px rgba(251, 191, 36, 0.25)",
+                  }}
+                >
+                  <SpiceIcon size={12} color="#1f2937" />
+                  {busy ? "…" : `${formatSpice(pack.price_spice)} Spice`}
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

@@ -43,6 +43,10 @@ export const GAME_PACKS = {
     icon: "🐉",
     status: "available",
     creatorRoute: "CharacterCreator",
+    // Slug on the game_packs DB table. Both 5e editions share the
+    // single `dnd5e` row (is_free=true), so one entitlement unlocks
+    // both picker entries.
+    entitlementSlug: "dnd5e",
   },
   dnd5e_2024: {
     id: "dnd5e_2024",
@@ -56,6 +60,7 @@ export const GAME_PACKS = {
     icon: "🐉",
     status: "available",
     creatorRoute: "CharacterCreator",
+    entitlementSlug: "dnd5e",
   },
   pathfinder_2e: {
     id: "pathfinder_2e",
@@ -71,6 +76,7 @@ export const GAME_PACKS = {
     status: "available",
     enabled: true,
     creatorRoute: "PathfinderCharacterCreator",
+    entitlementSlug: "pathfinder2e",
     // Lazy-loaded so the PF2e bundle doesn't bloat the main chunk.
     // Resolved by callers that know about the pf2e flow; the
     // legacy creatorRoute pattern (single CharacterCreator page
