@@ -1,5 +1,19 @@
 // Step IV — Path of Power (class, subclass, sub-pick, deity, proficiencies,
 // class feats, optional companion/familiar). Verbatim from the prototype.
+//
+// Post-Step-3 crash diagnosis (2026-05-18):
+//   Uncaught TypeError: Cannot read properties of undefined (reading 'fortitude')
+//     at StepClass (StepClass.jsx:82)
+//
+// Root cause: the prototype expected a flattened class shape
+// ({ perception, saves: {...}, firstFeats: [...] }) but the SRD importer
+// emits the Foundry-native nested shape ({ proficiencies: { perception,
+// saves: {...}, ... } }) and no `firstFeats` array. The Identity-step
+// template loader still writes slug ids (`'fighter'`, `'wizard'`, ...)
+// while CLASSES uses Foundry random ids, so the `.find` fallback drops
+// every templated character onto Alchemist — making the crash universal.
+// Bindings below now read through `selected.proficiencies?.…` and
+// guard `firstFeats` with an empty-array fallback.
 
 import React, { useEffect } from 'react';
 import { Sparkles, Crown } from 'lucide-react';
