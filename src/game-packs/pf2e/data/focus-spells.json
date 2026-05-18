@@ -1,0 +1,23 @@
+{
+  "cleric": {
+    "description": "Domain spells — pick one focus spell from your deity's domain at level 1 via the Domain Initiate class feat. Costs Focus Points instead of slots.",
+    "samples": [
+      { "name": "Sudden Shift",       "actions": "reaction", "desc": "After being missed by a melee attack, Step and become concealed against the attacker (Trickery domain)." },
+      { "name": "Touch of Undeath",   "actions": 2,          "desc": "Touch a living creature for 1d6 negative damage + 1 round of clumsy (Death domain)." },
+      { "name": "Practiced Defender", "actions": 1,          "desc": "Gain +1 status to AC for 1 round (Protection domain)." },
+      { "name": "Soothing Words",     "actions": 2,          "desc": "Ally regains 2d6 HP and gains +1 status to Will (Healing domain)." }
+    ]
+  },
+  "bard": {
+    "description": "Composition cantrips and compositions — bardic magic distinct from spell slots. All bards know Inspire Courage at level 1.",
+    "samples": [
+      { "name": "Inspire Courage",       "actions": 1,          "desc": "Allies in 60 ft gain +1 status to attacks, damage, and fear saves while you sustain (composition cantrip — all bards)." },
+      { "name": "Lingering Composition", "actions": "passive",  "desc": "Your compositions last 3 rounds instead of 1 (Maestro/Warrior focus spell)." },
+      { "name": "Counter Performance",   "actions": "reaction", "desc": "When ally fails a save vs. emotion/auditory/visual, use your Performance check as their save." }
+    ]
+  },
+  "wizard": {
+    "description": "Wizards don't get focus spells by default. Thesis (Improved Familiar Attunement) and some class feats can grant access to focus magic.",
+    "samples": []
+  }
+}

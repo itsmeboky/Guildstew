@@ -1,0 +1,75 @@
+{
+  "fighter": {
+    "name": "Fighter Kit", "totalSp": 140, "bulk": 4,
+    "items": [
+      { "name": "Studded Leather Armor", "priceSp": 30, "bulk": 1 },
+      { "name": "Longsword", "priceSp": 10, "bulk": 1 },
+      { "name": "Sling", "priceSp": 1, "bulk": "L" },
+      { "name": "Sling Bullets (20)", "priceSp": 1, "bulk": "L" },
+      { "name": "Adventurer's Pack", "priceSp": 15, "bulk": 1 },
+      { "name": "Torches (4)", "priceSp": 1, "bulk": "L" },
+      { "name": "Rations (1 week)", "priceSp": 5, "bulk": 1 }
+    ]
+  },
+  "wizard": {
+    "name": "Wizard Kit", "totalSp": 140, "bulk": 3,
+    "items": [
+      { "name": "Quarterstaff", "priceSp": 0, "bulk": 1 },
+      { "name": "Dagger", "priceSp": 2, "bulk": "L" },
+      { "name": "Spellbook (blank)", "priceSp": 10, "bulk": "L" },
+      { "name": "Writing Set", "priceSp": 10, "bulk": "L" },
+      { "name": "Material Component Pouch", "priceSp": 50, "bulk": "L" },
+      { "name": "Adventurer's Pack", "priceSp": 15, "bulk": 1 },
+      { "name": "Torches (4)", "priceSp": 1, "bulk": "L" },
+      { "name": "Rations (1 week)", "priceSp": 5, "bulk": 1 }
+    ]
+  },
+  "rogue": {
+    "name": "Rogue Kit", "totalSp": 140, "bulk": 3,
+    "items": [
+      { "name": "Leather Armor", "priceSp": 20, "bulk": 1 },
+      { "name": "Rapier", "priceSp": 20, "bulk": 1 },
+      { "name": "Shortbow + 20 arrows", "priceSp": 30, "bulk": 1 },
+      { "name": "Thieves' Toolkit", "priceSp": 30, "bulk": "L" },
+      { "name": "Adventurer's Pack", "priceSp": 15, "bulk": 1 },
+      { "name": "Torches (4)", "priceSp": 1, "bulk": "L" },
+      { "name": "Rations (1 week)", "priceSp": 5, "bulk": 1 }
+    ]
+  },
+  "cleric": {
+    "name": "Cleric Kit", "totalSp": 140, "bulk": 4,
+    "items": [
+      { "name": "Scale Mail", "priceSp": 40, "bulk": 2 },
+      { "name": "Mace", "priceSp": 10, "bulk": 1 },
+      { "name": "Wooden Shield", "priceSp": 10, "bulk": 1 },
+      { "name": "Religious Symbol (wooden)", "priceSp": 1, "bulk": "L" },
+      { "name": "Healer's Toolkit", "priceSp": 50, "bulk": 1 },
+      { "name": "Adventurer's Pack", "priceSp": 15, "bulk": 1 },
+      { "name": "Torches (4)", "priceSp": 1, "bulk": "L" },
+      { "name": "Rations (1 week)", "priceSp": 5, "bulk": 1 }
+    ]
+  },
+  "barbarian": {
+    "name": "Barbarian Kit", "totalSp": 140, "bulk": 5,
+    "items": [
+      { "name": "Hide Armor", "priceSp": 20, "bulk": 2 },
+      { "name": "Greataxe", "priceSp": 20, "bulk": 2 },
+      { "name": "Javelin (×3)", "priceSp": 3, "bulk": "L" },
+      { "name": "Adventurer's Pack", "priceSp": 15, "bulk": 1 },
+      { "name": "Torches (4)", "priceSp": 1, "bulk": "L" },
+      { "name": "Rations (1 week)", "priceSp": 5, "bulk": 1 }
+    ]
+  },
+  "bard": {
+    "name": "Bard Kit", "totalSp": 140, "bulk": 3,
+    "items": [
+      { "name": "Leather Armor", "priceSp": 20, "bulk": 1 },
+      { "name": "Rapier", "priceSp": 20, "bulk": 1 },
+      { "name": "Musical Instrument (handheld)", "priceSp": 80, "bulk": "L" },
+      { "name": "Writing Set", "priceSp": 10, "bulk": "L" },
+      { "name": "Adventurer's Pack", "priceSp": 15, "bulk": 1 },
+      { "name": "Torches (4)", "priceSp": 1, "bulk": "L" },
+      { "name": "Rations (1 week)", "priceSp": 5, "bulk": 1 }
+    ]
+  }
+}

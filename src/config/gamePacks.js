@@ -15,6 +15,8 @@
 // with a per-user lookup; the rest of the system already keys off
 // this catalog.
 
+import { lazy } from "react";
+
 export const GAME_PACKS = {
   dnd5e_2014: {
     id: "dnd5e_2014",
@@ -57,6 +59,7 @@ export const GAME_PACKS = {
   },
   pathfinder_2e: {
     id: "pathfinder_2e",
+    family: "pf2e",
     name: "Pathfinder 2e",
     short: "PF2e",
     tagline: "Tactical fantasy with deep customization.",
@@ -64,7 +67,22 @@ export const GAME_PACKS = {
       "The crunchy d20 alternative — three-action economy, ancestries instead of races, feats every other level.",
     accent: "#c2410c",
     icon: "⚔️",
-    status: "coming_soon",
+    license: "ORC",
+    status: "available",
+    enabled: true,
+    creatorRoute: "PathfinderCharacterCreator",
+    // Lazy-loaded so the PF2e bundle doesn't bloat the main chunk.
+    // Resolved by callers that know about the pf2e flow; the
+    // legacy creatorRoute pattern (single CharacterCreator page
+    // dispatching on gamePack) stays the path of least disruption
+    // for 5e and is not used here.
+    creator: lazy(() =>
+      import("@/game-packs/pf2e").then((m) => ({ default: m.CharacterCreatorFlow }))
+    ),
+    sheet: lazy(() =>
+      import("@/game-packs/pf2e").then((m) => ({ default: m.CharacterSheet }))
+    ),
+    meta: () => import("@/game-packs/pf2e").then((m) => m.PACK_META),
   },
   world_of_darkness: {
     id: "world_of_darkness",
@@ -131,6 +149,7 @@ export const GAME_PACK_ORDER = [
 // callers don't have to know about the rename.
 const ID_ALIASES = {
   dnd5e: "dnd5e_2014",
+  pf2e: "pathfinder_2e",
 };
 
 export function getGamePack(id) {

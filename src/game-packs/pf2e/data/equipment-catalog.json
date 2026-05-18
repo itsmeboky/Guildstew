@@ -1,0 +1,51 @@
+{
+  "weapons": [
+    { "name": "Longsword", "priceSp": 10, "bulk": 1, "note": "Versatile P" },
+    { "name": "Shortsword", "priceSp": 9, "bulk": "L", "note": "Agile, Finesse" },
+    { "name": "Rapier", "priceSp": 20, "bulk": 1, "note": "Deadly d8, Finesse" },
+    { "name": "Battle Axe", "priceSp": 10, "bulk": 1, "note": "Sweep" },
+    { "name": "Greataxe", "priceSp": 20, "bulk": 2, "note": "Two-hand d12, Sweep" },
+    { "name": "Greatsword", "priceSp": 20, "bulk": 2, "note": "Two-hand d12, Versatile P" },
+    { "name": "Longbow + 20 arrows", "priceSp": 60, "bulk": 2, "note": "Deadly d10, Range 100 ft" },
+    { "name": "Shortbow + 20 arrows", "priceSp": 30, "bulk": 1, "note": "Deadly d10, Range 60 ft" },
+    { "name": "Mace", "priceSp": 10, "bulk": 1, "note": "Shove" },
+    { "name": "Dagger", "priceSp": 2, "bulk": "L", "note": "Agile, Finesse, Thrown 10 ft" },
+    { "name": "Quarterstaff", "priceSp": 0, "bulk": 1, "note": "Two-hand d8, Parry" },
+    { "name": "Sling + 20 bullets", "priceSp": 1, "bulk": "L", "note": "Propulsive, Range 50 ft" },
+    { "name": "Crossbow + 20 bolts", "priceSp": 35, "bulk": 1, "note": "Range 120 ft" },
+    { "name": "Javelin", "priceSp": 1, "bulk": "L", "note": "Thrown 30 ft" }
+  ],
+  "armor": [
+    { "name": "Leather Armor", "priceSp": 20, "bulk": 1, "note": "Light" },
+    { "name": "Studded Leather Armor", "priceSp": 30, "bulk": 1, "note": "Light" },
+    { "name": "Hide Armor", "priceSp": 20, "bulk": 2, "note": "Medium" },
+    { "name": "Scale Mail", "priceSp": 40, "bulk": 2, "note": "Medium" },
+    { "name": "Chain Shirt", "priceSp": 50, "bulk": 1, "note": "Medium" },
+    { "name": "Chain Mail", "priceSp": 60, "bulk": 2, "note": "Heavy" },
+    { "name": "Half Plate", "priceSp": 180, "bulk": 3, "note": "Heavy" },
+    { "name": "Wooden Shield", "priceSp": 10, "bulk": 1, "note": "Hardness 3, HP 12" },
+    { "name": "Steel Shield", "priceSp": 20, "bulk": 1, "note": "Hardness 5, HP 20" }
+  ],
+  "gear": [
+    { "name": "Adventurer's Pack", "priceSp": 15, "bulk": 1, "note": "Pack, bedroll, rope, rations, torches, etc." },
+    { "name": "Healer's Toolkit", "priceSp": 50, "bulk": 1, "note": "Required for Medicine checks." },
+    { "name": "Thieves' Toolkit", "priceSp": 30, "bulk": "L", "note": "Required to Pick Locks / Disable Devices." },
+    { "name": "Climbing Kit", "priceSp": 50, "bulk": 1, "note": "+1 item bonus to Climb." },
+    { "name": "Religious Symbol (wooden)", "priceSp": 1, "bulk": "L", "note": "Divine spellcasting focus." },
+    { "name": "Spellbook (blank)", "priceSp": 10, "bulk": "L", "note": "Required by wizards." },
+    { "name": "Writing Set", "priceSp": 10, "bulk": "L", "note": "Ink, parchment, quills." },
+    { "name": "Material Component Pouch", "priceSp": 50, "bulk": "L", "note": "Material casting focus." },
+    { "name": "Musical Instrument (handheld)", "priceSp": 80, "bulk": "L", "note": "Bardic occult casting focus." },
+    { "name": "Rope (50 ft)", "priceSp": 5, "bulk": "L", "note": "Hemp." },
+    { "name": "Lantern (hooded)", "priceSp": 6, "bulk": "L", "note": "Bright light, 30-ft cone." }
+  ],
+  "consumables": [
+    { "name": "Healing Potion (minor)", "priceSp": 40, "bulk": "L", "note": "Restores 1d8 HP." },
+    { "name": "Torch", "priceSp": 1, "bulk": "L", "note": "Bright light, 20 ft." },
+    { "name": "Rations (1 week)", "priceSp": 4, "bulk": 1, "note": "Travel food." },
+    { "name": "Oil Flask", "priceSp": 1, "bulk": "L", "note": "" },
+    { "name": "Tindertwig", "priceSp": 1, "bulk": "—", "note": "Single-use lighter." },
+    { "name": "Alchemist's Fire (lesser)", "priceSp": 30, "bulk": "L", "note": "1d8 fire + 1 persistent." },
+    { "name": "Antiplague (lesser)", "priceSp": 30, "bulk": "L", "note": "+2 vs. disease for 24h." }
+  ]
+}

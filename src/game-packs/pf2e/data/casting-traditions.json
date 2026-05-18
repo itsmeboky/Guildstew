@@ -1,0 +1,5 @@
+{
+  "wizard": { "tradition": "arcane",  "prep": "prepared",    "keyAbility": "Intelligence" },
+  "cleric": { "tradition": "divine",  "prep": "prepared",    "keyAbility": "Wisdom" },
+  "bard":   { "tradition": "occult",  "prep": "spontaneous", "keyAbility": "Charisma" }
+}
