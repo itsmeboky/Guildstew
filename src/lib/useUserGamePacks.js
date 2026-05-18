@@ -2,19 +2,22 @@
 // current player currently has access to.
 //
 // Resolution order:
-//   1. Free packs (game_packs.is_free = true) are auto-owned for
-//      every authenticated user.
+//   1. Config-driven free packs — anything in GAME_PACKS with
+//      `status: "available"` is granted automatically. This is the
+//      source of truth for which systems are free-by-spec
+//      (currently dnd5e_2014, dnd5e_2024, pathfinder_2e), so the
+//      picker works regardless of whether the matching game_packs
+//      DB row has been seeded / has the right slug / has
+//      `is_free = true`. Decoupling this from the DB row means
+//      a player can build characters even before deploy ops touch
+//      Supabase.
 //   2. Purchased packs (game_pack_purchases rows for this user)
-//      are owned regardless of how they were paid (Stripe USD or
-//      Spice debit).
-//
-// The DB stores game pack slugs (e.g. 'dnd5e', 'pathfinder2e').
-// The picker config keys are richer (dnd5e_2014, dnd5e_2024,
-// pathfinder_2e) because a single DB pack can unlock multiple
-// picker entries — e.g. both 5e editions share `entitlementSlug: 'dnd5e'`.
+//      are granted regardless of how they were paid (Stripe USD
+//      or Spice debit). Those still need a DB-backed entitlement
+//      since the purchase IS the ownership.
 //
 // The hook reads through React Query so the GamePacksGrid purchase
-// mutation can invalidate `["userOwnedGamePackSlugs", userId]`
+// mutation can invalidate `["userOwnedGamePackPurchases", userId]`
 // and the picker live-updates without a reload.
 
 import { useQuery } from "@tanstack/react-query";
@@ -22,43 +25,43 @@ import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { GAME_PACKS } from "@/config/gamePacks";
 
+// Free-by-spec packs — config is the source of truth. The DB
+// game_packs.is_free column still exists for the Tavern grid +
+// admin tooling but no longer gates the picker.
+const FREE_PICKER_IDS = Object.entries(GAME_PACKS)
+  .filter(([, pack]) => pack.status === "available")
+  .map(([pickerId]) => pickerId);
+
 export function useUserGamePacks() {
   const { user } = useAuth();
 
-  const { data: ownedSlugs = [] } = useQuery({
-    queryKey: ["userOwnedGamePackSlugs", user?.id ?? null],
+  // Purchased entitlements — only for paid packs. Empty for users
+  // who haven't bought anything yet (or who aren't signed in).
+  const { data: purchasedPickerIds = [] } = useQuery({
+    queryKey: ["userOwnedGamePackPurchases", user?.id ?? null],
     queryFn: async () => {
-      const [freeRes, purchasedRes] = await Promise.all([
-        supabase.from("game_packs").select("slug").eq("is_active", true).eq("is_free", true),
-        user?.id
-          ? supabase
-              .from("game_pack_purchases")
-              .select("game_packs(slug)")
-              .eq("user_id", user.id)
-          : Promise.resolve({ data: [], error: null }),
-      ]);
-
-      const free = (freeRes.data || []).map((r) => r.slug);
-      const purchased = (purchasedRes.data || [])
+      if (!user?.id) return [];
+      const { data } = await supabase
+        .from("game_pack_purchases")
+        .select("game_packs(slug)")
+        .eq("user_id", user.id);
+      const purchasedSlugs = (data || [])
         .map((r) => r.game_packs?.slug)
         .filter(Boolean);
-
-      return Array.from(new Set([...free, ...purchased]));
+      if (purchasedSlugs.length === 0) return [];
+      const ids = [];
+      for (const [pickerId, pack] of Object.entries(GAME_PACKS)) {
+        if (pack.entitlementSlug && purchasedSlugs.includes(pack.entitlementSlug)) {
+          ids.push(pickerId);
+        }
+      }
+      return ids;
     },
-    // Free packs are public; keep the query enabled even when
-    // signed-out so the picker still has something to show on
-    // landing-page screenshots. The user-bound branch short-
-    // circuits to an empty array when there's no id.
-    enabled: true,
+    enabled: !!user?.id,
     staleTime: 60_000,
   });
 
-  // Map DB slugs back to picker-ids via entitlementSlug.
-  const ids = [];
-  for (const [pickerId, pack] of Object.entries(GAME_PACKS)) {
-    if (pack.entitlementSlug && ownedSlugs.includes(pack.entitlementSlug)) {
-      ids.push(pickerId);
-    }
-  }
-  return ids;
+  // Free + purchased, dedup. Free is config-driven so no async
+  // wait — the picker can render the free cards on the first paint.
+  return Array.from(new Set([...FREE_PICKER_IDS, ...purchasedPickerIds]));
 }
