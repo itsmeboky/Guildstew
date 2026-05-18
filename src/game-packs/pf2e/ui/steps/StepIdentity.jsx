@@ -1,11 +1,11 @@
-// Step I — Who Walks Into the Story? (level + bio + house-rule toggles).
-// Verbatim from the PF2eCharacterForge prototype.
+// Step I — Who Walks Into the Story? (level + bio).
 
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import GMWhisper from '../components/GMWhisper.jsx';
 import CornerBrackets from '../components/CornerBrackets.jsx';
 import PortraitUpload from '../components/PortraitUpload.jsx';
 import { LevelStat } from '../components/BottomBar.jsx';
+import { useAuth } from '@/lib/AuthContext';
 import {
   ANCESTRIES,
   HERITAGES_BY_ANCESTRY,
@@ -22,8 +22,28 @@ import {
 import { STEPS } from '../../config/steps.js';
 
 const StepIdentity = ({ data, update, setData }) => {
+  const { user } = useAuth();
   const level = data.level || 1;
   const setLevel = (n) => update({ level: Math.max(1, Math.min(20, n)) });
+
+  // Stable draft id for storage paths so portrait/token re-uploads
+  // overwrite the same key instead of accumulating orphans. Generated
+  // once per draft and persisted on the in-memory creator state.
+  const tempId = useMemo(() => {
+    if (data.tempId) return data.tempId;
+    return (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `pf2e-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }, [data.tempId]);
+
+  useEffect(() => {
+    if (!data.tempId) update({ tempId });
+  }, [tempId, data.tempId, update]);
+
+  const systemData = data.system_data || {};
+  const setSystemField = (key, value) => update({
+    system_data: { ...systemData, [key]: value },
+  });
 
   // Quick preview of what this level grants
   const classFeatCount = STANDARD_CLASS_FEAT_LEVELS.filter(l => l <= level).length;
@@ -186,12 +206,29 @@ const StepIdentity = ({ data, update, setData }) => {
       {/* Left: avatar + portrait */}
       <div className="col-span-12 md:col-span-4 space-y-4">
         <div className="grid grid-cols-2 gap-3 items-start">
-          <PortraitUpload value={data.avatar} onChange={v => update({ avatar: v })} label="Token Avatar" aspect="aspect-square" round />
+          <PortraitUpload
+            value={systemData.token_url}
+            onChange={v => setSystemField('token_url', v)}
+            label="Token Avatar"
+            aspect="aspect-square"
+            round
+            userId={user?.id}
+            tempId={tempId}
+            kind="token"
+          />
           <div className="text-[10px] text-pf-stone font-body leading-relaxed pt-6">
             Small circular image shown on maps and chat rolls. Crop tight to the face.
           </div>
         </div>
-        <PortraitUpload value={data.portrait} onChange={v => update({ portrait: v })} label="Full Portrait" aspect="aspect-[3/4]" />
+        <PortraitUpload
+          value={systemData.portrait_url}
+          onChange={v => setSystemField('portrait_url', v)}
+          label="Full Portrait"
+          aspect="aspect-[3/4]"
+          userId={user?.id}
+          tempId={tempId}
+          kind="portrait"
+        />
         <p className="text-[10px] text-pf-stone font-body leading-relaxed italic">
           Portrait shows on the character sheet and in scene panels. Upload yours, or generate one in the studio.
         </p>
