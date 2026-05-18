@@ -12,14 +12,27 @@ imports.
 
 ## License
 
-The foundryvtt/pf2e repository is licensed under **Apache 2.0** (code)
-with the underlying game mechanics text licensed under the **OGL 1.0a /
-ORC** (depending on Remaster vs pre-Remaster content). The top-level
-`LICENSE`, `static/LICENSE`, and `static/licenses/` files have been
-preserved here to satisfy attribution requirements.
+The foundryvtt/pf2e repository is a **hybrid** of four license terms,
+not a single one. The full attribution lives at
+[`LICENSES/PATHFINDER_2E.md`](../../../../LICENSES/PATHFINDER_2E.md);
+the summary:
 
-When the generated adapter modules ship in production, the relevant
-attribution block will also appear in `LICENSES/PATHFINDER_2E.md` and be
+| Layer | License | Covers |
+|---|---|---|
+| Code / logic | Apache 2.0 | Anything ported from the foundryvtt/pf2e TypeScript source |
+| Remaster game content | ORC | Player Core, Player Core 2, Monster Core, GM Core, War of Immortals, ongoing remaster migrations |
+| Pre-Remaster legacy content | OGL 1.0a | Legacy bestiary entries / items the upstream hasn't migrated yet |
+| Paizo trademarks | Paizo Community Use Policy | Pathfinder name, Golarion, deities, location/proper nouns |
+
+This source dump was extracted from a **Remaster-era release** (confirmed
+by the presence of `exemplar.json` and `commander.json` — both War of
+Immortals classes, post-Remaster-only — and the upstream having moved
+fully to Remaster in system release 5.9.0).
+
+The top-level `LICENSE`, `static/LICENSE`, and `static/licenses/` files
+are preserved here verbatim to satisfy attribution requirements. When
+the generated adapter modules ship in production, the relevant
+attribution block also appears in `LICENSES/PATHFINDER_2E.md` and is
 surfaced in the Tavern listing for the pack.
 
 ## What was kept
