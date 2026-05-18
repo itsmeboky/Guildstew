@@ -403,6 +403,17 @@ export const spellsByClass = {
   }
 };
 
+// Subclass-granted "expanded spell list" data + helper live in a
+// plain .js sibling so the Node test runner can import them without
+// a JSX loader. Re-exported here so existing consumers that already
+// import from spellData.jsx keep working, and used locally by
+// getAllAvailableSpells below.
+import {
+  SUBCLASS_EXPANDED_SPELLS,
+  getExpandedSpellsForSubclass,
+} from "./subclassExpandedSpells.js";
+export { SUBCLASS_EXPANDED_SPELLS, getExpandedSpellsForSubclass };
+
 export const recommendedSpells = {
   Paladin: {
     cantrips: [],
@@ -781,7 +792,20 @@ function getSingleClassSpellSlots(className, level) {
   return slots;
 }
 
-export function getAllAvailableSpells(primaryClass, multiclasses = [], fullSpellsList = null) {
+export function getAllAvailableSpells(
+  primaryClass,
+  multiclasses = [],
+  fullSpellsList = null,
+  options = null,
+) {
+  // Subclass-granted expanded spell lists (e.g. Warlock patron
+  // Expanded Spells: a Fiend warlock at L1 can pick burning hands
+  // even though it's not on the base warlock list). Pass
+  // `{subclass, level}` so the merge runs; legacy callers that
+  // don't pass options still see the base class list only.
+  const subclass = options?.subclass || null;
+  const primaryLevel = Number(options?.level) || 1;
+
   if (fullSpellsList && Array.isArray(fullSpellsList) && fullSpellsList.length > 0) {
     const allSpells = {
       cantrips: [],
@@ -833,6 +857,20 @@ export function getAllAvailableSpells(primaryClass, multiclasses = [], fullSpell
       if (Array.isArray(hardcoded.cantrips)) allSpells.cantrips.push(...hardcoded.cantrips);
       if (Array.isArray(hardcoded.level1))   allSpells.level1.push(...hardcoded.level1);
     });
+
+    // Subclass-expanded spell lists (PHB Otherworldly Patron
+    // "Expanded Spells", Cleric Domain Spells, etc.). The expanded
+    // list spells become available to pick even when they aren't on
+    // the base class list — they still cost a known / prepared slot
+    // from the normal quota.
+    const expanded = getExpandedSpellsForSubclass(primaryClass, subclass, primaryLevel);
+    if (expanded) {
+      Object.entries(expanded).forEach(([key, list]) => {
+        if (Array.isArray(list) && allSpells[key]) {
+          allSpells[key].push(...list);
+        }
+      });
+    }
 
     Object.keys(allSpells).forEach(key => {
       allSpells[key] = Array.from(new Set(allSpells[key])).sort();

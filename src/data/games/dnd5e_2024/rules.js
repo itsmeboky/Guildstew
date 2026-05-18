@@ -339,10 +339,12 @@ export function mysticArcanumLevels(warlockLevel) {
     .sort((a, b) => a - b);
 }
 
-// Warlock Eldritch Invocations known by Warlock level (2024 grants
-// the first Invocation at level 1, vs 2014 which started at level 2).
+// Warlock Eldritch Invocations known by Warlock level. 2024 grants
+// the first TWO Invocations at level 1 (vs 2014 which started at
+// level 2 with 2 Invocations). PHB 2024 Warlock features table:
+// L1=2, L2=3, L5=5, L7=6, L9=7, L12=8, L15=9, L18=10.
 const ELDRITCH_INVOCATIONS_BY_LEVEL = {
-  1: 1, 2: 3, 5: 5, 7: 6, 9: 7, 12: 8, 15: 9, 18: 10,
+  1: 2, 2: 3, 5: 5, 7: 6, 9: 7, 12: 8, 15: 9, 18: 10,
 };
 
 export function eldritchInvocationsKnown(warlockLevel) {

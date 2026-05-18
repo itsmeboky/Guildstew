@@ -67,8 +67,16 @@ export const FIND_STEED = [
  * when the class doesn't have a companion slot at character-creation
  * time (most classes). The `chain` and `beast_master` flags drive
  * list composition in the picker.
+ *
+ * For Warlock, `pactBoon` is the L3 Pact Boon name from
+ * `characterData.feature_choices['Warlock-3-Pact Boon']` (e.g.
+ * "Pact of the Chain"). Earlier versions of this function inferred
+ * Chain from `subclass.includes("chain")`, but `subclass` is the
+ * Patron (Fiend / Archfey / Great Old One) — it never contains
+ * "chain", so the imp / pseudodragon / quasit / sprite list was
+ * never appended. Take the Pact Boon explicitly.
  */
-export function resolveCompanionContext({ className, subclass }) {
+export function resolveCompanionContext({ className, subclass, pactBoon }) {
   if (className === "Wizard") {
     return { kind: "familiar", title: "Familiar", description: "Your magical companion that serves and scouts for you.", list: FIND_FAMILIAR };
   }
@@ -77,7 +85,7 @@ export function resolveCompanionContext({ className, subclass }) {
     // don't get a creature statblock — surface the familiar list so
     // the player can still pick an option, and upgrade it when
     // Chain is chosen.
-    const isChain = (subclass || "").toLowerCase().includes("chain");
+    const isChain = (pactBoon || "").toLowerCase().includes("chain");
     return {
       kind: isChain ? "familiar_chain" : "familiar",
       title: "Familiar",

@@ -96,6 +96,10 @@ export default function SpellsStep({ characterData, updateCharacterData }) {
     characterData.class,
     characterData.multiclasses || [],
     fullSpellsList,
+    // Subclass + level enable patron-expanded spell merging (e.g.
+    // a Fiend warlock at L1 gains burning hands / command even
+    // though they aren't on the base warlock list).
+    { subclass: characterData.subclass, level: characterData.level },
   );
   const selectedSpells = characterData.spells || {};
   const pactSlots = getPactSlots(
