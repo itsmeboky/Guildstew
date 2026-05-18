@@ -1,4 +1,9 @@
 // Step I — Who Walks Into the Story? (level + bio).
+//
+// House rules read from active campaign.system_data.variant_rules —
+// see CampaignSettings.jsx. Variant toggles (Free Archetype, Ancestry
+// Paragon, Voluntary Flaws, Proficiency w/o Level, Dual-Class,
+// Gradual Boosts) are campaign-scoped, not character-scoped.
 
 import React, { useEffect, useMemo } from 'react';
 import GMWhisper from '../components/GMWhisper.jsx';
@@ -353,42 +358,6 @@ const StepIdentity = ({ data, update, setData }) => {
           />
         </div>
 
-        {/* House Rules / Optional Variants */}
-        <div className="border-t border-pf-brass-dim/20 pt-4 mt-2">
-          <label className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase block mb-2">House Rules <span className="text-pf-stone normal-case lowercase tracking-normal italic">(GM-toggled variants)</span></label>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {[
-              { id: 'freeArchetype',          label: 'Free Archetype',         desc: 'Bonus archetype feat at every even level — most-requested PF2e variant.' },
-              { id: 'ancestryParagon',        label: 'Ancestry Paragon',       desc: 'Ancestry feats at levels 1, 3, 7, 11, 15 (instead of 1, 5, 9, 13, 17).' },
-              { id: 'voluntaryFlaws',         label: 'Voluntary Flaws',        desc: 'Accept two extra ability flaws in exchange for one bonus boost.' },
-              { id: 'proficiencyWithoutLevel',label: 'Proficiency w/o Level',  desc: 'Drop level from proficiency math. Lower-magic feel.' },
-              { id: 'dualClass',              label: 'Dual-Class',             desc: 'Level two classes in parallel. High-power variant.' },
-              { id: 'gradualBoosts',          label: 'Gradual Ability Boosts', desc: 'Spread each batch of 4 boosts across 4 levels instead of one.' },
-            ].map(rule => {
-              const houseRules = data.houseRules || {};
-              const active = !!houseRules[rule.id];
-              return (
-                <button
-                  key={rule.id}
-                  onClick={() => update({ houseRules: { ...houseRules, [rule.id]: !active } })}
-                  className={`relative text-left p-3 bg-pf-bg-elev border transition-all
-                              ${active ? 'border-pf-brass bg-pf-brass/5' : 'border-pf-brass-dim/30 hover:border-pf-brass-dim'}`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-display text-xs text-pf-bone tracking-wider">{rule.label}</span>
-                    <span className={`font-mono text-[10px] ${active ? 'text-pf-sage' : 'text-pf-stone'}`}>
-                      {active ? '✓ ON' : '○ OFF'}
-                    </span>
-                  </div>
-                  <p className="font-body text-[10px] text-pf-stone leading-snug">{rule.desc}</p>
-                </button>
-              );
-            })}
-          </div>
-          <p className="font-body text-[10px] text-pf-stone italic mt-2">
-            These propagate to the Boosts and Class steps automatically. Toggle with your GM before play.
-          </p>
-        </div>
       </div>
     </div>
   </div>
