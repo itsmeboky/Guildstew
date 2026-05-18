@@ -14,7 +14,7 @@ import { quickPick, generatePortrait } from "@/api/aiClient";
 import { uploadFile } from "@/utils/uploadFile";
 import { trackEvent } from "@/utils/analytics";
 import { useAuth } from "@/lib/AuthContext";
-import IdentityStep from './IdentityStep';
+import IdentityStep from "@/components/characterCreator/IdentityStep";
 import ClassStep from "@/components/characterCreator/ClassStep";
 
 const BACKGROUNDS = [
