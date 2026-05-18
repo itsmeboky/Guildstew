@@ -58,7 +58,7 @@ const StepBackground = ({ data, update }) => {
           <div className="col-span-12 md:col-span-5 md:border-r md:border-pf-brass-dim/20 md:pr-6">
             <div className="flex items-baseline justify-between mb-3 gap-3">
               <h3 className="font-display text-3xl text-pf-bone">{selected.name}</h3>
-              <ComplexityBadge level={selected.complexity} />
+              <ComplexityBadge level={selected.rarity} />
             </div>
             <p className="font-body text-sm text-pf-parchment italic leading-relaxed mb-4">{flavor}</p>
 
