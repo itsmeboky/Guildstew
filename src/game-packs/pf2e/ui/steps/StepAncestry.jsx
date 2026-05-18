@@ -137,25 +137,27 @@ const StepAncestry = ({ data, update }) => {
                     <p className="font-display text-[10px] tracking-[0.2em] text-pf-brass uppercase mb-2">
                       Level {fLvl} Ancestry Feat
                     </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {featOptions.map(feat => {
-                        const active = picked === feat.name;
-                        return (
-                          <button
-                            key={feat.name}
-                            onClick={() => update({ ancestryFeats: { ...ancestryFeats, [fLvl]: feat.name } })}
-                            className={`relative p-3 bg-pf-bg-card border text-left transition-all
-                                        ${active ? 'border-pf-brass bg-pf-brass/5' : 'border-pf-brass-dim/30 hover:border-pf-brass-dim'}`}
-                          >
-                            {active && <CornerBrackets active />}
-                            <div className="flex items-baseline justify-between mb-1">
-                              <span className="font-display text-sm text-pf-bone">{feat.name}</span>
-                              <ThreeActionGlyph count={feat.actions} />
-                            </div>
-                            <p className="font-body text-[11px] text-pf-stone leading-snug">{feat.desc}</p>
-                          </button>
-                        );
-                      })}
+                    <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                      <div className="grid grid-cols-3 gap-3">
+                        {featOptions.map(feat => {
+                          const active = picked === feat.name;
+                          return (
+                            <button
+                              key={feat.name}
+                              onClick={() => update({ ancestryFeats: { ...ancestryFeats, [fLvl]: feat.name } })}
+                              className={`relative p-4 min-h-[120px] bg-pf-bg-card border text-left transition-all
+                                          ${active ? 'border-pf-brass bg-pf-brass/5' : 'border-pf-brass-dim/30 hover:border-pf-brass-dim'}`}
+                            >
+                              {active && <CornerBrackets active />}
+                              <div className="flex items-baseline justify-between mb-2 gap-2">
+                                <span className="font-display text-base text-pf-bone">{feat.name}</span>
+                                <ThreeActionGlyph count={feat.actions} />
+                              </div>
+                              <p className="font-body text-[13px] text-pf-stone leading-snug">{feat.desc}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                     {fLvl > 1 && (
                       <p className="text-[10px] text-pf-stone/70 font-body italic mt-1">
