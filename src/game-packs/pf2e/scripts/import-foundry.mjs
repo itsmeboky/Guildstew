@@ -243,6 +243,7 @@ function transformBackground(item) {
     trainedSkills: sys.trainedSkills?.value || [],
     loreSkill: sys.loreSkill,
     grantedFeat: sys.items ? Object.values(sys.items).find(i => i.uuid?.includes('feat'))?.name : null,
+    rarity: sys.traits?.rarity || 'common',
     desc: getDesc(item, tier),
     source: sys.publication?.title,
     tier,
