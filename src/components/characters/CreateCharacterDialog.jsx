@@ -51,7 +51,16 @@ export default function CreateCharacterDialog({ open, onClose }) {
     if (open) {
       setChosenPack(shouldAutoPick ? ownedPacks[0] : null);
     }
-  }, [open, ownedPacks, shouldAutoPick]);
+    // useUserGamePacks() returns a fresh array reference every
+    // render. Depending on `ownedPacks` directly would re-fire this
+    // effect on every render and clobber the user's pack pick the
+    // instant they click a card. Depend on `open` only — the intent
+    // is "reset to the picker when the dialog (re)opens", not
+    // "reset every render". `ownedPacks.length` is included as a
+    // stable sentinel so auto-pick refreshes if the owned set
+    // changes between opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, ownedPacks.length, shouldAutoPick]);
 
   const handlePackSelect = (packId) => {
     const pack = getGamePack(packId);
