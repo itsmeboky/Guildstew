@@ -1,0 +1,18 @@
+[
+  { "name": "Acrobatics",   "ability": "Dex" },
+  { "name": "Arcana",       "ability": "Int" },
+  { "name": "Athletics",    "ability": "Str" },
+  { "name": "Crafting",     "ability": "Int" },
+  { "name": "Deception",    "ability": "Cha" },
+  { "name": "Diplomacy",    "ability": "Cha" },
+  { "name": "Intimidation", "ability": "Cha" },
+  { "name": "Medicine",     "ability": "Wis" },
+  { "name": "Nature",       "ability": "Wis" },
+  { "name": "Occultism",    "ability": "Int" },
+  { "name": "Performance",  "ability": "Cha" },
+  { "name": "Religion",     "ability": "Wis" },
+  { "name": "Society",      "ability": "Int" },
+  { "name": "Stealth",      "ability": "Dex" },
+  { "name": "Survival",     "ability": "Wis" },
+  { "name": "Thievery",     "ability": "Dex" }
+]
