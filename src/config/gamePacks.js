@@ -68,12 +68,9 @@ export const GAME_PACKS = {
     accent: "#c2410c",
     icon: "⚔️",
     license: "ORC",
-    // Status stays `coming_soon` until CharacterCreator.jsx (or a
-    // dedicated PathfinderCharacterCreator page) dispatches into
-    // the lazy `creator` below. Flipping to `available` without
-    // that wiring would route users to a crash — see follow-up.
-    status: "coming_soon",
+    status: "available",
     enabled: true,
+    creatorRoute: "PathfinderCharacterCreator",
     // Lazy-loaded so the PF2e bundle doesn't bloat the main chunk.
     // Resolved by callers that know about the pf2e flow; the
     // legacy creatorRoute pattern (single CharacterCreator page
