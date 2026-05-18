@@ -22,19 +22,6 @@ export const GAME_PACKS = {
     id: "dnd5e_2014",
     family: "dnd5e",
     name: "D&D 5e (2014)",
-    short: "5e (2014)",
-    tagline: "The classic 5e ruleset — PHB 2014.",
-    description:
-      "Classic D&D 5th edition as written in the 2014 Player's Handbook. Twelve classes, ability scores, levels 1–20, advantage/disadvantage, the whole familiar toolkit.",
-    accent: "#37F2D1",
-    icon: "🐉",
-    status: "legacy",
-    creatorRoute: "CharacterCreator",
-    aliasFor: "dnd5e_2014",
-  },
-  dnd5e_2014: {
-    id: "dnd5e_2014",
-    name: "D&D 5e (2014)",
     short: "D&D 5e 2014",
     tagline: "Original 2014 PHB ruleset. The classic toolkit.",
     description:
@@ -43,10 +30,10 @@ export const GAME_PACKS = {
     icon: "🐉",
     status: "available",
     creatorRoute: "CharacterCreator",
-    // Slug on the game_packs DB table. Both 5e editions share the
-    // single `dnd5e` row (is_free=true), so one entitlement unlocks
-    // both picker entries.
-    entitlementSlug: "dnd5e",
+    // Slug on the game_packs DB table. Migration 20260514030000 split
+    // the original single `dnd5e` row into `dnd5e_2014` + `dnd5e_2024`,
+    // so each edition now has its own DB row and its own entitlement.
+    entitlementSlug: "dnd5e_2014",
   },
   dnd5e_2024: {
     id: "dnd5e_2024",
@@ -60,7 +47,7 @@ export const GAME_PACKS = {
     icon: "🐉",
     status: "available",
     creatorRoute: "CharacterCreator",
-    entitlementSlug: "dnd5e",
+    entitlementSlug: "dnd5e_2024",
   },
   pathfinder_2e: {
     id: "pathfinder_2e",
@@ -76,7 +63,11 @@ export const GAME_PACKS = {
     status: "available",
     enabled: true,
     creatorRoute: "PathfinderCharacterCreator",
-    entitlementSlug: "pathfinder2e",
+    // DB slug matches the row inserted by migration 20260514030000.
+    // (The earlier value `pathfinder2e` — without the underscore —
+    // never matched any row, so PF2e was un-pickable for the same
+    // reason the two D&D editions were.)
+    entitlementSlug: "pathfinder_2e",
     // Lazy-loaded so the PF2e bundle doesn't bloat the main chunk.
     // Resolved by callers that know about the pf2e flow; the
     // legacy creatorRoute pattern (single CharacterCreator page
@@ -165,9 +156,17 @@ export function getGamePack(id) {
 }
 
 export function getOwnedGamePacks(ownedIds) {
+  // Available packs are free-by-spec — they show in the picker for
+  // every visitor regardless of what useUserGamePacks() returns.
+  // The `ownedIds` argument is kept for the future paid-pack flow
+  // (where status==="available" alone isn't enough), but right now
+  // every pack at status==="available" is granted unconditionally.
+  // This prevents the picker from going empty if the hook errors,
+  // the DB doesn't have a matching row, or a deploy lag serves a
+  // stale bundle.
   return GAME_PACK_ORDER
     .map((id) => GAME_PACKS[id])
-    .filter((p) => p && ownedIds.includes(p.id) && p.status === "available");
+    .filter((p) => p && p.status === "available");
 }
 
 export function getUpcomingGamePacks(ownedIds) {
