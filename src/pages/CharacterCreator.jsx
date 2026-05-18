@@ -679,6 +679,17 @@ const handleSubmit = () => {
       return;
     }
 
+    // RLS policy `users_manage_own_characters` rejects any INSERT
+    // where user_id != auth.uid(). If useAuth hasn't hydrated yet
+    // (cold app start, expired session), `user?.id` would be null,
+    // we'd write user_id=null, and Supabase would return a generic
+    // "security error" with no useful detail. Bail explicitly so
+    // the player sees an actionable message instead.
+    if (!user?.id) {
+      toast.error("Sign in first — your session has expired.");
+      return;
+    }
+
     const stats = buildStatsFromCharacterData(characterData);
     stats.created_by = user?.email;
     stats.user_id = user?.id;
@@ -702,6 +713,13 @@ const handleSubmit = () => {
   // building a `stats` object (buildStatsFromCharacterData expects
   // the characterData shape) rather than bypassing it.
   const saveAiGenerated = async (generated) => {
+    // Same RLS-bypass guard as handleSubmit. Without authUser?.id
+    // populated, the INSERT would write user_id=null and be rejected
+    // by the users_manage_own_characters policy.
+    if (!authUser?.id) {
+      toast.error("Sign in first — your session has expired.");
+      return;
+    }
     setAiSaving(true);
     try {
       const abilities = generated.ability_scores

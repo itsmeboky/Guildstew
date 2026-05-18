@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,10 +37,15 @@ export default function Settings() {
   const [supportOpen, setSupportOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me()
-  });
+  // The session user comes from the AuthContext provider, not from
+  // base44.auth.me() — that method does not exist on base44Client
+  // (the auth object only exposes updateMe / logout / redirectToLogin),
+  // so the previous useQuery call resolved to `undefined`, leaving
+  // `user?.id` null. Downstream side-effects: the support ticket
+  // dialog received userId={undefined} and the resulting INSERT into
+  // public.support_tickets was rejected by the
+  // users_manage_own_tickets RLS policy (user_id != auth.uid()).
+  const { user } = useAuth();
 
   const { data: achievements } = useQuery({
     queryKey: ['achievements'],
