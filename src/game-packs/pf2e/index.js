@@ -58,7 +58,13 @@ export const PACK_META = {
 // or pull the whole pack object:
 //   import pack from "@/game-packs/pf2e";
 //   pack.content.ancestries
-export { CharacterCreatorFlow } from "./ui/CharacterCreatorFlow.jsx";
+// Re-export the UI surfaces the gamePacks config lazy-imports. Both
+// component files use `export default`, so the re-export has to alias
+// the default export to a named one — otherwise `m.CharacterCreatorFlow`
+// resolves to undefined, lazy() returns {default: undefined}, and
+// React renders <undefined /> (minified error #306).
+export { default as CharacterCreatorFlow } from "./ui/CharacterCreatorFlow.jsx";
+export { default as CharacterSheet } from "./ui/CharacterSheet.jsx";
 
 // `content` and `data` namespaces are derived from the same
 // canonical bridge — each entry is a getter so the bundle doesn't
