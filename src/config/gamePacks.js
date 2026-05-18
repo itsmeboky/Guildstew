@@ -156,9 +156,17 @@ export function getGamePack(id) {
 }
 
 export function getOwnedGamePacks(ownedIds) {
+  // Available packs are free-by-spec — they show in the picker for
+  // every visitor regardless of what useUserGamePacks() returns.
+  // The `ownedIds` argument is kept for the future paid-pack flow
+  // (where status==="available" alone isn't enough), but right now
+  // every pack at status==="available" is granted unconditionally.
+  // This prevents the picker from going empty if the hook errors,
+  // the DB doesn't have a matching row, or a deploy lag serves a
+  // stale bundle.
   return GAME_PACK_ORDER
     .map((id) => GAME_PACKS[id])
-    .filter((p) => p && ownedIds.includes(p.id) && p.status === "available");
+    .filter((p) => p && p.status === "available");
 }
 
 export function getUpcomingGamePacks(ownedIds) {
