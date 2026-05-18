@@ -1,1 +1,2233 @@
-[]
+[
+  {
+    "id": "athamaru",
+    "name": "Athamaru",
+    "hp": 8,
+    "size": "med",
+    "speed": 20,
+    "boosts": [
+      "str",
+      "wis",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "int"
+    ],
+    "vision": "low-light-vision",
+    "languages": [
+      "common",
+      "thalassic"
+    ],
+    "additionalLanguages": [
+      "alghollthu",
+      "azlanti",
+      "fey",
+      "tien"
+    ],
+    "traits": [
+      "amphibious",
+      "athamaru",
+      "humanoid"
+    ],
+    "desc": "Athamarus are fish-like humanoids who form tight-knit undersea communities. In small settlements, they engage in the subsistence farming of seaweed, train eels to serve as mounts, and create elaborate works of coral art. Their interactions with other aquatic ancestries are strained, as athamarus have suffered mistreatment at their hands. However, they remain curious about potential connections and what new opportunities may offer. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.19pE89qVIMELrZoY]{Athamaru}",
+    "source": "Pathfinder Howl of the Wild",
+    "tier": "tier2",
+    "heritages": [
+      {
+        "id": "4BczMv4EnLcgrEJE",
+        "name": "Coral Athamaru",
+        "ancestrySlug": "athamaru",
+        "traits": [],
+        "desc": "Coral covers patches of your body, which provides a natural layer of defense. Coral athamarus often choose Coral Symbiotes and other related ancestry feats. The coral plates are medium armor in the plate armor group that grant a +4 item bonus to AC, a Dex cap of +1, a check penalty of –2, a Speed penalty of –5 feet, a Strength value of +3, and have the aquadynamic and comfort traits. You can never wear other armor or remove the coral. You can etch armor runes onto the coral.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "yEQSw61sNRvgPy4T",
+        "name": "Hopeful Athamaru",
+        "ancestrySlug": "athamaru",
+        "traits": [],
+        "desc": "You have begun to prepare yourself to become an athamaru matriarch, and are likely stepping outside of your community to better prepare yourself as a leader. As part of the physical change, you are substantially taller than you once were. Instead of Medium, your size is Large. In addition, you instill your allies with a feeling of hopefulness. You have a 10-foot aura that grants any ally in it a +1 circumstance bonus to saving throws against fear; this is an emotion and mental effect.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "1w4npGmPzgdZw3Na",
+        "name": "Kaleidoscopic Athamaru",
+        "ancestrySlug": "athamaru",
+        "traits": [],
+        "desc": "Your scales are a spectrum of color that shimmers in the light. In areas of bright light or dim light, you gain a +1 circumstance bonus to Performance checks. You also gain the @UUID[Compendium.pf2e.actionspf2e.Item.Dazzle Seeker] reaction.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "CkrTRdLfDDDUOCqP",
+        "name": "Quilled Athamaru",
+        "ancestrySlug": "athamaru",
+        "traits": [],
+        "desc": "Sharp quills on your head can pierce your foes deeply. Most athamarus use such quills for defense, but a well-timed headbash can be devastatingly effective. You gain a quills melee unarmed attack that deals 1d6 piercing damage. Your quills are in the brawling group and have the agile, finesse, and unarmed traits.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      }
+    ]
+  },
+  {
+    "id": "automaton",
+    "name": "Automaton",
+    "hp": 8,
+    "size": "med",
+    "speed": 25,
+    "boosts": [
+      "str",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [],
+    "vision": "low-light-vision",
+    "languages": [
+      "common",
+      "utopian"
+    ],
+    "additionalLanguages": [
+      "chthonian",
+      "diabolic",
+      "dwarven",
+      "elven",
+      "empyrean",
+      "jistkan",
+      "petran",
+      "pyric",
+      "sussuran",
+      "thalassic"
+    ],
+    "traits": [
+      "automaton",
+      "construct"
+    ],
+    "desc": "These intelligent constructs house actual souls and represent what remains of a dying empire's last attempt at greatness. Automatons combine technological ingenuity with magical power, creating a blended being wholly unique to the world. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.rsx8cRI20oEDgfQh]{Automaton}",
+    "source": "Pathfinder Guns & Gears",
+    "tier": "tier2",
+    "heritages": [
+      {
+        "id": "2kMltxs2rmxRSxfV",
+        "name": "Hunter Automaton",
+        "ancestrySlug": "automaton",
+        "traits": [],
+        "desc": "You were designed to serve as a scout or assassin and have a body resembling a pack hunter like a large cat or wolf. Though you typically move like a quadruped, you can still stand and fight like a biped, allowing you to use all equipment normally. Your quadruped design allows you to move quickly; if you have both hands free, you can increase your Speed to 30 feet as you run on all fours.",
+        "source": "Pathfinder Guns & Gears",
+        "tier": "tier2"
+      },
+      {
+        "id": "J0eAmntxXywr9sGt",
+        "name": "Mage Automaton",
+        "ancestrySlug": "automaton",
+        "traits": [],
+        "desc": "The chamber housing your core has a more direct connection to the rest of your humanoid shape, allowing you to tap into your core's magical energy. You gain one cantrip from the arcane spell list. You can cast this spell as an arcane innate spell at will. A cantrip is heightened to a spell rank equal to half your level rounded up.",
+        "source": "Pathfinder Guns & Gears",
+        "tier": "tier2"
+      },
+      {
+        "id": "j1nzBc9Pui7vsJ9o",
+        "name": "Sharpshooter Automaton",
+        "ancestrySlug": "automaton",
+        "traits": [],
+        "desc": "Your lithe, humanoid shape is designed for speed and accuracy suitable for ranged combat. You gain the @UUID[Compendium.pf2e.actionspf2e.Item.Automaton Aim] action.",
+        "source": "Pathfinder Guns & Gears",
+        "tier": "tier2"
+      },
+      {
+        "id": "y24ykEUfpIu5Gp6D",
+        "name": "Warrior Automaton",
+        "ancestrySlug": "automaton",
+        "traits": [],
+        "desc": "Sporting a bulkier, powerful design, your body has been designed for combat. You have a bulky, humanoid shape. The damage die for your fist increases to 1d6 instead of 1d4. You don't take a penalty when making a lethal attack with your fist or any other unarmed attack.",
+        "source": "Pathfinder Guns & Gears",
+        "tier": "tier2"
+      }
+    ]
+  },
+  {
+    "id": "awakened-animal",
+    "name": "Awakened Animal",
+    "hp": 6,
+    "size": "med",
+    "speed": 5,
+    "boosts": [
+      "con",
+      "wis",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "int"
+    ],
+    "vision": "normal",
+    "languages": [
+      "common"
+    ],
+    "additionalLanguages": [],
+    "traits": [
+      "awakened-animal",
+      "beast"
+    ],
+    "desc": "You once enjoyed the simple and boundless pleasures of nature with an innocent, uncluttered mind. You lived from moment to moment, never questioning what comes next or pondering the ramifications of what happened before. You were at one with the wild. Then came the event that changed everything. You drank from a glowing lake, someone pulled a magical prank, a druid sought to elevate your mind. You were pulled out of the present moment of the wild and into a land of thought. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.jX3VHEFgpqqUy0aP]{Awakened Animal}",
+    "source": "Pathfinder Howl of the Wild",
+    "tier": "tier2",
+    "heritages": [
+      {
+        "id": "13vilUcBjqMV2gxP",
+        "name": "Climbing Animal",
+        "ancestrySlug": "awakened-animal",
+        "traits": [],
+        "desc": "You are an animal whose limbs are adapted to grab, climb, and brachiate. You might be dexterous and ready to use tools like a chimpanzee or otter, or you may simply be a quick climber like a bear, raccoon, or sloth. You have a land Speed of 20 feet, a climb Speed of 20 feet, and one animal attack of your choice (typically claw, fist, or jaws).",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "QZv2taQQAdeR8Vmg",
+        "name": "Flying Animal",
+        "ancestrySlug": "awakened-animal",
+        "traits": [],
+        "desc": "You are an animal that can take flight for long or sustained bursts, such as an eagle, bat, bee, or flying squirrel. The awakening process has disrupted your ability to fly as freely as you once did. What used to be an automatic process is now one that you must apply some thought to until it becomes automatic once again. You can still slow your descent, so you take no damage from falling, regardless of the distance you fall. Most flying awakened animals choose the Take Flight ancestry feat at 1st level to regain a limited ability to fly. You have a land Speed of 20 feet and one animal attack of your choice (typically beak, claw, jaws, talon, or wing).",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "bsXA1l5mxNnmBh5M",
+        "name": "Running Animal",
+        "ancestrySlug": "awakened-animal",
+        "traits": [],
+        "desc": "You are an animal meant for running at great speeds across land. Typically, you run on all fours like a dog, cheetah, or an iguana, but you could also use two legs like a kangaroo, emu, or penguin. You have a land Speed of 30 feet and one animal attack of your choice (typically claw, jaws, or tail).",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "nlhVoQDfLKYM3j1l",
+        "name": "Swimming Animal",
+        "ancestrySlug": "awakened-animal",
+        "traits": [],
+        "desc": "You are an aquatic animal who is most comfortable in the water. You may spend much of your time in the water like an alligator, seal, whale, or dolphin, or you may require the water to breathe like a fish or some crustaceans. You have one animal attack of your choice (typically claw, jaws, or tail; see the sidebar). Choose if you are aquatic or water-dwelling. Aquatic: You gain the aquatic trait and you have a swim Speed of 30 feet. The aquatic trait means you breathe water but not air, and your bludgeoning and slashing unarmed Strikes don't take the usual –2 penalty for being underwater. Water-dwelling: You can hold your breath underwater for 10 minutes before needing air. You have a swim Speed of 20 feet, and if you can move on land, you have base Speed of 20 feet.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      }
+    ]
+  },
+  {
+    "id": "catfolk",
+    "name": "Catfolk",
+    "hp": 8,
+    "size": "med",
+    "speed": 25,
+    "boosts": [
+      "cha",
+      "dex",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "wis"
+    ],
+    "vision": "low-light-vision",
+    "languages": [
+      "amurrun",
+      "common"
+    ],
+    "additionalLanguages": [
+      "draconic",
+      "elven",
+      "fey",
+      "gnomish",
+      "goblin",
+      "halfling",
+      "iruxi",
+      "jotun"
+    ],
+    "traits": [
+      "catfolk",
+      "humanoid"
+    ],
+    "desc": "Curious and gregarious wanderers, catfolk combine the features of felines and humanoids in both appearance and temperament. They enjoy learning new things, collecting new tales and trinkets, and ensuring their loved ones are safe and happy. Catfolk view themselves as the chosen guardians of natural places in the world and are often recklessly brave, even in the face of overwhelming opposition. They believe that strong communities, breadth of experience, and continual self-improvement aid them in this fight. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.5S1Pq3GoEzLfBbH7]{Catfolk}",
+    "source": "Pathfinder Player Core 2",
+    "tier": "tier1",
+    "heritages": [
+      {
+        "id": "bLhIBwqdjTiVJ5qm",
+        "name": "Clawed Catfolk",
+        "ancestrySlug": "catfolk",
+        "traits": [],
+        "desc": "Your family has particularly long, sharp claws capable of delivering bleeding wounds with a wicked swipe. You gain a claw unarmed attack that deals 1d6 slashing damage. Your claws are in the brawling group and have the agile, finesse and unarmed traits.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "1lv7RMp7t5iqeUFT",
+        "name": "Hunting Catfolk",
+        "ancestrySlug": "catfolk",
+        "traits": [],
+        "desc": "You come from a long line of skilled hunters and trackers and have a particularly keen sense of smell. You gain imprecise scent with a range of 30 feet. This means you can use your sense of smell to determine a creature's location. The GM will usually double the range if you're downwind from the creature or halve the range if you're upwind. In addition, you gain a +2 circumstance bonus to @UUID[Compendium.pf2e.actionspf2e.Item.Track] a creature or object if you've smelled it before.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "HpqQ5VQ0w4HqYgVC",
+        "name": "Jungle Catfolk",
+        "ancestrySlug": "catfolk",
+        "traits": [],
+        "desc": "You're descended from jungle stalkers and can move swiftly through scrub and underbrush. You ignore difficult terrain from undergrowth, and greater difficult terrain from undergrowth is only difficult terrain for you.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "3F5ffk7cmnrBhPcT",
+        "name": "Liminal Catfolk",
+        "ancestrySlug": "catfolk",
+        "traits": [],
+        "desc": "You've inherited a closeness to the far corners of the world, where the boundaries between dimensions grow thin. You can cast the @UUID[Compendium.pf2e.spells-srd.Item.Detect Magic] cantrip as an occult innate spell at will. A cantrip is heightened to half your level rounded up. You also gain a +1 circumstance bonus to Occultism checks to @UUID[Compendium.pf2e.actionspf2e.Item.Recall Knowledge] about creatures that originated on planes other than the Universe.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "hOPOyyt7qZXYYCOU",
+        "name": "Nine Lives Catfolk",
+        "ancestrySlug": "catfolk",
+        "traits": [],
+        "desc": "Your family has always seems to bounce back from disaster, not through physical hardiness or specialized skill, but from sheer luck. Other catfolk whisper that you have nine lives. While you're @UUID[Compendium.pf2e.conditionitems.Item.Dying], you don't add your dying value to the DC of your recovery checks (this means the DC is typically 10). In addition, you gain the @UUID[Compendium.pf2e.feats-srd.Item.Diehard] general feat.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "NWsZ0cIeghyzk9bU",
+        "name": "Sharp-Eared Catfolk",
+        "ancestrySlug": "catfolk",
+        "traits": [],
+        "desc": "You were born with big, expressive ears that move with your moods and perk up at any unexpected sound. You gain a +2 circumstance bonus to locate undetected creatures that you could hear within 30 feet with a @UUID[Compendium.pf2e.actionspf2e.Item.Seek] action. As long as you're aware of a creature via sound, once per round, your ears can help you @UUID[Compendium.pf2e.actionspf2e.Item.Point Out] the creature to all allies as a free action.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "6dMd4JG0ndrObEUj",
+        "name": "Winter Catfolk",
+        "ancestrySlug": "catfolk",
+        "traits": [],
+        "desc": "You have a thick coat of fur that protects you from the cold. You gain cold resistance equal to half your level (minimum 1). You treat environmental cold effects as if they were one step less extreme (incredible cold becomes extreme, extreme cold becomes severe, and so on).",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      }
+    ]
+  },
+  {
+    "id": "centaur",
+    "name": "Centaur",
+    "hp": 8,
+    "size": "lg",
+    "speed": 30,
+    "boosts": [
+      "str",
+      "wis",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "cha"
+    ],
+    "vision": "darkvision",
+    "languages": [
+      "common",
+      "fey"
+    ],
+    "additionalLanguages": [
+      "arboreal",
+      "cyclops",
+      "dwarven",
+      "elven",
+      "gnomish",
+      "halfling",
+      "jotun"
+    ],
+    "traits": [
+      "beast",
+      "centaur",
+      "humanoid"
+    ],
+    "desc": "Centaurs are proud nomads who range far and wide across their ancestral territories, protecting their lands from exploitation and intrusion. They are survivalists who forge tight bonds with family and community and stand firm in the face of danger. Many are skilled hunters, trackers, and warriors who do battle with bow, steel, and hooves. Brave and stubborn, they're willing to challenge even the fiercest foes and largest forces to protect their homes, kin, and the land within their domain. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.AhKqWjsodDXRUelE]{Centaur}",
+    "source": "Pathfinder Howl of the Wild",
+    "tier": "tier2",
+    "heritages": [
+      {
+        "id": "1FmcZqnmDm8H0DRB",
+        "name": "Budding Speaker Centaur",
+        "ancestrySlug": "centaur",
+        "traits": [],
+        "desc": "You were born with a spark of magic that could set you on the path to becoming a Greenspeaker or Faithspeaker. Select divine or primal. If you selected divine, you're a Faithspeaker. If you selected primal, you're a Greenspeaker. This choice can't be changed. You gain one cantrip from the chosen spell list. You can cast this spell as an innate spell at will. A cantrip is heightened to a spell rank equal to half your level rounded up.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "z16zRyLCeTXan0Ae",
+        "name": "Fleetwind Centaur",
+        "ancestrySlug": "centaur",
+        "traits": [],
+        "desc": "You're sleek of frame and capable of reaching incredible speeds on hooves alone. Your Speed increases by 5 feet.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "XQp3uReCgoXS8hCJ",
+        "name": "Ironhoof Centaur",
+        "ancestrySlug": "centaur",
+        "traits": [],
+        "desc": "Your hooves are incredibly strong and serve as formidable weapons. You gain a hoof unarmed attack that deals 1d6 bludgeoning damage. Your hooves are in the brawling group and have the finesse and unarmed traits.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "3aKeX3q9hRdxgP1J",
+        "name": "Mottle-Coat Centaur",
+        "ancestrySlug": "centaur",
+        "traits": [],
+        "desc": "Your coat is mottled or striped, granting you natural camouflage in your home environment. Select a terrain from the following: arctic, desert, forest, mountain, plains, or swamp. In your selected terrain, you gain a +1 circumstance bonus to Stealth checks to @UUID[Compendium.pf2e.actionspf2e.Item.Hide] or @UUID[Compendium.pf2e.actionspf2e.Item.Sneak] and to Deception checks to @UUID[Compendium.pf2e.actionspf2e.Item.Feint].",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "2GmWdSNbH4yx9pzY",
+        "name": "Ponygait Centaur",
+        "ancestrySlug": "centaur",
+        "traits": [],
+        "desc": "You are smaller than most other centaurs, though no less fleet of foot. Instead of Large, your size is Medium. You gain a +1 circumstance bonus to Reflex saving throws.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "raDHBXYpc2MvWWgh",
+        "name": "Stoutheart Centaur",
+        "ancestrySlug": "centaur",
+        "traits": [],
+        "desc": "You're a hardy centaur, firm of stance and strong of heart. You gain 10 Hit Points from your ancestry instead of 8 and gain a +1 circumstance bonus to Acrobatics checks to @UUID[Compendium.pf2e.actionspf2e.Item.Balance] and to your Reflex DC to avoid being tripped.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      }
+    ]
+  },
+  {
+    "id": "dwarf",
+    "name": "Dwarf",
+    "hp": 10,
+    "size": "med",
+    "speed": 20,
+    "boosts": [
+      "con",
+      "wis",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "cha"
+    ],
+    "vision": "darkvision",
+    "languages": [
+      "common",
+      "dwarven"
+    ],
+    "additionalLanguages": [
+      "gnomish",
+      "goblin",
+      "jotun",
+      "orcish",
+      "petran",
+      "sakvroth"
+    ],
+    "traits": [
+      "dwarf",
+      "humanoid"
+    ],
+    "desc": "Dwarves have a well-earned reputation as a stoic and stern people, ensconced within citadels and cities carved from solid rock. While some see them as dour and humorless crafters of stone and metal, dwarves and those who have spent time among them understand their unbridled zeal for their work, caring far more about quality than quantity. To a stranger, they can seem untrusting and clannish, but to their friends and family, they are warm and caring, their halls filled with the sounds of laughter and hammers hitting anvils. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.XzRv30zY3UXRbBho]{Dwarf}",
+    "source": "Pathfinder Player Core",
+    "tier": "tier1",
+    "heritages": [
+      {
+        "id": "yL6944LrPo2HNdEJ",
+        "name": "Ancient-Blooded Dwarf",
+        "ancestrySlug": "dwarf",
+        "traits": [],
+        "desc": "Dwarven heroes of old could shrug off their enemies' magic, and some of that resistance manifests in you. You gain the @UUID[Compendium.pf2e.actionspf2e.Item.Call on Ancient Blood] reaction.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "VTtXwBxrfRUXSL38",
+        "name": "Death Warden Dwarf",
+        "ancestrySlug": "dwarf",
+        "traits": [],
+        "desc": "Your ancestors were tomb guardians, and their power to ward off death passed on to you. If you roll a success on a saving throw against an effect that has the void trait or was created by an undead creature, you get a critical success instead.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "5CqsBKCZuGON53Hk",
+        "name": "Forge Dwarf",
+        "ancestrySlug": "dwarf",
+        "traits": [],
+        "desc": "You have a remarkable adaptation to hot environments. This grants you fire resistance equal to half your level (minimum 1), and you treat environmental heat effects as if they were one step less extreme (incredible heat becomes extreme, extreme heat becomes severe, and so on).",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "VSyOvtgJ1ZNpIVgC",
+        "name": "Rock Dwarf",
+        "ancestrySlug": "dwarf",
+        "traits": [],
+        "desc": "Your ancestors lived and worked among the ancient stones of the mountains or the depths of the earth. This makes you solid as a rock when you plant your feet. You gain a +2 circumstance bonus to your Fortitude or Reflex DC against attempts to @UUID[Compendium.pf2e.actionspf2e.Item.Reposition], @UUID[Compendium.pf2e.actionspf2e.Item.Shove], or @UUID[Compendium.pf2e.actionspf2e.Item.Trip] you. This bonus also applies to saving throws against spells or effects that attempt to force you to move or knock you @UUID[Compendium.pf2e.conditionitems.Item.Prone]. In addition, if any effect would force you to move 10 feet or more, you are moved only half the distance.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "UV2sABrTC5teOXTE",
+        "name": "Strong-Blooded Dwarf",
+        "ancestrySlug": "dwarf",
+        "traits": [],
+        "desc": "Your blood runs hearty and strong, and you can shake off toxins. You gain poison resistance equal to half your level (minimum 1), and each of your successful saving throws against a poison affliction reduces its stage by 2, or by 1 for a virulent poison. Each critical success against an ongoing poison reduces its stage by 3, or by 2 for a virulent poison.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      }
+    ]
+  },
+  {
+    "id": "elf",
+    "name": "Elf",
+    "hp": 6,
+    "size": "med",
+    "speed": 30,
+    "boosts": [
+      "dex",
+      "int",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "con"
+    ],
+    "vision": "low-light-vision",
+    "languages": [
+      "common",
+      "elven"
+    ],
+    "additionalLanguages": [
+      "draconic",
+      "empyrean",
+      "fey",
+      "gnomish",
+      "goblin",
+      "kholo",
+      "orcish"
+    ],
+    "traits": [
+      "elf",
+      "humanoid"
+    ],
+    "desc": "As an ancient people, elves have seen great change and have the perspective that can come only from watching the arc of history. After leaving the world in ancient times, they returned to a changed land, and they still struggle to reclaim their ancestral homes, most notably from terrible demons that have invaded parts of their lands. To some, the elves are objects of awe—graceful and beautiful, with immense talent and knowledge. Among themselves, however, the elves place far more importance on personal freedom than on living up to these ideals. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.3cfdiId1IoxLsF9V]{Elf}",
+    "source": "Pathfinder Player Core",
+    "tier": "tier1",
+    "heritages": [
+      {
+        "id": "Nd9hdX8rdYyRozw8",
+        "name": "Ancient Elf",
+        "ancestrySlug": "elf",
+        "traits": [],
+        "desc": "In your long life, you've dabbled in many paths and many styles. A typical ancient elf is at least 100 years old, though you might be younger at the GM's discretion. Choose a class other than your own. You gain the multiclass dedication feat for that class, even though you don't meet its level prerequisite. You must still meet its other prerequisites to gain the feat.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "1dYDucCIaZpCJqBc",
+        "name": "Arctic Elf",
+        "ancestrySlug": "elf",
+        "traits": [],
+        "desc": "You dwell deep in the frozen north and have gained incredible resilience against cold environments, granting you cold resistance equal to half your level (minimum 1). You treat environmental cold effects as if they were one step less extreme (incredible cold becomes extreme, extreme cold becomes severe, and so on).",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "NfIAGatB1KIzt8G7",
+        "name": "Cavern Elf",
+        "ancestrySlug": "elf",
+        "traits": [],
+        "desc": "You were born or spent many years in underground tunnels or caverns where light is scarce. You gain darkvision.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "jEtVesbqYcWGbBYk",
+        "name": "Seer Elf",
+        "ancestrySlug": "elf",
+        "traits": [],
+        "desc": "You have an inborn ability to detect and understand magical phenomena. You can cast the @UUID[Compendium.pf2e.spells-srd.Item.Detect Magic] cantrip as an arcane innate spell at will. A cantrip is heightened to a spell rank equal to half your level rounded up. In addition, you gain a +1 circumstance bonus to checks to @UUID[Compendium.pf2e.actionspf2e.Item.Identify Magic] and to @UUID[Compendium.pf2e.actionspf2e.Item.Decipher Writing] of a magical nature. These skill actions typically use the Arcana, Nature, Occultism, or Religion skill.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "1wVDYY9Wue0G5R9Q",
+        "name": "Whisper Elf",
+        "ancestrySlug": "elf",
+        "traits": [],
+        "desc": "Your ears are finely tuned, able to detect even the slightest whispers of sound. You gain a +2 circumstance bonus when using the @UUID[Compendium.pf2e.actionspf2e.Item.Seek] action to find @UUID[Compendium.pf2e.conditionitems.Item.Hidden] or @UUID[Compendium.pf2e.conditionitems.Item.Undetected] creatures within 30 feet of you. When you target an opponent that is @UUID[Compendium.pf2e.conditionitems.Item.Concealed] from you or hidden from you, reduce the DC of the flat check to 3 for a concealed target or 9 for a hidden one. This benefit doesn't apply if you can't hear or if the creature is incapable of making sound (for example, if it's affected by a @UUID[Compendium.pf2e.spells-srd.Item.Silence] spell).",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "nW1gi13E62Feto2w",
+        "name": "Woodland Elf",
+        "ancestrySlug": "elf",
+        "traits": [],
+        "desc": "You're adapted to life in the forest, the deep jungle, or a similar environment, and you know how to climb trees and use foliage to your advantage. When @UUID[Compendium.pf2e.actionspf2e.Item.Climb]{Climbing} trees, vines, and other foliage, you move at half your Speed on a success and at full Speed on a critical success (and you move at full Speed on a success if you have @UUID[Compendium.pf2e.feats-srd.Item.Quick Climb]). This doesn't affect you if you're using a climb Speed. You can always use the @UUID[Compendium.pf2e.actionspf2e.Item.Take Cover] action when you are within forest terrain to gain cover, even if you're not next to an obstacle you can Take Cover behind.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      }
+    ]
+  },
+  {
+    "id": "gnome",
+    "name": "Gnome",
+    "hp": 8,
+    "size": "sm",
+    "speed": 25,
+    "boosts": [
+      "cha",
+      "con",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "str"
+    ],
+    "vision": "low-light-vision",
+    "languages": [
+      "common",
+      "fey",
+      "gnomish"
+    ],
+    "additionalLanguages": [
+      "draconic",
+      "dwarven",
+      "elven",
+      "goblin",
+      "jotun",
+      "orcish"
+    ],
+    "traits": [
+      "gnome",
+      "humanoid"
+    ],
+    "desc": "Long ago, early gnome ancestors emigrated from the First World, realm of the fey. While it's unclear why the first gnomes wandered to Golarion, this lineage manifests in modern gnomes as bizarre reasoning, eccentricity, obsessive tendencies, and what some see as naivete. These qualities are further reflected in their physical characteristics, such as spindly limbs, brightly colored hair, and childlike and extremely expressive facial features that further reflect their otherworldly origins. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.qIu10HByKeRaPPvD]{Gnome}",
+    "source": "Pathfinder Player Core",
+    "tier": "tier1",
+    "heritages": [
+      {
+        "id": "XeXWsvcWU3Zaj5WC",
+        "name": "Chameleon Gnome",
+        "ancestrySlug": "gnome",
+        "traits": [],
+        "desc": "The color of your hair and skin is mutable, possibly due to latent magic from First World influences or lingering illusion effects. You can slowly change the vibrancy and the exact color, and the coloration can be different across your body, allowing you to create patterns or other colorful designs. It takes a single action for minor localized shifts and up to an hour for dramatic shifts throughout your body. While you're asleep, the colors shift on their own in tune with your dreams, giving you an unusual coloration each morning. When you're in an area where your coloration is roughly similar to the environment (for instance, forest green in a forest), you can use the single action to make minor localized shifts designed to help you blend into your surroundings. This grants you a +2 circumstance bonus to Stealth checks until your surroundings shift in coloration or pattern.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "D3hTAqgwSank8OyO",
+        "name": "Fey-Touched Gnome",
+        "ancestrySlug": "gnome",
+        "traits": [],
+        "desc": "The blood of the fey flows through your veins, saturating you with their magic and making you truly one of them. You gain the fey trait, in addition to the gnome and humanoid traits. Choose one cantrip from the primal spell list. You can cast this spell as a primal innate spell at will. A cantrip is heightened to a spell rank equal to half your level rounded up. You can change this cantrip to a different one from the same list once per day by meditating to realign yourself with the First World; this is a 10-minute activity that has the concentrate trait.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "tXC5Gwn9D5x0ouJh",
+        "name": "Sensate Gnome",
+        "ancestrySlug": "gnome",
+        "traits": [],
+        "desc": "You see all colors as brighter, hear all sounds as richer, and especially smell all scents with incredible detail. You gain a special sense: imprecise scent with a range of 30 feet. This means you can use your sense of smell to determine the exact location of a creature. The GM will usually double the range if you're downwind from the creature or halve the range if you're upwind. In addition, you gain a +2 circumstance bonus to Perception checks whenever you're trying to locate an undetected creature that is within the range of your scent.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "d0bNxgGqvaCkFlhN",
+        "name": "Umbral Gnome",
+        "ancestrySlug": "gnome",
+        "traits": [],
+        "desc": "Whether from a connection to dark or shadowy fey, from the underground gnomes known as drathnelar, or from another source, you can see in complete darkness. You gain darkvision.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "etkuQkjkNLPLnjkA",
+        "name": "Wellspring Gnome",
+        "ancestrySlug": "gnome",
+        "traits": [],
+        "desc": "Some other source of magic has a greater hold on you than the primal magic of your fey lineage does. This connection might come from an occult plane or an ancient occult song; a deity, celestial, or fiend; magical effluent left behind by a mage war; or ancient rune magic. Choose arcane, divine, or occult. You gain one cantrip from that magical tradition's spell list. You can cast this spell as an innate spell at will, as a spell of your chosen tradition. A cantrip is heightened to a spell rank equal to half your level rounded up. Whenever you gain a primal innate spell from a gnome ancestry feat, change its tradition from primal to your chosen tradition.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      }
+    ]
+  },
+  {
+    "id": "goblin",
+    "name": "Goblin",
+    "hp": 6,
+    "size": "sm",
+    "speed": 25,
+    "boosts": [
+      "cha",
+      "dex",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "wis"
+    ],
+    "vision": "darkvision",
+    "languages": [
+      "common",
+      "goblin"
+    ],
+    "additionalLanguages": [
+      "draconic",
+      "dwarven",
+      "gnomish",
+      "halfling",
+      "kholo",
+      "orcish"
+    ],
+    "traits": [
+      "goblin",
+      "humanoid"
+    ],
+    "desc": "The convoluted histories other people cling to don't interest goblins. These small folk live in the moment, and they prefer tall tales over factual records. The wars of a few decades ago might as well be from the ancient past. Misunderstood by other people, goblins are happy how they are. Goblin virtues are about being present, creative, and honest. They strive to lead fulfilled lives, rather than worrying about how their journeys will end. To tell stories, not nitpick the facts. To be small, but dream big. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.Gn0XGCWDb0N4zLE0]{Goblin}",
+    "source": "Pathfinder Player Core",
+    "tier": "tier1",
+    "heritages": [
+      {
+        "id": "32oX6hHUY6K8N70Q",
+        "name": "Charhide Goblin",
+        "ancestrySlug": "goblin",
+        "traits": [],
+        "desc": "Your ancestors have always had a connection to fire and a thicker skin, which allows you to resist burning. You gain fire resistance equal to half your level (minimum 1). You can also recover from being on fire more easily. Your flat check to remove persistent fire damage is DC 10 instead of DC 15, which is reduced to @Check[flat|dc:5] if another creature uses a particularly appropriate action to help.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "gyoN45SVfRZwHMkk",
+        "name": "Irongut Goblin",
+        "ancestrySlug": "goblin",
+        "traits": [],
+        "desc": "You can subsist on food that most folks would consider spoiled. You can keep yourself fed with poor meals in a settlement as long as garbage is readily available, without using the @UUID[Compendium.pf2e.actionspf2e.Item.Subsist] downtime activity. You can eat and drink things when you are @UUID[Compendium.pf2e.conditionitems.Item.Sickened]. You gain a +2 circumstance bonus to saving throws against afflictions, against gaining the sickened condition, and to remove the sickened condition. When you roll a success on a Fortitude save affected by this bonus, you get a critical success instead. All these benefits apply only when the affliction or condition resulted from something you ingested.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "a6F2WjYU8D0suT8T",
+        "name": "Razortooth Goblin",
+        "ancestrySlug": "goblin",
+        "traits": [],
+        "desc": "Your family's teeth are formidable weapons. You gain a jaws unarmed attack that deals 1d6 piercing damage. Your jaws are in the brawling group and have the finesse and unarmed traits.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "gQyPU441J3rGt8mD",
+        "name": "Snow Goblin",
+        "ancestrySlug": "goblin",
+        "traits": [],
+        "desc": "You are acclimated to living in frigid lands and have skin ranging from sky blue to navy in color, as well as blue fur. You gain cold resistance equal to half your level (minimum 1). You treat environmental cold effects as if they were one step less extreme (incredible cold becomes extreme, extreme cold becomes severe, and so on).",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "ULj56ZoW7dWdnBvu",
+        "name": "Unbreakable Goblin",
+        "ancestrySlug": "goblin",
+        "traits": [],
+        "desc": "You're able to bounce back from injuries easily due to an exceptionally thick skull, cartilaginous bones, or some other mixed blessing. You gain 10 Hit Points from your ancestry instead of 6. When you fall, reduce the falling damage you take as though you had fallen half the distance.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      }
+    ]
+  },
+  {
+    "id": "halfling",
+    "name": "Halfling",
+    "hp": 6,
+    "size": "sm",
+    "speed": 25,
+    "boosts": [
+      "dex",
+      "wis",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "str"
+    ],
+    "vision": "normal",
+    "languages": [
+      "common",
+      "halfling"
+    ],
+    "additionalLanguages": [
+      "dwarven",
+      "elven",
+      "gnomish",
+      "goblin"
+    ],
+    "traits": [
+      "halfling",
+      "humanoid"
+    ],
+    "desc": "Claiming no place as their own, halflings control few settlements larger than villages. Instead, they frequently live among humans within the walls of larger cities, carving out small communities alongside taller folk. Many halflings lead perfectly fulfilling lives in the shadows of their larger neighbors, while others prefer a nomadic existence, traveling the world and taking advantage of opportunities and adventures as they come. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.voI7uPS9vsG74JIn]{Halfling}",
+    "source": "Pathfinder Player Core",
+    "tier": "tier1",
+    "heritages": [
+      {
+        "id": "Eq42wZ5OTweJLnLU",
+        "name": "Gutsy Halfling",
+        "ancestrySlug": "halfling",
+        "traits": [],
+        "desc": "Your family line is known for keeping a level head and staving off fear when the chips were down. When you roll a success on a saving throw against an emotion effect, you get a critical success instead.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "Mj7uHxxVkRUlOFwJ",
+        "name": "Hillock Halfling",
+        "ancestrySlug": "halfling",
+        "traits": [],
+        "desc": "Accustomed to a calm life in the hills, your people find rest and relaxation especially replenishing, particularly when indulging in creature comforts. When you regain Hit Points overnight, add your level to the Hit Points regained. When anyone uses the Medicine skill to @UUID[Compendium.pf2e.actionspf2e.Item.Treat Wounds]{Treat your Wounds}, you can eat a snack to add your level to the Hit Points you regain from their treatment.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "G9Gwfi8ZIva52uGp",
+        "name": "Jinxed Halfling",
+        "ancestrySlug": "halfling",
+        "traits": [],
+        "desc": "You were born with a strange blessing: bereft of the typical halfling luck, you can instead manipulate the fortunes of others. You can never take the @UUID[Compendium.pf2e.feats-srd.Item.Halfling Luck] feat, and you gain the @UUID[Compendium.pf2e.actionspf2e.Item.Jinx] action.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "idGDjqi1q3Ft8bAZ",
+        "name": "Nomadic Halfling",
+        "ancestrySlug": "halfling",
+        "traits": [],
+        "desc": "Your ancestors have traveled from place to place for generations, never content to settle down. You gain two additional languages of your choice, chosen from among the common and uncommon languages available to you, and every time you take the @UUID[Compendium.pf2e.feats-srd.Item.Multilingual] feat, you gain another new language.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "cCy8vsZENlwiAyZ6",
+        "name": "Twilight Halfling",
+        "ancestrySlug": "halfling",
+        "traits": [],
+        "desc": "Your ancestors performed many secret acts under the concealing cover of dusk, whether for good or ill, and over time they developed the ability to see in twilight beyond even the usual keen sight of halflings. You gain low-light vision.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "xtRIYizCjLg9qe1Z",
+        "name": "Wildwood Halfling",
+        "ancestrySlug": "halfling",
+        "traits": [],
+        "desc": "You hail from deep within a jungle or forest, and you've learned how to use your small size to wriggle through undergrowth and other obstacles. You ignore any difficult terrain caused by plants and fungi, such as bushes, vines, and undergrowth.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      }
+    ]
+  },
+  {
+    "id": "hobgoblin",
+    "name": "Hobgoblin",
+    "hp": 8,
+    "size": "med",
+    "speed": 25,
+    "boosts": [
+      "con",
+      "int",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "wis"
+    ],
+    "vision": "darkvision",
+    "languages": [
+      "common",
+      "goblin"
+    ],
+    "additionalLanguages": [
+      "draconic",
+      "dwarven",
+      "halfling",
+      "jotun",
+      "kholo",
+      "orcish"
+    ],
+    "traits": [
+      "hobgoblin",
+      "humanoid"
+    ],
+    "desc": "Taller and stronger than their goblin kin, hobgoblins are equals in strength and size to humans, with broad shoulders and long, powerful arms. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.DuWzeY4zugKFFthl]{Hobgoblin}",
+    "source": "Pathfinder Player Core 2",
+    "tier": "tier1",
+    "heritages": [
+      {
+        "id": "ikNJZRxUjcRLisO6",
+        "name": "Elfbane Hobgoblin",
+        "ancestrySlug": "hobgoblin",
+        "traits": [],
+        "desc": "Hobgoblins were engineered long ago from the unreliable and fecund goblins to be used as an army against the elves. Although the elves ultimately freed the hobgoblins from their bondage, some hobgoblins retain ancestral resistance to magic, which they refer to as \"elf magic.\" You gain the @UUID[Compendium.pf2e.actionspf2e.Item.Resist Elf Magic] reaction.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "CzOHITB2ihLGqMuJ",
+        "name": "Runtboss Hobgoblin",
+        "ancestrySlug": "hobgoblin",
+        "traits": [],
+        "desc": "You come from a long line of hobgoblins who commanded goblins. You are smaller than other hobgoblins, but goblins still listen to any commands you bellow. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Group Coercion] skill feat. If you roll a success on an Intimidation check to @UUID[Compendium.pf2e.actionspf2e.Item.Coerce] a goblin, you get a critical success instead; if you roll a critical failure, you get a failure instead.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "rQJBtQ9uKUzK9ktK",
+        "name": "Shortshanks Hobgoblin",
+        "ancestrySlug": "hobgoblin",
+        "traits": [],
+        "desc": "You have a longer torso and broader shoulders than most hobgoblins, making your legs seem short by comparison. This gives you a strong, muscular core and lowers your center of gravity—features that assist you in riding and climbing—and you've trained at riding in a saddle from an extremely early age. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Ride] feat. Additionally, you are not @UUID[Compendium.pf2e.conditionitems.Item.Off-Guard] while you Climb.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "n2eJEjA8pnOMiuCm",
+        "name": "Smokeworker Hobgoblin",
+        "ancestrySlug": "hobgoblin",
+        "traits": [],
+        "desc": "Your family have been alchemists, engineers, and scientists for generations, laboring on projects that bring smoke and fire to the field of battle. You gain fire resistance equal to half your level (minimum 1). You automatically succeed at the DC 5 flat check to target a @UUID[Compendium.pf2e.conditionitems.Item.Concealed] creature if that creature is concealed only by smoke.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "K124fCpU03SJvmeP",
+        "name": "Warmarch Hobgoblin",
+        "ancestrySlug": "hobgoblin",
+        "traits": [],
+        "desc": "You come from a line of wandering mercenaries constantly on the march and scavenging food on the trail. If you fail, but don't critically fail, to @UUID[Compendium.pf2e.actionspf2e.Item.Subsist] in the wilderness, you can still keep yourself fed with poor meals. When exploring, you can @UUID[Compendium.pf2e.actionspf2e.Item.Hustle] twice as long before you have to stop.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "0vaeOoECfVD5EGbq",
+        "name": "Warrenbred Hobgoblin",
+        "ancestrySlug": "hobgoblin",
+        "traits": [],
+        "desc": "Your ancestors lived underground. Your ears are larger than those of other hobgoblins and sensitive to echoes. While you're underground, when you target an opponent that is @UUID[Compendium.pf2e.conditionitems.Item.Concealed] from you or @UUID[Compendium.pf2e.conditionitems.Item.Hidden] from you, reduce the DC of the flat check to 3 for a concealed target or 9 for a hidden one. In addition, if you roll a success on an Acrobatics check to @UUID[Compendium.pf2e.actionspf2e.Item.Squeeze], you get a critical success instead.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      }
+    ]
+  },
+  {
+    "id": "human",
+    "name": "Human",
+    "hp": 8,
+    "size": "med",
+    "speed": 25,
+    "boosts": [
+      "cha",
+      "con",
+      "dex",
+      "int",
+      "str",
+      "wis",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [],
+    "vision": "normal",
+    "languages": [
+      "common"
+    ],
+    "additionalLanguages": [],
+    "traits": [
+      "human",
+      "humanoid"
+    ],
+    "desc": "As unpredictable and varied as any of Golarion's peoples, humans have exceptional drive and the capacity to endure and expand. Though many civilizations thrived before humanity rose to prominence, humans have built some of the greatest and the most terrible societies throughout the course of history, and today they are the most populous people in the realms around the Inner Sea. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.7pU8yM7yPMw92SY3]{Human}",
+    "source": "Pathfinder Player Core",
+    "tier": "tier1",
+    "heritages": [
+      {
+        "id": "zVf0Hlp5xG0Q7kmc",
+        "name": "Skilled Human",
+        "ancestrySlug": "human",
+        "traits": [],
+        "desc": "Your ingenuity allows you to train in a wide variety of skills. You become trained in one skill of your choice. At 5th level, you become an expert in the chosen skill.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "hFBwsVcSnNCJoimo",
+        "name": "Versatile Human",
+        "ancestrySlug": "human",
+        "traits": [],
+        "desc": "Humanity's versatility and ambition have fueled its ascendance to be the most common ancestry in most nations throughout the world. Select a general feat of your choice for which you meet the prerequisites (as with your ancestry feat, you can select this general feat at any point during character creation).",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      }
+    ]
+  },
+  {
+    "id": "jotunborn",
+    "name": "Jotunborn",
+    "hp": 10,
+    "size": "lg",
+    "speed": 25,
+    "boosts": [
+      "str",
+      "wis",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "cha"
+    ],
+    "vision": "low-light-vision",
+    "languages": [
+      "common",
+      "jotun"
+    ],
+    "additionalLanguages": [
+      "cyclops",
+      "dwarven",
+      "empyrean",
+      "fey",
+      "orcish",
+      "petran",
+      "shadowtongue"
+    ],
+    "traits": [
+      "giant",
+      "humanoid",
+      "jotunborn"
+    ],
+    "desc": "According to their oldest stories, the first jotunborn were the direct creations of the earliest gods. Having just completed the majority of the creation of the world, these gods created several groups of people to act as stewards for this new world. Among these groups were jotunborn, beings who were formed from the remains of titans who dared rebel against the gods in the earliest days of existence. Rather than give jotunborn the full power they gave the titans, the gods instead instilled the first jotunborn with the faintest spark of creation and gave them slighter forms. These new servitors would be just as capable at helping to shape the rest of the world but would also be weaker and easier to strike down should they rebel like their progenitors.",
+    "source": "Pathfinder Battlecry!",
+    "tier": "tier2",
+    "heritages": [
+      {
+        "id": "m4kFMTu2sOSWgnAU",
+        "name": "Keeper Jotunborn",
+        "ancestrySlug": "jotunborn",
+        "traits": [],
+        "desc": "Your work as an iivlar keeper has granted you a greater understanding of these sacred creatures and the ability to track them, as elusive as they may be. You are trained in Survival, and you gain the @UUID[Compendium.pf2e.feats-srd.Item.Survey Wildlife] skill feat. You gain a +1 circumstance bonus to @UUID[Compendium.pf2e.actionspf2e.Item.Track] animals.",
+        "source": "Pathfinder Battlecry!",
+        "tier": "tier2"
+      },
+      {
+        "id": "KDs97OkCmEYTLUp9",
+        "name": "Plane-Hopper Jotunborn",
+        "ancestrySlug": "jotunborn",
+        "traits": [],
+        "desc": "You were chosen for your smaller size that allows you to move between planar thresholds with ease. You generally serve as a messenger or scout, and planar exposure has granted you a spark of magical power. Instead of Large, your size is Medium. You gain one cantrip from the occult spell list. You can cast this spell as an occult innate spell at will. A cantrip is heightened to a spell rank equal to half your level rounded up.",
+        "source": "Pathfinder Battlecry!",
+        "tier": "tier2"
+      },
+      {
+        "id": "NUUWs7jFwsIPmx3p",
+        "name": "Sage Jotunborn",
+        "ancestrySlug": "jotunborn",
+        "traits": [],
+        "desc": "You were tasked with keeping oral and stitched histories for your family, your clan, or even an entire settlement. You are trained in Society. You also gain the @UUID[Compendium.pf2e.feats-srd.Item.Additional Lore] general feat for a lore skill of your choice.",
+        "source": "Pathfinder Battlecry!",
+        "tier": "tier2"
+      },
+      {
+        "id": "t9HOJelfwDo3RBii",
+        "name": "Warrior Jotunborn",
+        "ancestrySlug": "jotunborn",
+        "traits": [],
+        "desc": "Your hardier body made you a perfect recruit for combat. The damage die for your fist increases to 1d6. You don't take a penalty when making a lethal attack with your fist.",
+        "source": "Pathfinder Battlecry!",
+        "tier": "tier2"
+      },
+      {
+        "id": "K0NerdkFnce9KeHw",
+        "name": "Weaver Jotunborn",
+        "ancestrySlug": "jotunborn",
+        "traits": [],
+        "desc": "You've mastered the art of iivlar silk weaving, a technique that requires a fine attention to detail. You are trained in Crafting. You gain a +1 circumstance bonus to Perception checks to @UUID[Compendium.pf2e.actionspf2e.Item.Seek] when searching for hidden details like secret doors or traps.",
+        "source": "Pathfinder Battlecry!",
+        "tier": "tier2"
+      }
+    ]
+  },
+  {
+    "id": "kholo",
+    "name": "Kholo",
+    "hp": 8,
+    "size": "med",
+    "speed": 25,
+    "boosts": [
+      "str",
+      "int",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "wis"
+    ],
+    "vision": "low-light-vision",
+    "languages": [
+      "common",
+      "kholo"
+    ],
+    "additionalLanguages": [
+      "draconic",
+      "elven",
+      "fey",
+      "iruxi",
+      "necril",
+      "orcish"
+    ],
+    "traits": [
+      "humanoid",
+      "kholo"
+    ],
+    "desc": "Kholo have bad reputations as brutal raiders and demon-worshipers. Many believe that kholo are witches, cannibals, and worse. The truth is more complex. Kholo are eminently practical and pragmatic hunters and raiders. To them, honor is just another word for pointless risk. Any loss of a kholo affects not just the individual, but their packmates and kin as well. Wasting time on anything but victory, whether it's mercy or cruelty, is seen as little shy of immoral. Kholo are masters of ambushes, tactical feints, and psychological warfare. Equally misunderstood is the kholo practice of ancestor worship and endocannibalism. Kholo consume their dead as a sign of reverence, holding a grand feast and transforming the bones into art or weapons. Kholo extend this honor to respected foes, hoping to bring their enemy's cunning or strength into the clan. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.xBV8oGvecw7abZxc]",
+    "source": "Pathfinder Player Core 2",
+    "tier": "tier1",
+    "heritages": [
+      {
+        "id": "udMXXjFirjARYr4p",
+        "name": "Ant Kholo",
+        "ancestrySlug": "kholo",
+        "traits": [],
+        "desc": "You're a sharp-featured, big-eared kholo about 3 feet tall. Many are skeptical that you are in fact a kholo. Your size is Small instead of Medium. You are trained in Deception (or another skill if you were already trained in Deception). You gain a +1 circumstance bonus to Deception checks to Lie when specifically claiming innocence, to Deception DCs against @UUID[Compendium.pf2e.actionspf2e.Item.Sense Motive] checks to uncover such lies, and to initiative checks when you roll Deception for initiative.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "JW45oQRHaqthjmIx",
+        "name": "Cave Kholo",
+        "ancestrySlug": "kholo",
+        "traits": [],
+        "desc": "Storytellers spin ancient tales claiming that kholo lived in caves and underground before most of your kind ventured into the light. You're a throwback to these ancients, with a broad chest and markings that resemble short black slashes instead of spots. Your eyes are developed to see perfectly in the dark, a valuable advantage to your clan. You gain darkvision.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "0B0M6CUnVDkeznRv",
+        "name": "Dog Kholo",
+        "ancestrySlug": "kholo",
+        "traits": [],
+        "desc": "You're a nimble-bodied kholo with a prehistoric, almost dog-like build. Though you typically move like a quadruped, you can still stand and fight like a biped, allowing you to use all equipment normally. If you have both hands free, you can increase your Speed to 30 feet as you run on all fours.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "SqEcb1c3yeoJMxm0",
+        "name": "Great Kholo",
+        "ancestrySlug": "kholo",
+        "traits": [],
+        "desc": "You're an imposing, powerful kholo, with tawny fur and brown spots on your hide. You gain 10 Hit Points from your ancestry instead of 8 and gain a +1 circumstance bonus to Athletics checks to @UUID[Compendium.pf2e.actionspf2e.Item.Reposition], @UUID[Compendium.pf2e.actionspf2e.Item.Shove], or @UUID[Compendium.pf2e.actionspf2e.Item.Trip].",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "B89BCo6LtI3SJq54",
+        "name": "Sweetbreath Kholo",
+        "ancestrySlug": "kholo",
+        "traits": [],
+        "desc": "You're a striped, pale-furred kholo with oddly pleasant breath, which you can use to entrance your prey. You are trained in Diplomacy (or another skill if you were already trained in Diplomacy). You also gain a +1 circumstance bonus to checks to @UUID[Compendium.pf2e.actionspf2e.Item.Make an Impression] if the target can smell your breath.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "hwRWx3hWx8ahBdz0",
+        "name": "Winter Kholo",
+        "ancestrySlug": "kholo",
+        "traits": [],
+        "desc": "You're a hardy kholo covered in thick, tufted fur that makes you able to survive in the harsh winters of the colder territories. You gain cold resistance equal to half your level (minimum 1). You treat environmental cold effects as if they were one step less extreme (incredible cold becomes extreme, extreme cold becomes severe, and so on).",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "kXp8qRh5AgtD4Izi",
+        "name": "Witch Kholo",
+        "ancestrySlug": "kholo",
+        "traits": [],
+        "desc": "You're a shaggy, dark-furred kholo capable of making some truly uncanny sounds. You can cast the @UUID[Compendium.pf2e.spells-srd.Item.Figment] cantrip as an occult innate spell at will. A cantrip is heightened to a spell rank equal to half your level rounded up. In addition, you gain a +1 circumstance bonus to checks to @UUID[Compendium.pf2e.actionspf2e.Item.Create a Diversion] and Impersonate when using only your voice.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      }
+    ]
+  },
+  {
+    "id": "kobold",
+    "name": "Kobold",
+    "hp": 6,
+    "size": "sm",
+    "speed": 25,
+    "boosts": [
+      "cha",
+      "dex",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "con"
+    ],
+    "vision": "darkvision",
+    "languages": [
+      "common",
+      "sakvroth"
+    ],
+    "additionalLanguages": [
+      "aklo",
+      "diabolic",
+      "draconic",
+      "dwarven",
+      "empyrean",
+      "fey",
+      "gnomish",
+      "petran"
+    ],
+    "traits": [
+      "humanoid",
+      "kobold"
+    ],
+    "desc": "Every kobold instinctively understands the importance of power, and many are inclined to venerate those who have it, whether they be mighty dragons, cruel fiends, imperious fey, or even ancient artifacts. Kobolds seek out these alliances out of a sense of pragmatism—after all, who would dare bully a kobold who serves an ancient dragon?—but also because kobold eggs incubated near such loci of power take on physical traits (and sometimes abilities) similar to those of the warren's benefactor. On their own, kobolds are ingenious crafters and devoted allies, but outsiders who trespass into their territory find them to be inspired skirmishers and clever ambushers. However, these reptilian opportunists prove happy to cooperate with other humanoids when it's to their benefit, combining caution and cunning to make their fortunes in the wider world. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.naQrTTE7CXu5lnNt]{Kobold}",
+    "source": "Pathfinder Player Core 2",
+    "tier": "tier1",
+    "heritages": [
+      {
+        "id": "35k2aujXYvqUCSS1",
+        "name": "Cavernstalker Kobold",
+        "ancestrySlug": "kobold",
+        "traits": [],
+        "desc": "You hatched in a warren with narrow tunnels that was also home to a being of primal earth energy, which has made you limber and flexible. When @UUID[Compendium.pf2e.actionspf2e.Item.Climb]{Climbing} rock walls, stalactites, and other natural stone features, you move at half your Speed on a success and at full Speed on a critical success (and you move at full Speed on a success if you have @UUID[Compendium.pf2e.feats-srd.Item.Quick Climb]). This doesn't affect you if you're using a climb Speed. If you roll a success on an Acrobatics check to @UUID[Compendium.pf2e.actionspf2e.Item.Squeeze], you get a critical success instead.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "P8BP1un5BTrwXoBy",
+        "name": "Dragonscaled Kobold",
+        "ancestrySlug": "kobold",
+        "traits": [],
+        "desc": "Thanks to your warren's association with a dragon, your scales are sturdier than other kobolds'. You gain 10 Hit Points from your ancestry instead of 6. You gain a +1 circumstance bonus to saves against dragon breath, effects with the sleep trait, and effects that would make you @UUID[Compendium.pf2e.conditionitems.Item.Paralyzed].",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "dbj1cbkYeAAdkDSM",
+        "name": "Elementheart Kobold",
+        "ancestrySlug": "kobold",
+        "traits": [],
+        "desc": "When you hatched, you imprinted on a creature strongly associated with one of the Elemental Planes, such as an elemental or genie. Choose air, earth, fire, metal, water, or wood for your elemental benefactor. You gain resistance equal to half your level (minimum 1) to the damage type associated with your elemental benefactor: cold for air, electricity for earth, fire for fire, sonic for metal, acid for water, or poison for wood.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "VRyX00OuPGsJSurM",
+        "name": "Spellhorn Kobold",
+        "ancestrySlug": "kobold",
+        "traits": [],
+        "desc": "Since hatching in the vicinity of a powerful source of magic, a trace of it flows through your veins. Choose one common cantrip from the arcane spell list. You can Cast this Spell as an arcane innate spell at will. A cantrip is heightened to a spell rank equal to half your level rounded up. You are trained in the spell attack modifier and spell DC statistics, and your key spellcasting attribute is Charisma.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "WaCn0mcivFv1omNK",
+        "name": "Strongjaw Kobold",
+        "ancestrySlug": "kobold",
+        "traits": [],
+        "desc": "Your warren is noted for their powerful jaws and sharp teeth, either to help protect against natural predators or due to reverence of a mighty beast. You gain a jaws unarmed attack that deals 1d6 piercing damage. Your jaws are in the brawling group and have the finesse and unarmed traits.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "ZW8GX14n3ZGievK1",
+        "name": "Tunnelflood Kobold",
+        "ancestrySlug": "kobold",
+        "traits": [],
+        "desc": "You grew up in a warren crisscrossed by underwater passages, whether natural or excavated, and were influenced by a powerful aquatic entity or being of primal water. You gain a swim Speed of 15 feet.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "m9rrlchS10xHFA2G",
+        "name": "Venomtail Kobold",
+        "ancestrySlug": "kobold",
+        "traits": [],
+        "desc": "Thanks to the proximity of a venomous creature to your warren, you were born with a vestigial spur in your tail that secretes deadly venom. You gain the @UUID[Compendium.pf2e.actionspf2e.Item.Tail Toxin] action.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      }
+    ]
+  },
+  {
+    "id": "leshy",
+    "name": "Leshy",
+    "hp": 8,
+    "size": "sm",
+    "speed": 25,
+    "boosts": [
+      "con",
+      "wis",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "int"
+    ],
+    "vision": "low-light-vision",
+    "languages": [
+      "common",
+      "fey"
+    ],
+    "additionalLanguages": [
+      "draconic",
+      "elven",
+      "gnomish",
+      "goblin",
+      "halfling",
+      "sakvroth"
+    ],
+    "traits": [
+      "leshy",
+      "plant"
+    ],
+    "desc": "Guardians and emissaries of the environment, leshies are immortal spirits of nature temporarily granted a physical form. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.SWkwNivrfzWZqas9]{Leshy}",
+    "source": "Pathfinder Player Core",
+    "tier": "tier1",
+    "heritages": [
+      {
+        "id": "2cii5ZkBsJ4DYdd2",
+        "name": "Cactus Leshy",
+        "ancestrySlug": "leshy",
+        "traits": [],
+        "desc": "Spines cover your body. You gain a spine unarmed attack that deals 1d6 piercing damage. Your spines are in the brawling group and have the finesse and unarmed traits.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "L6zfGzLMDLHbZ7VV",
+        "name": "Fruit Leshy",
+        "ancestrySlug": "leshy",
+        "traits": [],
+        "desc": "Your body continually produces small fruits imbued with primal magic. At dawn each day, a new fruit ripens. You or an ally can remove this fruit as an Interact action. If a living creature that can derive sustenance from fruit consumes it as an Interact action within the next hour, they regain @Damage[(ceil(@actor.level/2))d8[vitality,healing]|shortLabel] Hit Points, plus an additional 1d8 Hit Points for every 2 of your levels beyond 1st. This effect has the healing and vitality traits.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "87h0jepQuzIbN7jN",
+        "name": "Fungus Leshy",
+        "ancestrySlug": "leshy",
+        "traits": [],
+        "desc": "Your body was made from fungi that grows in the shade of caves and trees, and you are at home in dark caverns and warrens. You gain darkvision. You lose the plant trait and gain the fungus trait.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "wNnsjird4OQe0s6p",
+        "name": "Gourd Leshy",
+        "ancestrySlug": "leshy",
+        "traits": [],
+        "desc": "You have a large gourd for a skull, and since you don't have a physical brain, you can use the space inside your head. You can store a collection of up to 1 Bulk of objects within your head. The DC of checks to @UUID[Compendium.pf2e.actionspf2e.Item.Steal] objects from inside your head increases by 4. Additionally, if you store only one object within your head, you can draw it effortlessly into your hand as part of another action to use the object. Drawing the item grants this other action the manipulate trait.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "dQqurQys37aJYb26",
+        "name": "Leaf Leshy",
+        "ancestrySlug": "leshy",
+        "traits": [],
+        "desc": "Your body is made mostly from natural foliage, and like a leaf tumbling from a tree, you land from falls with particular grace. You take no damage from falling, regardless of the distance you fall.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "ievKYUc53q0mroGp",
+        "name": "Lotus Leshy",
+        "ancestrySlug": "leshy",
+        "traits": [],
+        "desc": "You effortlessly float on the surface of water. You can walk on the surface of still water and other non-damaging liquids, moving at half your normal Speed. You can also attempt to @UUID[Compendium.pf2e.actionspf2e.Item.Balance] to move across the surface of flowing water, using the DC of a Swim check to move through the water. When you do this, you can't move faster than half your Speed, and if you fail or critically fail, you fall into the water rather than the normal effects.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "CZx9HMmoOwcpkLY8",
+        "name": "Root Leshy",
+        "ancestrySlug": "leshy",
+        "traits": [],
+        "desc": "Your body is made from hardy roots that attach you firmly to the ground. You gain 10 Hit Points from your ancestry instead of 8. You can go without sunlight for 2 weeks before you begin to starve. You gain a +2 circumstance bonus to your Fortitude or Reflex DC against attempts to @UUID[Compendium.pf2e.actionspf2e.Item.Reposition], @UUID[Compendium.pf2e.actionspf2e.Item.Shove], or @UUID[Compendium.pf2e.actionspf2e.Item.Trip] you. This bonus also applies to saving throws against spells or effects that attempt to move you or knock you @UUID[Compendium.pf2e.conditionitems.Item.Prone].",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "hTl3uc6y1kTuo9ac",
+        "name": "Seaweed Leshy",
+        "ancestrySlug": "leshy",
+        "traits": [],
+        "desc": "Your body is made from woven seaweed, and you're just as comfortable underwater as on land. You gain a swim Speed of 20 feet, and you can always breathe underwater. However, your land Speed is reduced by 5 feet (to 20 feet for most seaweed leshies).",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "evXJISqyhl3fHE9u",
+        "name": "Vine Leshy",
+        "ancestrySlug": "leshy",
+        "traits": [],
+        "desc": "Your prehensile vines grant you unmatched skill at climbing. You do not need to have any hands free to @UUID[Compendium.pf2e.actionspf2e.Item.Climb]. Additionally, if you roll a success on an Athletics check to Climb, you get a critical success instead.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      }
+    ]
+  },
+  {
+    "id": "lizardfolk",
+    "name": "Lizardfolk",
+    "hp": 8,
+    "size": "med",
+    "speed": 25,
+    "boosts": [
+      "str",
+      "wis",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "int"
+    ],
+    "vision": "normal",
+    "languages": [
+      "common",
+      "iruxi"
+    ],
+    "additionalLanguages": [
+      "amurrun",
+      "boggard",
+      "draconic",
+      "elven",
+      "fey",
+      "jotun",
+      "thalassic"
+    ],
+    "traits": [
+      "humanoid",
+      "lizardfolk"
+    ],
+    "desc": "Lizardfolk are consummate survivors, heirs to empires considered ancient even by the elves. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.cbLJs37Nc8FveriK]{Lizardfolk}",
+    "source": "Pathfinder Player Core 2",
+    "tier": "tier1",
+    "heritages": [
+      {
+        "id": "OoUqJJB77VfWbWRM",
+        "name": "Cliffscale Lizardfolk",
+        "ancestrySlug": "lizardfolk",
+        "traits": [],
+        "desc": "Your toes are adapted for gripping and climbing. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Combat Climber] feat as a bonus feat, and as long as you aren't wearing footwear, you can use the sticky pads on your feet to climb, leaving your hands free. Additionally, if you roll a success on an Athletics check to climb, you get a critical success instead.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "sEnMG5zbnXdJvVPz",
+        "name": "Cloudleaper Lizardfolk",
+        "ancestrySlug": "lizardfolk",
+        "traits": [],
+        "desc": "Your body is light with flaps of skin along your limbs that catch the air that passes beneath you. As long as you can act and have enough room, you can open the flaps to slow any fall just enough to avoid taking damage (whether you have the room to do so depends on the GM's discretion).",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "6rIIsZg3tOyIU3g3",
+        "name": "Frilled Lizardfolk",
+        "ancestrySlug": "lizardfolk",
+        "traits": [],
+        "desc": "You can flare your neck frill and flex your dorsal spines, Demoralizing your foes. When you do, @UUID[Compendium.pf2e.actionspf2e.Item.Demoralize] loses the auditory trait and gains the visual trait, and you don't take a penalty when you attempt to Demoralize a creature that doesn't understand your language. You also gain the @UUID[Compendium.pf2e.actionspf2e.Item.Threatening Approach] action.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "6xxXtgj3fcCi53lt",
+        "name": "Sandstrider Lizardfolk",
+        "ancestrySlug": "lizardfolk",
+        "traits": [],
+        "desc": "Your thick scales help you retain water and combat the sun's glare. You gain fire resistance equal to half your level (minimum 1). Environmental heat effects are one step less extreme for you, and you can go 10 times as long as normal before you are affected by starvation or thirst. However, unless you wear protective gear or take shelter, environmental cold effects are one step more extreme for you.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "VYfpTUuXJM3iBOz0",
+        "name": "Unseen Lizardfolk",
+        "ancestrySlug": "lizardfolk",
+        "traits": [],
+        "desc": "You can change your skin color to blend in with your surroundings, making minor shifts with a single action and dramatic changes over the course of an hour. When you're in an area where your coloration is roughly similar to the environment (for instance, forest green in a forest), you can use the minor, single-action application of this ability to make localized changes that help you blend into your surroundings, gaining a +2 circumstance bonus to Stealth checks until your surroundings change in coloration or pattern.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "dJeiekfqGQ8dkwsO",
+        "name": "Wetlander Lizardfolk",
+        "ancestrySlug": "lizardfolk",
+        "traits": [],
+        "desc": "Your family is descended from the most common lizardfolk heritage, and you are accustomed to aquatic environments. You gain a 15-foot swim Speed.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "TQFE10VFvh9wb8zb",
+        "name": "Woodstalker Lizardfolk",
+        "ancestrySlug": "lizardfolk",
+        "traits": [],
+        "desc": "You move easily through thick forest and jungle, using every branch or bush. You can always use the @UUID[Compendium.pf2e.actionspf2e.Item.Take Cover] action when in forest or jungle terrain to gain cover, even if you're not next to an obstacle you would normally be able to Take Cover behind. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Terrain Stalker] feat, even if you're not trained in Stealth, and you must choose underbrush as your chosen terrain.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      }
+    ]
+  },
+  {
+    "id": "merfolk",
+    "name": "Merfolk",
+    "hp": 8,
+    "size": "med",
+    "speed": 5,
+    "boosts": [
+      "dex",
+      "cha",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "con"
+    ],
+    "vision": "low-light-vision",
+    "languages": [
+      "common",
+      "thalassic"
+    ],
+    "additionalLanguages": [
+      "aklo",
+      "azlanti",
+      "draconic",
+      "elven",
+      "fey"
+    ],
+    "traits": [
+      "amphibious",
+      "humanoid",
+      "merfolk"
+    ],
+    "desc": "Merfolk live in every ocean of the world, infinite in their variety and awe-inspiring in their majesty. They consider themselves, not without some merit, the rulers of the sea. Among the tropical reefs of the Fever Sea, merfolk build temples and palaces of brightly colored corals. Beneath the ice floes of the Shining Sea, merfolk hunt seals and whales for food in small, standoffish clans. In the Embaral Ocean, merfolk populate the great trading city of Alohmab, built into the shell of a titanic snail that crawls across the ocean floor. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.9hcAMLgnCAKkuyH6]{Merfolk}",
+    "source": "Pathfinder Howl of the Wild",
+    "tier": "tier2",
+    "heritages": [
+      {
+        "id": "6egx1zhQx2s6BEa1",
+        "name": "Abyssal Merfolk",
+        "ancestrySlug": "merfolk",
+        "traits": [],
+        "desc": "You live far, far below the surface of the ocean. Your fish tail might resemble a viperfish or anglerfish, and you might have luminous eyes or translucent skin. Abyssal merfolk have an uncanny reputation, but they can exist in even the most lightless realms. You gain darkvision and are immune to the crushing pressure of the oceanic depths.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "DNynADD4xhwTAiE5",
+        "name": "Carcharodon Merfolk",
+        "ancestrySlug": "merfolk",
+        "traits": [],
+        "desc": "As a fearsome shark merfolk, your lower body is similar to that of one of the apex predators of the ocean. Like a shark, you can smell blood from quite a distance. You gain scent as an imprecise sense with a range of 30 feet. However, you can smell spilled blood at a range of 120 feet in the air and 500 feet in the water.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "OOkgTzDU4mBvV98Z",
+        "name": "Pelagic Merfolk",
+        "ancestrySlug": "merfolk",
+        "traits": [],
+        "desc": "You're a merfolk of the open seas. Your tail is patterned after the silvery tuna and herring that school by the million in your hunting grounds. Water obeys your will, and with a quick word, you can draw a sheathe of it around you. You gain the @UUID[Compendium.pf2e.actionspf2e.Item.Shielding Wave] action.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "Q5NrFWKDMCoVn9qR",
+        "name": "Reef Merfolk",
+        "ancestrySlug": "merfolk",
+        "traits": [],
+        "desc": "You were raised amid colorful corals and schools of tropical fish. Compared to most merfolk, your body is vividly hued with stripes, spots, and patterns like a clownfish or angelfish. You're used to the occasionally toxic denizens of your home and are bothered little by stings or petty poisons. You gain poison resistance equal to half your level (minimum 1), and each of your successful saving throws against a poison affliction reduces its stage by 2, or by 1 for a virulent poison. Each critical success against an ongoing poison reduces its stage by 3, or by 2 for a virulent poison.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "4BiGekRGfBRC7DoI",
+        "name": "Sailfish Merfolk",
+        "ancestrySlug": "merfolk",
+        "traits": [],
+        "desc": "The lower half of your body resembles a powerful sailfish, complete with a large dorsal fin. Using this fin, you can move through the water faster and leap farther. Your swim Speed increases to 30 feet. When you attempt a @UUID[Compendium.pf2e.actionspf2e.Item.High Jump] or @UUID[Compendium.pf2e.actionspf2e.Item.Long Jump], you gain a +1 circumstance bonus to the Athletics check, and you can Swim instead of Striding before attempting the jump.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      }
+    ]
+  },
+  {
+    "id": "minotaur",
+    "name": "Minotaur",
+    "hp": 10,
+    "size": "lg",
+    "speed": 25,
+    "boosts": [
+      "str",
+      "con",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "cha"
+    ],
+    "vision": "darkvision",
+    "languages": [
+      "common",
+      "jotun"
+    ],
+    "additionalLanguages": [
+      "cyclops",
+      "dwarven",
+      "fey",
+      "petran",
+      "sakvroth"
+    ],
+    "traits": [
+      "beast",
+      "humanoid",
+      "minotaur"
+    ],
+    "desc": "Minotaurs stalk complex passageways, whether natural or artificial, and are masters of stone architecture. Inquisitive and steadfast, these bovine humanoids spend their lives perfecting the pursuit that calls to them, which can sometimes lead them far from the enclaves where they were raised. Minotaurs are originally from the Iblydos archipelago but have spread far and wide across the world, forming close-knit communities often near mountains or beneath the surface of the earth. Though sometimes mistaken for simple brutes, minotaurs have scholars and warriors alike. Those who can look past their appearance will find an affinity for building and navigation, as well as creative problem-solving. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.D1SZXGFA8Hh4huax]{Minotaur}",
+    "source": "Pathfinder Howl of the Wild",
+    "tier": "tier2",
+    "heritages": [
+      {
+        "id": "bHgGh3vtXL7fkhIy",
+        "name": "Ghost Bull Minotaur",
+        "ancestrySlug": "minotaur",
+        "traits": [],
+        "desc": "Your fur is as pale as death, possibly from some connection you or your family has to the afterlife, which lets you supernaturally find your way. You can cast @UUID[Compendium.pf2e.spells-srd.Item.Know the Way] as an occult innate spell at will. A cantrip is heightened to a spell rank equal to half your level rounded up. In addition, you gain a +1 circumstance bonus against spells or effects that cause the @UUID[Compendium.pf2e.conditionitems.Item.Confused] condition.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "jP9ORt0jgY5VHyD3",
+        "name": "Glacier Cavern Minotaur",
+        "ancestrySlug": "minotaur",
+        "traits": [],
+        "desc": "Your fur grows thick and warm, well suited to the frozen mountains in which you reside. You gain cold resistance equal to half your level (minimum of 1). Environmental cold effects are one step less extreme for you.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "23MEmXuyw75jiGKq",
+        "name": "Littlehorn Minotaur",
+        "ancestrySlug": "minotaur",
+        "traits": [],
+        "desc": "Though no less powerful, your frame (and your horns) are smaller than those of most other minotaurs. Instead of Large, your size is Medium. Your horns unarmed attack deals 1d6 piercing damage instead of 1d8, but it has the agile trait.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "HAo0S8ysFipf6S2B",
+        "name": "Roaming Minotaur",
+        "ancestrySlug": "minotaur",
+        "traits": [],
+        "desc": "Your hooves are broad and powerful, perfect for clearing away rubble as you step. You become trained in Survival (or another skill if you were already trained in Survival) and gain the @UUID[Compendium.pf2e.feats-srd.Item.Terrain Expertise] skill feat. You ignore difficult terrain caused by natural uneven ground while in the terrain chosen for your Terrain Expertise feat.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "mPVEc7hFZQhv0gqJ",
+        "name": "Slabsoul Minotaur",
+        "ancestrySlug": "minotaur",
+        "traits": [],
+        "desc": "Your deep connection with stone and walls allows you to conjure massive slabs of granite that collapse on your foes. You gain the @UUID[Compendium.pf2e.actionspf2e.Item.Raise Slabs] activity.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "tYrb9KOv1etjE5wK",
+        "name": "Stalker Minotaur",
+        "ancestrySlug": "minotaur",
+        "traits": [],
+        "desc": "Despite your heavy frame, you walk on shaggy hooves that muffle your footfalls, allowing you to surprise your prey. You become trained in Stealth (or another skill if you were already trained in Stealth) and gain the @UUID[Compendium.pf2e.feats-srd.Item.Terrain Stalker] skill feat, except you must choose rubble and you can @UUID[Compendium.pf2e.actionspf2e.Item.Sneak] no more than 10 feet instead of 5 feet without attempting a Stealth check.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      }
+    ]
+  },
+  {
+    "id": "orc",
+    "name": "Orc",
+    "hp": 10,
+    "size": "med",
+    "speed": 25,
+    "boosts": [
+      "cha",
+      "con",
+      "dex",
+      "int",
+      "str",
+      "wis",
+      "cha",
+      "con",
+      "dex",
+      "int",
+      "str",
+      "wis"
+    ],
+    "flaws": [],
+    "vision": "darkvision",
+    "languages": [
+      "common",
+      "orcish"
+    ],
+    "additionalLanguages": [
+      "goblin",
+      "jotun",
+      "petran",
+      "sakvroth"
+    ],
+    "traits": [
+      "humanoid",
+      "orc"
+    ],
+    "desc": "Orcs are forged in the fires of violence and conflict, often from the moment they are born. As they live lives that are frequently cut brutally short, orcs revel in testing their strength against worthy foes, whether by challenging a higher-ranking member of their community for dominance or raiding a neighboring settlement. Many orcs seek glory as soon as they can walk and carry a blade or club, taming wild beasts or hunting deadly monsters. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.GCxhDyf1ZNlLiDKZ]{Orc}",
+    "source": "Pathfinder Player Core",
+    "tier": "tier1",
+    "heritages": [
+      {
+        "id": "8Gsa8KFsHizEwSHU",
+        "name": "Badlands Orc",
+        "ancestrySlug": "orc",
+        "traits": [],
+        "desc": "You come from sun-scorched badlands, where long legs and an ability to withstand the elements helped you thrive. You can @UUID[Compendium.pf2e.actionspf2e.Item.Hustle] twice as long while exploring before you have to stop, and you treat environmental heat effects as if they were one step less extreme (incredible heat becomes extreme, extreme heat becomes severe, and so on).",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "nXQxlmjH24Eb8h2Q",
+        "name": "Battle-Ready Orc",
+        "ancestrySlug": "orc",
+        "traits": [],
+        "desc": "You descend from a line of terrifying battlefield commanders. You become trained in Intimidation, and you gain the @UUID[Compendium.pf2e.feats-srd.Item.Intimidating Glare] skill feat.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "wn4EbYk1QN3tyFhh",
+        "name": "Deep Orc",
+        "ancestrySlug": "orc",
+        "traits": [],
+        "desc": "Your calloused hands and red eyes speak to a life spent in the deep darkness of mountain caverns, where you learned to battle on rocky cliffs and survive with minimal resources. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Terrain Expertise] skill feat for underground terrain and the @UUID[Compendium.pf2e.feats-srd.Item.Combat Climber] skill feat.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "VvEAFoxuddYNBmNc",
+        "name": "Grave Orc",
+        "ancestrySlug": "orc",
+        "traits": [],
+        "desc": "You were exposed to powerful necromantic energies that should have killed you—but you survived. Your skin is cold, clammy, and gray. You gain resistance to void damage equal to half your level (minimum 1). You also gain a +1 circumstance bonus to saving throws against effects with the death or void trait.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "MTTU2t7x6TjvUDnE",
+        "name": "Hold-Scarred Orc",
+        "ancestrySlug": "orc",
+        "traits": [],
+        "desc": "You are part of an orc community that participates in ritual scarification or tattooing. The marks on your skin show your exceptional hardiness and vitality. You gain 12 Hit Points from your ancestry instead of 10. You also gain the @UUID[Compendium.pf2e.feats-srd.Item.Diehard] feat.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "dwKCwwtWetvPmJks",
+        "name": "Rainfall Orc",
+        "ancestrySlug": "orc",
+        "traits": [],
+        "desc": "You were born in a rain forest with only tangles of trees providing protection from torrential rainstorms and flash floods. You've learned to move adeptly through jungle terrain and resist the various ailments common in humid environs. You gain a +2 circumstance bonus to Athletics checks to @UUID[Compendium.pf2e.actionspf2e.Item.Climb] or @UUID[Compendium.pf2e.actionspf2e.Item.Swim] and a +1 circumstance bonus to saving throws against diseases.",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      },
+      {
+        "id": "pZ1u2ScWrBXSaAqQ",
+        "name": "Winter Orc",
+        "ancestrySlug": "orc",
+        "traits": [],
+        "desc": "Your ancestors survived in cold climates. You become trained in Survival, and you treat environmental cold effects as if they were one step less extreme (incredible cold becomes extreme, extreme cold becomes severe, and so on).",
+        "source": "Pathfinder Player Core",
+        "tier": "tier1"
+      }
+    ]
+  },
+  {
+    "id": "ratfolk",
+    "name": "Ratfolk",
+    "hp": 6,
+    "size": "sm",
+    "speed": 25,
+    "boosts": [
+      "dex",
+      "int",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "str"
+    ],
+    "vision": "low-light-vision",
+    "languages": [
+      "common",
+      "ysoki"
+    ],
+    "additionalLanguages": [
+      "aklo",
+      "draconic",
+      "dwarven",
+      "gnomish",
+      "goblin",
+      "halfling",
+      "kholo",
+      "orcish",
+      "sakvroth"
+    ],
+    "traits": [
+      "humanoid",
+      "ratfolk"
+    ],
+    "desc": "Ysoki are beings that most surface-dwelling humanoids refer to as \"ratfolk.\" They are a communal people who prefer cramped conditions, with up to 100 individuals living in a given home. If they can't find homes in town, ratfolk may instead live in caves and cavern complexes, as these provide great storage for the many and varied goods they bring back from trading expeditions. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.zoSkNev57C8OEDYL]{Ratfolk}",
+    "source": "Pathfinder Player Core 2",
+    "tier": "tier1",
+    "heritages": [
+      {
+        "id": "7p9HtLzWBHc18JDW",
+        "name": "Deep Rat",
+        "ancestrySlug": "ratfolk",
+        "traits": [],
+        "desc": "Your ancestors lived deeper underground than other ratfolk, granting you the ability to see in the dark. You gain darkvision.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "twayjFuXbsvyHUwy",
+        "name": "Desert Rat",
+        "ancestrySlug": "ratfolk",
+        "traits": [],
+        "desc": "You are native to arid plains and likely grew up traveling the roads. If you have both hands free, you can increase your Speed to 30 feet as you run on all fours. In addition, environmental heat effects are one step less extreme for you, and you can go 10 times longer than normal before you are affected by starvation or thirst. However, unless you wear protective gear or take shelter, environmental cold effects are one step more extreme for you.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "fROPRHGyUn4PgcER",
+        "name": "Longsnout Rat",
+        "ancestrySlug": "ratfolk",
+        "traits": [],
+        "desc": "Your long snout gives you a keener sense of smell than most ratfolk. You gain imprecise scent with a range of 30 feet. This means you can use your sense of smell to determine a creature's location. The GM will usually double the range if you're downwind from the creature or halve the range if you're upwind. In addition, you gain a +2 circumstance bonus to Perception checks to @UUID[Compendium.pf2e.actionspf2e.Item.Seek] a creature or object within the range of your scent.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "eFsD7W6hnK33jlDQ",
+        "name": "Sewer Rat",
+        "ancestrySlug": "ratfolk",
+        "traits": [],
+        "desc": "You come from a long line of ratfolk with a community based in the sewers beneath a large settlement. You are immune to the disease putrid plague. You gain a +1 circumstance bonus to saving throws against diseases and poisons. If you roll a success on a saving throw against a disease or poison, you get a critical success instead. If you have a different ability that would improve the save in this way (such as the @UUID[Compendium.pf2e.classfeatures.Item.Battle Hardened] fighter class feature), if you roll a critical failure on the save you get a failure instead.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "tarfuEXmi0E0Enfy",
+        "name": "Shadow Rat",
+        "ancestrySlug": "ratfolk",
+        "traits": [],
+        "desc": "Your ancestors lived in dark spaces underground, granting you dark fur and a vaguely unnatural mien. You gain the trained proficiency rank in Intimidation and can use Intimidation to @UUID[Compendium.pf2e.actionspf2e.Item.Coerce] animals. When you @UUID[Compendium.pf2e.actionspf2e.Item.Demoralize] an animal, you don't take a penalty for not sharing a language with it. If you would automatically become trained in Intimidation (from your background or class, for example), you become trained in another skill of your choice. Animals' attitudes toward you begin one degree worse than normal, usually starting at unfriendly instead of indifferent for domesticated animals, and hostile instead of unfriendly for wild animals.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "7lFPhRMAFXQsXUP2",
+        "name": "Snow Rat",
+        "ancestrySlug": "ratfolk",
+        "traits": [],
+        "desc": "You have a thicker coat and bulkier frame to defend against the cold, granting you cold resistance equal to half your level (minimum 1). You treat environmental cold effects as if they were one step less extreme (incredible cold becomes extreme, extreme cold becomes severe, and so on).",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "U882U2NUUGL6u3rL",
+        "name": "Tunnel Rat",
+        "ancestrySlug": "ratfolk",
+        "traits": [],
+        "desc": "You can easily compress your body and squeeze through gaps. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Quick Squeeze] feat as a bonus feat, even if you aren't trained in Acrobatics. Tight spaces not tight enough to require the @UUID[Compendium.pf2e.actionspf2e.Item.Squeeze] action aren't difficult terrain for you.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      }
+    ]
+  },
+  {
+    "id": "surki",
+    "name": "Surki",
+    "hp": 8,
+    "size": "med",
+    "speed": 25,
+    "boosts": [
+      "con",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [],
+    "vision": "darkvision",
+    "languages": [
+      "common",
+      "surki"
+    ],
+    "additionalLanguages": [
+      "elven",
+      "fey",
+      "sakvroth"
+    ],
+    "traits": [
+      "humanoid",
+      "surki"
+    ],
+    "desc": "Surkis are an insectile species who subsist on the latent magic in the world around them. As a subterranean species native to the Darklands, surkis have rarely been seen on the surface, and always with long pauses between historical sightings. This is due to surkis' life cycle—long dormancies followed by so-called \"generation digs,\" as they migrate great distances in response to happenings underground. The healing of the Worldwound initiated one of the largest such digs in their history, bringing surkis up into the caverns and passages of the Sarkoris Scar and emerging onto the surface for the first time in many years. Since their emergence, several small surki settlements have been established in secluded corners of Sarkoris, voraciously cataloging the wildlife, magics, and various other inhabitants of the area as they explore the alien environment of the surface. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.6kuNg9Pr7LdaNPQq]{Surki}",
+    "source": "Pathfinder Howl of the Wild",
+    "tier": "tier2",
+    "heritages": [
+      {
+        "id": "BDBzVaZx3GfZXs5b",
+        "name": "Breaker Surki",
+        "ancestrySlug": "surki",
+        "traits": [],
+        "desc": "Your claws are especially hard and can break through earth and predators alike. You gain a claw unarmed attack that deals 1d4 slashing damage. Your claws are in the brawling group and have the agile, finesse, unarmed, and versatile B traits. Evolution Your wrist nodes project magic into a durable digging wedge. You can spend an Interact action to increase your claw unarmed attack's damage to 1d6; grant it the magical, razing, and versatile force traits; and remove the agile trait. You can spend another action to deactivate the wedge and return your claw to its normal statistics. Evolution Your ankle nodes can emit grounding claw spikes of magic to hold you in place. If any effect would force you to move 10 feet or more, you can choose to move only half the distance. The extra traction from your claw spikes allows you to Climb with one hand occupied (or with both hands occupied if you have the @UUID[Compendium.pf2e.feats-srd.Item.Combat Climber] feat). You gain the @UUID[Compendium.pf2e.actionspf2e.Item.Trench Digging] reaction.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "0Anj61DzUimJ1uMS",
+        "name": "Elytron Surki",
+        "ancestrySlug": "surki",
+        "traits": [],
+        "desc": "The top layer of your carapace is especially mobile, and you can unfurl it to catch the air gracefully as you fall. You take no damage from falling, regardless of the distance you fall. Evolution Your shoulder nodes have evolved into a pair of spines that you can energize to project a pair of glowing wings. You can cast @UUID[Compendium.pf2e.spells-srd.Item.Fly] as an innate spell once per day, targeting yourself; while your wings are energized, you shed bright light in a 20-foot radius and dim light for the next 20 feet. Evolution Your shoulder nodes have evolved into a fan of thin membranes that resonate when magic is coursed through them. You gain the @UUID[Compendium.pf2e.actionspf2e.Item.Stridulating Song] action.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "qKn9k3TQt0gsOLn7",
+        "name": "Hardshell Surki",
+        "ancestrySlug": "surki",
+        "traits": [],
+        "desc": "Your carapace is much denser than that of other surkis, offering you a suit of your very own armor. Your carapace is medium armor in the plate armor group that grants a +4 item bonus to AC, a Dex cap of +1, a check penalty of –2, a Speed penalty of –5 feet, a Strength value of +3, and has the comfort trait. You can never wear other armor or remove your carapace. You can etch armor runes onto your carapace. Evolution The magical circulatory system that runs between your nodes has become a reinforcing network that strengthens your carapace with magical energy. If you're struck by a critical hit that deals physical damage, you can use your reaction to attempt a @Check[flat|dc:17|showDC:all]. If successful, the attack becomes a normal hit. Evolution Your abdominal nodes can project a field around you that guards you against the type of magic you're most familiar with. You gain the @UUID[Compendium.pf2e.actionspf2e.Item.Dampening Harmonics] action.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      },
+      {
+        "id": "Wyw1tkO0e199Wm8o",
+        "name": "Lantern Surki",
+        "ancestrySlug": "surki",
+        "traits": [],
+        "desc": "The nodes in your abdomen are particularly luminous. You can use an Interact action to shed light from your abdomen in a 20-foot radius (and dim light for the next 20 feet). This is a magical light effect with a counteract rank equal to half your level rounded up. You can change the color of the light or extinguish it with another Interact action. Evolution Your abdominal nodes have evolved into a pair of secondary limbs that project a magical focusing lens. You gain the @UUID[Compendium.pf2e.actionspf2e.Item.Lantern Beam] action. Evolution Secondary light emitters grow from your shoulder nodes that flash in time with your lantern. You gain the @UUID[Compendium.pf2e.actionspf2e.Item.Lantern Strobe] action.",
+        "source": "Pathfinder Howl of the Wild",
+        "tier": "tier2"
+      }
+    ]
+  },
+  {
+    "id": "tengu",
+    "name": "Tengu",
+    "hp": 6,
+    "size": "med",
+    "speed": 25,
+    "boosts": [
+      "dex",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [],
+    "vision": "low-light-vision",
+    "languages": [
+      "common",
+      "tengu"
+    ],
+    "additionalLanguages": [
+      "dwarven",
+      "elven",
+      "fey",
+      "gnomish",
+      "goblin",
+      "halfling"
+    ],
+    "traits": [
+      "humanoid",
+      "tengu"
+    ],
+    "desc": "Tengu are survivalists and conversationalists, equally at home living off the wilderness and finding a niche in dense cities. They accumulate knowledge, tools, and companions, adding them to their collection as they travel. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.YGIwmuVOJI7uNhGM]{Tengu}",
+    "source": "Pathfinder Player Core 2",
+    "tier": "tier1",
+    "heritages": [
+      {
+        "id": "2hLDilS6qbjHxgVS",
+        "name": "Dogtooth Tengu",
+        "ancestrySlug": "tengu",
+        "traits": [],
+        "desc": "In addition to a beak, your mouth also features a number of vicious, pointed teeth. Some legends claim your powerful jaws can even bite through steel. While you aren't that strong yet, your fangs can still leave terrible wounds. Your beak unarmed attack gains the deadly d8 trait.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "g4FRxyuHndZu4KTo",
+        "name": "Jinxed Tengu",
+        "ancestrySlug": "tengu",
+        "traits": [],
+        "desc": "Your lineage has been exposed to curse after curse, and now they slide off your feathers like rain. If you succeed at a saving throw against a curse or misfortune effect, you get a critical success instead. When you would gain the @UUID[Compendium.pf2e.conditionitems.Item.Doomed] condition, attempt a @Check[flat|dc:17]. On a success, reduce the value of the doomed condition you would gain by 1.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "ptpK6H1rM4Bu3ry4",
+        "name": "Mountainkeeper Tengu",
+        "ancestrySlug": "tengu",
+        "traits": [],
+        "desc": "You come from a line of tengu ascetics, leaving you with a link to the spirits of the world and the Great Beyond. You can cast the @UUID[Compendium.pf2e.spells-srd.Item.Vitality Lash] cantrip as a primal innate spell at will. A cantrip is heightened to a spell rank equal to half your level rounded up. Each time you cast a spell from a tengu heritage or ancestry feat, you can decide whether it's a divine or primal spell.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "rKV11HWREwjjMIum",
+        "name": "Skyborn Tengu",
+        "ancestrySlug": "tengu",
+        "traits": [],
+        "desc": "Your bones may be especially light, you may be a rare tengu with wings, or your connection to the spirits of wind and sky might be stronger than most, slowing your descent through the air. You take no damage from falling, regardless of the distance you fall.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "7vHLPleFpSqKAjWG",
+        "name": "Stormtossed Tengu",
+        "ancestrySlug": "tengu",
+        "traits": [],
+        "desc": "Whether due to a blessing from Hei Feng or hatching from your egg during a squall, you are resistant to storms. You gain electricity resistance equal to half your level (minimum 1). You automatically succeed at the flat check to target a @UUID[Compendium.pf2e.conditionitems.Item.Concealed] creature if that creature is concealed only by rain or fog.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "qM566kCXljkOpocA",
+        "name": "Taloned Tengu",
+        "ancestrySlug": "tengu",
+        "traits": [],
+        "desc": "Your talons are every bit as sharp and strong as your beak. You gain a talons unarmed attack that deals 1d4 slashing damage. Your talons are in the brawling group and have the agile, finesse, unarmed, and versatile P traits.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "WEzgrxBRFBGdj8Hx",
+        "name": "Wavediver Tengu",
+        "ancestrySlug": "tengu",
+        "traits": [],
+        "desc": "You're one of the rare tengu who can cut through water like a bird through air, and you often lurk in rivers or oceans where few expect you. You gain a swim Speed of 15 feet.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      }
+    ]
+  },
+  {
+    "id": "tripkee",
+    "name": "Tripkee",
+    "hp": 6,
+    "size": "sm",
+    "speed": 25,
+    "boosts": [
+      "dex",
+      "wis",
+      "str",
+      "dex",
+      "con",
+      "int",
+      "wis",
+      "cha"
+    ],
+    "flaws": [
+      "str"
+    ],
+    "vision": "low-light-vision",
+    "languages": [
+      "common",
+      "tripkee"
+    ],
+    "additionalLanguages": [
+      "boggard",
+      "chthonian",
+      "draconic",
+      "elven",
+      "fey",
+      "iruxi",
+      "thalassic"
+    ],
+    "traits": [
+      "humanoid",
+      "tripkee"
+    ],
+    "desc": "Tripkees are a shy and cautious people who generally seek to avoid being drawn into the affairs of others. Despite their cautious outlook and small stature, adventurous tripkees still take bold and noble action when the situation demands it. @UUID[Compendium.pf2e.journals.JournalEntry.45SK8rdbbxvEHfMn.JournalEntryPage.FhIJtKcINEe7fipX]",
+    "source": "Pathfinder Player Core 2",
+    "tier": "tier1",
+    "heritages": [
+      {
+        "id": "bmA9JK06rnOKpNLr",
+        "name": "Poisonhide Tripkee",
+        "ancestrySlug": "tripkee",
+        "traits": [],
+        "desc": "You may be small, but the poison glands concealed across your body hide a deadly defense. You gain the @UUID[Compendium.pf2e.actionspf2e.Item.Toxic Skin] reaction.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "87Eej7uEvTxXeli7",
+        "name": "Riverside Tripkee",
+        "ancestrySlug": "tripkee",
+        "traits": [],
+        "desc": "Your ancestors live in and on the water. You gain a 15-foot swim Speed.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "2kSzKDtwbcILZTIe",
+        "name": "Snaptongue Tripkee",
+        "ancestrySlug": "tripkee",
+        "traits": [],
+        "desc": "Your tongue is especially long, and you can launch it with extraordinary range and precision. You can use your tongue to deliver spells with a range of touch and perform extremely simple Interact actions, such as opening some types of unlocked doors. Your tongue can't perform actions that require fingers or significant manual dexterity, including any action that would require a check to accomplish, and you can't use it to hold items.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "rFdVYKtHsZzRCsSd",
+        "name": "Stickytoe Tripkee",
+        "ancestrySlug": "tripkee",
+        "traits": [],
+        "desc": "Your hands and feet exude a film that helps them adhere to surfaces. You gain a +2 circumstance bonus to your Fortitude and Reflex DC against attempts to @UUID[Compendium.pf2e.actionspf2e.Item.Disarm], @UUID[Compendium.pf2e.actionspf2e.Item.Shove], @UUID[Compendium.pf2e.actionspf2e.Item.Reposition], or @UUID[Compendium.pf2e.actionspf2e.Item.Trip] you. When ascending trees, vines, and other foliage, if you roll a success on the Athletics check to Climb, you get a critical success instead.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "2QLKvmCimT9ai0Bi",
+        "name": "Thickskin Tripkee",
+        "ancestrySlug": "tripkee",
+        "traits": [],
+        "desc": "Your thick leathery skin resembles that of a toad. You gain 8 Hit Points from your ancestry instead of 6. You gain a +1 circumstance bonus to saves against diseases and poisons.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      },
+      {
+        "id": "xaTTN5anLEBzWCzv",
+        "name": "Windweb Tripkee",
+        "ancestrySlug": "tripkee",
+        "traits": [],
+        "desc": "Tough webbing along your hands and toes can slow any fall. As long as you have one hand free, you take no falling damage, regardless of the distance you fall.",
+        "source": "Pathfinder Player Core 2",
+        "tier": "tier1"
+      }
+    ]
+  }
+]

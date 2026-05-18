@@ -10,8 +10,23 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FOUNDRY_PATH = 'C:/Users/itsme/Downloads/pf2e-foundry-source/packs';
+// Resolved relative to the repo so the script works in any environment.
+// Override with FOUNDRY_PATH env var if your source lives elsewhere.
+const FOUNDRY_PATH = process.env.FOUNDRY_PATH
+  || path.resolve(__dirname, '../pf2e-foundry-source/packs/pf2e');
 const OUT = path.join(__dirname, '..', 'data');
+
+// Foundry's pruned source layout uses bare directory names, not the
+// `-srd` suffix the original importer assumed. Map output-file names
+// to the actual source dirs the pruned dump ships.
+const PACK_DIR = {
+  'feats-srd':     'feats',
+  'spells-srd':    'spells',
+  'equipment-srd': 'equipment',
+  'ancestries':    'ancestries',
+  'backgrounds':   'backgrounds',
+  'classes':       'classes',
+};
 
 // === LICENSING TIERS ===
 // Tier 1: Ship as-is (ORC, Player Core scope)
@@ -72,15 +87,35 @@ function stripHTML(html) {
 }
 
 // === GENERIC ITEM READER ===
-function readPack(packName) {
-  const dir = path.join(FOUNDRY_PATH, packName);
+// Recursive walker — spells/ and feats/ are subdivided in the
+// pruned Foundry source (spells/{focus,rituals,spells},
+// feats/{ancestry,archetype,class,general,miscellaneous,mythic,skill}).
+// Skip Foundry's _folders.json compendium-tree metadata.
+function walkJsonSync(dir, acc = []) {
+  if (!fs.existsSync(dir)) return acc;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkJsonSync(full, acc);
+    } else if (entry.isFile() && entry.name.endsWith('.json') && entry.name !== '_folders.json') {
+      try {
+        acc.push(JSON.parse(fs.readFileSync(full, 'utf8')));
+      } catch (err) {
+        console.warn(`! skipping malformed JSON: ${full} (${err.message})`);
+      }
+    }
+  }
+  return acc;
+}
+
+function readPack(outFilename) {
+  const sourceDir = PACK_DIR[outFilename] || outFilename;
+  const dir = path.join(FOUNDRY_PATH, sourceDir);
   if (!fs.existsSync(dir)) {
     console.warn(`Pack not found: ${dir}`);
     return [];
   }
-  return fs.readdirSync(dir)
-    .filter(f => f.endsWith('.json'))
-    .map(f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')));
+  return walkJsonSync(dir);
 }
 
 function publicationOK(item) {
@@ -147,7 +182,10 @@ function transformAncestry(item) {
   if (!tier) return null;
   const sys = item.system;
   return {
-    id: item._id || item.slug || item.name?.toLowerCase().replace(/\s+/g, '-'),
+    // Heritages reference their parent via system.ancestry.slug.
+    // Anchor the ancestry id to the same slug so attachHeritages()
+    // joins cleanly regardless of which legacy id field is set.
+    id: item.slug || item.name?.toLowerCase().replace(/\s+/g, '-') || item._id,
     name: scrub(item.name),
     hp: sys.hp || 8,
     size: sys.size || 'Medium',
@@ -232,6 +270,38 @@ function transformEquipment(item) {
   };
 }
 
+function transformHeritage(item) {
+  const tier = publicationOK(item);
+  if (!tier) return null;
+  const sys = item.system;
+  return {
+    id: item._id || item.name?.toLowerCase().replace(/\s+/g, '-'),
+    name: scrub(item.name),
+    ancestrySlug: sys.ancestry?.slug || null,
+    traits: sys.traits?.value || [],
+    desc: getDesc(item, tier),
+    source: sys.publication?.title,
+    tier,
+  };
+}
+
+// Merge transformed heritages onto their parent ancestry records by
+// ancestry slug. data/index.js builds HERITAGES_BY_ANCESTRY by reading
+// `a.heritages` off each ancestry — populating that field here keeps
+// the bridge unchanged.
+function attachHeritages(ancestries, heritages) {
+  const byAncestry = new Map();
+  for (const h of heritages) {
+    if (!h?.ancestrySlug) continue;
+    if (!byAncestry.has(h.ancestrySlug)) byAncestry.set(h.ancestrySlug, []);
+    byAncestry.get(h.ancestrySlug).push(h);
+  }
+  for (const a of ancestries) {
+    a.heritages = byAncestry.get(a.id) || [];
+  }
+  return ancestries;
+}
+
 // === WRITE ===
 function writeData(filename, items) {
   const out = items.filter(Boolean);
@@ -244,11 +314,19 @@ function writeData(filename, items) {
 console.log('Importing from:', FOUNDRY_PATH);
 fs.mkdirSync(OUT, { recursive: true });
 
-writeData('ancestries.json',  readPack('ancestries').map(transformAncestry));
+// Ancestries first, then attach heritages from their own pack before
+// writing — heritages are filed separately in Foundry but consumers
+// expect them embedded on each ancestry record.
+const ancestries = readPack('ancestries').map(transformAncestry).filter(Boolean);
+const heritages = readPack('heritages').map(transformHeritage).filter(Boolean);
+attachHeritages(ancestries, heritages);
+writeData('ancestries.json',  ancestries);
+
 writeData('backgrounds.json', readPack('backgrounds').map(transformBackground));
 writeData('classes.json',     readPack('classes').map(transformClass));
 writeData('feats-srd.json',   readPack('feats-srd').map(transformFeat));
 writeData('spells-srd.json',  readPack('spells-srd').map(transformSpell));
 writeData('equipment-srd.json', readPack('equipment-srd').map(transformEquipment));
 
+console.log(`  attached ${heritages.length} heritages across ${ancestries.length} ancestries`);
 console.log('Done. Review tier2 entries for flavor-scrub completeness before commit.');
