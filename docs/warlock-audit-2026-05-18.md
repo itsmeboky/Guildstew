@@ -356,3 +356,100 @@ The single highest-leverage fix is **M-1** (patron expanded spells) +
 **M-5** (Chain familiar trigger) — together they make the L1 / L3
 Warlock experience match RAW for the three patron paths the data
 already supports.
+
+---
+
+## Fix log (closeout 2026-05-18)
+
+### Shipped
+
+| ID | Status | Commit | Notes |
+|---|---|---|---|
+| C-1 | ✅ Fixed | `fix(warlock-2024): grant 2 Eldritch Invocations at L1` | One-line table fix in `dnd5e_2024/rules.js`. Regression test updated. |
+| M-1 | ✅ Fixed | `fix(warlock): merge patron Expanded Spells into spell picker` | Added `SUBCLASS_EXPANDED_SPELLS` data table sourced from 2014 SRD JSON's Fiend subclass. `getAllAvailableSpells` now takes `{subclass, level}` and merges the expanded list (Fiend at L1 gains burning hands + command). Data + helper extracted to a sibling `.js` module so Node tests can import them. 6 new regression tests. |
+| M-5 | ✅ Fixed | `fix(warlock): route Pact of the Chain familiar upgrade via Pact Boon` | `resolveCompanionContext` now takes an explicit `pactBoon` argument sourced from `feature_choices['Warlock-3-Pact Boon']` instead of reading patron name. 4 new regression tests. |
+
+### Demoted
+
+- **C-2** — Could not reproduce the L11+ Continue blocker. Trace:
+  the spells-step validator reads from `getSpellsCompletion`, which
+  derives non-cantrip cap from `spellsKnown(Warlock, level)` (correct
+  at every level 1–20). The features step always returns `true`. The
+  picker, post-SpellsStep fix, caps by the same value. So a L11+
+  warlock should unblock once they pick `spellsKnown(L)` non-cantrip
+  spells, all bucketed under whichever level has slots (which for
+  pure Warlock is `level{N}` where N = pact slot level). Reclassified
+  as not-a-defect pending a live repro from the original reporter —
+  if it recurs, the issue is probably in the per-level chapter
+  rendering at warlock-style pact-only level sets, not the validator.
+
+### Blocked by OGL / SRD constraint
+
+- **M-2** — Adding Archfey + Great Old One patron data to 2014
+  `classFeatures.js` is the obvious fix, but the file header
+  (`src/game-packs/dnd5e/data/classFeatures.js:1–15`) explicitly
+  flags this file as the residual OGL exposure that was cleaned up
+  to ship only SRD-covered subclass entries. The 2014 SRD JSON
+  contains only "The Fiend". Hand-authoring Archfey / Great Old One
+  features here would re-introduce the exact exposure that pass
+  removed. **Decision needed at product level**: either remove the
+  non-SRD patron blurbs from `ClassStep.jsx:218–222` (clean) or
+  source full patron data from an OGL-compliant pack.
+- **N-2** — Same constraint for 2024. Only Fiend patron in 2024 SRD
+  JSON. Out of scope until an OGL-compliant pack lands.
+
+### Deferred — new UI work, paths forward
+
+Each requires net-new picker UI; data layer is already in place.
+None block character creation today (the player can save and the
+sheet renders), but they leave RAW mechanics unenforced.
+
+- **M-3 · Mystic Arcanum picker** — Data is correct
+  (`SPELLS_KNOWN_TABLE.Warlock.mysticArcanum` 2014;
+  `mysticArcanumLevels()` 2024). Need a SpellsStep chapter that
+  appears at L11+ and lets the player pick one warlock-list spell
+  per Arcanum slot (6th at L11, +7th at L13, +8th at L15, +9th at
+  L17). Storage suggestion: `characterData.spells.arcanum: {6:
+  "spell name", 7: "spell name", ...}` to keep separate from the
+  pact-slot bucket. Validator: add a corresponding check in
+  `spellsCompletion.js`.
+- **M-4 · Eldritch Invocations picker** — `5e-SRD-Features.json`
+  ships **32 Eldritch Invocation entries** with structured
+  `prerequisites` arrays (verified: `grep -c '"name": "Eldritch
+  Invocation:"` returns 64 — 32 entries × index + detail rows).
+  Building the data adapter is straightforward; the picker needs
+  to enforce per-level count cap (`eldritchInvocationsKnown(L)`)
+  + per-invocation prerequisites (min level, pact boon, patron,
+  other invocation). 2014: gain starts at L2 with 2; 2024 (after
+  C-1 fix): gain starts at L1 with 2. Storage suggestion:
+  `characterData.invocations: ["Agonizing Blast", "Devil's Sight"]`.
+- **M-6 · Pact of the Tome cantrip picker** — Trigger off
+  `feature_choices['Warlock-3-Pact Boon'] === 'Pact of the Tome'`.
+  Render a 3-cantrip chapter pulling from `fullSpellsList` filtered
+  to `level === 0` (any class). Store as
+  `characterData.spells.bookOfShadowsCantrips: [name, name, name]`
+  so the picker's non-cantrip / cantrip caps don't double-count.
+
+### Minor / cosmetic — deferred (one batch commit suggested)
+
+- **N-1** — Patron-picker duplication in ClassFeaturesStep. Could
+  be silenced by recognising "Otherworldly Patron" as an already-set
+  subclass in the `RequiredChoice` and skipping re-render. Cosmetic.
+- **N-3** — Warlock-specific starting equipment options. EquipmentStep
+  is generic; refactor scope, not Warlock-specific. Defer with the
+  other class equipment polishes.
+- **N-4** — Eldritch Master (L20) entry missing from `classFeatures.js`
+  per-level data. Trivial data add but only worth doing as part of
+  a larger backfill (L4-L20 for Warlock — and probably most other
+  classes are also missing late-game feature entries).
+- **N-5** — Pact of the Blade weapon proficiency. Requires equipment
+  step integration to be visible; defer with N-3.
+
+### Recommended next steps
+
+If you want to drive the L11+ Warlock experience to RAW: M-3 +
+M-4 unblock Mystic Arcanum and Invocations respectively. Both are
+"add new picker chapter" shaped — comparable in scope to the
+Wizard Spellbook chapter that already exists in SpellsStep2024.
+M-3 is the simpler one (fixed 4 picks at 4 known levels with a
+narrow spell-pool filter) and would be a good warm-up before M-4.
