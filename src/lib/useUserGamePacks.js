@@ -7,7 +7,7 @@
 // subscriptions / homebrew unlock), swap the constant return for a
 // per-user query against whatever table tracks ownership.
 
-const DEFAULT_OWNED = ["dnd5e_2014", "dnd5e_2024"];
+const DEFAULT_OWNED = ["dnd5e_2014", "dnd5e_2024", "pathfinder_2e"];
 
 export function useUserGamePacks() {
   return DEFAULT_OWNED;
