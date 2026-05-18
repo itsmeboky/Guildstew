@@ -5,6 +5,7 @@ import React from 'react';
 
 const ComplexityBadge = ({ level }) => {
   const map = {
+    easy:         { label: 'Easy',              cls: 'bg-pf-sage/15 text-pf-sage border-pf-sage/40' },
     beginner:     { label: 'Beginner-Friendly', cls: 'bg-pf-sage/15 text-pf-sage border-pf-sage/40' },
     intermediate: { label: 'Intermediate',      cls: 'bg-pf-brass/10 text-pf-brass border-pf-brass/40' },
     advanced:     { label: 'Advanced',          cls: 'bg-pf-oxblood/15 text-pf-oxblood-glow border-pf-oxblood/40' },
