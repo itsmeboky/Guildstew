@@ -23,13 +23,23 @@ export const GAME_PACKS = {
     family: "dnd5e",
     name: "D&D 5e (2014)",
     short: "D&D 5e 2014",
+    shortName: "D&D 5e",
+    yearLabel: "2014",
+    tagAbbreviation: "D&D 5e '14",
     tagline: "Original 2014 PHB ruleset. The classic toolkit.",
     description:
       "Twelve classes, nine races, levels 1-20, the 2014 PHB rules everyone learned 5e on. Multiclass, ASIs, the lot.",
     accent: "#37F2D1",
+    accentColor: "#8B0000",
     icon: "🐉",
     status: "available",
     creatorRoute: "CharacterCreator",
+    // Library detail renderer key — looked up by CharacterDetailDispatcher.
+    // D&D 5e detail is still inlined in src/pages/CharacterLibrary.jsx
+    // pending a follow-up extraction phase; the dispatcher currently
+    // short-circuits the dnd5e family and lets the library render
+    // inline. PF2e routes through the dispatcher fully.
+    detailComponent: "Dnd5eCharacterDetail",
     // Slug on the game_packs DB table. Migration 20260514030000 split
     // the original single `dnd5e` row into `dnd5e_2014` + `dnd5e_2024`,
     // so each edition now has its own DB row and its own entitlement.
@@ -40,13 +50,18 @@ export const GAME_PACKS = {
     family: "dnd5e",
     name: "D&D 5e (2024)",
     short: "5e (2024)",
+    shortName: "D&D 5e",
+    yearLabel: "2024",
+    tagAbbreviation: "D&D 5e '24",
     tagline: "The 2024 revision — PHB 2024.",
     description:
       "The 2024 revision. Weapon Mastery on martial classes, reworked spell lists, ASI through backgrounds, refreshed subclasses, and updated species rules. SRD 5.2 only — non-SRD content is not shipped.",
     accent: "#37F2D1",
+    accentColor: "#DC143C",
     icon: "🐉",
     status: "available",
     creatorRoute: "CharacterCreator",
+    detailComponent: "Dnd5eCharacterDetail",
     entitlementSlug: "dnd5e_2024",
   },
   pathfinder_2e: {
@@ -54,15 +69,19 @@ export const GAME_PACKS = {
     family: "pf2e",
     name: "Pathfinder 2e",
     short: "PF2e",
+    shortName: "PF2e",
+    tagAbbreviation: "PF2e",
     tagline: "Tactical fantasy with deep customization.",
     description:
       "The crunchy d20 alternative — three-action economy, ancestries instead of races, feats every other level.",
     accent: "#c2410c",
+    accentColor: "#B8860B",
     icon: "⚔️",
     license: "ORC",
     status: "available",
     enabled: true,
     creatorRoute: "PathfinderCharacterCreator",
+    detailComponent: "PathfinderCharacterDetail",
     // DB slug matches the row inserted by migration 20260514030000.
     // (The earlier value `pathfinder2e` — without the underscore —
     // never matched any row, so PF2e was un-pickable for the same

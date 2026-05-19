@@ -30,6 +30,10 @@ import {
   fightingStyleDescriptions
 } from "@/components/dnd5e/featureDescriptions";
 import CompanionCard from "@/components/characters/CompanionCard";
+import CharacterDetailDispatcher from "@/components/characters/CharacterDetailDispatcher";
+import GamePackTag from "@/components/characters/GamePackTag";
+import { getGamePack } from "@/config/gamePacks";
+import { getCharacterPortraitUrl, getCharacterTokenUrl } from "@/lib/characterMedia";
 import SpellHoverCard from "@/components/spells/SpellHoverCard";
 import { classHitDice } from "@/components/dnd5e/characterCalculations";
 import { spellDetails, spellIcons } from "@/components/dnd5e/spellData";
@@ -292,6 +296,7 @@ export default function CharacterLibrary() {
           ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {characters.map((character) => {
+              const cardTokenUrl = getCharacterTokenUrl(character) || getCharacterPortraitUrl(character);
               return (
                 <div
                   key={character.id}
@@ -305,9 +310,9 @@ export default function CharacterLibrary() {
                         : 'ring-2 ring-gray-600 hover:ring-[#FF5722]'
                     }`}
                   >
-                    {(character.profile_avatar_url || character.avatar_url) ? (
+                    {cardTokenUrl ? (
                       <img
-                        src={character.profile_avatar_url || character.avatar_url}
+                        src={cardTokenUrl}
                         alt={character.name}
                         className="w-full h-full"
                         style={{
@@ -329,6 +334,11 @@ export default function CharacterLibrary() {
                       </div>
                     )}
                   </div>
+                  {character.game_pack && (
+                    <div className="absolute bottom-1 left-1 right-1 flex justify-center pointer-events-none">
+                      <GamePackTag packId={character.game_pack} size="sm" />
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -365,8 +375,31 @@ export default function CharacterLibrary() {
         )}
       </div>
 
-      {/* Right Panel - Character Details */}
-      {selectedCharacter && (
+      {/* Right Panel - Character Details.
+          Non-D&D packs route through CharacterDetailDispatcher (which
+          lazy-loads a per-pack renderer); the inline detail JSX below
+          remains the D&D 5e rendering path until that gets extracted
+          into game-packs/dnd5e/. PF2e characters will surface an
+          UnknownGamePackError until Phase I lands their dedicated
+          renderer — better than silently rendering D&D-shaped stats
+          for a Pathfinder character. */}
+      {selectedCharacter && (() => {
+        const pack = getGamePack(selectedCharacter.game_pack);
+        const isDnd = !pack || pack.family === 'dnd5e';
+        if (!isDnd) {
+          return (
+            <div className="w-[500px] p-6 overflow-y-auto relative z-10 overflow-x-hidden" style={{
+              background: 'linear-gradient(to left, rgba(30, 36, 48, 0.7), rgba(30, 36, 48, 0.95))'
+            }}>
+              <div className="mb-4 flex items-baseline gap-3">
+                <h1 className="text-3xl font-bold text-[#FF5722] flex-1">{selectedCharacter.name}</h1>
+                <GamePackTag pack={pack} size="lg" />
+              </div>
+              <CharacterDetailDispatcher character={selectedCharacter} />
+            </div>
+          );
+        }
+        return (
         <div className="w-[500px] p-6 overflow-y-auto relative z-10 overflow-x-hidden" style={{
           background: 'linear-gradient(to left, rgba(30, 36, 48, 0.7), rgba(30, 36, 48, 0.95))'
         }}>
@@ -1253,7 +1286,8 @@ export default function CharacterLibrary() {
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       <CreateCharacterDialog
         open={createDialogOpen}
