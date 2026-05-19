@@ -403,7 +403,14 @@ export default function CharacterLibrary() {
                   outer name/tag block on top, producing the duplicate-
                   name bug. Now non-D&D detail surfaces are responsible
                   for the entire side-panel content. */}
-              <CharacterDetailDispatcher character={selectedCharacter} />
+              <CharacterDetailDispatcher
+                character={selectedCharacter}
+                onEdit={() => navigate(createPageUrl(pack.creatorRoute || 'CharacterCreator') + `?edit=${selectedCharacter.id}`)}
+                onDelete={() => {
+                  setCharacterToDelete(selectedCharacter);
+                  setDeleteDialogOpen(true);
+                }}
+              />
             </div>
           );
         }
