@@ -63,7 +63,7 @@ const StepBackground = ({ data, update }) => {
             <p className="font-body text-sm text-pf-parchment italic leading-relaxed mb-4">{flavor}</p>
 
             <div className="mt-6">
-              <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-2">GM's Whisper</p>
+              <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-2">Helpful Tip</p>
               <p className="font-body text-sm text-pf-parchment leading-relaxed italic">{gmWhisper}</p>
             </div>
           </div>

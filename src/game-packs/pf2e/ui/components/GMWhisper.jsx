@@ -1,6 +1,7 @@
-// "GM's Whisper" tooltip-style helper threaded through every step.
+// "Helpful Tip" inline helper threaded through every step.
 // tone='tip' shows a lightbulb, tone='warning' shows an alert icon.
-// Verbatim from prototype.
+// (Component name kept as GMWhisper to avoid a sweep of every import
+// site — only the visible label was renamed.)
 
 import React from 'react';
 import { Lightbulb, AlertCircle } from 'lucide-react';
@@ -12,7 +13,7 @@ const GMWhisper = ({ children, tone = 'tip' }) => {
       <div className="flex items-start gap-3">
         <Icon size={16} className="text-pf-brass shrink-0 mt-0.5" />
         <div className="flex-1">
-          <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-1">GM's Whisper</p>
+          <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-1">Helpful Tip</p>
           <p className="font-body text-sm text-pf-parchment leading-relaxed italic">{children}</p>
         </div>
       </div>
