@@ -9,19 +9,38 @@ import CornerBrackets from '../components/CornerBrackets.jsx';
 import ComplexityBadge from '../components/ComplexityBadge.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import MechanicRow from '../components/MechanicRow.jsx';
+import UnknownEntityError from '../components/UnknownEntityError.jsx';
 import { BACKGROUNDS, BACKGROUND_DETAILS, LORES } from '../../data/index.js';
 import { getBackgroundTip } from '../../content/backgroundTips.js';
 import { STEPS } from '../../config/steps.js';
 
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-const slugify = (s) => (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+// Mirror of normalizeSlug in content/backgroundTips.js — the tip
+// lookup runs the input through its own normalizer too, so this is
+// defense-in-depth: if the import ever ships a name with stray
+// whitespace or underscores the lookup still resolves.
+const slugify = (s) => String(s || '')
+  .toLowerCase()
+  .trim()
+  .replace(/[\s_]+/g, '-')
+  .replace(/[^a-z0-9-]/g, '')
+  .replace(/-+/g, '-')
+  .replace(/^-|-$/g, '');
 
 const StepBackground = ({ data, update }) => {
-  const selected = BACKGROUNDS.find(b => b.id === data.background) || BACKGROUNDS[0];
-
   useEffect(() => {
-    if (!data.background) update({ background: BACKGROUNDS[0].id });
+    if (!data.background && BACKGROUNDS.length > 0) {
+      update({ background: BACKGROUNDS[0].slug });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const selected = BACKGROUNDS.find(b => b.slug === data.background);
+  if (data.background && !selected) {
+    console.error('[pf2e] Unknown background slug:', data.background, '— available count:', BACKGROUNDS.length);
+    return <UnknownEntityError kind="background" slug={data.background} available={BACKGROUNDS.map(b => b.slug)} />;
+  }
+  if (!selected) return null;
 
   const flavor = selected.desc || '';
   // Curated tip per background slug; falls back to a generic framing

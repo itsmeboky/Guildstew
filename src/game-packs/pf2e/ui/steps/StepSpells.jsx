@@ -20,7 +20,7 @@ import { fmtMod } from '../../rules/compute-ability-scores.js';
 import { STEPS } from '../../config/steps.js';
 
 const StepSpells = ({ data, update }) => {
-  const cls = CLASSES.find(c => c.id === data.class);
+  const cls = CLASSES.find(c => c.slug === data.class);
   const tradition = cls && CASTING_TRADITION_BY_CLASS[cls.slug];
   const level = data.level || 1;
 

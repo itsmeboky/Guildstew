@@ -23,6 +23,7 @@ import ThumbnailStrip from '../components/ThumbnailStrip.jsx';
 import CornerBrackets from '../components/CornerBrackets.jsx';
 import ComplexityBadge from '../components/ComplexityBadge.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
+import UnknownEntityError from '../components/UnknownEntityError.jsx';
 import RecommendedButton from '../components/RecommendedButton.jsx';
 import RecommendedBadge from '../components/RecommendedBadge.jsx';
 import ProfLine from '../components/ProfLine.jsx';
@@ -41,10 +42,24 @@ import {
 } from '../../data/index.js';
 import { getClassTip } from '../../content/classTips.js';
 import { getRecommended } from '../../content/recommendedBuilds.js';
+import { getSubclassOverlay, applySubclassOverlay } from '../../content/subclassOverlays.js';
 import { STEPS } from '../../config/steps.js';
 
 const StepClass = ({ data, update, openDeityModal }) => {
-  const selected = CLASSES.find(c => c.id === data.class) || CLASSES[0];
+  // Auto-select the first available class when none is set yet so the
+  // initial render has something to draw. Once `data.class` is set,
+  // a missed lookup is a real bug — surface it instead of silently
+  // dropping the player onto the first class in the list.
+  useEffect(() => {
+    if (!data.class && CLASSES.length > 0) update({ class: CLASSES[0].slug });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const selected = CLASSES.find(c => c.slug === data.class);
+  if (data.class && !selected) {
+    console.error('[pf2e] Unknown class slug:', data.class, '— available:', CLASSES.map(c => c.slug));
+    return <UnknownEntityError kind="class" slug={data.class} available={CLASSES.map(c => c.slug)} />;
+  }
+  if (!selected) return null; // first render before auto-pick lands
   const Icon = selected.icon;
   const prof = selected.proficiencies || {};
   const saves = prof.saves || {};
@@ -385,27 +400,31 @@ const StepClass = ({ data, update, openDeityModal }) => {
         </div>
       )}
 
-      {/* CLASS PROFICIENCIES — what your class starts trained in */}
+      {/* CLASS PROFICIENCIES — what your class starts trained in.
+          Subclass proficiency deltas are sourced from
+          content/subclassOverlays.js — see file for which subclasses
+          are covered. */}
       {(() => {
         const details = CLASS_DETAILS[selected.slug];
         if (!details?.proficiencies) return null;
-        // Merge subclass-driven proficiency overrides (Cloistered vs Warpriest, etc.)
-        let p = { ...details.proficiencies };
-        if (selected.slug === 'cleric' && data.subclass === 'warpriest') {
-          p = { ...p,
-            weapons: { ...(p.weapons || {}), simple: 'trained', martial: 'trained', favoredWeapon: 'trained' },
-            armor:   { ...(p.armor   || {}), medium: 'trained' },
-            saves:   { ...(p.saves   || {}), fortitude: 'expert' },
-          };
-        }
-        if (selected.slug === 'cleric' && data.subclass === 'cloistered') {
-          p = { ...p,
-            weapons: { ...(p.weapons || {}), simple: 'trained', favoredWeapon: 'trained' },
-          };
-        }
+        const overlay = getSubclassOverlay(selected.slug, data.subclass);
+        const p = applySubclassOverlay(details.proficiencies, overlay);
         return (
           <div className="mt-5">
             <SectionHeader>Initial Class Proficiencies{data.subclass ? ` — ${CLASS_DETAILS[selected.slug]?.subclasses?.options.find(o => o.id === data.subclass)?.name || 'Subclass'}` : ''}</SectionHeader>
+            {overlay?.notes && (
+              <p className="font-body text-xs text-pf-parchment italic mb-3 leading-relaxed">{overlay.notes}</p>
+            )}
+            {overlay?.bonusSkills?.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {overlay.bonusSkills.map(s => (
+                  <span key={s} className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-display tracking-wider uppercase bg-pf-brass/15 border border-pf-brass/40 text-pf-bone">
+                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                    <span className="text-[8px] text-pf-brass">subclass</span>
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-body">
               <div className="bg-pf-bg-card border border-pf-brass-dim/30 p-3">
                 <p className="font-display text-[10px] tracking-[0.2em] text-pf-brass uppercase mb-2">Defense</p>
@@ -441,21 +460,35 @@ const StepClass = ({ data, update, openDeityModal }) => {
         );
       })()}
 
-      {/* === ANIMAL COMPANION / FAMILIAR === */}
+      {/* === ANIMAL COMPANION / FAMILIAR ===
+          Only show for classes that actually grant one through core
+          progression. Everyone else can pick a companion/familiar via
+          general feats — surfacing the picker for them implies it's a
+          default choice when it isn't. Will move to reading from a
+          `selectedClass.grants` field once the slug-resolver lands. */}
       {(() => {
-        const eligibleForCompanion = ['barbarian'].includes(selected.slug) && data.subclass === 'animal';
-        const eligibleForFamiliar = selected.slug === 'wizard' && data.subclass === 'familiar-attunement';
-        const showOptional = ['wizard', 'rogue', 'bard', 'cleric'].includes(selected.slug);
-        if (!eligibleForCompanion && !eligibleForFamiliar && !showOptional) return null;
+        const CLASSES_WITH_ANIMAL_COMPANION = ['ranger', 'druid'];
+        const CLASSES_WITH_FAMILIAR        = ['witch', 'wizard', 'sorcerer'];
+        const showAnimalCompanion = CLASSES_WITH_ANIMAL_COMPANION.includes(selected.slug);
+        const showFamiliar = CLASSES_WITH_FAMILIAR.includes(selected.slug);
+        if (!showAnimalCompanion && !showFamiliar) return null;
+
+        const familiarRequired = selected.slug === 'witch';
+        const sectionTitle = showAnimalCompanion && showFamiliar
+          ? 'Animal Companion or Familiar'
+          : showAnimalCompanion ? 'Animal Companion' : 'Familiar';
+        const blurb = showAnimalCompanion && !showFamiliar
+          ? 'Pick the animal that fights alongside you.'
+          : familiarRequired
+            ? 'Your patron grants you a familiar — pick its species.'
+            : showFamiliar && !showAnimalCompanion
+              ? 'Pick the magical companion that holds your spellbook and aids you.'
+              : 'Pick an animal companion or a familiar — depends on the path you take.';
         return (
           <div className="mt-5">
-            <SectionHeader>Animal Companion / Familiar</SectionHeader>
-            <p className="font-body text-xs text-pf-stone mb-3 italic">
-              {eligibleForCompanion ? 'Animal Instinct grants a bestial spiritual ally that fights alongside you. Pick your animal aspect.' :
-               eligibleForFamiliar ? 'Improved Familiar Attunement grants a magical companion with two abilities.' :
-               'Some class feats grant an animal companion or familiar. Pick one if your build calls for it (otherwise leave blank).'}
-            </p>
-            {(eligibleForCompanion || (!eligibleForFamiliar && showOptional)) && (
+            <SectionHeader>{sectionTitle}</SectionHeader>
+            <p className="font-body text-xs text-pf-stone mb-3 italic">{blurb}</p>
+            {showAnimalCompanion && (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 mb-4">
                 {[
                   { id: 'ape', name: 'Ape', desc: 'STR + climbing. Unarmed: fist 1d8.' },
@@ -485,7 +518,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
                 })}
               </div>
             )}
-            {eligibleForFamiliar && (
+            {showFamiliar && (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
                 {[
                   { id: 'cat', name: 'Cat', desc: 'Climbing + Stealth bonus.' },

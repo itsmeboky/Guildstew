@@ -27,7 +27,7 @@ export const computeAbilityScores = (data) => {
       accumulated[ab] = (accumulated[ab] || 0) - 1;
     }
   }
-  const cls = CLASSES.find(c => c.id === data.class);
+  const cls = CLASSES.find(c => c.slug === data.class);
   if (cls?.keyAbility?.length) accumulated[cls.keyAbility[0]] = (accumulated[cls.keyAbility[0]] || 0) + 1;
   const scores = {};
   for (const ab of ABILITIES) {

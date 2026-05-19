@@ -19,9 +19,9 @@ export const LevelStat = ({ label, value }) => (
 );
 
 const BottomBar = ({ data, step, totalSteps, onBack, onNext }) => {
-  const ancestry = ANCESTRIES.find(a => a.id === data.ancestry);
-  const cls = CLASSES.find(c => c.id === data.class);
-  const bg = BACKGROUNDS.find(b => b.id === data.background);
+  const ancestry = ANCESTRIES.find(a => a.slug === data.ancestry);
+  const cls = CLASSES.find(c => c.slug === data.class);
+  const bg = BACKGROUNDS.find(b => b.slug === data.background);
 
   return (
     <div className="sticky bottom-0 z-30 bg-pf-bg-card/95 backdrop-blur-md border-t border-pf-brass-dim/30">

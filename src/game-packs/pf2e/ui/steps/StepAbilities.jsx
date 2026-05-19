@@ -25,21 +25,44 @@ const StepAbilities = ({ data, update }) => {
   // boostBatches: { 1: {Strength: 1, ...}, 5: {...}, ... }
   const boostBatches = data.boostBatches || { 1: {} };
 
-  const setBatch = (batchLvl, ability) => {
+  // Toggle a single boost in a batch. Side-effect: when the player
+  // toggles off a recommended boost on batch 1, drop the ★ flag for
+  // that ability in the same update so the recommendedFlags state
+  // doesn't drift behind the actual batch contents. (Prior split into
+  // two separate `update` calls left the second call to mutate state
+  // computed from a render snapshot that hadn't seen the first call
+  // yet — visible as a sticky REC badge on a since-removed boost.)
+  const toggleBoost = (batchLvl, ability) => {
     const batch = boostBatches[batchLvl] || {};
     const current = batch[ability] || 0;
     const batchTotal = Object.values(batch).reduce((a, b) => a + b, 0);
+    const flags = data.recommendedFlags || {};
+
     let nextBatch;
+    let wasRecommended = false;
     if (current === 0 && batchTotal < 4) {
       nextBatch = { ...batch, [ability]: 1 };
     } else if (current === 1) {
       nextBatch = { ...batch };
       delete nextBatch[ability];
+      wasRecommended = batchLvl === 1 && (flags.boosts || []).includes(ability);
     } else {
       return;
     }
-    update({ boostBatches: { ...boostBatches, [batchLvl]: nextBatch } });
+
+    const patch = { boostBatches: { ...boostBatches, [batchLvl]: nextBatch } };
+    if (wasRecommended) {
+      patch.recommendedFlags = {
+        ...flags,
+        boosts: (flags.boosts || []).filter(x => x !== ability),
+      };
+    }
+    update(patch);
   };
+
+  // Kept as an alias so older call sites in this file (and the test
+  // hooks the prototype shipped) still work.
+  const setBatch = toggleBoost;
 
   // Ancestry/background accumulated boosts (only apply to base, not per batch)
   const accumulated = {
@@ -51,7 +74,7 @@ const StepAbilities = ({ data, update }) => {
     Charisma: (data.ancestry === 'gnome' ? 1 : 0) + (data.background === 'noble' ? 1 : 0) - (data.ancestry === 'dwarf' ? 1 : 0),
   };
 
-  const cls = CLASSES.find(c => c.id === data.class);
+  const cls = CLASSES.find(c => c.slug === data.class);
   const keyAbility = cls?.keyAbility?.[0];
 
   const recommended = getRecommended(cls?.slug);
@@ -252,25 +275,18 @@ const StepAbilities = ({ data, update }) => {
                 {ABILITIES.map(ab => {
                   const picked = (batch[ab] || 0) > 0;
                   const canPick = remaining > 0 || picked;
-                  const isRec = batchLvl === 1 && picked && (recFlags.boosts || []).includes(ab);
-                  const handleClick = () => {
-                    if (!canPick) return;
-                    setBatch(batchLvl, ab);
-                    // Drop the ★ for this ability when the user toggles it off.
-                    if (batchLvl === 1 && picked && (recFlags.boosts || []).includes(ab)) {
-                      update({
-                        recommendedFlags: {
-                          ...recFlags,
-                          boosts: (recFlags.boosts || []).filter(x => x !== ab),
-                        },
-                      });
-                    }
-                  };
+                  // REC marks the recommendation, not the selection —
+                  // stays lit on the recommended ability even if the
+                  // player toggles it off afterward (lets them re-apply
+                  // by clicking back on the same tile).
+                  const isRec = batchLvl === 1 && (recFlags.boosts || []).includes(ab);
                   return (
                     <button
                       key={ab}
-                      onClick={handleClick}
+                      type="button"
+                      onClick={() => toggleBoost(batchLvl, ab)}
                       disabled={!canPick}
+                      title={!canPick ? `Batch full (${batchTotal}/4) — remove one to swap` : undefined}
                       className={`relative px-3 py-2 bg-pf-bg-elev/40 border text-left transition-all
                                   ${picked ? 'border-pf-brass bg-pf-brass/10' : canPick ? 'border-pf-brass-dim/30 hover:border-pf-brass-dim' : 'border-pf-brass-dim/20 opacity-50 cursor-not-allowed'}`}
                     >

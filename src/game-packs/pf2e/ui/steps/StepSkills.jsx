@@ -1,11 +1,15 @@
 // Step VI — Skills, Feats & Tongues. Verbatim from the prototype.
 
 import React from 'react';
+import { toast } from 'sonner';
 import GMWhisper from '../components/GMWhisper.jsx';
 import CornerBrackets from '../components/CornerBrackets.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import ProficiencyDots from '../components/ProficiencyDots.jsx';
 import ThreeActionGlyph from '../components/ThreeActionGlyph.jsx';
+import RecommendedButton from '../components/RecommendedButton.jsx';
+import RecommendedBadge from '../components/RecommendedBadge.jsx';
+import { getRecommended } from '../../content/recommendedBuilds.js';
 import {
   CLASSES,
   BACKGROUNDS,
@@ -27,10 +31,26 @@ import { STEPS } from '../../config/steps.js';
 
 const StepSkills = ({ data, update }) => {
   const trained = data.trainedSkills || [];
-  const selectedClass = CLASSES.find(c => c.id === data.class);
-  const allowed = selectedClass ? selectedClass.trainedSkills + 1 : 3;
-  const bgSkill = BACKGROUNDS.find(b => b.id === data.background)?.skill;
+  const selectedClass = CLASSES.find(c => c.slug === data.class);
   const level = data.level || 1;
+  // Trained-skills capacity. The imported class shape is now
+  // `{ value: ['auto-slug'], additional: 2 }` — the prototype assumed
+  // a bare integer, so `trainedSkills + 1` produced NaN and the
+  // picker silently refused new picks (`length < NaN` is always
+  // false). Math: additional + INT mod (positive only). The
+  // background's auto-granted skill is counted separately as a
+  // locked chip and doesn't eat a slot.
+  const additionalSkillSlots = selectedClass?.trainedSkills?.additional ?? 2;
+  const intModRaw = modOf(computeAbilityScores(data).Intelligence || 10);
+  const intMod = Math.max(0, intModRaw);
+  const allowed = additionalSkillSlots + intMod;
+  // Background's auto-trained skill comes in lowercase from the SRD
+  // import; SKILLS[].name is capitalized. Normalize for comparisons.
+  const selectedBackground = BACKGROUNDS.find(b => b.slug === data.background);
+  const bgSkillRaw = (selectedBackground?.trainedSkills?.[0] || selectedBackground?.skill || '').toLowerCase();
+  const bgSkill = bgSkillRaw
+    ? bgSkillRaw.charAt(0).toUpperCase() + bgSkillRaw.slice(1)
+    : null;
 
   // Skill increase tier per skill (Trained → Expert → Master → Legendary)
   const skillTiers = data.skillTiers || {};       // { 'Acrobatics': 'expert', ... }
@@ -51,8 +71,7 @@ const StepSkills = ({ data, update }) => {
   // new ancestry IDs are Foundry random strings, so the legacy lookup
   // always returned empty — every character started with zero base
   // languages and the picker pool was just COMMON_LANGUAGES.
-  const intMod = Math.max(0, modOf(computeAbilityScores(data).Intelligence || 10));
-  const selectedAncestry = ANCESTRIES.find(a => a.id === data.ancestry);
+  const selectedAncestry = ANCESTRIES.find(a => a.slug === data.ancestry);
   const baseLanguages = (selectedAncestry?.languages
     || ANCESTRY_LANGUAGES[data.ancestry]?.base
     || []).map(capLang);
@@ -86,6 +105,54 @@ const StepSkills = ({ data, update }) => {
     }
   };
 
+  // ── Use Recommended apply functions ───────────────────────────
+  const recommended = getRecommended(selectedClass?.slug);
+  const recFlags = data.recommendedFlags || {};
+
+  const applyRecommendedSkills = () => {
+    if (!recommended?.skills) return;
+    // Map recommendation slugs onto the canonical SKILLS list,
+    // exclude the background-granted skill (auto), cap by `allowed`.
+    const want = recommended.skills
+      .map(s => {
+        const found = SKILLS.find(sk => sk.name.toLowerCase() === s.toLowerCase());
+        return found?.name;
+      })
+      .filter(Boolean)
+      .filter(name => name !== bgSkill)
+      .slice(0, allowed);
+    update({
+      trainedSkills: want,
+      recommendedFlags: { ...recFlags, skills: want },
+    });
+    toast.success('Recommended skills applied', { description: recommended.rationale });
+  };
+
+  // Generic preference order — covers most casters' utility wants.
+  // Filtered against the ancestry's `additional` list at apply time so
+  // we only pick languages this ancestry actually allows.
+  const LANGUAGE_PREFERENCE = ['Draconic', 'Celestial', 'Fey', 'Undercommon', 'Aklo', 'Sylvan', 'Elven', 'Dwarven'];
+
+  const applyRecommendedLanguages = () => {
+    if (bonusLanguageSlots <= 0) return;
+    const picks = LANGUAGE_PREFERENCE
+      .filter(l => additionalPool.includes(l) && !baseLanguages.includes(l))
+      .slice(0, bonusLanguageSlots);
+    // Fall back to head of the pool when no preference overlaps.
+    const finalPicks = picks.length > 0
+      ? picks
+      : additionalPool
+        .filter(l => !baseLanguages.includes(l))
+        .slice(0, bonusLanguageSlots);
+    update({
+      languages: finalPicks,
+      recommendedFlags: { ...recFlags, languages: finalPicks },
+    });
+    toast.success('Recommended languages applied', {
+      description: `Filled ${finalPicks.length} bonus language slot${finalPicks.length === 1 ? '' : 's'}.`,
+    });
+  };
+
   // Skills available for increasing (must already be trained, must be below max tier for level)
   const increasableSkills = SKILLS
     .map(s => s.name)
@@ -101,12 +168,16 @@ const StepSkills = ({ data, update }) => {
       <GMWhisper>{STEPS[5].whisper}</GMWhisper>
 
       {/* === Trained skills (existing) === */}
-      <div className="relative bg-pf-bg-card border border-pf-brass-dim/30 p-4 mb-3 flex items-center justify-between">
+      <div className="relative bg-pf-bg-card border border-pf-brass-dim/30 p-4 mb-3 flex items-center justify-between gap-3">
         <CornerBrackets />
-        <div>
+        <div className="flex-1">
           <span className="font-display text-[11px] tracking-[0.2em] text-pf-brass uppercase">Initial Trained Skills</span>
           {bgSkill && <p className="text-[11px] font-body text-pf-stone mt-0.5">"<span className="text-pf-parchment">{bgSkill}</span>" granted automatically by background.</p>}
         </div>
+        <RecommendedButton
+          onClick={applyRecommendedSkills}
+          disabled={!recommended?.skills}
+        />
         <span className={`font-display text-3xl tracking-wider ${trained.length === allowed ? 'text-pf-sage' : 'text-pf-brass'}`}>
           {trained.length}<span className="text-pf-stone text-base">/{allowed}</span>
         </span>
@@ -268,7 +339,14 @@ const StepSkills = ({ data, update }) => {
       {/* === Languages === */}
       {data.ancestry && (
         <>
-          <SectionHeader>Languages ({baseLanguages.length + languages.length})</SectionHeader>
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <SectionHeader>Languages ({baseLanguages.length + languages.length})</SectionHeader>
+            <RecommendedButton
+              onClick={applyRecommendedLanguages}
+              disabled={bonusLanguageSlots <= 0 || additionalPool.length === 0}
+              title="Fill bonus language slots with sensible picks for your ancestry"
+            />
+          </div>
           <p className="font-body text-xs text-pf-stone mb-3 italic">
             Your ancestry grants {baseLanguages.length} base languages. Pick up to {bonusLanguageSlots} bonus languages (= positive INT modifier).
           </p>
