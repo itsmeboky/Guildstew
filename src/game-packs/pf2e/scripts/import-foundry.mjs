@@ -75,8 +75,59 @@ function scrub(text) {
   return FLAVOR_REPLACEMENTS.reduce((t, [pat, rep]) => t.replace(pat, rep), text);
 }
 
+// Foundry's inline DSL leaks raw into our UI — every `@UUID[...]{Name}`
+// renders as ugly text. This runs BEFORE stripHTML so the Foundry
+// syntax is reduced to display-only fragments, and any unmatched
+// brackets get cleaned up by the HTML pass that follows.
+function stripFoundrySyntax(s) {
+  if (!s) return '';
+  return s
+    // @UUID[Compendium...]{Display Text}   → "Display Text"
+    .replace(/@UUID\[[^\]]+\]\{([^}]+)\}/g, '$1')
+    // bare @UUID[Compendium...]            → removed (rare; usually has display)
+    .replace(/@UUID\[[^\]]+\]/g, '')
+    // @Check[type:reflex|dc:20]{Display}   → "Display"
+    .replace(/@Check\[[^\]]+\]\{([^}]+)\}/g, '$1')
+    // @Check[type:reflex|dc:20]            → "Reflex save DC 20"
+    .replace(/@Check\[([^\]]+)\]/g, (_, params) => {
+      const parts = Object.fromEntries(
+        params.split('|').map(p => p.split(':').map(x => x.trim())),
+      );
+      const type = parts.type ? parts.type[0].toUpperCase() + parts.type.slice(1) : '';
+      const dc = parts.dc ? ` DC ${parts.dc}` : '';
+      return `${type} save${dc}`.trim();
+    })
+    // @Damage[2d6[fire]]{Display}          → "Display"
+    .replace(/@Damage\[[^\]]+\]\{([^}]+)\}/g, '$1')
+    // @Damage[2d6[fire]]                   → "2d6 fire"
+    .replace(/@Damage\[([^\]]+)\]/g, (_, inner) =>
+      inner.replace(/\[/g, ' ').replace(/\]/g, '').replace(/\s+/g, ' ').trim())
+    // @Template[type:burst|distance:20]{Display}
+    .replace(/@Template\[[^\]]+\]\{([^}]+)\}/g, '$1')
+    // @Template[type:burst|distance:20]    → "20-ft burst"
+    .replace(/@Template\[([^\]]+)\]/g, (_, params) => {
+      const parts = Object.fromEntries(
+        params.split('|').map(p => p.split(':').map(x => x.trim())),
+      );
+      return `${parts.distance || ''}-ft ${parts.type || 'area'}`.trim();
+    })
+    // @Localize[PF2E.Some.Key]             → removed (localization key with no fallback text)
+    .replace(/@Localize\[[^\]]+\]/g, '')
+    // [[/r 1d6]]{Display}                  → "Display"
+    .replace(/\[\[\/r [^\]]+\]\]\{([^}]+)\}/g, '$1')
+    // [[/r 1d6]]                           → "1d6"
+    .replace(/\[\[\/r ([^\]]+)\]\]/g, '$1')
+    // {action:strike} / {action:1} action-glyph placeholders
+    .replace(/\{action:[a-z0-9]+\}/g, '')
+    // stray trailing `}` on their own line (left over from heightened
+    // headings that wrapped weirdly)
+    .replace(/^\s*\}\s*$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function stripHTML(html) {
-  return (html || '')
+  return stripFoundrySyntax(html || '')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
