@@ -41,6 +41,7 @@ import {
 } from '../../data/index.js';
 import { getClassTip } from '../../content/classTips.js';
 import { getRecommended } from '../../content/recommendedBuilds.js';
+import { getSubclassOverlay, applySubclassOverlay } from '../../content/subclassOverlays.js';
 import { STEPS } from '../../config/steps.js';
 
 const StepClass = ({ data, update, openDeityModal }) => {
@@ -385,27 +386,31 @@ const StepClass = ({ data, update, openDeityModal }) => {
         </div>
       )}
 
-      {/* CLASS PROFICIENCIES — what your class starts trained in */}
+      {/* CLASS PROFICIENCIES — what your class starts trained in.
+          Subclass proficiency deltas are sourced from
+          content/subclassOverlays.js — see file for which subclasses
+          are covered. */}
       {(() => {
         const details = CLASS_DETAILS[selected.slug];
         if (!details?.proficiencies) return null;
-        // Merge subclass-driven proficiency overrides (Cloistered vs Warpriest, etc.)
-        let p = { ...details.proficiencies };
-        if (selected.slug === 'cleric' && data.subclass === 'warpriest') {
-          p = { ...p,
-            weapons: { ...(p.weapons || {}), simple: 'trained', martial: 'trained', favoredWeapon: 'trained' },
-            armor:   { ...(p.armor   || {}), medium: 'trained' },
-            saves:   { ...(p.saves   || {}), fortitude: 'expert' },
-          };
-        }
-        if (selected.slug === 'cleric' && data.subclass === 'cloistered') {
-          p = { ...p,
-            weapons: { ...(p.weapons || {}), simple: 'trained', favoredWeapon: 'trained' },
-          };
-        }
+        const overlay = getSubclassOverlay(selected.slug, data.subclass);
+        const p = applySubclassOverlay(details.proficiencies, overlay);
         return (
           <div className="mt-5">
             <SectionHeader>Initial Class Proficiencies{data.subclass ? ` — ${CLASS_DETAILS[selected.slug]?.subclasses?.options.find(o => o.id === data.subclass)?.name || 'Subclass'}` : ''}</SectionHeader>
+            {overlay?.notes && (
+              <p className="font-body text-xs text-pf-parchment italic mb-3 leading-relaxed">{overlay.notes}</p>
+            )}
+            {overlay?.bonusSkills?.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {overlay.bonusSkills.map(s => (
+                  <span key={s} className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-display tracking-wider uppercase bg-pf-brass/15 border border-pf-brass/40 text-pf-bone">
+                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                    <span className="text-[8px] text-pf-brass">subclass</span>
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-body">
               <div className="bg-pf-bg-card border border-pf-brass-dim/30 p-3">
                 <p className="font-display text-[10px] tracking-[0.2em] text-pf-brass uppercase mb-2">Defense</p>
