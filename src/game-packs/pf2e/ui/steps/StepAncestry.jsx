@@ -29,7 +29,14 @@ const StepAncestry = ({ data, update }) => {
   const selected = ANCESTRIES.find(a => a.slug === data.ancestry);
   if (data.ancestry && !selected) {
     console.error('[pf2e] Unknown ancestry slug:', data.ancestry, '— available:', ANCESTRIES.map(a => a.slug));
-    return <UnknownEntityError kind="ancestry" slug={data.ancestry} available={ANCESTRIES.map(a => a.slug)} />;
+    return (
+      <UnknownEntityError
+        kind="ancestry"
+        slug={data.ancestry}
+        available={ANCESTRIES.map(a => a.slug)}
+        onReset={() => update({ ancestry: null, heritage: null })}
+      />
+    );
   }
   if (!selected) return null;
   const heritages = HERITAGES_BY_ANCESTRY[selected.slug] || [];

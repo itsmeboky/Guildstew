@@ -4,12 +4,16 @@
 // kind of entity it belonged to, and what the data layer thinks is
 // available so the user can report it instead of playing a broken
 // character.
+//
+// When `onReset` is provided, an inline button lets the user clear
+// the bad slug and re-enter the picker — recovery without backing
+// out of the whole step.
 
 import React from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, RotateCcw } from 'lucide-react';
 import CornerBrackets from './CornerBrackets.jsx';
 
-const UnknownEntityError = ({ kind, slug, available = [] }) => (
+const UnknownEntityError = ({ kind, slug, available = [], onReset }) => (
   <div className="relative bg-pf-bg-card border border-pf-oxblood p-6 my-4">
     <CornerBrackets active />
     <div className="flex items-start gap-3">
@@ -22,6 +26,18 @@ const UnknownEntityError = ({ kind, slug, available = [] }) => (
           The {kind} <code className="font-mono text-pf-brass">"{slug || 'unset'}"</code> isn't in the imported data.
           This is likely a data-import or template-slug issue — please report it.
         </p>
+
+        {onReset && (
+          <button
+            type="button"
+            onClick={onReset}
+            className="inline-flex items-center gap-1.5 mt-1 mb-3 px-3 py-1.5 text-[11px] font-display tracking-wider uppercase border border-pf-brass text-pf-bone hover:bg-pf-brass/15 transition-colors"
+          >
+            <RotateCcw size={11} className="text-pf-brass" />
+            Pick a {kind} from the list instead
+          </button>
+        )}
+
         {available.length > 0 && (
           <details className="font-body text-[11px] text-pf-stone">
             <summary className="cursor-pointer hover:text-pf-parchment">
