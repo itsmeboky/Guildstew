@@ -349,7 +349,7 @@ function transformClass(item, guard) {
 // grants a specific Lore, or `null` when the player picks freely
 // ("a Lore skill of your choice", "a Lore skill related to ..."). The
 // SRD source has no structured field for this, so we string-match.
-function extractLoreSubskill(rawDesc) {
+function loreFromDesc(rawDesc) {
   if (!rawDesc) return null;
   // Player-choice phrasing comes in two flavors — both surface as
   // "a Lore skill" in the prose.
@@ -357,6 +357,55 @@ function extractLoreSubskill(rawDesc) {
   // Specific "X Lore" — up to 4 capitalized words preceding "Lore".
   const m = rawDesc.match(/\b([A-Z][\w-]+(?:\s+[A-Z][\w-]+){0,3})\s+Lore\b/);
   return m ? m[1] : null;
+}
+
+// Some backgrounds grant Lore via a feature-item reference instead of
+// (or in addition to) prose. Today's Foundry pf2e source only uses
+// the generic "Additional Lore" feat for this — which still requires
+// a player choice — so this fallback ships defensively for future
+// imports where Paizo might ship "Religious Lore" as a discrete item.
+function loreFromItems(srcBackground) {
+  const items = srcBackground?.system?.items;
+  if (!items) return null;
+  const collection = Array.isArray(items) ? items : Object.values(items);
+  for (const item of collection) {
+    if (!item || typeof item !== 'object') continue;
+    const name = item.name || '';
+    const m = name.match(/^(.+?)\s+Lore$/i);
+    if (m && !/^additional$/i.test(m[1])) {
+      return m[1];
+    }
+  }
+  return null;
+}
+
+// Last-resort scan of Foundry rule elements. `GrantItem` rules that
+// point at a Lore compendium item embed the Lore name in the UUID.
+function loreFromRules(srcBackground) {
+  const rules = srcBackground?.system?.rules || [];
+  for (const rule of rules) {
+    if (rule?.key !== 'GrantItem') continue;
+    const uuid = rule.uuid || '';
+    const m = uuid.match(/Item\.([^.]+?)-Lore(?:\b|$)/i);
+    if (m && !/^additional$/i.test(m[1])) return m[1].replace(/-/g, ' ');
+  }
+  return null;
+}
+
+// Resolve the granted Lore through every pathway we know about.
+// Priority: structured field on system → prose extraction (highest
+// signal in current data) → granted-items pathway → rule elements.
+// Returns null only when none of those resolve, meaning the player
+// genuinely picks freely.
+function extractLoreSubskill(srcBackground, rawDesc) {
+  if (srcBackground?.system?.loreSubskill) return srcBackground.system.loreSubskill;
+  const fromDesc = loreFromDesc(rawDesc);
+  if (fromDesc) return fromDesc;
+  const fromItems = loreFromItems(srcBackground);
+  if (fromItems) return fromItems;
+  const fromRules = loreFromRules(srcBackground);
+  if (fromRules) return fromRules;
+  return null;
 }
 
 function transformBackground(item, guard) {
@@ -373,7 +422,7 @@ function transformBackground(item, guard) {
     boosts: Object.values(sys.boosts || {}).flatMap(b => b.value || []),
     trainedSkills: sys.trainedSkills?.value || [],
     loreSkill: sys.loreSkill,
-    loreSubskill: extractLoreSubskill(desc),
+    loreSubskill: extractLoreSubskill(item, desc),
     grantedFeat: sys.items ? Object.values(sys.items).find(i => i.uuid?.includes('feat'))?.name : null,
     rarity: sys.traits?.rarity || 'common',
     desc,
