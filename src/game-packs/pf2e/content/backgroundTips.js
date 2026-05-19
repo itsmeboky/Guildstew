@@ -2,11 +2,23 @@
 // background and what playstyle it suits — not what the background
 // grants mechanically (that's already on the card).
 //
-// Keyed by background slug (kebab-case of the display name, since
-// imported backgrounds don't carry a `slug` field — the lookup
-// derives one at call time in StepBackground).
+// The lookup normalizes both the file's keys and the incoming slug
+// through `normalizeSlug` so any drift (extra whitespace, accidental
+// capitalization, underscore-vs-hyphen) at the call site still
+// resolves. Backgrounds that aren't curated here fall through to a
+// generic framing line.
 
-export const BACKGROUND_TIPS = {
+function normalizeSlug(input) {
+  return String(input || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[\s_]+/g, '-')      // spaces and underscores → hyphens
+    .replace(/[^a-z0-9-]/g, '')   // strip anything that isn't alphanumeric or hyphen
+    .replace(/-+/g, '-')          // collapse multi-hyphens
+    .replace(/^-|-$/g, '');       // trim edge hyphens
+}
+
+const _RAW_TIPS = {
   acolyte: "If you imagine your character starting in a temple, monastery, or church — pick this. Pairs naturally with Cleric and Champion, but a faithful Rogue or Fighter works just as well.",
   acrobat: "For players who want a circus, street performer, or daredevil past. Stacks well with Rogue, Swashbuckler, and Monk.",
   'animal-whisperer': "If you want a character who's better with beasts than people. Pairs with Ranger, Druid, or any class taking an animal companion.",
@@ -45,9 +57,14 @@ export const BACKGROUND_TIPS = {
   warrior: "Generic combat past — soldier, mercenary, gladiator. Pairs with any martial class.",
 };
 
+export const BACKGROUND_TIPS = Object.fromEntries(
+  Object.entries(_RAW_TIPS).map(([k, v]) => [normalizeSlug(k), v]),
+);
+
 const GENERIC_FALLBACK =
   "Pick this background if its flavor matches the character you're imagining — the mechanical benefits are listed on the right.";
 
-export function getBackgroundTip(slug) {
-  return BACKGROUND_TIPS[slug] || GENERIC_FALLBACK;
+export function getBackgroundTip(rawSlug) {
+  const key = normalizeSlug(rawSlug);
+  return BACKGROUND_TIPS[key] || GENERIC_FALLBACK;
 }
