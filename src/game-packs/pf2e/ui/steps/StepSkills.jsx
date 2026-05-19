@@ -9,6 +9,7 @@ import ThreeActionGlyph from '../components/ThreeActionGlyph.jsx';
 import {
   CLASSES,
   BACKGROUNDS,
+  ANCESTRIES,
   SKILLS,
   SKILL_FEATS,
   GENERAL_FEATS,
@@ -18,6 +19,8 @@ import {
   SKILL_FEAT_LEVELS,
   GENERAL_FEAT_LEVELS,
 } from '../../data/index.js';
+
+const capLang = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 import { modOf, computeAbilityScores } from '../../rules/compute-ability-scores.js';
 import { meetsPrereqs } from '../../rules/prereq-checker.js';
 import { STEPS } from '../../config/steps.js';
@@ -40,9 +43,26 @@ const StepSkills = ({ data, update }) => {
   const skillFeatLevels = SKILL_FEAT_LEVELS.filter(l => l <= level);
   const generalFeatLevels = GENERAL_FEAT_LEVELS.filter(l => l <= level);
 
-  // Languages math
+  // Languages math.
+  //
+  // Source-of-truth shift: the SRD-imported ancestries carry
+  // `languages` (auto-granted) and `additionalLanguages` (player-pick
+  // pool). The legacy ANCESTRY_LANGUAGES table is slug-keyed and the
+  // new ancestry IDs are Foundry random strings, so the legacy lookup
+  // always returned empty — every character started with zero base
+  // languages and the picker pool was just COMMON_LANGUAGES.
   const intMod = Math.max(0, modOf(computeAbilityScores(data).Intelligence || 10));
-  const baseLanguages = ANCESTRY_LANGUAGES[data.ancestry]?.base || [];
+  const selectedAncestry = ANCESTRIES.find(a => a.id === data.ancestry);
+  const baseLanguages = (selectedAncestry?.languages
+    || ANCESTRY_LANGUAGES[data.ancestry]?.base
+    || []).map(capLang);
+  const additionalPool = (selectedAncestry?.additionalLanguages || []).map(capLang);
+  // Picker offers the ancestry's curated additional languages first,
+  // then every common tongue that isn't already in either bucket.
+  const languagePool = [
+    ...additionalPool,
+    ...COMMON_LANGUAGES.filter(l => !additionalPool.includes(l) && !baseLanguages.includes(l)),
+  ];
   const bonusLanguageSlots = intMod;
 
   const toggleSkill = (skillName) => {
@@ -256,12 +276,17 @@ const StepSkills = ({ data, update }) => {
             {baseLanguages.map(lang => (
               <div key={lang} className="px-3 py-1.5 bg-pf-sage/10 border border-pf-sage/40 text-xs font-body text-pf-bone flex items-center justify-between">
                 <span>{lang}</span>
-                <span className="text-[9px] font-mono text-pf-sage">BASE</span>
+                <span className="text-[9px] font-mono text-pf-sage">auto</span>
               </div>
             ))}
           </div>
+          {bonusLanguageSlots === 0 ? (
+            <p className="font-body text-[11px] text-pf-stone italic">
+              No bonus language slots until Intelligence is boosted above +0.
+            </p>
+          ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
-            {COMMON_LANGUAGES.filter(l => !baseLanguages.includes(l)).map(lang => {
+            {languagePool.map(lang => {
               const active = languages.includes(lang);
               const disabled = !active && languages.length >= bonusLanguageSlots;
               return (
@@ -279,6 +304,7 @@ const StepSkills = ({ data, update }) => {
               );
             })}
           </div>
+          )}
         </>
       )}
     </div>

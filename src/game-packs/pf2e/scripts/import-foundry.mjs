@@ -206,45 +206,71 @@ function transformClass(item) {
   const tier = publicationOK(item);
   if (!tier) return null;
   const sys = item.system;
+  const slug = item.system?.slug || item.name?.toLowerCase().replace(/\s+/g, '-');
   return {
     id: item._id || item.slug || item.name?.toLowerCase().replace(/\s+/g, '-'),
+    slug,
     name: scrub(item.name),
     hp: sys.hp || 8,
     keyAbility: sys.keyAbility?.value || [],
-    trainedSkills: sys.trainedSkills?.value?.length || 2,
+    // Foundry stores `trainedSkills.{value, additional}` — `value` is
+    // the auto-trained skill list (slug strings) and `additional` is
+    // the formula constant added to INT mod for player-pickable slots.
+    trainedSkills: {
+      value: sys.trainedSkills?.value || [],
+      additional: sys.trainedSkills?.additional ?? 2,
+    },
     skillIncreaseLevels: sys.skillIncreaseLevels?.value || [],
     classFeatLevels: sys.classFeatLevels?.value || [],
     proficiencies: {
-      perception: sys.perception,
+      // Source emits saves as direct numbers (0-4), not { rank: N } —
+      // the earlier `?.rank` access dropped them all to undefined.
+      perception: sys.perception ?? 0,
       saves: {
-        fortitude: sys.savingThrows?.fortitude?.rank,
-        reflex: sys.savingThrows?.reflex?.rank,
-        will: sys.savingThrows?.will?.rank,
+        fortitude: sys.savingThrows?.fortitude ?? 0,
+        reflex:    sys.savingThrows?.reflex    ?? 0,
+        will:      sys.savingThrows?.will      ?? 0,
       },
-      // weapon/armor proficiencies are in sys.attacks/defenses
       weapons: sys.attacks || {},
       armor: sys.defenses || {},
     },
-    spellcasting: sys.spellcasting,
+    spellcasting: sys.spellcasting ?? 0,
     desc: getDesc(item, tier),
     source: sys.publication?.title,
     tier,
   };
 }
 
+// Pull the granted Lore subskill out of the description prose. Returns
+// a label string ("Scribing", "Underworld", ...) when the background
+// grants a specific Lore, or `null` when the player picks freely
+// ("a Lore skill of your choice", "a Lore skill related to ..."). The
+// SRD source has no structured field for this, so we string-match.
+function extractLoreSubskill(rawDesc) {
+  if (!rawDesc) return null;
+  // Player-choice phrasing comes in two flavors — both surface as
+  // "a Lore skill" in the prose.
+  if (/\ba\s+Lore\s+skill\b/i.test(rawDesc)) return null;
+  // Specific "X Lore" — up to 4 capitalized words preceding "Lore".
+  const m = rawDesc.match(/\b([A-Z][\w-]+(?:\s+[A-Z][\w-]+){0,3})\s+Lore\b/);
+  return m ? m[1] : null;
+}
+
 function transformBackground(item) {
   const tier = publicationOK(item);
   if (!tier) return null;
   const sys = item.system;
+  const desc = getDesc(item, tier);
   return {
     id: item._id || item.slug,
     name: scrub(item.name),
     boosts: Object.values(sys.boosts || {}).flatMap(b => b.value || []),
     trainedSkills: sys.trainedSkills?.value || [],
     loreSkill: sys.loreSkill,
+    loreSubskill: extractLoreSubskill(desc),
     grantedFeat: sys.items ? Object.values(sys.items).find(i => i.uuid?.includes('feat'))?.name : null,
     rarity: sys.traits?.rarity || 'common',
-    desc: getDesc(item, tier),
+    desc,
     source: sys.publication?.title,
     tier,
   };
