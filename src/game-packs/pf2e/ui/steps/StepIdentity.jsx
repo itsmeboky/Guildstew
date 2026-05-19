@@ -100,27 +100,29 @@ const StepIdentity = ({ data, update, setData }) => {
       cantripsKnown: [], rank1Known: [], spellsByRank: {}, spellbook: [],
       focusSpells: [], loadout: [], kitTaken: null,
     };
+    // Templates intentionally do NOT pre-stamp `kitTaken`. The class
+    // kit should only apply when the user explicitly clicks "Take
+    // This Kit" in Step VIII so the items actually flow into the
+    // loadout — pre-stamping it left the kit "already taken" but the
+    // loadout empty.
     const templates = {
       'iconic-fighter': {
         ...base, name: 'Valeros', ancestry: 'human', heritage: 'versatile-human', background: 'warrior',
         class: 'fighter', subclass: null, classFeats: { 1: 'Power Attack' },
         trainedSkills: ['Athletics', 'Intimidation'],
         boostBatches: { 1: { Constitution: 1, Wisdom: 1, Charisma: 1 } },
-        kitTaken: 'fighter',
       },
       'iconic-wizard': {
         ...base, name: 'Ezren', ancestry: 'human', heritage: 'skilled-human', background: 'scholar',
         class: 'wizard', subclass: 'spell-substitution', classFeats: { 1: 'Reach Spell' },
         trainedSkills: ['Society', 'Arcana'], arcaneBond: 'staff',
         boostBatches: { 1: { Constitution: 1, Wisdom: 1, Dexterity: 1 } },
-        kitTaken: 'wizard',
       },
       'iconic-rogue': {
         ...base, name: 'Merisiel', ancestry: 'elf', heritage: 'whisper-elf', background: 'criminal',
         class: 'rogue', subclass: 'thief', classFeats: { 1: 'Nimble Dodge' },
         trainedSkills: ['Stealth', 'Thievery', 'Acrobatics', 'Athletics'],
         boostBatches: { 1: { Constitution: 1, Wisdom: 1, Charisma: 1 } },
-        kitTaken: 'rogue',
       },
       'iconic-cleric': {
         ...base, name: 'Kyra', ancestry: 'human', heritage: 'skilled-human', background: 'acolyte',
