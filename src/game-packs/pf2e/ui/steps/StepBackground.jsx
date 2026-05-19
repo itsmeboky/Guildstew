@@ -38,7 +38,14 @@ const StepBackground = ({ data, update }) => {
   const selected = BACKGROUNDS.find(b => b.slug === data.background);
   if (data.background && !selected) {
     console.error('[pf2e] Unknown background slug:', data.background, '— available count:', BACKGROUNDS.length);
-    return <UnknownEntityError kind="background" slug={data.background} available={BACKGROUNDS.map(b => b.slug)} />;
+    return (
+      <UnknownEntityError
+        kind="background"
+        slug={data.background}
+        available={BACKGROUNDS.map(b => b.slug)}
+        onReset={() => update({ background: null })}
+      />
+    );
   }
   if (!selected) return null;
 

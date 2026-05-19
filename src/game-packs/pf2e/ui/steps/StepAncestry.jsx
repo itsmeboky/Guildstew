@@ -29,7 +29,14 @@ const StepAncestry = ({ data, update }) => {
   const selected = ANCESTRIES.find(a => a.slug === data.ancestry);
   if (data.ancestry && !selected) {
     console.error('[pf2e] Unknown ancestry slug:', data.ancestry, '— available:', ANCESTRIES.map(a => a.slug));
-    return <UnknownEntityError kind="ancestry" slug={data.ancestry} available={ANCESTRIES.map(a => a.slug)} />;
+    return (
+      <UnknownEntityError
+        kind="ancestry"
+        slug={data.ancestry}
+        available={ANCESTRIES.map(a => a.slug)}
+        onReset={() => update({ ancestry: null, heritage: null })}
+      />
+    );
   }
   if (!selected) return null;
   const heritages = HERITAGES_BY_ANCESTRY[selected.slug] || [];
@@ -61,7 +68,7 @@ const StepAncestry = ({ data, update }) => {
             {Icon && <Icon size={48} className="text-pf-brass" strokeWidth={1.2} />}
             <h3 className="font-display text-3xl text-pf-bone">{selected.name}</h3>
             <ComplexityBadge level={tipEntry.complexity} />
-            <p className="font-body text-sm text-pf-parchment leading-relaxed">{selected.description}</p>
+            <p className="font-body text-sm text-pf-parchment leading-relaxed">{selected.desc || selected.description}</p>
           </div>
 
           {/* Stats column */}

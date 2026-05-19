@@ -5,7 +5,7 @@ import { Star, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import GMWhisper from '../components/GMWhisper.jsx';
 import CornerBrackets from '../components/CornerBrackets.jsx';
-import RecommendedButton from '../components/RecommendedButton.jsx';
+import RecommendationPanel from '../components/RecommendationPanel.jsx';
 import RecommendedBadge from '../components/RecommendedBadge.jsx';
 import { CLASSES, BOOST_BATCH_LEVELS } from '../../data/index.js';
 import { ABILITIES } from '../../rules/constants.js';
@@ -66,9 +66,9 @@ const StepAbilities = ({ data, update }) => {
 
   // Ancestry/background accumulated boosts (only apply to base, not per batch)
   const accumulated = {
-    Strength: data.background === 'soldier' || data.background === 'sailor' ? 1 : 0,
+    Strength: data.background === 'warrior' || data.background === 'sailor' ? 1 : 0,
     Dexterity: (data.ancestry === 'elf' || data.ancestry === 'halfling' ? 1 : 0) + (['criminal', 'scout', 'sailor'].includes(data.background) ? 1 : 0),
-    Constitution: (data.ancestry === 'dwarf' || data.ancestry === 'gnome' ? 1 : 0) + (data.background === 'soldier' ? 1 : 0),
+    Constitution: (data.ancestry === 'dwarf' || data.ancestry === 'gnome' ? 1 : 0) + (data.background === 'warrior' ? 1 : 0),
     Intelligence: (data.ancestry === 'elf' ? 1 : 0) + (['acolyte', 'noble', 'scholar'].includes(data.background) ? 1 : 0),
     Wisdom: (data.ancestry === 'dwarf' || data.ancestry === 'halfling' ? 1 : 0) + (['scout', 'scholar'].includes(data.background) ? 1 : 0),
     Charisma: (data.ancestry === 'gnome' ? 1 : 0) + (data.background === 'noble' ? 1 : 0) - (data.ancestry === 'dwarf' ? 1 : 0),
@@ -259,17 +259,22 @@ const StepAbilities = ({ data, update }) => {
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  {batchLvl === 1 && (
-                    <RecommendedButton
-                      onClick={applyRecommendedBoosts}
-                      disabled={!recommended?.boosts?.free}
-                    />
-                  )}
                   <span className={`font-display text-3xl tracking-wider ${remaining === 0 ? 'text-pf-sage' : 'text-pf-brass'}`}>
                     {remaining}<span className="text-pf-stone text-base">/4</span>
                   </span>
                 </div>
               </div>
+
+              {batchLvl === 1 && (
+                <RecommendationPanel
+                  title="Recommended boosts for your class"
+                  reasoning={recommended?.reasoning?.boosts || recommended?.rationale}
+                  onApply={applyRecommendedBoosts}
+                  disabled={!recommended?.boosts?.free}
+                  applied={!!(recFlags.boosts?.length)}
+                  className="mb-4"
+                />
+              )}
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
                 {ABILITIES.map(ab => {

@@ -355,22 +355,29 @@ export default function CharacterLibrary() {
         </button>
       </div>
 
-      {/* Center - Character Portrait */}
+      {/* Center - Character Portrait.
+          Pack-agnostic via getCharacterPortraitUrl: D&D 5e records
+          carry portrait/avatar at the top level; PF2e records (post
+          J.2 flatten) carry it at system_data.portrait_url. Either
+          shape resolves to the same URL here. */}
       <div className="flex-1 flex items-center justify-center p-8 relative z-10">
-        {selectedCharacter ? (
-          <div
-            className="w-full h-full bg-top bg-cover rounded-2xl shadow-2xl"
-            style={{
-              // Avatar falls through to a dark gradient if the
-              // character has no portrait — no more via.placeholder
-              // hits that were failing in dev.
-              backgroundImage: selectedCharacter.avatar_url
-                ? `url(${selectedCharacter.avatar_url})`
-                : 'linear-gradient(135deg, #1a1f2e 0%, #2A3441 50%, #050816 100%)',
-              maxWidth: '600px'
-            }}
-          />
-        ) : (
+        {selectedCharacter ? (() => {
+          const portraitUrl = getCharacterPortraitUrl(selectedCharacter);
+          return (
+            <div
+              className="w-full h-full bg-top bg-cover rounded-2xl shadow-2xl"
+              style={{
+                // Falls through to a dark gradient if the character
+                // has no portrait — no more via.placeholder hits that
+                // were failing in dev.
+                backgroundImage: portraitUrl
+                  ? `url(${portraitUrl})`
+                  : 'linear-gradient(135deg, #1a1f2e 0%, #2A3441 50%, #050816 100%)',
+                maxWidth: '600px',
+              }}
+            />
+          );
+        })() : (
           <div className="text-gray-500 text-xl">Select a character to view</div>
         )}
       </div>
