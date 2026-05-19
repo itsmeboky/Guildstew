@@ -45,6 +45,22 @@ export const SKILL_FEATS = featsData.filter(f => f.category === 'skill');
 export const GENERAL_FEATS = featsData.filter(f => f.category === 'general');
 export const CLASS_DEDICATIONS = featsData.filter(f => f.category === 'classfeature' && f.traits.includes('dedication'));
 
+// Class feats indexed by [classSlug][level] for the picker.
+// Source-of-truth filter: SRD class feats whose `traits` array contains
+// the class slug. Level keys collect every feat at that level so the
+// picker can show the available list per slot.
+export const CLASS_FEATS_BY_CLASS = featsData
+  .filter(f => f.category === 'class')
+  .reduce((acc, f) => {
+    const traits = f.traits || [];
+    for (const t of traits) {
+      if (!acc[t]) acc[t] = {};
+      const lvl = f.level || 1;
+      (acc[t][lvl] ??= []).push(f);
+    }
+    return acc;
+  }, {});
+
 // Spells indexed by tradition and rank
 export const SPELL_LISTS = ['arcane', 'divine', 'occult', 'primal'].reduce((acc, trad) => {
   acc[trad] = {
