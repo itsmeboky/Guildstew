@@ -169,6 +169,75 @@ export const SUBCLASS_OVERLAYS = {
       notes: "Martial-leaning. Stronger Fortitude, medium armor, and martial weapons at the cost of slower spell-rank progression.",
     },
   },
+
+  // Druid orders — ORC Player Core 1. Four Remaster orders; the
+  // pre-Remaster Wild Order was rebuilt and renamed to Untamed Order
+  // in PC1. Order slugs match Foundry's `class-features/*.json`
+  // filenames (animal-order, leaf-order, storm-order, untamed-order).
+  druid: {
+    'animal-order': {
+      name: 'Animal Order',
+      slug: 'animal-order',
+      licenseSource: 'orc-pc1',
+      proficiencyDeltas: {
+        skills: { athletics: 'trained' },
+      },
+      bonusSkills: ['athletics'],
+      keyAbility: 'Wisdom',
+      spellTradition: 'primal',
+      spellPreparation: 'prepared',
+      grants: ['animal-companion', 'animal-order-spell'],
+      grantedAnimalCompanion: true,
+      grantedSpells: { focus: ['heal-animal'] },
+      notes: 'Animal companion granted at level 1 — pick its type via the standard companion list.',
+    },
+    'leaf-order': {
+      name: 'Leaf Order',
+      slug: 'leaf-order',
+      licenseSource: 'orc-pc1',
+      proficiencyDeltas: {
+        skills: { diplomacy: 'trained' },
+      },
+      bonusSkills: ['diplomacy'],
+      keyAbility: 'Wisdom',
+      spellTradition: 'primal',
+      spellPreparation: 'prepared',
+      grants: ['leshy-familiar', 'leaf-order-spell'],
+      grantedFamiliar: true,
+      grantedSpells: { focus: ['goodberry'] },
+      notes: 'Leshy familiar granted at level 1 — a sapient plant companion.',
+    },
+    'storm-order': {
+      name: 'Storm Order',
+      slug: 'storm-order',
+      licenseSource: 'orc-pc1',
+      proficiencyDeltas: {
+        skills: { acrobatics: 'trained' },
+      },
+      bonusSkills: ['acrobatics'],
+      keyAbility: 'Wisdom',
+      spellTradition: 'primal',
+      spellPreparation: 'prepared',
+      grants: ['storm-order-spell'],
+      grantedSpells: { focus: ['tempest-surge'] },
+      notes: 'Long-range elemental damage focus; Tempest Surge stacks reach with weather control.',
+    },
+    'untamed-order': {
+      name: 'Untamed Order',
+      slug: 'untamed-order',
+      licenseSource: 'orc-pc1',
+      proficiencyDeltas: {
+        skills: { nature: 'trained' },
+      },
+      bonusSkills: ['nature'],
+      keyAbility: 'Wisdom',
+      spellTradition: 'primal',
+      spellPreparation: 'prepared',
+      grants: ['untamed-form', 'untamed-order-spell'],
+      grantedSpells: { focus: ['untamed-form'] },
+      notes: 'Shapeshifter path. Untamed Form replaces the pre-Remaster Wild Shape with rebalanced, level-scaling battle forms.',
+    },
+  },
 };
 
 /**
