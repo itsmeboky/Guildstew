@@ -14,7 +14,8 @@
 
 import React, { useState } from 'react';
 import GamePackTag from '@/components/characters/GamePackTag';
-import { ANCESTRIES, HERITAGES_BY_ANCESTRY, BACKGROUNDS, CLASSES, CASTING_TRADITION_BY_CLASS } from '../data/index.js';
+import { ANCESTRIES, HERITAGES_BY_ANCESTRY, BACKGROUNDS, CLASSES, CLASS_DETAILS, CASTING_TRADITION_BY_CLASS } from '../data/index.js';
+import { formatCharacterSubline } from '../rules/character-subline.js';
 import { sd, media } from './detail/_shared.js';
 import StatsTab from './detail/StatsTab.jsx';
 import SkillsTab from './detail/SkillsTab.jsx';
@@ -101,13 +102,13 @@ function PathfinderCharacterHeader({ character, pack }) {
   const heritage = heritageList.find(h => h.slug === data.heritage);
   const background = BACKGROUNDS.find(b => b.slug === data.background);
   const cls = CLASSES.find(c => c.slug === data.class);
+  const details = cls && CLASS_DETAILS[data.class];
+  const subclass = details?.subclasses?.options?.find(o => o.id === data.subclass);
 
-  const sublineParts = [
-    `Level ${data.level || 1}`,
-    [heritage?.name, ancestry?.name].filter(Boolean).join(' '),
-    cls?.name,
-    background?.name,
-  ].filter(Boolean);
+  const subline = formatCharacterSubline({
+    level: data.level,
+    heritage, ancestry, cls, subclass, background,
+  });
 
   return (
     <header className="space-y-2">
@@ -116,7 +117,7 @@ function PathfinderCharacterHeader({ character, pack }) {
         {pack && <GamePackTag pack={pack} size="lg" />}
       </div>
       <p className="text-pf-stone text-sm font-display tracking-[0.18em] uppercase">
-        {sublineParts.join(' · ')}
+        {subline}
       </p>
       {data.catchphrase && (
         <p className="text-pf-parchment italic text-sm">"{data.catchphrase}"</p>
