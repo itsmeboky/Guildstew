@@ -18,7 +18,7 @@ import { getAncestryTip } from '../../content/ancestryTips.js';
 import { STEPS } from '../../config/steps.js';
 
 const StepAncestry = ({ data, update }) => {
-  const selected = ANCESTRIES.find(a => a.id === data.ancestry) || ANCESTRIES[0];
+  const selected = ANCESTRIES.find(a => a.slug === data.ancestry) || ANCESTRIES[0];
   const heritages = HERITAGES_BY_ANCESTRY[selected.id] || [];
   const Icon = selected.icon;
   const tipEntry = getAncestryTip(selected.id);

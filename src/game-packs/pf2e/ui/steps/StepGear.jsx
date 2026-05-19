@@ -43,13 +43,13 @@ const formatPrice = (sp) => {
 
 const computeStrBoosts = (data) => {
   let s = 0;
-  const ancestry = ANCESTRIES.find(a => a.id === data.ancestry);
+  const ancestry = ANCESTRIES.find(a => a.slug === data.ancestry);
   if (ancestry) {
     if (ancestry.boosts.includes('Strength')) s++;
     if (ancestry.flaws.includes('Strength')) s--;
   }
   if (data.background === 'soldier' || data.background === 'sailor') s++;
-  const cls = CLASSES.find(c => c.id === data.class);
+  const cls = CLASSES.find(c => c.slug === data.class);
   s += (cls?.keyAbility?.includes('Strength') ? 1 : 0); // class key boost counted once
   const batches = data.boostBatches || {};
   for (const b of Object.values(batches)) s += (b.Strength || 0);
@@ -57,8 +57,8 @@ const computeStrBoosts = (data) => {
 };
 
 const StepGear = ({ data, update }) => {
-  const cls = CLASSES.find(c => c.id === data.class);
-  const ancestry = ANCESTRIES.find(a => a.id === data.ancestry);
+  const cls = CLASSES.find(c => c.slug === data.class);
+  const ancestry = ANCESTRIES.find(a => a.slug === data.ancestry);
   const kit = cls ? CLASS_KITS[cls.id] : null;
   const granted = ANCESTRY_GRANTED_ITEMS[ancestry?.id] || [];
   const loadout = data.loadout || [];

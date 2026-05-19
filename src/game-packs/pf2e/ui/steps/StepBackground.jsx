@@ -27,7 +27,7 @@ const slugify = (s) => String(s || '')
   .replace(/^-|-$/g, '');
 
 const StepBackground = ({ data, update }) => {
-  const selected = BACKGROUNDS.find(b => b.id === data.background) || BACKGROUNDS[0];
+  const selected = BACKGROUNDS.find(b => b.slug === data.background) || BACKGROUNDS[0];
 
   useEffect(() => {
     if (!data.background) update({ background: BACKGROUNDS[0].id });

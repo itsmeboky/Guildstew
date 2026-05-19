@@ -16,7 +16,7 @@ export const computeDerivedStats = (data) => {
   const level = data.level || 1;
   const scores = computeAbilityScores(data);
   const mods = Object.fromEntries(ABILITIES.map(ab => [ab, modOf(scores[ab])]));
-  const cls = CLASSES.find(c => c.id === data.class);
+  const cls = CLASSES.find(c => c.slug === data.class);
   const details = cls ? CLASS_DETAILS[cls.id] : null;
   const profs = details?.proficiencies || {};
   const opts = { proficiencyWithoutLevel: !!data.houseRules?.proficiencyWithoutLevel };
@@ -52,7 +52,7 @@ export const computeDerivedStats = (data) => {
   }
 
   // HP
-  const ancestry = ANCESTRIES.find(a => a.id === data.ancestry);
+  const ancestry = ANCESTRIES.find(a => a.slug === data.ancestry);
   const hp = (ancestry?.hp || 0) + (cls?.hp || 0) * level + mods.Constitution * level;
 
   // Languages count = base ancestry + max(0, INT mod)

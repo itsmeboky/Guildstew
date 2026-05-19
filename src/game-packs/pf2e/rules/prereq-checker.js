@@ -12,9 +12,9 @@ import { ANCESTRIES, BACKGROUNDS } from '../data/index.js';
 export const meetsPrereqs = (feat, data) => {
   if (!feat || !feat.prereqs || feat.prereqs.length === 0) return { ok: true, reasons: [] };
   const stats = computeDerivedStats(data);
-  const ancestry = ANCESTRIES.find(a => a.id === data.ancestry);
+  const ancestry = ANCESTRIES.find(a => a.slug === data.ancestry);
   const trained = data.trainedSkills || [];
-  const bgSkill = BACKGROUNDS.find(b => b.id === data.background)?.skill;
+  const bgSkill = BACKGROUNDS.find(b => b.slug === data.background)?.skill;
   const tiers = data.skillTiers || {};
   const fail = [];
 

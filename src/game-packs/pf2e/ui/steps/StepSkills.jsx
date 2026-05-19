@@ -31,7 +31,7 @@ import { STEPS } from '../../config/steps.js';
 
 const StepSkills = ({ data, update }) => {
   const trained = data.trainedSkills || [];
-  const selectedClass = CLASSES.find(c => c.id === data.class);
+  const selectedClass = CLASSES.find(c => c.slug === data.class);
   const level = data.level || 1;
   // Trained-skills capacity. The imported class shape is now
   // `{ value: ['auto-slug'], additional: 2 }` — the prototype assumed
@@ -46,7 +46,7 @@ const StepSkills = ({ data, update }) => {
   const allowed = additionalSkillSlots + intMod;
   // Background's auto-trained skill comes in lowercase from the SRD
   // import; SKILLS[].name is capitalized. Normalize for comparisons.
-  const selectedBackground = BACKGROUNDS.find(b => b.id === data.background);
+  const selectedBackground = BACKGROUNDS.find(b => b.slug === data.background);
   const bgSkillRaw = (selectedBackground?.trainedSkills?.[0] || selectedBackground?.skill || '').toLowerCase();
   const bgSkill = bgSkillRaw
     ? bgSkillRaw.charAt(0).toUpperCase() + bgSkillRaw.slice(1)
@@ -71,7 +71,7 @@ const StepSkills = ({ data, update }) => {
   // new ancestry IDs are Foundry random strings, so the legacy lookup
   // always returned empty — every character started with zero base
   // languages and the picker pool was just COMMON_LANGUAGES.
-  const selectedAncestry = ANCESTRIES.find(a => a.id === data.ancestry);
+  const selectedAncestry = ANCESTRIES.find(a => a.slug === data.ancestry);
   const baseLanguages = (selectedAncestry?.languages
     || ANCESTRY_LANGUAGES[data.ancestry]?.base
     || []).map(capLang);

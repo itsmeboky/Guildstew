@@ -8,7 +8,7 @@
 import { CLASSES } from '../data/index.js';
 
 export const computeBuildType = (data) => {
-  const cls = CLASSES.find(c => c.id === data.class);
+  const cls = CLASSES.find(c => c.slug === data.class);
   if (!cls) return null;
   const castersFull = ['wizard', 'cleric', 'sorcerer', 'druid', 'bard', 'witch', 'oracle', 'psychic'];
   const martials = ['fighter', 'barbarian', 'monk', 'champion', 'ranger', 'gunslinger', 'swashbuckler'];

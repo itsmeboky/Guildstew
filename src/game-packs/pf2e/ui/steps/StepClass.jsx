@@ -45,7 +45,7 @@ import { getSubclassOverlay, applySubclassOverlay } from '../../content/subclass
 import { STEPS } from '../../config/steps.js';
 
 const StepClass = ({ data, update, openDeityModal }) => {
-  const selected = CLASSES.find(c => c.id === data.class) || CLASSES[0];
+  const selected = CLASSES.find(c => c.slug === data.class) || CLASSES[0];
   const Icon = selected.icon;
   const prof = selected.proficiencies || {};
   const saves = prof.saves || {};
