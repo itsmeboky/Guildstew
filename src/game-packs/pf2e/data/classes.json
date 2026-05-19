@@ -1,12 +1,18 @@
 [
   {
     "id": "XwfcJuskrhI9GIjX",
+    "slug": "alchemist",
     "name": "Alchemist",
     "hp": 8,
     "keyAbility": [
       "int"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "crafting"
+      ],
+      "additional": 3
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -33,7 +39,11 @@
     ],
     "proficiencies": {
       "perception": 1,
-      "saves": {},
+      "saves": {
+        "fortitude": 2,
+        "reflex": 2,
+        "will": 1
+      },
       "weapons": {
         "advanced": 0,
         "martial": 0,
@@ -58,12 +68,18 @@
   },
   {
     "id": "9KiqZVG9r5g8mC4V",
+    "slug": "animist",
     "name": "Animist",
     "hp": 8,
     "keyAbility": [
       "wis"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "religion"
+      ],
+      "additional": 2
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -89,7 +105,11 @@
     ],
     "proficiencies": {
       "perception": 1,
-      "saves": {},
+      "saves": {
+        "fortitude": 1,
+        "reflex": 1,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 0,
@@ -114,12 +134,18 @@
   },
   {
     "id": "YDRiP7uVvr9WRhOI",
+    "slug": "barbarian",
     "name": "Barbarian",
     "hp": 12,
     "keyAbility": [
       "str"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "athletics"
+      ],
+      "additional": 3
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -146,7 +172,11 @@
     ],
     "proficiencies": {
       "perception": 2,
-      "saves": {},
+      "saves": {
+        "fortitude": 2,
+        "reflex": 1,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 1,
@@ -171,12 +201,19 @@
   },
   {
     "id": "3gweRQ5gn7szIWAv",
+    "slug": "bard",
     "name": "Bard",
     "hp": 8,
     "keyAbility": [
       "cha"
     ],
-    "trainedSkills": 2,
+    "trainedSkills": {
+      "value": [
+        "occultism",
+        "performance"
+      ],
+      "additional": 4
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -202,7 +239,11 @@
     ],
     "proficiencies": {
       "perception": 2,
-      "saves": {},
+      "saves": {
+        "fortitude": 1,
+        "reflex": 1,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 1,
@@ -227,13 +268,19 @@
   },
   {
     "id": "x8iwnpdLbfcoZkHA",
+    "slug": "champion",
     "name": "Champion",
     "hp": 10,
     "keyAbility": [
       "dex",
       "str"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "religion"
+      ],
+      "additional": 2
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -260,7 +307,11 @@
     ],
     "proficiencies": {
       "perception": 1,
-      "saves": {},
+      "saves": {
+        "fortitude": 2,
+        "reflex": 1,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 1,
@@ -285,12 +336,18 @@
   },
   {
     "id": "EizrWvUPMS67Pahd",
+    "slug": "cleric",
     "name": "Cleric",
     "hp": 8,
     "keyAbility": [
       "wis"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "religion"
+      ],
+      "additional": 2
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -316,7 +373,11 @@
     ],
     "proficiencies": {
       "perception": 1,
-      "saves": {},
+      "saves": {
+        "fortitude": 1,
+        "reflex": 1,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 0,
@@ -341,12 +402,18 @@
   },
   {
     "id": "Oyee5Ds9uwYLEkD0",
+    "slug": "commander",
     "name": "Commander",
     "hp": 8,
     "keyAbility": [
       "int"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "society"
+      ],
+      "additional": 2
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -373,7 +440,11 @@
     ],
     "proficiencies": {
       "perception": 2,
-      "saves": {},
+      "saves": {
+        "fortitude": 1,
+        "reflex": 2,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 1,
@@ -398,12 +469,18 @@
   },
   {
     "id": "7s57JDCaiYYCAdFx",
+    "slug": "druid",
     "name": "Druid",
     "hp": 8,
     "keyAbility": [
       "wis"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "nature"
+      ],
+      "additional": 2
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -429,7 +506,11 @@
     ],
     "proficiencies": {
       "perception": 1,
-      "saves": {},
+      "saves": {
+        "fortitude": 1,
+        "reflex": 1,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 0,
@@ -454,13 +535,19 @@
   },
   {
     "id": "vZ0jL7pwthV2pm4A",
+    "slug": "exemplar",
     "name": "Exemplar",
     "hp": 10,
     "keyAbility": [
       "dex",
       "str"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "religion"
+      ],
+      "additional": 3
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -487,7 +574,11 @@
     ],
     "proficiencies": {
       "perception": 1,
-      "saves": {},
+      "saves": {
+        "fortitude": 2,
+        "reflex": 1,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 1,
@@ -512,13 +603,17 @@
   },
   {
     "id": "8zn3cD6GSmoo1LW4",
+    "slug": "fighter",
     "name": "Fighter",
     "hp": 10,
     "keyAbility": [
       "dex",
       "str"
     ],
-    "trainedSkills": 2,
+    "trainedSkills": {
+      "value": [],
+      "additional": 3
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -545,7 +640,11 @@
     ],
     "proficiencies": {
       "perception": 2,
-      "saves": {},
+      "saves": {
+        "fortitude": 2,
+        "reflex": 2,
+        "will": 1
+      },
       "weapons": {
         "advanced": 1,
         "martial": 2,
@@ -570,12 +669,18 @@
   },
   {
     "id": "1L7geK3aoosye3Xj",
+    "slug": "guardian",
     "name": "Guardian",
     "hp": 12,
     "keyAbility": [
       "str"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "athletics"
+      ],
+      "additional": 3
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -602,7 +707,11 @@
     ],
     "proficiencies": {
       "perception": 1,
-      "saves": {},
+      "saves": {
+        "fortitude": 2,
+        "reflex": 1,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 1,
@@ -627,12 +736,16 @@
   },
   {
     "id": "Z9li154CPNmun29Q",
+    "slug": "gunslinger",
     "name": "Gunslinger",
     "hp": 8,
     "keyAbility": [
       "dex"
     ],
-    "trainedSkills": 2,
+    "trainedSkills": {
+      "value": [],
+      "additional": 3
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -659,7 +772,11 @@
     ],
     "proficiencies": {
       "perception": 2,
-      "saves": {},
+      "saves": {
+        "fortitude": 2,
+        "reflex": 2,
+        "will": 1
+      },
       "weapons": {
         "advanced": 0,
         "martial": 1,
@@ -684,12 +801,18 @@
   },
   {
     "id": "30qVs46dVNflgQNx",
+    "slug": "inventor",
     "name": "Inventor",
     "hp": 8,
     "keyAbility": [
       "int"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "crafting"
+      ],
+      "additional": 3
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -716,7 +839,11 @@
     ],
     "proficiencies": {
       "perception": 1,
-      "saves": {},
+      "saves": {
+        "fortitude": 2,
+        "reflex": 1,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 1,
@@ -741,12 +868,18 @@
   },
   {
     "id": "4wrSCyX6akmyo7Wj",
+    "slug": "investigator",
     "name": "Investigator",
     "hp": 8,
     "keyAbility": [
       "int"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "society"
+      ],
+      "additional": 4
+    },
     "skillIncreaseLevels": [
       2,
       3,
@@ -783,7 +916,11 @@
     ],
     "proficiencies": {
       "perception": 2,
-      "saves": {},
+      "saves": {
+        "fortitude": 1,
+        "reflex": 2,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 1,
@@ -808,12 +945,18 @@
   },
   {
     "id": "RggQN3bX5SEcsffR",
+    "slug": "kineticist",
     "name": "Kineticist",
     "hp": 8,
     "keyAbility": [
       "con"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "nature"
+      ],
+      "additional": 3
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -840,7 +983,11 @@
     ],
     "proficiencies": {
       "perception": 1,
-      "saves": {},
+      "saves": {
+        "fortitude": 2,
+        "reflex": 2,
+        "will": 1
+      },
       "weapons": {
         "advanced": 0,
         "martial": 0,
@@ -865,13 +1012,17 @@
   },
   {
     "id": "YPxpk9JbMnKjbNLc",
+    "slug": "monk",
     "name": "Monk",
     "hp": 10,
     "keyAbility": [
       "dex",
       "str"
     ],
-    "trainedSkills": 2,
+    "trainedSkills": {
+      "value": [],
+      "additional": 4
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -898,7 +1049,11 @@
     ],
     "proficiencies": {
       "perception": 1,
-      "saves": {},
+      "saves": {
+        "fortitude": 2,
+        "reflex": 2,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 0,
@@ -923,12 +1078,18 @@
   },
   {
     "id": "pWHx4SXcft9O2udP",
+    "slug": "oracle",
     "name": "Oracle",
     "hp": 8,
     "keyAbility": [
       "cha"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "religion"
+      ],
+      "additional": 3
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -954,7 +1115,11 @@
     ],
     "proficiencies": {
       "perception": 1,
-      "saves": {},
+      "saves": {
+        "fortitude": 1,
+        "reflex": 1,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 0,
@@ -979,13 +1144,19 @@
   },
   {
     "id": "Yix76sfxrIlltSTJ",
+    "slug": "ranger",
     "name": "Ranger",
     "hp": 10,
     "keyAbility": [
       "dex",
       "str"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "survival"
+      ],
+      "additional": 4
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -1012,7 +1183,11 @@
     ],
     "proficiencies": {
       "perception": 2,
-      "saves": {},
+      "saves": {
+        "fortitude": 2,
+        "reflex": 2,
+        "will": 1
+      },
       "weapons": {
         "advanced": 0,
         "martial": 1,
@@ -1037,12 +1212,18 @@
   },
   {
     "id": "LO9STvskJemPkiAI",
+    "slug": "rogue",
     "name": "Rogue",
     "hp": 8,
     "keyAbility": [
       "dex"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "stealth"
+      ],
+      "additional": 7
+    },
     "skillIncreaseLevels": [
       2,
       3,
@@ -1079,7 +1260,11 @@
     ],
     "proficiencies": {
       "perception": 2,
-      "saves": {},
+      "saves": {
+        "fortitude": 1,
+        "reflex": 2,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 1,
@@ -1104,12 +1289,16 @@
   },
   {
     "id": "15Yc1r6s9CEhSTMe",
+    "slug": "sorcerer",
     "name": "Sorcerer",
     "hp": 6,
     "keyAbility": [
       "cha"
     ],
-    "trainedSkills": 2,
+    "trainedSkills": {
+      "value": [],
+      "additional": 2
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -1135,7 +1324,11 @@
     ],
     "proficiencies": {
       "perception": 1,
-      "saves": {},
+      "saves": {
+        "fortitude": 1,
+        "reflex": 1,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 0,
@@ -1160,12 +1353,18 @@
   },
   {
     "id": "uJ5aCzlw34GGdWjp",
+    "slug": "swashbuckler",
     "name": "Swashbuckler",
     "hp": 10,
     "keyAbility": [
       "dex"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "acrobatics"
+      ],
+      "additional": 4
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -1192,7 +1391,11 @@
     ],
     "proficiencies": {
       "perception": 2,
-      "saves": {},
+      "saves": {
+        "fortitude": 1,
+        "reflex": 2,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 1,
@@ -1217,12 +1420,16 @@
   },
   {
     "id": "bYDXk9HUMKOuym9h",
+    "slug": "witch",
     "name": "Witch",
     "hp": 6,
     "keyAbility": [
       "int"
     ],
-    "trainedSkills": 2,
+    "trainedSkills": {
+      "value": [],
+      "additional": 3
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -1248,7 +1455,11 @@
     ],
     "proficiencies": {
       "perception": 1,
-      "saves": {},
+      "saves": {
+        "fortitude": 1,
+        "reflex": 1,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 0,
@@ -1273,12 +1484,18 @@
   },
   {
     "id": "RwjIZzIxzPpUglnK",
+    "slug": "wizard",
     "name": "Wizard",
     "hp": 6,
     "keyAbility": [
       "int"
     ],
-    "trainedSkills": 1,
+    "trainedSkills": {
+      "value": [
+        "arcana"
+      ],
+      "additional": 2
+    },
     "skillIncreaseLevels": [
       3,
       5,
@@ -1304,7 +1521,11 @@
     ],
     "proficiencies": {
       "perception": 1,
-      "saves": {},
+      "saves": {
+        "fortitude": 1,
+        "reflex": 1,
+        "will": 2
+      },
       "weapons": {
         "advanced": 0,
         "martial": 0,
