@@ -24,6 +24,7 @@ import { ABILITIES } from '../../rules/constants.js';
 import { computeDerivedStats } from '../../rules/compute-derived-stats.js';
 import { fmtMod } from '../../rules/compute-ability-scores.js';
 import { profBonus } from '../../rules/proficiency.js';
+import { formatCharacterSubline } from '../../rules/character-subline.js';
 import { computeBuildType, computeFeatHPBonus, computeSpeedBonus } from '../../rules/house-rules.js';
 import { computeItemSkillBonuses } from '../../rules/armor-classifier.js';
 import { STEPS } from '../../config/steps.js';
@@ -121,7 +122,7 @@ const StepReview = ({ data, onForge }) => {
         <CharacterCardHeader
           data={data}
           name={data.name || 'Unnamed'}
-          subline={`Level ${stats.level} · ${heritage?.name || ''} ${ancestry?.name || 'Ancestry'} · ${subclass?.name || cls?.name || 'Class'} · ${background?.name || 'Background'}`}
+          subline={formatCharacterSubline({ level: stats.level, heritage, ancestry, cls, subclass, background })}
           buildType={buildType}
           catchphrase={data.catchphrase}
         />
@@ -278,8 +279,11 @@ const StepReview = ({ data, onForge }) => {
  * been uploaded yet so the layout doesn't collapse.
  */
 function CharacterCardHeader({ data, name, subline, buildType, catchphrase }) {
-  const portraitUrl = data.system_data?.portrait_url || null;
-  const tokenUrl = data.system_data?.token_url || null;
+  // Portrait/token live flat on `data` after the Phase J.2 flatten.
+  // Kept the legacy nested read as a fallback so in-flight drafts
+  // that pre-date the flatten don't lose their image preview.
+  const portraitUrl = data.portrait_url || data.system_data?.portrait_url || null;
+  const tokenUrl = data.token_url || data.system_data?.token_url || null;
 
   return (
     <div className="mb-6 pb-6 border-b border-pf-brass-dim/30">

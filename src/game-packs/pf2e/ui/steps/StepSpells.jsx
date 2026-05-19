@@ -3,10 +3,14 @@
 
 import React from 'react';
 import { Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 import GMWhisper from '../components/GMWhisper.jsx';
 import CornerBrackets from '../components/CornerBrackets.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import ThreeActionGlyph from '../components/ThreeActionGlyph.jsx';
+import RecommendationPanel from '../components/RecommendationPanel.jsx';
+import RecommendedBadge from '../components/RecommendedBadge.jsx';
+import { getRecommended } from '../../content/recommendedBuilds.js';
 import {
   CLASSES,
   CASTING_TRADITION_BY_CLASS,
@@ -87,6 +91,49 @@ const StepSpells = ({ data, update }) => {
   const toggleSpellbook = (name) => {
     if (spellbook.includes(name)) update({ spellbook: spellbook.filter(s => s !== name) });
     else if (spellbook.length < spellbookSize) update({ spellbook: [...spellbook, name] });
+  };
+
+  // Use Recommended for spells. Matches recommendedBuilds.js's
+  // kebab-case slugs against the tradition's spell catalog by
+  // lowercased name (the catalog only carries display names — no
+  // slug field — so this mirrors the same trick used for class
+  // feats). Spells that don't resolve are skipped with a console
+  // warning rather than crashing the apply.
+  const rec = getRecommended(cls?.slug);
+  const hasSpellRec = !!(rec?.spells?.cantrips?.length || rec?.spells?.first?.length);
+  const recFlags = data.recommendedFlags || {};
+
+  const slugToName = (kebabSlug, pool) => {
+    const target = String(kebabSlug || '').replace(/-/g, ' ').toLowerCase().trim();
+    const hit = pool.find(sp => sp.name.toLowerCase() === target);
+    if (!hit) console.warn('[pf2e] spell recommendation', kebabSlug, 'not in tradition catalog');
+    return hit?.name;
+  };
+
+  const applyRecommendedSpells = () => {
+    if (!rec?.spells) return;
+    const cantripPool = list?.cantrips || [];
+    const rank1Pool = list?.rank1 || [];
+    const cantripNames = (rec.spells.cantrips || [])
+      .map(s => slugToName(s, cantripPool))
+      .filter(Boolean)
+      .slice(0, slots.cantrips || 0);
+    const rank1Limit = slots[1] || 0;
+    const rank1Names = (rec.spells.first || [])
+      .map(s => slugToName(s, rank1Pool))
+      .filter(Boolean)
+      .slice(0, rank1Limit);
+    update({
+      cantripsKnown: cantripNames,
+      spellsByRank: { ...spellsByRank, 1: rank1Names },
+      rank1Known: rank1Names,
+      recommendedFlags: {
+        ...recFlags,
+        cantrips: cantripNames,
+        rank1: rank1Names,
+      },
+    });
+    toast.success('Recommended spells applied', { description: rec.rationale });
   };
 
   const traditionLabel = tradition.tradition[0].toUpperCase() + tradition.tradition.slice(1);
@@ -250,8 +297,17 @@ const StepSpells = ({ data, update }) => {
         </>
       )}
 
-      {/* === CANTRIPS === */}
-      <SectionHeader>Cantrips ({cantripsKnown.length} / {slots.cantrips})</SectionHeader>
+      {/* === CANTRIPS + RANK-1 SPELLS === */}
+      <RecommendationPanel
+        title={`Cantrips (${cantripsKnown.length} / ${slots.cantrips})`}
+        reasoning={rec?.reasoning?.spells}
+        onApply={applyRecommendedSpells}
+        disabled={!hasSpellRec}
+        applied={!!(recFlags.cantrips?.length || recFlags.rank1?.length)}
+        buttonTitle={hasSpellRec
+          ? 'Fill cantrips and rank-1 slots from the recommended build for this class'
+          : 'Spell recommendation not yet available for this class'}
+      />
       <p className="font-body text-xs text-pf-stone mb-3 italic">
         Cantrips cost no spell slots. Cast them as often as you like — they auto-heighten to half your level.
       </p>

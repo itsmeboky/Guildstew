@@ -45,10 +45,14 @@ const StepIdentity = ({ data, update, setData }) => {
     if (!data.tempId) update({ tempId });
   }, [tempId, data.tempId, update]);
 
-  const systemData = data.system_data || {};
-  const setSystemField = (key, value) => update({
-    system_data: { ...systemData, [key]: value },
-  });
+  // Per-character system fields (portrait/token/allies/enemies)
+  // live directly on the creator's `data` blob now. They used to be
+  // nested under `data.system_data.{…}` which, after the parent
+  // persists `character.system_data = data`, surfaced as the awkward
+  // doubled path `character.system_data.system_data.portrait_url`.
+  // The one-shot SQL migration (Phase J.2) lifts existing records up
+  // to the flat shape, and these writers stop creating new nesting.
+  const setSystemField = (key, value) => update({ [key]: value });
 
   // Quick preview of what this level grants
   const classFeatCount = STANDARD_CLASS_FEAT_LEVELS.filter(l => l <= level).length;
@@ -100,30 +104,32 @@ const StepIdentity = ({ data, update, setData }) => {
       cantripsKnown: [], rank1Known: [], spellsByRank: {}, spellbook: [],
       focusSpells: [], loadout: [], kitTaken: null,
     };
+    // Templates intentionally do NOT pre-stamp `kitTaken`. The class
+    // kit should only apply when the user explicitly clicks "Take
+    // This Kit" in Step VIII so the items actually flow into the
+    // loadout — pre-stamping it left the kit "already taken" but the
+    // loadout empty.
     const templates = {
       'iconic-fighter': {
-        ...base, name: 'Valeros', ancestry: 'human', heritage: 'versatile', background: 'soldier',
+        ...base, name: 'Valeros', ancestry: 'human', heritage: 'versatile-human', background: 'warrior',
         class: 'fighter', subclass: null, classFeats: { 1: 'Power Attack' },
         trainedSkills: ['Athletics', 'Intimidation'],
         boostBatches: { 1: { Constitution: 1, Wisdom: 1, Charisma: 1 } },
-        kitTaken: 'fighter',
       },
       'iconic-wizard': {
-        ...base, name: 'Ezren', ancestry: 'human', heritage: 'skilled', background: 'scholar',
+        ...base, name: 'Ezren', ancestry: 'human', heritage: 'skilled-human', background: 'scholar',
         class: 'wizard', subclass: 'spell-substitution', classFeats: { 1: 'Reach Spell' },
         trainedSkills: ['Society', 'Arcana'], arcaneBond: 'staff',
         boostBatches: { 1: { Constitution: 1, Wisdom: 1, Dexterity: 1 } },
-        kitTaken: 'wizard',
       },
       'iconic-rogue': {
-        ...base, name: 'Merisiel', ancestry: 'elf', heritage: 'whisper', background: 'criminal',
+        ...base, name: 'Merisiel', ancestry: 'elf', heritage: 'whisper-elf', background: 'criminal',
         class: 'rogue', subclass: 'thief', classFeats: { 1: 'Nimble Dodge' },
         trainedSkills: ['Stealth', 'Thievery', 'Acrobatics', 'Athletics'],
         boostBatches: { 1: { Constitution: 1, Wisdom: 1, Charisma: 1 } },
-        kitTaken: 'rogue',
       },
       'iconic-cleric': {
-        ...base, name: 'Kyra', ancestry: 'human', heritage: 'skilled', background: 'acolyte',
+        ...base, name: 'Kyra', ancestry: 'human', heritage: 'skilled-human', background: 'acolyte',
         class: 'cleric', subclass: 'warpriest', classFeats: { 1: 'Domain Initiate' },
         domain: 'sun', healHarmFont: 'heal',
         trainedSkills: ['Religion', 'Medicine'],
@@ -212,7 +218,7 @@ const StepIdentity = ({ data, update, setData }) => {
       <div className="col-span-12 md:col-span-4 space-y-4">
         <div className="grid grid-cols-2 gap-3 items-start">
           <PortraitUpload
-            value={systemData.token_url}
+            value={data.token_url}
             onChange={v => setSystemField('token_url', v)}
             label="Token Avatar"
             aspect="aspect-square"
@@ -226,7 +232,7 @@ const StepIdentity = ({ data, update, setData }) => {
           </div>
         </div>
         <PortraitUpload
-          value={systemData.portrait_url}
+          value={data.portrait_url}
           onChange={v => setSystemField('portrait_url', v)}
           label="Full Portrait"
           aspect="aspect-[3/4]"
@@ -313,7 +319,7 @@ const StepIdentity = ({ data, update, setData }) => {
             <label className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase block mb-1.5">Allies <span className="text-pf-stone normal-case lowercase tracking-normal italic">(optional)</span></label>
             <textarea
               rows={2}
-              value={systemData.allies || ''}
+              value={data.allies || ''}
               onChange={e => setSystemField('allies', e.target.value)}
               placeholder="Family, mentors, debts owed-to..."
               className="w-full bg-pf-bg-elev border border-pf-brass-dim/30 px-4 py-2.5 text-pf-bone font-body text-sm
@@ -324,7 +330,7 @@ const StepIdentity = ({ data, update, setData }) => {
             <label className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase block mb-1.5">Enemies <span className="text-pf-stone normal-case lowercase tracking-normal italic">(optional)</span></label>
             <textarea
               rows={2}
-              value={systemData.enemies || ''}
+              value={data.enemies || ''}
               onChange={e => setSystemField('enemies', e.target.value)}
               placeholder="Rivals, debts owed, grudges..."
               className="w-full bg-pf-bg-elev border border-pf-brass-dim/30 px-4 py-2.5 text-pf-bone font-body text-sm

@@ -7,7 +7,7 @@ import CornerBrackets from '../components/CornerBrackets.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import ProficiencyDots from '../components/ProficiencyDots.jsx';
 import ThreeActionGlyph from '../components/ThreeActionGlyph.jsx';
-import RecommendedButton from '../components/RecommendedButton.jsx';
+import RecommendationPanel from '../components/RecommendationPanel.jsx';
 import RecommendedBadge from '../components/RecommendedBadge.jsx';
 import { getRecommended } from '../../content/recommendedBuilds.js';
 import {
@@ -168,19 +168,21 @@ const StepSkills = ({ data, update }) => {
       <GMWhisper>{STEPS[5].whisper}</GMWhisper>
 
       {/* === Trained skills (existing) === */}
-      <div className="relative bg-pf-bg-card border border-pf-brass-dim/30 p-4 mb-3 flex items-center justify-between gap-3">
+      <div className="relative bg-pf-bg-card border border-pf-brass-dim/30 p-4 mb-3">
         <CornerBrackets />
-        <div className="flex-1">
-          <span className="font-display text-[11px] tracking-[0.2em] text-pf-brass uppercase">Initial Trained Skills</span>
-          {bgSkill && <p className="text-[11px] font-body text-pf-stone mt-0.5">"<span className="text-pf-parchment">{bgSkill}</span>" granted automatically by background.</p>}
-        </div>
-        <RecommendedButton
-          onClick={applyRecommendedSkills}
+        <RecommendationPanel
+          title="Initial Trained Skills"
+          extra={
+            <span className={trained.length === allowed ? 'text-pf-sage' : ''}>
+              {bgSkill ? `${bgSkill} auto-granted by background · ` : ''}
+              {trained.length}/{allowed} picked
+            </span>
+          }
+          reasoning={recommended?.reasoning?.skills}
+          onApply={applyRecommendedSkills}
           disabled={!recommended?.skills}
+          applied={!!(recFlags.skills?.length)}
         />
-        <span className={`font-display text-3xl tracking-wider ${trained.length === allowed ? 'text-pf-sage' : 'text-pf-brass'}`}>
-          {trained.length}<span className="text-pf-stone text-base">/{allowed}</span>
-        </span>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-2 mb-6">
         {SKILLS.map(s => {
@@ -339,17 +341,17 @@ const StepSkills = ({ data, update }) => {
       {/* === Languages === */}
       {data.ancestry && (
         <>
-          <div className="flex items-center justify-between gap-3 mb-1">
-            <SectionHeader>Languages ({baseLanguages.length + languages.length})</SectionHeader>
-            <RecommendedButton
-              onClick={applyRecommendedLanguages}
-              disabled={bonusLanguageSlots <= 0 || additionalPool.length === 0}
-              title="Fill bonus language slots with sensible picks for your ancestry"
-            />
-          </div>
-          <p className="font-body text-xs text-pf-stone mb-3 italic">
-            Your ancestry grants {baseLanguages.length} base languages. Pick up to {bonusLanguageSlots} bonus languages (= positive INT modifier).
-          </p>
+          <RecommendationPanel
+            title={`Languages (${baseLanguages.length + languages.length})`}
+            extra={`${baseLanguages.length} base + up to ${bonusLanguageSlots} bonus`}
+            reasoning={`Your ancestry grants ${baseLanguages.length} base language${baseLanguages.length === 1 ? '' : 's'} automatically. Bonus slots equal your Intelligence modifier (positive only). Pick languages your party might need to talk to creatures in your campaign — Draconic for dragon-heavy settings, Fey for woodland, Undercommon for the Darklands, Celestial/Diabolic for divine-flavored campaigns.`}
+            onApply={applyRecommendedLanguages}
+            disabled={bonusLanguageSlots <= 0 || additionalPool.length === 0}
+            applied={!!(recFlags.languages?.length)}
+            buttonTitle={bonusLanguageSlots <= 0
+              ? 'Bonus language slots unlock once Intelligence is boosted above +0'
+              : 'Fill bonus language slots with sensible picks for your ancestry'}
+          />
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 mb-2">
             {baseLanguages.map(lang => (
               <div key={lang} className="px-3 py-1.5 bg-pf-sage/10 border border-pf-sage/40 text-xs font-body text-pf-bone flex items-center justify-between">

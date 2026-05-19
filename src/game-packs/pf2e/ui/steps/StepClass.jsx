@@ -24,7 +24,7 @@ import CornerBrackets from '../components/CornerBrackets.jsx';
 import ComplexityBadge from '../components/ComplexityBadge.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import UnknownEntityError from '../components/UnknownEntityError.jsx';
-import RecommendedButton from '../components/RecommendedButton.jsx';
+import RecommendationPanel from '../components/RecommendationPanel.jsx';
 import RecommendedBadge from '../components/RecommendedBadge.jsx';
 import ProfLine from '../components/ProfLine.jsx';
 import ProfRow from '../components/ProfRow.jsx';
@@ -57,7 +57,14 @@ const StepClass = ({ data, update, openDeityModal }) => {
   const selected = CLASSES.find(c => c.slug === data.class);
   if (data.class && !selected) {
     console.error('[pf2e] Unknown class slug:', data.class, '— available:', CLASSES.map(c => c.slug));
-    return <UnknownEntityError kind="class" slug={data.class} available={CLASSES.map(c => c.slug)} />;
+    return (
+      <UnknownEntityError
+        kind="class"
+        slug={data.class}
+        available={CLASSES.map(c => c.slug)}
+        onReset={() => update({ class: null, subclass: null, subclassPick: null })}
+      />
+    );
   }
   if (!selected) return null; // first render before auto-pick lands
   const Icon = selected.icon;
@@ -224,16 +231,14 @@ const StepClass = ({ data, update, openDeityModal }) => {
 
               return (
                 <>
-                  <div className="flex items-center justify-between mb-1">
-                    <SectionHeader>Class Feats ({featLevels.length})</SectionHeader>
-                    <RecommendedButton
-                      onClick={applyRecommendedFeats}
-                      disabled={!recommended?.classFeats}
-                    />
-                  </div>
-                  <p className="text-[11px] text-pf-stone font-body mb-3 leading-relaxed">
-                    One feat per feat-level. Diamond glyphs show how many actions the feat costs per turn.
-                  </p>
+                  <RecommendationPanel
+                    title={`Class Feats (${featLevels.length})`}
+                    extra="One feat per feat-level — diamond glyphs show action cost"
+                    reasoning={recommended?.reasoning?.classFeats}
+                    onApply={applyRecommendedFeats}
+                    disabled={!recommended?.classFeats}
+                    applied={Object.keys(recFlags.classFeats || {}).length > 0}
+                  />
 
                   {totalDedications > 0 && (
                     <div className={`relative bg-pf-bg-card border ${canTakeNewDedication ? 'border-pf-sage/40' : 'border-pf-oxblood/40'} p-2.5 mb-3`}>
@@ -591,20 +596,29 @@ function TrainedSkillsPicker({ selected, data, update, recommended, recFlags }) 
   const intMod = Math.max(0, intBoostsAtL1);
   const totalSlots = additional + intMod;
 
+  // Storage format: canonical capitalized name from SKILLS[].name.
+  // StepSkills writes the same shape, so the two pickers share state
+  // without casing drift. (Earlier this stored lowercase slugs, which
+  // diverged from StepSkills and caused recommendations applied in
+  // one step to look un-applied in the other.)
   const picks = data.trainedSkills || [];
   const skillSlugs = SKILLS.map(s => ({ slug: s.name.toLowerCase(), name: s.name, ability: s.ability }));
-  const taken = new Set([...auto, ...picks.map(p => p.toLowerCase())]);
+  const lowerPicks = picks.map(p => String(p).toLowerCase());
+  const taken = new Set([...auto, ...lowerPicks]);
   const recSkills = recFlags?.skills || [];
 
   const setPick = (idx, slug) => {
     const next = [...picks];
-    if (!slug) next.splice(idx, 1);
-    else next[idx] = slug;
+    // Promote the dropdown's lowercase value back to the canonical
+    // SKILLS-name before persisting.
+    const nextName = slug ? skillSlugs.find(s => s.slug === slug)?.name : null;
+    if (!nextName) next.splice(idx, 1);
+    else next[idx] = nextName;
     // Drop the ★ badge for the slug being replaced/cleared.
-    const prevSlug = picks[idx];
+    const prevName = picks[idx];
     let nextRecSkills = recSkills;
-    if (prevSlug && recSkills.includes(prevSlug) && prevSlug !== slug) {
-      nextRecSkills = recSkills.filter(s => s !== prevSlug);
+    if (prevName && recSkills.includes(prevName) && prevName !== nextName) {
+      nextRecSkills = recSkills.filter(s => s !== prevName);
     }
     update({
       trainedSkills: next,
@@ -614,31 +628,30 @@ function TrainedSkillsPicker({ selected, data, update, recommended, recFlags }) 
 
   const applyRecommended = () => {
     if (!recommended?.skills) return;
-    // Cap by total slots so over-curated recommendations don't blow
-    // the picker's bounds; map known display slugs onto the skill list
-    // and skip any already-auto-trained or unknown entries.
-    const validSlugs = recommended.skills
-      .filter(s => skillSlugs.some(sk => sk.slug === s))
-      .filter(s => !auto.includes(s))
+    // Map kebab-case recommendation slugs → canonical SKILLS names,
+    // skip auto-trained, cap by total slots.
+    const validNames = recommended.skills
+      .map(s => skillSlugs.find(sk => sk.slug === s)?.name)
+      .filter(Boolean)
+      .filter(name => !auto.includes(name.toLowerCase()))
       .slice(0, totalSlots);
     update({
-      trainedSkills: validSlugs,
-      recommendedFlags: { ...(data.recommendedFlags || {}), skills: validSlugs },
+      trainedSkills: validNames,
+      recommendedFlags: { ...(data.recommendedFlags || {}), skills: validNames },
     });
     toast.success('Recommended skills applied', { description: recommended.rationale });
   };
 
   return (
     <div className="mt-4">
-      <div className="flex items-center justify-between mb-2">
-        <p className="font-display tracking-[0.15em] text-pf-brass uppercase text-[10px]">
-          Trained Skills <span className="text-pf-stone normal-case lowercase tracking-normal italic">({additional} + INT mod = {totalSlots})</span>
-        </p>
-        <RecommendedButton
-          onClick={applyRecommended}
-          disabled={!recommended?.skills}
-        />
-      </div>
+      <RecommendationPanel
+        title="Trained Skills"
+        extra={`${additional} + INT mod = ${totalSlots}`}
+        reasoning={recommended?.reasoning?.skills}
+        onApply={applyRecommended}
+        disabled={!recommended?.skills}
+        applied={!!(recFlags.skills?.length)}
+      />
 
       {auto.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-2">
@@ -656,13 +669,17 @@ function TrainedSkillsPicker({ selected, data, update, recommended, recFlags }) 
 
       <div className="space-y-1.5">
         {Array.from({ length: totalSlots }).map((_, idx) => {
-          const current = picks[idx] || '';
-          const isRec = current && recSkills.includes(current);
-          const available = skillSlugs.filter(s => s.slug === current || !taken.has(s.slug));
+          // picks[idx] is the canonical capitalized name; the <select>
+          // works in lowercase slug so the option value matches the
+          // option key — currentSlug bridges them.
+          const currentName = picks[idx] || '';
+          const currentSlug = currentName ? currentName.toLowerCase() : '';
+          const isRec = currentName && recSkills.includes(currentName);
+          const available = skillSlugs.filter(s => s.slug === currentSlug || !taken.has(s.slug));
           return (
             <div key={idx} className="flex items-center gap-1.5">
               <select
-                value={current}
+                value={currentSlug}
                 onChange={e => setPick(idx, e.target.value)}
                 className="flex-1 bg-pf-bg-elev border border-pf-brass-dim/30 px-2 py-1 text-[11px] font-body text-pf-bone
                            focus:border-pf-brass focus:outline-none transition-all"
@@ -673,7 +690,7 @@ function TrainedSkillsPicker({ selected, data, update, recommended, recFlags }) 
                 ))}
               </select>
               {isRec && <RecommendedBadge />}
-              {current && (
+              {currentName && (
                 <button
                   type="button"
                   onClick={() => setPick(idx, '')}
