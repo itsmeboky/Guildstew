@@ -109,9 +109,12 @@ const StepClass = ({ data, update, openDeityModal }) => {
     });
   };
 
-  useEffect(() => {
-    if (!data.class) update({ class: CLASSES[0].id });
-  }, []);
+  // NOTE: any future hook (useEffect, useState, useMemo, …) MUST live
+  // ABOVE the `if (data.class && !selected) return <UnknownEntityError…/>`
+  // guard at the top of this component. Hooks below the early return
+  // change the hook count between renders and trigger React error #310.
+  // The auto-pick effect already covers the empty-data first render —
+  // there's no second on-mount hook to add here.
 
   return (
     <div>
