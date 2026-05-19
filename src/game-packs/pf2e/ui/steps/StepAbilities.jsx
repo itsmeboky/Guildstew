@@ -66,9 +66,9 @@ const StepAbilities = ({ data, update }) => {
 
   // Ancestry/background accumulated boosts (only apply to base, not per batch)
   const accumulated = {
-    Strength: data.background === 'soldier' || data.background === 'sailor' ? 1 : 0,
+    Strength: data.background === 'warrior' || data.background === 'sailor' ? 1 : 0,
     Dexterity: (data.ancestry === 'elf' || data.ancestry === 'halfling' ? 1 : 0) + (['criminal', 'scout', 'sailor'].includes(data.background) ? 1 : 0),
-    Constitution: (data.ancestry === 'dwarf' || data.ancestry === 'gnome' ? 1 : 0) + (data.background === 'soldier' ? 1 : 0),
+    Constitution: (data.ancestry === 'dwarf' || data.ancestry === 'gnome' ? 1 : 0) + (data.background === 'warrior' ? 1 : 0),
     Intelligence: (data.ancestry === 'elf' ? 1 : 0) + (['acolyte', 'noble', 'scholar'].includes(data.background) ? 1 : 0),
     Wisdom: (data.ancestry === 'dwarf' || data.ancestry === 'halfling' ? 1 : 0) + (['scout', 'scholar'].includes(data.background) ? 1 : 0),
     Charisma: (data.ancestry === 'gnome' ? 1 : 0) + (data.background === 'noble' ? 1 : 0) - (data.ancestry === 'dwarf' ? 1 : 0),
