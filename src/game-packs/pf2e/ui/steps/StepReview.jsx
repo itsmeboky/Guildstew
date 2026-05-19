@@ -118,18 +118,13 @@ const StepReview = ({ data, onForge }) => {
 
       <div className="relative bg-pf-bg-card border border-pf-brass p-8 mt-4">
         <CornerBrackets active />
-        <div className="text-center mb-6 pb-6 border-b border-pf-brass-dim/30">
-          <h1 className="font-display text-5xl text-pf-bone mb-2">{data.name || 'Unnamed'}</h1>
-          <p className="font-display text-sm tracking-[0.3em] text-pf-brass uppercase">
-            Level {stats.level} · {heritage?.name || ''} {ancestry?.name || 'Ancestry'} · {subclass?.name || cls?.name || 'Class'} · {background?.name || 'Background'}
-          </p>
-          {buildType && (
-            <p className="font-display text-[10px] tracking-[0.3em] text-pf-brass-dim uppercase mt-1">— {buildType} —</p>
-          )}
-          {data.catchphrase && (
-            <p className="font-body italic text-sm text-pf-parchment mt-3">"{data.catchphrase}"</p>
-          )}
-        </div>
+        <CharacterCardHeader
+          data={data}
+          name={data.name || 'Unnamed'}
+          subline={`Level ${stats.level} · ${heritage?.name || ''} ${ancestry?.name || 'Ancestry'} · ${subclass?.name || cls?.name || 'Class'} · ${background?.name || 'Background'}`}
+          buildType={buildType}
+          catchphrase={data.catchphrase}
+        />
 
         {/* Ability scores row */}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-6">
@@ -274,5 +269,62 @@ const StepReview = ({ data, onForge }) => {
     </div>
   );
 };
+
+/**
+ * Header band for the final character card: framed portrait (2:3 with
+ * gold corner brackets) + circular token tucked against it like a
+ * signet seal, with the name / sub-line / catchphrase to the right.
+ * Falls back to a parchment-toned placeholder when an image hasn't
+ * been uploaded yet so the layout doesn't collapse.
+ */
+function CharacterCardHeader({ data, name, subline, buildType, catchphrase }) {
+  const portraitUrl = data.system_data?.portrait_url || null;
+  const tokenUrl = data.system_data?.token_url || null;
+
+  return (
+    <div className="mb-6 pb-6 border-b border-pf-brass-dim/30">
+      <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+        {/* Framed portrait + signet token */}
+        <div className="relative shrink-0">
+          <div className="relative w-40 aspect-[2/3] bg-pf-bg-elev border border-pf-brass-dim/60 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.7)] overflow-hidden">
+            <CornerBrackets active />
+            {portraitUrl ? (
+              <img src={portraitUrl} alt={`${name} portrait`} className="absolute inset-0 w-full h-full object-cover" />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center text-pf-stone font-display text-[10px] tracking-[0.25em] uppercase">
+                No portrait
+              </div>
+            )}
+          </div>
+
+          {/* Token tucked at the bottom-right of the portrait, like a signet seal */}
+          <div className="absolute -bottom-3 -right-3 w-16 h-16 rounded-full bg-pf-bg-elev
+                          border-2 border-pf-brass shadow-[0_4px_14px_-4px_rgba(0,0,0,0.7),inset_0_0_12px_rgba(201,169,97,0.25)]
+                          overflow-hidden">
+            {tokenUrl ? (
+              <img src={tokenUrl} alt={`${name} token`} className="w-full h-full object-cover rounded-full" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-[8px] font-display text-pf-stone tracking-[0.15em] uppercase">
+                Token
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Identity text */}
+        <div className="flex-1 text-center md:text-left">
+          <h1 className="font-display text-5xl text-pf-bone mb-2">{name}</h1>
+          <p className="font-display text-sm tracking-[0.3em] text-pf-brass uppercase">{subline}</p>
+          {buildType && (
+            <p className="font-display text-[10px] tracking-[0.3em] text-pf-brass-dim uppercase mt-1">— {buildType} —</p>
+          )}
+          {catchphrase && (
+            <p className="font-body italic text-sm text-pf-parchment mt-3">"{catchphrase}"</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default StepReview;
