@@ -1,7 +1,6 @@
 // Shared helpers + render primitives used by every CharacterSheet
 // tab. Kept here so per-tab files only need to import what they use
-// rather than re-declaring `cap`/`fmtMod`/`sd`/`SectionHeading` six
-// times over.
+// rather than re-declaring helpers six times over.
 
 import React from 'react';
 
@@ -9,8 +8,6 @@ export const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 export const fmtMod = (n) => (n >= 0 ? `+${n}` : `${n}`);
 
 // Pull the creator's draft blob off the persisted character record.
-// Same name still leaks through — `system_data` IS the blob — so this
-// is just defensive null-handling at the call sites.
 export const sd = (character) => character?.system_data || {};
 
 // Portrait/token/allies/enemies live flat on `sd` post-J.2 but the
@@ -31,12 +28,34 @@ export function SectionHeading({ children }) {
   );
 }
 
-export function StatBlock({ label, value, sub }) {
+/**
+ * Stat card with optional icon + accent color, matching the D&D 5e
+ * library detail treatment. Accent tints the icon and value;
+ * `tall` switches to a banner shape for HP-style emphasis. The
+ * basic plain-box treatment (no icon, no accent) is the original
+ * shape — used for saves and ability mods where visual noise would
+ * crowd a 6-card grid.
+ */
+export function StatCard({ icon: Icon, label, value, sub, accent = '#9CA3AF', tall = false }) {
   return (
-    <div className="bg-[#1E2430] border border-pf-brass-dim/40 px-3 py-2 text-center">
-      <p className="font-display text-[9px] tracking-[0.18em] text-pf-brass uppercase">{label}</p>
-      <p className="font-mono text-xl text-pf-bone tabular-nums leading-tight mt-0.5">{value}</p>
-      {sub && <p className="font-mono text-[9px] text-pf-stone">{sub}</p>}
+    <div
+      className={`relative rounded-xl text-center border bg-gradient-to-br from-[#2A3441] to-[#1E2430] ${tall ? 'p-5' : 'p-3'}`}
+      style={{ borderColor: `${accent}55` }}
+    >
+      {Icon && <Icon className={`${tall ? 'w-7 h-7' : 'w-5 h-5'} mx-auto mb-1`} style={{ color: accent }} />}
+      <p className="font-display text-[10px] tracking-[0.18em] uppercase text-pf-stone">{label}</p>
+      <p
+        className={`font-mono ${tall ? 'text-4xl' : 'text-2xl'} tabular-nums leading-tight mt-0.5 font-bold`}
+        style={{ color: accent }}
+      >
+        {value}
+      </p>
+      {sub && <p className="font-mono text-[10px] text-pf-stone mt-0.5">{sub}</p>}
     </div>
   );
 }
+
+// Older alias — the original detail view called this StatBlock.
+// Kept for backward compat so any imports still resolve; functionally
+// identical when no `icon` or `accent` is provided.
+export const StatBlock = StatCard;
