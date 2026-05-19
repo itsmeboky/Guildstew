@@ -111,6 +111,13 @@ const StepGear = ({ data, update }) => {
     });
   };
 
+  // Inverse of takeKit. Wipes the kit-applied loadout entries and
+  // clears the kitTaken flag so the button reverts to "Take This Kit"
+  // and the user can pick a different kit or customize from scratch.
+  const removeKit = () => {
+    update({ loadout: [], kitTaken: null });
+  };
+
   const addToLoadout = (item) => {
     const existing = loadout.findIndex(i => i.name === item.name);
     if (existing >= 0) {
@@ -289,14 +296,13 @@ const StepGear = ({ data, update }) => {
                   )}
 
                   <button
-                    onClick={takeKit}
-                    disabled={kitTaken}
+                    onClick={kitTaken ? removeKit : takeKit}
                     className={`w-full py-3 font-display tracking-[0.25em] text-xs uppercase transition-all
                                 ${kitTaken
-                                  ? 'bg-pf-bg-elev text-pf-stone/40 cursor-not-allowed'
+                                  ? 'bg-pf-bg-elev border border-pf-oxblood/40 text-pf-stone hover:text-pf-bone hover:border-pf-oxblood'
                                   : 'bg-pf-oxblood text-pf-bone hover:bg-pf-oxblood-glow hover:shadow-[0_0_24px_-8px_rgba(200,50,62,0.6)]'}`}
                   >
-                    {kitTaken ? 'Kit Already Taken' : 'Take This Kit'}
+                    {kitTaken ? 'Remove This Kit' : 'Take This Kit'}
                   </button>
 
                   <p className="text-[11px] text-pf-stone font-body italic text-center mt-3">
