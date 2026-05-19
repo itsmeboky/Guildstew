@@ -24,6 +24,7 @@ import { ABILITIES } from '../../rules/constants.js';
 import { computeDerivedStats } from '../../rules/compute-derived-stats.js';
 import { fmtMod } from '../../rules/compute-ability-scores.js';
 import { profBonus } from '../../rules/proficiency.js';
+import { formatCharacterSubline } from '../../rules/character-subline.js';
 import { computeBuildType, computeFeatHPBonus, computeSpeedBonus } from '../../rules/house-rules.js';
 import { computeItemSkillBonuses } from '../../rules/armor-classifier.js';
 import { STEPS } from '../../config/steps.js';
@@ -121,7 +122,7 @@ const StepReview = ({ data, onForge }) => {
         <CharacterCardHeader
           data={data}
           name={data.name || 'Unnamed'}
-          subline={`Level ${stats.level} · ${heritage?.name || ''} ${ancestry?.name || 'Ancestry'} · ${subclass?.name || cls?.name || 'Class'} · ${background?.name || 'Background'}`}
+          subline={formatCharacterSubline({ level: stats.level, heritage, ancestry, cls, subclass, background })}
           buildType={buildType}
           catchphrase={data.catchphrase}
         />
