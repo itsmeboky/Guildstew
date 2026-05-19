@@ -10,15 +10,11 @@ import ComplexityBadge from '../components/ComplexityBadge.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import MechanicRow from '../components/MechanicRow.jsx';
 import { BACKGROUNDS, BACKGROUND_DETAILS, LORES } from '../../data/index.js';
+import { getBackgroundTip } from '../../content/backgroundTips.js';
 import { STEPS } from '../../config/steps.js';
 
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-const firstSentence = (text) => {
-  if (!text) return '';
-  const trimmed = text.trim();
-  const idx = trimmed.search(/[.!?](\s|$)/);
-  return idx > -1 ? trimmed.slice(0, idx + 1) : trimmed;
-};
+const slugify = (s) => (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 const StepBackground = ({ data, update }) => {
   const selected = BACKGROUNDS.find(b => b.id === data.background) || BACKGROUNDS[0];
@@ -28,10 +24,10 @@ const StepBackground = ({ data, update }) => {
   }, []);
 
   const flavor = selected.desc || '';
-  // Until curated GM tips ship per background, fall back to the
-  // first sentence of the SRD description so the whisper panel
-  // never renders blank.
-  const gmWhisper = selected.tip || firstSentence(flavor);
+  // Curated tip per background slug; falls back to a generic framing
+  // line when a tip hasn't been written yet (better than echoing the
+  // first sentence of the SRD prose).
+  const helpfulTip = getBackgroundTip(slugify(selected.name));
   const trainedSkill = (selected.trainedSkills || [])[0];
   const grantedFeat = selected.grantedFeat || selected.feat;
 
@@ -64,7 +60,7 @@ const StepBackground = ({ data, update }) => {
 
             <div className="mt-6">
               <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-2">Helpful Tip</p>
-              <p className="font-body text-sm text-pf-parchment leading-relaxed italic">{gmWhisper}</p>
+              <p className="font-body text-sm text-pf-parchment leading-relaxed italic">{helpfulTip}</p>
             </div>
           </div>
 
