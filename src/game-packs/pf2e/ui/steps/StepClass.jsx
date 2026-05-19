@@ -57,7 +57,14 @@ const StepClass = ({ data, update, openDeityModal }) => {
   const selected = CLASSES.find(c => c.slug === data.class);
   if (data.class && !selected) {
     console.error('[pf2e] Unknown class slug:', data.class, '— available:', CLASSES.map(c => c.slug));
-    return <UnknownEntityError kind="class" slug={data.class} available={CLASSES.map(c => c.slug)} />;
+    return (
+      <UnknownEntityError
+        kind="class"
+        slug={data.class}
+        available={CLASSES.map(c => c.slug)}
+        onReset={() => update({ class: null, subclass: null, subclassPick: null })}
+      />
+    );
   }
   if (!selected) return null; // first render before auto-pick lands
   const Icon = selected.icon;
