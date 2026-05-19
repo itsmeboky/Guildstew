@@ -8,10 +8,12 @@
 // component per pack and this becomes one of several.
 //
 // Data shape: the creator persists the full draft into
-// `character.system_data`, so most reads here come through
-// `sd = character.system_data || {}`. Portrait/token/allies/enemies
-// are one extra level deeper (`sd.system_data.{…}`) because
-// StepIdentity nested them — accessed via `media(sd)`.
+// `character.system_data`, so reads here come through
+// `sd = character.system_data || {}`. The pre-J.2 doubled path
+// (`sd.system_data.{portrait,allies,enemies}`) is kept as a legacy
+// fallback for any records that pre-dated the flatten migration —
+// once `system_data ? 'system_data'` returns zero rows in Supabase
+// this branch can retire.
 
 import React, { useState } from 'react';
 import GamePackTag from '@/components/characters/GamePackTag';
@@ -26,7 +28,16 @@ const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 const fmtMod = (n) => (n >= 0 ? `+${n}` : `${n}`);
 
 const sd = (character) => character?.system_data || {};
-const media = (sdObj) => sdObj?.system_data || {};
+// Post-J.2 flatten, portrait/token/allies/enemies live on `sd` itself.
+// The nested `sd.system_data` fallback only fires for records that
+// pre-date the migration and somehow slipped through it — defensive
+// and removable once the Supabase verification query returns zero.
+const media = (sdObj) => ({
+  portrait_url: sdObj?.portrait_url ?? sdObj?.system_data?.portrait_url,
+  token_url:    sdObj?.token_url    ?? sdObj?.system_data?.token_url,
+  allies:       sdObj?.allies       ?? sdObj?.system_data?.allies,
+  enemies:      sdObj?.enemies      ?? sdObj?.system_data?.enemies,
+});
 
 const TABS = [
   { key: 'stats',      label: 'Stats' },
