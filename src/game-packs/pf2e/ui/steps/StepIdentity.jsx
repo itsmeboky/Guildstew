@@ -102,28 +102,28 @@ const StepIdentity = ({ data, update, setData }) => {
     };
     const templates = {
       'iconic-fighter': {
-        ...base, name: 'Valeros', ancestry: 'human', heritage: 'versatile', background: 'soldier',
+        ...base, name: 'Valeros', ancestry: 'human', heritage: 'versatile-human', background: 'warrior',
         class: 'fighter', subclass: null, classFeats: { 1: 'Power Attack' },
         trainedSkills: ['Athletics', 'Intimidation'],
         boostBatches: { 1: { Constitution: 1, Wisdom: 1, Charisma: 1 } },
         kitTaken: 'fighter',
       },
       'iconic-wizard': {
-        ...base, name: 'Ezren', ancestry: 'human', heritage: 'skilled', background: 'scholar',
+        ...base, name: 'Ezren', ancestry: 'human', heritage: 'skilled-human', background: 'scholar',
         class: 'wizard', subclass: 'spell-substitution', classFeats: { 1: 'Reach Spell' },
         trainedSkills: ['Society', 'Arcana'], arcaneBond: 'staff',
         boostBatches: { 1: { Constitution: 1, Wisdom: 1, Dexterity: 1 } },
         kitTaken: 'wizard',
       },
       'iconic-rogue': {
-        ...base, name: 'Merisiel', ancestry: 'elf', heritage: 'whisper', background: 'criminal',
+        ...base, name: 'Merisiel', ancestry: 'elf', heritage: 'whisper-elf', background: 'criminal',
         class: 'rogue', subclass: 'thief', classFeats: { 1: 'Nimble Dodge' },
         trainedSkills: ['Stealth', 'Thievery', 'Acrobatics', 'Athletics'],
         boostBatches: { 1: { Constitution: 1, Wisdom: 1, Charisma: 1 } },
         kitTaken: 'rogue',
       },
       'iconic-cleric': {
-        ...base, name: 'Kyra', ancestry: 'human', heritage: 'skilled', background: 'acolyte',
+        ...base, name: 'Kyra', ancestry: 'human', heritage: 'skilled-human', background: 'acolyte',
         class: 'cleric', subclass: 'warpriest', classFeats: { 1: 'Domain Initiate' },
         domain: 'sun', healHarmFont: 'heal',
         trainedSkills: ['Religion', 'Medicine'],

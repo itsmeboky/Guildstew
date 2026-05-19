@@ -49,7 +49,7 @@ const computeStrBoosts = (data) => {
     if (ancestry.boosts.includes('Strength')) s++;
     if (ancestry.flaws.includes('Strength')) s--;
   }
-  if (data.background === 'soldier' || data.background === 'sailor') s++;
+  if (data.background === 'warrior' || data.background === 'sailor') s++;
   const cls = CLASSES.find(c => c.slug === data.class);
   s += (cls?.keyAbility?.includes('Strength') ? 1 : 0); // class key boost counted once
   const batches = data.boostBatches || {};
