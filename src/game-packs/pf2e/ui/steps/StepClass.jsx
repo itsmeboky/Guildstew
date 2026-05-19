@@ -598,20 +598,29 @@ function TrainedSkillsPicker({ selected, data, update, recommended, recFlags }) 
   const intMod = Math.max(0, intBoostsAtL1);
   const totalSlots = additional + intMod;
 
+  // Storage format: canonical capitalized name from SKILLS[].name.
+  // StepSkills writes the same shape, so the two pickers share state
+  // without casing drift. (Earlier this stored lowercase slugs, which
+  // diverged from StepSkills and caused recommendations applied in
+  // one step to look un-applied in the other.)
   const picks = data.trainedSkills || [];
   const skillSlugs = SKILLS.map(s => ({ slug: s.name.toLowerCase(), name: s.name, ability: s.ability }));
-  const taken = new Set([...auto, ...picks.map(p => p.toLowerCase())]);
+  const lowerPicks = picks.map(p => String(p).toLowerCase());
+  const taken = new Set([...auto, ...lowerPicks]);
   const recSkills = recFlags?.skills || [];
 
   const setPick = (idx, slug) => {
     const next = [...picks];
-    if (!slug) next.splice(idx, 1);
-    else next[idx] = slug;
+    // Promote the dropdown's lowercase value back to the canonical
+    // SKILLS-name before persisting.
+    const nextName = slug ? skillSlugs.find(s => s.slug === slug)?.name : null;
+    if (!nextName) next.splice(idx, 1);
+    else next[idx] = nextName;
     // Drop the ★ badge for the slug being replaced/cleared.
-    const prevSlug = picks[idx];
+    const prevName = picks[idx];
     let nextRecSkills = recSkills;
-    if (prevSlug && recSkills.includes(prevSlug) && prevSlug !== slug) {
-      nextRecSkills = recSkills.filter(s => s !== prevSlug);
+    if (prevName && recSkills.includes(prevName) && prevName !== nextName) {
+      nextRecSkills = recSkills.filter(s => s !== prevName);
     }
     update({
       trainedSkills: next,
@@ -621,16 +630,16 @@ function TrainedSkillsPicker({ selected, data, update, recommended, recFlags }) 
 
   const applyRecommended = () => {
     if (!recommended?.skills) return;
-    // Cap by total slots so over-curated recommendations don't blow
-    // the picker's bounds; map known display slugs onto the skill list
-    // and skip any already-auto-trained or unknown entries.
-    const validSlugs = recommended.skills
-      .filter(s => skillSlugs.some(sk => sk.slug === s))
-      .filter(s => !auto.includes(s))
+    // Map kebab-case recommendation slugs → canonical SKILLS names,
+    // skip auto-trained, cap by total slots.
+    const validNames = recommended.skills
+      .map(s => skillSlugs.find(sk => sk.slug === s)?.name)
+      .filter(Boolean)
+      .filter(name => !auto.includes(name.toLowerCase()))
       .slice(0, totalSlots);
     update({
-      trainedSkills: validSlugs,
-      recommendedFlags: { ...(data.recommendedFlags || {}), skills: validSlugs },
+      trainedSkills: validNames,
+      recommendedFlags: { ...(data.recommendedFlags || {}), skills: validNames },
     });
     toast.success('Recommended skills applied', { description: recommended.rationale });
   };
@@ -663,13 +672,17 @@ function TrainedSkillsPicker({ selected, data, update, recommended, recFlags }) 
 
       <div className="space-y-1.5">
         {Array.from({ length: totalSlots }).map((_, idx) => {
-          const current = picks[idx] || '';
-          const isRec = current && recSkills.includes(current);
-          const available = skillSlugs.filter(s => s.slug === current || !taken.has(s.slug));
+          // picks[idx] is the canonical capitalized name; the <select>
+          // works in lowercase slug so the option value matches the
+          // option key — currentSlug bridges them.
+          const currentName = picks[idx] || '';
+          const currentSlug = currentName ? currentName.toLowerCase() : '';
+          const isRec = currentName && recSkills.includes(currentName);
+          const available = skillSlugs.filter(s => s.slug === currentSlug || !taken.has(s.slug));
           return (
             <div key={idx} className="flex items-center gap-1.5">
               <select
-                value={current}
+                value={currentSlug}
                 onChange={e => setPick(idx, e.target.value)}
                 className="flex-1 bg-pf-bg-elev border border-pf-brass-dim/30 px-2 py-1 text-[11px] font-body text-pf-bone
                            focus:border-pf-brass focus:outline-none transition-all"
@@ -680,7 +693,7 @@ function TrainedSkillsPicker({ selected, data, update, recommended, recFlags }) 
                 ))}
               </select>
               {isRec && <RecommendedBadge />}
-              {current && (
+              {currentName && (
                 <button
                   type="button"
                   onClick={() => setPick(idx, '')}
