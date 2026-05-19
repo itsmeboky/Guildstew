@@ -10,6 +10,7 @@ const ComplexityBadge = ({ level }) => {
     beginner:     { label: 'Beginner-Friendly', cls: 'bg-pf-sage/15 text-pf-sage border-pf-sage/40' },
     intermediate: { label: 'Intermediate',      cls: 'bg-pf-brass/10 text-pf-brass border-pf-brass/40' },
     advanced:     { label: 'Advanced',          cls: 'bg-pf-oxblood/15 text-pf-oxblood-glow border-pf-oxblood/40' },
+    master:       { label: 'Master',            cls: 'bg-purple-500/15 text-purple-300 border-purple-400/40' },
     // PF2e rarity → complexity mapping (used for backgrounds today;
     // any data layer that surfaces `system.traits.rarity` can pass it
     // straight through.)

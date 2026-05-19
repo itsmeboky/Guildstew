@@ -21,7 +21,7 @@ import { STEPS } from '../../config/steps.js';
 
 const StepSpells = ({ data, update }) => {
   const cls = CLASSES.find(c => c.id === data.class);
-  const tradition = cls && CASTING_TRADITION_BY_CLASS[cls.id];
+  const tradition = cls && CASTING_TRADITION_BY_CLASS[cls.slug];
   const level = data.level || 1;
 
   // Non-caster: friendly informational panel
@@ -52,7 +52,7 @@ const StepSpells = ({ data, update }) => {
 
   // Caster
   const list = SPELL_LISTS[tradition.tradition];
-  const slots = SPELLS_KNOWN_BY_RANK(level, cls.id);
+  const slots = SPELLS_KNOWN_BY_RANK(level, cls.slug);
   const maxRank = HIGHEST_SPELL_RANK(level);
   const cantripsKnown = data.cantripsKnown || [];
   const spellsByRank = data.spellsByRank || {};
@@ -60,7 +60,7 @@ const StepSpells = ({ data, update }) => {
 
   // Spellbook size for prepared casters (Wizard especially)
   // Wizards: 10 spells of each rank in spellbook by level 1, +2 per level after
-  const spellbookSize = cls.id === 'wizard' ? 10 + (level - 1) * 2 : 0;
+  const spellbookSize = cls.slug === 'wizard' ? 10 + (level - 1) * 2 : 0;
 
   const toggleCantrip = (name) => {
     if (cantripsKnown.includes(name)) {
@@ -95,10 +95,10 @@ const StepSpells = ({ data, update }) => {
   // Cleric Heal/Harm Font calculation: +CHA mod bonus slots locked to Heal or Harm
   const stats = computeDerivedStats(data);
   const chaMod = stats.mods.Charisma;
-  const fontSlots = cls.id === 'cleric' ? Math.max(1, chaMod) : 0;
+  const fontSlots = cls.slug === 'cleric' ? Math.max(1, chaMod) : 0;
 
   // Focus spell options for this class
-  const focusData = FOCUS_SPELLS_BY_CLASS[cls.id];
+  const focusData = FOCUS_SPELLS_BY_CLASS[cls.slug];
   const focusSpells = data.focusSpells || [];
 
   const toggleFocus = (name) => {
@@ -144,12 +144,12 @@ const StepSpells = ({ data, update }) => {
             <p className="font-display text-lg text-pf-bone font-mono">{stats.spellAttack !== null ? fmtMod(stats.spellAttack) : '—'}</p>
           </div>
         </div>
-        {tradition.prep === 'prepared' && cls.id !== 'wizard' && (
+        {tradition.prep === 'prepared' && cls.slug !== 'wizard' && (
           <p className="text-[11px] text-pf-stone font-body italic mt-2">
             Prepared casters can prepare any spell from the {traditionLabel.toLowerCase()} list each morning. Your "known" picks below = your daily prep.
           </p>
         )}
-        {tradition.prep === 'prepared' && cls.id === 'wizard' && (
+        {tradition.prep === 'prepared' && cls.slug === 'wizard' && (
           <p className="text-[11px] text-pf-stone font-body italic mt-2">
             Wizards prepare spells from their <span className="text-pf-brass">spellbook</span> — a personal collection of memorized arcane formulas. Spellbook holds {spellbookSize} spells at level {level}. Pick spellbook entries below; you'll prepare from those during play.
           </p>
@@ -162,7 +162,7 @@ const StepSpells = ({ data, update }) => {
       </div>
 
       {/* === CLERIC HEAL/HARM FONT === */}
-      {cls.id === 'cleric' && (
+      {cls.slug === 'cleric' && (
         <div className="relative bg-pf-bg-card border border-pf-brass/40 p-4 mb-6">
           <CornerBrackets active />
           <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-2">Divine Font — Bonus Daily Slots</p>
@@ -197,7 +197,7 @@ const StepSpells = ({ data, update }) => {
       )}
 
       {/* === WIZARD ARCANE BOND === */}
-      {cls.id === 'wizard' && (
+      {cls.slug === 'wizard' && (
         <div className="relative bg-pf-bg-card border border-pf-brass/40 p-4 mb-6">
           <CornerBrackets active />
           <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-2">Arcane Bond — Recall Magic</p>
@@ -281,7 +281,7 @@ const StepSpells = ({ data, update }) => {
       </div>
 
       {/* === WIZARD SPELLBOOK === */}
-      {cls.id === 'wizard' && (
+      {cls.slug === 'wizard' && (
         <>
           <SectionHeader>Spellbook ({spellbook.length} / {spellbookSize})</SectionHeader>
           <p className="font-body text-xs text-pf-stone mb-3 italic">
@@ -317,7 +317,7 @@ const StepSpells = ({ data, update }) => {
         const rankSpells = list[`rank${rank}`];
         const known = spellsByRank[rank] || (rank === 1 ? (data.rank1Known || []) : []);
         const limit = slots[rank] || 0;
-        const labelType = cls.id === 'wizard' ? 'Daily Prep' : (tradition.prep === 'prepared' ? 'Prepared' : 'Known');
+        const labelType = cls.slug === 'wizard' ? 'Daily Prep' : (tradition.prep === 'prepared' ? 'Prepared' : 'Known');
         return (
           <div key={rank}>
             <SectionHeader>
@@ -326,7 +326,7 @@ const StepSpells = ({ data, update }) => {
             {rankSpells ? (
               <>
                 <p className="font-body text-xs text-pf-stone mb-3 italic">
-                  Cast using rank-{rank} spell slots. {tradition.prep === 'spontaneous' ? 'Spontaneous: locked in once chosen.' : cls.id === 'wizard' ? 'Pick from your spellbook to prepare today.' : 'Pick what you prepare each morning.'}
+                  Cast using rank-{rank} spell slots. {tradition.prep === 'spontaneous' ? 'Spontaneous: locked in once chosen.' : cls.slug === 'wizard' ? 'Pick from your spellbook to prepare today.' : 'Pick what you prepare each morning.'}
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 mb-6">
                   {rankSpells.map(sp => {

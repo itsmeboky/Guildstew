@@ -17,11 +17,14 @@
 
 import React, { useEffect } from 'react';
 import { Sparkles, Crown } from 'lucide-react';
+import { toast } from 'sonner';
 import GMWhisper from '../components/GMWhisper.jsx';
 import ThumbnailStrip from '../components/ThumbnailStrip.jsx';
 import CornerBrackets from '../components/CornerBrackets.jsx';
 import ComplexityBadge from '../components/ComplexityBadge.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
+import RecommendedButton from '../components/RecommendedButton.jsx';
+import RecommendedBadge from '../components/RecommendedBadge.jsx';
 import ProfLine from '../components/ProfLine.jsx';
 import ProfRow from '../components/ProfRow.jsx';
 import ClassFeatSlot from '../components/ClassFeatSlot.jsx';
@@ -29,11 +32,15 @@ import {
   CLASSES,
   CLASS_DEDICATIONS,
   CLASS_DETAILS,
+  CLASS_FEATS_BY_CLASS,
   SUBCLASS_SUBPICKS,
   INSTINCT_ANATHEMA,
   CLERIC_DOMAINS,
   STANDARD_CLASS_FEAT_LEVELS,
+  SKILLS,
 } from '../../data/index.js';
+import { getClassTip } from '../../content/classTips.js';
+import { getRecommended } from '../../content/recommendedBuilds.js';
 import { STEPS } from '../../config/steps.js';
 
 const StepClass = ({ data, update, openDeityModal }) => {
@@ -41,7 +48,51 @@ const StepClass = ({ data, update, openDeityModal }) => {
   const Icon = selected.icon;
   const prof = selected.proficiencies || {};
   const saves = prof.saves || {};
-  const firstFeats = selected.firstFeats || [];
+  const tipEntry = getClassTip(selected.slug);
+  // Class feats indexed by level for the current class slug — pulled
+  // straight from the SRD import via traits.includes(slug). Replaces
+  // the prototype's hand-curated `firstFeats` array.
+  const classFeatsByLevel = CLASS_FEATS_BY_CLASS[selected.slug] || {};
+  const recommended = getRecommended(selected.slug);
+  const recFlags = data.recommendedFlags || {};
+
+  // Apply recommended level-1 class feats. Match by lowercased name
+  // since the recommendation file uses kebab-case display slugs and
+  // the imported feats only carry a `name` field (no `slug`).
+  const applyRecommendedFeats = () => {
+    if (!recommended?.classFeats) return;
+    const nextClassFeats = { ...(data.classFeats || {}) };
+    const nextFlags = { ...(recFlags.classFeats || {}) };
+    for (const [lvlStr, slugs] of Object.entries(recommended.classFeats)) {
+      const lvl = parseInt(lvlStr, 10);
+      if (!Array.isArray(slugs) || slugs.length === 0) continue;
+      const want = slugs[0]; // one feat per slot today
+      const match = (classFeatsByLevel[lvl] || []).find(f =>
+        (f.name || '').toLowerCase().replace(/\s+/g, '-') === want
+        || (f.name || '').toLowerCase() === want.replace(/-/g, ' '),
+      );
+      if (match) {
+        nextClassFeats[lvl] = match.name;
+        nextFlags[lvl] = match.name;
+      }
+    }
+    update({
+      classFeats: nextClassFeats,
+      recommendedFlags: { ...recFlags, classFeats: nextFlags },
+    });
+    toast.success('Recommended class feats applied', { description: recommended.rationale });
+  };
+
+  // Picking a different feat in a slot drops the ★ for that slot only.
+  const pickClassFeat = (lvl, name) => {
+    const nextClassFeats = { ...(data.classFeats || {}), [lvl]: name };
+    const featFlags = { ...(recFlags.classFeats || {}) };
+    if (featFlags[lvl] && featFlags[lvl] !== name) delete featFlags[lvl];
+    update({
+      classFeats: nextClassFeats,
+      recommendedFlags: { ...recFlags, classFeats: featFlags },
+    });
+  };
 
   useEffect(() => {
     if (!data.class) update({ class: CLASSES[0].id });
@@ -76,7 +127,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
                 </p>
               </div>
             </div>
-            <ComplexityBadge level={selected.complexity} />
+            <ComplexityBadge level={tipEntry.complexity} />
             <p className="font-body text-sm text-pf-parchment leading-relaxed my-4">{selected.blurb || selected.desc}</p>
             {selected.spellcasting && (
               <div className="flex items-center gap-2 mb-3">
@@ -85,8 +136,8 @@ const StepClass = ({ data, update, openDeityModal }) => {
               </div>
             )}
             <div className="mt-4 pt-4 border-t border-pf-brass-dim/20">
-              <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-1.5">GM's Whisper</p>
-              <p className="font-body text-sm text-pf-parchment leading-relaxed italic">{selected.tip}</p>
+              <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-1.5">Helpful Tip</p>
+              <p className="font-body text-sm text-pf-parchment leading-relaxed italic">{tipEntry.tip}</p>
             </div>
           </div>
 
@@ -102,9 +153,14 @@ const StepClass = ({ data, update, openDeityModal }) => {
             <div className="mt-4 grid grid-cols-2 gap-1.5 text-[10px] font-body">
               <span className="font-display tracking-[0.15em] text-pf-brass uppercase col-span-2 mt-2">Hit Points / Level</span>
               <span className="text-pf-bone font-mono text-2xl col-span-2">{selected.hp}</span>
-              <span className="font-display tracking-[0.15em] text-pf-brass uppercase col-span-2 mt-2">Trained Skills</span>
-              <span className="text-pf-bone font-mono col-span-2">{selected.trainedSkills} + INT mod</span>
             </div>
+            <TrainedSkillsPicker
+              selected={selected}
+              data={data}
+              update={update}
+              recommended={recommended}
+              recFlags={recFlags}
+            />
 
             {selected.requiresDeity && (
               <div className="mt-5 p-3 bg-pf-oxblood/10 border border-pf-oxblood/40">
@@ -150,7 +206,13 @@ const StepClass = ({ data, update, openDeityModal }) => {
 
               return (
                 <>
-                  <SectionHeader>Class Feats ({featLevels.length})</SectionHeader>
+                  <div className="flex items-center justify-between mb-1">
+                    <SectionHeader>Class Feats ({featLevels.length})</SectionHeader>
+                    <RecommendedButton
+                      onClick={applyRecommendedFeats}
+                      disabled={!recommended?.classFeats}
+                    />
+                  </div>
                   <p className="text-[11px] text-pf-stone font-body mb-3 leading-relaxed">
                     One feat per feat-level. Diamond glyphs show how many actions the feat costs per turn.
                   </p>
@@ -181,10 +243,11 @@ const StepClass = ({ data, update, openDeityModal }) => {
                         key={fLvl}
                         fLvl={fLvl}
                         picked={classFeats[fLvl]}
-                        classOptions={firstFeats}
+                        classOptions={classFeatsByLevel[fLvl] || []}
                         dedicationOptions={CLASS_DEDICATIONS.filter(d => d.forbidden !== selected.id)}
                         dedicationLocked={!canTakeNewDedication && (!classFeats[fLvl] || !dedicationNames.includes(classFeats[fLvl]))}
-                        onPick={(name) => update({ classFeats: { ...classFeats, [fLvl]: name } })}
+                        recommendedName={recFlags.classFeats?.[fLvl]}
+                        onPick={(name) => pickClassFeat(fLvl, name)}
                       />
                     ))}
 
@@ -222,7 +285,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
 
       {/* SUBCLASS PICKER — Doctrine, Order, Thesis, Bloodline, etc. */}
       {(() => {
-        const details = CLASS_DETAILS[selected.id];
+        const details = CLASS_DETAILS[selected.slug];
         if (!details?.subclasses) {
           return details?.proficiencies?.note ? (
             <div className="relative bg-pf-bg-card border border-dashed border-pf-brass-dim/40 p-4 mt-4">
@@ -287,7 +350,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
       })()}
 
       {/* BARBARIAN INSTINCT ANATHEMA — surfaces what your character refuses */}
-      {selected.id === 'barbarian' && data.subclass && INSTINCT_ANATHEMA[data.subclass] && (
+      {selected.slug === 'barbarian' && data.subclass && INSTINCT_ANATHEMA[data.subclass] && (
         <div className="mt-4 relative bg-pf-bg-card border border-pf-oxblood/30 p-4">
           <p className="font-display text-[10px] tracking-[0.25em] text-pf-oxblood-glow uppercase mb-2">Instinct Anathema</p>
           <p className="font-body text-xs text-pf-parchment leading-relaxed">{INSTINCT_ANATHEMA[data.subclass]}</p>
@@ -296,7 +359,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
       )}
 
       {/* CLERIC DOMAIN PICKER — drives Domain Initiate focus spell choice */}
-      {selected.id === 'cleric' && (
+      {selected.slug === 'cleric' && (
         <div className="mt-5">
           <SectionHeader>Domain — Domain Initiate (1st-Level Class Feat)</SectionHeader>
           <p className="font-body text-xs text-pf-stone mb-3 italic">
@@ -324,25 +387,25 @@ const StepClass = ({ data, update, openDeityModal }) => {
 
       {/* CLASS PROFICIENCIES — what your class starts trained in */}
       {(() => {
-        const details = CLASS_DETAILS[selected.id];
+        const details = CLASS_DETAILS[selected.slug];
         if (!details?.proficiencies) return null;
         // Merge subclass-driven proficiency overrides (Cloistered vs Warpriest, etc.)
         let p = { ...details.proficiencies };
-        if (selected.id === 'cleric' && data.subclass === 'warpriest') {
+        if (selected.slug === 'cleric' && data.subclass === 'warpriest') {
           p = { ...p,
             weapons: { ...(p.weapons || {}), simple: 'trained', martial: 'trained', favoredWeapon: 'trained' },
             armor:   { ...(p.armor   || {}), medium: 'trained' },
             saves:   { ...(p.saves   || {}), fortitude: 'expert' },
           };
         }
-        if (selected.id === 'cleric' && data.subclass === 'cloistered') {
+        if (selected.slug === 'cleric' && data.subclass === 'cloistered') {
           p = { ...p,
             weapons: { ...(p.weapons || {}), simple: 'trained', favoredWeapon: 'trained' },
           };
         }
         return (
           <div className="mt-5">
-            <SectionHeader>Initial Class Proficiencies{data.subclass ? ` — ${CLASS_DETAILS[selected.id]?.subclasses?.options.find(o => o.id === data.subclass)?.name || 'Subclass'}` : ''}</SectionHeader>
+            <SectionHeader>Initial Class Proficiencies{data.subclass ? ` — ${CLASS_DETAILS[selected.slug]?.subclasses?.options.find(o => o.id === data.subclass)?.name || 'Subclass'}` : ''}</SectionHeader>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-body">
               <div className="bg-pf-bg-card border border-pf-brass-dim/30 p-3">
                 <p className="font-display text-[10px] tracking-[0.2em] text-pf-brass uppercase mb-2">Defense</p>
@@ -380,9 +443,9 @@ const StepClass = ({ data, update, openDeityModal }) => {
 
       {/* === ANIMAL COMPANION / FAMILIAR === */}
       {(() => {
-        const eligibleForCompanion = ['barbarian'].includes(selected.id) && data.subclass === 'animal';
-        const eligibleForFamiliar = selected.id === 'wizard' && data.subclass === 'familiar-attunement';
-        const showOptional = ['wizard', 'rogue', 'bard', 'cleric'].includes(selected.id);
+        const eligibleForCompanion = ['barbarian'].includes(selected.slug) && data.subclass === 'animal';
+        const eligibleForFamiliar = selected.slug === 'wizard' && data.subclass === 'familiar-attunement';
+        const showOptional = ['wizard', 'rogue', 'bard', 'cleric'].includes(selected.slug);
         if (!eligibleForCompanion && !eligibleForFamiliar && !showOptional) return null;
         return (
           <div className="mt-5">
@@ -453,7 +516,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
       })()}
 
       {/* === OPTIONAL DEITY (for non-Clerics) === */}
-      {selected.id !== 'cleric' && (
+      {selected.slug !== 'cleric' && (
         <div className="mt-5">
           <SectionHeader>Patron Deity <span className="text-pf-stone font-body normal-case tracking-normal italic text-xs ml-2">(optional)</span></SectionHeader>
           <p className="font-body text-xs text-pf-stone mb-3 italic">
@@ -471,5 +534,130 @@ const StepClass = ({ data, update, openDeityModal }) => {
     </div>
   );
 };
+
+/**
+ * Trained-skills picker. Renders auto-trained chips (locked, from
+ * `class.trainedSkills.value`) and N pickable dropdown slots, where N
+ * is `class.trainedSkills.additional + max(0, INT mod)`. The INT mod
+ * is approximated from the player's level-1 free boost batch — the
+ * boosts step is the source of truth, but until they revisit it we
+ * keep slot count reactive to whatever's been chosen so far.
+ *
+ * Player picks persist to `data.trainedSkills` as a flat slug array.
+ */
+function TrainedSkillsPicker({ selected, data, update, recommended, recFlags }) {
+  const auto = (selected.trainedSkills?.value || []).map(s => s.toLowerCase());
+  const additional = selected.trainedSkills?.additional ?? 2;
+  const intBoostsAtL1 = data.boostBatches?.[1]?.Intelligence || 0;
+  // Each free boost is +2 to score; ignore ancestry/background here
+  // since the post-import ancestry slugs no longer line up with the
+  // legacy StepAbilities tables. Conservative under-count.
+  const intMod = Math.max(0, intBoostsAtL1);
+  const totalSlots = additional + intMod;
+
+  const picks = data.trainedSkills || [];
+  const skillSlugs = SKILLS.map(s => ({ slug: s.name.toLowerCase(), name: s.name, ability: s.ability }));
+  const taken = new Set([...auto, ...picks.map(p => p.toLowerCase())]);
+  const recSkills = recFlags?.skills || [];
+
+  const setPick = (idx, slug) => {
+    const next = [...picks];
+    if (!slug) next.splice(idx, 1);
+    else next[idx] = slug;
+    // Drop the ★ badge for the slug being replaced/cleared.
+    const prevSlug = picks[idx];
+    let nextRecSkills = recSkills;
+    if (prevSlug && recSkills.includes(prevSlug) && prevSlug !== slug) {
+      nextRecSkills = recSkills.filter(s => s !== prevSlug);
+    }
+    update({
+      trainedSkills: next,
+      recommendedFlags: { ...(data.recommendedFlags || {}), skills: nextRecSkills },
+    });
+  };
+
+  const applyRecommended = () => {
+    if (!recommended?.skills) return;
+    // Cap by total slots so over-curated recommendations don't blow
+    // the picker's bounds; map known display slugs onto the skill list
+    // and skip any already-auto-trained or unknown entries.
+    const validSlugs = recommended.skills
+      .filter(s => skillSlugs.some(sk => sk.slug === s))
+      .filter(s => !auto.includes(s))
+      .slice(0, totalSlots);
+    update({
+      trainedSkills: validSlugs,
+      recommendedFlags: { ...(data.recommendedFlags || {}), skills: validSlugs },
+    });
+    toast.success('Recommended skills applied', { description: recommended.rationale });
+  };
+
+  return (
+    <div className="mt-4">
+      <div className="flex items-center justify-between mb-2">
+        <p className="font-display tracking-[0.15em] text-pf-brass uppercase text-[10px]">
+          Trained Skills <span className="text-pf-stone normal-case lowercase tracking-normal italic">({additional} + INT mod = {totalSlots})</span>
+        </p>
+        <RecommendedButton
+          onClick={applyRecommended}
+          disabled={!recommended?.skills}
+        />
+      </div>
+
+      {auto.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {auto.map(slug => {
+            const skill = skillSlugs.find(s => s.slug === slug) || { name: slug.charAt(0).toUpperCase() + slug.slice(1) };
+            return (
+              <span key={slug} className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-display tracking-wider uppercase bg-pf-brass/15 border border-pf-brass/40 text-pf-bone">
+                {skill.name}
+                <span className="text-[8px] text-pf-brass">auto</span>
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        {Array.from({ length: totalSlots }).map((_, idx) => {
+          const current = picks[idx] || '';
+          const isRec = current && recSkills.includes(current);
+          const available = skillSlugs.filter(s => s.slug === current || !taken.has(s.slug));
+          return (
+            <div key={idx} className="flex items-center gap-1.5">
+              <select
+                value={current}
+                onChange={e => setPick(idx, e.target.value)}
+                className="flex-1 bg-pf-bg-elev border border-pf-brass-dim/30 px-2 py-1 text-[11px] font-body text-pf-bone
+                           focus:border-pf-brass focus:outline-none transition-all"
+              >
+                <option value="">— Pick skill —</option>
+                {available.map(s => (
+                  <option key={s.slug} value={s.slug}>{s.name} ({s.ability})</option>
+                ))}
+              </select>
+              {isRec && <RecommendedBadge />}
+              {current && (
+                <button
+                  type="button"
+                  onClick={() => setPick(idx, '')}
+                  title="Clear slot"
+                  className="px-2 py-1 text-[10px] text-pf-stone hover:text-pf-bone border border-pf-brass-dim/30 hover:border-pf-brass"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {totalSlots === 0 && (
+          <p className="font-body text-[10px] text-pf-stone italic">
+            No bonus skills until Intelligence boosts are assigned in the Boosts step.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default StepClass;

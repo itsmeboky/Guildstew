@@ -9,16 +9,12 @@ import CornerBrackets from '../components/CornerBrackets.jsx';
 import ComplexityBadge from '../components/ComplexityBadge.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import MechanicRow from '../components/MechanicRow.jsx';
-import { BACKGROUNDS, BACKGROUND_DETAILS } from '../../data/index.js';
+import { BACKGROUNDS, BACKGROUND_DETAILS, LORES } from '../../data/index.js';
+import { getBackgroundTip } from '../../content/backgroundTips.js';
 import { STEPS } from '../../config/steps.js';
 
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-const firstSentence = (text) => {
-  if (!text) return '';
-  const trimmed = text.trim();
-  const idx = trimmed.search(/[.!?](\s|$)/);
-  return idx > -1 ? trimmed.slice(0, idx + 1) : trimmed;
-};
+const slugify = (s) => (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 const StepBackground = ({ data, update }) => {
   const selected = BACKGROUNDS.find(b => b.id === data.background) || BACKGROUNDS[0];
@@ -28,10 +24,10 @@ const StepBackground = ({ data, update }) => {
   }, []);
 
   const flavor = selected.desc || '';
-  // Until curated GM tips ship per background, fall back to the
-  // first sentence of the SRD description so the whisper panel
-  // never renders blank.
-  const gmWhisper = selected.tip || firstSentence(flavor);
+  // Curated tip per background slug; falls back to a generic framing
+  // line when a tip hasn't been written yet (better than echoing the
+  // first sentence of the SRD prose).
+  const helpfulTip = getBackgroundTip(slugify(selected.name));
   const trainedSkill = (selected.trainedSkills || [])[0];
   const grantedFeat = selected.grantedFeat || selected.feat;
 
@@ -63,8 +59,8 @@ const StepBackground = ({ data, update }) => {
             <p className="font-body text-sm text-pf-parchment italic leading-relaxed mb-4">{flavor}</p>
 
             <div className="mt-6">
-              <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-2">GM's Whisper</p>
-              <p className="font-body text-sm text-pf-parchment leading-relaxed italic">{gmWhisper}</p>
+              <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-2">Helpful Tip</p>
+              <p className="font-body text-sm text-pf-parchment leading-relaxed italic">{helpfulTip}</p>
             </div>
           </div>
 
@@ -74,6 +70,7 @@ const StepBackground = ({ data, update }) => {
             <div className="space-y-3 text-sm font-body">
               <MechanicRow label="Ability Boosts" value={(selected.boosts || []).map(cap).join(' · ')} />
               <MechanicRow label="Trained Skill" value={cap(trainedSkill)} highlight />
+              <LoreSkillRow selected={selected} data={data} update={update} />
               <MechanicRow label="Skill Feat" value={grantedFeat} highlight />
             </div>
           </div>
@@ -121,5 +118,61 @@ const StepBackground = ({ data, update }) => {
     </div>
   );
 };
+
+/**
+ * Lore subskill row. Some backgrounds grant a specific Lore (Acolyte →
+ * Scribing Lore); others let the player pick freely. When the
+ * background's `loreSubskill` is set, render a locked chip; when it's
+ * null, render a dropdown sourced from the static LORES list.
+ *
+ * Persists the chosen Lore as `data.backgroundLoreSubskill` (string).
+ * Auto-clears when the background changes — the locked chip path
+ * stamps the granted Lore back onto the field so downstream consumers
+ * (sheet rendering, Step-9 validator) read it uniformly.
+ */
+function LoreSkillRow({ selected, data, update }) {
+  const granted = selected?.loreSubskill;
+
+  React.useEffect(() => {
+    if (granted && data.backgroundLoreSubskill !== granted) {
+      update({ backgroundLoreSubskill: granted });
+    }
+    if (!granted && data.backgroundLoreSubskill && !LORES.includes(data.backgroundLoreSubskill)) {
+      // Background changed to one that doesn't grant the previously
+      // stored subskill — wipe it so the picker shows empty.
+      update({ backgroundLoreSubskill: '' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id, granted]);
+
+  if (granted) {
+    return (
+      <div className="flex items-center justify-between border-b border-pf-brass-dim/10 py-1">
+        <span className="text-pf-stone">Lore Skill</span>
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-display tracking-wider uppercase bg-pf-brass/15 border border-pf-brass/40 text-pf-bone">
+          {granted} Lore
+          <span className="text-[8px] text-pf-brass">auto</span>
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-pf-brass-dim/10 py-1">
+      <span className="text-pf-stone shrink-0">Lore Skill</span>
+      <select
+        value={data.backgroundLoreSubskill || ''}
+        onChange={e => update({ backgroundLoreSubskill: e.target.value })}
+        className="flex-1 max-w-[16rem] bg-pf-bg-elev border border-pf-brass-dim/30 px-2 py-1 text-[11px] font-body text-pf-bone
+                   focus:border-pf-brass focus:outline-none transition-all"
+      >
+        <option value="">— Pick a Lore subskill —</option>
+        {LORES.map(name => (
+          <option key={name} value={name}>{name} Lore</option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 export default StepBackground;
