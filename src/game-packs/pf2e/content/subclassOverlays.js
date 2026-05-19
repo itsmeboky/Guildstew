@@ -129,6 +129,46 @@ export const SUBCLASS_OVERLAYS = {
       notes: "Multiclass caster dedication available at 2nd level via the Eldritch Trickster archetype.",
     },
   },
+
+  // Cleric doctrines — ORC Player Core 1.
+  //
+  // Canonical Foundry filenames are `cloistered-cleric.json` and
+  // `warpriest.json`. We key these overlays by the short `cloistered`
+  // / `warpriest` stems that already exist as option ids in
+  // class-details.json so persisted characters keep resolving without
+  // a migration. The K.8 audit script accepts either.
+  cleric: {
+    cloistered: {
+      name: 'Cloistered Cleric',
+      slug: 'cloistered',
+      licenseSource: 'orc-pc1',
+      proficiencyDeltas: {
+        weapons: { simple: 'trained', favoredWeapon: 'trained' },
+        spellcasting: 'trained',
+      },
+      keyAbility: 'Wisdom',
+      spellTradition: 'divine',
+      spellPreparation: 'prepared',
+      grants: ['domain-initiate'],
+      notes: "Full spellcaster focus. Better spell progression and access to expert proficiency in spellcasting earlier.",
+    },
+    warpriest: {
+      name: 'Warpriest',
+      slug: 'warpriest',
+      licenseSource: 'orc-pc1',
+      proficiencyDeltas: {
+        weapons: { simple: 'trained', martial: 'trained', favoredWeapon: 'trained' },
+        armor:   { medium: 'trained' },
+        saves:   { fortitude: 'expert' },
+        spellcasting: 'trained',
+      },
+      keyAbility: 'Wisdom',
+      spellTradition: 'divine',
+      spellPreparation: 'prepared',
+      grants: ['domain-initiate', 'shield-block'],
+      notes: "Martial-leaning. Stronger Fortitude, medium armor, and martial weapons at the cost of slower spell-rank progression.",
+    },
+  },
 };
 
 /**
