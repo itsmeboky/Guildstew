@@ -14,7 +14,17 @@ import { getBackgroundTip } from '../../content/backgroundTips.js';
 import { STEPS } from '../../config/steps.js';
 
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-const slugify = (s) => (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+// Mirror of normalizeSlug in content/backgroundTips.js — the tip
+// lookup runs the input through its own normalizer too, so this is
+// defense-in-depth: if the import ever ships a name with stray
+// whitespace or underscores the lookup still resolves.
+const slugify = (s) => String(s || '')
+  .toLowerCase()
+  .trim()
+  .replace(/[\s_]+/g, '-')
+  .replace(/[^a-z0-9-]/g, '')
+  .replace(/-+/g, '-')
+  .replace(/^-|-$/g, '');
 
 const StepBackground = ({ data, update }) => {
   const selected = BACKGROUNDS.find(b => b.id === data.background) || BACKGROUNDS[0];
