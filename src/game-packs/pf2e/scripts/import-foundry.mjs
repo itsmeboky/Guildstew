@@ -241,19 +241,36 @@ function transformClass(item) {
   };
 }
 
+// Pull the granted Lore subskill out of the description prose. Returns
+// a label string ("Scribing", "Underworld", ...) when the background
+// grants a specific Lore, or `null` when the player picks freely
+// ("a Lore skill of your choice", "a Lore skill related to ..."). The
+// SRD source has no structured field for this, so we string-match.
+function extractLoreSubskill(rawDesc) {
+  if (!rawDesc) return null;
+  // Player-choice phrasing comes in two flavors — both surface as
+  // "a Lore skill" in the prose.
+  if (/\ba\s+Lore\s+skill\b/i.test(rawDesc)) return null;
+  // Specific "X Lore" — up to 4 capitalized words preceding "Lore".
+  const m = rawDesc.match(/\b([A-Z][\w-]+(?:\s+[A-Z][\w-]+){0,3})\s+Lore\b/);
+  return m ? m[1] : null;
+}
+
 function transformBackground(item) {
   const tier = publicationOK(item);
   if (!tier) return null;
   const sys = item.system;
+  const desc = getDesc(item, tier);
   return {
     id: item._id || item.slug,
     name: scrub(item.name),
     boosts: Object.values(sys.boosts || {}).flatMap(b => b.value || []),
     trainedSkills: sys.trainedSkills?.value || [],
     loreSkill: sys.loreSkill,
+    loreSubskill: extractLoreSubskill(desc),
     grantedFeat: sys.items ? Object.values(sys.items).find(i => i.uuid?.includes('feat'))?.name : null,
     rarity: sys.traits?.rarity || 'common',
-    desc: getDesc(item, tier),
+    desc,
     source: sys.publication?.title,
     tier,
   };
