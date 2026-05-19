@@ -1,6 +1,8 @@
 [
   {
-    "id": "CAjQrHZZbALE7Qjy",
+    "id": "acolyte",
+    "slug": "acolyte",
+    "foundryId": "CAjQrHZZbALE7Qjy",
     "name": "Acolyte",
     "boosts": [
       "int",
@@ -23,7 +25,9 @@
     "tier": "tier1"
   },
   {
-    "id": "IFHYbU6Nu8BiTsRa",
+    "id": "acrobat",
+    "slug": "acrobat",
+    "foundryId": "IFHYbU6Nu8BiTsRa",
     "name": "Acrobat",
     "boosts": [
       "dex",
@@ -46,7 +50,9 @@
     "tier": "tier1"
   },
   {
-    "id": "PutqlPJTPUBkMmSn",
+    "id": "aeronaut",
+    "slug": "aeronaut",
+    "foundryId": "PutqlPJTPUBkMmSn",
     "name": "Aeronaut",
     "boosts": [
       "dex",
@@ -68,7 +74,9 @@
     "tier": "tier2"
   },
   {
-    "id": "fyKPDYFeIrgzADJB",
+    "id": "alkenstar-outlaw",
+    "slug": "alkenstar-outlaw",
+    "foundryId": "fyKPDYFeIrgzADJB",
     "name": "Alkenstar Outlaw",
     "boosts": [
       "con",
@@ -91,7 +99,9 @@
     "tier": "tier2"
   },
   {
-    "id": "Yuwr2pT3z3WYTX9T",
+    "id": "alkenstar-sojourner",
+    "slug": "alkenstar-sojourner",
+    "foundryId": "Yuwr2pT3z3WYTX9T",
     "name": "Alkenstar Sojourner",
     "boosts": [
       "cha",
@@ -114,7 +124,9 @@
     "tier": "tier2"
   },
   {
-    "id": "zwjoAOGkT44MmDKT",
+    "id": "alloysmith",
+    "slug": "alloysmith",
+    "foundryId": "zwjoAOGkT44MmDKT",
     "name": "Alloysmith",
     "boosts": [
       "int",
@@ -136,7 +148,9 @@
     "tier": "tier2"
   },
   {
-    "id": "0ZfBP7Tp2P3WN7Dp",
+    "id": "amnesiac",
+    "slug": "amnesiac",
+    "foundryId": "0ZfBP7Tp2P3WN7Dp",
     "name": "Amnesiac",
     "boosts": [
       "cha",
@@ -166,7 +180,9 @@
     "tier": "tier1"
   },
   {
-    "id": "5RGLAPi5sLykRcmm",
+    "id": "animal-whisperer",
+    "slug": "animal-whisperer",
+    "foundryId": "5RGLAPi5sLykRcmm",
     "name": "Animal Whisperer",
     "boosts": [
       "cha",
@@ -189,7 +205,9 @@
     "tier": "tier1"
   },
   {
-    "id": "MgiZ25JdT6O3fLbO",
+    "id": "anti-tech-activist",
+    "slug": "anti-tech-activist",
+    "foundryId": "MgiZ25JdT6O3fLbO",
     "name": "Anti-Tech Activist",
     "boosts": [
       "cha",
@@ -212,7 +230,9 @@
     "tier": "tier2"
   },
   {
-    "id": "3Ax5uJqoRPnBQyQy",
+    "id": "arcane-revolutionary",
+    "slug": "arcane-revolutionary",
+    "foundryId": "3Ax5uJqoRPnBQyQy",
     "name": "Arcane Revolutionary",
     "boosts": [
       "dex",
@@ -235,7 +255,9 @@
     "tier": "tier2"
   },
   {
-    "id": "6irgRkKZ8tRZzLvs",
+    "id": "artisan",
+    "slug": "artisan",
+    "foundryId": "6irgRkKZ8tRZzLvs",
     "name": "Artisan",
     "boosts": [
       "int",
@@ -258,7 +280,9 @@
     "tier": "tier1"
   },
   {
-    "id": "y9OyNsxGfmjqdcP0",
+    "id": "artist",
+    "slug": "artist",
+    "foundryId": "y9OyNsxGfmjqdcP0",
     "name": "Artist",
     "boosts": [
       "cha",
@@ -281,7 +305,9 @@
     "tier": "tier1"
   },
   {
-    "id": "3YQ1Wcjzk8ftoyo7",
+    "id": "astrologer",
+    "slug": "astrologer",
+    "foundryId": "3YQ1Wcjzk8ftoyo7",
     "name": "Astrologer",
     "boosts": [
       "int",
@@ -304,7 +330,9 @@
     "tier": "tier1"
   },
   {
-    "id": "0wzTmGUb8yvzMrO0",
+    "id": "back-alley-doctor",
+    "slug": "back-alley-doctor",
+    "foundryId": "0wzTmGUb8yvzMrO0",
     "name": "Back-Alley Doctor",
     "boosts": [
       "con",
@@ -327,7 +355,9 @@
     "tier": "tier2"
   },
   {
-    "id": "6abqATPjYoF946LD",
+    "id": "bandit",
+    "slug": "bandit",
+    "foundryId": "6abqATPjYoF946LD",
     "name": "Bandit",
     "boosts": [
       "cha",
@@ -350,7 +380,9 @@
     "tier": "tier1"
   },
   {
-    "id": "wudDO9OEsRjJsqhU",
+    "id": "barber",
+    "slug": "barber",
+    "foundryId": "wudDO9OEsRjJsqhU",
     "name": "Barber",
     "boosts": [
       "dex",
@@ -373,7 +405,9 @@
     "tier": "tier1"
   },
   {
-    "id": "a8BmnIIUR7AYog5B",
+    "id": "barkeep",
+    "slug": "barkeep",
+    "foundryId": "a8BmnIIUR7AYog5B",
     "name": "Barkeep",
     "boosts": [
       "cha",
@@ -396,7 +430,9 @@
     "tier": "tier1"
   },
   {
-    "id": "Phvnfdmz4bB7jrI3",
+    "id": "barrister",
+    "slug": "barrister",
+    "foundryId": "Phvnfdmz4bB7jrI3",
     "name": "Barrister",
     "boosts": [
       "cha",
@@ -419,7 +455,9 @@
     "tier": "tier1"
   },
   {
-    "id": "P77k0P5em9Yvm9bk",
+    "id": "battle-mechanic",
+    "slug": "battle-mechanic",
+    "foundryId": "P77k0P5em9Yvm9bk",
     "name": "Battle Mechanic",
     "boosts": [
       "int",
@@ -442,7 +480,9 @@
     "tier": "tier2"
   },
   {
-    "id": "Szv9uCC6bLf814Uc",
+    "id": "battlefield-scrounger",
+    "slug": "battlefield-scrounger",
+    "foundryId": "Szv9uCC6bLf814Uc",
     "name": "Battlefield Scrounger",
     "boosts": [
       "int",
@@ -465,7 +505,9 @@
     "tier": "tier2"
   },
   {
-    "id": "9pK15dQJVypSCjzO",
+    "id": "blessed",
+    "slug": "blessed",
+    "foundryId": "9pK15dQJVypSCjzO",
     "name": "Blessed",
     "boosts": [
       "cha",
@@ -485,7 +527,9 @@
     "tier": "tier1"
   },
   {
-    "id": "o1lhSKOpKPamTITI",
+    "id": "bookkeeper",
+    "slug": "bookkeeper",
+    "foundryId": "o1lhSKOpKPamTITI",
     "name": "Bookkeeper",
     "boosts": [
       "int",
@@ -508,7 +552,9 @@
     "tier": "tier1"
   },
   {
-    "id": "a9Q4iIiAZryVWN27",
+    "id": "bounty-hunter",
+    "slug": "bounty-hunter",
+    "foundryId": "a9Q4iIiAZryVWN27",
     "name": "Bounty Hunter",
     "boosts": [
       "str",
@@ -531,7 +577,9 @@
     "tier": "tier1"
   },
   {
-    "id": "8CLTXqyjdzEMKnZC",
+    "id": "cannoneer",
+    "slug": "cannoneer",
+    "foundryId": "8CLTXqyjdzEMKnZC",
     "name": "Cannoneer",
     "boosts": [
       "dex",
@@ -554,7 +602,9 @@
     "tier": "tier2"
   },
   {
-    "id": "t0t1ck8iKpaI4o5W",
+    "id": "charlatan",
+    "slug": "charlatan",
+    "foundryId": "t0t1ck8iKpaI4o5W",
     "name": "Charlatan",
     "boosts": [
       "cha",
@@ -577,7 +627,9 @@
     "tier": "tier1"
   },
   {
-    "id": "0FgYkkKv9u8zxWiO",
+    "id": "child-of-the-twin-village",
+    "slug": "child-of-the-twin-village",
+    "foundryId": "0FgYkkKv9u8zxWiO",
     "name": "Child of the Twin Village",
     "boosts": [
       "cha",
@@ -599,7 +651,9 @@
     "tier": "tier2"
   },
   {
-    "id": "2TImvKwcFLDVhzUC",
+    "id": "circuit-judge",
+    "slug": "circuit-judge",
+    "foundryId": "2TImvKwcFLDVhzUC",
     "name": "Circuit Judge",
     "boosts": [
       "int",
@@ -622,7 +676,9 @@
     "tier": "tier2"
   },
   {
-    "id": "dSYel8ABTevOc5YA",
+    "id": "clockfighter",
+    "slug": "clockfighter",
+    "foundryId": "dSYel8ABTevOc5YA",
     "name": "Clockfighter",
     "boosts": [
       "cha",
@@ -645,7 +701,9 @@
     "tier": "tier2"
   },
   {
-    "id": "xKEQvxDMHWRUkL6i",
+    "id": "clockwork-researcher",
+    "slug": "clockwork-researcher",
+    "foundryId": "xKEQvxDMHWRUkL6i",
     "name": "Clockwork Researcher",
     "boosts": [
       "dex",
@@ -668,7 +726,9 @@
     "tier": "tier2"
   },
   {
-    "id": "4XpWgGejwb2L6WpK",
+    "id": "codebreaker",
+    "slug": "codebreaker",
+    "foundryId": "4XpWgGejwb2L6WpK",
     "name": "Codebreaker",
     "boosts": [
       "int",
@@ -691,7 +751,9 @@
     "tier": "tier2"
   },
   {
-    "id": "hdvllwAIooBX2Fib",
+    "id": "combat-carpenter",
+    "slug": "combat-carpenter",
+    "foundryId": "hdvllwAIooBX2Fib",
     "name": "Combat Carpenter",
     "boosts": [
       "dex",
@@ -714,7 +776,9 @@
     "tier": "tier2"
   },
   {
-    "id": "SAm5AeDB2AjjMnDK",
+    "id": "combat-chaplain",
+    "slug": "combat-chaplain",
+    "foundryId": "SAm5AeDB2AjjMnDK",
     "name": "Combat Chaplain",
     "boosts": [
       "cha",
@@ -737,7 +801,9 @@
     "tier": "tier2"
   },
   {
-    "id": "biCstJF0OGvC5NKW",
+    "id": "concordance-researcher",
+    "slug": "concordance-researcher",
+    "foundryId": "biCstJF0OGvC5NKW",
     "name": "Concordance Researcher",
     "boosts": [
       "int",
@@ -757,7 +823,9 @@
     "tier": "tier2"
   },
   {
-    "id": "idFSq3DYBRomYmZt",
+    "id": "concordance-scout",
+    "slug": "concordance-scout",
+    "foundryId": "idFSq3DYBRomYmZt",
     "name": "Concordance Scout",
     "boosts": [
       "cha",
@@ -780,7 +848,9 @@
     "tier": "tier2"
   },
   {
-    "id": "Asg9Edqh95eSZBE9",
+    "id": "conscript",
+    "slug": "conscript",
+    "foundryId": "Asg9Edqh95eSZBE9",
     "name": "Conscript",
     "boosts": [
       "con",
@@ -803,7 +873,9 @@
     "tier": "tier2"
   },
   {
-    "id": "3gN09dOT2hMwGcK2",
+    "id": "cook",
+    "slug": "cook",
+    "foundryId": "3gN09dOT2hMwGcK2",
     "name": "Cook",
     "boosts": [
       "con",
@@ -826,7 +898,9 @@
     "tier": "tier1"
   },
   {
-    "id": "DBxOUwM7qhGH8MrF",
+    "id": "courier",
+    "slug": "courier",
+    "foundryId": "DBxOUwM7qhGH8MrF",
     "name": "Courier",
     "boosts": [
       "dex",
@@ -849,7 +923,9 @@
     "tier": "tier1"
   },
   {
-    "id": "9lVw1JGl5ser6626",
+    "id": "criminal",
+    "slug": "criminal",
+    "foundryId": "9lVw1JGl5ser6626",
     "name": "Criminal",
     "boosts": [
       "dex",
@@ -872,7 +948,9 @@
     "tier": "tier1"
   },
   {
-    "id": "44T9XsTcTbmMhtc1",
+    "id": "crystal-healer",
+    "slug": "crystal-healer",
+    "foundryId": "44T9XsTcTbmMhtc1",
     "name": "Crystal Healer",
     "boosts": [
       "cha",
@@ -895,7 +973,9 @@
     "tier": "tier2"
   },
   {
-    "id": "fuTLDmihr9Z9e5wa",
+    "id": "cultist",
+    "slug": "cultist",
+    "foundryId": "fuTLDmihr9Z9e5wa",
     "name": "Cultist",
     "boosts": [
       "cha",
@@ -918,7 +998,9 @@
     "tier": "tier1"
   },
   {
-    "id": "j2G71vQahw1DiWpO",
+    "id": "cursed",
+    "slug": "cursed",
+    "foundryId": "j2G71vQahw1DiWpO",
     "name": "Cursed",
     "boosts": [
       "cha",
@@ -940,7 +1022,9 @@
     "tier": "tier1"
   },
   {
-    "id": "tGtrad5lJzXPZCx6",
+    "id": "deep-sea-diver",
+    "slug": "deep-sea-diver",
+    "foundryId": "tGtrad5lJzXPZCx6",
     "name": "Deep-Sea Diver",
     "boosts": [
       "str",
@@ -963,7 +1047,9 @@
     "tier": "tier2"
   },
   {
-    "id": "29mBzKZ7TRm2TizG",
+    "id": "dendrologist",
+    "slug": "dendrologist",
+    "foundryId": "29mBzKZ7TRm2TizG",
     "name": "Dendrologist",
     "boosts": [
       "int",
@@ -986,7 +1072,9 @@
     "tier": "tier2"
   },
   {
-    "id": "KC5oI1bs6Wx8h91u",
+    "id": "deputy",
+    "slug": "deputy",
+    "foundryId": "KC5oI1bs6Wx8h91u",
     "name": "Deputy",
     "boosts": [
       "dex",
@@ -1009,7 +1097,9 @@
     "tier": "tier2"
   },
   {
-    "id": "dVRDDjT4FOu6uLDR",
+    "id": "detective",
+    "slug": "detective",
+    "foundryId": "dVRDDjT4FOu6uLDR",
     "name": "Detective",
     "boosts": [
       "int",
@@ -1032,7 +1122,9 @@
     "tier": "tier1"
   },
   {
-    "id": "7fCZTzmv5I2dI4sr",
+    "id": "discarded-duplicate",
+    "slug": "discarded-duplicate",
+    "foundryId": "7fCZTzmv5I2dI4sr",
     "name": "Discarded Duplicate",
     "boosts": [
       "cha",
@@ -1062,7 +1154,9 @@
     "tier": "tier2"
   },
   {
-    "id": "V9VsomfjbPQNfaSL",
+    "id": "disciple-of-the-gear",
+    "slug": "disciple-of-the-gear",
+    "foundryId": "V9VsomfjbPQNfaSL",
     "name": "Disciple of the Gear",
     "boosts": [
       "int",
@@ -1085,7 +1179,9 @@
     "tier": "tier2"
   },
   {
-    "id": "kmhZZgR7KlBzRBX0",
+    "id": "driver",
+    "slug": "driver",
+    "foundryId": "kmhZZgR7KlBzRBX0",
     "name": "Driver",
     "boosts": [
       "dex",
@@ -1108,7 +1204,9 @@
     "tier": "tier2"
   },
   {
-    "id": "YGJzgmHNqw9C72Kb",
+    "id": "elementally-infused",
+    "slug": "elementally-infused",
+    "foundryId": "YGJzgmHNqw9C72Kb",
     "name": "Elementally Infused",
     "boosts": [
       "cha",
@@ -1128,7 +1226,9 @@
     "tier": "tier2"
   },
   {
-    "id": "3WPo7m6rJQh9L7MN",
+    "id": "emissary",
+    "slug": "emissary",
+    "foundryId": "3WPo7m6rJQh9L7MN",
     "name": "Emissary",
     "boosts": [
       "cha",
@@ -1151,7 +1251,9 @@
     "tier": "tier1"
   },
   {
-    "id": "i4hN6OYv8qmi3GLW",
+    "id": "entertainer",
+    "slug": "entertainer",
+    "foundryId": "i4hN6OYv8qmi3GLW",
     "name": "Entertainer",
     "boosts": [
       "cha",
@@ -1174,7 +1276,9 @@
     "tier": "tier1"
   },
   {
-    "id": "SOmJyAtPOokesZoe",
+    "id": "farmhand",
+    "slug": "farmhand",
+    "foundryId": "SOmJyAtPOokesZoe",
     "name": "Farmhand",
     "boosts": [
       "con",
@@ -1196,7 +1300,9 @@
     "tier": "tier1"
   },
   {
-    "id": "mcL4WLO2yxBGlvuG",
+    "id": "farmsteader",
+    "slug": "farmsteader",
+    "foundryId": "mcL4WLO2yxBGlvuG",
     "name": "Farmsteader",
     "boosts": [
       "con",
@@ -1219,7 +1325,9 @@
     "tier": "tier2"
   },
   {
-    "id": "Q2brdDtEoI3cmpuD",
+    "id": "feral-child",
+    "slug": "feral-child",
+    "foundryId": "Q2brdDtEoI3cmpuD",
     "name": "Feral Child",
     "boosts": [
       "con",
@@ -1238,7 +1346,9 @@
     "tier": "tier1"
   },
   {
-    "id": "ppBGlWl0UkBKkJgE",
+    "id": "feybound",
+    "slug": "feybound",
+    "foundryId": "ppBGlWl0UkBKkJgE",
     "name": "Feybound",
     "boosts": [
       "cha",
@@ -1258,7 +1368,9 @@
     "tier": "tier1"
   },
   {
-    "id": "FKHut73XDUGTnKkP",
+    "id": "field-medic",
+    "slug": "field-medic",
+    "foundryId": "FKHut73XDUGTnKkP",
     "name": "Field Medic",
     "boosts": [
       "con",
@@ -1281,7 +1393,9 @@
     "tier": "tier1"
   },
   {
-    "id": "QGji0lMUo6to2h2k",
+    "id": "fire-warden",
+    "slug": "fire-warden",
+    "foundryId": "QGji0lMUo6to2h2k",
     "name": "Fire Warden",
     "boosts": [
       "con",
@@ -1304,7 +1418,9 @@
     "tier": "tier2"
   },
   {
-    "id": "2lk5NOcu1aUglUdK",
+    "id": "fireworks-performer",
+    "slug": "fireworks-performer",
+    "foundryId": "2lk5NOcu1aUglUdK",
     "name": "Fireworks Performer",
     "boosts": [
       "cha",
@@ -1327,7 +1443,9 @@
     "tier": "tier2"
   },
   {
-    "id": "3frMfODIYFeqTl2k",
+    "id": "fortune-teller",
+    "slug": "fortune-teller",
+    "foundryId": "3frMfODIYFeqTl2k",
     "name": "Fortune Teller",
     "boosts": [
       "cha",
@@ -1350,7 +1468,9 @@
     "tier": "tier1"
   },
   {
-    "id": "89LEOv97ZwsjnhNx",
+    "id": "gambler",
+    "slug": "gambler",
+    "foundryId": "89LEOv97ZwsjnhNx",
     "name": "Gambler",
     "boosts": [
       "cha",
@@ -1373,7 +1493,9 @@
     "tier": "tier1"
   },
   {
-    "id": "88WyCqU5x1eJ0MK2",
+    "id": "gladiator",
+    "slug": "gladiator",
+    "foundryId": "88WyCqU5x1eJ0MK2",
     "name": "Gladiator",
     "boosts": [
       "cha",
@@ -1396,7 +1518,9 @@
     "tier": "tier1"
   },
   {
-    "id": "B6kNrX1y8XNbQYea",
+    "id": "goldhand-arms-dealer",
+    "slug": "goldhand-arms-dealer",
+    "foundryId": "B6kNrX1y8XNbQYea",
     "name": "Goldhand Arms Dealer",
     "boosts": [
       "cha",
@@ -1419,7 +1543,9 @@
     "tier": "tier2"
   },
   {
-    "id": "6UmhTxOQeqFnppxx",
+    "id": "guard",
+    "slug": "guard",
+    "foundryId": "6UmhTxOQeqFnppxx",
     "name": "Guard",
     "boosts": [
       "cha",
@@ -1442,7 +1568,9 @@
     "tier": "tier1"
   },
   {
-    "id": "5dezuNcZJ6wfecnG",
+    "id": "gunsmith",
+    "slug": "gunsmith",
+    "foundryId": "5dezuNcZJ6wfecnG",
     "name": "Gunsmith",
     "boosts": [
       "dex",
@@ -1465,7 +1593,9 @@
     "tier": "tier2"
   },
   {
-    "id": "pGOlKz4Krnh7MyUM",
+    "id": "haunted",
+    "slug": "haunted",
+    "foundryId": "pGOlKz4Krnh7MyUM",
     "name": "Haunted",
     "boosts": [
       "cha",
@@ -1487,7 +1617,9 @@
     "tier": "tier1"
   },
   {
-    "id": "ZdhPKEY9FfaOS8Wy",
+    "id": "herbalist",
+    "slug": "herbalist",
+    "foundryId": "ZdhPKEY9FfaOS8Wy",
     "name": "Herbalist",
     "boosts": [
       "con",
@@ -1510,7 +1642,9 @@
     "tier": "tier1"
   },
   {
-    "id": "b3UC18ueX8m9Ov0W",
+    "id": "hermit",
+    "slug": "hermit",
+    "foundryId": "b3UC18ueX8m9Ov0W",
     "name": "Hermit",
     "boosts": [
       "con",
@@ -1531,7 +1665,9 @@
     "tier": "tier1"
   },
   {
-    "id": "1M91pTjatEejBjEl",
+    "id": "hired-killer",
+    "slug": "hired-killer",
+    "foundryId": "1M91pTjatEejBjEl",
     "name": "Hired Killer",
     "boosts": [
       "dex",
@@ -1554,7 +1690,9 @@
     "tier": "tier2"
   },
   {
-    "id": "T537wo3aem8GvnmR",
+    "id": "hounded-thief",
+    "slug": "hounded-thief",
+    "foundryId": "T537wo3aem8GvnmR",
     "name": "Hounded Thief",
     "boosts": [
       "dex",
@@ -1577,7 +1715,9 @@
     "tier": "tier2"
   },
   {
-    "id": "5Z3cLEpsx9nHVwhM",
+    "id": "hunter",
+    "slug": "hunter",
+    "foundryId": "5Z3cLEpsx9nHVwhM",
     "name": "Hunter",
     "boosts": [
       "dex",
@@ -1600,7 +1740,9 @@
     "tier": "tier1"
   },
   {
-    "id": "HdnmIaLadhRfZq8X",
+    "id": "insurgent",
+    "slug": "insurgent",
+    "foundryId": "HdnmIaLadhRfZq8X",
     "name": "Insurgent",
     "boosts": [
       "str",
@@ -1623,7 +1765,9 @@
     "tier": "tier1"
   },
   {
-    "id": "HSNUDvPgO1NESW7S",
+    "id": "junk-collector",
+    "slug": "junk-collector",
+    "foundryId": "HSNUDvPgO1NESW7S",
     "name": "Junk Collector",
     "boosts": [
       "dex",
@@ -1646,7 +1790,9 @@
     "tier": "tier2"
   },
   {
-    "id": "vTyG1bQkEENZHroY",
+    "id": "junker",
+    "slug": "junker",
+    "foundryId": "vTyG1bQkEENZHroY",
     "name": "Junker",
     "boosts": [
       "str",
@@ -1669,7 +1815,9 @@
     "tier": "tier2"
   },
   {
-    "id": "2bzqI0D4J3LUi8nq",
+    "id": "laborer",
+    "slug": "laborer",
+    "foundryId": "2bzqI0D4J3LUi8nq",
     "name": "Laborer",
     "boosts": [
       "con",
@@ -1692,7 +1840,9 @@
     "tier": "tier1"
   },
   {
-    "id": "lX5KDS2hU5LihZRs",
+    "id": "martial-disciple",
+    "slug": "martial-disciple",
+    "foundryId": "lX5KDS2hU5LihZRs",
     "name": "Martial Disciple",
     "boosts": [
       "dex",
@@ -1712,7 +1862,9 @@
     "tier": "tier1"
   },
   {
-    "id": "ZQuUl50C2x6evtGJ",
+    "id": "martial-musician",
+    "slug": "martial-musician",
+    "foundryId": "ZQuUl50C2x6evtGJ",
     "name": "Martial Musician",
     "boosts": [
       "cha",
@@ -1735,7 +1887,9 @@
     "tier": "tier2"
   },
   {
-    "id": "cODrdTvko4Om26ik",
+    "id": "mechanic",
+    "slug": "mechanic",
+    "foundryId": "cODrdTvko4Om26ik",
     "name": "Mechanic",
     "boosts": [
       "int",
@@ -1758,7 +1912,9 @@
     "tier": "tier2"
   },
   {
-    "id": "wGB222d5UIBGYWsK",
+    "id": "mechanical-symbiosis",
+    "slug": "mechanical-symbiosis",
+    "foundryId": "wGB222d5UIBGYWsK",
     "name": "Mechanical Symbiosis",
     "boosts": [
       "int",
@@ -1780,7 +1936,9 @@
     "tier": "tier2"
   },
   {
-    "id": "x3fFxtLogoy5hZfe",
+    "id": "medicinal-clocksmith",
+    "slug": "medicinal-clocksmith",
+    "foundryId": "x3fFxtLogoy5hZfe",
     "name": "Medicinal Clocksmith",
     "boosts": [
       "int",
@@ -1803,7 +1961,9 @@
     "tier": "tier2"
   },
   {
-    "id": "KMv7ollLVaZ81XDV",
+    "id": "merchant",
+    "slug": "merchant",
+    "foundryId": "KMv7ollLVaZ81XDV",
     "name": "Merchant",
     "boosts": [
       "cha",
@@ -1826,7 +1986,9 @@
     "tier": "tier1"
   },
   {
-    "id": "bCJ9p3P5uJDAtaUI",
+    "id": "miner",
+    "slug": "miner",
+    "foundryId": "bCJ9p3P5uJDAtaUI",
     "name": "Miner",
     "boosts": [
       "str",
@@ -1849,7 +2011,9 @@
     "tier": "tier1"
   },
   {
-    "id": "Yu7Cl0Lk94LdPRi6",
+    "id": "noble",
+    "slug": "noble",
+    "foundryId": "Yu7Cl0Lk94LdPRi6",
     "name": "Noble",
     "boosts": [
       "cha",
@@ -1872,7 +2036,9 @@
     "tier": "tier1"
   },
   {
-    "id": "8UXahQfkP9GZ1TNW",
+    "id": "nomad",
+    "slug": "nomad",
+    "foundryId": "8UXahQfkP9GZ1TNW",
     "name": "Nomad",
     "boosts": [
       "con",
@@ -1894,7 +2060,9 @@
     "tier": "tier1"
   },
   {
-    "id": "d5fKB0ZMJQkwDF5p",
+    "id": "otherworldly-mission",
+    "slug": "otherworldly-mission",
+    "foundryId": "d5fKB0ZMJQkwDF5p",
     "name": "Otherworldly Mission",
     "boosts": [
       "cha",
@@ -1916,7 +2084,9 @@
     "tier": "tier2"
   },
   {
-    "id": "dAvFZ5QmbAHgXcNp",
+    "id": "outrider",
+    "slug": "outrider",
+    "foundryId": "dAvFZ5QmbAHgXcNp",
     "name": "Outrider",
     "boosts": [
       "con",
@@ -1939,7 +2109,9 @@
     "tier": "tier1"
   },
   {
-    "id": "r9fzNQEz33HyKTxm",
+    "id": "pilgrim",
+    "slug": "pilgrim",
+    "foundryId": "r9fzNQEz33HyKTxm",
     "name": "Pilgrim",
     "boosts": [
       "cha",
@@ -1962,7 +2134,9 @@
     "tier": "tier1"
   },
   {
-    "id": "jvegfAMdri6J2VzZ",
+    "id": "plague-doctor",
+    "slug": "plague-doctor",
+    "foundryId": "jvegfAMdri6J2VzZ",
     "name": "Plague Doctor",
     "boosts": [
       "con",
@@ -1985,7 +2159,9 @@
     "tier": "tier2"
   },
   {
-    "id": "2sRZ6OsvHIpwGCAg",
+    "id": "planar-migrant",
+    "slug": "planar-migrant",
+    "foundryId": "2sRZ6OsvHIpwGCAg",
     "name": "Planar Migrant",
     "boosts": [
       "con",
@@ -2008,7 +2184,9 @@
     "tier": "tier2"
   },
   {
-    "id": "M8EfhY6Knb2iQm6S",
+    "id": "press-ganged-gg",
+    "slug": "press-ganged-gg",
+    "foundryId": "M8EfhY6Knb2iQm6S",
     "name": "Press-Ganged (G&G)",
     "boosts": [
       "con",
@@ -2031,7 +2209,9 @@
     "tier": "tier2"
   },
   {
-    "id": "qJNmSgzq0ae29qCC",
+    "id": "printer",
+    "slug": "printer",
+    "foundryId": "qJNmSgzq0ae29qCC",
     "name": "Printer",
     "boosts": [
       "cha",
@@ -2054,7 +2234,9 @@
     "tier": "tier2"
   },
   {
-    "id": "apXTV7jJx6yJpj8D",
+    "id": "prisoner",
+    "slug": "prisoner",
+    "foundryId": "apXTV7jJx6yJpj8D",
     "name": "Prisoner",
     "boosts": [
       "con",
@@ -2077,7 +2259,9 @@
     "tier": "tier1"
   },
   {
-    "id": "wrNTaSFFTxznOZLF",
+    "id": "quartermaster",
+    "slug": "quartermaster",
+    "foundryId": "wrNTaSFFTxznOZLF",
     "name": "Quartermaster",
     "boosts": [
       "cha",
@@ -2100,7 +2284,9 @@
     "tier": "tier2"
   },
   {
-    "id": "RC4l6WsxPn89a1f8",
+    "id": "raised-by-belief",
+    "slug": "raised-by-belief",
+    "foundryId": "RC4l6WsxPn89a1f8",
     "name": "Raised by Belief",
     "boosts": [
       "cha",
@@ -2125,7 +2311,9 @@
     "tier": "tier1"
   },
   {
-    "id": "i28Z9JXhEvoc7BX5",
+    "id": "refugee-pc2",
+    "slug": "refugee-pc2",
+    "foundryId": "i28Z9JXhEvoc7BX5",
     "name": "Refugee (PC2)",
     "boosts": [
       "con",
@@ -2148,7 +2336,9 @@
     "tier": "tier1"
   },
   {
-    "id": "dQxmaPCHTor36bll",
+    "id": "report-runner",
+    "slug": "report-runner",
+    "foundryId": "dQxmaPCHTor36bll",
     "name": "Report Runner",
     "boosts": [
       "str",
@@ -2171,7 +2361,9 @@
     "tier": "tier2"
   },
   {
-    "id": "rzyRtasSTfHS3e0y",
+    "id": "returned",
+    "slug": "returned",
+    "foundryId": "rzyRtasSTfHS3e0y",
     "name": "Returned",
     "boosts": [
       "con",
@@ -2192,7 +2384,9 @@
     "tier": "tier1"
   },
   {
-    "id": "W6OIPZhjcV45gfoX",
+    "id": "revenant",
+    "slug": "revenant",
+    "foundryId": "W6OIPZhjcV45gfoX",
     "name": "Revenant",
     "boosts": [
       "cha",
@@ -2214,7 +2408,9 @@
     "tier": "tier2"
   },
   {
-    "id": "ns9BOvCyjdapYhI0",
+    "id": "root-worker",
+    "slug": "root-worker",
+    "foundryId": "ns9BOvCyjdapYhI0",
     "name": "Root Worker",
     "boosts": [
       "int",
@@ -2237,7 +2433,9 @@
     "tier": "tier1"
   },
   {
-    "id": "uC6D2nmDTATxXrV6",
+    "id": "royalty",
+    "slug": "royalty",
+    "foundryId": "uC6D2nmDTATxXrV6",
     "name": "Royalty",
     "boosts": [
       "cha",
@@ -2260,7 +2458,9 @@
     "tier": "tier1"
   },
   {
-    "id": "4Vc8uXVHonrasFnU",
+    "id": "saboteur",
+    "slug": "saboteur",
+    "foundryId": "4Vc8uXVHonrasFnU",
     "name": "Saboteur",
     "boosts": [
       "dex",
@@ -2283,7 +2483,9 @@
     "tier": "tier1"
   },
   {
-    "id": "Zmwyhsxe4i6rZN75",
+    "id": "sailor",
+    "slug": "sailor",
+    "foundryId": "Zmwyhsxe4i6rZN75",
     "name": "Sailor",
     "boosts": [
       "dex",
@@ -2306,7 +2508,9 @@
     "tier": "tier1"
   },
   {
-    "id": "4KCa67gyxUn60zdf",
+    "id": "saloon-entertainer",
+    "slug": "saloon-entertainer",
+    "foundryId": "4KCa67gyxUn60zdf",
     "name": "Saloon Entertainer",
     "boosts": [
       "cha",
@@ -2329,7 +2533,9 @@
     "tier": "tier2"
   },
   {
-    "id": "yZUzLCeuaIkNk4up",
+    "id": "saved-by-clockwork",
+    "slug": "saved-by-clockwork",
+    "foundryId": "yZUzLCeuaIkNk4up",
     "name": "Saved by Clockwork",
     "boosts": [
       "int",
@@ -2351,7 +2557,9 @@
     "tier": "tier2"
   },
   {
-    "id": "vHeP960qjhfob4Je",
+    "id": "scavenger",
+    "slug": "scavenger",
+    "foundryId": "vHeP960qjhfob4Je",
     "name": "Scavenger",
     "boosts": [
       "int",
@@ -2374,7 +2582,9 @@
     "tier": "tier1"
   },
   {
-    "id": "v0WPfxN6G8XFfFZT",
+    "id": "scholar",
+    "slug": "scholar",
+    "foundryId": "v0WPfxN6G8XFfFZT",
     "name": "Scholar",
     "boosts": [
       "int",
@@ -2394,7 +2604,9 @@
     "tier": "tier1"
   },
   {
-    "id": "o7RbsQbv5iLRvd8j",
+    "id": "scout",
+    "slug": "scout",
+    "foundryId": "o7RbsQbv5iLRvd8j",
     "name": "Scout",
     "boosts": [
       "dex",
@@ -2417,7 +2629,9 @@
     "tier": "tier1"
   },
   {
-    "id": "UdOUj7i8XGTI72Zc",
+    "id": "servant",
+    "slug": "servant",
+    "foundryId": "UdOUj7i8XGTI72Zc",
     "name": "Servant",
     "boosts": [
       "cha",
@@ -2440,7 +2654,9 @@
     "tier": "tier1"
   },
   {
-    "id": "AqhHif8mzYjlGMxJ",
+    "id": "sheriff",
+    "slug": "sheriff",
+    "foundryId": "AqhHif8mzYjlGMxJ",
     "name": "Sheriff",
     "boosts": [
       "cha",
@@ -2463,7 +2679,9 @@
     "tier": "tier2"
   },
   {
-    "id": "lMJYIXSh3NSJslmi",
+    "id": "sky-rider",
+    "slug": "sky-rider",
+    "foundryId": "lMJYIXSh3NSJslmi",
     "name": "Sky Rider",
     "boosts": [
       "dex",
@@ -2486,7 +2704,9 @@
     "tier": "tier2"
   },
   {
-    "id": "XcacLiaGDgjzHS3T",
+    "id": "spotter",
+    "slug": "spotter",
+    "foundryId": "XcacLiaGDgjzHS3T",
     "name": "Spotter",
     "boosts": [
       "dex",
@@ -2509,7 +2729,9 @@
     "tier": "tier2"
   },
   {
-    "id": "qbvzNG8hMjb8f66D",
+    "id": "squire",
+    "slug": "squire",
+    "foundryId": "qbvzNG8hMjb8f66D",
     "name": "Squire",
     "boosts": [
       "con",
@@ -2532,7 +2754,9 @@
     "tier": "tier1"
   },
   {
-    "id": "moVRsnpjB5THCwxE",
+    "id": "street-urchin",
+    "slug": "street-urchin",
+    "foundryId": "moVRsnpjB5THCwxE",
     "name": "Street Urchin",
     "boosts": [
       "con",
@@ -2555,7 +2779,9 @@
     "tier": "tier1"
   },
   {
-    "id": "uwZ0emSBFNMGA74j",
+    "id": "tall-tale",
+    "slug": "tall-tale",
+    "foundryId": "uwZ0emSBFNMGA74j",
     "name": "Tall Tale",
     "boosts": [
       "cha",
@@ -2578,7 +2804,9 @@
     "tier": "tier2"
   },
   {
-    "id": "ixluAGUDZciLEHtb",
+    "id": "tax-collector",
+    "slug": "tax-collector",
+    "foundryId": "ixluAGUDZciLEHtb",
     "name": "Tax Collector",
     "boosts": [
       "cha",
@@ -2601,7 +2829,9 @@
     "tier": "tier1"
   },
   {
-    "id": "WrKVeUQ6KeRCm9uH",
+    "id": "teacher",
+    "slug": "teacher",
+    "foundryId": "WrKVeUQ6KeRCm9uH",
     "name": "Teacher",
     "boosts": [
       "int",
@@ -2622,7 +2852,9 @@
     "tier": "tier1"
   },
   {
-    "id": "2FUdcPsXwoWT1bms",
+    "id": "tech-reliant",
+    "slug": "tech-reliant",
+    "foundryId": "2FUdcPsXwoWT1bms",
     "name": "Tech-Reliant",
     "boosts": [
       "con",
@@ -2646,7 +2878,9 @@
     "tier": "tier2"
   },
   {
-    "id": "i79pgNIAtJfkkOiw",
+    "id": "tinker",
+    "slug": "tinker",
+    "foundryId": "i79pgNIAtJfkkOiw",
     "name": "Tinker",
     "boosts": [
       "dex",
@@ -2669,7 +2903,9 @@
     "tier": "tier1"
   },
   {
-    "id": "Sj91CUyEUeWoPh2R",
+    "id": "toymaker",
+    "slug": "toymaker",
+    "foundryId": "Sj91CUyEUeWoPh2R",
     "name": "Toymaker",
     "boosts": [
       "cha",
@@ -2691,7 +2927,9 @@
     "tier": "tier2"
   },
   {
-    "id": "2Mm0BHMJZhqIqoQG",
+    "id": "undertaker",
+    "slug": "undertaker",
+    "foundryId": "2Mm0BHMJZhqIqoQG",
     "name": "Undertaker",
     "boosts": [
       "int",
@@ -2714,7 +2952,9 @@
     "tier": "tier2"
   },
   {
-    "id": "uS1T7SpCtT0lZxep",
+    "id": "veteran",
+    "slug": "veteran",
+    "foundryId": "uS1T7SpCtT0lZxep",
     "name": "Veteran",
     "boosts": [
       "con",
@@ -2737,7 +2977,9 @@
     "tier": "tier2"
   },
   {
-    "id": "UFHezf1LXUwcQIAQ",
+    "id": "wandering-preacher",
+    "slug": "wandering-preacher",
+    "foundryId": "UFHezf1LXUwcQIAQ",
     "name": "Wandering Preacher",
     "boosts": [
       "con",
@@ -2760,7 +3002,9 @@
     "tier": "tier2"
   },
   {
-    "id": "QQxXV2zHATLZ07rA",
+    "id": "war-orphan",
+    "slug": "war-orphan",
+    "foundryId": "QQxXV2zHATLZ07rA",
     "name": "War Orphan",
     "boosts": [
       "con",
@@ -2783,7 +3027,9 @@
     "tier": "tier2"
   },
   {
-    "id": "IXxdCzBS0xP20ckw",
+    "id": "ward",
+    "slug": "ward",
+    "foundryId": "IXxdCzBS0xP20ckw",
     "name": "Ward",
     "boosts": [
       "cha",
@@ -2806,7 +3052,9 @@
     "tier": "tier1"
   },
   {
-    "id": "r0kYIbN06Cv8eNG3",
+    "id": "warrior",
+    "slug": "warrior",
+    "foundryId": "r0kYIbN06Cv8eNG3",
     "name": "Warrior",
     "boosts": [
       "con",
@@ -2829,7 +3077,9 @@
     "tier": "tier1"
   },
   {
-    "id": "9l6q90sk8UM292CY",
+    "id": "waste-walker",
+    "slug": "waste-walker",
+    "foundryId": "9l6q90sk8UM292CY",
     "name": "Waste Walker",
     "boosts": [
       "str",
@@ -2852,7 +3102,9 @@
     "tier": "tier2"
   },
   {
-    "id": "O4xKRtHb21DCTvQ0",
+    "id": "wished-alive",
+    "slug": "wished-alive",
+    "foundryId": "O4xKRtHb21DCTvQ0",
     "name": "Wished Alive",
     "boosts": [
       "cha",

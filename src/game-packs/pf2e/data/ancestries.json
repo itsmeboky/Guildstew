@@ -1,6 +1,8 @@
 [
   {
     "id": "athamaru",
+    "slug": "athamaru",
+    "foundryId": "Cg1AMgp3zrGmimWd",
     "name": "Athamaru",
     "hp": 8,
     "size": "med",
@@ -39,7 +41,9 @@
     "tier": "tier2",
     "heritages": [
       {
-        "id": "4BczMv4EnLcgrEJE",
+        "id": "coral-athamaru",
+        "slug": "coral-athamaru",
+        "foundryId": "4BczMv4EnLcgrEJE",
         "name": "Coral Athamaru",
         "ancestrySlug": "athamaru",
         "traits": [],
@@ -48,7 +52,9 @@
         "tier": "tier2"
       },
       {
-        "id": "yEQSw61sNRvgPy4T",
+        "id": "hopeful-athamaru",
+        "slug": "hopeful-athamaru",
+        "foundryId": "yEQSw61sNRvgPy4T",
         "name": "Hopeful Athamaru",
         "ancestrySlug": "athamaru",
         "traits": [],
@@ -57,7 +63,9 @@
         "tier": "tier2"
       },
       {
-        "id": "1w4npGmPzgdZw3Na",
+        "id": "kaleidoscopic-athamaru",
+        "slug": "kaleidoscopic-athamaru",
+        "foundryId": "1w4npGmPzgdZw3Na",
         "name": "Kaleidoscopic Athamaru",
         "ancestrySlug": "athamaru",
         "traits": [],
@@ -66,7 +74,9 @@
         "tier": "tier2"
       },
       {
-        "id": "CkrTRdLfDDDUOCqP",
+        "id": "quilled-athamaru",
+        "slug": "quilled-athamaru",
+        "foundryId": "CkrTRdLfDDDUOCqP",
         "name": "Quilled Athamaru",
         "ancestrySlug": "athamaru",
         "traits": [],
@@ -78,6 +88,8 @@
   },
   {
     "id": "automaton",
+    "slug": "automaton",
+    "foundryId": "kYsBAJ103T44agJF",
     "name": "Automaton",
     "hp": 8,
     "size": "med",
@@ -118,7 +130,9 @@
     "tier": "tier2",
     "heritages": [
       {
-        "id": "2kMltxs2rmxRSxfV",
+        "id": "hunter-automaton",
+        "slug": "hunter-automaton",
+        "foundryId": "2kMltxs2rmxRSxfV",
         "name": "Hunter Automaton",
         "ancestrySlug": "automaton",
         "traits": [],
@@ -127,7 +141,9 @@
         "tier": "tier2"
       },
       {
-        "id": "J0eAmntxXywr9sGt",
+        "id": "mage-automaton",
+        "slug": "mage-automaton",
+        "foundryId": "J0eAmntxXywr9sGt",
         "name": "Mage Automaton",
         "ancestrySlug": "automaton",
         "traits": [],
@@ -136,7 +152,9 @@
         "tier": "tier2"
       },
       {
-        "id": "j1nzBc9Pui7vsJ9o",
+        "id": "sharpshooter-automaton",
+        "slug": "sharpshooter-automaton",
+        "foundryId": "j1nzBc9Pui7vsJ9o",
         "name": "Sharpshooter Automaton",
         "ancestrySlug": "automaton",
         "traits": [],
@@ -145,7 +163,9 @@
         "tier": "tier2"
       },
       {
-        "id": "y24ykEUfpIu5Gp6D",
+        "id": "warrior-automaton",
+        "slug": "warrior-automaton",
+        "foundryId": "y24ykEUfpIu5Gp6D",
         "name": "Warrior Automaton",
         "ancestrySlug": "automaton",
         "traits": [],
@@ -157,6 +177,8 @@
   },
   {
     "id": "awakened-animal",
+    "slug": "awakened-animal",
+    "foundryId": "GFOgV3MzWkYwJoJW",
     "name": "Awakened Animal",
     "hp": 6,
     "size": "med",
@@ -188,7 +210,9 @@
     "tier": "tier2",
     "heritages": [
       {
-        "id": "13vilUcBjqMV2gxP",
+        "id": "climbing-animal",
+        "slug": "climbing-animal",
+        "foundryId": "13vilUcBjqMV2gxP",
         "name": "Climbing Animal",
         "ancestrySlug": "awakened-animal",
         "traits": [],
@@ -197,7 +221,9 @@
         "tier": "tier2"
       },
       {
-        "id": "QZv2taQQAdeR8Vmg",
+        "id": "flying-animal",
+        "slug": "flying-animal",
+        "foundryId": "QZv2taQQAdeR8Vmg",
         "name": "Flying Animal",
         "ancestrySlug": "awakened-animal",
         "traits": [],
@@ -206,7 +232,9 @@
         "tier": "tier2"
       },
       {
-        "id": "bsXA1l5mxNnmBh5M",
+        "id": "running-animal",
+        "slug": "running-animal",
+        "foundryId": "bsXA1l5mxNnmBh5M",
         "name": "Running Animal",
         "ancestrySlug": "awakened-animal",
         "traits": [],
@@ -215,7 +243,9 @@
         "tier": "tier2"
       },
       {
-        "id": "nlhVoQDfLKYM3j1l",
+        "id": "swimming-animal",
+        "slug": "swimming-animal",
+        "foundryId": "nlhVoQDfLKYM3j1l",
         "name": "Swimming Animal",
         "ancestrySlug": "awakened-animal",
         "traits": [],
@@ -227,6 +257,8 @@
   },
   {
     "id": "catfolk",
+    "slug": "catfolk",
+    "foundryId": "972EkpJOPv9KkQIW",
     "name": "Catfolk",
     "hp": 8,
     "size": "med",
@@ -268,7 +300,9 @@
     "tier": "tier1",
     "heritages": [
       {
-        "id": "bLhIBwqdjTiVJ5qm",
+        "id": "clawed-catfolk",
+        "slug": "clawed-catfolk",
+        "foundryId": "bLhIBwqdjTiVJ5qm",
         "name": "Clawed Catfolk",
         "ancestrySlug": "catfolk",
         "traits": [],
@@ -277,7 +311,9 @@
         "tier": "tier1"
       },
       {
-        "id": "1lv7RMp7t5iqeUFT",
+        "id": "hunting-catfolk",
+        "slug": "hunting-catfolk",
+        "foundryId": "1lv7RMp7t5iqeUFT",
         "name": "Hunting Catfolk",
         "ancestrySlug": "catfolk",
         "traits": [],
@@ -286,7 +322,9 @@
         "tier": "tier1"
       },
       {
-        "id": "HpqQ5VQ0w4HqYgVC",
+        "id": "jungle-catfolk",
+        "slug": "jungle-catfolk",
+        "foundryId": "HpqQ5VQ0w4HqYgVC",
         "name": "Jungle Catfolk",
         "ancestrySlug": "catfolk",
         "traits": [],
@@ -295,7 +333,9 @@
         "tier": "tier1"
       },
       {
-        "id": "3F5ffk7cmnrBhPcT",
+        "id": "liminal-catfolk",
+        "slug": "liminal-catfolk",
+        "foundryId": "3F5ffk7cmnrBhPcT",
         "name": "Liminal Catfolk",
         "ancestrySlug": "catfolk",
         "traits": [],
@@ -304,7 +344,9 @@
         "tier": "tier1"
       },
       {
-        "id": "hOPOyyt7qZXYYCOU",
+        "id": "nine-lives-catfolk",
+        "slug": "nine-lives-catfolk",
+        "foundryId": "hOPOyyt7qZXYYCOU",
         "name": "Nine Lives Catfolk",
         "ancestrySlug": "catfolk",
         "traits": [],
@@ -313,7 +355,9 @@
         "tier": "tier1"
       },
       {
-        "id": "NWsZ0cIeghyzk9bU",
+        "id": "sharp-eared-catfolk",
+        "slug": "sharp-eared-catfolk",
+        "foundryId": "NWsZ0cIeghyzk9bU",
         "name": "Sharp-Eared Catfolk",
         "ancestrySlug": "catfolk",
         "traits": [],
@@ -322,7 +366,9 @@
         "tier": "tier1"
       },
       {
-        "id": "6dMd4JG0ndrObEUj",
+        "id": "winter-catfolk",
+        "slug": "winter-catfolk",
+        "foundryId": "6dMd4JG0ndrObEUj",
         "name": "Winter Catfolk",
         "ancestrySlug": "catfolk",
         "traits": [],
@@ -334,6 +380,8 @@
   },
   {
     "id": "centaur",
+    "slug": "centaur",
+    "foundryId": "pJkQlFTvpQ5GjZ5e",
     "name": "Centaur",
     "hp": 8,
     "size": "lg",
@@ -375,7 +423,9 @@
     "tier": "tier2",
     "heritages": [
       {
-        "id": "1FmcZqnmDm8H0DRB",
+        "id": "budding-speaker-centaur",
+        "slug": "budding-speaker-centaur",
+        "foundryId": "1FmcZqnmDm8H0DRB",
         "name": "Budding Speaker Centaur",
         "ancestrySlug": "centaur",
         "traits": [],
@@ -384,7 +434,9 @@
         "tier": "tier2"
       },
       {
-        "id": "z16zRyLCeTXan0Ae",
+        "id": "fleetwind-centaur",
+        "slug": "fleetwind-centaur",
+        "foundryId": "z16zRyLCeTXan0Ae",
         "name": "Fleetwind Centaur",
         "ancestrySlug": "centaur",
         "traits": [],
@@ -393,7 +445,9 @@
         "tier": "tier2"
       },
       {
-        "id": "XQp3uReCgoXS8hCJ",
+        "id": "ironhoof-centaur",
+        "slug": "ironhoof-centaur",
+        "foundryId": "XQp3uReCgoXS8hCJ",
         "name": "Ironhoof Centaur",
         "ancestrySlug": "centaur",
         "traits": [],
@@ -402,7 +456,9 @@
         "tier": "tier2"
       },
       {
-        "id": "3aKeX3q9hRdxgP1J",
+        "id": "mottle-coat-centaur",
+        "slug": "mottle-coat-centaur",
+        "foundryId": "3aKeX3q9hRdxgP1J",
         "name": "Mottle-Coat Centaur",
         "ancestrySlug": "centaur",
         "traits": [],
@@ -411,7 +467,9 @@
         "tier": "tier2"
       },
       {
-        "id": "2GmWdSNbH4yx9pzY",
+        "id": "ponygait-centaur",
+        "slug": "ponygait-centaur",
+        "foundryId": "2GmWdSNbH4yx9pzY",
         "name": "Ponygait Centaur",
         "ancestrySlug": "centaur",
         "traits": [],
@@ -420,7 +478,9 @@
         "tier": "tier2"
       },
       {
-        "id": "raDHBXYpc2MvWWgh",
+        "id": "stoutheart-centaur",
+        "slug": "stoutheart-centaur",
+        "foundryId": "raDHBXYpc2MvWWgh",
         "name": "Stoutheart Centaur",
         "ancestrySlug": "centaur",
         "traits": [],
@@ -432,6 +492,8 @@
   },
   {
     "id": "dwarf",
+    "slug": "dwarf",
+    "foundryId": "BYj5ZvlXZdpaEgA6",
     "name": "Dwarf",
     "hp": 10,
     "size": "med",
@@ -471,7 +533,9 @@
     "tier": "tier1",
     "heritages": [
       {
-        "id": "yL6944LrPo2HNdEJ",
+        "id": "ancient-blooded-dwarf",
+        "slug": "ancient-blooded-dwarf",
+        "foundryId": "yL6944LrPo2HNdEJ",
         "name": "Ancient-Blooded Dwarf",
         "ancestrySlug": "dwarf",
         "traits": [],
@@ -480,7 +544,9 @@
         "tier": "tier1"
       },
       {
-        "id": "VTtXwBxrfRUXSL38",
+        "id": "death-warden-dwarf",
+        "slug": "death-warden-dwarf",
+        "foundryId": "VTtXwBxrfRUXSL38",
         "name": "Death Warden Dwarf",
         "ancestrySlug": "dwarf",
         "traits": [],
@@ -489,7 +555,9 @@
         "tier": "tier1"
       },
       {
-        "id": "5CqsBKCZuGON53Hk",
+        "id": "forge-dwarf",
+        "slug": "forge-dwarf",
+        "foundryId": "5CqsBKCZuGON53Hk",
         "name": "Forge Dwarf",
         "ancestrySlug": "dwarf",
         "traits": [],
@@ -498,7 +566,9 @@
         "tier": "tier1"
       },
       {
-        "id": "VSyOvtgJ1ZNpIVgC",
+        "id": "rock-dwarf",
+        "slug": "rock-dwarf",
+        "foundryId": "VSyOvtgJ1ZNpIVgC",
         "name": "Rock Dwarf",
         "ancestrySlug": "dwarf",
         "traits": [],
@@ -507,7 +577,9 @@
         "tier": "tier1"
       },
       {
-        "id": "UV2sABrTC5teOXTE",
+        "id": "strong-blooded-dwarf",
+        "slug": "strong-blooded-dwarf",
+        "foundryId": "UV2sABrTC5teOXTE",
         "name": "Strong-Blooded Dwarf",
         "ancestrySlug": "dwarf",
         "traits": [],
@@ -519,6 +591,8 @@
   },
   {
     "id": "elf",
+    "slug": "elf",
+    "foundryId": "PgKmsA2aKdbLU6O0",
     "name": "Elf",
     "hp": 6,
     "size": "med",
@@ -559,7 +633,9 @@
     "tier": "tier1",
     "heritages": [
       {
-        "id": "Nd9hdX8rdYyRozw8",
+        "id": "ancient-elf",
+        "slug": "ancient-elf",
+        "foundryId": "Nd9hdX8rdYyRozw8",
         "name": "Ancient Elf",
         "ancestrySlug": "elf",
         "traits": [],
@@ -568,7 +644,9 @@
         "tier": "tier1"
       },
       {
-        "id": "1dYDucCIaZpCJqBc",
+        "id": "arctic-elf",
+        "slug": "arctic-elf",
+        "foundryId": "1dYDucCIaZpCJqBc",
         "name": "Arctic Elf",
         "ancestrySlug": "elf",
         "traits": [],
@@ -577,7 +655,9 @@
         "tier": "tier1"
       },
       {
-        "id": "NfIAGatB1KIzt8G7",
+        "id": "cavern-elf",
+        "slug": "cavern-elf",
+        "foundryId": "NfIAGatB1KIzt8G7",
         "name": "Cavern Elf",
         "ancestrySlug": "elf",
         "traits": [],
@@ -586,7 +666,9 @@
         "tier": "tier1"
       },
       {
-        "id": "jEtVesbqYcWGbBYk",
+        "id": "seer-elf",
+        "slug": "seer-elf",
+        "foundryId": "jEtVesbqYcWGbBYk",
         "name": "Seer Elf",
         "ancestrySlug": "elf",
         "traits": [],
@@ -595,7 +677,9 @@
         "tier": "tier1"
       },
       {
-        "id": "1wVDYY9Wue0G5R9Q",
+        "id": "whisper-elf",
+        "slug": "whisper-elf",
+        "foundryId": "1wVDYY9Wue0G5R9Q",
         "name": "Whisper Elf",
         "ancestrySlug": "elf",
         "traits": [],
@@ -604,7 +688,9 @@
         "tier": "tier1"
       },
       {
-        "id": "nW1gi13E62Feto2w",
+        "id": "woodland-elf",
+        "slug": "woodland-elf",
+        "foundryId": "nW1gi13E62Feto2w",
         "name": "Woodland Elf",
         "ancestrySlug": "elf",
         "traits": [],
@@ -616,6 +702,8 @@
   },
   {
     "id": "gnome",
+    "slug": "gnome",
+    "foundryId": "CYlfsYLJcBOgqKtD",
     "name": "Gnome",
     "hp": 8,
     "size": "sm",
@@ -656,7 +744,9 @@
     "tier": "tier1",
     "heritages": [
       {
-        "id": "XeXWsvcWU3Zaj5WC",
+        "id": "chameleon-gnome",
+        "slug": "chameleon-gnome",
+        "foundryId": "XeXWsvcWU3Zaj5WC",
         "name": "Chameleon Gnome",
         "ancestrySlug": "gnome",
         "traits": [],
@@ -665,7 +755,9 @@
         "tier": "tier1"
       },
       {
-        "id": "D3hTAqgwSank8OyO",
+        "id": "fey-touched-gnome",
+        "slug": "fey-touched-gnome",
+        "foundryId": "D3hTAqgwSank8OyO",
         "name": "Fey-Touched Gnome",
         "ancestrySlug": "gnome",
         "traits": [],
@@ -674,7 +766,9 @@
         "tier": "tier1"
       },
       {
-        "id": "tXC5Gwn9D5x0ouJh",
+        "id": "sensate-gnome",
+        "slug": "sensate-gnome",
+        "foundryId": "tXC5Gwn9D5x0ouJh",
         "name": "Sensate Gnome",
         "ancestrySlug": "gnome",
         "traits": [],
@@ -683,7 +777,9 @@
         "tier": "tier1"
       },
       {
-        "id": "d0bNxgGqvaCkFlhN",
+        "id": "umbral-gnome",
+        "slug": "umbral-gnome",
+        "foundryId": "d0bNxgGqvaCkFlhN",
         "name": "Umbral Gnome",
         "ancestrySlug": "gnome",
         "traits": [],
@@ -692,7 +788,9 @@
         "tier": "tier1"
       },
       {
-        "id": "etkuQkjkNLPLnjkA",
+        "id": "wellspring-gnome",
+        "slug": "wellspring-gnome",
+        "foundryId": "etkuQkjkNLPLnjkA",
         "name": "Wellspring Gnome",
         "ancestrySlug": "gnome",
         "traits": [],
@@ -704,6 +802,8 @@
   },
   {
     "id": "goblin",
+    "slug": "goblin",
+    "foundryId": "sQfjTMDaZbT9DThq",
     "name": "Goblin",
     "hp": 6,
     "size": "sm",
@@ -743,7 +843,9 @@
     "tier": "tier1",
     "heritages": [
       {
-        "id": "32oX6hHUY6K8N70Q",
+        "id": "charhide-goblin",
+        "slug": "charhide-goblin",
+        "foundryId": "32oX6hHUY6K8N70Q",
         "name": "Charhide Goblin",
         "ancestrySlug": "goblin",
         "traits": [],
@@ -752,7 +854,9 @@
         "tier": "tier1"
       },
       {
-        "id": "gyoN45SVfRZwHMkk",
+        "id": "irongut-goblin",
+        "slug": "irongut-goblin",
+        "foundryId": "gyoN45SVfRZwHMkk",
         "name": "Irongut Goblin",
         "ancestrySlug": "goblin",
         "traits": [],
@@ -761,7 +865,9 @@
         "tier": "tier1"
       },
       {
-        "id": "a6F2WjYU8D0suT8T",
+        "id": "razortooth-goblin",
+        "slug": "razortooth-goblin",
+        "foundryId": "a6F2WjYU8D0suT8T",
         "name": "Razortooth Goblin",
         "ancestrySlug": "goblin",
         "traits": [],
@@ -770,7 +876,9 @@
         "tier": "tier1"
       },
       {
-        "id": "gQyPU441J3rGt8mD",
+        "id": "snow-goblin",
+        "slug": "snow-goblin",
+        "foundryId": "gQyPU441J3rGt8mD",
         "name": "Snow Goblin",
         "ancestrySlug": "goblin",
         "traits": [],
@@ -779,7 +887,9 @@
         "tier": "tier1"
       },
       {
-        "id": "ULj56ZoW7dWdnBvu",
+        "id": "unbreakable-goblin",
+        "slug": "unbreakable-goblin",
+        "foundryId": "ULj56ZoW7dWdnBvu",
         "name": "Unbreakable Goblin",
         "ancestrySlug": "goblin",
         "traits": [],
@@ -791,6 +901,8 @@
   },
   {
     "id": "halfling",
+    "slug": "halfling",
+    "foundryId": "GgZAHbrjnzWOZy2v",
     "name": "Halfling",
     "hp": 6,
     "size": "sm",
@@ -828,7 +940,9 @@
     "tier": "tier1",
     "heritages": [
       {
-        "id": "Eq42wZ5OTweJLnLU",
+        "id": "gutsy-halfling",
+        "slug": "gutsy-halfling",
+        "foundryId": "Eq42wZ5OTweJLnLU",
         "name": "Gutsy Halfling",
         "ancestrySlug": "halfling",
         "traits": [],
@@ -837,7 +951,9 @@
         "tier": "tier1"
       },
       {
-        "id": "Mj7uHxxVkRUlOFwJ",
+        "id": "hillock-halfling",
+        "slug": "hillock-halfling",
+        "foundryId": "Mj7uHxxVkRUlOFwJ",
         "name": "Hillock Halfling",
         "ancestrySlug": "halfling",
         "traits": [],
@@ -846,7 +962,9 @@
         "tier": "tier1"
       },
       {
-        "id": "G9Gwfi8ZIva52uGp",
+        "id": "jinxed-halfling",
+        "slug": "jinxed-halfling",
+        "foundryId": "G9Gwfi8ZIva52uGp",
         "name": "Jinxed Halfling",
         "ancestrySlug": "halfling",
         "traits": [],
@@ -855,7 +973,9 @@
         "tier": "tier1"
       },
       {
-        "id": "idGDjqi1q3Ft8bAZ",
+        "id": "nomadic-halfling",
+        "slug": "nomadic-halfling",
+        "foundryId": "idGDjqi1q3Ft8bAZ",
         "name": "Nomadic Halfling",
         "ancestrySlug": "halfling",
         "traits": [],
@@ -864,7 +984,9 @@
         "tier": "tier1"
       },
       {
-        "id": "cCy8vsZENlwiAyZ6",
+        "id": "twilight-halfling",
+        "slug": "twilight-halfling",
+        "foundryId": "cCy8vsZENlwiAyZ6",
         "name": "Twilight Halfling",
         "ancestrySlug": "halfling",
         "traits": [],
@@ -873,7 +995,9 @@
         "tier": "tier1"
       },
       {
-        "id": "xtRIYizCjLg9qe1Z",
+        "id": "wildwood-halfling",
+        "slug": "wildwood-halfling",
+        "foundryId": "xtRIYizCjLg9qe1Z",
         "name": "Wildwood Halfling",
         "ancestrySlug": "halfling",
         "traits": [],
@@ -885,6 +1009,8 @@
   },
   {
     "id": "hobgoblin",
+    "slug": "hobgoblin",
+    "foundryId": "piNLXUrm9iaGqD2i",
     "name": "Hobgoblin",
     "hp": 8,
     "size": "med",
@@ -924,7 +1050,9 @@
     "tier": "tier1",
     "heritages": [
       {
-        "id": "ikNJZRxUjcRLisO6",
+        "id": "elfbane-hobgoblin",
+        "slug": "elfbane-hobgoblin",
+        "foundryId": "ikNJZRxUjcRLisO6",
         "name": "Elfbane Hobgoblin",
         "ancestrySlug": "hobgoblin",
         "traits": [],
@@ -933,7 +1061,9 @@
         "tier": "tier1"
       },
       {
-        "id": "CzOHITB2ihLGqMuJ",
+        "id": "runtboss-hobgoblin",
+        "slug": "runtboss-hobgoblin",
+        "foundryId": "CzOHITB2ihLGqMuJ",
         "name": "Runtboss Hobgoblin",
         "ancestrySlug": "hobgoblin",
         "traits": [],
@@ -942,7 +1072,9 @@
         "tier": "tier1"
       },
       {
-        "id": "rQJBtQ9uKUzK9ktK",
+        "id": "shortshanks-hobgoblin",
+        "slug": "shortshanks-hobgoblin",
+        "foundryId": "rQJBtQ9uKUzK9ktK",
         "name": "Shortshanks Hobgoblin",
         "ancestrySlug": "hobgoblin",
         "traits": [],
@@ -951,7 +1083,9 @@
         "tier": "tier1"
       },
       {
-        "id": "n2eJEjA8pnOMiuCm",
+        "id": "smokeworker-hobgoblin",
+        "slug": "smokeworker-hobgoblin",
+        "foundryId": "n2eJEjA8pnOMiuCm",
         "name": "Smokeworker Hobgoblin",
         "ancestrySlug": "hobgoblin",
         "traits": [],
@@ -960,7 +1094,9 @@
         "tier": "tier1"
       },
       {
-        "id": "K124fCpU03SJvmeP",
+        "id": "warmarch-hobgoblin",
+        "slug": "warmarch-hobgoblin",
+        "foundryId": "K124fCpU03SJvmeP",
         "name": "Warmarch Hobgoblin",
         "ancestrySlug": "hobgoblin",
         "traits": [],
@@ -969,7 +1105,9 @@
         "tier": "tier1"
       },
       {
-        "id": "0vaeOoECfVD5EGbq",
+        "id": "warrenbred-hobgoblin",
+        "slug": "warrenbred-hobgoblin",
+        "foundryId": "0vaeOoECfVD5EGbq",
         "name": "Warrenbred Hobgoblin",
         "ancestrySlug": "hobgoblin",
         "traits": [],
@@ -981,6 +1119,8 @@
   },
   {
     "id": "human",
+    "slug": "human",
+    "foundryId": "IiG7DgeLWYrSNXuX",
     "name": "Human",
     "hp": 8,
     "size": "med",
@@ -1014,7 +1154,9 @@
     "tier": "tier1",
     "heritages": [
       {
-        "id": "zVf0Hlp5xG0Q7kmc",
+        "id": "skilled-human",
+        "slug": "skilled-human",
+        "foundryId": "zVf0Hlp5xG0Q7kmc",
         "name": "Skilled Human",
         "ancestrySlug": "human",
         "traits": [],
@@ -1023,7 +1165,9 @@
         "tier": "tier1"
       },
       {
-        "id": "hFBwsVcSnNCJoimo",
+        "id": "versatile-human",
+        "slug": "versatile-human",
+        "foundryId": "hFBwsVcSnNCJoimo",
         "name": "Versatile Human",
         "ancestrySlug": "human",
         "traits": [],
@@ -1035,6 +1179,8 @@
   },
   {
     "id": "jotunborn",
+    "slug": "jotunborn",
+    "foundryId": "gayvFCiQcGNCA7aM",
     "name": "Jotunborn",
     "hp": 10,
     "size": "lg",
@@ -1076,7 +1222,9 @@
     "tier": "tier2",
     "heritages": [
       {
-        "id": "m4kFMTu2sOSWgnAU",
+        "id": "keeper-jotunborn",
+        "slug": "keeper-jotunborn",
+        "foundryId": "m4kFMTu2sOSWgnAU",
         "name": "Keeper Jotunborn",
         "ancestrySlug": "jotunborn",
         "traits": [],
@@ -1085,7 +1233,9 @@
         "tier": "tier2"
       },
       {
-        "id": "KDs97OkCmEYTLUp9",
+        "id": "plane-hopper-jotunborn",
+        "slug": "plane-hopper-jotunborn",
+        "foundryId": "KDs97OkCmEYTLUp9",
         "name": "Plane-Hopper Jotunborn",
         "ancestrySlug": "jotunborn",
         "traits": [],
@@ -1094,7 +1244,9 @@
         "tier": "tier2"
       },
       {
-        "id": "NUUWs7jFwsIPmx3p",
+        "id": "sage-jotunborn",
+        "slug": "sage-jotunborn",
+        "foundryId": "NUUWs7jFwsIPmx3p",
         "name": "Sage Jotunborn",
         "ancestrySlug": "jotunborn",
         "traits": [],
@@ -1103,7 +1255,9 @@
         "tier": "tier2"
       },
       {
-        "id": "t9HOJelfwDo3RBii",
+        "id": "warrior-jotunborn",
+        "slug": "warrior-jotunborn",
+        "foundryId": "t9HOJelfwDo3RBii",
         "name": "Warrior Jotunborn",
         "ancestrySlug": "jotunborn",
         "traits": [],
@@ -1112,7 +1266,9 @@
         "tier": "tier2"
       },
       {
-        "id": "K0NerdkFnce9KeHw",
+        "id": "weaver-jotunborn",
+        "slug": "weaver-jotunborn",
+        "foundryId": "K0NerdkFnce9KeHw",
         "name": "Weaver Jotunborn",
         "ancestrySlug": "jotunborn",
         "traits": [],
@@ -1124,6 +1280,8 @@
   },
   {
     "id": "kholo",
+    "slug": "kholo",
+    "foundryId": "vxbQ1Yw4qwgjTzqo",
     "name": "Kholo",
     "hp": 8,
     "size": "med",
@@ -1163,7 +1321,9 @@
     "tier": "tier1",
     "heritages": [
       {
-        "id": "udMXXjFirjARYr4p",
+        "id": "ant-kholo",
+        "slug": "ant-kholo",
+        "foundryId": "udMXXjFirjARYr4p",
         "name": "Ant Kholo",
         "ancestrySlug": "kholo",
         "traits": [],
@@ -1172,7 +1332,9 @@
         "tier": "tier1"
       },
       {
-        "id": "JW45oQRHaqthjmIx",
+        "id": "cave-kholo",
+        "slug": "cave-kholo",
+        "foundryId": "JW45oQRHaqthjmIx",
         "name": "Cave Kholo",
         "ancestrySlug": "kholo",
         "traits": [],
@@ -1181,7 +1343,9 @@
         "tier": "tier1"
       },
       {
-        "id": "0B0M6CUnVDkeznRv",
+        "id": "dog-kholo",
+        "slug": "dog-kholo",
+        "foundryId": "0B0M6CUnVDkeznRv",
         "name": "Dog Kholo",
         "ancestrySlug": "kholo",
         "traits": [],
@@ -1190,7 +1354,9 @@
         "tier": "tier1"
       },
       {
-        "id": "SqEcb1c3yeoJMxm0",
+        "id": "great-kholo",
+        "slug": "great-kholo",
+        "foundryId": "SqEcb1c3yeoJMxm0",
         "name": "Great Kholo",
         "ancestrySlug": "kholo",
         "traits": [],
@@ -1199,7 +1365,9 @@
         "tier": "tier1"
       },
       {
-        "id": "B89BCo6LtI3SJq54",
+        "id": "sweetbreath-kholo",
+        "slug": "sweetbreath-kholo",
+        "foundryId": "B89BCo6LtI3SJq54",
         "name": "Sweetbreath Kholo",
         "ancestrySlug": "kholo",
         "traits": [],
@@ -1208,7 +1376,9 @@
         "tier": "tier1"
       },
       {
-        "id": "hwRWx3hWx8ahBdz0",
+        "id": "winter-kholo",
+        "slug": "winter-kholo",
+        "foundryId": "hwRWx3hWx8ahBdz0",
         "name": "Winter Kholo",
         "ancestrySlug": "kholo",
         "traits": [],
@@ -1217,7 +1387,9 @@
         "tier": "tier1"
       },
       {
-        "id": "kXp8qRh5AgtD4Izi",
+        "id": "witch-kholo",
+        "slug": "witch-kholo",
+        "foundryId": "kXp8qRh5AgtD4Izi",
         "name": "Witch Kholo",
         "ancestrySlug": "kholo",
         "traits": [],
@@ -1229,6 +1401,8 @@
   },
   {
     "id": "kobold",
+    "slug": "kobold",
+    "foundryId": "7oQxL6wgsokD3QXG",
     "name": "Kobold",
     "hp": 6,
     "size": "sm",
@@ -1270,7 +1444,9 @@
     "tier": "tier1",
     "heritages": [
       {
-        "id": "35k2aujXYvqUCSS1",
+        "id": "cavernstalker-kobold",
+        "slug": "cavernstalker-kobold",
+        "foundryId": "35k2aujXYvqUCSS1",
         "name": "Cavernstalker Kobold",
         "ancestrySlug": "kobold",
         "traits": [],
@@ -1279,7 +1455,9 @@
         "tier": "tier1"
       },
       {
-        "id": "P8BP1un5BTrwXoBy",
+        "id": "dragonscaled-kobold",
+        "slug": "dragonscaled-kobold",
+        "foundryId": "P8BP1un5BTrwXoBy",
         "name": "Dragonscaled Kobold",
         "ancestrySlug": "kobold",
         "traits": [],
@@ -1288,7 +1466,9 @@
         "tier": "tier1"
       },
       {
-        "id": "dbj1cbkYeAAdkDSM",
+        "id": "elementheart-kobold",
+        "slug": "elementheart-kobold",
+        "foundryId": "dbj1cbkYeAAdkDSM",
         "name": "Elementheart Kobold",
         "ancestrySlug": "kobold",
         "traits": [],
@@ -1297,7 +1477,9 @@
         "tier": "tier1"
       },
       {
-        "id": "VRyX00OuPGsJSurM",
+        "id": "spellhorn-kobold",
+        "slug": "spellhorn-kobold",
+        "foundryId": "VRyX00OuPGsJSurM",
         "name": "Spellhorn Kobold",
         "ancestrySlug": "kobold",
         "traits": [],
@@ -1306,7 +1488,9 @@
         "tier": "tier1"
       },
       {
-        "id": "WaCn0mcivFv1omNK",
+        "id": "strongjaw-kobold",
+        "slug": "strongjaw-kobold",
+        "foundryId": "WaCn0mcivFv1omNK",
         "name": "Strongjaw Kobold",
         "ancestrySlug": "kobold",
         "traits": [],
@@ -1315,7 +1499,9 @@
         "tier": "tier1"
       },
       {
-        "id": "ZW8GX14n3ZGievK1",
+        "id": "tunnelflood-kobold",
+        "slug": "tunnelflood-kobold",
+        "foundryId": "ZW8GX14n3ZGievK1",
         "name": "Tunnelflood Kobold",
         "ancestrySlug": "kobold",
         "traits": [],
@@ -1324,7 +1510,9 @@
         "tier": "tier1"
       },
       {
-        "id": "m9rrlchS10xHFA2G",
+        "id": "venomtail-kobold",
+        "slug": "venomtail-kobold",
+        "foundryId": "m9rrlchS10xHFA2G",
         "name": "Venomtail Kobold",
         "ancestrySlug": "kobold",
         "traits": [],
@@ -1336,6 +1524,8 @@
   },
   {
     "id": "leshy",
+    "slug": "leshy",
+    "foundryId": "cdhgByGG1WtuaK73",
     "name": "Leshy",
     "hp": 8,
     "size": "sm",
@@ -1375,7 +1565,9 @@
     "tier": "tier1",
     "heritages": [
       {
-        "id": "2cii5ZkBsJ4DYdd2",
+        "id": "cactus-leshy",
+        "slug": "cactus-leshy",
+        "foundryId": "2cii5ZkBsJ4DYdd2",
         "name": "Cactus Leshy",
         "ancestrySlug": "leshy",
         "traits": [],
@@ -1384,7 +1576,9 @@
         "tier": "tier1"
       },
       {
-        "id": "L6zfGzLMDLHbZ7VV",
+        "id": "fruit-leshy",
+        "slug": "fruit-leshy",
+        "foundryId": "L6zfGzLMDLHbZ7VV",
         "name": "Fruit Leshy",
         "ancestrySlug": "leshy",
         "traits": [],
@@ -1393,7 +1587,9 @@
         "tier": "tier1"
       },
       {
-        "id": "87h0jepQuzIbN7jN",
+        "id": "fungus-leshy",
+        "slug": "fungus-leshy",
+        "foundryId": "87h0jepQuzIbN7jN",
         "name": "Fungus Leshy",
         "ancestrySlug": "leshy",
         "traits": [],
@@ -1402,7 +1598,9 @@
         "tier": "tier1"
       },
       {
-        "id": "wNnsjird4OQe0s6p",
+        "id": "gourd-leshy",
+        "slug": "gourd-leshy",
+        "foundryId": "wNnsjird4OQe0s6p",
         "name": "Gourd Leshy",
         "ancestrySlug": "leshy",
         "traits": [],
@@ -1411,7 +1609,9 @@
         "tier": "tier1"
       },
       {
-        "id": "dQqurQys37aJYb26",
+        "id": "leaf-leshy",
+        "slug": "leaf-leshy",
+        "foundryId": "dQqurQys37aJYb26",
         "name": "Leaf Leshy",
         "ancestrySlug": "leshy",
         "traits": [],
@@ -1420,7 +1620,9 @@
         "tier": "tier1"
       },
       {
-        "id": "ievKYUc53q0mroGp",
+        "id": "lotus-leshy",
+        "slug": "lotus-leshy",
+        "foundryId": "ievKYUc53q0mroGp",
         "name": "Lotus Leshy",
         "ancestrySlug": "leshy",
         "traits": [],
@@ -1429,7 +1631,9 @@
         "tier": "tier1"
       },
       {
-        "id": "CZx9HMmoOwcpkLY8",
+        "id": "root-leshy",
+        "slug": "root-leshy",
+        "foundryId": "CZx9HMmoOwcpkLY8",
         "name": "Root Leshy",
         "ancestrySlug": "leshy",
         "traits": [],
@@ -1438,7 +1642,9 @@
         "tier": "tier1"
       },
       {
-        "id": "hTl3uc6y1kTuo9ac",
+        "id": "seaweed-leshy",
+        "slug": "seaweed-leshy",
+        "foundryId": "hTl3uc6y1kTuo9ac",
         "name": "Seaweed Leshy",
         "ancestrySlug": "leshy",
         "traits": [],
@@ -1447,7 +1653,9 @@
         "tier": "tier1"
       },
       {
-        "id": "evXJISqyhl3fHE9u",
+        "id": "vine-leshy",
+        "slug": "vine-leshy",
+        "foundryId": "evXJISqyhl3fHE9u",
         "name": "Vine Leshy",
         "ancestrySlug": "leshy",
         "traits": [],
@@ -1459,6 +1667,8 @@
   },
   {
     "id": "lizardfolk",
+    "slug": "lizardfolk",
+    "foundryId": "HWEgF7Gmoq55VhTL",
     "name": "Lizardfolk",
     "hp": 8,
     "size": "med",
@@ -1499,7 +1709,9 @@
     "tier": "tier1",
     "heritages": [
       {
-        "id": "OoUqJJB77VfWbWRM",
+        "id": "cliffscale-lizardfolk",
+        "slug": "cliffscale-lizardfolk",
+        "foundryId": "OoUqJJB77VfWbWRM",
         "name": "Cliffscale Lizardfolk",
         "ancestrySlug": "lizardfolk",
         "traits": [],
@@ -1508,7 +1720,9 @@
         "tier": "tier1"
       },
       {
-        "id": "sEnMG5zbnXdJvVPz",
+        "id": "cloudleaper-lizardfolk",
+        "slug": "cloudleaper-lizardfolk",
+        "foundryId": "sEnMG5zbnXdJvVPz",
         "name": "Cloudleaper Lizardfolk",
         "ancestrySlug": "lizardfolk",
         "traits": [],
@@ -1517,7 +1731,9 @@
         "tier": "tier1"
       },
       {
-        "id": "6rIIsZg3tOyIU3g3",
+        "id": "frilled-lizardfolk",
+        "slug": "frilled-lizardfolk",
+        "foundryId": "6rIIsZg3tOyIU3g3",
         "name": "Frilled Lizardfolk",
         "ancestrySlug": "lizardfolk",
         "traits": [],
@@ -1526,7 +1742,9 @@
         "tier": "tier1"
       },
       {
-        "id": "6xxXtgj3fcCi53lt",
+        "id": "sandstrider-lizardfolk",
+        "slug": "sandstrider-lizardfolk",
+        "foundryId": "6xxXtgj3fcCi53lt",
         "name": "Sandstrider Lizardfolk",
         "ancestrySlug": "lizardfolk",
         "traits": [],
@@ -1535,7 +1753,9 @@
         "tier": "tier1"
       },
       {
-        "id": "VYfpTUuXJM3iBOz0",
+        "id": "unseen-lizardfolk",
+        "slug": "unseen-lizardfolk",
+        "foundryId": "VYfpTUuXJM3iBOz0",
         "name": "Unseen Lizardfolk",
         "ancestrySlug": "lizardfolk",
         "traits": [],
@@ -1544,7 +1764,9 @@
         "tier": "tier1"
       },
       {
-        "id": "dJeiekfqGQ8dkwsO",
+        "id": "wetlander-lizardfolk",
+        "slug": "wetlander-lizardfolk",
+        "foundryId": "dJeiekfqGQ8dkwsO",
         "name": "Wetlander Lizardfolk",
         "ancestrySlug": "lizardfolk",
         "traits": [],
@@ -1553,7 +1775,9 @@
         "tier": "tier1"
       },
       {
-        "id": "TQFE10VFvh9wb8zb",
+        "id": "woodstalker-lizardfolk",
+        "slug": "woodstalker-lizardfolk",
+        "foundryId": "TQFE10VFvh9wb8zb",
         "name": "Woodstalker Lizardfolk",
         "ancestrySlug": "lizardfolk",
         "traits": [],
@@ -1565,6 +1789,8 @@
   },
   {
     "id": "merfolk",
+    "slug": "merfolk",
+    "foundryId": "FUqZRllwn6kmFA8K",
     "name": "Merfolk",
     "hp": 8,
     "size": "med",
@@ -1604,7 +1830,9 @@
     "tier": "tier2",
     "heritages": [
       {
-        "id": "6egx1zhQx2s6BEa1",
+        "id": "abyssal-merfolk",
+        "slug": "abyssal-merfolk",
+        "foundryId": "6egx1zhQx2s6BEa1",
         "name": "Abyssal Merfolk",
         "ancestrySlug": "merfolk",
         "traits": [],
@@ -1613,7 +1841,9 @@
         "tier": "tier2"
       },
       {
-        "id": "DNynADD4xhwTAiE5",
+        "id": "carcharodon-merfolk",
+        "slug": "carcharodon-merfolk",
+        "foundryId": "DNynADD4xhwTAiE5",
         "name": "Carcharodon Merfolk",
         "ancestrySlug": "merfolk",
         "traits": [],
@@ -1622,7 +1852,9 @@
         "tier": "tier2"
       },
       {
-        "id": "OOkgTzDU4mBvV98Z",
+        "id": "pelagic-merfolk",
+        "slug": "pelagic-merfolk",
+        "foundryId": "OOkgTzDU4mBvV98Z",
         "name": "Pelagic Merfolk",
         "ancestrySlug": "merfolk",
         "traits": [],
@@ -1631,7 +1863,9 @@
         "tier": "tier2"
       },
       {
-        "id": "Q5NrFWKDMCoVn9qR",
+        "id": "reef-merfolk",
+        "slug": "reef-merfolk",
+        "foundryId": "Q5NrFWKDMCoVn9qR",
         "name": "Reef Merfolk",
         "ancestrySlug": "merfolk",
         "traits": [],
@@ -1640,7 +1874,9 @@
         "tier": "tier2"
       },
       {
-        "id": "4BiGekRGfBRC7DoI",
+        "id": "sailfish-merfolk",
+        "slug": "sailfish-merfolk",
+        "foundryId": "4BiGekRGfBRC7DoI",
         "name": "Sailfish Merfolk",
         "ancestrySlug": "merfolk",
         "traits": [],
@@ -1652,6 +1888,8 @@
   },
   {
     "id": "minotaur",
+    "slug": "minotaur",
+    "foundryId": "3wQ49DoWFYQgVsq6",
     "name": "Minotaur",
     "hp": 10,
     "size": "lg",
@@ -1691,7 +1929,9 @@
     "tier": "tier2",
     "heritages": [
       {
-        "id": "bHgGh3vtXL7fkhIy",
+        "id": "ghost-bull-minotaur",
+        "slug": "ghost-bull-minotaur",
+        "foundryId": "bHgGh3vtXL7fkhIy",
         "name": "Ghost Bull Minotaur",
         "ancestrySlug": "minotaur",
         "traits": [],
@@ -1700,7 +1940,9 @@
         "tier": "tier2"
       },
       {
-        "id": "jP9ORt0jgY5VHyD3",
+        "id": "glacier-cavern-minotaur",
+        "slug": "glacier-cavern-minotaur",
+        "foundryId": "jP9ORt0jgY5VHyD3",
         "name": "Glacier Cavern Minotaur",
         "ancestrySlug": "minotaur",
         "traits": [],
@@ -1709,7 +1951,9 @@
         "tier": "tier2"
       },
       {
-        "id": "23MEmXuyw75jiGKq",
+        "id": "littlehorn-minotaur",
+        "slug": "littlehorn-minotaur",
+        "foundryId": "23MEmXuyw75jiGKq",
         "name": "Littlehorn Minotaur",
         "ancestrySlug": "minotaur",
         "traits": [],
@@ -1718,7 +1962,9 @@
         "tier": "tier2"
       },
       {
-        "id": "HAo0S8ysFipf6S2B",
+        "id": "roaming-minotaur",
+        "slug": "roaming-minotaur",
+        "foundryId": "HAo0S8ysFipf6S2B",
         "name": "Roaming Minotaur",
         "ancestrySlug": "minotaur",
         "traits": [],
@@ -1727,7 +1973,9 @@
         "tier": "tier2"
       },
       {
-        "id": "mPVEc7hFZQhv0gqJ",
+        "id": "slabsoul-minotaur",
+        "slug": "slabsoul-minotaur",
+        "foundryId": "mPVEc7hFZQhv0gqJ",
         "name": "Slabsoul Minotaur",
         "ancestrySlug": "minotaur",
         "traits": [],
@@ -1736,7 +1984,9 @@
         "tier": "tier2"
       },
       {
-        "id": "tYrb9KOv1etjE5wK",
+        "id": "stalker-minotaur",
+        "slug": "stalker-minotaur",
+        "foundryId": "tYrb9KOv1etjE5wK",
         "name": "Stalker Minotaur",
         "ancestrySlug": "minotaur",
         "traits": [],
@@ -1748,6 +1998,8 @@
   },
   {
     "id": "orc",
+    "slug": "orc",
+    "foundryId": "lSGWXjcbOa6O5fTx",
     "name": "Orc",
     "hp": 10,
     "size": "med",
@@ -1787,7 +2039,9 @@
     "tier": "tier1",
     "heritages": [
       {
-        "id": "8Gsa8KFsHizEwSHU",
+        "id": "badlands-orc",
+        "slug": "badlands-orc",
+        "foundryId": "8Gsa8KFsHizEwSHU",
         "name": "Badlands Orc",
         "ancestrySlug": "orc",
         "traits": [],
@@ -1796,7 +2050,9 @@
         "tier": "tier1"
       },
       {
-        "id": "nXQxlmjH24Eb8h2Q",
+        "id": "battle-ready-orc",
+        "slug": "battle-ready-orc",
+        "foundryId": "nXQxlmjH24Eb8h2Q",
         "name": "Battle-Ready Orc",
         "ancestrySlug": "orc",
         "traits": [],
@@ -1805,7 +2061,9 @@
         "tier": "tier1"
       },
       {
-        "id": "wn4EbYk1QN3tyFhh",
+        "id": "deep-orc",
+        "slug": "deep-orc",
+        "foundryId": "wn4EbYk1QN3tyFhh",
         "name": "Deep Orc",
         "ancestrySlug": "orc",
         "traits": [],
@@ -1814,7 +2072,9 @@
         "tier": "tier1"
       },
       {
-        "id": "VvEAFoxuddYNBmNc",
+        "id": "grave-orc",
+        "slug": "grave-orc",
+        "foundryId": "VvEAFoxuddYNBmNc",
         "name": "Grave Orc",
         "ancestrySlug": "orc",
         "traits": [],
@@ -1823,7 +2083,9 @@
         "tier": "tier1"
       },
       {
-        "id": "MTTU2t7x6TjvUDnE",
+        "id": "hold-scarred-orc",
+        "slug": "hold-scarred-orc",
+        "foundryId": "MTTU2t7x6TjvUDnE",
         "name": "Hold-Scarred Orc",
         "ancestrySlug": "orc",
         "traits": [],
@@ -1832,7 +2094,9 @@
         "tier": "tier1"
       },
       {
-        "id": "dwKCwwtWetvPmJks",
+        "id": "rainfall-orc",
+        "slug": "rainfall-orc",
+        "foundryId": "dwKCwwtWetvPmJks",
         "name": "Rainfall Orc",
         "ancestrySlug": "orc",
         "traits": [],
@@ -1841,7 +2105,9 @@
         "tier": "tier1"
       },
       {
-        "id": "pZ1u2ScWrBXSaAqQ",
+        "id": "winter-orc",
+        "slug": "winter-orc",
+        "foundryId": "pZ1u2ScWrBXSaAqQ",
         "name": "Winter Orc",
         "ancestrySlug": "orc",
         "traits": [],
@@ -1853,6 +2119,8 @@
   },
   {
     "id": "ratfolk",
+    "slug": "ratfolk",
+    "foundryId": "P6PcVnCkh4XMdefw",
     "name": "Ratfolk",
     "hp": 6,
     "size": "sm",
@@ -1895,7 +2163,9 @@
     "tier": "tier1",
     "heritages": [
       {
-        "id": "7p9HtLzWBHc18JDW",
+        "id": "deep-rat",
+        "slug": "deep-rat",
+        "foundryId": "7p9HtLzWBHc18JDW",
         "name": "Deep Rat",
         "ancestrySlug": "ratfolk",
         "traits": [],
@@ -1904,7 +2174,9 @@
         "tier": "tier1"
       },
       {
-        "id": "twayjFuXbsvyHUwy",
+        "id": "desert-rat",
+        "slug": "desert-rat",
+        "foundryId": "twayjFuXbsvyHUwy",
         "name": "Desert Rat",
         "ancestrySlug": "ratfolk",
         "traits": [],
@@ -1913,7 +2185,9 @@
         "tier": "tier1"
       },
       {
-        "id": "fROPRHGyUn4PgcER",
+        "id": "longsnout-rat",
+        "slug": "longsnout-rat",
+        "foundryId": "fROPRHGyUn4PgcER",
         "name": "Longsnout Rat",
         "ancestrySlug": "ratfolk",
         "traits": [],
@@ -1922,7 +2196,9 @@
         "tier": "tier1"
       },
       {
-        "id": "eFsD7W6hnK33jlDQ",
+        "id": "sewer-rat",
+        "slug": "sewer-rat",
+        "foundryId": "eFsD7W6hnK33jlDQ",
         "name": "Sewer Rat",
         "ancestrySlug": "ratfolk",
         "traits": [],
@@ -1931,7 +2207,9 @@
         "tier": "tier1"
       },
       {
-        "id": "tarfuEXmi0E0Enfy",
+        "id": "shadow-rat",
+        "slug": "shadow-rat",
+        "foundryId": "tarfuEXmi0E0Enfy",
         "name": "Shadow Rat",
         "ancestrySlug": "ratfolk",
         "traits": [],
@@ -1940,7 +2218,9 @@
         "tier": "tier1"
       },
       {
-        "id": "7lFPhRMAFXQsXUP2",
+        "id": "snow-rat",
+        "slug": "snow-rat",
+        "foundryId": "7lFPhRMAFXQsXUP2",
         "name": "Snow Rat",
         "ancestrySlug": "ratfolk",
         "traits": [],
@@ -1949,7 +2229,9 @@
         "tier": "tier1"
       },
       {
-        "id": "U882U2NUUGL6u3rL",
+        "id": "tunnel-rat",
+        "slug": "tunnel-rat",
+        "foundryId": "U882U2NUUGL6u3rL",
         "name": "Tunnel Rat",
         "ancestrySlug": "ratfolk",
         "traits": [],
@@ -1961,6 +2243,8 @@
   },
   {
     "id": "surki",
+    "slug": "surki",
+    "foundryId": "ALOmLePjbc37ca3Y",
     "name": "Surki",
     "hp": 8,
     "size": "med",
@@ -1994,7 +2278,9 @@
     "tier": "tier2",
     "heritages": [
       {
-        "id": "BDBzVaZx3GfZXs5b",
+        "id": "breaker-surki",
+        "slug": "breaker-surki",
+        "foundryId": "BDBzVaZx3GfZXs5b",
         "name": "Breaker Surki",
         "ancestrySlug": "surki",
         "traits": [],
@@ -2003,7 +2289,9 @@
         "tier": "tier2"
       },
       {
-        "id": "0Anj61DzUimJ1uMS",
+        "id": "elytron-surki",
+        "slug": "elytron-surki",
+        "foundryId": "0Anj61DzUimJ1uMS",
         "name": "Elytron Surki",
         "ancestrySlug": "surki",
         "traits": [],
@@ -2012,7 +2300,9 @@
         "tier": "tier2"
       },
       {
-        "id": "qKn9k3TQt0gsOLn7",
+        "id": "hardshell-surki",
+        "slug": "hardshell-surki",
+        "foundryId": "qKn9k3TQt0gsOLn7",
         "name": "Hardshell Surki",
         "ancestrySlug": "surki",
         "traits": [],
@@ -2021,7 +2311,9 @@
         "tier": "tier2"
       },
       {
-        "id": "Wyw1tkO0e199Wm8o",
+        "id": "lantern-surki",
+        "slug": "lantern-surki",
+        "foundryId": "Wyw1tkO0e199Wm8o",
         "name": "Lantern Surki",
         "ancestrySlug": "surki",
         "traits": [],
@@ -2033,6 +2325,8 @@
   },
   {
     "id": "tengu",
+    "slug": "tengu",
+    "foundryId": "18xDKYPDBLEv2myX",
     "name": "Tengu",
     "hp": 6,
     "size": "med",
@@ -2069,7 +2363,9 @@
     "tier": "tier1",
     "heritages": [
       {
-        "id": "2hLDilS6qbjHxgVS",
+        "id": "dogtooth-tengu",
+        "slug": "dogtooth-tengu",
+        "foundryId": "2hLDilS6qbjHxgVS",
         "name": "Dogtooth Tengu",
         "ancestrySlug": "tengu",
         "traits": [],
@@ -2078,7 +2374,9 @@
         "tier": "tier1"
       },
       {
-        "id": "g4FRxyuHndZu4KTo",
+        "id": "jinxed-tengu",
+        "slug": "jinxed-tengu",
+        "foundryId": "g4FRxyuHndZu4KTo",
         "name": "Jinxed Tengu",
         "ancestrySlug": "tengu",
         "traits": [],
@@ -2087,7 +2385,9 @@
         "tier": "tier1"
       },
       {
-        "id": "ptpK6H1rM4Bu3ry4",
+        "id": "mountainkeeper-tengu",
+        "slug": "mountainkeeper-tengu",
+        "foundryId": "ptpK6H1rM4Bu3ry4",
         "name": "Mountainkeeper Tengu",
         "ancestrySlug": "tengu",
         "traits": [],
@@ -2096,7 +2396,9 @@
         "tier": "tier1"
       },
       {
-        "id": "rKV11HWREwjjMIum",
+        "id": "skyborn-tengu",
+        "slug": "skyborn-tengu",
+        "foundryId": "rKV11HWREwjjMIum",
         "name": "Skyborn Tengu",
         "ancestrySlug": "tengu",
         "traits": [],
@@ -2105,7 +2407,9 @@
         "tier": "tier1"
       },
       {
-        "id": "7vHLPleFpSqKAjWG",
+        "id": "stormtossed-tengu",
+        "slug": "stormtossed-tengu",
+        "foundryId": "7vHLPleFpSqKAjWG",
         "name": "Stormtossed Tengu",
         "ancestrySlug": "tengu",
         "traits": [],
@@ -2114,7 +2418,9 @@
         "tier": "tier1"
       },
       {
-        "id": "qM566kCXljkOpocA",
+        "id": "taloned-tengu",
+        "slug": "taloned-tengu",
+        "foundryId": "qM566kCXljkOpocA",
         "name": "Taloned Tengu",
         "ancestrySlug": "tengu",
         "traits": [],
@@ -2123,7 +2429,9 @@
         "tier": "tier1"
       },
       {
-        "id": "WEzgrxBRFBGdj8Hx",
+        "id": "wavediver-tengu",
+        "slug": "wavediver-tengu",
+        "foundryId": "WEzgrxBRFBGdj8Hx",
         "name": "Wavediver Tengu",
         "ancestrySlug": "tengu",
         "traits": [],
@@ -2135,6 +2443,8 @@
   },
   {
     "id": "tripkee",
+    "slug": "tripkee",
+    "foundryId": "hXM5jXezIki1cMI2",
     "name": "Tripkee",
     "hp": 6,
     "size": "sm",
@@ -2175,7 +2485,9 @@
     "tier": "tier1",
     "heritages": [
       {
-        "id": "bmA9JK06rnOKpNLr",
+        "id": "poisonhide-tripkee",
+        "slug": "poisonhide-tripkee",
+        "foundryId": "bmA9JK06rnOKpNLr",
         "name": "Poisonhide Tripkee",
         "ancestrySlug": "tripkee",
         "traits": [],
@@ -2184,7 +2496,9 @@
         "tier": "tier1"
       },
       {
-        "id": "87Eej7uEvTxXeli7",
+        "id": "riverside-tripkee",
+        "slug": "riverside-tripkee",
+        "foundryId": "87Eej7uEvTxXeli7",
         "name": "Riverside Tripkee",
         "ancestrySlug": "tripkee",
         "traits": [],
@@ -2193,7 +2507,9 @@
         "tier": "tier1"
       },
       {
-        "id": "2kSzKDtwbcILZTIe",
+        "id": "snaptongue-tripkee",
+        "slug": "snaptongue-tripkee",
+        "foundryId": "2kSzKDtwbcILZTIe",
         "name": "Snaptongue Tripkee",
         "ancestrySlug": "tripkee",
         "traits": [],
@@ -2202,7 +2518,9 @@
         "tier": "tier1"
       },
       {
-        "id": "rFdVYKtHsZzRCsSd",
+        "id": "stickytoe-tripkee",
+        "slug": "stickytoe-tripkee",
+        "foundryId": "rFdVYKtHsZzRCsSd",
         "name": "Stickytoe Tripkee",
         "ancestrySlug": "tripkee",
         "traits": [],
@@ -2211,7 +2529,9 @@
         "tier": "tier1"
       },
       {
-        "id": "2QLKvmCimT9ai0Bi",
+        "id": "thickskin-tripkee",
+        "slug": "thickskin-tripkee",
+        "foundryId": "2QLKvmCimT9ai0Bi",
         "name": "Thickskin Tripkee",
         "ancestrySlug": "tripkee",
         "traits": [],
@@ -2220,7 +2540,9 @@
         "tier": "tier1"
       },
       {
-        "id": "xaTTN5anLEBzWCzv",
+        "id": "windweb-tripkee",
+        "slug": "windweb-tripkee",
+        "foundryId": "xaTTN5anLEBzWCzv",
         "name": "Windweb Tripkee",
         "ancestrySlug": "tripkee",
         "traits": [],
