@@ -182,14 +182,55 @@ function getDesc(item, tier) {
   return tier === 'tier2' ? scrub(raw) : raw;
 }
 
+// Canonical slug derivation. Prefer Paizo's official slug
+// (`system.slug`) when the source carries it; otherwise derive from
+// the display name. Matches the normalizer used at the call sites
+// (content/backgroundTips.js etc.) so cross-file lookups line up.
+function deriveSlug(name) {
+  return String(name || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function resolveSlug(item) {
+  return item?.system?.slug || deriveSlug(item?.name);
+}
+
+// Collision tracker — every emitted entity registers its slug here.
+// Two different entities deriving the same slug means we have to
+// disambiguate by hand (rename one, suffix the other, etc.) — better
+// to crash the import than ship a silently-merged lookup table.
+function makeCollisionGuard(kind) {
+  const seen = new Map();
+  return (slug, name) => {
+    if (!slug) return slug;
+    const prior = seen.get(slug);
+    if (prior && prior !== name) {
+      throw new Error(
+        `[pf2e import] Slug collision in ${kind}: "${slug}" derived from both "${prior}" and "${name}". `
+        + 'Rename one in the source or add a tiebreaker to deriveSlug.',
+      );
+    }
+    seen.set(slug, name);
+    return slug;
+  };
+}
+
 // === TRANSFORMERS ===
 
-function transformFeat(item) {
+function transformFeat(item, guard) {
   const tier = publicationOK(item);
   if (!tier) return null;
   const sys = item.system;
+  const slug = guard(resolveSlug(item), item.name);
   return {
-    id: item._id || item.flags?.core?.sourceId,
+    id: slug,
+    slug,
+    foundryId: item._id || item.flags?.core?.sourceId,
     name: scrub(item.name),
     level: sys.level?.value || 1,
     actions: sys.actions?.value ?? (sys.actionType?.value === 'reaction' ? 'reaction'
@@ -205,12 +246,15 @@ function transformFeat(item) {
   };
 }
 
-function transformSpell(item) {
+function transformSpell(item, guard) {
   const tier = publicationOK(item);
   if (!tier) return null;
   const sys = item.system;
+  const slug = guard(resolveSlug(item), item.name);
   return {
-    id: item._id,
+    id: slug,
+    slug,
+    foundryId: item._id,
     name: scrub(item.name),
     rank: sys.level?.value || 0,
     traits: sys.traits?.value || [],
@@ -228,15 +272,19 @@ function transformSpell(item) {
   };
 }
 
-function transformAncestry(item) {
+function transformAncestry(item, guard) {
   const tier = publicationOK(item);
   if (!tier) return null;
   const sys = item.system;
+  const slug = guard(resolveSlug(item), item.name);
   return {
-    // Heritages reference their parent via system.ancestry.slug.
-    // Anchor the ancestry id to the same slug so attachHeritages()
-    // joins cleanly regardless of which legacy id field is set.
-    id: item.slug || item.name?.toLowerCase().replace(/\s+/g, '-') || item._id,
+    // `id` stays aliased to `slug` so the existing UI lookups
+    // (`ANCESTRIES.find(a => a.id === data.ancestry)`) keep matching
+    // — ancestry was the first kind to land here and consumers got
+    // wired against `.id` before the slug field existed.
+    id: slug,
+    slug,
+    foundryId: item._id,
     name: scrub(item.name),
     hp: sys.hp || 8,
     size: sys.size || 'Medium',
@@ -253,14 +301,18 @@ function transformAncestry(item) {
   };
 }
 
-function transformClass(item) {
+function transformClass(item, guard) {
   const tier = publicationOK(item);
   if (!tier) return null;
   const sys = item.system;
-  const slug = item.system?.slug || item.name?.toLowerCase().replace(/\s+/g, '-');
+  const slug = guard(resolveSlug(item), item.name);
   return {
-    id: item._id || item.slug || item.name?.toLowerCase().replace(/\s+/g, '-'),
+    // Make `id` an alias of `slug` so callers can match against
+    // either field without ambiguity — templates ship slugs, the
+    // creator now writes slugs everywhere too (see F.2).
+    id: slug,
     slug,
+    foundryId: item._id,
     name: scrub(item.name),
     hp: sys.hp || 8,
     keyAbility: sys.keyAbility?.value || [],
@@ -307,13 +359,16 @@ function extractLoreSubskill(rawDesc) {
   return m ? m[1] : null;
 }
 
-function transformBackground(item) {
+function transformBackground(item, guard) {
   const tier = publicationOK(item);
   if (!tier) return null;
   const sys = item.system;
   const desc = getDesc(item, tier);
+  const slug = guard(resolveSlug(item), item.name);
   return {
-    id: item._id || item.slug,
+    id: slug,
+    slug,
+    foundryId: item._id,
     name: scrub(item.name),
     boosts: Object.values(sys.boosts || {}).flatMap(b => b.value || []),
     trainedSkills: sys.trainedSkills?.value || [],
@@ -327,12 +382,15 @@ function transformBackground(item) {
   };
 }
 
-function transformEquipment(item) {
+function transformEquipment(item, guard) {
   const tier = publicationOK(item);
   if (!tier) return null;
   const sys = item.system;
+  const slug = guard(resolveSlug(item), item.name);
   return {
-    id: item._id,
+    id: slug,
+    slug,
+    foundryId: item._id,
     name: scrub(item.name),
     type: item.type, // weapon | armor | consumable | equipment
     category: sys.category,
@@ -348,12 +406,15 @@ function transformEquipment(item) {
   };
 }
 
-function transformHeritage(item) {
+function transformHeritage(item, guard) {
   const tier = publicationOK(item);
   if (!tier) return null;
   const sys = item.system;
+  const slug = guard(resolveSlug(item), item.name);
   return {
-    id: item._id || item.name?.toLowerCase().replace(/\s+/g, '-'),
+    id: slug,
+    slug,
+    foundryId: item._id,
     name: scrub(item.name),
     ancestrySlug: sys.ancestry?.slug || null,
     traits: sys.traits?.value || [],
@@ -394,17 +455,32 @@ fs.mkdirSync(OUT, { recursive: true });
 
 // Ancestries first, then attach heritages from their own pack before
 // writing — heritages are filed separately in Foundry but consumers
-// expect them embedded on each ancestry record.
-const ancestries = readPack('ancestries').map(transformAncestry).filter(Boolean);
-const heritages = readPack('heritages').map(transformHeritage).filter(Boolean);
+// expect them embedded on each ancestry record. Each kind gets its
+// own collision guard so a duplicate slug surfaces as a loud error
+// instead of a silent merge.
+const ancestries = readPack('ancestries')
+  .map(x => transformAncestry(x, makeCollisionGuard('ancestries')))
+  .filter(Boolean);
+const heritages = readPack('heritages')
+  .map(x => transformHeritage(x, makeCollisionGuard('heritages')))
+  .filter(Boolean);
 attachHeritages(ancestries, heritages);
 writeData('ancestries.json',  ancestries);
 
-writeData('backgrounds.json', readPack('backgrounds').map(transformBackground));
-writeData('classes.json',     readPack('classes').map(transformClass));
-writeData('feats-srd.json',   readPack('feats-srd').map(transformFeat));
-writeData('spells-srd.json',  readPack('spells-srd').map(transformSpell));
-writeData('equipment-srd.json', readPack('equipment-srd').map(transformEquipment));
+const backgroundGuard = makeCollisionGuard('backgrounds');
+writeData('backgrounds.json', readPack('backgrounds').map(x => transformBackground(x, backgroundGuard)));
+
+const classGuard = makeCollisionGuard('classes');
+writeData('classes.json',     readPack('classes').map(x => transformClass(x, classGuard)));
+
+const featGuard = makeCollisionGuard('feats');
+writeData('feats-srd.json',   readPack('feats-srd').map(x => transformFeat(x, featGuard)));
+
+const spellGuard = makeCollisionGuard('spells');
+writeData('spells-srd.json',  readPack('spells-srd').map(x => transformSpell(x, spellGuard)));
+
+const equipGuard = makeCollisionGuard('equipment');
+writeData('equipment-srd.json', readPack('equipment-srd').map(x => transformEquipment(x, equipGuard)));
 
 console.log(`  attached ${heritages.length} heritages across ${ancestries.length} ancestries`);
 console.log('Done. Review tier2 entries for flavor-scrub completeness before commit.');

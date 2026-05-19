@@ -1,7 +1,8 @@
 [
   {
-    "id": "XwfcJuskrhI9GIjX",
+    "id": "alchemist",
     "slug": "alchemist",
+    "foundryId": "XwfcJuskrhI9GIjX",
     "name": "Alchemist",
     "hp": 8,
     "keyAbility": [
@@ -67,8 +68,9 @@
     "tier": "tier1"
   },
   {
-    "id": "9KiqZVG9r5g8mC4V",
+    "id": "animist",
     "slug": "animist",
+    "foundryId": "9KiqZVG9r5g8mC4V",
     "name": "Animist",
     "hp": 8,
     "keyAbility": [
@@ -133,8 +135,9 @@
     "tier": "tier2"
   },
   {
-    "id": "YDRiP7uVvr9WRhOI",
+    "id": "barbarian",
     "slug": "barbarian",
+    "foundryId": "YDRiP7uVvr9WRhOI",
     "name": "Barbarian",
     "hp": 12,
     "keyAbility": [
@@ -200,8 +203,9 @@
     "tier": "tier1"
   },
   {
-    "id": "3gweRQ5gn7szIWAv",
+    "id": "bard",
     "slug": "bard",
+    "foundryId": "3gweRQ5gn7szIWAv",
     "name": "Bard",
     "hp": 8,
     "keyAbility": [
@@ -267,8 +271,9 @@
     "tier": "tier1"
   },
   {
-    "id": "x8iwnpdLbfcoZkHA",
+    "id": "champion",
     "slug": "champion",
+    "foundryId": "x8iwnpdLbfcoZkHA",
     "name": "Champion",
     "hp": 10,
     "keyAbility": [
@@ -335,8 +340,9 @@
     "tier": "tier1"
   },
   {
-    "id": "EizrWvUPMS67Pahd",
+    "id": "cleric",
     "slug": "cleric",
+    "foundryId": "EizrWvUPMS67Pahd",
     "name": "Cleric",
     "hp": 8,
     "keyAbility": [
@@ -401,8 +407,9 @@
     "tier": "tier1"
   },
   {
-    "id": "Oyee5Ds9uwYLEkD0",
+    "id": "commander",
     "slug": "commander",
+    "foundryId": "Oyee5Ds9uwYLEkD0",
     "name": "Commander",
     "hp": 8,
     "keyAbility": [
@@ -468,8 +475,9 @@
     "tier": "tier2"
   },
   {
-    "id": "7s57JDCaiYYCAdFx",
+    "id": "druid",
     "slug": "druid",
+    "foundryId": "7s57JDCaiYYCAdFx",
     "name": "Druid",
     "hp": 8,
     "keyAbility": [
@@ -534,8 +542,9 @@
     "tier": "tier1"
   },
   {
-    "id": "vZ0jL7pwthV2pm4A",
+    "id": "exemplar",
     "slug": "exemplar",
+    "foundryId": "vZ0jL7pwthV2pm4A",
     "name": "Exemplar",
     "hp": 10,
     "keyAbility": [
@@ -602,8 +611,9 @@
     "tier": "tier2"
   },
   {
-    "id": "8zn3cD6GSmoo1LW4",
+    "id": "fighter",
     "slug": "fighter",
+    "foundryId": "8zn3cD6GSmoo1LW4",
     "name": "Fighter",
     "hp": 10,
     "keyAbility": [
@@ -668,8 +678,9 @@
     "tier": "tier1"
   },
   {
-    "id": "1L7geK3aoosye3Xj",
+    "id": "guardian",
     "slug": "guardian",
+    "foundryId": "1L7geK3aoosye3Xj",
     "name": "Guardian",
     "hp": 12,
     "keyAbility": [
@@ -735,8 +746,9 @@
     "tier": "tier2"
   },
   {
-    "id": "Z9li154CPNmun29Q",
+    "id": "gunslinger",
     "slug": "gunslinger",
+    "foundryId": "Z9li154CPNmun29Q",
     "name": "Gunslinger",
     "hp": 8,
     "keyAbility": [
@@ -800,8 +812,9 @@
     "tier": "tier2"
   },
   {
-    "id": "30qVs46dVNflgQNx",
+    "id": "inventor",
     "slug": "inventor",
+    "foundryId": "30qVs46dVNflgQNx",
     "name": "Inventor",
     "hp": 8,
     "keyAbility": [
@@ -867,8 +880,9 @@
     "tier": "tier2"
   },
   {
-    "id": "4wrSCyX6akmyo7Wj",
+    "id": "investigator",
     "slug": "investigator",
+    "foundryId": "4wrSCyX6akmyo7Wj",
     "name": "Investigator",
     "hp": 8,
     "keyAbility": [
@@ -944,8 +958,9 @@
     "tier": "tier1"
   },
   {
-    "id": "RggQN3bX5SEcsffR",
+    "id": "kineticist",
     "slug": "kineticist",
+    "foundryId": "RggQN3bX5SEcsffR",
     "name": "Kineticist",
     "hp": 8,
     "keyAbility": [
@@ -1011,8 +1026,9 @@
     "tier": "tier2"
   },
   {
-    "id": "YPxpk9JbMnKjbNLc",
+    "id": "monk",
     "slug": "monk",
+    "foundryId": "YPxpk9JbMnKjbNLc",
     "name": "Monk",
     "hp": 10,
     "keyAbility": [
@@ -1077,8 +1093,9 @@
     "tier": "tier1"
   },
   {
-    "id": "pWHx4SXcft9O2udP",
+    "id": "oracle",
     "slug": "oracle",
+    "foundryId": "pWHx4SXcft9O2udP",
     "name": "Oracle",
     "hp": 8,
     "keyAbility": [
@@ -1143,8 +1160,9 @@
     "tier": "tier1"
   },
   {
-    "id": "Yix76sfxrIlltSTJ",
+    "id": "ranger",
     "slug": "ranger",
+    "foundryId": "Yix76sfxrIlltSTJ",
     "name": "Ranger",
     "hp": 10,
     "keyAbility": [
@@ -1211,8 +1229,9 @@
     "tier": "tier1"
   },
   {
-    "id": "LO9STvskJemPkiAI",
+    "id": "rogue",
     "slug": "rogue",
+    "foundryId": "LO9STvskJemPkiAI",
     "name": "Rogue",
     "hp": 8,
     "keyAbility": [
@@ -1288,8 +1307,9 @@
     "tier": "tier1"
   },
   {
-    "id": "15Yc1r6s9CEhSTMe",
+    "id": "sorcerer",
     "slug": "sorcerer",
+    "foundryId": "15Yc1r6s9CEhSTMe",
     "name": "Sorcerer",
     "hp": 6,
     "keyAbility": [
@@ -1352,8 +1372,9 @@
     "tier": "tier1"
   },
   {
-    "id": "uJ5aCzlw34GGdWjp",
+    "id": "swashbuckler",
     "slug": "swashbuckler",
+    "foundryId": "uJ5aCzlw34GGdWjp",
     "name": "Swashbuckler",
     "hp": 10,
     "keyAbility": [
@@ -1419,8 +1440,9 @@
     "tier": "tier1"
   },
   {
-    "id": "bYDXk9HUMKOuym9h",
+    "id": "witch",
     "slug": "witch",
+    "foundryId": "bYDXk9HUMKOuym9h",
     "name": "Witch",
     "hp": 6,
     "keyAbility": [
@@ -1483,8 +1505,9 @@
     "tier": "tier1"
   },
   {
-    "id": "RwjIZzIxzPpUglnK",
+    "id": "wizard",
     "slug": "wizard",
+    "foundryId": "RwjIZzIxzPpUglnK",
     "name": "Wizard",
     "hp": 6,
     "keyAbility": [
