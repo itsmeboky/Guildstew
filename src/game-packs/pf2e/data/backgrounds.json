@@ -18,7 +18,7 @@
     "loreSubskill": "Scribing",
     "grantedFeat": "Student of the Canon",
     "rarity": "common",
-    "desc": "You spent your early days in a religious monastery or cloister. You may have traveled out into the world to spread the message of your religion or because you cast away the teachings of your faith, but deep down, you'll always carry within you the lessons you learned. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Religion skill and the Scribing Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Student of the Canon] skill feat.",
+    "desc": "You spent your early days in a religious monastery or cloister. You may have traveled out into the world to spread the message of your religion or because you cast away the teachings of your faith, but deep down, you'll always carry within you the lessons you learned. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Religion skill and the Scribing Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -41,7 +41,7 @@
     "loreSubskill": "Circus",
     "grantedFeat": "Steady Balance",
     "rarity": "common",
-    "desc": "In a circus or on the streets, you earned your pay by performing as an acrobat. You might have turned to adventuring when the money dried up, or simply decided to put your skills to better use. Choose two attribute boosts. One must be to Strength or Dexterity , and one is a free attribute boost. You're trained in the Acrobatics skill and the Circus Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Steady Balance] skill feat.",
+    "desc": "In a circus or on the streets, you earned your pay by performing as an acrobat. You might have turned to adventuring when the money dried up, or simply decided to put your skills to better use. Choose two attribute boosts. One must be to Strength or Dexterity , and one is a free attribute boost. You're trained in the Acrobatics skill and the Circus Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -63,7 +63,7 @@
     ],
     "loreSubskill": "Piloting",
     "rarity": "uncommon",
-    "desc": "You have mastered the techniques for piloting all manner of airships—balloons, dirigibles, winged vehicles, or something altogether more fantastical. You have developed expertise in using these vehicles for transport, exploration, and battle. You live for the majestic view these vehicles provide high above the fray and can harness the winds that fill the skies. Choose two attribute boosts. One must be to Strength or Dexterity , and one is a free attribute boost. You're trained in the Athletics skill and the Piloting Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Assurance] skill feat with Piloting Lore.",
+    "desc": "You have mastered the techniques for piloting all manner of airships—balloons, dirigibles, winged vehicles, or something altogether more fantastical. You have developed expertise in using these vehicles for transport, exploration, and battle. You live for the majestic view these vehicles provide high above the fray and can harness the winds that fill the skies. Choose two attribute boosts. One must be to Strength or Dexterity , and one is a free attribute boost. You're trained in the Athletics skill and the Piloting Lore skill. You gain the skill feat with Piloting Lore.",
     "source": "Pathfinder Battlecry!",
     "tier": "tier2"
   },
@@ -86,7 +86,7 @@
     "loreSubskill": "Underworld",
     "grantedFeat": "Subtle Theft",
     "rarity": "uncommon",
-    "desc": "You're an outlaw whose first crime was stealing the guns from Alkenstar's Gunworks which allowed you to commence a crime spree of epic proportions. You don't know where your road ends, but it's probably going to be a bloody affair. The life of an adventurer might even be a relief compared to a life forever on the run from Alkenstar authorities and their allies. Choose two attribute boosts. One boost must be to Dexterity or Constitution , and one is a free attribute boost. You're trained in Thievery and Underworld Lore. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Subtle Theft] skill feat.",
+    "desc": "You're an outlaw whose first crime was stealing the guns from Alkenstar's Gunworks which allowed you to commence a crime spree of epic proportions. You don't know where your road ends, but it's probably going to be a bloody affair. The life of an adventurer might even be a relief compared to a life forever on the run from Alkenstar authorities and their allies. Choose two attribute boosts. One boost must be to Dexterity or Constitution , and one is a free attribute boost. You're trained in Thievery and Underworld Lore. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -109,7 +109,7 @@
     "loreSubskill": "Engineering",
     "grantedFeat": "Streetwise",
     "rarity": "uncommon",
-    "desc": "You came to Alkenstar because you heard they had guns, but you stayed because of the atmosphere. Or the guns. Either way, journalism and scientific curiosity opened the door to a life of adventure. Now you continue to adventure in the Alkenstar area, using your skills to deal with whatever situations present themselves. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in Society and Engineering Lore. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Streetwise] skill feat.",
+    "desc": "You came to Alkenstar because you heard they had guns, but you stayed because of the atmosphere. Or the guns. Either way, journalism and scientific curiosity opened the door to a life of adventure. Now you continue to adventure in the Alkenstar area, using your skills to deal with whatever situations present themselves. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in Society and Engineering Lore. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -131,7 +131,7 @@
     ],
     "loreSubskill": "Metal",
     "rarity": "common",
-    "desc": "Blacksmithing might be an ancient profession, but you are its cutting edge. You've studied the properties of different metals, experimented with them by combining them, exposing them to different elements and processes, and have even delved into the metaphysical nature of metal in your quest to master it. You might have taken up adventuring to acquire more funding and materials or to test your designs. Choose two attribute boosts. One must be to Strength or Intelligence , and one is a free attribute boost. You're trained in the Crafting skill and the Plane of Metal Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Specialty Crafting] skill feat with the blacksmithing specialty.",
+    "desc": "Blacksmithing might be an ancient profession, but you are its cutting edge. You've studied the properties of different metals, experimented with them by combining them, exposing them to different elements and processes, and have even delved into the metaphysical nature of metal in your quest to master it. You might have taken up adventuring to acquire more funding and materials or to test your designs. Choose two attribute boosts. One must be to Strength or Intelligence , and one is a free attribute boost. You're trained in the Crafting skill and the Plane of Metal Lore skill. You gain the skill feat with the blacksmithing specialty.",
     "source": "Pathfinder Rage of Elements",
     "tier": "tier2"
   },
@@ -184,7 +184,7 @@
     "loreSubskill": null,
     "grantedFeat": "Train Animal",
     "rarity": "common",
-    "desc": "You have always felt a connection to animals, and it was only a small leap to learn to train them. As you travel, you continuously encounter different creatures, befriending them along the way. Choose two attribute boosts. One must be to Wisdom or Charisma , and one is a free attribute boost. You're trained in the Nature skill and a Lore skill related to one terrain inhabited by animals you like (such as Plains Lore or Swamp Lore). You gain the @UUID[Compendium.pf2e.feats-srd.Item.Train Animal] skill feat.",
+    "desc": "You have always felt a connection to animals, and it was only a small leap to learn to train them. As you travel, you continuously encounter different creatures, befriending them along the way. Choose two attribute boosts. One must be to Wisdom or Charisma , and one is a free attribute boost. You're trained in the Nature skill and a Lore skill related to one terrain inhabited by animals you like (such as Plains Lore or Swamp Lore). You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -207,7 +207,7 @@
     "loreSubskill": "Guild",
     "grantedFeat": "Group Coercion",
     "rarity": "common",
-    "desc": "You've seen the sorts of things that technology brings—polluted environments, workers put out of their jobs or horribly injured, and the slow erosion of society—and you've vowed to inform the larger world of these ills. You do so with long, impassioned speeches on street corners and village squares and by talking personally with the heads of various guilds. Adventuring into the wider world could help spread your message even farther. Choose two attribute boosts. One must be to Constitution or Charisma , and one is a free attribute boost. You're trained in the Intimidation skill and the Guild Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Group Coercion] skill feat.",
+    "desc": "You've seen the sorts of things that technology brings—polluted environments, workers put out of their jobs or horribly injured, and the slow erosion of society—and you've vowed to inform the larger world of these ills. You do so with long, impassioned speeches on street corners and village squares and by talking personally with the heads of various guilds. Adventuring into the wider world could help spread your message even farther. Choose two attribute boosts. One must be to Constitution or Charisma , and one is a free attribute boost. You're trained in the Intimidation skill and the Guild Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -230,7 +230,7 @@
     "loreSubskill": null,
     "grantedFeat": "Quick Identification",
     "rarity": "uncommon",
-    "desc": "You have fought against oppressive leaders and governments, harnessing ancient magical energies to help liberate your community from much larger, better-resourced armies. Using magical methods to harass and sabotage your oppressors, you've learned to take advantage of their blind spots and use their own resources against them. Choose two attribute boosts. One must be to Dexterity or Intelligence , and one is a free attribute boost. You're trained in the Arcana skill and the Lore skill related to the settlement you liberated. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Quick Identification] skill feat.",
+    "desc": "You have fought against oppressive leaders and governments, harnessing ancient magical energies to help liberate your community from much larger, better-resourced armies. Using magical methods to harass and sabotage your oppressors, you've learned to take advantage of their blind spots and use their own resources against them. Choose two attribute boosts. One must be to Dexterity or Intelligence , and one is a free attribute boost. You're trained in the Arcana skill and the Lore skill related to the settlement you liberated. You gain the skill feat.",
     "source": "Pathfinder Battlecry!",
     "tier": "tier2"
   },
@@ -253,7 +253,7 @@
     "loreSubskill": "Guild",
     "grantedFeat": "Specialty Crafting",
     "rarity": "common",
-    "desc": "As an apprentice, you practiced a particular form of building or crafting, developing a specialized skill. You might have been a blacksmith's apprentice toiling over the forge for countless hours, a young tailor sewing garments of all kinds, or a shipwright shaping the hulls of ships. Choose two attribute boosts. One must be to Strength or Intelligence , and one is a free attribute boost. You're trained in the Crafting skill and the Guild Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Specialty Crafting] skill feat.",
+    "desc": "As an apprentice, you practiced a particular form of building or crafting, developing a specialized skill. You might have been a blacksmith's apprentice toiling over the forge for countless hours, a young tailor sewing garments of all kinds, or a shipwright shaping the hulls of ships. Choose two attribute boosts. One must be to Strength or Intelligence , and one is a free attribute boost. You're trained in the Crafting skill and the Guild Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -276,7 +276,7 @@
     "loreSubskill": "Art",
     "grantedFeat": "Specialty Crafting",
     "rarity": "common",
-    "desc": "Your art is your greatest passion, whatever form it takes. Adventuring might help you find inspiration, or simply be a way to survive until you become a world-famous artist. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You're trained in the Crafting skill and the Art Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Specialty Crafting] skill feat.",
+    "desc": "Your art is your greatest passion, whatever form it takes. Adventuring might help you find inspiration, or simply be a way to survive until you become a world-famous artist. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You're trained in the Crafting skill and the Art Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -299,7 +299,7 @@
     "loreSubskill": "Astrology",
     "grantedFeat": "Oddity Identification",
     "rarity": "common",
-    "desc": "Astrologers look to the stars for signs and portents, using their positions in the heavens to chart courses for those living beneath them. As the celestial spheres move, so does fate itself. You studied the stars and learned to divine your path based on their guidance. Whether the stars directly called you to a life of adventure or you use the stars to guide your wanderlust, you're living out the stars' guidance in a life of adventure. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in Occultism and Astrology Lore. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Oddity Identification] skill feat.",
+    "desc": "Astrologers look to the stars for signs and portents, using their positions in the heavens to chart courses for those living beneath them. As the celestial spheres move, so does fate itself. You studied the stars and learned to divine your path based on their guidance. Whether the stars directly called you to a life of adventure or you use the stars to guide your wanderlust, you're living out the stars' guidance in a life of adventure. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in Occultism and Astrology Lore. You gain the skill feat.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -322,7 +322,7 @@
     "loreSubskill": "Underworld",
     "grantedFeat": "Risky Surgery",
     "rarity": "common",
-    "desc": "You're the medic many turn to when a more official clinic or healer might not be available. You may specialize in stitching up bullet wounds or have a standing, confidential deal with a criminal syndicate to provide your services any time of day or night. In either case, you've perhaps turned to the adventuring life because a former client is unhappy with your work or members of the local constabulary have been asking too many questions. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Medicine skill and the Underworld Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Risky Surgery] skill feat.",
+    "desc": "You're the medic many turn to when a more official clinic or healer might not be available. You may specialize in stitching up bullet wounds or have a standing, confidential deal with a criminal syndicate to provide your services any time of day or night. In either case, you've perhaps turned to the adventuring life because a former client is unhappy with your work or members of the local constabulary have been asking too many questions. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Medicine skill and the Underworld Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -345,7 +345,7 @@
     "loreSubskill": null,
     "grantedFeat": "Group Coercion",
     "rarity": "common",
-    "desc": "Your past includes no small amount of rural banditry, robbing travelers on the road and scraping by. Whether your robbery was sanctioned by a local noble or you did so of your own accord, you eventually got caught up in the adventuring life. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You're trained in the Intimidation skill and a Lore skill related to the terrain you worked in (such as Desert Lore or Plains Lore). You gain the @UUID[Compendium.pf2e.feats-srd.Item.Group Coercion] skill feat.",
+    "desc": "Your past includes no small amount of rural banditry, robbing travelers on the road and scraping by. Whether your robbery was sanctioned by a local noble or you did so of your own accord, you eventually got caught up in the adventuring life. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You're trained in the Intimidation skill and a Lore skill related to the terrain you worked in (such as Desert Lore or Plains Lore). You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -368,7 +368,7 @@
     "loreSubskill": "Surgery",
     "grantedFeat": "Risky Surgery",
     "rarity": "common",
-    "desc": "Haircuts, dentistry, bloodletting, and surgery—if it takes a steady hand and a razor, you can do it. You may have taken to the road to expand your skills or test yourself against a world that leaves your patients so battered and bruised. Choose two attribute boosts. One must be to Dexterity or Wisdom , and one is a free attribute boost. You're trained in the Medicine skill and the Surgery Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Risky Surgery] skill feat.",
+    "desc": "Haircuts, dentistry, bloodletting, and surgery—if it takes a steady hand and a razor, you can do it. You may have taken to the road to expand your skills or test yourself against a world that leaves your patients so battered and bruised. Choose two attribute boosts. One must be to Dexterity or Wisdom , and one is a free attribute boost. You're trained in the Medicine skill and the Surgery Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -391,7 +391,7 @@
     "loreSubskill": "Alcohol",
     "grantedFeat": "Hobnobber",
     "rarity": "common",
-    "desc": "You have five specialties: hefting barrels, drinking, polishing steins, drinking, and drinking. You worked in a bar, where you learned how to hold your liquor and rowdily socialize. Choose two attribute boosts. One must be to Constitution or Charisma , and one is a free attribute boost. You're trained in the Diplomacy skill and the Alcohol Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Hobnobber] skill feat.",
+    "desc": "You have five specialties: hefting barrels, drinking, polishing steins, drinking, and drinking. You worked in a bar, where you learned how to hold your liquor and rowdily socialize. Choose two attribute boosts. One must be to Constitution or Charisma , and one is a free attribute boost. You're trained in the Diplomacy skill and the Alcohol Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -414,7 +414,7 @@
     "loreSubskill": "Legal",
     "grantedFeat": "Group Impression",
     "rarity": "common",
-    "desc": "Piles of legal manuals, stern teachers, and experience in the courtroom have instructed you in legal matters. You're capable of mounting a prosecution or defense in court, and you tend to keep abreast of local laws, as you never can tell when you might need to know them on short notice. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Diplomacy skill and the Legal Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Group Impression] skill feat.",
+    "desc": "Piles of legal manuals, stern teachers, and experience in the courtroom have instructed you in legal matters. You're capable of mounting a prosecution or defense in court, and you tend to keep abreast of local laws, as you never can tell when you might need to know them on short notice. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Diplomacy skill and the Legal Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -437,7 +437,7 @@
     "loreSubskill": "Vehicle",
     "grantedFeat": "Quick Repair",
     "rarity": "common",
-    "desc": "All vehicles eventually break down, from both wear and tear and through contact with the enemy, and someone needs to fix them. You have experience repairing air, land, and sea vehicles of all types, and you are knowledgeable about how they function and what specialized tools they require. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Crafting skill and the Vehicle Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Quick Repair] skill feat.",
+    "desc": "All vehicles eventually break down, from both wear and tear and through contact with the enemy, and someone needs to fix them. You have experience repairing air, land, and sea vehicles of all types, and you are knowledgeable about how they function and what specialized tools they require. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Crafting skill and the Vehicle Lore skill. You gain the skill feat.",
     "source": "Pathfinder Battlecry!",
     "tier": "tier2"
   },
@@ -460,7 +460,7 @@
     "loreSubskill": "Warfare",
     "grantedFeat": "Improvise Tool",
     "rarity": "uncommon",
-    "desc": "You've spent years rummaging through the corpses of armies and their equipment as soon as battles were won, seeking items from the dead that you can craft into something of value. While you've left that life behind, you've learned about warfare as well as how to create useful items from scavenged goods. Choose two attribute boosts. One must be to Strength or Intelligence , and one is a free attribute boost. You're trained in the Crafting skill and the Warfare Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Improvise Tool] skill feat.",
+    "desc": "You've spent years rummaging through the corpses of armies and their equipment as soon as battles were won, seeking items from the dead that you can craft into something of value. While you've left that life behind, you've learned about warfare as well as how to create useful items from scavenged goods. Choose two attribute boosts. One must be to Strength or Intelligence , and one is a free attribute boost. You're trained in the Crafting skill and the Warfare Lore skill. You gain the skill feat.",
     "source": "Pathfinder Battlecry!",
     "tier": "tier2"
   },
@@ -480,7 +480,7 @@
     "trainedSkills": [],
     "loreSubskill": null,
     "rarity": "rare",
-    "desc": "You have been blessed by a divinity. For an unknown reason, and irrespective of your actual beliefs, a deity has granted you a boon to use for good or ill. Your blessing grants wisdom and insight to aid you in your struggles. You may or may not even know the identity of the being who blessed you, and the blessing might come with a cost you discover later on. Choose two attribute boosts. One must be to Wisdom or Charisma , and one is a free attribute boost. You are trained in a Lore skill associated with the deity who blessed you (such as Shelyn Lore) if you know their identity, or else in a Lore skill of the GM's choice if you don't. Either you can cast @UUID[Compendium.pf2e.spells-srd.Item.Guidance] as a divine innate spell at will, or you gain a similar blessing determined by the GM.",
+    "desc": "You have been blessed by a divinity. For an unknown reason, and irrespective of your actual beliefs, a deity has granted you a boon to use for good or ill. Your blessing grants wisdom and insight to aid you in your struggles. You may or may not even know the identity of the being who blessed you, and the blessing might come with a cost you discover later on. Choose two attribute boosts. One must be to Wisdom or Charisma , and one is a free attribute boost. You are trained in a Lore skill associated with the deity who blessed you (such as Shelyn Lore) if you know their identity, or else in a Lore skill of the GM's choice if you don't. Either you can cast as a divine innate spell at will, or you gain a similar blessing determined by the GM.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -503,7 +503,7 @@
     "loreSubskill": "Accounting",
     "grantedFeat": "Eye For Numbers",
     "rarity": "common",
-    "desc": "You ran the numbers on a large farm, for a merchant's endeavors, or with a major guild in the city. You kept track of expenses, payroll, profits, and anything else that had to do with money, for better or worse. If better, you might be adventuring to learn how others ply this trade. If worse, you may be fleeing from impending consequences in the hope that no one finds you. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Society skill and the Accounting Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Eye for Numbers] skill feat.",
+    "desc": "You ran the numbers on a large farm, for a merchant's endeavors, or with a major guild in the city. You kept track of expenses, payroll, profits, and anything else that had to do with money, for better or worse. If better, you might be adventuring to learn how others ply this trade. If worse, you may be fleeing from impending consequences in the hope that no one finds you. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Society skill and the Accounting Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -526,7 +526,7 @@
     "loreSubskill": "Legal",
     "grantedFeat": "Experienced Tracker",
     "rarity": "common",
-    "desc": "Bringing in lawbreakers lined your pockets. Maybe you had an altruistic motive and sought to bring in criminals to make the streets safer, or maybe the coin was motivation enough. Your techniques for hunting down criminals transfer easily to the life of an adventurer. Choose two attribute boosts. One must be to Strength or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and the Legal Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Experienced Tracker] skill feat.",
+    "desc": "Bringing in lawbreakers lined your pockets. Maybe you had an altruistic motive and sought to bring in criminals to make the streets safer, or maybe the coin was motivation enough. Your techniques for hunting down criminals transfer easily to the life of an adventurer. Choose two attribute boosts. One must be to Strength or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and the Legal Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -549,7 +549,7 @@
     "loreSubskill": "Warfare",
     "grantedFeat": "Hefty Hauler",
     "rarity": "common",
-    "desc": "You served as a crewmate aboard a military vessel or pirate ship and were responsible for the use and maintenance of the ship's cannons. A strong back and quick reflexes were equally important to you in your duties, and you know your way around explosives and the dangers that lie therein. These skills serve you well in your new life as an adventurer, as compared to the weight of a cannon, a gear load that makes your allies blanche just makes you laugh instead. Choose two attribute boosts. One boost must be to Dexterity or Strength , and one is a free attribute boost. You're trained in the Athletics skill and the Warfare Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Hefty Hauler] skill feat.",
+    "desc": "You served as a crewmate aboard a military vessel or pirate ship and were responsible for the use and maintenance of the ship's cannons. A strong back and quick reflexes were equally important to you in your duties, and you know your way around explosives and the dangers that lie therein. These skills serve you well in your new life as an adventurer, as compared to the weight of a cannon, a gear load that makes your allies blanche just makes you laugh instead. Choose two attribute boosts. One boost must be to Dexterity or Strength , and one is a free attribute boost. You're trained in the Athletics skill and the Warfare Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -572,7 +572,7 @@
     "loreSubskill": "Underworld",
     "grantedFeat": "Charming Liar",
     "rarity": "common",
-    "desc": "You traveled from place to place, peddling false fortunes and snake oil in one town, pretending to be royalty in exile to seduce a wealthy heir in the next. Becoming an adventurer might be your next big scam or an attempt to put your talents to use for a greater cause. Perhaps it's a bit of both, as you realize that after pretending to be a hero, you've become the mask. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Deception skill and the Underworld Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Charming Liar] skill feat.",
+    "desc": "You traveled from place to place, peddling false fortunes and snake oil in one town, pretending to be royalty in exile to seduce a wealthy heir in the next. Becoming an adventurer might be your next big scam or an attempt to put your talents to use for a greater cause. Perhaps it's a bit of both, as you realize that after pretending to be a hero, you've become the mask. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Deception skill and the Underworld Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -617,7 +617,7 @@
     "loreSubskill": "Legal",
     "grantedFeat": "Lie To Me",
     "rarity": "uncommon",
-    "desc": "You're a circuit judge, a courtroom on horseback who serves a group of communities out in the Mana Wastes or a similar backwoods region. You show up every couple of months, hear the cases that have piled up since your last visit, give verdicts, and then it's on to the next town in your itinerary. It's not the easiest life in the world, but it's an interesting one, and you hear some mighty strange cases. Chances are, it was one of those cases that set you on the road to adventure. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in Deception and Legal Lore. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Lie to Me] skill feat.",
+    "desc": "You're a circuit judge, a courtroom on horseback who serves a group of communities out in the Mana Wastes or a similar backwoods region. You show up every couple of months, hear the cases that have piled up since your last visit, give verdicts, and then it's on to the next town in your itinerary. It's not the easiest life in the world, but it's an interesting one, and you hear some mighty strange cases. Chances are, it was one of those cases that set you on the road to adventure. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in Deception and Legal Lore. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -640,7 +640,7 @@
     "loreSubskill": "Gladiatorial",
     "grantedFeat": "Experienced Professional",
     "rarity": "common",
-    "desc": "While others choose to use their engineering ability to heal the injured or make brilliant innovations, you've used your skill to repair and modify clockwork constructs that battle in gladiatorial combat. You know how to get a crowd electrified for your clockwork gladiator, win or lose, and you know how to repair it when it gets damaged. These skills serve you well as an adventurer. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Crafting skill and the Gladiatorial Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Experienced Professional] skill feat.",
+    "desc": "While others choose to use their engineering ability to heal the injured or make brilliant innovations, you've used your skill to repair and modify clockwork constructs that battle in gladiatorial combat. You know how to get a crowd electrified for your clockwork gladiator, win or lose, and you know how to repair it when it gets damaged. These skills serve you well as an adventurer. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Crafting skill and the Gladiatorial Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -663,7 +663,7 @@
     "loreSubskill": "Engineering",
     "grantedFeat": "Crafter's Appraisal",
     "rarity": "common",
-    "desc": "New forms of clockwork technology are incredibly interesting to you, and you've been studying examples of them to see where else they might be best put to use. You might eventually develop a new prototype machine or find a way to make related technologies practical enough for everyone to benefit. Though before you do, you must continue your research! Choose two attribute boosts. One must be to Dexterity or Intelligence , and one is a free attribute boost. You're trained in the Society skill and the Engineering Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Crafter's Appraisal] skill feat.",
+    "desc": "New forms of clockwork technology are incredibly interesting to you, and you've been studying examples of them to see where else they might be best put to use. You might eventually develop a new prototype machine or find a way to make related technologies practical enough for everyone to benefit. Though before you do, you must continue your research! Choose two attribute boosts. One must be to Dexterity or Intelligence , and one is a free attribute boost. You're trained in the Society skill and the Engineering Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -686,7 +686,7 @@
     "loreSubskill": "Cryptography",
     "grantedFeat": "Glean Contents",
     "rarity": "common",
-    "desc": "Whether you're employed by a military organization to decipher coded messages sent by enemy factions or work independently to crack an enigma created by a past civilization, you have a head for patterns and linguistics. You might even use new clockwork devices to aid you in your efforts. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Society skill and the Cryptography Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Glean Contents] skill feat.",
+    "desc": "Whether you're employed by a military organization to decipher coded messages sent by enemy factions or work independently to crack an enigma created by a past civilization, you have a head for patterns and linguistics. You might even use new clockwork devices to aid you in your efforts. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Society skill and the Cryptography Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -709,7 +709,7 @@
     "loreSubskill": "Engineering",
     "grantedFeat": "Specialty Crafting",
     "rarity": "common",
-    "desc": "You have spent countless hours selecting lumber, drafting designs, and constructing all manner of wooden buildings, shields, weapons, and tools. You can readily identify the weak spots in wooden fortifications and determine the best ways to bolster or attack them. Choose two attribute boosts. One must be to Dexterity or Intelligence , and one is a free attribute boost. You're trained in the Crafting skill and the Engineering Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Specialty Crafting] skill feat.",
+    "desc": "You have spent countless hours selecting lumber, drafting designs, and constructing all manner of wooden buildings, shields, weapons, and tools. You can readily identify the weak spots in wooden fortifications and determine the best ways to bolster or attack them. Choose two attribute boosts. One must be to Dexterity or Intelligence , and one is a free attribute boost. You're trained in the Crafting skill and the Engineering Lore skill. You gain the skill feat.",
     "source": "Pathfinder Battlecry!",
     "tier": "tier2"
   },
@@ -732,7 +732,7 @@
     "loreSubskill": null,
     "grantedFeat": "Recognize Spell",
     "rarity": "common",
-    "desc": "As a member of the clergy, you have been responsible for tending to the spiritual and moral well-being of soldiers and their families. While you may have been a follower of a specific deity, you acted as an ambassador of the church overall, providing religious support in a religiously pluralistic and diverse setting. You provided counsel and took on the role of critical friend, mediator, and reconciler for those under your charge. You may have been called to lead worship, perform weddings, and conduct funerals in both nearby villages as well as remote locales. Choose two attribute boosts. One must be to Wisdom or Charisma , and one is a free attribute boost. You're trained in the Religion skill and the Lore skill associated with the deity you worship. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Recognize Spell] skill feat.",
+    "desc": "As a member of the clergy, you have been responsible for tending to the spiritual and moral well-being of soldiers and their families. While you may have been a follower of a specific deity, you acted as an ambassador of the church overall, providing religious support in a religiously pluralistic and diverse setting. You provided counsel and took on the role of critical friend, mediator, and reconciler for those under your charge. You may have been called to lead worship, perform weddings, and conduct funerals in both nearby villages as well as remote locales. Choose two attribute boosts. One must be to Wisdom or Charisma , and one is a free attribute boost. You're trained in the Religion skill and the Lore skill associated with the deity you worship. You gain the skill feat.",
     "source": "Pathfinder Battlecry!",
     "tier": "tier2"
   },
@@ -775,7 +775,7 @@
     "loreSubskill": "Air",
     "grantedFeat": "Hobnobber",
     "rarity": "uncommon",
-    "desc": "You were hired by the Concordance of Elements to seek out rumors of planar breaches or other evidence of planar imbalances. After reporting back to the Concordance, they'd send agents more well equipped to deal with the situation. Still, this job has led you into more trouble than your employers suspect, and you've learned how to get your information quickly and get out relatively unscathed. Choose two attribute boosts. One must be to Constitution or Charisma , and one is a free attribute boost. You're trained in the Diplomacy skill and one of the following lore skills: Plane of Air Lore, Plane of Earth Lore, Plane of Fire Lore, Plane of Metal Lore, Plane of Water Lore, or Plane of Wood Lore. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Hobnobber] skill feat.",
+    "desc": "You were hired by the Concordance of Elements to seek out rumors of planar breaches or other evidence of planar imbalances. After reporting back to the Concordance, they'd send agents more well equipped to deal with the situation. Still, this job has led you into more trouble than your employers suspect, and you've learned how to get your information quickly and get out relatively unscathed. Choose two attribute boosts. One must be to Constitution or Charisma , and one is a free attribute boost. You're trained in the Diplomacy skill and one of the following lore skills: Plane of Air Lore, Plane of Earth Lore, Plane of Fire Lore, Plane of Metal Lore, Plane of Water Lore, or Plane of Wood Lore. You gain the skill feat.",
     "source": "Pathfinder Rage of Elements",
     "tier": "tier2"
   },
@@ -798,7 +798,7 @@
     "loreSubskill": "Warfare",
     "grantedFeat": "Dubious Knowledge",
     "rarity": "common",
-    "desc": "Like many others in your settlement, you readily performed your duty and served in the army once you came of age. Much to the chagrin of the grizzled lifers that sought to train it out of you, you managed to retain a modicum of your naivete even as you faced the gruesome horrors of war. You've learned just enough strategy and tactics to make you dangerous. Choose two attribute boosts. One must be to Strength or Constitution , and one is a free attribute boost. You're trained in the Society skill and the Warfare Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Dubious Knowledge] skill feat.",
+    "desc": "Like many others in your settlement, you readily performed your duty and served in the army once you came of age. Much to the chagrin of the grizzled lifers that sought to train it out of you, you managed to retain a modicum of your naivete even as you faced the gruesome horrors of war. You've learned just enough strategy and tactics to make you dangerous. Choose two attribute boosts. One must be to Strength or Constitution , and one is a free attribute boost. You're trained in the Society skill and the Warfare Lore skill. You gain the skill feat.",
     "source": "Pathfinder Battlecry!",
     "tier": "tier2"
   },
@@ -821,7 +821,7 @@
     "loreSubskill": "Cooking",
     "grantedFeat": "Seasoned",
     "rarity": "common",
-    "desc": "You grew up in the kitchens of a tavern or other dining establishment and excelled there, becoming an exceptional cook. Baking, cooking, a little brewing on the side—you've spent lots of time out of sight. It's about time you went out into the world to catch some sights for yourself. Choose two attribute boosts. One must be to Constitution or Intelligence , and one is a free attribute boost. You're trained in the Survival skill and the Cooking Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Seasoned] skill feat.",
+    "desc": "You grew up in the kitchens of a tavern or other dining establishment and excelled there, becoming an exceptional cook. Baking, cooking, a little brewing on the side—you've spent lots of time out of sight. It's about time you went out into the world to catch some sights for yourself. Choose two attribute boosts. One must be to Constitution or Intelligence , and one is a free attribute boost. You're trained in the Survival skill and the Cooking Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -844,7 +844,7 @@
     "loreSubskill": null,
     "grantedFeat": "Glean Contents",
     "rarity": "common",
-    "desc": "In your youth, you earned coin running messages for persons of wealth and influence, darting through crowded city streets. Your dogged commitment to deliver your message was good training for the life of an adventurer. Choose two attribute boosts. One must be to Dexterity or Intelligence , and one is a free attribute boost. You're trained in the Society skill and the Lore skill for the city in which you were raised. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Glean Contents] skill feat.",
+    "desc": "In your youth, you earned coin running messages for persons of wealth and influence, darting through crowded city streets. Your dogged commitment to deliver your message was good training for the life of an adventurer. Choose two attribute boosts. One must be to Dexterity or Intelligence , and one is a free attribute boost. You're trained in the Society skill and the Lore skill for the city in which you were raised. You gain the skill feat.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -867,7 +867,7 @@
     "loreSubskill": "Underworld",
     "grantedFeat": "Experienced Smuggler",
     "rarity": "common",
-    "desc": "As an unscrupulous independent or as a member of an underworld organization, you lived a life of crime. You might have become an adventurer to seek redemption, to escape the law, or simply to get access to bigger and better loot. Choose two attribute boosts. One must be to Dexterity or Intelligence , and one is a free attribute boost. You're trained in the Stealth skill and the Underworld Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Experienced Smuggler] skill feat.",
+    "desc": "As an unscrupulous independent or as a member of an underworld organization, you lived a life of crime. You might have become an adventurer to seek redemption, to escape the law, or simply to get access to bigger and better loot. Choose two attribute boosts. One must be to Dexterity or Intelligence , and one is a free attribute boost. You're trained in the Stealth skill and the Underworld Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -890,7 +890,7 @@
     "loreSubskill": "Earth",
     "grantedFeat": "Natural Medicine",
     "rarity": "common",
-    "desc": "Mineral formations can be beautiful things, sparkling and arrayed in geometric configurations. To you, they are also potent natural healing aids. You may have taken up adventuring to prove yourself by healing the ailing or to find new crystals with unique properties to add to your growing collection. Choose two attribute boosts. One must be to Wisdom or Charisma and one is a free attribute boost. You're trained in the Nature skill and the Plane of Earth Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Natural Medicine] skill feat.",
+    "desc": "Mineral formations can be beautiful things, sparkling and arrayed in geometric configurations. To you, they are also potent natural healing aids. You may have taken up adventuring to prove yourself by healing the ailing or to find new crystals with unique properties to add to your growing collection. Choose two attribute boosts. One must be to Wisdom or Charisma and one is a free attribute boost. You're trained in the Nature skill and the Plane of Earth Lore skill. You gain the skill feat.",
     "source": "Pathfinder Rage of Elements",
     "tier": "tier2"
   },
@@ -913,7 +913,7 @@
     "loreSubskill": null,
     "grantedFeat": "Schooled In Secrets",
     "rarity": "common",
-    "desc": "You were (or still are) a member of a cult whose rites may involve sacred dances to ensure a strong harvest or dire rituals that call upon dark powers. You might have taken up adventuring to further your cult's aims, to initiate yourself into the world's grander mysteries, or to flee unsavory practices or strictures. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Occultism skill and a Lore skill related to your deity or cult. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Schooled in Secrets] skill feat.",
+    "desc": "You were (or still are) a member of a cult whose rites may involve sacred dances to ensure a strong harvest or dire rituals that call upon dark powers. You might have taken up adventuring to further your cult's aims, to initiate yourself into the world's grander mysteries, or to flee unsavory practices or strictures. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Occultism skill and a Lore skill related to your deity or cult. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -935,7 +935,7 @@
     ],
     "loreSubskill": "Curse",
     "rarity": "rare",
-    "desc": "You are the victim of a personal or hereditary curse. Through great effort and occult study, you have learned to fend off the curse's worst effects and, by extension, you can protect yourself against other harmful magic. However, the curse still hangs over you and sometimes manifests in dangerous ways. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You are trained in Occultism and Curse Lore. You gain the @UUID[Compendium.pf2e.actionspf2e.Item.Warding Sign] reaction. You and the GM should determine the full effects of the curse, though you've staved most of them off for now. The GM determines the curse's lingering manifestations on you, which usually include at least a constant or very frequent thematic effect and occasional more dangerous effects.",
+    "desc": "You are the victim of a personal or hereditary curse. Through great effort and occult study, you have learned to fend off the curse's worst effects and, by extension, you can protect yourself against other harmful magic. However, the curse still hangs over you and sometimes manifests in dangerous ways. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You are trained in Occultism and Curse Lore. You gain the reaction. You and the GM should determine the full effects of the curse, though you've staved most of them off for now. The GM determines the curse's lingering manifestations on you, which usually include at least a constant or very frequent thematic effect and occasional more dangerous effects.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -958,7 +958,7 @@
     "loreSubskill": "Water",
     "grantedFeat": "Underwater Marauder",
     "rarity": "common",
-    "desc": "The sapphire depths of the seas and the mysteries they hold beneath their surface have always piqued your interest. Your obsession with the ocean depths cannot be contained to one world alone, and you've read tomes and journals about the source of all water, everywhere, hoping to one day understand the watery secrets of the great unknown. Choose two attribute boosts. One must be to Strength or Wisdom , and one is a free attribute boost. You're trained in the Athletics skill and the Plane of Water Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Underwater Marauder] skill feat.",
+    "desc": "The sapphire depths of the seas and the mysteries they hold beneath their surface have always piqued your interest. Your obsession with the ocean depths cannot be contained to one world alone, and you've read tomes and journals about the source of all water, everywhere, hoping to one day understand the watery secrets of the great unknown. Choose two attribute boosts. One must be to Strength or Wisdom , and one is a free attribute boost. You're trained in the Athletics skill and the Plane of Water Lore skill. You gain the skill feat.",
     "source": "Pathfinder Rage of Elements",
     "tier": "tier2"
   },
@@ -981,7 +981,7 @@
     "loreSubskill": "Wood",
     "grantedFeat": "Terrain Expertise",
     "rarity": "common",
-    "desc": "Trees grow in every biome, and your awe at their ability to conquer terrain has inspired deeper study into their workings. There are trees everywhere, and your study of them will inevitably take you ever further afield in search of new varieties, perhaps even to the Plane of Wood itself. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and the Plane of Wood Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Terrain Expertise] skill feat for forests.",
+    "desc": "Trees grow in every biome, and your awe at their ability to conquer terrain has inspired deeper study into their workings. There are trees everywhere, and your study of them will inevitably take you ever further afield in search of new varieties, perhaps even to the Plane of Wood itself. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and the Plane of Wood Lore skill. You gain the skill feat for forests.",
     "source": "Pathfinder Rage of Elements",
     "tier": "tier2"
   },
@@ -1004,7 +1004,7 @@
     "loreSubskill": "Hunting",
     "grantedFeat": "Experienced Tracker",
     "rarity": "common",
-    "desc": "While your life may have taken some twists and turns in the intervening years, you were once deputized as the lawful protector of a community. While the role was temporary and you've since turned in your badge, that responsibility shaped you. Whenever a community is in trouble, and the sheriff is nowhere to be found, residents call on you to capture a criminal, rescue the mayor's offspring from bandits, or go toe to toe with outlaws. Choose two attribute boosts. One must be to Dexterity or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and the Hunting Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Experienced Tracker] skill feat.",
+    "desc": "While your life may have taken some twists and turns in the intervening years, you were once deputized as the lawful protector of a community. While the role was temporary and you've since turned in your badge, that responsibility shaped you. Whenever a community is in trouble, and the sheriff is nowhere to be found, residents call on you to capture a criminal, rescue the mayor's offspring from bandits, or go toe to toe with outlaws. Choose two attribute boosts. One must be to Dexterity or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and the Hunting Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -1027,7 +1027,7 @@
     "loreSubskill": "Underworld",
     "grantedFeat": "Streetwise",
     "rarity": "common",
-    "desc": "You solved crimes as a police inspector or took jobs for wealthy clients as a private investigator. You might have become an adventurer as part of your next big mystery, but likely it was due to the consequences or aftermath of a prior case. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Society skill and the Underworld Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Streetwise] skill feat.",
+    "desc": "You solved crimes as a police inspector or took jobs for wealthy clients as a private investigator. You might have become an adventurer as part of your next big mystery, but likely it was due to the consequences or aftermath of a prior case. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Society skill and the Underworld Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1057,7 +1057,7 @@
     "trainedSkills": [],
     "loreSubskill": null,
     "rarity": "rare",
-    "desc": "Someone created you for a specific purpose. Some important person, be they a storied royal, a contentious politician, or a stark military leader, needed a body double for their most dangerous appearances. Using a mixture of fringe science and magic, you were commissioned and trained to emulate this person in every way, and have stood in for them in countless deadly circumstances. You may or may not know the reason behind your decommissioning, but whoever discarded you didn't finish you off. Now, the world is yours to explore—but \"you\" may have a bold or brutish reputation, or the individual you were duplicating may be long dead. Regardless of the fate of this individual, your way of life has changed drastically. You and the GM can work out how to incorporate your previous life into your story. The GM can keep this knowledge @UUID[Compendium.pf2e.conditionitems.Item.Hidden] even from you, or you or another character know what happened. You and the GM can also leave the information unspecified and fill it in later. You gain three free attribute boosts. You choose two, and the GM chooses one based on the attributes of the character you were built to duplicate.",
+    "desc": "Someone created you for a specific purpose. Some important person, be they a storied royal, a contentious politician, or a stark military leader, needed a body double for their most dangerous appearances. Using a mixture of fringe science and magic, you were commissioned and trained to emulate this person in every way, and have stood in for them in countless deadly circumstances. You may or may not know the reason behind your decommissioning, but whoever discarded you didn't finish you off. Now, the world is yours to explore—but \"you\" may have a bold or brutish reputation, or the individual you were duplicating may be long dead. Regardless of the fate of this individual, your way of life has changed drastically. You and the GM can work out how to incorporate your previous life into your story. The GM can keep this knowledge even from you, or you or another character know what happened. You and the GM can also leave the information unspecified and fill it in later. You gain three free attribute boosts. You choose two, and the GM chooses one based on the attributes of the character you were built to duplicate.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -1080,7 +1080,7 @@
     "loreSubskill": null,
     "grantedFeat": "Quick Repair",
     "rarity": "common",
-    "desc": "While many regard science and faith as incompatible, you believe scientific advancement is your deity's will. Perhaps you're a follower of Brigh, Casandalee, or some other god of technology, or perhaps you see the furnaces and sparks of modernity as the latest manifestation of the Sun deity's flame or Gozreh's lightning—whatever the case, you're always willing to spread the word of your deity, and you've learned some basic tinkering to show how your deity's focus can increase the common standard of living. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Crafting skill and the Lore skill for the deity you worship. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Quick Repair] skill feat.",
+    "desc": "While many regard science and faith as incompatible, you believe scientific advancement is your deity's will. Perhaps you're a follower of Brigh, Casandalee, or some other god of technology, or perhaps you see the furnaces and sparks of modernity as the latest manifestation of the Sun deity's flame or Gozreh's lightning—whatever the case, you're always willing to spread the word of your deity, and you've learned some basic tinkering to show how your deity's focus can increase the common standard of living. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Crafting skill and the Lore skill for the deity you worship. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -1103,7 +1103,7 @@
     "loreSubskill": "Driving",
     "grantedFeat": "Assurance",
     "rarity": "common",
-    "desc": "You live behind the controls of a vehicle, and can handle anything the road or waves and sky can throw at you. You adventure to test your skills with new and interesting vehicles. Choose two attribute boosts. One must be to Strength or Dexterity , and one is a free attribute boost. You're trained in the Acrobatics skill and either the Driving Lore or Piloting Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Assurance] skill feat with the chosen lore.",
+    "desc": "You live behind the controls of a vehicle, and can handle anything the road or waves and sky can throw at you. You adventure to test your skills with new and interesting vehicles. Choose two attribute boosts. One must be to Strength or Dexterity , and one is a free attribute boost. You're trained in the Acrobatics skill and either the Driving Lore or Piloting Lore skill. You gain the skill feat with the chosen lore.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -1123,7 +1123,7 @@
     "trainedSkills": [],
     "loreSubskill": "Air",
     "rarity": "rare",
-    "desc": "You were exposed to a strong burst of elemental essence originating directly from an elemental plane, most likely caused by a planar breach. Your body absorbed the elemental essence with no ill effects, and now it coalesces within you. With time, you've learned to project elemental power in a manner safe to you but still deadly to others. Choose two attribute boosts. One must be to Constitution or Charisma , and one is a free attribute boost. Choose one elemental plane: Air, Earth, Fire, Metal, Water, or Wood. You are trained in the corresponding Lore skill: Plane of Air Lore, Plane of Earth Lore, Plane of Fire Lore, Plane of Metal Lore, Plane of Water Lore, or Plane of Wood Lore. You also gain a cantrip according to your chosen plane: Air: @UUID[Compendium.pf2e.spells-srd.Item.Gale Blast] Earth: @UUID[Compendium.pf2e.spells-srd.Item.Scatter Scree] Fire: @UUID[Compendium.pf2e.spells-srd.Item.Ignition] Metal: @UUID[Compendium.pf2e.spells-srd.Item.Needle Darts] Water: @UUID[Compendium.pf2e.spells-srd.Item.Spout] Wood: @UUID[Compendium.pf2e.spells-srd.Item.Root Reading] You can cast this spell as a primal innate spell at will.",
+    "desc": "You were exposed to a strong burst of elemental essence originating directly from an elemental plane, most likely caused by a planar breach. Your body absorbed the elemental essence with no ill effects, and now it coalesces within you. With time, you've learned to project elemental power in a manner safe to you but still deadly to others. Choose two attribute boosts. One must be to Constitution or Charisma , and one is a free attribute boost. Choose one elemental plane: Air, Earth, Fire, Metal, Water, or Wood. You are trained in the corresponding Lore skill: Plane of Air Lore, Plane of Earth Lore, Plane of Fire Lore, Plane of Metal Lore, Plane of Water Lore, or Plane of Wood Lore. You also gain a cantrip according to your chosen plane: Air: Earth: Fire: Metal: Water: Wood: You can cast this spell as a primal innate spell at will.",
     "source": "Pathfinder Rage of Elements",
     "tier": "tier2"
   },
@@ -1146,7 +1146,7 @@
     "loreSubskill": null,
     "grantedFeat": "Multilingual",
     "rarity": "common",
-    "desc": "As a diplomat or messenger, you traveled to lands far and wide. Communicating with new people and forming alliances were your stock and trade. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Society skill and a Lore skill related to one city you've visited often. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Multilingual] skill feat.",
+    "desc": "As a diplomat or messenger, you traveled to lands far and wide. Communicating with new people and forming alliances were your stock and trade. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Society skill and a Lore skill related to one city you've visited often. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1169,7 +1169,7 @@
     "loreSubskill": "Theater",
     "grantedFeat": "Fascinating Performance",
     "rarity": "common",
-    "desc": "Through an education in the arts or sheer dogged practice, you learned to entertain crowds. You might have been an actor, a dancer, a musician, a street magician, or any other sort of performer. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You're trained in the Performance skill and the Theater Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Fascinating Performance] skill feat.",
+    "desc": "Through an education in the arts or sheer dogged practice, you learned to entertain crowds. You might have been an actor, a dancer, a musician, a street magician, or any other sort of performer. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You're trained in the Performance skill and the Theater Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1191,7 +1191,7 @@
     ],
     "loreSubskill": "Farming",
     "rarity": "common",
-    "desc": "With a strong back and an understanding of seasonal cycles, you tilled the land and tended crops. Your farm could have been razed by invaders, you could have lost the family tying you to the land, or you might have simply tired of the drudgery, but at some point, you became an adventurer. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Athletics skill and the Farming Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Assurance] skill feat with Athletics.",
+    "desc": "With a strong back and an understanding of seasonal cycles, you tilled the land and tended crops. Your farm could have been razed by invaders, you could have lost the family tying you to the land, or you might have simply tired of the drudgery, but at some point, you became an adventurer. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Athletics skill and the Farming Lore skill. You gain the skill feat with Athletics.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1214,7 +1214,7 @@
     "loreSubskill": "Farming",
     "grantedFeat": "Forager",
     "rarity": "common",
-    "desc": "You built your house using wood from the trees surrounding it. Raised it up from the dirt and called it home. You thought that it would be where you would grow old and die. But despite your best efforts, you were wrong. The land that once gave you food fell fallow, and dust took to the air and choked the livestock. Now you wander the world as an adventurer. Are you in search of a new place to settle down and try again, or have you become disillusioned by your old dreams, leading you to seek out a new purpose? Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and the Farming Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Forager] skill feat.",
+    "desc": "You built your house using wood from the trees surrounding it. Raised it up from the dirt and called it home. You thought that it would be where you would grow old and die. But despite your best efforts, you were wrong. The land that once gave you food fell fallow, and dust took to the air and choked the livestock. Now you wander the world as an adventurer. Are you in search of a new place to settle down and try again, or have you become disillusioned by your old dreams, leading you to seek out a new purpose? Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and the Farming Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -1233,7 +1233,7 @@
     "loreSubskill": null,
     "grantedFeat": "Forager",
     "rarity": "rare",
-    "desc": "You spent your youth in the wilderness, living close to or perhaps raised by animals. You have a close, mystical connection with these animals and gained certain abilities from them, though this limited your well-roundedness in mental pursuits. Choose one ability boost. It must be Strength , Dexterity , or Constitution . You are trained in Nature and Survival. You gain low-light vision (or darkvision if you already had low-light vision), imprecise scent with a range of 30 feet, and the @UUID[Compendium.pf2e.feats-srd.Item.Forager] skill feat.",
+    "desc": "You spent your youth in the wilderness, living close to or perhaps raised by animals. You have a close, mystical connection with these animals and gained certain abilities from them, though this limited your well-roundedness in mental pursuits. Choose one ability boost. It must be Strength , Dexterity , or Constitution . You are trained in Nature and Survival. You gain low-light vision (or darkvision if you already had low-light vision), imprecise scent with a range of 30 feet, and the skill feat.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -1253,7 +1253,7 @@
     "trainedSkills": [],
     "loreSubskill": "Fey",
     "rarity": "rare",
-    "desc": "You have spent time in the First World or another realm of the fey and aren't entirely the same person you were before. Perhaps you made a purchase at the legendary Witchmarket or partook deeply of fey food and wine. Whatever the case, willingly or inadvertently, you made a bargain with the fey, the benefits of which come at a price. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You are trained in Fey Lore and gain the @UUID[Compendium.pf2e.actionspf2e.Item.Fey's Fortune] free action. You must follow some rule or limitation as part of your pact with the fey. If you violate the rule, you lose Fey's Fortune until you receive the effects of a successful @UUID[Compendium.pf2e.spells-srd.Item.Atone] ritual using the Nature skill. The exact limitation is up to you and the GM, but the most common requirement is that you must fulfill a single request from any fey who knows your name.",
+    "desc": "You have spent time in the First World or another realm of the fey and aren't entirely the same person you were before. Perhaps you made a purchase at the legendary Witchmarket or partook deeply of fey food and wine. Whatever the case, willingly or inadvertently, you made a bargain with the fey, the benefits of which come at a price. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You are trained in Fey Lore and gain the free action. You must follow some rule or limitation as part of your pact with the fey. If you violate the rule, you lose Fey's Fortune until you receive the effects of a successful ritual using the Nature skill. The exact limitation is up to you and the GM, but the most common requirement is that you must fulfill a single request from any fey who knows your name.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -1276,7 +1276,7 @@
     "loreSubskill": "Warfare",
     "grantedFeat": "Battle Medicine",
     "rarity": "common",
-    "desc": "In the chaotic rush of battle, you learned to adapt to rapidly changing conditions as you administered to battle casualties. You patched up soldiers, guards, or other combatants, and learned a fair amount about the logistics of war. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Medicine skill and the Warfare Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Battle Medicine] skill feat.",
+    "desc": "In the chaotic rush of battle, you learned to adapt to rapidly changing conditions as you administered to battle casualties. You patched up soldiers, guards, or other combatants, and learned a fair amount about the logistics of war. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Medicine skill and the Warfare Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1299,7 +1299,7 @@
     "loreSubskill": "Fire",
     "grantedFeat": "Breath Control",
     "rarity": "common",
-    "desc": "Whether you fought against fires in the wilderness or in crowded city streets, you've had your fair share of dealing with uncontrolled flames. Battling thick smoke and toxic fumes, you've broken down obstacles to save trapped people from a fiery grave, and you've studied the nature and source of fire itself to try and better learn how to fight it. Choose two attribute boosts. One must be to Strength or Constitution , and one is a free attribute boost. You're trained in the Athletics skill and the Plane of Fire Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Breath Control] feat.",
+    "desc": "Whether you fought against fires in the wilderness or in crowded city streets, you've had your fair share of dealing with uncontrolled flames. Battling thick smoke and toxic fumes, you've broken down obstacles to save trapped people from a fiery grave, and you've studied the nature and source of fire itself to try and better learn how to fight it. Choose two attribute boosts. One must be to Strength or Constitution , and one is a free attribute boost. You're trained in the Athletics skill and the Plane of Fire Lore skill. You gain the feat.",
     "source": "Pathfinder Rage of Elements",
     "tier": "tier2"
   },
@@ -1322,7 +1322,7 @@
     "loreSubskill": "Fireworks",
     "grantedFeat": "Fascinating Performance",
     "rarity": "common",
-    "desc": "Few celebrations in Tian Xia are complete without a show of fireworks, and your job is to make sure they go off without a hitch. You load the fireworks, set the fuses, and choreograph the performance, bringing the show together in a finale of lights and explosions. Then it's time to pack up your gear and move on to the next civic holiday or religious festival. Of course, someone who travels the roads with a pack full of high explosives is bound to run into an adventure or two along the way, and so over time, your fireworks have been spent in support of that life. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Performance skill and the Fireworks Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Fascinating Performance] skill feat.",
+    "desc": "Few celebrations in Tian Xia are complete without a show of fireworks, and your job is to make sure they go off without a hitch. You load the fireworks, set the fuses, and choreograph the performance, bringing the show together in a finale of lights and explosions. Then it's time to pack up your gear and move on to the next civic holiday or religious festival. Of course, someone who travels the roads with a pack full of high explosives is bound to run into an adventure or two along the way, and so over time, your fireworks have been spent in support of that life. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Performance skill and the Fireworks Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -1345,7 +1345,7 @@
     "loreSubskill": "Fortune-Telling",
     "grantedFeat": "Oddity Identification",
     "rarity": "common",
-    "desc": "The strands of fate are clear to you, as you have learned many traditional forms by which laypeople can divine the future. You might have used these skills to guide your community, or simply to make money. But even the slightest peek into these practices connects you to the occult mysteries of the universe. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Occultism skill and the Fortune-Telling Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Oddity Identification] skill feat.",
+    "desc": "The strands of fate are clear to you, as you have learned many traditional forms by which laypeople can divine the future. You might have used these skills to guide your community, or simply to make money. But even the slightest peek into these practices connects you to the occult mysteries of the universe. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Occultism skill and the Fortune-Telling Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1368,7 +1368,7 @@
     "loreSubskill": "Games",
     "grantedFeat": "Lie To Me",
     "rarity": "common",
-    "desc": "The thrill of the win drew you into games of chance. This might have been a lucrative sideline that paled in comparison to the real risks of adventuring, or you might have fallen on hard times due to your gambling and pursued adventuring as a way out of a spiral. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You're trained in the Deception skill and the Games Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Lie to Me] skill feat.",
+    "desc": "The thrill of the win drew you into games of chance. This might have been a lucrative sideline that paled in comparison to the real risks of adventuring, or you might have fallen on hard times due to your gambling and pursued adventuring as a way out of a spiral. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You're trained in the Deception skill and the Games Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1391,7 +1391,7 @@
     "loreSubskill": "Gladiatorial",
     "grantedFeat": "Impressive Performance",
     "rarity": "common",
-    "desc": "The bloody games of the arena taught you the art of combat. Before you attained true fame, you departed—or escaped—the arena to explore the world. Your skill at drawing both blood and a crowd's attention pay off in a new adventuring life. Choose two attribute boosts. One must be to Strength or Charisma , and one is a free attribute boost. You're trained in the Performance skill and the Gladiatorial Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Impressive Performance] skill feat.",
+    "desc": "The bloody games of the arena taught you the art of combat. Before you attained true fame, you departed—or escaped—the arena to explore the world. Your skill at drawing both blood and a crowd's attention pay off in a new adventuring life. Choose two attribute boosts. One must be to Strength or Charisma , and one is a free attribute boost. You're trained in the Performance skill and the Gladiatorial Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1414,7 +1414,7 @@
     "loreSubskill": "Mercantile",
     "grantedFeat": "Group Impression",
     "rarity": "uncommon",
-    "desc": "You're a dwarven agent of the Goldhand Lodge, a collection of dwarven merchants based out of Dongun Hold who seeks to sell guns far and wide. High King Anong Arunak hasn't expressed approval for such a method of distribution yet, but in the meantime you're still out and about, talking up your wares and occasionally providing visceral demonstrations of the overwhelming stopping power of your firearms. These demonstrations and sales have given you a taste for adventure, and the constant threat of piracy has convinced you of the importance of adventuring with a group. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You're trained in Diplomacy and Mercantile Lore. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Group Impression] skill feat.",
+    "desc": "You're a dwarven agent of the Goldhand Lodge, a collection of dwarven merchants based out of Dongun Hold who seeks to sell guns far and wide. High King Anong Arunak hasn't expressed approval for such a method of distribution yet, but in the meantime you're still out and about, talking up your wares and occasionally providing visceral demonstrations of the overwhelming stopping power of your firearms. These demonstrations and sales have given you a taste for adventure, and the constant threat of piracy has convinced you of the importance of adventuring with a group. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You're trained in Diplomacy and Mercantile Lore. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -1437,7 +1437,7 @@
     "loreSubskill": "Legal",
     "grantedFeat": "Quick Coercion",
     "rarity": "common",
-    "desc": "You served in the guard, out of either patriotism or the need for coin. Either way, you know how to get a difficult suspect to talk. However you left the guard, you might think of adventuring as a way to use your skills on a wider stage. Choose two attribute boosts. One must be to Strength or Charisma , and one is a free attribute boost. You're trained in the Intimidation skill and the Legal Lore or Warfare Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Quick Coercion] skill feat.",
+    "desc": "You served in the guard, out of either patriotism or the need for coin. Either way, you know how to get a difficult suspect to talk. However you left the guard, you might think of adventuring as a way to use your skills on a wider stage. Choose two attribute boosts. One must be to Strength or Charisma , and one is a free attribute boost. You're trained in the Intimidation skill and the Legal Lore or Warfare Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1460,7 +1460,7 @@
     "loreSubskill": "Engineering",
     "grantedFeat": "Quick Repair",
     "rarity": "common",
-    "desc": "From a young age, you apprenticed to an experienced gunsmith and over time your skill and knowledge rose to match that of your master. Today, you can easily repair, modify, or improve nearly any firearm you've seen before, and even if you haven't seen it, you'll break it down to learn about what makes it tick in no time. You've taken those skills on the road, using them to assist yourself and your allies as an adventurer when it comes to maintaining their weapons, shields, armor, and more. Choose two attribute boosts. One of these boosts must be to Intelligence or Dexterity , and one is a free attribute boost. You're trained in the Crafting skill and the Engineering Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Quick Repair] skill feat.",
+    "desc": "From a young age, you apprenticed to an experienced gunsmith and over time your skill and knowledge rose to match that of your master. Today, you can easily repair, modify, or improve nearly any firearm you've seen before, and even if you haven't seen it, you'll break it down to learn about what makes it tick in no time. You've taken those skills on the road, using them to assist yourself and your allies as an adventurer when it comes to maintaining their weapons, shields, armor, and more. Choose two attribute boosts. One of these boosts must be to Intelligence or Dexterity , and one is a free attribute boost. You're trained in the Crafting skill and the Engineering Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -1482,7 +1482,7 @@
     ],
     "loreSubskill": null,
     "rarity": "rare",
-    "desc": "You are followed by a spirit or entity, either from childhood or since a momentous event. You and others may have seen this entity. You have studied esoteric subjects trying to understand your situation, but this presence in your life remains a mystery. Whatever this entity is or wants, it influences your life in subtle ways, and not always for the better. Sometimes the entity helps you, but at other times, its influence is malevolent or harmful. The entity is most likely to surface in stressful situations. Choose two attribute boosts. One must be to Wisdom or Charisma , and one is a free attribute boost. You are trained in Occultism and an additional skill in which the haunting entity is well-versed, determined by the GM. Any time you attempt a skill check for the entity's skill, the GM can offer you a +1 circumstance bonus to the check, as though the entity were @UUID[Compendium.pf2e.actionspf2e.Item.Aid]{Aiding} you. If you accept but fail the check, you are @UUID[Compendium.pf2e.conditionitems.Item.Frightened]{Frightened 2} (@UUID[Compendium.pf2e.conditionitems.Item.Frightened]{Frightened 4} on a critical failure). The initial Frightened value can't be reduced by effects that would reduce or prevent the condition (such as a fighter's bravery).",
+    "desc": "You are followed by a spirit or entity, either from childhood or since a momentous event. You and others may have seen this entity. You have studied esoteric subjects trying to understand your situation, but this presence in your life remains a mystery. Whatever this entity is or wants, it influences your life in subtle ways, and not always for the better. Sometimes the entity helps you, but at other times, its influence is malevolent or harmful. The entity is most likely to surface in stressful situations. Choose two attribute boosts. One must be to Wisdom or Charisma , and one is a free attribute boost. You are trained in Occultism and an additional skill in which the haunting entity is well-versed, determined by the GM. Any time you attempt a skill check for the entity's skill, the GM can offer you a +1 circumstance bonus to the check, as though the entity were Aiding you. If you accept but fail the check, you are Frightened 2 (Frightened 4 on a critical failure). The initial Frightened value can't be reduced by effects that would reduce or prevent the condition (such as a fighter's bravery).",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -1505,7 +1505,7 @@
     "loreSubskill": "Herbalism",
     "grantedFeat": "Natural Medicine",
     "rarity": "common",
-    "desc": "As a formally trained apothecary or a rural practitioner of folk medicine, you learned the healing properties of various herbs. You're adept at collecting the right natural cures in all sorts of environments and preparing them properly. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Nature skill and the Herbalism Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Natural Medicine] skill feat.",
+    "desc": "As a formally trained apothecary or a rural practitioner of folk medicine, you learned the healing properties of various herbs. You're adept at collecting the right natural cures in all sorts of environments and preparing them properly. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Nature skill and the Herbalism Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1526,7 +1526,7 @@
     "loreSubskill": null,
     "grantedFeat": "Dubious Knowledge",
     "rarity": "common",
-    "desc": "In an isolated place—like a cave, remote oasis, or secluded mansion—you lived a life of solitude. Adventuring might be a welcome reprieve from solitude or an unwanted change, but in either case, you're likely still rough around the edges. Choose two attribute boosts. One must be to Constitution or Intelligence , and one is a free attribute boost. You're trained in the Nature or Occultism skill, plus a Lore skill related to the terrain you lived in as a hermit (such as Cave Lore or Desert Lore). You gain the @UUID[Compendium.pf2e.feats-srd.Item.Dubious Knowledge] skill feat.",
+    "desc": "In an isolated place—like a cave, remote oasis, or secluded mansion—you lived a life of solitude. Adventuring might be a welcome reprieve from solitude or an unwanted change, but in either case, you're likely still rough around the edges. Choose two attribute boosts. One must be to Constitution or Intelligence , and one is a free attribute boost. You're trained in the Nature or Occultism skill, plus a Lore skill related to the terrain you lived in as a hermit (such as Cave Lore or Desert Lore). You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1549,7 +1549,7 @@
     "loreSubskill": "Underworld",
     "grantedFeat": "Terrain Stalker",
     "rarity": "common",
-    "desc": "Your life truly began after your first kill. Maybe you killed in self-defense, maybe it was a crime of passion, or maybe it was just an accident and you were a kid in the wrong place at the wrong time. In the end, the why doesn't matter. You got away with it. And then you found that maybe it didn't bother you as much as it should have. And maybe, just maybe, you had a talent you could use to forge a life for yourself. A blood-soaked talent and a blood-soaked life, sure. But it's yours. Choose two attribute boosts. One boost must be to Strength or Dexterity , and one is a free attribute boost. You're trained in the Stealth skill and the Underworld Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Terrain Stalker] skill feat, choosing a terrain appropriate for where you make your kills.",
+    "desc": "Your life truly began after your first kill. Maybe you killed in self-defense, maybe it was a crime of passion, or maybe it was just an accident and you were a kid in the wrong place at the wrong time. In the end, the why doesn't matter. You got away with it. And then you found that maybe it didn't bother you as much as it should have. And maybe, just maybe, you had a talent you could use to forge a life for yourself. A blood-soaked talent and a blood-soaked life, sure. But it's yours. Choose two attribute boosts. One boost must be to Strength or Dexterity , and one is a free attribute boost. You're trained in the Stealth skill and the Underworld Lore skill. You gain the skill feat, choosing a terrain appropriate for where you make your kills.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -1572,7 +1572,7 @@
     "loreSubskill": "Underworld",
     "grantedFeat": "Pickpocket",
     "rarity": "common",
-    "desc": "Some time ago, you stole a unique item from a strange individual. It might have been a piece of clockwork from a far-off land or some other bit of strange technology. You might still have it or you might have sold it, but either way, you can't shake the feeling that you're being followed and watched, likely by forces who want to retrieve what you took. Luckily, a life of adventure keeps you on the move. Choose two attribute boosts. One must be to Dexterity or Wisdom , and one is a free attribute boost. You're trained in the Thievery skill and the Underworld Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Pickpocket] skill feat.",
+    "desc": "Some time ago, you stole a unique item from a strange individual. It might have been a piece of clockwork from a far-off land or some other bit of strange technology. You might still have it or you might have sold it, but either way, you can't shake the feeling that you're being followed and watched, likely by forces who want to retrieve what you took. Luckily, a life of adventure keeps you on the move. Choose two attribute boosts. One must be to Dexterity or Wisdom , and one is a free attribute boost. You're trained in the Thievery skill and the Underworld Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -1595,7 +1595,7 @@
     "loreSubskill": "Tanning",
     "grantedFeat": "Survey Wildlife",
     "rarity": "common",
-    "desc": "You stalked and took down animals and other creatures of the wild. Skinning animals, harvesting their flesh, and cooking them were also part of your training, all of which can give you useful resources while you adventure. Choose two attribute boosts. One must be to Dexterity or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and the Tanning Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Survey Wildlife] skill feat.",
+    "desc": "You stalked and took down animals and other creatures of the wild. Skinning animals, harvesting their flesh, and cooking them were also part of your training, all of which can give you useful resources while you adventure. Choose two attribute boosts. One must be to Dexterity or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and the Tanning Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1618,7 +1618,7 @@
     "loreSubskill": "Warfare",
     "grantedFeat": "Lengthy Diversion",
     "rarity": "common",
-    "desc": "You were more than a rebel; you were a revolutionary, fighting for the promise of a new or better country. You may or may not still believe in the cause, or perhaps victory or exile has led you on this new journey to trumpet your glory... or to escape the consequences of your defeat. Choose two attribute boosts. One must be to Strength or Wisdom , and one is a free attribute boost. You're trained in the Deception skill and the Warfare Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Lengthy Diversion] skill feat.",
+    "desc": "You were more than a rebel; you were a revolutionary, fighting for the promise of a new or better country. You may or may not still believe in the cause, or perhaps victory or exile has led you on this new journey to trumpet your glory... or to escape the consequences of your defeat. Choose two attribute boosts. One must be to Strength or Wisdom , and one is a free attribute boost. You're trained in the Deception skill and the Warfare Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -1641,7 +1641,7 @@
     "loreSubskill": "Engineering",
     "grantedFeat": "Crafter's Appraisal",
     "rarity": "common",
-    "desc": "You live by the adage that one person's trash is another's treasure. Whether by sifting through scrap heaps or digging up old battlefields, you remain on the lookout for lost or discarded objects that you might be able to turn into something useful. More often than not, what you find is just junk, but you're convinced that one of these days, you're going to hit the jackpot. You've even taken up adventuring as a means to supercharge your access to all sorts of junk, gear, and loot. Choose two attribute boosts. One must be to Dexterity or Intelligence , and one is a free attribute boost. You're trained in the Crafting skill and your choice of either the Engineering Lore or Mining Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Crafter's Appraisal] skill feat.",
+    "desc": "You live by the adage that one person's trash is another's treasure. Whether by sifting through scrap heaps or digging up old battlefields, you remain on the lookout for lost or discarded objects that you might be able to turn into something useful. More often than not, what you find is just junk, but you're convinced that one of these days, you're going to hit the jackpot. You've even taken up adventuring as a means to supercharge your access to all sorts of junk, gear, and loot. Choose two attribute boosts. One must be to Dexterity or Intelligence , and one is a free attribute boost. You're trained in the Crafting skill and your choice of either the Engineering Lore or Mining Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -1664,7 +1664,7 @@
     "loreSubskill": null,
     "grantedFeat": "Hefty Hauler",
     "rarity": "common",
-    "desc": "You live on the outskirts of civilization, combing through the detritus left behind for interesting trinkets to sell or use in your own crafting. Though you have a preferred terrain to search, you know that the greatest treasures occur where people make greater use of technology. Choose two attribute boosts. One must be to Strength or Wisdom , and one is a free attribute boost. You're trained in the Athletics skill and the Lore skill of the terrain in which you scavenge. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Hefty Hauler] skill feat.",
+    "desc": "You live on the outskirts of civilization, combing through the detritus left behind for interesting trinkets to sell or use in your own crafting. Though you have a preferred terrain to search, you know that the greatest treasures occur where people make greater use of technology. Choose two attribute boosts. One must be to Strength or Wisdom , and one is a free attribute boost. You're trained in the Athletics skill and the Lore skill of the terrain in which you scavenge. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -1687,7 +1687,7 @@
     "loreSubskill": "Labor",
     "grantedFeat": "Hefty Hauler",
     "rarity": "common",
-    "desc": "You've spent years performing arduous physical labor. It was a difficult life, but you somehow survived. You may have embraced adventuring as an easier method to make your way in the world, or you might adventure under someone else's command. Choose two attribute boosts. One must be to Strength or Constitution , and one is a free attribute boost. You're trained in the Athletics skill and the Labor Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Hefty Hauler] skill feat.",
+    "desc": "You've spent years performing arduous physical labor. It was a difficult life, but you somehow survived. You may have embraced adventuring as an easier method to make your way in the world, or you might adventure under someone else's command. Choose two attribute boosts. One must be to Strength or Constitution , and one is a free attribute boost. You're trained in the Athletics skill and the Labor Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1707,7 +1707,7 @@
     "trainedSkills": [],
     "loreSubskill": "Warfare",
     "rarity": "common",
-    "desc": "You dedicated yourself to intense training and rigorous study to become a great warrior. The school you attended might have been a traditionalist monastery, an elite military academy, or the local branch of a prestigious mercenary organization. Choose two attribute boosts. One must be to Strength or Dexterity , and one is a free attribute boost. You're trained in your choice of the Acrobatics or Athletics skill. You gain a skill feat: @UUID[Compendium.pf2e.feats-srd.Item.Cat Fall] if you chose Acrobatics or @UUID[Compendium.pf2e.feats-srd.Item.Quick Jump] if you chose Athletics. You're also trained in the Warfare Lore skill.",
+    "desc": "You dedicated yourself to intense training and rigorous study to become a great warrior. The school you attended might have been a traditionalist monastery, an elite military academy, or the local branch of a prestigious mercenary organization. Choose two attribute boosts. One must be to Strength or Dexterity , and one is a free attribute boost. You're trained in your choice of the Acrobatics or Athletics skill. You gain a skill feat: if you chose Acrobatics or if you chose Athletics. You're also trained in the Warfare Lore skill.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1730,7 +1730,7 @@
     "loreSubskill": "Warfare",
     "grantedFeat": "Impressive Performance",
     "rarity": "uncommon",
-    "desc": "Before you were old enough to join the actual fighting forces, you found your way onto the battlefield playing bagpipes, bugles, or drums. With these instruments of war, you helped direct troops in speed and direction, providing a pulsing cadence to push troops forward and keep them motivated. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You're trained in the Performance skill and the Warfare Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Impressive Performance] skill feat.",
+    "desc": "Before you were old enough to join the actual fighting forces, you found your way onto the battlefield playing bagpipes, bugles, or drums. With these instruments of war, you helped direct troops in speed and direction, providing a pulsing cadence to push troops forward and keep them motivated. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You're trained in the Performance skill and the Warfare Lore skill. You gain the skill feat.",
     "source": "Pathfinder Battlecry!",
     "tier": "tier2"
   },
@@ -1753,7 +1753,7 @@
     "loreSubskill": "Engineering",
     "grantedFeat": "Quick Repair",
     "rarity": "common",
-    "desc": "The intricate inner workings of machines are no stranger to you. Whether they are mundane devices or complex clockworks, you know what makes them tick and how to maintain them. An adventuring group might keep you around to repair their equipment, or you might travel around to offer your rare services to those in need—for a price, of course! Choose two attribute boosts. One must be to Strength or Intelligence , and one is a free attribute boost. You're trained in the Crafting skill and the Engineering Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Quick Repair] skill feat.",
+    "desc": "The intricate inner workings of machines are no stranger to you. Whether they are mundane devices or complex clockworks, you know what makes them tick and how to maintain them. An adventuring group might keep you around to repair their equipment, or you might travel around to offer your rare services to those in need—for a price, of course! Choose two attribute boosts. One must be to Strength or Intelligence , and one is a free attribute boost. You're trained in the Crafting skill and the Engineering Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -1775,7 +1775,7 @@
     ],
     "loreSubskill": null,
     "rarity": "rare",
-    "desc": "Whether you purposefully took it on or had it thrust upon you, a bronze, clockwork object latched onto some part of your body. It may have sunk its needles into you or locked its spidery legs around your neck, torso, or upper arm. Some entity or spirit lives in this collection of gears and wires-whether or not other people hear its whispers is up to you. The entity may be an ancient, terrible being that has razed villages with its hosts, or it may be a brilliant, starry-eyed child who barely understands you're not part of its own body. You have studied and searched for information on these rare, crab-like machines, leaving you an expert in the binding of elemental spirits or mortal souls to mechanical objects. Though you have several theories on what the symbiotic entity might be, you have no definitive answers-this may be why you're adventuring in the first place, or perhaps you've made a deal with someone to get it removed. The entity might talk to you periodically, or it might only speak when it wants you to do something in particular or finds the two of you in danger. You and the GM should decide on the entity's motivations, or if the motivations should be a secret known only to the GM. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Arcana skill and an additional skill in which the clockwork entity is well-versed, determined by the GM. Any time you attempt a skill check for the entity's skill, the GM can offer you a +1 circumstance bonus to the check, as though the entity were Aiding you. If you accept but fail the check, the entity clenches up and you are @UUID[Compendium.pf2e.conditionitems.Item.Stunned]{Stunned 1} (@UUID[Compendium.pf2e.conditionitems.Item.Stunned]{Stunned 2} on a critical failure).",
+    "desc": "Whether you purposefully took it on or had it thrust upon you, a bronze, clockwork object latched onto some part of your body. It may have sunk its needles into you or locked its spidery legs around your neck, torso, or upper arm. Some entity or spirit lives in this collection of gears and wires-whether or not other people hear its whispers is up to you. The entity may be an ancient, terrible being that has razed villages with its hosts, or it may be a brilliant, starry-eyed child who barely understands you're not part of its own body. You have studied and searched for information on these rare, crab-like machines, leaving you an expert in the binding of elemental spirits or mortal souls to mechanical objects. Though you have several theories on what the symbiotic entity might be, you have no definitive answers-this may be why you're adventuring in the first place, or perhaps you've made a deal with someone to get it removed. The entity might talk to you periodically, or it might only speak when it wants you to do something in particular or finds the two of you in danger. You and the GM should decide on the entity's motivations, or if the motivations should be a secret known only to the GM. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Arcana skill and an additional skill in which the clockwork entity is well-versed, determined by the GM. Any time you attempt a skill check for the entity's skill, the GM can offer you a +1 circumstance bonus to the check, as though the entity were Aiding you. If you accept but fail the check, the entity clenches up and you are Stunned 1 (Stunned 2 on a critical failure).",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -1798,7 +1798,7 @@
     "loreSubskill": "Engineering",
     "grantedFeat": "Risky Surgery",
     "rarity": "common",
-    "desc": "While others might have looked to clockwork as a mechanical innovation, you see the potential in the technology to improve the health of patients. You might be an experienced field medic who reached for a scrapped construct to help a wounded soldier, or a vanguard surgeon who's found replacing organs with clockwork more effective than repairing them. Perhaps you've also worked to \"optimize\" organic bodies with fine machinery, with or without the permission of your patients. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Medicine skill and the Engineering Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Risky Surgery] skill feat.",
+    "desc": "While others might have looked to clockwork as a mechanical innovation, you see the potential in the technology to improve the health of patients. You might be an experienced field medic who reached for a scrapped construct to help a wounded soldier, or a vanguard surgeon who's found replacing organs with clockwork more effective than repairing them. Perhaps you've also worked to \"optimize\" organic bodies with fine machinery, with or without the permission of your patients. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Medicine skill and the Engineering Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -1821,7 +1821,7 @@
     "loreSubskill": "Mercantile",
     "grantedFeat": "Bargain Hunter",
     "rarity": "common",
-    "desc": "In a dusty shop, market stall, or merchant caravan, you bartered wares for coin and trade goods. The skills you picked up still apply in the adventuring life, in which a good deal on a suit of armor could prevent your death. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Diplomacy skill and the Mercantile Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Bargain Hunter] skill feat.",
+    "desc": "In a dusty shop, market stall, or merchant caravan, you bartered wares for coin and trade goods. The skills you picked up still apply in the adventuring life, in which a good deal on a suit of armor could prevent your death. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Diplomacy skill and the Mercantile Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1844,7 +1844,7 @@
     "loreSubskill": "Mining",
     "grantedFeat": "Terrain Expertise",
     "rarity": "common",
-    "desc": "You earned a living wrenching precious minerals from the lightless depths of the earth. Adventuring might have seemed lucrative or glamorous compared to this backbreaking labor—and if you have to head back underground, this time you plan to do so armed with a real weapon instead of a miner's pick. Choose two attribute boosts. One must be to Strength or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and the Mining Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Terrain Expertise] skill feat with underground terrain.",
+    "desc": "You earned a living wrenching precious minerals from the lightless depths of the earth. Adventuring might have seemed lucrative or glamorous compared to this backbreaking labor—and if you have to head back underground, this time you plan to do so armed with a real weapon instead of a miner's pick. Choose two attribute boosts. One must be to Strength or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and the Mining Lore skill. You gain the skill feat with underground terrain.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1867,7 +1867,7 @@
     "loreSubskill": "Genealogy",
     "grantedFeat": "Courtly Graces",
     "rarity": "common",
-    "desc": "To the common folk, the life of a noble seems one of idyllic luxury, but growing up as a noble or member of the aspiring gentry, you know the reality: a noble's lot is obligation and intrigue. Whether you seek to escape your duties by adventuring or to better your station, you have traded silks and pageantry for an adventurer's life. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Society skill and the Genealogy Lore or Heraldry Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Courtly Graces] skill feat.",
+    "desc": "To the common folk, the life of a noble seems one of idyllic luxury, but growing up as a noble or member of the aspiring gentry, you know the reality: a noble's lot is obligation and intrigue. Whether you seek to escape your duties by adventuring or to better your station, you have traded silks and pageantry for an adventurer's life. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Society skill and the Genealogy Lore or Heraldry Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1889,7 +1889,7 @@
     ],
     "loreSubskill": null,
     "rarity": "common",
-    "desc": "Traveling far and wide, you picked up basic tactics for surviving on the road and in unknown lands, getting by with few supplies and even fewer comforts. As an adventurer, you travel still, often into even more dangerous places. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and a Lore skill related to one terrain you traveled in (such as Desert Lore or Swamp Lore). You gain the @UUID[Compendium.pf2e.feats-srd.Item.Assurance] skill feat with Survival.",
+    "desc": "Traveling far and wide, you picked up basic tactics for surviving on the road and in unknown lands, getting by with few supplies and even fewer comforts. As an adventurer, you travel still, often into even more dangerous places. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and a Lore skill related to one terrain you traveled in (such as Desert Lore or Swamp Lore). You gain the skill feat with Survival.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -1934,7 +1934,7 @@
     "loreSubskill": "Plains",
     "grantedFeat": "Express Rider",
     "rarity": "common",
-    "desc": "In your youth, you galloped on horseback over vast prairies, serving as a vanguard for your settlement, an army, or another group. Seeing so many different lands built a thirst in you to adventure and explore the world instead of just racing past it. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Nature skill and the Plains Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Express Rider] skill feat.",
+    "desc": "In your youth, you galloped on horseback over vast prairies, serving as a vanguard for your settlement, an army, or another group. Seeing so many different lands built a thirst in you to adventure and explore the world instead of just racing past it. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Nature skill and the Plains Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -1957,7 +1957,7 @@
     "loreSubskill": null,
     "grantedFeat": "Pilgrim's Token",
     "rarity": "common",
-    "desc": "In your youth, you made several pilgrimages to important shrines and sacred sites. You might have been a mendicant friar, a seller of religious relics (real or fraudulent), or just a simple farmer following the dictates of your faith. Whatever the aims of your wanderings now, your faith still protects you on the road. Choose two attribute boosts. One must be to Wisdom or Charisma , and one is a free attribute boost. You're trained in the Religion skill and the Lore skill for your patron deity. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Pilgrim's Token] skill feat.",
+    "desc": "In your youth, you made several pilgrimages to important shrines and sacred sites. You might have been a mendicant friar, a seller of religious relics (real or fraudulent), or just a simple farmer following the dictates of your faith. Whatever the aims of your wanderings now, your faith still protects you on the road. Choose two attribute boosts. One must be to Wisdom or Charisma , and one is a free attribute boost. You're trained in the Religion skill and the Lore skill for your patron deity. You gain the skill feat.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -1980,7 +1980,7 @@
     "loreSubskill": "Herbalism",
     "grantedFeat": "Inoculation",
     "rarity": "common",
-    "desc": "Plagues often spring from mass deaths and the vermin that multiply after such tragedies. Cities under siege can grow ill without proper nutrition and clean water. Your expertise with medicine allows you to help those afflicted by disease, and your view of the world is likely colored by seeing so much misfortune. Choose two attribute boosts. One must be in Constitution or Wisdom , and one is a free attribute boost. You're trained in the Medicine skill and the Herbalism Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Inoculation] skill feat.",
+    "desc": "Plagues often spring from mass deaths and the vermin that multiply after such tragedies. Cities under siege can grow ill without proper nutrition and clean water. Your expertise with medicine allows you to help those afflicted by disease, and your view of the world is likely colored by seeing so much misfortune. Choose two attribute boosts. One must be in Constitution or Wisdom , and one is a free attribute boost. You're trained in the Medicine skill and the Herbalism Lore skill. You gain the skill feat.",
     "source": "Pathfinder Battlecry!",
     "tier": "tier2"
   },
@@ -2003,7 +2003,7 @@
     "loreSubskill": "Air",
     "grantedFeat": "Hefty Hauler",
     "rarity": "rare",
-    "desc": "Your birthplace was on one of the elemental planes, but you traveled to the Universe for some reason. Maybe you left on good terms, or maybe you were driven out and hope to one day return. Maybe you were even exiled, and any mention of it brings pain and resentment. In any case, nowhere has quite felt like home since, and you've roamed the land, carrying your life's possessions on your back wherever you go. You adventure possibly in search of a place to belong or a way to return to your plane of origin and settle unfinished business. Choose two attribute boosts. One must be Dexterity or Constitution , and one is a free attribute boost. You're trained in the Athletics skill and one of the following lore skills: Plane of Air Lore, Plane of Earth Lore, Plane of Fire Lore, Plane of Metal Lore, Plane of Water Lore, or Plane of Wood Lore. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Hefty Hauler] and @UUID[Compendium.pf2e.feats-srd.Item.Prescient Planner] skill feats.",
+    "desc": "Your birthplace was on one of the elemental planes, but you traveled to the Universe for some reason. Maybe you left on good terms, or maybe you were driven out and hope to one day return. Maybe you were even exiled, and any mention of it brings pain and resentment. In any case, nowhere has quite felt like home since, and you've roamed the land, carrying your life's possessions on your back wherever you go. You adventure possibly in search of a place to belong or a way to return to your plane of origin and settle unfinished business. Choose two attribute boosts. One must be Dexterity or Constitution , and one is a free attribute boost. You're trained in the Athletics skill and one of the following lore skills: Plane of Air Lore, Plane of Earth Lore, Plane of Fire Lore, Plane of Metal Lore, Plane of Water Lore, or Plane of Wood Lore. You gain the and skill feats.",
     "source": "Pathfinder Rage of Elements",
     "tier": "tier2"
   },
@@ -2026,7 +2026,7 @@
     "loreSubskill": "Labor",
     "grantedFeat": "Armor Assist",
     "rarity": "uncommon",
-    "desc": "Was that five shots or six? Maybe it doesn't really matter in the end, because after those nice folks paid for all your drinks, you woke up to find yourself on the lowest rung of the ladder. Whether you're now a crewmate on a ship, a conscript in an army, or something worse, you've nowhere to go but up. This background generally requires buy-in from the entire group to tell a story allowing you to play a character starting their adventuring due to circumstances outside their own control. However, you can also play a character who was once press-ganged and has since escaped that life. If you do, press-ganged doesn't have the uncommon trait, and it has the same mechanical effects either way. Choose two attribute boosts. One must be to Strength or Constitution , and one is a free attribute boost. You're trained in the Athletics skill and the Labor Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Armor Assist] skill feat.",
+    "desc": "Was that five shots or six? Maybe it doesn't really matter in the end, because after those nice folks paid for all your drinks, you woke up to find yourself on the lowest rung of the ladder. Whether you're now a crewmate on a ship, a conscript in an army, or something worse, you've nowhere to go but up. This background generally requires buy-in from the entire group to tell a story allowing you to play a character starting their adventuring due to circumstances outside their own control. However, you can also play a character who was once press-ganged and has since escaped that life. If you do, press-ganged doesn't have the uncommon trait, and it has the same mechanical effects either way. Choose two attribute boosts. One must be to Strength or Constitution , and one is a free attribute boost. You're trained in the Athletics skill and the Labor Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -2049,7 +2049,7 @@
     "loreSubskill": "Scribing",
     "grantedFeat": "Multilingual",
     "rarity": "common",
-    "desc": "Keeping your finger on the pulse of the city, you write a small news broadsheet to sell on street corners. You rent the use of a printing press to achieve this goal, so you're familiar with such machines. However, people and their stories are your main focus, and you adventure to chase the latest scoop. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Society skill and the Scribing Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Multilingual] skill feat.",
+    "desc": "Keeping your finger on the pulse of the city, you write a small news broadsheet to sell on street corners. You rent the use of a printing press to achieve this goal, so you're familiar with such machines. However, people and their stories are your main focus, and you adventure to chase the latest scoop. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Society skill and the Scribing Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -2072,7 +2072,7 @@
     "loreSubskill": "Underworld",
     "grantedFeat": "Experienced Smuggler",
     "rarity": "common",
-    "desc": "You have been imprisoned or punished for crimes (whether you were guilty or not). Now that your sentence has ended or you've escaped, you take full advantage of the newfound freedom of your adventuring life. Choose two attribute boosts. One must be to Strength or Constitution , and one is a free attribute boost. You're trained in the Stealth skill and the Underworld Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Experienced Smuggler] skill feat.",
+    "desc": "You have been imprisoned or punished for crimes (whether you were guilty or not). Now that your sentence has ended or you've escaped, you take full advantage of the newfound freedom of your adventuring life. Choose two attribute boosts. One must be to Strength or Constitution , and one is a free attribute boost. You're trained in the Stealth skill and the Underworld Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -2095,7 +2095,7 @@
     "loreSubskill": "Legal",
     "grantedFeat": "Intimidating Glare",
     "rarity": "common",
-    "desc": "An army marches on its stomach, and you have been on the forefront of ensuring your troops were properly fed and supplied. Through your logistical expertise, you understand that it can be vital to keep a tight fist around necessary supplies. And when soldiers ask for items without the proper clearance, you know how to turn them away with a withering look. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Intimidation skill and the Legal Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Intimidating Glare] skill feat.",
+    "desc": "An army marches on its stomach, and you have been on the forefront of ensuring your troops were properly fed and supplied. Through your logistical expertise, you understand that it can be vital to keep a tight fist around necessary supplies. And when soldiers ask for items without the proper clearance, you know how to turn them away with a withering look. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Intimidation skill and the Legal Lore skill. You gain the skill feat.",
     "source": "Pathfinder Battlecry!",
     "tier": "tier2"
   },
@@ -2120,7 +2120,7 @@
     "loreSubskill": null,
     "grantedFeat": "Assurance",
     "rarity": "common",
-    "desc": "Whether in a monastery, a religious household, or just as part of your everyday life, your upbringing was steeped in the traditions of a particular deity. You might remain committed or you may have turned from your childhood creed, but your skills are still founded in your devotion. Choose two attribute boosts. One must be to an attribute specified in your deity's Divine Attribute , and the other is a free attribute boost. You're trained in the deity's listed Divine Skill and gain the @UUID[Compendium.pf2e.feats-srd.Item.Assurance] feat with that skill. You gain a Lore skill related to your deity (Abadar Lore, for example).",
+    "desc": "Whether in a monastery, a religious household, or just as part of your everyday life, your upbringing was steeped in the traditions of a particular deity. You might remain committed or you may have turned from your childhood creed, but your skills are still founded in your devotion. Choose two attribute boosts. One must be to an attribute specified in your deity's Divine Attribute , and the other is a free attribute boost. You're trained in the deity's listed Divine Skill and gain the feat with that skill. You gain a Lore skill related to your deity (Abadar Lore, for example).",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -2143,7 +2143,7 @@
     "loreSubskill": null,
     "grantedFeat": "Streetwise",
     "rarity": "common",
-    "desc": "You come from a land very distant from the one you now find yourself in, driven by war, plague, or simply in the pursuit of opportunity. Regardless of your origin or the reason you left your home, you find yourself an outsider in this new land. Adventuring is a way to support yourself while offering hope to those who need it most. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Society skill and a Lore skill related to the settlement you came from. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Streetwise] skill feat.",
+    "desc": "You come from a land very distant from the one you now find yourself in, driven by war, plague, or simply in the pursuit of opportunity. Regardless of your origin or the reason you left your home, you find yourself an outsider in this new land. Adventuring is a way to support yourself while offering hope to those who need it most. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Society skill and a Lore skill related to the settlement you came from. You gain the skill feat.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -2166,7 +2166,7 @@
     "loreSubskill": "Stabling",
     "grantedFeat": "Express Rider",
     "rarity": "common",
-    "desc": "During times of war, armies might venture far from the seats of government that send them out or get separated from their commanders by the terrain. Thanks to your riding skill and affinity with the animals that serve as mounts, you were tasked with carrying reports of an ongoing war from one place to another. Speed was of utmost importance, and sometimes you would need to spend days in the saddle. Choose two attribute boosts. One must be to Strength or Wisdom , and one is a free attribute boost. You're trained in the Nature skill and the Stabling Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Express Rider] skill feat.",
+    "desc": "During times of war, armies might venture far from the seats of government that send them out or get separated from their commanders by the terrain. Thanks to your riding skill and affinity with the animals that serve as mounts, you were tasked with carrying reports of an ongoing war from one place to another. Speed was of utmost importance, and sometimes you would need to spend days in the saddle. Choose two attribute boosts. One must be to Strength or Wisdom , and one is a free attribute boost. You're trained in the Nature skill and the Stabling Lore skill. You gain the skill feat.",
     "source": "Pathfinder Battlecry!",
     "tier": "tier2"
   },
@@ -2184,10 +2184,10 @@
       "wis"
     ],
     "trainedSkills": [],
-    "loreSubskill": "Additional",
+    "loreSubskill": "Boneyard",
     "grantedFeat": "Diehard",
     "rarity": "rare",
-    "desc": "You died and miraculously returned with knowledge of the realms beyond death and a stronger link to life. Some dead and undead souls might feel a strange, instinctual kinship with you. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Diehard] feat and the @UUID[Compendium.pf2e.feats-srd.Item.Additional Lore] feat for Boneyard Lore.",
+    "desc": "You died and miraculously returned with knowledge of the realms beyond death and a stronger link to life. Some dead and undead souls might feel a strange, instinctual kinship with you. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You gain the feat and the feat for Boneyard Lore.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -2232,7 +2232,7 @@
     "loreSubskill": "Herbalism",
     "grantedFeat": "Root Magic",
     "rarity": "common",
-    "desc": "Some ailments can't be cured by herbs alone. You learned ritual remedies as well, calling on nature spirits to soothe aches and ward off the evil eye. Taking up with adventurers has given you company on the road, as well as protection from those who would brand you a fake—or worse. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Occultism skill and the Herbalism Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Root Magic] skill feat.",
+    "desc": "Some ailments can't be cured by herbs alone. You learned ritual remedies as well, calling on nature spirits to soothe aches and ward off the evil eye. Taking up with adventurers has given you company on the road, as well as protection from those who would brand you a fake—or worse. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Occultism skill and the Herbalism Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -2255,7 +2255,7 @@
     "loreSubskill": null,
     "grantedFeat": "Courtly Graces",
     "rarity": "rare",
-    "desc": "You are a prominent member of a royal family. You have eschewed the daily routines of royal life and taken up an adventurous quest—perhaps you're a deposed queen hoping to regain her throne, a prince seeking a more exciting life, or a sovereign's heir on a secret mission. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You are trained in Society. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Courtly Graces] skill feat and can influence commoners in your family's territory, as well as nobility anywhere. If you later gain the @UUID[Compendium.pf2e.feats-srd.Item.Leverage Connections] skill feat, you automatically have common and noble connections within any community in your royal family's territory and have noble connections in large communities outside your territory.",
+    "desc": "You are a prominent member of a royal family. You have eschewed the daily routines of royal life and taken up an adventurous quest—perhaps you're a deposed queen hoping to regain her throne, a prince seeking a more exciting life, or a sovereign's heir on a secret mission. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You are trained in Society. You gain the skill feat and can influence commoners in your family's territory, as well as nobility anywhere. If you later gain the skill feat, you automatically have common and noble connections within any community in your royal family's territory and have noble connections in large communities outside your territory.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -2278,7 +2278,7 @@
     "loreSubskill": "Engineering",
     "grantedFeat": "Concealing Legerdemain",
     "rarity": "common",
-    "desc": "Whether you do it for personal enjoyment or at the behest of a mercenary company or military organization, you have a knack for destroying things. You have a sense for an object or structure's weak spots and know where to deliver a hammer strike or alchemical bomb. You adventure to hone your skills or complete a particular mission. Choose two attribute boosts. One must be to Strength or Dexterity , and one is a free attribute boost. You're trained in the Thievery skill and the Engineering Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Concealing Legerdemain] skill feat.",
+    "desc": "Whether you do it for personal enjoyment or at the behest of a mercenary company or military organization, you have a knack for destroying things. You have a sense for an object or structure's weak spots and know where to deliver a hammer strike or alchemical bomb. You adventure to hone your skills or complete a particular mission. Choose two attribute boosts. One must be to Strength or Dexterity , and one is a free attribute boost. You're trained in the Thievery skill and the Engineering Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -2301,7 +2301,7 @@
     "loreSubskill": "Sailing",
     "grantedFeat": "Underwater Marauder",
     "rarity": "common",
-    "desc": "You heard the call of the sea from a young age. Perhaps you signed onto a merchant's vessel, joined the navy, or even fell in with a crew of pirates and scalawags. Choose two attribute boosts. One must be to Strength or Dexterity , and one is a free attribute boost. You're trained in the Athletics skill and the Sailing Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Underwater Marauder] skill feat.",
+    "desc": "You heard the call of the sea from a young age. Perhaps you signed onto a merchant's vessel, joined the navy, or even fell in with a crew of pirates and scalawags. Choose two attribute boosts. One must be to Strength or Dexterity , and one is a free attribute boost. You're trained in the Athletics skill and the Sailing Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -2324,7 +2324,7 @@
     "loreSubskill": null,
     "grantedFeat": "Virtuosic Performer",
     "rarity": "common",
-    "desc": "All you want to do is entertain the people, but sure enough, bad news seems to follow you. Gunfights, brawls, robberies, and more befall establishments you play at, and word is quick to spread. Keep one town ahead of the gossip, and you just might be able to play a gig, command a stage, or run a table again. Choose two attribute boosts. One must be to Charisma or Dexterity , and one is a free attribute boost. You're trained in the Performance skill and a lore skill of your choice. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Virtuosic Performer] skill feat.",
+    "desc": "All you want to do is entertain the people, but sure enough, bad news seems to follow you. Gunfights, brawls, robberies, and more befall establishments you play at, and word is quick to spread. Keep one town ahead of the gossip, and you just might be able to play a gig, command a stage, or run a table again. Choose two attribute boosts. One must be to Charisma or Dexterity , and one is a free attribute boost. You're trained in the Performance skill and a lore skill of your choice. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -2369,7 +2369,7 @@
     "loreSubskill": null,
     "grantedFeat": "Forager",
     "rarity": "common",
-    "desc": "You've made a living sorting through the things society throws away. You might have scavenged simply to survive, or plied a trade as a ragpicker, dung carter, or the like. While you've left that life behind, you still keep one eye on the ground out of habit. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and the Lore skill for the settlement you grew up scavenging in. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Forager] skill feat.",
+    "desc": "You've made a living sorting through the things society throws away. You might have scavenged simply to survive, or plied a trade as a ragpicker, dung carter, or the like. While you've left that life behind, you still keep one eye on the ground out of habit. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and the Lore skill for the settlement you grew up scavenging in. You gain the skill feat.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -2389,7 +2389,7 @@
     "trainedSkills": [],
     "loreSubskill": "Academia",
     "rarity": "common",
-    "desc": "You have a knack for learning and sequestered yourself from the outside world to learn all you could. You read about so many wondrous places and things in your books, always dreaming about one day seeing the real things. Eventually, that curiosity led you to leave your studies and become an adventurer. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in your choice of the Arcana, Nature, Occultism, or Religion skill, and gain the @UUID[Compendium.pf2e.feats-srd.Item.Assurance] skill feat in your chosen skill. You're also trained in the Academia Lore skill.",
+    "desc": "You have a knack for learning and sequestered yourself from the outside world to learn all you could. You read about so many wondrous places and things in your books, always dreaming about one day seeing the real things. Eventually, that curiosity led you to leave your studies and become an adventurer. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in your choice of the Arcana, Nature, Occultism, or Religion skill, and gain the skill feat in your chosen skill. You're also trained in the Academia Lore skill.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -2412,7 +2412,7 @@
     "loreSubskill": null,
     "grantedFeat": "Forager",
     "rarity": "common",
-    "desc": "You called the wilderness home as you found trails and guided travelers. Your wanderlust could have called you to the adventuring life, or perhaps you served as a scout for soldiers and found you liked battle. Choose two attribute boosts. One must be to Dexterity or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and a Lore skill related to one terrain you scouted in (such as Forest Lore or Cavern Lore). You gain the @UUID[Compendium.pf2e.feats-srd.Item.Forager] skill feat.",
+    "desc": "You called the wilderness home as you found trails and guided travelers. Your wanderlust could have called you to the adventuring life, or perhaps you served as a scout for soldiers and found you liked battle. Choose two attribute boosts. One must be to Dexterity or Wisdom , and one is a free attribute boost. You're trained in the Survival skill and a Lore skill related to one terrain you scouted in (such as Forest Lore or Cavern Lore). You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -2435,7 +2435,7 @@
     "loreSubskill": "Labor",
     "grantedFeat": "Read Lips",
     "rarity": "common",
-    "desc": "You held a role of servitude, waiting on nobles and engendering their trust as one of the confidantes of the household. You might have walked away on good terms, or perhaps you know dangerous secrets about your former employers. Regardless, you're adventuring for a change and finding that in this new role, the skills you've learned now serve you. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You're trained in the Society skill and the Labor Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Read Lips] skill feat.",
+    "desc": "You held a role of servitude, waiting on nobles and engendering their trust as one of the confidantes of the household. You might have walked away on good terms, or perhaps you know dangerous secrets about your former employers. Regardless, you're adventuring for a change and finding that in this new role, the skills you've learned now serve you. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You're trained in the Society skill and the Labor Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -2458,7 +2458,7 @@
     "loreSubskill": "Hunting",
     "grantedFeat": "Group Coercion",
     "rarity": "uncommon",
-    "desc": "You hold an official title of sheriff or deputy in a small community. Those that would do harm to others flee your gaze, for they know it brings the promise of castigation. You protect your town, watch over those who have placed their trust in you, and make sure those that would do others harm are brought to justice. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You're trained in the Intimidation skill and the Hunting Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Group Coercion] skill feat.",
+    "desc": "You hold an official title of sheriff or deputy in a small community. Those that would do harm to others flee your gaze, for they know it brings the promise of castigation. You protect your town, watch over those who have placed their trust in you, and make sure those that would do others harm are brought to justice. Choose two attribute boosts. One must be to Dexterity or Charisma , and one is a free attribute boost. You're trained in the Intimidation skill and the Hunting Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -2481,7 +2481,7 @@
     "loreSubskill": "Air",
     "grantedFeat": "Cat Fall",
     "rarity": "common",
-    "desc": "The freedom of a bird in flight is something to envy, and envy it you did, but not for long. You've borrowed mechanical gliders or sought out the benefits of magically aided gliding and flight, doing anything for an opportunity to look down on the world with only the wind to keep you aloft. The expense of these experiences may have been a notable factor in why you undertook the adventuring lifestyle or perhaps you are seeking new methods of flight to master. Choose two attribute boosts. One must be to Dexterity or Wisdom , and one is a free attribute boost. You're trained in the Acrobatics skill and the Plane of Air Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Cat Fall] skill feat.",
+    "desc": "The freedom of a bird in flight is something to envy, and envy it you did, but not for long. You've borrowed mechanical gliders or sought out the benefits of magically aided gliding and flight, doing anything for an opportunity to look down on the world with only the wind to keep you aloft. The expense of these experiences may have been a notable factor in why you undertook the adventuring lifestyle or perhaps you are seeking new methods of flight to master. Choose two attribute boosts. One must be to Dexterity or Wisdom , and one is a free attribute boost. You're trained in the Acrobatics skill and the Plane of Air Lore skill. You gain the skill feat.",
     "source": "Pathfinder Rage of Elements",
     "tier": "tier2"
   },
@@ -2504,7 +2504,7 @@
     "loreSubskill": "Scouting",
     "grantedFeat": "Terrain Stalker",
     "rarity": "common",
-    "desc": "An eye for detail, a sense for the wind, and a strong trust in your gut feelings. These qualities have set you apart from others when it comes to assisting a sharpshooter with setting up the perfect shot against their target. Elevation, velocity, and concealment-these are all vital factors that need to be considered to pull off a feat of true marksmanship, and no sniper would be able to function without an experienced spotter. Since your younger days, you've put your skills as a spotter to work as an adventurer. Whether you're taking your own shots now or spotting for others, your talents grant you an edge in an adventuring career. Choose two attribute boosts. One must be to Dexterity or Wisdom , and one is a free attribute boost. You're trained in the Stealth skill and the Scouting Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Terrain Stalker] skill feat.",
+    "desc": "An eye for detail, a sense for the wind, and a strong trust in your gut feelings. These qualities have set you apart from others when it comes to assisting a sharpshooter with setting up the perfect shot against their target. Elevation, velocity, and concealment-these are all vital factors that need to be considered to pull off a feat of true marksmanship, and no sniper would be able to function without an experienced spotter. Since your younger days, you've put your skills as a spotter to work as an adventurer. Whether you're taking your own shots now or spotting for others, your talents grant you an edge in an adventuring career. Choose two attribute boosts. One must be to Dexterity or Wisdom , and one is a free attribute boost. You're trained in the Stealth skill and the Scouting Lore skill. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -2527,7 +2527,7 @@
     "loreSubskill": "Heraldry",
     "grantedFeat": "Armor Assist",
     "rarity": "common",
-    "desc": "You trained at the feet of a knight, maintaining their gear and supporting them at tourneys and in battle. Now you search for a challenge that will prove you worthy of full knighthood, or you've spurned pomp and ceremony to test yourself in honest, albeit less formal, combat. Choose two attribute boosts. One must be to Strength or Constitution , and one is a free attribute boost. You're trained in the Athletics skill and your choice of the Heraldry Lore or Warfare Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Armor Assist] skill feat.",
+    "desc": "You trained at the feet of a knight, maintaining their gear and supporting them at tourneys and in battle. Now you search for a challenge that will prove you worthy of full knighthood, or you've spurned pomp and ceremony to test yourself in honest, albeit less formal, combat. Choose two attribute boosts. One must be to Strength or Constitution , and one is a free attribute boost. You're trained in the Athletics skill and your choice of the Heraldry Lore or Warfare Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -2550,7 +2550,7 @@
     "loreSubskill": null,
     "grantedFeat": "Pickpocket",
     "rarity": "common",
-    "desc": "You eked out a living by picking pockets on the streets of a major city, never knowing where you'd find your next meal. While some adventure for the glory, you do so to survive. Choose two attribute boosts. One must be to Dexterity or Constitution , and one is a free attribute boost. You're trained in the Thievery skill and a Lore skill for the city you lived in as a street urchin (such as Absalom Lore or Magnimar Lore). You gain the @UUID[Compendium.pf2e.feats-srd.Item.Pickpocket] skill feat.",
+    "desc": "You eked out a living by picking pockets on the streets of a major city, never knowing where you'd find your next meal. While some adventure for the glory, you do so to survive. Choose two attribute boosts. One must be to Dexterity or Constitution , and one is a free attribute boost. You're trained in the Thievery skill and a Lore skill for the city you lived in as a street urchin (such as Absalom Lore or Magnimar Lore). You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -2573,7 +2573,7 @@
     "loreSubskill": null,
     "grantedFeat": "Impressive Performance",
     "rarity": "rare",
-    "desc": "You've ridden a tornado, lassoed a river, mooned a dragon under a full moon, and shot six zombies with one bullet. That's what the stories say, anyway, and even if people don't strictly believe them, they are curious about you. Certainly, the stories keep spreading, and it would appear that you either have a unique destiny or are trying to convince the world that you do. Choose two attribute boosts. One must be to Constitution or Charisma , and one is a free attribute boost. You're trained in Performance. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Impressive Performance] skill feat. You can gain the @UUID[Compendium.pf2e.feats-srd.Item.Leverage Connections] skill feat later without being expert in Society or having Courtly Graces-this represents less traditional social connections and more the way that your legend has spread, and you've learned to leverage your legend, with people wanting to meet you and see you for themselves.",
+    "desc": "You've ridden a tornado, lassoed a river, mooned a dragon under a full moon, and shot six zombies with one bullet. That's what the stories say, anyway, and even if people don't strictly believe them, they are curious about you. Certainly, the stories keep spreading, and it would appear that you either have a unique destiny or are trying to convince the world that you do. Choose two attribute boosts. One must be to Constitution or Charisma , and one is a free attribute boost. You're trained in Performance. You gain the skill feat. You can gain the skill feat later without being expert in Society or having Courtly Graces-this represents less traditional social connections and more the way that your legend has spread, and you've learned to leverage your legend, with people wanting to meet you and see you for themselves.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -2596,7 +2596,7 @@
     "loreSubskill": null,
     "grantedFeat": "Quick Coercion",
     "rarity": "common",
-    "desc": "Reviled but required, you were sent when taxes were due. Performing your job might have required travel and persuasion, or perhaps you were responsible for collecting taxes on trade. Either way, it sometimes meant dirty hands, and adventuring seemed the next logical step to you. Choose two attribute boosts. One must be to Strength or Charisma , and one is a free attribute boost. You're trained in the Intimidation skill and the Lore skill for the settlement that employed you. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Quick Coercion] skill feat.",
+    "desc": "Reviled but required, you were sent when taxes were due. Performing your job might have required travel and persuasion, or perhaps you were responsible for collecting taxes on trade. Either way, it sometimes meant dirty hands, and adventuring seemed the next logical step to you. Choose two attribute boosts. One must be to Strength or Charisma , and one is a free attribute boost. You're trained in the Intimidation skill and the Lore skill for the settlement that employed you. You gain the skill feat.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -2617,7 +2617,7 @@
     "loreSubskill": "Academia",
     "grantedFeat": "Experienced Professional",
     "rarity": "common",
-    "desc": "You are incredibly knowledgeable, skilled, and perhaps even trained to teach children and adults about the world and its wonders. From books to classes, you're committed to imparting knowledge to all. Not everything can be taught or learned from a book, though, so you've become an adventurer to learn subjects more directly and bring that wisdom back to your students. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in your choice of either the Performance or Society skill, as well as the Academia Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Experienced Professional] skill feat.",
+    "desc": "You are incredibly knowledgeable, skilled, and perhaps even trained to teach children and adults about the world and its wonders. From books to classes, you're committed to imparting knowledge to all. Not everything can be taught or learned from a book, though, so you've become an adventurer to learn subjects more directly and bring that wisdom back to your students. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in your choice of either the Performance or Society skill, as well as the Academia Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -2641,7 +2641,7 @@
     "loreSubskill": null,
     "grantedFeat": "Battle Medicine",
     "rarity": "rare",
-    "desc": "Some event, be it an accident, attack, or disaster, has left you horribly scarred by magic. Your body no longer tolerates magical healing, and you can't use magic, forcing you to rely on gadgets and ingenuity where others trust in spells and magical items. You might have been well-versed in magic before, or barely familiar with its use. This event may have injured your body in visible ways, but no matter the extent of your injuries, your body no longer interacts with healing magic in any capacity. Choose two attribute boosts. One must be to Constitution or Intelligence , and one is a free attribute boost. You're trained in the Crafting skill and the Medicine skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Battle Medicine] skill feat, and a +1 circumstance bonus to saving throws against spells. Healing spells, healing magic items, and magical effects with the healing trait have no effect on you.",
+    "desc": "Some event, be it an accident, attack, or disaster, has left you horribly scarred by magic. Your body no longer tolerates magical healing, and you can't use magic, forcing you to rely on gadgets and ingenuity where others trust in spells and magical items. You might have been well-versed in magic before, or barely familiar with its use. This event may have injured your body in visible ways, but no matter the extent of your injuries, your body no longer interacts with healing magic in any capacity. Choose two attribute boosts. One must be to Constitution or Intelligence , and one is a free attribute boost. You're trained in the Crafting skill and the Medicine skill. You gain the skill feat, and a +1 circumstance bonus to saving throws against spells. Healing spells, healing magic items, and magical effects with the healing trait have no effect on you.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -2664,7 +2664,7 @@
     "loreSubskill": "Engineering",
     "grantedFeat": "Specialty Crafting",
     "rarity": "common",
-    "desc": "Creating all sorts of minor inventions scratches your itch for problem-solving. Your engineering skills take a particularly creative bent, and no one know what you'll come up with next. It might be a genius device with tremendous potential or it might explode. Choose two attribute boosts. One must be to Dexterity or Intelligence , and one is a free attribute boost. You're trained in the Crafting skill and the Engineering Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Specialty Crafting] skill feat.",
+    "desc": "Creating all sorts of minor inventions scratches your itch for problem-solving. Your engineering skills take a particularly creative bent, and no one know what you'll come up with next. It might be a genius device with tremendous potential or it might explode. Choose two attribute boosts. One must be to Dexterity or Intelligence , and one is a free attribute boost. You're trained in the Crafting skill and the Engineering Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -2686,7 +2686,7 @@
     ],
     "loreSubskill": "Mercantile",
     "rarity": "common",
-    "desc": "You delight in making little trinkets for children of all ages, and seeing their faces light up thanks to one of your creations brings joy to your heart. Perhaps you sell your wares from a particular shop or from the back of a wagon as you travel from town to town. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Crafting skill and the Mercantile Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Specialty Crafting] skill feat, choosing Artistry, Blacksmithing, Glassmaking, Leatherworking, Tailoring, or Woodworking as your specialty.",
+    "desc": "You delight in making little trinkets for children of all ages, and seeing their faces light up thanks to one of your creations brings joy to your heart. Perhaps you sell your wares from a particular shop or from the back of a wagon as you travel from town to town. Choose two attribute boosts. One must be to Intelligence or Charisma , and one is a free attribute boost. You're trained in the Crafting skill and the Mercantile Lore skill. You gain the skill feat, choosing Artistry, Blacksmithing, Glassmaking, Leatherworking, Tailoring, or Woodworking as your specialty.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -2709,7 +2709,7 @@
     "loreSubskill": null,
     "grantedFeat": "Forensic Acumen",
     "rarity": "common",
-    "desc": "People die. This is the unfortunate fact of life on which you've founded your business, because wherever people die, there is a demand for mortuary services. You might be a Pharasmin priest or a secular professional, but your job is seeing to the body, comforting the bereaved, and making sure that the deceased goes to their ultimate reward with all due dignity. Of course, someone in your position sees a lot of strange deaths, and chances are one of them set you on the road to adventure. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Medicine skill and a Lore skill specializing in one local type of undead. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Forensic Acumen] skill feat.",
+    "desc": "People die. This is the unfortunate fact of life on which you've founded your business, because wherever people die, there is a demand for mortuary services. You might be a Pharasmin priest or a secular professional, but your job is seeing to the body, comforting the bereaved, and making sure that the deceased goes to their ultimate reward with all due dignity. Of course, someone in your position sees a lot of strange deaths, and chances are one of them set you on the road to adventure. Choose two attribute boosts. One must be to Intelligence or Wisdom , and one is a free attribute boost. You're trained in the Medicine skill and a Lore skill specializing in one local type of undead. You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -2732,7 +2732,7 @@
     "loreSubskill": "Warfare",
     "grantedFeat": "Armor Assist",
     "rarity": "common",
-    "desc": "You have seen more battles than you can remember and have managed to make it through them mostly intact. Nothing surprises you anymore, except maybe when things actually go as planned. You are always pleasantly surprised when you manage to survive another day. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Athletics skill and the Warfare Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Armor Assist] skill feat.",
+    "desc": "You have seen more battles than you can remember and have managed to make it through them mostly intact. Nothing surprises you anymore, except maybe when things actually go as planned. You are always pleasantly surprised when you manage to survive another day. Choose two attribute boosts. One must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Athletics skill and the Warfare Lore skill. You gain the skill feat.",
     "source": "Pathfinder Battlecry!",
     "tier": "tier2"
   },
@@ -2755,7 +2755,7 @@
     "loreSubskill": null,
     "grantedFeat": "Pilgrim's Token",
     "rarity": "common",
-    "desc": "While you once spoke to a small congregation in a ramshackle church, those days are behind you now. Your church was destroyed, your congregants scattered, and now you meander the lands holding a worn copy of your religious text in one hand, and a fiery conviction in the other. Choose two attribute boosts. One boost must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Religion skill and a Lore skill associated with the deity you preach for (such as Pharasmin Lore). You gain the @UUID[Compendium.pf2e.feats-srd.Item.Pilgrim's Token] skill feat.",
+    "desc": "While you once spoke to a small congregation in a ramshackle church, those days are behind you now. Your church was destroyed, your congregants scattered, and now you meander the lands holding a worn copy of your religious text in one hand, and a fiery conviction in the other. Choose two attribute boosts. One boost must be to Constitution or Wisdom , and one is a free attribute boost. You're trained in the Religion skill and a Lore skill associated with the deity you preach for (such as Pharasmin Lore). You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
@@ -2778,7 +2778,7 @@
     "loreSubskill": "Underworld",
     "grantedFeat": "Dirty Trick",
     "rarity": "common",
-    "desc": "The horrors of war have left you orphaned and alone, forcing you to fend for yourself until you were taught the ways of the world by a group of similarly affected youths. They were like a new family to you, but you had to live outside the law in order to survive. Those days are behind you now, but there are certain tricks you'll never forget. Choose two attribute boosts. One must be to Dexterity or Constitution , and one is a free attribute boost. You're trained in the Thievery skill and the Underworld Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Dirty Trick] skill feat.",
+    "desc": "The horrors of war have left you orphaned and alone, forcing you to fend for yourself until you were taught the ways of the world by a group of similarly affected youths. They were like a new family to you, but you had to live outside the law in order to survive. Those days are behind you now, but there are certain tricks you'll never forget. Choose two attribute boosts. One must be to Dexterity or Constitution , and one is a free attribute boost. You're trained in the Thievery skill and the Underworld Lore skill. You gain the skill feat.",
     "source": "Pathfinder Battlecry!",
     "tier": "tier2"
   },
@@ -2801,7 +2801,7 @@
     "loreSubskill": "Genealogy",
     "grantedFeat": "Fascinating Performance",
     "rarity": "common",
-    "desc": "When you were young, you became the ward of another house—boarded, fed, and educated, but never quite a part of the family. Perhaps you had to tend to their needs in return for feeding and raising you, or perhaps you were provided for but disregarded. Now, adventuring is your chance to grow and roam free. Choose two attribute boosts. One must be to Constitution or Charisma , and one is a free attribute boost. You're trained in the Performance skill and the Genealogy Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Fascinating Performance] skill feat.",
+    "desc": "When you were young, you became the ward of another house—boarded, fed, and educated, but never quite a part of the family. Perhaps you had to tend to their needs in return for feeding and raising you, or perhaps you were provided for but disregarded. Now, adventuring is your chance to grow and roam free. Choose two attribute boosts. One must be to Constitution or Charisma , and one is a free attribute boost. You're trained in the Performance skill and the Genealogy Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
   },
@@ -2824,7 +2824,7 @@
     "loreSubskill": "Warfare",
     "grantedFeat": "Intimidating Glare",
     "rarity": "common",
-    "desc": "In your younger days, you waded into battle as a mercenary, a warrior defending a nomadic people, or a member of a militia or army. You might have wanted to break away from the regimented structure of these forces, or you could have always been as independent a warrior as you are now. Choose two attribute boosts. One must be to Strength or Constitution , and one is a free attribute boost. You're trained in the Intimidation skill and the Warfare Lore skill. You gain the @UUID[Compendium.pf2e.feats-srd.Item.Intimidating Glare] skill feat.",
+    "desc": "In your younger days, you waded into battle as a mercenary, a warrior defending a nomadic people, or a member of a militia or army. You might have wanted to break away from the regimented structure of these forces, or you could have always been as independent a warrior as you are now. Choose two attribute boosts. One must be to Strength or Constitution , and one is a free attribute boost. You're trained in the Intimidation skill and the Warfare Lore skill. You gain the skill feat.",
     "source": "Pathfinder Player Core",
     "tier": "tier1"
   },
@@ -2847,7 +2847,7 @@
     "loreSubskill": "Mana Wastes",
     "grantedFeat": "Forager",
     "rarity": "common",
-    "desc": "Whether you grew up in the Mana Wastes, the deserts of northern Garund, or another similarly desolate place, you quickly learned that only the strong survive. You and your family were forced to evade monsters, mutants, wild magic, and worse, as each new day heralded the possibility of a danger or threat you'd never seen before. You learned to adapt to the worst possible conditions and how to forage and survive in a place few others would dare to live. Choose two attribute boosts. One boost must be to Strength or Wisdom , and one is a free attribute boost. You're trained in the Survival skill, and Mana Wastes Lore (or another similar Lore skill associated with the wastes where you grew up). You gain the @UUID[Compendium.pf2e.feats-srd.Item.Forager] skill feat.",
+    "desc": "Whether you grew up in the Mana Wastes, the deserts of northern Garund, or another similarly desolate place, you quickly learned that only the strong survive. You and your family were forced to evade monsters, mutants, wild magic, and worse, as each new day heralded the possibility of a danger or threat you'd never seen before. You learned to adapt to the worst possible conditions and how to forage and survive in a place few others would dare to live. Choose two attribute boosts. One boost must be to Strength or Wisdom , and one is a free attribute boost. You're trained in the Survival skill, and Mana Wastes Lore (or another similar Lore skill associated with the wastes where you grew up). You gain the skill feat.",
     "source": "Pathfinder Guns & Gears",
     "tier": "tier2"
   },
