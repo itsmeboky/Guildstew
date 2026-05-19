@@ -9,6 +9,7 @@ import CornerBrackets from '../components/CornerBrackets.jsx';
 import ComplexityBadge from '../components/ComplexityBadge.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import MechanicRow from '../components/MechanicRow.jsx';
+import UnknownEntityError from '../components/UnknownEntityError.jsx';
 import { BACKGROUNDS, BACKGROUND_DETAILS, LORES } from '../../data/index.js';
 import { getBackgroundTip } from '../../content/backgroundTips.js';
 import { STEPS } from '../../config/steps.js';
@@ -27,11 +28,19 @@ const slugify = (s) => String(s || '')
   .replace(/^-|-$/g, '');
 
 const StepBackground = ({ data, update }) => {
-  const selected = BACKGROUNDS.find(b => b.slug === data.background) || BACKGROUNDS[0];
-
   useEffect(() => {
-    if (!data.background) update({ background: BACKGROUNDS[0].id });
+    if (!data.background && BACKGROUNDS.length > 0) {
+      update({ background: BACKGROUNDS[0].slug });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const selected = BACKGROUNDS.find(b => b.slug === data.background);
+  if (data.background && !selected) {
+    console.error('[pf2e] Unknown background slug:', data.background, '— available count:', BACKGROUNDS.length);
+    return <UnknownEntityError kind="background" slug={data.background} available={BACKGROUNDS.map(b => b.slug)} />;
+  }
+  if (!selected) return null;
 
   const flavor = selected.desc || '';
   // Curated tip per background slug; falls back to a generic framing
