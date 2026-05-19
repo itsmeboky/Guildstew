@@ -29,6 +29,7 @@ import {
   CLASSES,
   CLASS_DEDICATIONS,
   CLASS_DETAILS,
+  CLASS_FEATS_BY_CLASS,
   SUBCLASS_SUBPICKS,
   INSTINCT_ANATHEMA,
   CLERIC_DOMAINS,
@@ -42,8 +43,11 @@ const StepClass = ({ data, update, openDeityModal }) => {
   const Icon = selected.icon;
   const prof = selected.proficiencies || {};
   const saves = prof.saves || {};
-  const firstFeats = selected.firstFeats || [];
   const tipEntry = getClassTip(selected.slug);
+  // Class feats indexed by level for the current class slug — pulled
+  // straight from the SRD import via traits.includes(slug). Replaces
+  // the prototype's hand-curated `firstFeats` array.
+  const classFeatsByLevel = CLASS_FEATS_BY_CLASS[selected.slug] || {};
 
   useEffect(() => {
     if (!data.class) update({ class: CLASSES[0].id });
@@ -183,7 +187,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
                         key={fLvl}
                         fLvl={fLvl}
                         picked={classFeats[fLvl]}
-                        classOptions={firstFeats}
+                        classOptions={classFeatsByLevel[fLvl] || []}
                         dedicationOptions={CLASS_DEDICATIONS.filter(d => d.forbidden !== selected.id)}
                         dedicationLocked={!canTakeNewDedication && (!classFeats[fLvl] || !dedicationNames.includes(classFeats[fLvl]))}
                         onPick={(name) => update({ classFeats: { ...classFeats, [fLvl]: name } })}
