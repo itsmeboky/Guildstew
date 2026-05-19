@@ -34,6 +34,7 @@ import {
   CLERIC_DOMAINS,
   STANDARD_CLASS_FEAT_LEVELS,
 } from '../../data/index.js';
+import { getClassTip } from '../../content/classTips.js';
 import { STEPS } from '../../config/steps.js';
 
 const StepClass = ({ data, update, openDeityModal }) => {
@@ -42,6 +43,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
   const prof = selected.proficiencies || {};
   const saves = prof.saves || {};
   const firstFeats = selected.firstFeats || [];
+  const tipEntry = getClassTip(selected.slug);
 
   useEffect(() => {
     if (!data.class) update({ class: CLASSES[0].id });
@@ -76,7 +78,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
                 </p>
               </div>
             </div>
-            <ComplexityBadge level={selected.complexity} />
+            <ComplexityBadge level={tipEntry.complexity} />
             <p className="font-body text-sm text-pf-parchment leading-relaxed my-4">{selected.blurb || selected.desc}</p>
             {selected.spellcasting && (
               <div className="flex items-center gap-2 mb-3">
@@ -85,8 +87,8 @@ const StepClass = ({ data, update, openDeityModal }) => {
               </div>
             )}
             <div className="mt-4 pt-4 border-t border-pf-brass-dim/20">
-              <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-1.5">GM's Whisper</p>
-              <p className="font-body text-sm text-pf-parchment leading-relaxed italic">{selected.tip}</p>
+              <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-1.5">Helpful Tip</p>
+              <p className="font-body text-sm text-pf-parchment leading-relaxed italic">{tipEntry.tip}</p>
             </div>
           </div>
 
