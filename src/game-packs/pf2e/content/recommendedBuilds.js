@@ -16,6 +16,7 @@ export const RECOMMENDED_BUILDS = {
     skills: ['athletics', 'intimidation'],
     classFeats: { 1: ['power-attack'] },
     spells: null,
+    startingItems: ['longsword', 'steel-shield', 'chain-mail', 'crossbow-20-bolts', 'adventurers-pack', 'healing-potion-minor'],
   },
   champion: {
     rationale: "Tanky frontliner. Strength for damage, Constitution for HP, Charisma for divine abilities and reactions, Wisdom for Perception.",
@@ -23,6 +24,7 @@ export const RECOMMENDED_BUILDS = {
     skills: ['religion', 'athletics'],
     classFeats: { 1: ['ranged-reprisal'] },
     spells: null,
+    startingItems: ['longsword', 'steel-shield', 'chain-mail', 'religious-symbol-wooden', 'javelin', 'adventurers-pack'],
   },
   cleric: {
     rationale: "Divine caster. Wisdom drives your spells. Constitution for survival. Strength or Dexterity for incidental melee/ranged.",
@@ -33,6 +35,7 @@ export const RECOMMENDED_BUILDS = {
       cantrips: ['guidance', 'shield', 'light', 'stabilize', 'detect-magic'],
       first: ['heal', 'bless'],
     },
+    startingItems: ['mace', 'wooden-shield', 'scale-mail', 'religious-symbol-wooden', 'healers-toolkit', 'adventurers-pack'],
   },
   ranger: {
     rationale: "Versatile martial. Dexterity for bows, Strength if going melee, Constitution for HP, Wisdom for Perception and Nature.",
@@ -40,6 +43,7 @@ export const RECOMMENDED_BUILDS = {
     skills: ['nature', 'survival', 'stealth'],
     classFeats: { 1: ['hunted-shot'] },
     spells: null,
+    startingItems: ['longbow-20-arrows', 'shortsword', 'studded-leather-armor', 'climbing-kit', 'rope-50-ft', 'adventurers-pack'],
   },
   rogue: {
     rationale: "Skills and mobility. Dexterity for everything, Charisma or Intelligence depending on racket, Constitution for HP.",
@@ -47,6 +51,7 @@ export const RECOMMENDED_BUILDS = {
     skills: ['stealth', 'thievery', 'acrobatics', 'society'],
     classFeats: { 1: ['nimble-dodge'] },
     spells: null,
+    startingItems: ['rapier', 'shortbow-20-arrows', 'leather-armor', 'thieves-toolkit', 'dagger', 'adventurers-pack'],
   },
   barbarian: {
     rationale: "Damage and durability. Strength swings, Constitution survives, Dexterity for AC, Wisdom for Will saves.",
@@ -54,6 +59,7 @@ export const RECOMMENDED_BUILDS = {
     skills: ['athletics', 'intimidation'],
     classFeats: { 1: ['raging-intimidation'] },
     spells: null,
+    startingItems: ['greataxe', 'hide-armor', 'javelin', 'adventurers-pack', 'rations-1-week'],
   },
   bard: {
     rationale: "Occult caster and support. Charisma drives spells. Dexterity for AC. Constitution to stay up while concentrating.",
@@ -64,6 +70,7 @@ export const RECOMMENDED_BUILDS = {
       cantrips: ['inspire-courage', 'daze', 'light', 'shield', 'detect-magic'],
       first: ['fear', 'soothe'],
     },
+    startingItems: ['rapier', 'leather-armor', 'musical-instrument-handheld', 'writing-set', 'adventurers-pack'],
   },
   druid: {
     rationale: "Primal caster. Wisdom drives spells. Constitution for survival. Dexterity for AC.",
@@ -74,6 +81,7 @@ export const RECOMMENDED_BUILDS = {
       cantrips: ['produce-flame', 'light', 'detect-magic', 'shield', 'stabilize'],
       first: ['heal', 'soothe'],
     },
+    startingItems: ['scimitar', 'sling-20-bullets', 'leather-armor', 'material-component-pouch', 'adventurers-pack'],
   },
   sorcerer: {
     rationale: "Spontaneous caster. Charisma drives spells. Dexterity for AC. Constitution for staying up.",
@@ -84,6 +92,7 @@ export const RECOMMENDED_BUILDS = {
       cantrips: ['daze', 'light', 'detect-magic', 'shield', 'prestidigitation'],
       first: ['magic-missile', 'fear'],
     },
+    startingItems: ['crossbow-20-bolts', 'dagger', 'material-component-pouch', 'adventurers-pack', 'healing-potion-minor'],
   },
   wizard: {
     rationale: "Prepared arcane caster. Intelligence drives spells. Constitution for staying up. Dexterity for AC.",
@@ -94,6 +103,7 @@ export const RECOMMENDED_BUILDS = {
       cantrips: ['daze', 'light', 'detect-magic', 'shield', 'prestidigitation'],
       first: ['magic-missile', 'fear'],
     },
+    startingItems: ['quarterstaff', 'dagger', 'spellbook-blank', 'writing-set', 'material-component-pouch', 'adventurers-pack'],
   },
   witch: {
     rationale: "Patron-granted prepared caster. Intelligence drives spell DC. Constitution keeps you alive concentrating. Dexterity for initiative and AC.",
@@ -104,6 +114,7 @@ export const RECOMMENDED_BUILDS = {
       cantrips: ['daze', 'light', 'detect-magic', 'shield', 'prestidigitation'],
       first: ['fear', 'soothe'],
     },
+    startingItems: ['dagger', 'sling-20-bullets', 'material-component-pouch', 'writing-set', 'adventurers-pack'],
   },
   monk: {
     rationale: "Mobile martial. Strength or Dexterity for unarmed strikes. Constitution for HP. Wisdom for Perception and AC.",
@@ -111,6 +122,7 @@ export const RECOMMENDED_BUILDS = {
     skills: ['athletics', 'acrobatics'],
     classFeats: { 1: ['ki-strike'] },
     spells: null,
+    startingItems: ['quarterstaff', 'shortbow-20-arrows', 'climbing-kit', 'rope-50-ft', 'adventurers-pack'],
   },
   // Remaining classes from the SRD import — boost spread + a starter
   // skill set. Class-feat and spell defaults stay TODO until the
@@ -233,4 +245,48 @@ export const RECOMMENDED_BUILDS = {
 
 export function getRecommended(classSlug) {
   return RECOMMENDED_BUILDS[classSlug] || null;
+}
+
+// Normalize a display name to the kebab-case slug form used in
+// `startingItems` so the shop can match its entries against the
+// recommendation list without forcing a separate slug field on each
+// catalog item.
+export function itemSlug(displayName) {
+  return String(displayName || '')
+    .toLowerCase()
+    .trim()
+    // strip parentheticals before slugifying — "(minor)" / "(50 ft)"
+    .replace(/\(([^)]+)\)/g, '$1')
+    .replace(/[+×]/g, '-')
+    .replace(/[\s_,/]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+/**
+ * Is `item` recommended for the chosen class? Two paths:
+ *   1. Direct slug match against `startingItems` in the class's
+ *      recommendation entry.
+ *   2. Weapon-proficiency backstop: if the item is a weapon and the
+ *      class has at least Trained in that weapon category, count it
+ *      as "viable" — broader than the curated list but useful for
+ *      classes without a curated entry.
+ */
+export function isRecommendedForClass(item, classData) {
+  if (!item || !classData) return false;
+  const rec = getRecommended(classData.slug);
+  if (rec?.startingItems?.length) {
+    const slug = itemSlug(item.name);
+    if (rec.startingItems.includes(slug)) return true;
+  }
+  // Backstop: weapon category proficiency. The catalog doesn't carry
+  // a `category` field today, so this only fires once item records
+  // gain one (post-equipment-import wiring).
+  const category = item.category || item.weaponCategory;
+  if (category) {
+    const profRank = classData.proficiencies?.weapons?.[category] ?? 0;
+    if (profRank >= 1) return true;
+  }
+  return false;
 }
