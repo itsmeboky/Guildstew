@@ -108,5 +108,25 @@
       "classDC": "trained",
       "occultSpellcasting": "trained"
     }
+  },
+  "druid": {
+    "subclasses": {
+      "label": "Order",
+      "help": "Your druidic order sets where your power comes from and what it does best. All Remaster orders are full primal casters; the order shapes your initial skill, focus spell, and signature feature.",
+      "options": [
+        { "id": "animal-order",  "name": "Animal Order",  "desc": "Bond with beasts. Gain a young animal companion at level 1 and the Heal Animal focus spell. Trained in Athletics. Best for the player who wants a furry battle partner." },
+        { "id": "leaf-order",    "name": "Leaf Order",    "desc": "Steward of growing things. Gain a leshy familiar and the Goodberry focus spell. Trained in Diplomacy. The naturalist healer fantasy." },
+        { "id": "storm-order",   "name": "Storm Order",   "desc": "Channel weather and the sky. Gain the Tempest Surge focus spell. Trained in Acrobatics. Reach across the battlefield with lightning and gust." },
+        { "id": "untamed-order", "name": "Untamed Order", "desc": "Walk as a beast. Gain the Untamed Form focus spell — shapeshift into wild forms early and often. Trained in Nature. The shapeshifter path." }
+      ]
+    },
+    "proficiencies": {
+      "perception": "trained",
+      "saves": { "fortitude": "trained", "reflex": "trained", "will": "expert" },
+      "weapons": { "simple": "trained", "unarmed": "trained" },
+      "armor": { "unarmored": "trained", "light": "trained", "medium": "trained" },
+      "classDC": "trained",
+      "primalSpellcasting": "trained"
+    }
   }
 }
