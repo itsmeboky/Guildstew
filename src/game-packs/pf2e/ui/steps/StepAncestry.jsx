@@ -8,6 +8,7 @@ import CornerBrackets from '../components/CornerBrackets.jsx';
 import ComplexityBadge from '../components/ComplexityBadge.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import ThreeActionGlyph from '../components/ThreeActionGlyph.jsx';
+import UnknownEntityError from '../components/UnknownEntityError.jsx';
 import {
   ANCESTRIES,
   HERITAGES_BY_ANCESTRY,
@@ -18,15 +19,22 @@ import { getAncestryTip } from '../../content/ancestryTips.js';
 import { STEPS } from '../../config/steps.js';
 
 const StepAncestry = ({ data, update }) => {
-  const selected = ANCESTRIES.find(a => a.slug === data.ancestry) || ANCESTRIES[0];
-  const heritages = HERITAGES_BY_ANCESTRY[selected.id] || [];
-  const Icon = selected.icon;
-  const tipEntry = getAncestryTip(selected.id);
-
-  // auto-select first ancestry on mount if none picked
+  // Auto-pick first ancestry when none is set so the initial render
+  // has data to draw. After that, a missed lookup is a real bug —
+  // surface it instead of dropping the player onto Athamaru silently.
   useEffect(() => {
-    if (!data.ancestry) update({ ancestry: ANCESTRIES[0].id });
+    if (!data.ancestry && ANCESTRIES.length > 0) update({ ancestry: ANCESTRIES[0].slug });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const selected = ANCESTRIES.find(a => a.slug === data.ancestry);
+  if (data.ancestry && !selected) {
+    console.error('[pf2e] Unknown ancestry slug:', data.ancestry, '— available:', ANCESTRIES.map(a => a.slug));
+    return <UnknownEntityError kind="ancestry" slug={data.ancestry} available={ANCESTRIES.map(a => a.slug)} />;
+  }
+  if (!selected) return null;
+  const heritages = HERITAGES_BY_ANCESTRY[selected.slug] || [];
+  const Icon = selected.icon;
+  const tipEntry = getAncestryTip(selected.slug);
 
   return (
     <div>

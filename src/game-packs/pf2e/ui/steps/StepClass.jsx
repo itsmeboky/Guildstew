@@ -23,6 +23,7 @@ import ThumbnailStrip from '../components/ThumbnailStrip.jsx';
 import CornerBrackets from '../components/CornerBrackets.jsx';
 import ComplexityBadge from '../components/ComplexityBadge.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
+import UnknownEntityError from '../components/UnknownEntityError.jsx';
 import RecommendedButton from '../components/RecommendedButton.jsx';
 import RecommendedBadge from '../components/RecommendedBadge.jsx';
 import ProfLine from '../components/ProfLine.jsx';
@@ -45,7 +46,20 @@ import { getSubclassOverlay, applySubclassOverlay } from '../../content/subclass
 import { STEPS } from '../../config/steps.js';
 
 const StepClass = ({ data, update, openDeityModal }) => {
-  const selected = CLASSES.find(c => c.slug === data.class) || CLASSES[0];
+  // Auto-select the first available class when none is set yet so the
+  // initial render has something to draw. Once `data.class` is set,
+  // a missed lookup is a real bug — surface it instead of silently
+  // dropping the player onto the first class in the list.
+  useEffect(() => {
+    if (!data.class && CLASSES.length > 0) update({ class: CLASSES[0].slug });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const selected = CLASSES.find(c => c.slug === data.class);
+  if (data.class && !selected) {
+    console.error('[pf2e] Unknown class slug:', data.class, '— available:', CLASSES.map(c => c.slug));
+    return <UnknownEntityError kind="class" slug={data.class} available={CLASSES.map(c => c.slug)} />;
+  }
+  if (!selected) return null; // first render before auto-pick lands
   const Icon = selected.icon;
   const prof = selected.proficiencies || {};
   const saves = prof.saves || {};
