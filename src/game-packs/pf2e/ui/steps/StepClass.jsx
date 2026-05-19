@@ -34,6 +34,7 @@ import {
   INSTINCT_ANATHEMA,
   CLERIC_DOMAINS,
   STANDARD_CLASS_FEAT_LEVELS,
+  SKILLS,
 } from '../../data/index.js';
 import { getClassTip } from '../../content/classTips.js';
 import { STEPS } from '../../config/steps.js';
@@ -108,9 +109,8 @@ const StepClass = ({ data, update, openDeityModal }) => {
             <div className="mt-4 grid grid-cols-2 gap-1.5 text-[10px] font-body">
               <span className="font-display tracking-[0.15em] text-pf-brass uppercase col-span-2 mt-2">Hit Points / Level</span>
               <span className="text-pf-bone font-mono text-2xl col-span-2">{selected.hp}</span>
-              <span className="font-display tracking-[0.15em] text-pf-brass uppercase col-span-2 mt-2">Trained Skills</span>
-              <span className="text-pf-bone font-mono col-span-2">{(selected.trainedSkills?.additional ?? 2)} + INT mod</span>
             </div>
+            <TrainedSkillsPicker selected={selected} data={data} update={update} />
 
             {selected.requiresDeity && (
               <div className="mt-5 p-3 bg-pf-oxblood/10 border border-pf-oxblood/40">
@@ -477,5 +477,96 @@ const StepClass = ({ data, update, openDeityModal }) => {
     </div>
   );
 };
+
+/**
+ * Trained-skills picker. Renders auto-trained chips (locked, from
+ * `class.trainedSkills.value`) and N pickable dropdown slots, where N
+ * is `class.trainedSkills.additional + max(0, INT mod)`. The INT mod
+ * is approximated from the player's level-1 free boost batch — the
+ * boosts step is the source of truth, but until they revisit it we
+ * keep slot count reactive to whatever's been chosen so far.
+ *
+ * Player picks persist to `data.trainedSkills` as a flat slug array.
+ */
+function TrainedSkillsPicker({ selected, data, update }) {
+  const auto = (selected.trainedSkills?.value || []).map(s => s.toLowerCase());
+  const additional = selected.trainedSkills?.additional ?? 2;
+  const intBoostsAtL1 = data.boostBatches?.[1]?.Intelligence || 0;
+  // Each free boost is +2 to score; ignore ancestry/background here
+  // since the post-import ancestry slugs no longer line up with the
+  // legacy StepAbilities tables. Conservative under-count.
+  const intMod = Math.max(0, intBoostsAtL1);
+  const totalSlots = additional + intMod;
+
+  const picks = data.trainedSkills || [];
+  const skillSlugs = SKILLS.map(s => ({ slug: s.name.toLowerCase(), name: s.name, ability: s.ability }));
+  const taken = new Set([...auto, ...picks.map(p => p.toLowerCase())]);
+
+  const setPick = (idx, slug) => {
+    const next = [...picks];
+    if (!slug) next.splice(idx, 1);
+    else next[idx] = slug;
+    update({ trainedSkills: next });
+  };
+
+  return (
+    <div className="mt-4">
+      <p className="font-display tracking-[0.15em] text-pf-brass uppercase text-[10px] mb-2">
+        Trained Skills <span className="text-pf-stone normal-case lowercase tracking-normal italic">({additional} + INT mod = {totalSlots})</span>
+      </p>
+
+      {auto.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {auto.map(slug => {
+            const skill = skillSlugs.find(s => s.slug === slug) || { name: slug.charAt(0).toUpperCase() + slug.slice(1) };
+            return (
+              <span key={slug} className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-display tracking-wider uppercase bg-pf-brass/15 border border-pf-brass/40 text-pf-bone">
+                {skill.name}
+                <span className="text-[8px] text-pf-brass">auto</span>
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        {Array.from({ length: totalSlots }).map((_, idx) => {
+          const current = picks[idx] || '';
+          const available = skillSlugs.filter(s => s.slug === current || !taken.has(s.slug));
+          return (
+            <div key={idx} className="flex items-center gap-1.5">
+              <select
+                value={current}
+                onChange={e => setPick(idx, e.target.value)}
+                className="flex-1 bg-pf-bg-elev border border-pf-brass-dim/30 px-2 py-1 text-[11px] font-body text-pf-bone
+                           focus:border-pf-brass focus:outline-none transition-all"
+              >
+                <option value="">— Pick skill —</option>
+                {available.map(s => (
+                  <option key={s.slug} value={s.slug}>{s.name} ({s.ability})</option>
+                ))}
+              </select>
+              {current && (
+                <button
+                  type="button"
+                  onClick={() => setPick(idx, '')}
+                  title="Clear slot"
+                  className="px-2 py-1 text-[10px] text-pf-stone hover:text-pf-bone border border-pf-brass-dim/30 hover:border-pf-brass"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {totalSlots === 0 && (
+          <p className="font-body text-[10px] text-pf-stone italic">
+            No bonus skills until Intelligence boosts are assigned in the Boosts step.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default StepClass;
