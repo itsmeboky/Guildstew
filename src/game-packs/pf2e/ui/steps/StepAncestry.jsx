@@ -68,7 +68,7 @@ const StepAncestry = ({ data, update }) => {
             {Icon && <Icon size={48} className="text-pf-brass" strokeWidth={1.2} />}
             <h3 className="font-display text-3xl text-pf-bone">{selected.name}</h3>
             <ComplexityBadge level={tipEntry.complexity} />
-            <p className="font-body text-sm text-pf-parchment leading-relaxed">{selected.description}</p>
+            <p className="font-body text-sm text-pf-parchment leading-relaxed">{selected.desc || selected.description}</p>
           </div>
 
           {/* Stats column */}
