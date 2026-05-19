@@ -71,5 +71,90 @@
       { "name": "Torches (4)", "priceSp": 1, "bulk": "L" },
       { "name": "Rations (1 week)", "priceSp": 5, "bulk": 1 }
     ]
+  },
+  "champion": {
+    "name": "Champion Kit", "totalSp": 140, "bulk": 5,
+    "items": [
+      { "name": "Chain Mail", "priceSp": 60, "bulk": 2 },
+      { "name": "Steel Shield", "priceSp": 20, "bulk": 1 },
+      { "name": "Longsword", "priceSp": 10, "bulk": 1 },
+      { "name": "Javelin (×2)", "priceSp": 2, "bulk": "L" },
+      { "name": "Religious Symbol (wooden)", "priceSp": 1, "bulk": "L" },
+      { "name": "Adventurer's Pack", "priceSp": 15, "bulk": 1 },
+      { "name": "Torches (4)", "priceSp": 1, "bulk": "L" },
+      { "name": "Rations (1 week)", "priceSp": 5, "bulk": 1 }
+    ]
+  },
+  "druid": {
+    "name": "Druid Kit", "totalSp": 140, "bulk": 3,
+    "items": [
+      { "name": "Leather Armor", "priceSp": 20, "bulk": 1 },
+      { "name": "Scimitar", "priceSp": 10, "bulk": 1 },
+      { "name": "Sling", "priceSp": 1, "bulk": "L" },
+      { "name": "Sling Bullets (20)", "priceSp": 1, "bulk": "L" },
+      { "name": "Material Component Pouch", "priceSp": 50, "bulk": "L" },
+      { "name": "Adventurer's Pack", "priceSp": 15, "bulk": 1 },
+      { "name": "Torches (4)", "priceSp": 1, "bulk": "L" },
+      { "name": "Rations (1 week)", "priceSp": 5, "bulk": 1 }
+    ]
+  },
+  "monk": {
+    "name": "Monk Kit", "totalSp": 140, "bulk": 2,
+    "items": [
+      { "name": "Bo Staff", "priceSp": 2, "bulk": 2 },
+      { "name": "Shuriken (10)", "priceSp": 1, "bulk": "L" },
+      { "name": "Climbing Kit", "priceSp": 5, "bulk": 1 },
+      { "name": "Adventurer's Pack", "priceSp": 15, "bulk": 1 },
+      { "name": "Torches (4)", "priceSp": 1, "bulk": "L" },
+      { "name": "Rations (1 week)", "priceSp": 5, "bulk": 1 }
+    ]
+  },
+  "ranger": {
+    "name": "Ranger Kit", "totalSp": 140, "bulk": 4,
+    "items": [
+      { "name": "Studded Leather Armor", "priceSp": 30, "bulk": 1 },
+      { "name": "Longbow + 20 arrows", "priceSp": 60, "bulk": 2 },
+      { "name": "Hunting Knife", "priceSp": 2, "bulk": "L" },
+      { "name": "Climbing Kit", "priceSp": 5, "bulk": 1 },
+      { "name": "Adventurer's Pack", "priceSp": 15, "bulk": 1 },
+      { "name": "Torches (4)", "priceSp": 1, "bulk": "L" },
+      { "name": "Rations (1 week)", "priceSp": 5, "bulk": 1 }
+    ]
+  },
+  "sorcerer": {
+    "name": "Sorcerer Kit", "totalSp": 140, "bulk": 2,
+    "items": [
+      { "name": "Crossbow + 20 bolts", "priceSp": 32, "bulk": 1 },
+      { "name": "Dagger", "priceSp": 2, "bulk": "L" },
+      { "name": "Material Component Pouch", "priceSp": 50, "bulk": "L" },
+      { "name": "Adventurer's Pack", "priceSp": 15, "bulk": 1 },
+      { "name": "Torches (4)", "priceSp": 1, "bulk": "L" },
+      { "name": "Rations (1 week)", "priceSp": 5, "bulk": 1 }
+    ]
+  },
+  "witch": {
+    "name": "Witch Kit", "totalSp": 140, "bulk": 2,
+    "items": [
+      { "name": "Dagger", "priceSp": 2, "bulk": "L" },
+      { "name": "Sling", "priceSp": 1, "bulk": "L" },
+      { "name": "Sling Bullets (20)", "priceSp": 1, "bulk": "L" },
+      { "name": "Material Component Pouch", "priceSp": 50, "bulk": "L" },
+      { "name": "Writing Set", "priceSp": 10, "bulk": "L" },
+      { "name": "Adventurer's Pack", "priceSp": 15, "bulk": 1 },
+      { "name": "Torches (4)", "priceSp": 1, "bulk": "L" },
+      { "name": "Rations (1 week)", "priceSp": 5, "bulk": 1 }
+    ]
+  },
+  "alchemist": {
+    "name": "Alchemist Kit", "totalSp": 140, "bulk": 3,
+    "items": [
+      { "name": "Leather Armor", "priceSp": 20, "bulk": 1 },
+      { "name": "Crossbow + 20 bolts", "priceSp": 32, "bulk": 1 },
+      { "name": "Dagger", "priceSp": 2, "bulk": "L" },
+      { "name": "Alchemist's Tools", "priceSp": 30, "bulk": 1 },
+      { "name": "Adventurer's Pack", "priceSp": 15, "bulk": 1 },
+      { "name": "Torches (4)", "priceSp": 1, "bulk": "L" },
+      { "name": "Rations (1 week)", "priceSp": 5, "bulk": 1 }
+    ]
   }
 }

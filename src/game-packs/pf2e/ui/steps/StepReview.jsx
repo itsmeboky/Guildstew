@@ -38,10 +38,10 @@ const formatPrice = (sp) => {
 };
 
 const StepReview = ({ data, onForge }) => {
-  const ancestry = ANCESTRIES.find(a => a.id === data.ancestry);
-  const heritage = ancestry ? HERITAGES_BY_ANCESTRY[ancestry.id]?.find(h => h.id === data.heritage) : null;
-  const background = BACKGROUNDS.find(b => b.id === data.background);
-  const cls = CLASSES.find(c => c.id === data.class);
+  const ancestry = ANCESTRIES.find(a => a.slug === data.ancestry);
+  const heritage = ancestry ? HERITAGES_BY_ANCESTRY[ancestry.id]?.find(h => h.slug === data.heritage) : null;
+  const background = BACKGROUNDS.find(b => b.slug === data.background);
+  const cls = CLASSES.find(c => c.slug === data.class);
   const details = cls ? CLASS_DETAILS[cls.id] : null;
   const subclass = cls && details?.subclasses?.options.find(o => o.id === data.subclass);
   const stats = computeDerivedStats(data);
@@ -59,7 +59,7 @@ const StepReview = ({ data, onForge }) => {
 
   // Per-skill modifiers
   const trained = data.trainedSkills || [];
-  const bgSkill = BACKGROUNDS.find(b => b.id === data.background)?.skill;
+  const bgSkill = BACKGROUNDS.find(b => b.slug === data.background)?.skill;
   const skillTiers = data.skillTiers || {};
   const itemBonuses = computeItemSkillBonuses(data);
   const skillModifiers = SKILLS.map(s => {

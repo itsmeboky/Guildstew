@@ -2,7 +2,7 @@
 // Verbatim from the prototype.
 
 import React, { useState } from 'react';
-import { Compass, Check, Plus, X } from 'lucide-react';
+import { Compass, Check, Plus, X, Star } from 'lucide-react';
 import GMWhisper from '../components/GMWhisper.jsx';
 import CornerBrackets from '../components/CornerBrackets.jsx';
 import ComplexityBadge from '../components/ComplexityBadge.jsx';
@@ -15,6 +15,7 @@ import {
   ANCESTRY_GRANTED_ITEMS,
   STARTING_WEALTH_BY_LEVEL,
 } from '../../data/index.js';
+import { isRecommendedForClass } from '../../content/recommendedBuilds.js';
 import { ARMOR_TYPE_FROM_NAME } from '../../rules/armor-classifier.js';
 
 const bulkValue = (b) => b === 'L' ? 0.1 : (b === '—' || b === 0) ? 0 : (typeof b === 'number' ? b : 0);
@@ -43,13 +44,13 @@ const formatPrice = (sp) => {
 
 const computeStrBoosts = (data) => {
   let s = 0;
-  const ancestry = ANCESTRIES.find(a => a.id === data.ancestry);
+  const ancestry = ANCESTRIES.find(a => a.slug === data.ancestry);
   if (ancestry) {
     if (ancestry.boosts.includes('Strength')) s++;
     if (ancestry.flaws.includes('Strength')) s--;
   }
   if (data.background === 'soldier' || data.background === 'sailor') s++;
-  const cls = CLASSES.find(c => c.id === data.class);
+  const cls = CLASSES.find(c => c.slug === data.class);
   s += (cls?.keyAbility?.includes('Strength') ? 1 : 0); // class key boost counted once
   const batches = data.boostBatches || {};
   for (const b of Object.values(batches)) s += (b.Strength || 0);
@@ -57,14 +58,15 @@ const computeStrBoosts = (data) => {
 };
 
 const StepGear = ({ data, update }) => {
-  const cls = CLASSES.find(c => c.id === data.class);
-  const ancestry = ANCESTRIES.find(a => a.id === data.ancestry);
+  const cls = CLASSES.find(c => c.slug === data.class);
+  const ancestry = ANCESTRIES.find(a => a.slug === data.ancestry);
   const kit = cls ? CLASS_KITS[cls.id] : null;
   const granted = ANCESTRY_GRANTED_ITEMS[ancestry?.id] || [];
   const loadout = data.loadout || [];
 
   const [activeTab, setActiveTab] = useState('kit');
   const [shopCategory, setShopCategory] = useState('weapons');
+  const [recommendedOnly, setRecommendedOnly] = useState(false);
 
   const strBoosts = computeStrBoosts(data);
   const strScore = 10 + strBoosts * 2;
@@ -217,11 +219,28 @@ const StepGear = ({ data, update }) => {
 
           {activeTab === 'kit' && (
             <div className="p-5">
-              {!kit ? (
+              {!cls ? (
                 <div className="text-center py-12">
                   <Compass size={36} className="text-pf-brass-dim mx-auto mb-3" />
                   <p className="font-display text-sm tracking-[0.15em] text-pf-stone uppercase mb-1">No Class Selected Yet</p>
                   <p className="font-body text-sm text-pf-stone">Go back to Step IV and pick a class to see its starter kit.</p>
+                </div>
+              ) : !kit ? (
+                <div className="text-center py-12">
+                  <Compass size={36} className="text-pf-brass-dim mx-auto mb-3" />
+                  <p className="font-display text-sm tracking-[0.15em] text-pf-stone uppercase mb-1">
+                    No Official Kit for {cls.name}
+                  </p>
+                  <p className="font-body text-sm text-pf-stone max-w-md mx-auto leading-relaxed mb-4">
+                    {cls.name}s don't ship with a curated starter kit yet. Browse the Custom Shop —
+                    items appropriate for your class will be marked with a gold star.
+                  </p>
+                  <button
+                    onClick={() => setActiveTab('shop')}
+                    className="px-4 py-2 bg-pf-bg-elev border border-pf-brass text-pf-bone font-display tracking-wider uppercase text-xs hover:bg-pf-brass/10 transition-all"
+                  >
+                    Open Shop
+                  </button>
                 </div>
               ) : (
                 <>
@@ -302,19 +321,50 @@ const StepGear = ({ data, update }) => {
                   </button>
                 ))}
               </div>
+
+              {cls && (
+                <div className="flex items-center justify-between px-4 py-2 border-b border-pf-brass-dim/20 bg-pf-bg-elev/30">
+                  <p className="font-body text-[11px] text-pf-stone">
+                    <Star size={10} className="inline text-pf-brass mr-1" />
+                    Items starred for <span className="text-pf-bone">{cls.name}</span>
+                  </p>
+                  <label className="flex items-center gap-2 font-display text-[10px] tracking-[0.15em] uppercase text-pf-stone cursor-pointer hover:text-pf-parchment">
+                    <input
+                      type="checkbox"
+                      checked={recommendedOnly}
+                      onChange={e => setRecommendedOnly(e.target.checked)}
+                      className="w-3 h-3 accent-pf-brass"
+                    />
+                    Recommended only
+                  </label>
+                </div>
+              )}
+
               <div className="p-4 max-h-[480px] overflow-y-auto">
                 <div className="space-y-1">
-                  {EQUIPMENT_CATALOG[shopCategory].map(item => {
+                  {EQUIPMENT_CATALOG[shopCategory]
+                    .map(item => ({ item, rec: cls ? isRecommendedForClass(item, cls) : false }))
+                    .filter(({ rec }) => !recommendedOnly || rec)
+                    .map(({ item, rec }) => {
                     const inLoadout = loadout.find(i => i.name === item.name);
                     const canAfford = item.priceSp <= remainingSp || item.priceSp === 0;
                     return (
                       <div
                         key={item.name}
-                        className={`flex items-center gap-3 px-3 py-2 border transition-all
+                        className={`relative flex items-center gap-3 px-3 py-2 border transition-all
                                     ${inLoadout
                                       ? 'border-pf-brass/40 bg-pf-brass/5'
-                                      : 'border-pf-brass-dim/20 hover:border-pf-brass-dim/40'}`}
+                                      : rec
+                                        ? 'border-pf-brass/30 bg-pf-brass/[0.03] shadow-[inset_0_0_24px_-12px_rgba(201,169,97,0.4)]'
+                                        : 'border-pf-brass-dim/20 hover:border-pf-brass-dim/40'}`}
                       >
+                        {rec && (
+                          <Star
+                            size={11}
+                            className="text-pf-brass fill-pf-brass shrink-0"
+                            aria-label="Recommended for your class"
+                          />
+                        )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-baseline gap-2">
                             <span className="font-body text-sm text-pf-parchment">{item.name}</span>
@@ -341,6 +391,12 @@ const StepGear = ({ data, update }) => {
                       </div>
                     );
                   })}
+                  {recommendedOnly
+                    && EQUIPMENT_CATALOG[shopCategory].every(item => !isRecommendedForClass(item, cls)) && (
+                    <p className="font-body text-[11px] text-pf-stone italic p-2 text-center">
+                      No recommendations in this category for {cls?.name || 'your class'} yet — toggle the filter off to browse.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
