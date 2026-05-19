@@ -7,8 +7,9 @@
 import React, { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import ThreeActionGlyph from './ThreeActionGlyph.jsx';
+import RecommendedBadge from './RecommendedBadge.jsx';
 
-const ClassFeatSlot = ({ fLvl, picked, classOptions, dedicationOptions, onPick, dedicationLocked }) => {
+const ClassFeatSlot = ({ fLvl, picked, classOptions, dedicationOptions, onPick, dedicationLocked, recommendedName }) => {
   const initialMode = dedicationOptions.some(d => d.name === picked) ? 'archetype' : 'class';
   const [mode, setMode] = useState(initialMode);
   const [query, setQuery] = useState('');
@@ -134,7 +135,10 @@ const ClassFeatSlot = ({ fLvl, picked, classOptions, dedicationOptions, onPick, 
                                 : 'border-pf-brass-dim/20 hover:border-pf-brass-dim'}`}
                 >
                   <div className="flex-1 min-w-0">
-                    <span className="font-body text-xs text-pf-parchment">{feat.name}</span>
+                    <span className="font-body text-xs text-pf-parchment inline-flex items-center gap-1.5">
+                      {feat.name}
+                      {recommendedName && recommendedName === feat.name && <RecommendedBadge />}
+                    </span>
                     {feat.desc && (
                       <p className="text-[10px] text-pf-stone leading-snug mt-0.5 line-clamp-3">{feat.desc}</p>
                     )}

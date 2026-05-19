@@ -17,11 +17,14 @@
 
 import React, { useEffect } from 'react';
 import { Sparkles, Crown } from 'lucide-react';
+import { toast } from 'sonner';
 import GMWhisper from '../components/GMWhisper.jsx';
 import ThumbnailStrip from '../components/ThumbnailStrip.jsx';
 import CornerBrackets from '../components/CornerBrackets.jsx';
 import ComplexityBadge from '../components/ComplexityBadge.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
+import RecommendedButton from '../components/RecommendedButton.jsx';
+import RecommendedBadge from '../components/RecommendedBadge.jsx';
 import ProfLine from '../components/ProfLine.jsx';
 import ProfRow from '../components/ProfRow.jsx';
 import ClassFeatSlot from '../components/ClassFeatSlot.jsx';
@@ -37,6 +40,7 @@ import {
   SKILLS,
 } from '../../data/index.js';
 import { getClassTip } from '../../content/classTips.js';
+import { getRecommended } from '../../content/recommendedBuilds.js';
 import { STEPS } from '../../config/steps.js';
 
 const StepClass = ({ data, update, openDeityModal }) => {
@@ -49,6 +53,46 @@ const StepClass = ({ data, update, openDeityModal }) => {
   // straight from the SRD import via traits.includes(slug). Replaces
   // the prototype's hand-curated `firstFeats` array.
   const classFeatsByLevel = CLASS_FEATS_BY_CLASS[selected.slug] || {};
+  const recommended = getRecommended(selected.slug);
+  const recFlags = data.recommendedFlags || {};
+
+  // Apply recommended level-1 class feats. Match by lowercased name
+  // since the recommendation file uses kebab-case display slugs and
+  // the imported feats only carry a `name` field (no `slug`).
+  const applyRecommendedFeats = () => {
+    if (!recommended?.classFeats) return;
+    const nextClassFeats = { ...(data.classFeats || {}) };
+    const nextFlags = { ...(recFlags.classFeats || {}) };
+    for (const [lvlStr, slugs] of Object.entries(recommended.classFeats)) {
+      const lvl = parseInt(lvlStr, 10);
+      if (!Array.isArray(slugs) || slugs.length === 0) continue;
+      const want = slugs[0]; // one feat per slot today
+      const match = (classFeatsByLevel[lvl] || []).find(f =>
+        (f.name || '').toLowerCase().replace(/\s+/g, '-') === want
+        || (f.name || '').toLowerCase() === want.replace(/-/g, ' '),
+      );
+      if (match) {
+        nextClassFeats[lvl] = match.name;
+        nextFlags[lvl] = match.name;
+      }
+    }
+    update({
+      classFeats: nextClassFeats,
+      recommendedFlags: { ...recFlags, classFeats: nextFlags },
+    });
+    toast.success('Recommended class feats applied', { description: recommended.rationale });
+  };
+
+  // Picking a different feat in a slot drops the ★ for that slot only.
+  const pickClassFeat = (lvl, name) => {
+    const nextClassFeats = { ...(data.classFeats || {}), [lvl]: name };
+    const featFlags = { ...(recFlags.classFeats || {}) };
+    if (featFlags[lvl] && featFlags[lvl] !== name) delete featFlags[lvl];
+    update({
+      classFeats: nextClassFeats,
+      recommendedFlags: { ...recFlags, classFeats: featFlags },
+    });
+  };
 
   useEffect(() => {
     if (!data.class) update({ class: CLASSES[0].id });
@@ -110,7 +154,13 @@ const StepClass = ({ data, update, openDeityModal }) => {
               <span className="font-display tracking-[0.15em] text-pf-brass uppercase col-span-2 mt-2">Hit Points / Level</span>
               <span className="text-pf-bone font-mono text-2xl col-span-2">{selected.hp}</span>
             </div>
-            <TrainedSkillsPicker selected={selected} data={data} update={update} />
+            <TrainedSkillsPicker
+              selected={selected}
+              data={data}
+              update={update}
+              recommended={recommended}
+              recFlags={recFlags}
+            />
 
             {selected.requiresDeity && (
               <div className="mt-5 p-3 bg-pf-oxblood/10 border border-pf-oxblood/40">
@@ -156,7 +206,13 @@ const StepClass = ({ data, update, openDeityModal }) => {
 
               return (
                 <>
-                  <SectionHeader>Class Feats ({featLevels.length})</SectionHeader>
+                  <div className="flex items-center justify-between mb-1">
+                    <SectionHeader>Class Feats ({featLevels.length})</SectionHeader>
+                    <RecommendedButton
+                      onClick={applyRecommendedFeats}
+                      disabled={!recommended?.classFeats}
+                    />
+                  </div>
                   <p className="text-[11px] text-pf-stone font-body mb-3 leading-relaxed">
                     One feat per feat-level. Diamond glyphs show how many actions the feat costs per turn.
                   </p>
@@ -190,7 +246,8 @@ const StepClass = ({ data, update, openDeityModal }) => {
                         classOptions={classFeatsByLevel[fLvl] || []}
                         dedicationOptions={CLASS_DEDICATIONS.filter(d => d.forbidden !== selected.id)}
                         dedicationLocked={!canTakeNewDedication && (!classFeats[fLvl] || !dedicationNames.includes(classFeats[fLvl]))}
-                        onPick={(name) => update({ classFeats: { ...classFeats, [fLvl]: name } })}
+                        recommendedName={recFlags.classFeats?.[fLvl]}
+                        onPick={(name) => pickClassFeat(fLvl, name)}
                       />
                     ))}
 
@@ -488,7 +545,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
  *
  * Player picks persist to `data.trainedSkills` as a flat slug array.
  */
-function TrainedSkillsPicker({ selected, data, update }) {
+function TrainedSkillsPicker({ selected, data, update, recommended, recFlags }) {
   const auto = (selected.trainedSkills?.value || []).map(s => s.toLowerCase());
   const additional = selected.trainedSkills?.additional ?? 2;
   const intBoostsAtL1 = data.boostBatches?.[1]?.Intelligence || 0;
@@ -501,19 +558,51 @@ function TrainedSkillsPicker({ selected, data, update }) {
   const picks = data.trainedSkills || [];
   const skillSlugs = SKILLS.map(s => ({ slug: s.name.toLowerCase(), name: s.name, ability: s.ability }));
   const taken = new Set([...auto, ...picks.map(p => p.toLowerCase())]);
+  const recSkills = recFlags?.skills || [];
 
   const setPick = (idx, slug) => {
     const next = [...picks];
     if (!slug) next.splice(idx, 1);
     else next[idx] = slug;
-    update({ trainedSkills: next });
+    // Drop the ★ badge for the slug being replaced/cleared.
+    const prevSlug = picks[idx];
+    let nextRecSkills = recSkills;
+    if (prevSlug && recSkills.includes(prevSlug) && prevSlug !== slug) {
+      nextRecSkills = recSkills.filter(s => s !== prevSlug);
+    }
+    update({
+      trainedSkills: next,
+      recommendedFlags: { ...(data.recommendedFlags || {}), skills: nextRecSkills },
+    });
+  };
+
+  const applyRecommended = () => {
+    if (!recommended?.skills) return;
+    // Cap by total slots so over-curated recommendations don't blow
+    // the picker's bounds; map known display slugs onto the skill list
+    // and skip any already-auto-trained or unknown entries.
+    const validSlugs = recommended.skills
+      .filter(s => skillSlugs.some(sk => sk.slug === s))
+      .filter(s => !auto.includes(s))
+      .slice(0, totalSlots);
+    update({
+      trainedSkills: validSlugs,
+      recommendedFlags: { ...(data.recommendedFlags || {}), skills: validSlugs },
+    });
+    toast.success('Recommended skills applied', { description: recommended.rationale });
   };
 
   return (
     <div className="mt-4">
-      <p className="font-display tracking-[0.15em] text-pf-brass uppercase text-[10px] mb-2">
-        Trained Skills <span className="text-pf-stone normal-case lowercase tracking-normal italic">({additional} + INT mod = {totalSlots})</span>
-      </p>
+      <div className="flex items-center justify-between mb-2">
+        <p className="font-display tracking-[0.15em] text-pf-brass uppercase text-[10px]">
+          Trained Skills <span className="text-pf-stone normal-case lowercase tracking-normal italic">({additional} + INT mod = {totalSlots})</span>
+        </p>
+        <RecommendedButton
+          onClick={applyRecommended}
+          disabled={!recommended?.skills}
+        />
+      </div>
 
       {auto.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-2">
@@ -532,6 +621,7 @@ function TrainedSkillsPicker({ selected, data, update }) {
       <div className="space-y-1.5">
         {Array.from({ length: totalSlots }).map((_, idx) => {
           const current = picks[idx] || '';
+          const isRec = current && recSkills.includes(current);
           const available = skillSlugs.filter(s => s.slug === current || !taken.has(s.slug));
           return (
             <div key={idx} className="flex items-center gap-1.5">
@@ -546,6 +636,7 @@ function TrainedSkillsPicker({ selected, data, update }) {
                   <option key={s.slug} value={s.slug}>{s.name} ({s.ability})</option>
                 ))}
               </select>
+              {isRec && <RecommendedBadge />}
               {current && (
                 <button
                   type="button"

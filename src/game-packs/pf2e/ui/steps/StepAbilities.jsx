@@ -2,11 +2,21 @@
 
 import React from 'react';
 import { Star, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 import GMWhisper from '../components/GMWhisper.jsx';
 import CornerBrackets from '../components/CornerBrackets.jsx';
+import RecommendedButton from '../components/RecommendedButton.jsx';
+import RecommendedBadge from '../components/RecommendedBadge.jsx';
 import { CLASSES, BOOST_BATCH_LEVELS } from '../../data/index.js';
 import { ABILITIES } from '../../rules/constants.js';
+import { getRecommended } from '../../content/recommendedBuilds.js';
 import { STEPS } from '../../config/steps.js';
+
+// Short-form ability codes used in recommendedBuilds → full ability names.
+const ABILITY_BY_CODE = {
+  str: 'Strength', dex: 'Dexterity', con: 'Constitution',
+  int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma',
+};
 
 const StepAbilities = ({ data, update }) => {
   const level = data.level || 1;
@@ -43,6 +53,28 @@ const StepAbilities = ({ data, update }) => {
 
   const cls = CLASSES.find(c => c.id === data.class);
   const keyAbility = cls?.keyAbility?.[0];
+
+  const recommended = getRecommended(cls?.slug);
+  const recFlags = data.recommendedFlags || {};
+
+  const applyRecommendedBoosts = () => {
+    const free = recommended?.boosts?.free;
+    if (!Array.isArray(free) || free.length === 0) return;
+    const nextBatch1 = {};
+    const recAbilities = [];
+    for (const code of free) {
+      const ab = ABILITY_BY_CODE[code];
+      if (ab) {
+        nextBatch1[ab] = 1;
+        recAbilities.push(ab);
+      }
+    }
+    update({
+      boostBatches: { ...boostBatches, 1: nextBatch1 },
+      recommendedFlags: { ...recFlags, boosts: recAbilities },
+    });
+    toast.success('Recommended boosts applied', { description: recommended.rationale });
+  };
 
   // Final score = base + (accumulated × 2) + sum of all batch boosts × 2 (or +1 above 18)
   const computeFinal = (ab) => {
@@ -203,19 +235,41 @@ const StepAbilities = ({ data, update }) => {
                       : `Every character at level ${batchLvl} gains four more free boosts.`} No double-boosting in this batch.
                   </p>
                 </div>
-                <span className={`font-display text-3xl tracking-wider ${remaining === 0 ? 'text-pf-sage' : 'text-pf-brass'}`}>
-                  {remaining}<span className="text-pf-stone text-base">/4</span>
-                </span>
+                <div className="flex items-center gap-3">
+                  {batchLvl === 1 && (
+                    <RecommendedButton
+                      onClick={applyRecommendedBoosts}
+                      disabled={!recommended?.boosts?.free}
+                    />
+                  )}
+                  <span className={`font-display text-3xl tracking-wider ${remaining === 0 ? 'text-pf-sage' : 'text-pf-brass'}`}>
+                    {remaining}<span className="text-pf-stone text-base">/4</span>
+                  </span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
                 {ABILITIES.map(ab => {
                   const picked = (batch[ab] || 0) > 0;
                   const canPick = remaining > 0 || picked;
+                  const isRec = batchLvl === 1 && picked && (recFlags.boosts || []).includes(ab);
+                  const handleClick = () => {
+                    if (!canPick) return;
+                    setBatch(batchLvl, ab);
+                    // Drop the ★ for this ability when the user toggles it off.
+                    if (batchLvl === 1 && picked && (recFlags.boosts || []).includes(ab)) {
+                      update({
+                        recommendedFlags: {
+                          ...recFlags,
+                          boosts: (recFlags.boosts || []).filter(x => x !== ab),
+                        },
+                      });
+                    }
+                  };
                   return (
                     <button
                       key={ab}
-                      onClick={() => canPick && setBatch(batchLvl, ab)}
+                      onClick={handleClick}
                       disabled={!canPick}
                       className={`relative px-3 py-2 bg-pf-bg-elev/40 border text-left transition-all
                                   ${picked ? 'border-pf-brass bg-pf-brass/10' : canPick ? 'border-pf-brass-dim/30 hover:border-pf-brass-dim' : 'border-pf-brass-dim/20 opacity-50 cursor-not-allowed'}`}
@@ -227,6 +281,11 @@ const StepAbilities = ({ data, update }) => {
                       <div className={`font-display text-xs tracking-wider mt-0.5 ${picked ? 'text-pf-bone' : 'text-pf-parchment'}`}>
                         {ab}
                       </div>
+                      {isRec && (
+                        <div className="absolute top-1 right-1">
+                          <RecommendedBadge />
+                        </div>
+                      )}
                     </button>
                   );
                 })}
