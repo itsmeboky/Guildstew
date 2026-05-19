@@ -103,7 +103,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
               <span className="font-display tracking-[0.15em] text-pf-brass uppercase col-span-2 mt-2">Hit Points / Level</span>
               <span className="text-pf-bone font-mono text-2xl col-span-2">{selected.hp}</span>
               <span className="font-display tracking-[0.15em] text-pf-brass uppercase col-span-2 mt-2">Trained Skills</span>
-              <span className="text-pf-bone font-mono col-span-2">{selected.trainedSkills} + INT mod</span>
+              <span className="text-pf-bone font-mono col-span-2">{(selected.trainedSkills?.additional ?? 2)} + INT mod</span>
             </div>
 
             {selected.requiresDeity && (
