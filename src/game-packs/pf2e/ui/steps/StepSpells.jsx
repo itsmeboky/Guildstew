@@ -8,7 +8,7 @@ import GMWhisper from '../components/GMWhisper.jsx';
 import CornerBrackets from '../components/CornerBrackets.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import ThreeActionGlyph from '../components/ThreeActionGlyph.jsx';
-import RecommendedButton from '../components/RecommendedButton.jsx';
+import RecommendationPanel from '../components/RecommendationPanel.jsx';
 import RecommendedBadge from '../components/RecommendedBadge.jsx';
 import { getRecommended } from '../../content/recommendedBuilds.js';
 import {
@@ -297,17 +297,17 @@ const StepSpells = ({ data, update }) => {
         </>
       )}
 
-      {/* === CANTRIPS === */}
-      <div className="flex items-center justify-between mb-1">
-        <SectionHeader>Cantrips ({cantripsKnown.length} / {slots.cantrips})</SectionHeader>
-        <RecommendedButton
-          onClick={applyRecommendedSpells}
-          disabled={!hasSpellRec}
-          title={hasSpellRec
-            ? 'Fill cantrips and rank-1 slots from the recommended build for this class'
-            : 'Spell recommendation not yet available for this class'}
-        />
-      </div>
+      {/* === CANTRIPS + RANK-1 SPELLS === */}
+      <RecommendationPanel
+        title={`Cantrips (${cantripsKnown.length} / ${slots.cantrips})`}
+        reasoning={rec?.reasoning?.spells}
+        onApply={applyRecommendedSpells}
+        disabled={!hasSpellRec}
+        applied={!!(recFlags.cantrips?.length || recFlags.rank1?.length)}
+        buttonTitle={hasSpellRec
+          ? 'Fill cantrips and rank-1 slots from the recommended build for this class'
+          : 'Spell recommendation not yet available for this class'}
+      />
       <p className="font-body text-xs text-pf-stone mb-3 italic">
         Cantrips cost no spell slots. Cast them as often as you like — they auto-heighten to half your level.
       </p>

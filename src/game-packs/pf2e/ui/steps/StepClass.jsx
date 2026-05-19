@@ -24,7 +24,7 @@ import CornerBrackets from '../components/CornerBrackets.jsx';
 import ComplexityBadge from '../components/ComplexityBadge.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import UnknownEntityError from '../components/UnknownEntityError.jsx';
-import RecommendedButton from '../components/RecommendedButton.jsx';
+import RecommendationPanel from '../components/RecommendationPanel.jsx';
 import RecommendedBadge from '../components/RecommendedBadge.jsx';
 import ProfLine from '../components/ProfLine.jsx';
 import ProfRow from '../components/ProfRow.jsx';
@@ -231,16 +231,14 @@ const StepClass = ({ data, update, openDeityModal }) => {
 
               return (
                 <>
-                  <div className="flex items-center justify-between mb-1">
-                    <SectionHeader>Class Feats ({featLevels.length})</SectionHeader>
-                    <RecommendedButton
-                      onClick={applyRecommendedFeats}
-                      disabled={!recommended?.classFeats}
-                    />
-                  </div>
-                  <p className="text-[11px] text-pf-stone font-body mb-3 leading-relaxed">
-                    One feat per feat-level. Diamond glyphs show how many actions the feat costs per turn.
-                  </p>
+                  <RecommendationPanel
+                    title={`Class Feats (${featLevels.length})`}
+                    extra="One feat per feat-level — diamond glyphs show action cost"
+                    reasoning={recommended?.reasoning?.classFeats}
+                    onApply={applyRecommendedFeats}
+                    disabled={!recommended?.classFeats}
+                    applied={Object.keys(recFlags.classFeats || {}).length > 0}
+                  />
 
                   {totalDedications > 0 && (
                     <div className={`relative bg-pf-bg-card border ${canTakeNewDedication ? 'border-pf-sage/40' : 'border-pf-oxblood/40'} p-2.5 mb-3`}>
@@ -646,15 +644,14 @@ function TrainedSkillsPicker({ selected, data, update, recommended, recFlags }) 
 
   return (
     <div className="mt-4">
-      <div className="flex items-center justify-between mb-2">
-        <p className="font-display tracking-[0.15em] text-pf-brass uppercase text-[10px]">
-          Trained Skills <span className="text-pf-stone normal-case lowercase tracking-normal italic">({additional} + INT mod = {totalSlots})</span>
-        </p>
-        <RecommendedButton
-          onClick={applyRecommended}
-          disabled={!recommended?.skills}
-        />
-      </div>
+      <RecommendationPanel
+        title="Trained Skills"
+        extra={`${additional} + INT mod = ${totalSlots}`}
+        reasoning={recommended?.reasoning?.skills}
+        onApply={applyRecommended}
+        disabled={!recommended?.skills}
+        applied={!!(recFlags.skills?.length)}
+      />
 
       {auto.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-2">
