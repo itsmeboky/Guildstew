@@ -441,21 +441,35 @@ const StepClass = ({ data, update, openDeityModal }) => {
         );
       })()}
 
-      {/* === ANIMAL COMPANION / FAMILIAR === */}
+      {/* === ANIMAL COMPANION / FAMILIAR ===
+          Only show for classes that actually grant one through core
+          progression. Everyone else can pick a companion/familiar via
+          general feats — surfacing the picker for them implies it's a
+          default choice when it isn't. Will move to reading from a
+          `selectedClass.grants` field once the slug-resolver lands. */}
       {(() => {
-        const eligibleForCompanion = ['barbarian'].includes(selected.slug) && data.subclass === 'animal';
-        const eligibleForFamiliar = selected.slug === 'wizard' && data.subclass === 'familiar-attunement';
-        const showOptional = ['wizard', 'rogue', 'bard', 'cleric'].includes(selected.slug);
-        if (!eligibleForCompanion && !eligibleForFamiliar && !showOptional) return null;
+        const CLASSES_WITH_ANIMAL_COMPANION = ['ranger', 'druid'];
+        const CLASSES_WITH_FAMILIAR        = ['witch', 'wizard', 'sorcerer'];
+        const showAnimalCompanion = CLASSES_WITH_ANIMAL_COMPANION.includes(selected.slug);
+        const showFamiliar = CLASSES_WITH_FAMILIAR.includes(selected.slug);
+        if (!showAnimalCompanion && !showFamiliar) return null;
+
+        const familiarRequired = selected.slug === 'witch';
+        const sectionTitle = showAnimalCompanion && showFamiliar
+          ? 'Animal Companion or Familiar'
+          : showAnimalCompanion ? 'Animal Companion' : 'Familiar';
+        const blurb = showAnimalCompanion && !showFamiliar
+          ? 'Pick the animal that fights alongside you.'
+          : familiarRequired
+            ? 'Your patron grants you a familiar — pick its species.'
+            : showFamiliar && !showAnimalCompanion
+              ? 'Pick the magical companion that holds your spellbook and aids you.'
+              : 'Pick an animal companion or a familiar — depends on the path you take.';
         return (
           <div className="mt-5">
-            <SectionHeader>Animal Companion / Familiar</SectionHeader>
-            <p className="font-body text-xs text-pf-stone mb-3 italic">
-              {eligibleForCompanion ? 'Animal Instinct grants a bestial spiritual ally that fights alongside you. Pick your animal aspect.' :
-               eligibleForFamiliar ? 'Improved Familiar Attunement grants a magical companion with two abilities.' :
-               'Some class feats grant an animal companion or familiar. Pick one if your build calls for it (otherwise leave blank).'}
-            </p>
-            {(eligibleForCompanion || (!eligibleForFamiliar && showOptional)) && (
+            <SectionHeader>{sectionTitle}</SectionHeader>
+            <p className="font-body text-xs text-pf-stone mb-3 italic">{blurb}</p>
+            {showAnimalCompanion && (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 mb-4">
                 {[
                   { id: 'ape', name: 'Ape', desc: 'STR + climbing. Unarmed: fist 1d8.' },
@@ -485,7 +499,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
                 })}
               </div>
             )}
-            {eligibleForFamiliar && (
+            {showFamiliar && (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
                 {[
                   { id: 'cat', name: 'Cat', desc: 'Climbing + Stealth bonus.' },
