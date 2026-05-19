@@ -217,11 +217,28 @@ const StepGear = ({ data, update }) => {
 
           {activeTab === 'kit' && (
             <div className="p-5">
-              {!kit ? (
+              {!cls ? (
                 <div className="text-center py-12">
                   <Compass size={36} className="text-pf-brass-dim mx-auto mb-3" />
                   <p className="font-display text-sm tracking-[0.15em] text-pf-stone uppercase mb-1">No Class Selected Yet</p>
                   <p className="font-body text-sm text-pf-stone">Go back to Step IV and pick a class to see its starter kit.</p>
+                </div>
+              ) : !kit ? (
+                <div className="text-center py-12">
+                  <Compass size={36} className="text-pf-brass-dim mx-auto mb-3" />
+                  <p className="font-display text-sm tracking-[0.15em] text-pf-stone uppercase mb-1">
+                    No Official Kit for {cls.name}
+                  </p>
+                  <p className="font-body text-sm text-pf-stone max-w-md mx-auto leading-relaxed mb-4">
+                    {cls.name}s don't ship with a curated starter kit yet. Browse the Custom Shop —
+                    items appropriate for your class will be marked with a gold star.
+                  </p>
+                  <button
+                    onClick={() => setActiveTab('shop')}
+                    className="px-4 py-2 bg-pf-bg-elev border border-pf-brass text-pf-bone font-display tracking-wider uppercase text-xs hover:bg-pf-brass/10 transition-all"
+                  >
+                    Open Shop
+                  </button>
                 </div>
               ) : (
                 <>
