@@ -74,7 +74,7 @@ const StepAbilities = ({ data, update }) => {
     Charisma: (data.ancestry === 'gnome' ? 1 : 0) + (data.background === 'noble' ? 1 : 0) - (data.ancestry === 'dwarf' ? 1 : 0),
   };
 
-  const cls = CLASSES.find(c => c.id === data.class);
+  const cls = CLASSES.find(c => c.slug === data.class);
   const keyAbility = cls?.keyAbility?.[0];
 
   const recommended = getRecommended(cls?.slug);
