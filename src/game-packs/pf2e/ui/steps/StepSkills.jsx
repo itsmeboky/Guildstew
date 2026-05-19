@@ -28,9 +28,25 @@ import { STEPS } from '../../config/steps.js';
 const StepSkills = ({ data, update }) => {
   const trained = data.trainedSkills || [];
   const selectedClass = CLASSES.find(c => c.id === data.class);
-  const allowed = selectedClass ? selectedClass.trainedSkills + 1 : 3;
-  const bgSkill = BACKGROUNDS.find(b => b.id === data.background)?.skill;
   const level = data.level || 1;
+  // Trained-skills capacity. The imported class shape is now
+  // `{ value: ['auto-slug'], additional: 2 }` — the prototype assumed
+  // a bare integer, so `trainedSkills + 1` produced NaN and the
+  // picker silently refused new picks (`length < NaN` is always
+  // false). Math: additional + INT mod (positive only). The
+  // background's auto-granted skill is counted separately as a
+  // locked chip and doesn't eat a slot.
+  const additionalSkillSlots = selectedClass?.trainedSkills?.additional ?? 2;
+  const intModRaw = modOf(computeAbilityScores(data).Intelligence || 10);
+  const intMod = Math.max(0, intModRaw);
+  const allowed = additionalSkillSlots + intMod;
+  // Background's auto-trained skill comes in lowercase from the SRD
+  // import; SKILLS[].name is capitalized. Normalize for comparisons.
+  const selectedBackground = BACKGROUNDS.find(b => b.id === data.background);
+  const bgSkillRaw = (selectedBackground?.trainedSkills?.[0] || selectedBackground?.skill || '').toLowerCase();
+  const bgSkill = bgSkillRaw
+    ? bgSkillRaw.charAt(0).toUpperCase() + bgSkillRaw.slice(1)
+    : null;
 
   // Skill increase tier per skill (Trained → Expert → Master → Legendary)
   const skillTiers = data.skillTiers || {};       // { 'Acrobatics': 'expert', ... }
@@ -51,7 +67,6 @@ const StepSkills = ({ data, update }) => {
   // new ancestry IDs are Foundry random strings, so the legacy lookup
   // always returned empty — every character started with zero base
   // languages and the picker pool was just COMMON_LANGUAGES.
-  const intMod = Math.max(0, modOf(computeAbilityScores(data).Intelligence || 10));
   const selectedAncestry = ANCESTRIES.find(a => a.id === data.ancestry);
   const baseLanguages = (selectedAncestry?.languages
     || ANCESTRY_LANGUAGES[data.ancestry]?.base
