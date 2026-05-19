@@ -82,6 +82,13 @@ export default function CharacterSheet({ character, pack, data: legacyData }) {
         {activeTab === 'background' && <BackgroundTab data={data} />}
         {activeTab === 'inventory'  && <InventoryTab data={data} />}
       </div>
+
+      <button
+        type="button"
+        className="mt-6 w-full bg-[#FF5722] hover:bg-[#FF6B3D] text-white font-bold text-xl py-5 rounded-2xl tracking-wider transition-colors"
+      >
+        PLAY
+      </button>
     </div>
   );
 }
