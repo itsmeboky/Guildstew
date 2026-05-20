@@ -13,6 +13,7 @@
 // ui/detail/_shared.js.
 
 import React, { useState } from 'react';
+import { Edit, Trash2 } from 'lucide-react';
 import GamePackTag from '@/components/characters/GamePackTag';
 import { ANCESTRIES, HERITAGES_BY_ANCESTRY, BACKGROUNDS, CLASSES, CLASS_DETAILS, CASTING_TRADITION_BY_CLASS } from '../data/index.js';
 import { formatCharacterSubline } from '../rules/character-subline.js';
@@ -39,7 +40,7 @@ function isCaster(data) {
     || !!CASTING_TRADITION_BY_CLASS[data?.class];
 }
 
-export default function CharacterSheet({ character, pack, data: legacyData }) {
+export default function CharacterSheet({ character, pack, onEdit, onDelete, data: legacyData }) {
   // Backward compat: the in-creator preview at StepReview wraps this
   // file with `<CharacterSheet data={data} />`, passing the draft
   // directly. Wrap it into the character shape the new view expects.
@@ -58,17 +59,25 @@ export default function CharacterSheet({ character, pack, data: legacyData }) {
 
   return (
     <div className="text-pf-bone font-body">
-      <PathfinderCharacterHeader character={resolvedCharacter} pack={pack} />
+      <PathfinderCharacterHeader
+        character={resolvedCharacter}
+        pack={pack}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
 
-      <div className="flex border-b border-pf-brass-dim/30 mt-4 mb-4">
+      {/* Tab strip — orange underline on active tab matching D&D 5e
+          treatment instead of the gold creator-step styling. The
+          library is a separate visual surface from the creator. */}
+      <div className="flex border-b border-gray-700/60 mt-4 mb-4">
         {tabs.map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex-1 py-2.5 font-display text-[10px] tracking-[0.2em] uppercase transition-all border-b-2
+            className={`flex-1 py-2.5 font-display text-[11px] tracking-[0.2em] uppercase transition-colors border-b-2 -mb-px
                         ${activeTab === tab.key
-                          ? 'border-pf-brass text-pf-bone bg-pf-brass/5'
-                          : 'border-transparent text-pf-stone hover:text-pf-parchment'}`}
+                          ? 'border-[#FF5722] text-[#FF5722]'
+                          : 'border-transparent text-gray-400 hover:text-gray-200'}`}
           >
             {tab.label}
           </button>
@@ -94,7 +103,7 @@ export default function CharacterSheet({ character, pack, data: legacyData }) {
   );
 }
 
-function PathfinderCharacterHeader({ character, pack }) {
+function PathfinderCharacterHeader({ character, pack, onEdit, onDelete }) {
   const data = sd(character);
   const m = media(data);
   const ancestry = ANCESTRIES.find(a => a.slug === data.ancestry);
@@ -110,37 +119,70 @@ function PathfinderCharacterHeader({ character, pack }) {
     heritage, ancestry, cls, subclass, background,
   });
 
+  // Layout mirrors the D&D 5e detail header: name + edit/delete
+  // action buttons in a title row, subline + GamePackTag inline,
+  // bio in a dark scrollable box. PF2e-specific extras (catchphrase,
+  // allies/enemies) live below the bio so they don't crowd the
+  // header on characters that don't have them set.
   return (
-    <header className="space-y-2">
-      <div className="flex items-baseline gap-3 flex-wrap">
-        <h1 className="text-3xl text-[#FF5722] font-bold">{character.name || 'Unnamed'}</h1>
-        {pack && <GamePackTag pack={pack} size="lg" />}
-      </div>
-      <p className="text-pf-stone text-sm font-display tracking-[0.18em] uppercase">
-        {subline}
-      </p>
-      {data.catchphrase && (
-        <p className="text-pf-parchment italic text-sm">"{data.catchphrase}"</p>
-      )}
-      {data.bio && (
-        <p className="text-pf-parchment text-sm leading-relaxed whitespace-pre-line">{data.bio}</p>
-      )}
-      {(m.allies || m.enemies) && (
-        <div className="grid grid-cols-2 gap-3 mt-2 text-xs">
-          {m.allies && (
-            <div>
-              <p className="font-display text-[10px] tracking-[0.2em] text-pf-brass uppercase mb-0.5">Allies</p>
-              <p className="text-pf-parchment leading-snug">{m.allies}</p>
-            </div>
+    <header className="mb-4">
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <h1 className="text-3xl font-bold text-[#FF5722] flex-1 break-words">
+          {character.name || 'Unnamed'}
+        </h1>
+        <div className="flex gap-2 shrink-0">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              title="Edit Character"
+              className="p-2 bg-[#37F2D1] hover:bg-[#2dd9bd] rounded-lg transition-colors"
+            >
+              <Edit className="w-4 h-4 text-[#1E2430]" />
+            </button>
           )}
-          {m.enemies && (
-            <div>
-              <p className="font-display text-[10px] tracking-[0.2em] text-pf-brass uppercase mb-0.5">Enemies</p>
-              <p className="text-pf-parchment leading-snug">{m.enemies}</p>
-            </div>
+          {onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              title="Delete Character"
+              className="p-2 bg-[#FF5722] hover:bg-[#FF6B3D] rounded-lg transition-colors"
+            >
+              <Trash2 className="w-4 h-4 text-white" />
+            </button>
           )}
         </div>
-      )}
+      </div>
+
+      <p className="text-gray-300 text-base mb-3 flex items-center gap-2 flex-wrap">
+        <span>{subline}</span>
+        {pack && <GamePackTag pack={pack} size="md" />}
+      </p>
+
+      <div className="bg-[#1E2430] rounded-lg p-4 max-h-32 overflow-y-auto custom-scrollbar">
+        {data.catchphrase && (
+          <p className="text-gray-300 text-sm italic mb-2">"{data.catchphrase}"</p>
+        )}
+        <p className="text-gray-400 text-sm leading-relaxed whitespace-pre-line">
+          {data.bio || 'No biography available.'}
+        </p>
+        {(m.allies || m.enemies) && (
+          <div className="grid grid-cols-2 gap-3 mt-3 text-xs">
+            {m.allies && (
+              <div>
+                <p className="font-display text-[10px] tracking-[0.2em] text-pf-brass uppercase mb-0.5">Allies</p>
+                <p className="text-gray-300 leading-snug">{m.allies}</p>
+              </div>
+            )}
+            {m.enemies && (
+              <div>
+                <p className="font-display text-[10px] tracking-[0.2em] text-pf-brass uppercase mb-0.5">Enemies</p>
+                <p className="text-gray-300 leading-snug">{m.enemies}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </header>
   );
 }
