@@ -105,6 +105,10 @@ export const ANCESTRY_TIPS = {
     complexity: 'intermediate',
     tip: "Insectoid humanoids — chitinous, segmented, often communal and hive-minded. 8 [[hit-points|HP]], [[vision|Darkvision]], 25 ft [[speed|Speed]]. Boosts to [[constitution|CON]] and [[strength|STR]], no fixed [[ability-flaw|flaw]] — sturdy and physically capable with no built-in trade-off. Excellent for Druid, Ranger, Cleric, Investigator, Fighter — any nature-attuned, observational, or frontline class. Chitinous body provides natural armor. Heritages: hivewatch (collective ant-like awareness shared with allies), ironcarapace (extra defensive layer), warmindi (warrior-caste, combat-bred).",
   },
+  jotunborn: {
+    complexity: 'advanced',
+    tip: "Giant-blooded humanoids — descended from giants generations back, carrying inherited [[size|Large]] size, raw [[strength|STR]], and stubbornness that runs in the bone. 10 [[hit-points|HP]], [[vision|Low-Light Vision]], 25 ft [[speed|Speed]]. Boosts to [[strength|STR]] and [[wisdom|WIS]], [[ability-flaw|flaw]] to [[charisma|CHA]]. Best for Barbarian, Fighter, Champion, anyone playing into raw physicality. The Large size grants reach with reach weapons but means tight corridors and human-sized doors become a problem. Heritages explore different giant ancestries — keeper, plane-hopper, sage, warrior, weaver — each a different facet of giant heritage.",
+  },
 
   // ─── Pre-existing entries kept as-is (not in current ORC tip batch) ────
 
