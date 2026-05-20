@@ -97,6 +97,8 @@ export const HERITAGE_TIPS = {
 
   'root-leshy': "Leshy with extensive root networks instead of legs. Extra stability — bonus on saves to avoid being knocked prone or moved against your will. Ideal for tanks, frontliners, and any character planted in one position by build (turret-style Fighters, etc.).",
 
+  'seaweed-leshy': "Leshy made of kelp, sargassum, and other aquatic plant matter. Swim [[speed|Speed]] and the ability to breathe underwater for limited stretches. Best for aquatic / coastal campaigns where the rest of the party has water adaptation; otherwise the underwater specialty doesn't see much use. Pairs well with Druid (especially Storm or Untamed order) for full ocean-spirit fantasy.",
+
   'vine-leshy': "Leshy with prehensile vines that extend reach. Extended reach for some manipulations and grappling. Useful for grapple-focused builds, climbing-heavy campaigns, or characters who want to manipulate distant objects.",
 
   // ─── ORC heritages ──────────────────────────────────────────────────────
@@ -114,6 +116,104 @@ export const HERITAGE_TIPS = {
   'rainfall-orc': "Orcs from coastal or river-dwelling clans. Swim speed and minor water adaptation. Good for water-heavy campaigns. Pair with Druid or Ranger for a fully water-themed Orc.",
 
   'winter-orc': "Orcs from northern frozen lands. Cold resistance scaling with your [[level]]. Best for arctic / northern campaigns. Pair with Barbarian for an ice-blooded warrior who feels right at home in blizzard fights.",
+
+  // ─── CATFOLK heritages (PC2) ────────────────────────────────────────────
+
+  'jungle-catfolk': "Catfolk born and raised in dense rainforests. Climb [[speed|Speed]] in trees and vine-heavy environments. Best for jungle/forest campaigns or any character built around mobility through the canopy. Pair with Ranger or Rogue for forest scout vibes.",
+
+  'liminal-catfolk': "Catfolk touched by liminal spaces between worlds — born on planar borders or in haunted twilight zones. Slight resistance to planar magic and bonus saves against effects that try to move you between locations. Picks this for cosmic / planar campaigns or characters with otherworldly backstories.",
+
+  'nine-lives-catfolk': "Catfolk who've cheated death so many times their ancestry mechanically expects it. Once per day, when you fail a save against an effect that would reduce you to 0 [[hit-points|HP]], you can roll twice and take the better result. The mechanical name fits — you've got extra lives baked in. Great for any frontline Catfolk who'll be the target of finishing blows.",
+
+  'winter-catfolk': "Catfolk from snowbound mountains and arctic forests. Cold resistance scaling with your [[level]]. Best for cold-themed campaigns or any character who'll face icy enemies (frost giants, white dragons, winter witches). Pairs with thick-furred Catfolk flavor.",
+
+  'hunting-catfolk': "Catfolk whose families have been pure hunters for generations. Bonus on [[survival|Survival]] checks for tracking and the related action economy. Picks this for any Catfolk built as a tracker or wilderness scout — pairs naturally with Ranger.",
+
+  // ─── HOBGOBLIN heritages (PC2) ──────────────────────────────────────────
+
+  'elfbane-hobgoblin': "Hobgoblins from cultures locked in long wars against elves and fey. Bonus on saves against [[primal|primal]] magic and fey-derived effects. Great for campaigns with significant fey/elven opposition. Pairs naturally with martial Hobgoblin builds for the 'elf-killer' fantasy.",
+
+  'runtboss-hobgoblin': "Hobgoblins who command lesser goblins through force of personality and tradition. Bonus to [[intimidation|Intimidation]] checks against goblinoid creatures specifically — and small mechanical benefits when leading allied goblins. Solid for parties with Goblin members or campaigns where you'll be commanding goblin troops.",
+
+  'smokeworker-hobgoblin': "Hobgoblins from cultures that specialize in smoke, fire, and combat alchemy. Fire resistance scaling with your [[level]], plus you ignore concealment from smoke (your own or anyone else's). Pairs incredibly well with Alchemist or any party that uses smoke screens tactically.",
+
+  'warmarch-hobgoblin': "Hobgoblins from cultures that march vast distances without rest. Reduced fatigue from long travel and forced marches — you and your allies can move farther between rests. Great for sandbox campaigns, exploration-heavy stories, or any party that does a lot of overland travel.",
+
+  // ─── KHOLO heritages (PC2) ──────────────────────────────────────────────
+
+  'ant-kholo': "Kholo from cultures with extreme physical conditioning — runners and endurance hunters. Reduced fatigue and stamina-related effects. Pairs with martial builds where staying mobile through a long combat matters.",
+
+  'cave-kholo': "Kholo from Darklands or deep cavern dwellings. Upgraded vision — extended [[vision|Darkvision]] range. Useful for any subterranean campaign or Darklands stories. Pairs with Rogue or Druid for shadow-stalker builds.",
+
+  'great-kholo': "Larger than typical Kholo — closer to giant-hyena scale. Larger frame, slightly tougher physically. Best for melee Barbarian or Fighter builds where the additional physical presence intimidates and the toughness backs it up.",
+
+  'sweetbreath-kholo': "Kholo whose cultural diet leans toward sweet foods rather than the typical scavenger fare. Cultural-flavor heritage — the mechanical benefit is minor (bonus on saves against certain types of poison perhaps) but the flavor is distinctive. Picks this when you want a Kholo with an unusual cultural background.",
+
+  'winter-kholo': "Kholo from northern frozen lands. Cold resistance scaling with your [[level]]. Best for arctic campaigns or any character facing cold-themed enemies. Pairs with thicker pelt + endurance flavor.",
+
+  // ─── KOBOLD heritages (PC2) ─────────────────────────────────────────────
+
+  'cavernstalker-kobold': "Kobolds whose ancestors hunted in dim caverns for so long their vision improved. Upgraded [[vision|Darkvision]]. Solid for any dark-environment campaign — Darklands stories, dungeon crawlers, twilight-zone adventures.",
+
+  'dragonscaled-kobold': "Kobolds whose draconic ancestry is closer than most — physical scales matching a specific dragon type. Resistance to one elemental damage type, picked at character creation based on your dragon heritage (red = fire, blue = electricity, etc.). Excellent for any campaign with dragon enemies; you essentially have built-in defense against the boss's signature damage.",
+
+  'strongjaw-kobold': "Kobolds with reinforced jaws and bite strength. Bite [[ancestry-feat|attack]] as a natural weapon. Useful as a backup attack for any Kobold or as the primary weapon for an unarmed-focused build. Pairs with Monk, Barbarian, or any class that benefits from natural weapons.",
+
+  // ─── LIZARDFOLK heritages (PC2) ─────────────────────────────────────────
+
+  'cliffscale-lizardfolk': "Lizardfolk from steep mountain or canyon territories. Climb [[speed|Speed]] on natural rock and cliff surfaces. Great for mountain campaigns, climbing-heavy dungeons, or any Lizardfolk built around vertical mobility. Pair with Ranger or Rogue for highland scout vibes.",
+
+  'cloudleaper-lizardfolk': "Lizardfolk with membranes between their limbs that catch air during leaps. Slow falls / glide for short distances. Excellent for any campaign with vertical hazards (cliffs, towers, sky-island stories) — you trade falling damage for elegant landings.",
+
+  'frilled-lizardfolk': "Lizardfolk with extendable neck frills that flare for display, intimidation, and threat-warding. Bonus to [[intimidation|Intimidation]] checks for Demoralize specifically. Great frontline-controller pick — the threat display does mechanical work, not just flavor.",
+
+  'sandstrider-lizardfolk': "Lizardfolk adapted to deserts and arid wastelands. Heat resistance and improved water conservation. Best for desert campaigns or campaigns with significant fire/heat opposition. Pairs with the natural Lizardfolk toughness for a 'survives where others die' niche.",
+
+  'unseen-lizardfolk': "Lizardfolk whose scales chromatically shift to blend with surroundings. Bonus on [[stealth|Stealth]] checks in natural terrain. Pairs with Ranger or Rogue for any wilderness ambush role. Less useful in pure urban / dungeon stories.",
+
+  'wetlander-lizardfolk': "Lizardfolk from swamps, deltas, and river systems. Swim [[speed|Speed]] equal to your land speed, plus the ability to hold your breath much longer than normal. Perfect for water-heavy campaigns; pairs with Druid (Storm/Untamed order) or any aquatic-themed concept.",
+
+  'woodstalker-lizardfolk': "Lizardfolk forest predators whose scales blend with bark and undergrowth. Bonus on [[stealth|Stealth]] and [[survival|Survival]] in forest terrain. Picks this for jungle / forest campaigns and Ranger builds that want to feel like genuine apex predators in their environment.",
+
+  // ─── RATFOLK heritages (PC2) ────────────────────────────────────────────
+
+  'deep-rat': "Ratfolk descended from deep-tunnel dwellers. Upgraded [[vision|Darkvision]]. Essential for any subterranean campaign — your already-[[size|Small]] advantage extends into lightless conditions where most ancestries are blinded.",
+
+  'desert-rat': "Ratfolk from arid lands where water is scarce. Bonus on [[fortitude|Fortitude]] saves against dehydration, heat, and ingested poisons. Great for desert campaigns or survival-themed stories where consumables and water are limited.",
+
+  'longsnout-rat': "Ratfolk whose elongated snouts give them keen smell. Bonus to [[perception|Perception]] for Seek actions that involve scent, plus the ability to track specific scents. Pairs naturally with [[survival|Survival]] training for a scent-tracker concept.",
+
+  'sewer-rat': "Ratfolk from urban undersides — sewers, abandoned cellars, kitchen middens. Resistance to disease (sewer life builds immunities). Excellent for urban campaigns, intrigue stories, or any character built around the gritty underside of city life.",
+
+  'shadow-rat': "Ratfolk whose dark fur and quiet movement make them slip through shadows unnoticed. Bonus on [[stealth|Stealth]] checks in dim or low-light conditions. Perfect for Rogue builds or any character built around urban stealth and infiltration.",
+
+  'tunnel-rat': "Ratfolk who slip through impossibly tight spaces. Reduced size penalty when squeezing through narrow passages, plus the ability to enter spaces normally too small for [[size|Small]] creatures. Essential for dungeon-crawler campaigns where tight passages and hidden routes matter.",
+
+  // ─── TENGU heritages (PC2) ──────────────────────────────────────────────
+
+  'jinxed-tengu': "Tengu whose unlucky reputation rebounds onto opponents. Once per day, when an enemy near you rolls a critical hit, you can make them re-roll and take the worse result. Excellent disruption for boss fights — the mirror of luck-based heritages, weaponizing misfortune against your enemies.",
+
+  'mountainkeeper-tengu': "Tengu from mountain monasteries and high-altitude communities. Bonus on saves against altitude effects and environmental cold. Best for mountain campaigns. Pairs with Monk for the classic stoic mountain-warrior fantasy.",
+
+  'skyborn-tengu': "Tengu whose connection to flight is closer than most — gliding membranes or stronger wings. Slow falls / brief glides for short distances. Excellent for vertical campaigns; pairs with Ranger or Monk for an aerial-mobility build.",
+
+  'stormtossed-tengu': "Tengu born during storms, with electricity literally crackling along their feathers. Electricity resistance scaling with your [[level]]. Best for any campaign with lightning enemies (blue dragons, storm giants, certain elementals).",
+
+  'taloned-tengu': "Tengu with sharp talons on their feet that work as natural weapons. Unarmed [[ancestry-feat|attack]] (kick) that deals notable damage. Pairs with Monk for the classic kicking-bird combatant, or as a backup unarmed attack for any class that wants natural weapons.",
+
+  'wavediver-tengu': "Tengu who dive into water like seabirds, hunting fish and aquatic creatures. Swim [[speed|Speed]] and improved underwater action economy. Great for water-heavy or coastal campaigns; pair with Ranger or Druid for a coastal-hunter concept.",
+
+  // ─── TRIPKEE heritages (PC2) ────────────────────────────────────────────
+
+  'poisonhide-tripkee': "Tripkee whose skin secretes mild toxin that can be transferred through touch. Touch-poison [[ancestry-feat|attack]] — useful as a melee enhancement, especially for unarmed builds. Pairs with Monk, Barbarian, or grappling-focused builds.",
+
+  'riverside-tripkee': "Tripkee from river and stream communities, fully comfortable in rapid water. Swim [[speed|Speed]] equal to your land speed. Picks this for water-heavy campaigns or any Tripkee built around water mobility.",
+
+  'snaptongue-tripkee': "Tripkee with extra-long prehensile tongues — enough range to grab small objects from a distance. Extended-reach tongue manipulator. Useful for grabbing remote keys, handling distant levers, or for the unique flavor of a frog-person who can grab a lit candle off a table across the room.",
+
+  'stickytoe-tripkee': "Tripkee whose tree-frog adhesive toe pads give them grip on nearly any surface. Climb [[speed|Speed]] on most surfaces, including walls and ceilings. Excellent for dungeon climbing, vertical maneuvering, or any campaign with significant climbing demands.",
+
+  'windweb-tripkee': "Tripkee with thin membranes between their fingers and toes that catch air. Slow falls / brief glides. Best for vertical campaigns or any environment where falls and aerial movement matter. Pairs with Druid or Ranger for jungle-canopy fantasy.",
 };
 
 export function getHeritageTip(slug) {
