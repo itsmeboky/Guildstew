@@ -344,7 +344,7 @@ const StepSkills = ({ data, update }) => {
           <RecommendationPanel
             title={`Languages (${baseLanguages.length + languages.length})`}
             extra={`${baseLanguages.length} base + up to ${bonusLanguageSlots} bonus`}
-            reasoning={`Your ancestry grants ${baseLanguages.length} base language${baseLanguages.length === 1 ? '' : 's'} automatically. Bonus slots equal your Intelligence modifier (positive only). Pick languages your party might need to talk to creatures in your campaign — Draconic for dragon-heavy settings, Fey for woodland, Undercommon for the Darklands, Celestial/Diabolic for divine-flavored campaigns.`}
+            reasoning={`Your [[ancestry]] grants ${baseLanguages.length} base [[languages|language]]${baseLanguages.length === 1 ? '' : 's'} automatically. Bonus slots equal your [[intelligence|Intelligence]] [[ability-modifier|modifier]] (positive only). Pick languages your party might need to talk to creatures in your campaign — Draconic for dragon-heavy settings, Fey for woodland, Undercommon for the Darklands, Celestial/Diabolic for [[divine]]-flavored campaigns.`}
             onApply={applyRecommendedLanguages}
             disabled={bonusLanguageSlots <= 0 || additionalPool.length === 0}
             applied={!!(recFlags.languages?.length)}
