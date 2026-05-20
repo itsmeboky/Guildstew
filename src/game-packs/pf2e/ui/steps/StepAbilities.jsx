@@ -4,6 +4,7 @@ import React from 'react';
 import { Star, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import GMWhisper from '../components/GMWhisper.jsx';
+import Term from '@/components/glossary/Term';
 import CornerBrackets from '../components/CornerBrackets.jsx';
 import RecommendationPanel from '../components/RecommendationPanel.jsx';
 import RecommendedBadge from '../components/RecommendedBadge.jsx';
@@ -120,7 +121,7 @@ const StepAbilities = ({ data, update }) => {
 
       {keyAbility && (
         <GMWhisper tone="tip">
-          Your class's key ability is <strong className="text-pf-brass not-italic">{keyAbility}</strong>. Spend at least one free boost on it in the level-1 batch.
+          Your <Term slug="class">class</Term>'s <Term slug="key-ability">key ability</Term> is <strong className="text-pf-brass not-italic">{keyAbility}</strong>. Spend at least one free <Term slug="ability-boost">boost</Term> on it in the <Term slug="level">level</Term>-1 batch.
         </GMWhisper>
       )}
 

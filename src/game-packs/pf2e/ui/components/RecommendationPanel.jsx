@@ -20,6 +20,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, CheckCircle2 } from 'lucide-react';
 import RecommendedButton from './RecommendedButton.jsx';
+import AnnotatedText from '@/components/glossary/AnnotatedText';
 
 export default function RecommendationPanel({
   title,
@@ -73,7 +74,7 @@ export default function RecommendationPanel({
             Why these picks?
           </summary>
           <p className="font-body text-[11px] text-pf-parchment leading-relaxed mt-2 whitespace-pre-line">
-            {reasoning}
+            <AnnotatedText text={reasoning} />
           </p>
         </details>
       )}

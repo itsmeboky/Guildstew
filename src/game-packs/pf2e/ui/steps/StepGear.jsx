@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { Compass, Check, Plus, X, Star } from 'lucide-react';
 import GMWhisper from '../components/GMWhisper.jsx';
+import Term from '@/components/glossary/Term';
 import CornerBrackets from '../components/CornerBrackets.jsx';
 import ComplexityBadge from '../components/ComplexityBadge.jsx';
 import {
@@ -152,7 +153,7 @@ const StepGear = ({ data, update }) => {
       </div>
 
       <GMWhisper>
-        A level-{data.level || 1} character starts with <strong className="text-pf-brass not-italic">{startingGp} gp</strong> for gear. New players should take the recommended class kit — it covers the essentials and saves twenty minutes of shopping. Veterans can browse the Custom Shop tab below.{data.level >= 3 ? ' At this level, your GM also typically grants level-appropriate magical items beyond the gold pool.' : ''}
+        A <Term slug="level">level</Term>-{data.level || 1} character starts with <strong className="text-pf-brass not-italic">{startingGp} gp</strong> for gear. New players should take the recommended <Term slug="class-kit">class kit</Term> — it covers the essentials and saves twenty minutes of shopping. Veterans can browse the Custom Shop tab below.{data.level >= 3 ? ' At this level, your GM also typically grants level-appropriate magical items beyond the gold pool.' : ''}
       </GMWhisper>
 
       {/* Budget + Bulk strip */}
