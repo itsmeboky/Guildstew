@@ -306,6 +306,36 @@ export const HERITAGE_TIPS = {
   'hardshell-surki': "Surki with reinforced chitin plating — significantly tougher exoskeleton than standard. Extra [[hit-points|HP]] at level 1 plus minor physical damage resistance. Best for frontline builds where the extra durability compounds with class HP. Pairs with Barbarian or Champion to push the resilience peak.",
 
   'lantern-surki': "Surki with bioluminescent patches — natural light sources that pulse with mood and intent. Can produce light at will (action-free for dim, brief action for brighter), plus minor communication via light patterns. Excellent for dungeon explorers (built-in light source) or party support roles. Pairs with any class — utility is universal.",
+
+  // ─── JOTUNBORN heritages (Battlecry!) ───────────────────────────────────
+
+  'keeper-jotunborn': "Jotunborn who serve as keepers of the sacred iivlar (the clan's revered creatures). Trained in [[survival|Survival]], gain the Survey Wildlife skill feat for free, plus a circumstance bonus when tracking animals. Excellent for any Jotunborn built as a Ranger, scout, or nature-bonded character. Pairs naturally with the giant-blooded outdoorsperson concept.",
+
+  'plane-hopper-jotunborn': "Jotunborn chosen for smaller stature so they could move between planar thresholds easily. [[size|Medium]] size instead of the typical Large — solves the dungeon-corridor problem Jotunborn otherwise face. Also grants one [[occult]] [[cantrip]] as an innate at-will spell. Picks this when you want Jotunborn flavor without Large-size logistical headaches, AND a touch of magic.",
+
+  'sage-jotunborn': "Jotunborn tasked with keeping oral and stitched histories — the clan's living archivists. Bonus to lore-based [[skill]] checks and the Additional Lore feat for free, picking up extra Lore subskills as you advance. Excellent for any Jotunborn built as a scholar, Investigator, or scholarly Cleric. Pairs naturally with INT-based knowledge builds.",
+
+  'warrior-jotunborn': "Jotunborn with hardier bodies, recruited for combat. Your fist damage die increases to 1d6 (up from the standard 1d4), and you don't take the lethal-attack penalty when striking unarmed. Excellent for any martial Jotunborn build — Fighter, Barbarian, or grappler — where reliable unarmed damage matters. Pairs with Monk especially well, where unarmed strikes are your bread and butter.",
+
+  'weaver-jotunborn': "Jotunborn who've mastered iivlar silk weaving — fine detail work that translates into broad observational skill. Trained in [[crafting|Crafting]] plus a circumstance bonus on [[perception|Perception]] Seek checks when searching for hidden details like secret doors or traps. Great for any Jotunborn built as the party's spotter and gear-fixer. Pairs well with Investigator or any class that values both Crafting and Perception.",
+
+  // ─── HotW closers (3) ───────────────────────────────────────────────────
+
+  'budding-speaker-centaur': "Centaurs born with a magical spark that may set them on the path of Faithspeaker or Greenspeaker. Pick divine or primal at creation (Faithspeaker = divine, Greenspeaker = primal). Gain one [[cantrip]] from your chosen [[spell-tradition|tradition]] as an at-will innate spell. Excellent for any Centaur character with a magical concept — Cleric, Druid, or even a martial with magical flavor. The choice is permanent, so think about the campaign's magic landscape before locking in.",
+
+  'abyssal-merfolk': "Merfolk from the deepest, darkest reaches of the ocean — pressures that crush most creatures. May resemble viperfish or anglerfish, with luminous eyes or translucent skin. Gain [[vision|Darkvision]] plus immunity to deep-ocean pressure effects. Excellent for deep-sea campaigns or any Merfolk concept built around exploring lightless depths. Pairs naturally with horror-tinged or cosmic-themed aquatic stories.",
+
+  'breaker-surki': "Surki with claws hard enough to break through earth, stone, and predators. Gain a claw [[ancestry-feat|unarmed attack]] that deals 1d4 slashing damage — a natural weapon you can't be disarmed of. Useful for unarmed builds, tunneling-themed concepts, or as a backup weapon for any Surki who finds themselves disarmed. Pairs with Monk, grappler-style Fighter, or Barbarian.",
+
+  // ─── AUTOMATON heritages (Guns & Gears) ─────────────────────────────────
+
+  'hunter-automaton': "Automatons built for tracking, scouting, and pursuit. Increased land [[speed|Speed]] (30 ft instead of the typical 25 ft) while you have both hands free. Excellent for any Automaton built as a Ranger, Rogue, or skirmisher. The hands-free condition matters — pairs better with unarmed or two-handed weapon builds than with dual-wielding or shield-using styles.",
+
+  'mage-automaton': "Automatons built or awakened with arcane channels woven through their core. Gain one [[cantrip]] from the [[arcane]] [[spell-tradition|tradition]] as an at-will innate spell, with access to the Core Attunement feat for further spell unlocks at higher levels. The single best Automaton heritage for any caster build — pairs with Wizard, Witch, Sorcerer, or any class wanting an arcane magical edge.",
+
+  'sharpshooter-automaton': "Automatons built with precision-aiming systems — designed for ranged combat. Can spend an action to offset some of the [[multiple-attack-penalty|multiple attack penalty]] on a ranged strike, making follow-up shots more reliable. Best for any Automaton built around bows, crossbows, or firearms (Gunslinger, Ranger archer build). The action cost is steep, so use it tactically rather than reflexively.",
+
+  'warrior-automaton': "Automatons built with reinforced striking surfaces — combat-ready from activation. Improved unarmed strike damage compared to other Automatons. Best for any martial Automaton build — Fighter, Champion, Barbarian, or Monk where unarmed strikes are core. Less impressive than Mage's spell access or Hunter's speed, but solid for a hands-on combat concept.",
 };
 
 export function getHeritageTip(slug) {
