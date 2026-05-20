@@ -19,6 +19,7 @@ import React, { useEffect } from 'react';
 import { Sparkles, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 import GMWhisper from '../components/GMWhisper.jsx';
+import AnnotatedText from '@/components/glossary/AnnotatedText';
 import ThumbnailStrip from '../components/ThumbnailStrip.jsx';
 import CornerBrackets from '../components/CornerBrackets.jsx';
 import ComplexityBadge from '../components/ComplexityBadge.jsx';
@@ -162,7 +163,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
             )}
             <div className="mt-4 pt-4 border-t border-pf-brass-dim/20">
               <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-1.5">Helpful Tip</p>
-              <p className="font-body text-sm text-pf-parchment leading-relaxed italic">{tipEntry.tip}</p>
+              <p className="font-body text-sm text-pf-parchment leading-relaxed italic"><AnnotatedText text={tipEntry.tip} /></p>
             </div>
           </div>
 
