@@ -3,6 +3,11 @@
 // the class auto-trained + background auto-trained lists into the
 // "trained" set so background-granted skills render correctly even
 // before the player adds any picks of their own.
+//
+// Visual treatment matches the library shell's dark-card / orange-
+// accent vocabulary: trained+ skills get a brighter card and an
+// orange-tinted modifier, untrained skills sit muted. Proficiency
+// rank renders as a small bordered chip so the tier is glanceable.
 
 import React from 'react';
 import { SKILLS, CLASSES, BACKGROUNDS } from '../../data/index.js';
@@ -14,6 +19,17 @@ const abilityKey = (short) => ({
   Str: 'Strength', Dex: 'Dexterity', Con: 'Constitution',
   Int: 'Intelligence', Wis: 'Wisdom', Cha: 'Charisma',
 }[short] || short);
+
+// Per-tier chip styling. Untrained is faded; everything else gets a
+// progressively brighter accent matching the library's orange/teal
+// palette.
+const TIER_CHIP = [
+  'border-gray-700 text-gray-500',          // untrained
+  'border-[#37F2D1]/40 text-[#37F2D1]',     // trained
+  'border-[#37F2D1]/70 text-[#37F2D1]',     // expert
+  'border-[#FFB347]/70 text-[#FFB347]',     // master
+  'border-[#FF5722] text-[#FF5722]',        // legendary
+];
 
 export default function SkillsTab({ data }) {
   const stats = computeDerivedStats(data);
@@ -28,7 +44,7 @@ export default function SkillsTab({ data }) {
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {SKILLS.map(skill => {
           const slug = skill.name.toLowerCase();
           const isTrained = trained.has(slug) || classAuto.has(slug) || bgAuto.has(slug);
@@ -36,12 +52,33 @@ export default function SkillsTab({ data }) {
           const rank = PROF_TIER_INDEX[tier] ?? 0;
           const abMod = stats.mods[abilityKey(skill.ability)] || 0;
           const modifier = abMod + profBonus(tier, level, stats.opts);
+          const trainedPlus = rank > 0;
           return (
-            <div key={skill.name} className="flex items-center justify-between bg-[#1E2430] border border-pf-brass-dim/30 px-3 py-1.5">
-              <span className="text-sm text-pf-parchment">{skill.name} <span className="text-pf-stone text-[10px] font-mono">({skill.ability})</span></span>
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-[9px] text-pf-stone uppercase tracking-wider">{PROFICIENCY_TIER_LABELS[rank]}</span>
-                <span className="font-mono text-sm text-pf-bone tabular-nums w-8 text-right">{fmtMod(modifier)}</span>
+            <div
+              key={skill.name}
+              className={`flex items-center justify-between rounded-lg px-3 py-2 border transition-colors
+                          ${trainedPlus
+                            ? 'bg-[#1E2430] border-gray-700'
+                            : 'bg-[#1E2430]/40 border-gray-800'}`}
+            >
+              <div className="flex items-baseline gap-2 min-w-0">
+                <span className={`text-sm ${trainedPlus ? 'text-white font-medium' : 'text-gray-500'}`}>
+                  {skill.name}
+                </span>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-gray-500">
+                  {skill.ability}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className={`text-[9px] font-display tracking-[0.15em] uppercase px-1.5 py-0.5 border rounded ${TIER_CHIP[rank] || TIER_CHIP[0]}`}>
+                  {PROFICIENCY_TIER_LABELS[rank]}
+                </span>
+                <span
+                  className={`font-mono text-base tabular-nums w-9 text-right font-bold
+                              ${trainedPlus ? 'text-[#FF5722]' : 'text-gray-600'}`}
+                >
+                  {fmtMod(modifier)}
+                </span>
               </div>
             </div>
           );
@@ -51,10 +88,10 @@ export default function SkillsTab({ data }) {
       {loreSubskill && (
         <div>
           <SectionHeading>Lore Subskills</SectionHeading>
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            <span className="inline-flex items-center gap-1.5 px-2 py-1 text-[10px] font-display tracking-wider uppercase bg-pf-brass/15 border border-pf-brass/40 text-pf-bone">
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 text-[10px] font-display tracking-wider uppercase bg-[#FF5722]/15 border border-[#FF5722]/40 text-[#FF5722] rounded">
               {loreSubskill} Lore
-              <span className="text-[8px] text-pf-brass">auto</span>
+              <span className="text-[8px] text-gray-400">auto</span>
             </span>
           </div>
         </div>

@@ -23,7 +23,7 @@ const DETAIL_COMPONENTS = {
   // Dnd5eCharacterDetail: pending extraction from CharacterLibrary
 };
 
-export default function CharacterDetailDispatcher({ character }) {
+export default function CharacterDetailDispatcher({ character, onEdit, onDelete }) {
   const pack = getGamePack(character?.game_pack);
 
   if (!pack) {
@@ -46,7 +46,7 @@ export default function CharacterDetailDispatcher({ character }) {
 
   return (
     <Suspense fallback={<DetailLoading pack={pack} />}>
-      <Component character={character} pack={pack} />
+      <Component character={character} pack={pack} onEdit={onEdit} onDelete={onDelete} />
     </Suspense>
   );
 }

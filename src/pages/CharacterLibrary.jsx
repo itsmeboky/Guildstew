@@ -398,11 +398,19 @@ export default function CharacterLibrary() {
             <div className="w-[500px] p-6 overflow-y-auto relative z-10 overflow-x-hidden" style={{
               background: 'linear-gradient(to left, rgba(30, 36, 48, 0.7), rgba(30, 36, 48, 0.95))'
             }}>
-              <div className="mb-4 flex items-baseline gap-3">
-                <h1 className="text-3xl font-bold text-[#FF5722] flex-1">{selectedCharacter.name}</h1>
-                <GamePackTag pack={pack} size="lg" />
-              </div>
-              <CharacterDetailDispatcher character={selectedCharacter} />
+              {/* Detail renderer owns its own header (name + subline +
+                  bio + GamePackTag). The library page used to wrap an
+                  outer name/tag block on top, producing the duplicate-
+                  name bug. Now non-D&D detail surfaces are responsible
+                  for the entire side-panel content. */}
+              <CharacterDetailDispatcher
+                character={selectedCharacter}
+                onEdit={() => navigate(createPageUrl(pack.creatorRoute || 'CharacterCreator') + `?edit=${selectedCharacter.id}`)}
+                onDelete={() => {
+                  setCharacterToDelete(selectedCharacter);
+                  setDeleteDialogOpen(true);
+                }}
+              />
             </div>
           );
         }
