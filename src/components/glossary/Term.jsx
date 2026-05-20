@@ -22,6 +22,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { PF2E_GLOSSARY } from '@/game-packs/pf2e/content/glossary';
+import TermPopover from './TermPopover';
 
 export default function Term({ slug, children }) {
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -79,27 +80,7 @@ export default function Term({ slug, children }) {
           sideOffset={6}
           className="w-80 bg-pf-bg-card border border-pf-brass/40 text-pf-parchment p-4 not-italic font-body normal-case tracking-normal"
         >
-          <header className="mb-2">
-            <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-1">
-              Glossary
-            </p>
-            <h3 className="font-display text-lg text-pf-bone leading-tight">
-              {entry.term}
-            </h3>
-          </header>
-          <p className="text-sm leading-relaxed">{entry.full}</p>
-          {entry.related?.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-pf-brass-dim/30 text-xs">
-              <span className="text-pf-stone uppercase tracking-[0.2em] mr-2">
-                Related:
-              </span>
-              {entry.related
-                .map((relSlug) => PF2E_GLOSSARY[relSlug])
-                .filter(Boolean)
-                .map((rel) => rel.term)
-                .join(' · ')}
-            </div>
-          )}
+          <TermPopover slug={slug} />
         </PopoverContent>
       </Popover>
     </span>
