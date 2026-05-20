@@ -214,6 +214,98 @@ export const HERITAGE_TIPS = {
   'stickytoe-tripkee': "Tripkee whose tree-frog adhesive toe pads give them grip on nearly any surface. Climb [[speed|Speed]] on most surfaces, including walls and ceilings. Excellent for dungeon climbing, vertical maneuvering, or any campaign with significant climbing demands.",
 
   'windweb-tripkee': "Tripkee with thin membranes between their fingers and toes that catch air. Slow falls / brief glides. Best for vertical campaigns or any environment where falls and aerial movement matter. Pairs with Druid or Ranger for jungle-canopy fantasy.",
+
+  // ─── PC1/PC2 gap fills ──────────────────────────────────────────────────
+
+  'clawed-catfolk': "Catfolk with naturally long, sharp claws — a built-in weapon you can't be disarmed of. Grants a 1d6 slashing claw [[ancestry-feat|unarmed attack]] with the agile, finesse, and unarmed traits. Excellent for unarmed builds (Monk, Brawler-style Fighter, finesse-based Rogue), as a reliable backup when you can't draw your weapon, or for fighting in tight spaces where weapon swings are restricted.",
+
+  'sharp-eared-catfolk': "Catfolk with hunting-sharp hearing. Bonus on [[perception|Perception]] checks specifically for detecting hidden creatures by sound, and improved ability to act when caught flat-footed by sound-based ambushes. Great for scouts, ambush detectors, and any party that needs an early-warning system. Pairs well with Ranger and Rogue builds.",
+
+  'shortshanks-hobgoblin': "Smaller-than-average Hobgoblins — [[size|Small]] size instead of the normal Medium. Reduces your reach but improves stealth and lets you slip through tight spaces. Great for Rogue, Investigator, or any Hobgoblin built around mobility and infiltration rather than pure martial dominance. Pairs well with finesse weapon builds.",
+
+  'warrenbred-hobgoblin': "Hobgoblins raised in tunnels, warrens, and subterranean strongholds. Upgraded [[vision|Darkvision]] range and improved [[perception|Perception]] in tight underground environments. Excellent for dungeon-crawler campaigns, Darklands stories, or any Hobgoblin built for the underground military fantasy.",
+
+  'dog-kholo': "Kholo with closer ties to dog ancestry than to hyena — a domestication-blooded variant. Improved scent-tracking and bonus to [[survival|Survival]] checks involving following trails. Picks this for any tracker-style Kholo or to lean into a friendlier, more party-cooperative version of the typically pack-aggressive ancestry.",
+
+  'witch-kholo': "Kholo with latent magical heritage — your bloodline carries a thin thread of witch power. Gain one [[cantrip]] from the [[occult]] tradition as an innate spell. Excellent for any Kholo character built as a witch or sorcerer; pairs naturally with a Witch class for thematic alignment, or as a magical-edge supplement for a martial Kholo.",
+
+  'elementheart-kobold': "Kobolds whose eggs incubated near an elemental presence — fire, air, earth, water, metal, or wood. Pick one element at creation; you gain resistance to that elemental damage type equal to half your [[level]] (minimum 1). Perfect for campaigns with heavy elemental opposition. Plan around the element you'll see most — fire if dragons feature heavily, cold for arctic stories, etc.",
+
+  'spellhorn-kobold': "Kobolds hatched in the vicinity of strong magic — arcane energy lingers in your blood. Choose one common [[cantrip]] from the [[arcane]] tradition; you cast it as an innate cantrip, with [[charisma|CHA]] as your spellcasting ability. Free magic forever — pairs incredibly well with Sorcerer, Witch, or any class wanting a magical edge.",
+
+  'tunnelflood-kobold': "Kobolds raised in warrens crisscrossed by underwater passages. Swim [[speed|Speed]] equal to your land speed, plus the ability to hold your breath much longer than normal. Excellent for aquatic or river campaigns, sewer-crawler stories, or any Kobold built around water mobility.",
+
+  'venomtail-kobold': "Kobolds with a poison gland in their tail — descended from venomous draconic lineages. Once per day, apply tail-secreted poison to a weapon or to your own strike, dealing significant persistent poison damage on a hit. Best paired with a class that can guarantee the hit (Investigator's Devise a Stratagem, Magus Spellstrike, anything that improves to-hit) to make the limited-use poison count.",
+
+  'snow-rat': "Ratfolk from northern frozen lands. Cold resistance scaling with your [[level]], plus environmental adaptations to icy terrain. Best for arctic / northern campaigns. Pairs with Druid or Ranger for a snow-stalker concept.",
+
+  'dogtooth-tengu': "Tengu with reinforced jaws and sharp beak-like teeth. Bite [[ancestry-feat|unarmed attack]] — a natural weapon that doesn't need to be drawn. Useful as a backup attack for any Tengu, or as the primary weapon for an unarmed-focused build. Pairs with Monk, Barbarian, or any class that benefits from a natural strike option.",
+
+  'thickskin-tripkee': "Tripkee with hardened, leathery skin — tougher than the typical lithe amphibian frame. Extra [[hit-points|HP]] at level 1, plus minor improvements to non-magical resistance. Best for melee or front-line Tripkee builds where the extra durability matters. Pairs with Barbarian or Champion to push the resilience further.",
+
+  // ─── ATHAMARU heritages (HotW) ──────────────────────────────────────────
+
+  'coral-athamaru': "Athamaru who symbiotically host living coral on their skin. Natural armor from the coral growth grants minor [[armor-class|AC]] benefit, plus minor regeneration during rest in saltwater. Excellent for tank-style Athamaru, especially in aquatic campaigns where you'll spend significant time in the water. Pairs with Champion or Fighter for full reef-warrior fantasy.",
+
+  'hopeful-athamaru': "Athamaru whose pheromones spread emotional uplift to nearby allies. Once per day, you can grant a nearby ally a bonus on their next save against an emotion effect, or shake an ally out of fear. Perfect support pick — pairs well with any party that faces frequent fear opposition (demons, dragons, undead).",
+
+  'kaleidoscopic-athamaru': "Athamaru with chromatophore skin that shifts color at will. Bonus on [[stealth|Stealth]] checks in natural aquatic environments via active camouflage, plus the ability to communicate through color patterns with other Athamaru. Useful for any Athamaru built as a scout, infiltrator, or aquatic ambusher.",
+
+  'quilled-athamaru': "Athamaru with defensive spines like a lionfish or pufferfish. Anyone grappling or striking you in melee may take damage from the spines. Excellent for tank builds where being painful to touch matters — Barbarian, Champion, or any class built around being attacked rather than avoiding it.",
+
+  // ─── AWAKENED-ANIMAL heritages (HotW) ───────────────────────────────────
+
+  'climbing-animal': "Awakened animals whose source animal is a climber — primates, certain felines, geckos. Climb [[speed|Speed]] equal to your land speed. Excellent for treetop, mountain, or vertical-dungeon campaigns. Pairs well with Ranger or Rogue for an aerial ambush style.",
+
+  'flying-animal': "Awakened animals whose source animal flies — birds, bats, flying squirrels (with restrictions on the small ones). Limited flight at level 1 (usually short-burst or glide; full flight unlocks via later [[ancestry-feat|ancestry feats]]). The single best mobility option in the game once flight is online. Plan around the early-level restrictions.",
+
+  'running-animal': "Awakened animals whose source animal is built for sustained ground speed — horses, antelope, big cats. Increased land [[speed|Speed]] above the standard 25 ft baseline. Excellent for any Awakened Animal in overland-travel-heavy campaigns or chase-scene stories. Pairs with Ranger, Barbarian, or any mobile martial.",
+
+  'swimming-animal': "Awakened animals whose source animal is aquatic — orcas, otters, sharks (with form variation). Swim [[speed|Speed]] equal to your land speed, often with breath-holding bonuses. Best for water-heavy campaigns. Pairs with Druid (Storm or Untamed) or Ranger for a fully aquatic predator concept.",
+
+  // ─── CENTAUR heritages (HotW) ───────────────────────────────────────────
+
+  'fleetwind-centaur': "Centaurs of light, slender build — speed over strength. Increased [[speed|Speed]] above the Centaur baseline, plus reduced encumbrance from light loads. Excellent for skirmisher or scout-style Centaurs. Pairs with Ranger or Rogue (yes, a [[size|Large]] Rogue is unusual but workable in open terrain).",
+
+  'ironhoof-centaur': "Centaurs whose hooves are denser and stronger than average — natural weapons that work even when you're unarmed. Hoof [[ancestry-feat|unarmed attack]] that deals notable bludgeoning damage. Pairs well with martial builds; the hoof attack scales with weapon proficiency, so a Fighter Centaur with Iron Hoof has a real backup strike.",
+
+  'mottle-coat-centaur': "Centaurs with naturally camouflaging coat patterns. Bonus on [[stealth|Stealth]] checks in natural terrain. Useful for any Centaur built as a scout, hunter, or wilderness operative. Pair with Ranger or Druid for a 'predator of the plains' concept.",
+
+  'ponygait-centaur': "Centaurs of smaller stature — closer to pony than horse scale. Sometimes Medium instead of [[size|Large]] (verify against data), which solves the dungeon-corridor problem most Centaurs face. Pick this when your concept is a Centaur character without the Large-size logistical headaches.",
+
+  'stoutheart-centaur': "Centaurs of unshakable will — emotional resilience runs in their bloodlines. Bonus on [[will|Will]] saves against fear and emotion-based effects. Excellent for any campaign with fear-heavy opposition. Pairs naturally with the Centaur's already-solid frontline durability.",
+
+  // ─── MERFOLK heritages (HotW) ───────────────────────────────────────────
+
+  'carcharodon-merfolk': "Merfolk with shark-blooded ancestry — sharper teeth, more predatory drive, frenzy when blood is in the water. Bite [[ancestry-feat|unarmed attack]] plus situational bonuses when enemies are wounded. Best for aggressive aquatic combat; pairs with Barbarian for the ocean-predator fantasy.",
+
+  'pelagic-merfolk': "Merfolk from the open deep ocean — far from coasts, where pressure and dark are constants. Pressure resistance plus improved [[vision|Low-Light Vision]] in deep water. Best for any Merfolk built for deep-water campaigns or stories that descend into the ocean's lower reaches.",
+
+  'reef-merfolk': "Merfolk from shallow coral reef ecosystems — colorful, social, more comfortable in warm coastal waters. Bonus on [[stealth|Stealth]] checks in reef and shallow-water environments via chromatic adaptation. Best for coastal campaigns; pairs with Rogue or Ranger for a reef-ambusher concept.",
+
+  'sailfish-merfolk': "Merfolk with fin-shaped sails and streamlined bodies — built for speed rather than strength. Increased swim [[speed|Speed]] above the Merfolk baseline. Best for any Merfolk built as an aquatic scout, chase specialist, or hit-and-run skirmisher. Pairs naturally with Swashbuckler or Ranger.",
+
+  // ─── MINOTAUR heritages (HotW) ──────────────────────────────────────────
+
+  'ghost-bull-minotaur': "Minotaurs of pale, ghost-like complexion — bloodlines that have walked close to death and returned. Resistance to [[ability-flaw|negative]] / necrotic damage and bonus saves against death effects. Excellent for undead-heavy campaigns. Pair with Champion or Cleric for an anti-undead crusader build.",
+
+  'glacier-cavern-minotaur': "Minotaurs from cold, deep cavern systems — combining cold-adaptation with the standard Minotaur dungeon-comfort. Cold resistance plus improved [[vision|Darkvision]]. Best for arctic / glacial / Darklands campaigns. Pairs with Barbarian for a primal ice-warrior fantasy.",
+
+  'littlehorn-minotaur': "Minotaurs with smaller horns and a slighter frame — sometimes [[size|Medium]] instead of Large (verify against data). Pick this for a Minotaur character without the Large-size dungeon problems. The smaller horns may reduce the gore attack's damage compared to other Minotaurs but solve the corridor-fit issue.",
+
+  'roaming-minotaur': "Minotaurs from nomadic herds — long-distance travelers rather than labyrinth-bound. Reduced fatigue from long marches and improved [[survival|Survival]] in unfamiliar terrain. Excellent for exploration-heavy campaigns or any party that does significant overland travel.",
+
+  'slabsoul-minotaur': "Minotaurs of unshakable emotional resilience — the bull-headed stoicism made literal. Bonus on [[will|Will]] saves against fear and emotion effects. Excellent for campaigns with fear-heavy opposition; pairs naturally with the Minotaur's already-solid frontline durability.",
+
+  'stalker-minotaur': "Minotaurs trained for hunting through twisting, complex terrain — masters of the labyrinth they came from. Bonus on [[stealth|Stealth]] and [[perception|Perception]] in dungeon-like environments. Excellent for any Minotaur built as a hunter, scout, or trap-setter rather than a pure frontliner. Pairs with Ranger for full predator-in-the-maze flavor.",
+
+  // ─── SURKI heritages (HotW) ─────────────────────────────────────────────
+
+  'elytron-surki': "Surki with hardened elytra (beetle wing covers) folded across their backs. Natural armor adds to [[armor-class|AC]], plus gliding capability via extended elytra during falls. Excellent for tank-style Surki or any character built around vertical maneuvering. Pairs with Champion or Fighter for full insectoid-knight aesthetic.",
+
+  'hardshell-surki': "Surki with reinforced chitin plating — significantly tougher exoskeleton than standard. Extra [[hit-points|HP]] at level 1 plus minor physical damage resistance. Best for frontline builds where the extra durability compounds with class HP. Pairs with Barbarian or Champion to push the resilience peak.",
+
+  'lantern-surki': "Surki with bioluminescent patches — natural light sources that pulse with mood and intent. Can produce light at will (action-free for dim, brief action for brighter), plus minor communication via light patterns. Excellent for dungeon explorers (built-in light source) or party support roles. Pairs with any class — utility is universal.",
 };
 
 export function getHeritageTip(slug) {
