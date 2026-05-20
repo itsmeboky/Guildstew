@@ -6,30 +6,33 @@
 // Keyed by the ancestry slug (`ANCESTRIES[*].id` from data/ancestries.json).
 // Missing slugs fall through to the `getAncestryTip` default below.
 
+// Inline [[slug]] / [[slug|label]] markers reference entries in
+// content/glossary.js. The render path turns them into <Term>
+// components with hover tooltip + popover.
 export const ANCESTRY_TIPS = {
   human: {
     complexity: 'easy',
-    tip: "The default fantasy choice. Two free ability boosts, a free 1st-level feat, and flexible heritages make humans the most adaptable ancestry. Strong pick for a first PF2e character.",
+    tip: "The default fantasy choice. Two free [[ability-boost|ability boosts]], a free 1st-level [[feat]], and flexible [[heritage|heritages]] make humans the most adaptable [[ancestry]]. Strong pick for a first PF2e character.",
   },
   dwarf: {
     complexity: 'easy',
-    tip: "Tough and durable. Constitution and Wisdom boosts pair with most classes. Darkvision and clan dagger fit a clear fantasy. Forgiving for new players.",
+    tip: "Tough and durable. [[constitution|Constitution]] and [[wisdom|Wisdom]] boosts pair with most classes. Darkvision and clan dagger fit a clear fantasy. Forgiving for new players.",
   },
   elf: {
     complexity: 'easy',
-    tip: "Long-lived and observant. Dexterity and Intelligence boosts shine for ranged martials and casters. Low-light vision. A safe, classic pick.",
+    tip: "Long-lived and observant. [[dexterity|Dexterity]] and [[intelligence|Intelligence]] boosts shine for ranged martials and casters. Low-light [[vision]]. A safe, classic pick.",
   },
   halfling: {
     complexity: 'easy',
-    tip: "Small, sneaky, and lucky. Dexterity and Wisdom boosts plus Halfling Luck make for forgiving gameplay. Great fit for new rogues, rangers, and bards.",
+    tip: "Small, sneaky, and lucky. [[dexterity|Dexterity]] and [[wisdom|Wisdom]] boosts plus Halfling Luck make for forgiving gameplay. Great fit for new rogues, rangers, and bards.",
   },
   gnome: {
     complexity: 'easy',
-    tip: "Curious and magical. Constitution and Charisma boosts plus a primal innate spell. Fey ties give flavor without complexity. Approachable.",
+    tip: "Curious and magical. [[constitution|Constitution]] and [[charisma|Charisma]] boosts plus a [[primal]] innate [[spell]]. Fey ties give flavor without complexity. Approachable.",
   },
   goblin: {
     complexity: 'easy',
-    tip: "Reckless, fast, and fearless. Dexterity and Charisma boosts with a chaotic toolkit. Good when you want personality on your sleeve.",
+    tip: "Reckless, fast, and fearless. [[dexterity|Dexterity]] and [[charisma|Charisma]] boosts with a chaotic toolkit. Good when you want personality on your sleeve.",
   },
   leshy: {
     complexity: 'intermediate',
@@ -37,11 +40,11 @@ export const ANCESTRY_TIPS = {
   },
   catfolk: {
     complexity: 'intermediate',
-    tip: "Mobile and curious. Good for ambush-style martials. Some heritages reward tactical positioning over raw stat optimization.",
+    tip: "Mobile and curious. Good for ambush-style martials. Some [[heritage|heritages]] reward tactical positioning over raw stat optimization.",
   },
   hobgoblin: {
     complexity: 'intermediate',
-    tip: "Disciplined and tough. Iron Fed and Smokeworker heritages reward specific tactical play. Slightly more setup than starter ancestries.",
+    tip: "Disciplined and tough. Iron Fed and Smokeworker [[heritage|heritages]] reward specific tactical play. Slightly more setup than starter ancestries.",
   },
   orc: {
     complexity: 'intermediate',
@@ -49,7 +52,7 @@ export const ANCESTRY_TIPS = {
   },
   tengu: {
     complexity: 'intermediate',
-    tip: "Crow folk with weapon flexibility. Multiple weapon familiarities reward planning your weapon choices at character build, not mid-campaign.",
+    tip: "Crow folk with weapon flexibility. Multiple [[weapon-proficiency|weapon familiarities]] reward planning your weapon choices at character build, not mid-campaign.",
   },
   ratfolk: {
     complexity: 'intermediate',
@@ -57,15 +60,15 @@ export const ANCESTRY_TIPS = {
   },
   nephilim: {
     complexity: 'intermediate',
-    tip: "Planar-touched heritage replacing the old Tiefling/Aasimar/Genasi split. Mechanically straightforward, narratively dense — fits players who like backstory hooks.",
+    tip: "Planar-touched [[heritage]] replacing the old Tiefling/Aasimar/Genasi split. Mechanically straightforward, narratively dense — fits players who like backstory hooks.",
   },
   kobold: {
     complexity: 'intermediate',
-    tip: "Draconic and clever. Various draconic exemplar heritages give different elemental flavors. Squishy at low levels, but charm and Dex carry you.",
+    tip: "Draconic and clever. Various draconic exemplar [[heritage|heritages]] give different elemental flavors. Squishy at low levels, but charm and [[dexterity|Dex]] carry you.",
   },
   athamaru: {
     complexity: 'advanced',
-    tip: "Aquatic salamander people. Many feats and heritage options ONLY work in or near water — best in an aquatic campaign, or paired with a party that fights near coasts.",
+    tip: "Aquatic salamander people. Many [[feat|feats]] and [[heritage]] options ONLY work in or near water — best in an aquatic campaign, or paired with a party that fights near coasts.",
   },
   automaton: {
     complexity: 'advanced',
@@ -77,7 +80,7 @@ export const ANCESTRY_TIPS = {
   },
   centaur: {
     complexity: 'advanced',
-    tip: "Large size at level 1 changes how you interact with movement, terrain, and squeezing through doorways. Mechanically distinct from every other ancestry.",
+    tip: "Large [[size]] at [[level]] 1 changes how you interact with movement, terrain, and squeezing through doorways. Mechanically distinct from every other [[ancestry]].",
   },
   skeleton: {
     complexity: 'advanced',
@@ -85,7 +88,7 @@ export const ANCESTRY_TIPS = {
   },
   conrasu: {
     complexity: 'advanced',
-    tip: "Spirit-folded constructs from another plane. Niche fantasy, niche mechanics. Pick if their lore grabs you specifically.",
+    tip: "Spirit-folded constructs from another plane. Niche fantasy, niche mechanics. Pick if their [[lore]] grabs you specifically.",
   },
   fetchling: {
     complexity: 'advanced',
@@ -93,7 +96,7 @@ export const ANCESTRY_TIPS = {
   },
   fleshwarp: {
     complexity: 'advanced',
-    tip: "Beings reshaped by alchemy or magic. Mechanically flexible (size varies by heritage) but appearance is intentionally unsettling — discuss with table before picking.",
+    tip: "Beings reshaped by alchemy or magic. Mechanically flexible ([[size]] varies by [[heritage]]) but appearance is intentionally unsettling — discuss with table before picking.",
   },
   strix: {
     complexity: 'advanced',
@@ -101,17 +104,17 @@ export const ANCESTRY_TIPS = {
   },
   vanara: {
     complexity: 'intermediate',
-    tip: "Monkey-folk with prehensile tails. Climb-focused movement and Dex/Wis boosts. Approachable if you like mobility-heavy play.",
+    tip: "Monkey-folk with prehensile tails. Climb-focused movement and [[dexterity|Dex]]/[[wisdom|Wis]] boosts. Approachable if you like mobility-heavy play.",
   },
   ysoki: {
     complexity: 'intermediate',
-    tip: "Spacefaring ratfolk variant — Starfinder crossover ancestry. Same cheek-pouch tricks, more sci-fi flavor.",
+    tip: "Spacefaring ratfolk variant — Starfinder crossover [[ancestry]]. Same cheek-pouch tricks, more sci-fi flavor.",
   },
 };
 
 export function getAncestryTip(slug) {
   return ANCESTRY_TIPS[slug] || {
     complexity: 'intermediate',
-    tip: "Pick this ancestry if its lore or visuals speak to you. Mechanics are summarized in the statblock above — pair Dex-heavy ancestries with finesse classes, Str-heavy with martial frontliners.",
+    tip: "Pick this [[ancestry]] if its [[lore]] or visuals speak to you. Mechanics are summarized in the statblock above — pair [[dexterity|Dex]]-heavy ancestries with finesse classes, [[strength|Str]]-heavy with martial frontliners.",
   };
 }

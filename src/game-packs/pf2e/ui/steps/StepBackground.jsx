@@ -4,6 +4,7 @@
 import React, { useEffect } from 'react';
 import { Compass } from 'lucide-react';
 import GMWhisper from '../components/GMWhisper.jsx';
+import AnnotatedText from '@/components/glossary/AnnotatedText';
 import ThumbnailStrip from '../components/ThumbnailStrip.jsx';
 import CornerBrackets from '../components/CornerBrackets.jsx';
 import ComplexityBadge from '../components/ComplexityBadge.jsx';
@@ -86,7 +87,7 @@ const StepBackground = ({ data, update }) => {
 
             <div className="mt-6">
               <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-2">Helpful Tip</p>
-              <p className="font-body text-sm text-pf-parchment leading-relaxed italic">{helpfulTip}</p>
+              <p className="font-body text-sm text-pf-parchment leading-relaxed italic"><AnnotatedText text={helpfulTip} /></p>
             </div>
           </div>
 
