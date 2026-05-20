@@ -16,6 +16,7 @@ import {
   ANCESTRY_FEAT_LEVELS,
 } from '../../data/index.js';
 import { getAncestryTip } from '../../content/ancestryTips.js';
+import AnnotatedText from '@/components/glossary/AnnotatedText';
 import { STEPS } from '../../config/steps.js';
 
 const StepAncestry = ({ data, update }) => {
@@ -103,7 +104,7 @@ const StepAncestry = ({ data, update }) => {
           <div className="col-span-12 md:col-span-4">
             <SectionHeader>For New Players</SectionHeader>
             <p className="font-body text-sm text-pf-parchment leading-relaxed italic">
-              "{tipEntry.tip}"
+              "<AnnotatedText text={tipEntry.tip} />"
             </p>
           </div>
         </div>
