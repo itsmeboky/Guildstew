@@ -1,12 +1,11 @@
 // Background tab — ancestry / heritage / background / class /
 // subclass flavor blocks, languages chip row, deity + pronouns when
-// set. Pulls from the cleaned-up flat data shape after Phase J.2 (no
-// nested system_data probes here — the SkillsTab/StatsTab kept their
-// callers on the same shape).
+// set. Visual treatment matches the library shell: rounded dark
+// cards with gray borders, orange labels, white names, muted desc.
 
 import React from 'react';
 import { ANCESTRIES, HERITAGES_BY_ANCESTRY, BACKGROUNDS, CLASSES, CLASS_DETAILS } from '../../data/index.js';
-import { cap, SectionHeading } from './_shared.js';
+import { cap } from './_shared.js';
 
 export default function BackgroundTab({ data }) {
   const ancestry = ANCESTRIES.find(a => a.slug === data.ancestry);
@@ -28,33 +27,47 @@ export default function BackgroundTab({ data }) {
       <FlavorBlock label="Class"      name={cls?.name}        desc={cls?.desc} />
       {subclass && <FlavorBlock label="Subclass" name={subclass.name} desc={subclass.desc} />}
 
-      <SectionHeading>Languages</SectionHeading>
-      <div className="flex flex-wrap gap-1.5 mt-1">
-        {baseLanguages.map(lang => (
-          <span key={`b-${lang}`} className="px-2 py-1 text-[10px] font-display tracking-wider uppercase bg-pf-sage/15 border border-pf-sage/40 text-pf-bone">
-            {lang} <span className="text-pf-sage text-[8px] ml-1">auto</span>
-          </span>
-        ))}
-        {additional.map(lang => (
-          <span key={`a-${lang}`} className="px-2 py-1 text-[10px] font-display tracking-wider uppercase bg-pf-brass/10 border border-pf-brass/40 text-pf-bone">
-            {lang}
-          </span>
-        ))}
-        {baseLanguages.length === 0 && additional.length === 0 && (
-          <p className="text-pf-stone italic text-xs">No languages recorded.</p>
-        )}
-      </div>
+      <Section label="Languages">
+        <div className="flex flex-wrap gap-1.5">
+          {baseLanguages.map(lang => (
+            <span key={`b-${lang}`} className="px-2 py-1 text-[10px] font-display tracking-wider uppercase bg-[#37F2D1]/15 border border-[#37F2D1]/40 text-[#37F2D1] rounded">
+              {lang} <span className="text-gray-400 text-[8px] ml-1">auto</span>
+            </span>
+          ))}
+          {additional.map(lang => (
+            <span key={`a-${lang}`} className="px-2 py-1 text-[10px] font-display tracking-wider uppercase bg-[#1E2430] border border-gray-700 text-gray-200 rounded">
+              {lang}
+            </span>
+          ))}
+          {baseLanguages.length === 0 && additional.length === 0 && (
+            <p className="text-gray-500 italic text-xs">No languages recorded.</p>
+          )}
+        </div>
+      </Section>
 
       {data.deity && (
-        <div>
-          <SectionHeading>Deity</SectionHeading>
-          <p className="text-sm text-pf-parchment mt-1">{data.deity?.name || String(data.deity)}</p>
-        </div>
+        <Section label="Deity">
+          <p className="text-sm text-gray-200">{data.deity?.name || String(data.deity)}</p>
+        </Section>
       )}
 
       {data.pronouns && (
-        <p className="text-xs text-pf-stone"><span className="text-pf-brass uppercase tracking-wider">Pronouns:</span> {data.pronouns}</p>
+        <p className="text-xs text-gray-400">
+          <span className="text-[#FF5722] uppercase tracking-wider font-display text-[10px] mr-2">Pronouns</span>
+          {data.pronouns}
+        </p>
       )}
+    </div>
+  );
+}
+
+function Section({ label, children }) {
+  return (
+    <div>
+      <p className="font-display text-[11px] tracking-[0.2em] uppercase text-[#FF5722] border-b border-gray-700/60 pb-1 mb-2">
+        {label}
+      </p>
+      {children}
     </div>
   );
 }
@@ -62,11 +75,11 @@ export default function BackgroundTab({ data }) {
 function FlavorBlock({ label, name, desc }) {
   if (!name) return null;
   return (
-    <div className="bg-[#1E2430] border border-pf-brass-dim/30 p-3">
-      <p className="font-display text-[10px] tracking-[0.2em] text-pf-brass uppercase mb-1">{label}</p>
-      <p className="font-display text-base text-pf-bone mb-1">{name}</p>
+    <div className="bg-[#1E2430] border border-gray-700 rounded-lg p-3">
+      <p className="font-display text-[10px] tracking-[0.2em] text-[#FF5722] uppercase mb-1">{label}</p>
+      <p className="text-base text-white font-bold mb-1.5">{name}</p>
       {desc && (
-        <p className="font-body text-xs text-pf-stone leading-snug line-clamp-4">{desc}</p>
+        <p className="font-body text-xs text-gray-400 leading-relaxed line-clamp-4">{desc}</p>
       )}
     </div>
   );
