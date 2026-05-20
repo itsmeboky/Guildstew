@@ -1026,6 +1026,74 @@
     "tier": "tier2"
   },
   {
+    "id": "magus",
+    "slug": "magus",
+    "foundryId": "HQBA9Yx2s8ycvz3C",
+    "name": "Magus",
+    "hp": 8,
+    "keyAbility": [
+      "dex",
+      "str"
+    ],
+    "trainedSkills": {
+      "value": [
+        "arcana"
+      ],
+      "additional": 2
+    },
+    "skillIncreaseLevels": [
+      3,
+      5,
+      7,
+      9,
+      11,
+      13,
+      15,
+      17,
+      19
+    ],
+    "classFeatLevels": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16,
+      18,
+      20
+    ],
+    "proficiencies": {
+      "perception": 1,
+      "saves": {
+        "fortitude": 2,
+        "reflex": 1,
+        "will": 2
+      },
+      "weapons": {
+        "advanced": 0,
+        "martial": 1,
+        "other": {
+          "name": "",
+          "rank": 0
+        },
+        "simple": 1,
+        "unarmed": 1
+      },
+      "armor": {
+        "heavy": 0,
+        "light": 1,
+        "medium": 1,
+        "unarmored": 1
+      }
+    },
+    "spellcasting": 1,
+    "desc": "Combining the physicality and technique of a warrior with the ability to cast arcane magic, you seek to perfect the art of fusing spell and strike. While the hefty tome you carry reflects hours conducting arcane research, your enemies need no reminder of your training. They recognize it as you take them down. Magus",
+    "source": "Pathfinder Secrets of Magic",
+    "tier": "tier2"
+  },
+  {
     "id": "monk",
     "slug": "monk",
     "foundryId": "YPxpk9JbMnKjbNLc",
@@ -1158,6 +1226,71 @@
     "desc": "Your conduit to divine power eschews the traditional channels of prayer and servitude—you instead glean sacred truths and great mysteries embodied in overarching concepts, whether because you perceive the common ground across multiple deities or circumvent their power entirely. You explore one of these mysteries and draw upon its power to cast miraculous spells, but that power comes with a terrible price: a curse that grows stronger the more you draw upon it, which you might uphold as an instrument of the divine or view as punishment from the gods. Oracle",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
+  },
+  {
+    "id": "psychic",
+    "slug": "psychic",
+    "foundryId": "Inq4gH3P5PYjSQbD",
+    "name": "Psychic",
+    "hp": 6,
+    "keyAbility": [],
+    "trainedSkills": {
+      "value": [
+        "occultism"
+      ],
+      "additional": 3
+    },
+    "skillIncreaseLevels": [
+      3,
+      5,
+      7,
+      9,
+      11,
+      13,
+      15,
+      17,
+      19
+    ],
+    "classFeatLevels": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16,
+      18,
+      20
+    ],
+    "proficiencies": {
+      "perception": 1,
+      "saves": {
+        "fortitude": 1,
+        "reflex": 1,
+        "will": 2
+      },
+      "weapons": {
+        "advanced": 0,
+        "martial": 0,
+        "other": {
+          "name": "",
+          "rank": 0
+        },
+        "simple": 1,
+        "unarmed": 1
+      },
+      "armor": {
+        "heavy": 0,
+        "light": 0,
+        "medium": 0,
+        "unarmored": 1
+      }
+    },
+    "spellcasting": 1,
+    "desc": "The mind can perceive truths hidden to fine-tuned instruments, house more secrets than any tome, and move objects and hearts more deftly than any lever. By delving into both the conscious and subconscious aspects of your inner self, you have awoken to the might of psychic magic, allowing you to cast spells not through incantations or gestures but by the power of your will alone. While the thin line between your mind and reality means that a single errant thought could have unintended consequences for yourself and your companions, you know that anything is possible, if you can imagine it. Psychic",
+    "source": "Pathfinder Dark Archive (Remastered)",
+    "tier": "tier2"
   },
   {
     "id": "ranger",
@@ -1372,6 +1505,71 @@
     "tier": "tier1"
   },
   {
+    "id": "summoner",
+    "slug": "summoner",
+    "foundryId": "YtOm245r8GFSFYeD",
+    "name": "Summoner",
+    "hp": 10,
+    "keyAbility": [
+      "cha"
+    ],
+    "trainedSkills": {
+      "value": [],
+      "additional": 3
+    },
+    "skillIncreaseLevels": [
+      3,
+      5,
+      7,
+      9,
+      11,
+      13,
+      15,
+      17,
+      19
+    ],
+    "classFeatLevels": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16,
+      18,
+      20
+    ],
+    "proficiencies": {
+      "perception": 1,
+      "saves": {
+        "fortitude": 2,
+        "reflex": 1,
+        "will": 2
+      },
+      "weapons": {
+        "advanced": 0,
+        "martial": 0,
+        "other": {
+          "name": "",
+          "rank": 0
+        },
+        "simple": 1,
+        "unarmed": 1
+      },
+      "armor": {
+        "heavy": 0,
+        "light": 0,
+        "medium": 0,
+        "unarmored": 1
+      }
+    },
+    "spellcasting": 1,
+    "desc": "You can magically beckon a powerful being called an eidolon to your side, serving as the mortal conduit that anchors it to the world. Whether your eidolon is a friend, a servant, or even a personal god, your connection to it marks you as extraordinary, shaping the course of your life dramatically. Summoner",
+    "source": "Pathfinder Secrets of Magic",
+    "tier": "tier2"
+  },
+  {
     "id": "swashbuckler",
     "slug": "swashbuckler",
     "foundryId": "uJ5aCzlw34GGdWjp",
@@ -1438,6 +1636,77 @@
     "desc": "Many warriors rely on brute force, weighty armor, or cumbersome weapons. For you, battle is a dance where you move among foes with style and grace. You dart among combatants with flair and land powerful finishing moves with a flick of the wrist and a flash of the blade, all while countering attacks with elegant ripostes that keep enemies off balance. Harassing and thwarting your foes lets you charm fate and cheat death time and again with aplomb and plenty of flair. Swashbuckler",
     "source": "Pathfinder Player Core 2",
     "tier": "tier1"
+  },
+  {
+    "id": "thaumaturge",
+    "slug": "thaumaturge",
+    "foundryId": "Y5GsHqzCzJlKka6x",
+    "name": "Thaumaturge",
+    "hp": 8,
+    "keyAbility": [
+      "cha"
+    ],
+    "trainedSkills": {
+      "value": [
+        "arcana",
+        "nature",
+        "occultism",
+        "religion"
+      ],
+      "additional": 3
+    },
+    "skillIncreaseLevels": [
+      3,
+      5,
+      7,
+      9,
+      11,
+      13,
+      15,
+      17,
+      19
+    ],
+    "classFeatLevels": [
+      1,
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16,
+      18,
+      20
+    ],
+    "proficiencies": {
+      "perception": 2,
+      "saves": {
+        "fortitude": 2,
+        "reflex": 1,
+        "will": 2
+      },
+      "weapons": {
+        "advanced": 0,
+        "martial": 1,
+        "other": {
+          "name": "",
+          "rank": 0
+        },
+        "simple": 1,
+        "unarmed": 1
+      },
+      "armor": {
+        "heavy": 0,
+        "light": 1,
+        "medium": 1,
+        "unarmored": 1
+      }
+    },
+    "spellcasting": 0,
+    "desc": "The world is full of the unexplainable: ancient magic, dead gods, and even stranger things. In response, you've scavenged the best parts of every magical tradition and built up a collection of esoterica—a broken holy relic here, a sprig of mistletoe there—that you can use to best any creature by exploiting their weaknesses and vulnerabilities. The mystic implement you carry is both badge and weapon, its symbolic weight helping you bargain with and subdue the supernatural. Every path to power has its restrictions and costs, but you turn them all to your advantage. You're a thaumaturge, and you work wonders. Thaumaturge",
+    "source": "Pathfinder Dark Archive (Remastered)",
+    "tier": "tier2"
   },
   {
     "id": "witch",

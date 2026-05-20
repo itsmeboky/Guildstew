@@ -47,7 +47,9 @@ const TIER_2_SOURCES = new Set([
   'Pathfinder Battlecry!',
   'Pathfinder War of Immortals',
   'Pathfinder Dark Archive',
+  'Pathfinder Dark Archive (Remastered)',
   'Pathfinder Rage of Elements',
+  'Pathfinder Secrets of Magic',
 ]);
 
 // Tier 3: NEVER ship (Lost Omens, APs, Society, OGL legacy, iconics)
