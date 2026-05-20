@@ -42,6 +42,7 @@ import {
   SKILLS,
 } from '../../data/index.js';
 import { getClassTip } from '../../content/classTips.js';
+import { getSubclassTip } from '../../content/subclassTips.js';
 import { getRecommended } from '../../content/recommendedBuilds.js';
 import { getSubclassOverlay, applySubclassOverlay } from '../../content/subclassOverlays.js';
 import { STEPS } from '../../config/steps.js';
@@ -340,6 +341,20 @@ const StepClass = ({ data, update, openDeityModal }) => {
                 );
               })}
             </div>
+            {(() => {
+              const subTip = picked ? getSubclassTip(selected.slug, picked) : null;
+              if (!subTip) return null;
+              return (
+                <div className="bg-pf-brass/5 border-l-2 border-pf-brass pl-4 pr-4 py-3 mt-3">
+                  <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-1">
+                    {sub.label} Tip
+                  </p>
+                  <p className="font-body text-sm text-pf-parchment leading-relaxed italic">
+                    <AnnotatedText text={subTip} />
+                  </p>
+                </div>
+              );
+            })()}
           </div>
         );
       })()}
