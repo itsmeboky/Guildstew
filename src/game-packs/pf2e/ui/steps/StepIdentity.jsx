@@ -118,7 +118,7 @@ const StepIdentity = ({ data, update, setData }) => {
       },
       'iconic-wizard': {
         ...base, name: 'Ezren', ancestry: 'human', heritage: 'skilled-human', background: 'scholar',
-        class: 'wizard', subclass: 'spell-substitution', classFeats: { 1: 'Reach Spell' },
+        class: 'wizard', subclass: 'school-of-ars-grammatica', classFeats: { 1: 'Reach Spell' },
         trainedSkills: ['Society', 'Arcana'], arcaneBond: 'staff',
         boostBatches: { 1: { Constitution: 1, Wisdom: 1, Dexterity: 1 } },
       },

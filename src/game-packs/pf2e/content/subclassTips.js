@@ -119,11 +119,10 @@ export const SUBCLASS_TIPS = {
     'wandering-reverie': "The dreamer. The subconscious is by definition buried below the surface — only by stripping away the clamor of everyday thought can you bring this deeper, more chaotic part of your mind to bear. Through sleep, self-hypnosis, or special exercises to empty your mind, you've found access to a state of free association that channels psychic power more reliably than conscious effort ever could. Key ability is [[charisma|CHA]]. Thoughtforms come from imagination — daydream impressions of small creatures bringing you objects as you telekinetically attract them, or a blink where you've teleported without realizing it. Spell manifestations have surreal, indistinct qualities; details fade from observers' memory like sensations from a dream. Psyche Action: Fade into Daydreams (become concealed until the start of your next turn). Pairs with builds emphasizing [[stealth|stealth]], illusion, or chaotic-feeling magic. Best for players who want the 'sleepwalking psychic' fantasy — power without trying. Skip if you want clear cause-and-effect magic — Wandering Reverie is by design hazy.",
   },
 
-  // ─── WIZARD ARCANE SCHOOLS (picker uses pre-Remaster theses) ───────────
-  // Picker IDs today are theses (spell-blending, spell-substitution,
-  // familiar-attunement, staff-nexus). These school tips key off the
-  // canonical Foundry slugs and sit dormant until the picker is rewired
-  // to use Remaster schools.
+  // ─── WIZARD ARCANE SCHOOLS ─────────────────────────────────────────────
+  // Picker uses the 8 Remaster school slugs verbatim. Theses are a
+  // separate selection layered on at later levels via class feats and
+  // not exposed as L1 subclasses.
   wizard: {
     'school-of-ars-grammatica': "Runes, wards, and the written word. Your school studies the fundamental components of magic itself — how spells are written, structured, dispelled. Source: Player Core. Curriculum emphasizes Message and Sigil [[cantrip|cantrips]], plus utility/defensive spells (Disguise Magic, Dispel Magic, Spellwrack). Initial school spell is Protective Wards — a sustained ward that grants [[armor-class|AC]] bonuses. Pairs with builds that want anti-magic counterplay, magical countermeasures, and broad utility. Best for players who want the 'master scribe' fantasy — magic as language, runes as power. Skip if you want flashy direct damage — Ars Grammatica leans subtle and structural.",
     'school-of-battle-magic': "The combat wizard. Your school studies destruction, defense, and battlefield magic. Source: Player Core. Curriculum focuses on damage and protection: Force Barrage, Fireball, Howling Blizzard, Chain Lightning, Disintegrate, Falling Stars. [[cantrip|Cantrips]] include Shield and Telekinetic Projectile. Initial school spell is Force Bolt — a reliable damage [[focus-spell|focus spell]] that doesn't roll to hit. Pairs with offensive caster builds and parties expecting frequent combat. Best for players who want the 'evoker' or 'war mage' fantasy — wizard as artillery. Skip if you want utility/social magic — Battle Magic is built for blasting.",
