@@ -394,6 +394,48 @@
     }
   },
 
+  "exemplar": {
+    "subclasses": {
+      "label": "Body Ikon",
+      "help": "An ikon imbued into your body itself — can't be stolen or disarmed. Pick ONE body ikon, ONE worn ikon, and ONE weapon ikon at level 1.",
+      "options": [
+        { "id": "eye-catching-spot",    "name": "Eye-Catching Spot",    "desc": "Beauty as weapon. Imbued on the face. −1 circumstance to melee attacks against you. Transcendence: Captivating Charm fascinates a target." },
+        { "id": "gaze-sharp-as-steel",  "name": "Gaze Sharp as Steel",  "desc": "Eyes that see everything. +1 status to Perception, +2 status to AC vs ranged. Transcendence: A Moment Unending adds precision damage." },
+        { "id": "scar-of-the-survivor", "name": "Scar of the Survivor", "desc": "Mark of the unbreakable. Diehard feat + +1 status to Fortitude saves. Transcendence: No Scar but This regains HP." },
+        { "id": "skin-hard-as-horn",    "name": "Skin Hard as Horn",    "desc": "Living armor. Resistance to bludgeoning/slashing/piercing (chosen daily). Transcendence: Crash against Me upgrades resistance and disrupts attackers." }
+      ]
+    },
+    "subclassSecondary": {
+      "label": "Worn Ikon",
+      "help": "An ikon worn as gear — a belt, cloak, bracers, sash, or similar. Choose one.",
+      "options": [
+        { "id": "bands-of-imprisonment",   "name": "Bands of Imprisonment",  "desc": "Discipline through restraint. +1 status to Will saves, mental resistance. Transcendence: Break Free combines Escape, Stride, and Strike." },
+        { "id": "fetching-bangles",        "name": "Fetching Bangles",       "desc": "Charm magnetism. Aura disrupts enemy retreat. Transcendence: Embrace of Destiny pulls a target adjacent to you." },
+        { "id": "horn-of-plenty",          "name": "Horn of Plenty",         "desc": "Blessed vessel. Stores potions/elixirs and produces a temporary elixir of life daily. Transcendence: Feed the Masses transfers to an ally at range." },
+        { "id": "mirrored-aegis",          "name": "Mirrored Aegis",         "desc": "Reflective shield. 15-ft aura grants +1 status to AC for you and allies. Transcendence: Raise the Walls layers ethereal shields on you and an ally." },
+        { "id": "pelt-of-the-beast",       "name": "Pelt of the Beast",      "desc": "Wild's protection. Daily-chosen energy resistance (cold/electricity/fire/poison/sonic). Transcendence: Survive the Wilds shares the resistance as aura." },
+        { "id": "skybearers-belt",         "name": "Skybearer's Belt",       "desc": "Strength to lift the heavens. Bonus on Athletics maneuvers against creatures up to two sizes larger. Transcendence: Bear Allies' Burdens carries allies during your Stride." },
+        { "id": "thousand-league-sandals", "name": "Thousand-League Sandals","desc": "Runner's gift. +10-ft status bonus to Speed. Transcendence: Marathon Dash grants nearby allies a free Stride as a reaction." },
+        { "id": "victors-wreath",          "name": "Victor's Wreath",        "desc": "Mark of triumph. 15-ft aura grants allies +1 status bonus to attack rolls. Transcendence: One Moment till Glory grants re-saves with bonus." }
+      ]
+    },
+    "subclassTertiary": {
+      "label": "Weapon Ikon",
+      "help": "An ikon embedded in your signature weapon. Choose one — its damage type and group constrain the weapon you wield.",
+      "options": [
+        { "id": "barrows-edge",          "name": "Barrow's Edge",         "desc": "Vampiric blade (slashing or piercing melee). +1 spirit/die; +3/die vs creatures below half HP. Transcendence: Drink of my Foes heals half damage dealt." },
+        { "id": "gleaming-blade",        "name": "Gleaming Blade",        "desc": "Radiant cutter (sword/knife group or slashing unarmed). +2 spirit/die. Transcendence: Flowing Spirit Strike merges two attacks into one damage instance." },
+        { "id": "hands-of-the-wildling", "name": "Hands of the Wildling", "desc": "Bestial fists (free-hand or unarmed). +1 spirit splash/die (immune to your own). Transcendence: Feral Swing 15-ft cone with Strike damage as spirit." },
+        { "id": "mortal-harvest",        "name": "Mortal Harvest",        "desc": "Reaper's tool (sickle, axe, flail, polearm). 1 persistent spirit/die on hits. Transcendence: Reap the Field strides then strikes a different target." },
+        { "id": "noble-branch",          "name": "Noble Branch",          "desc": "Humble staff (staff, bo staff, spear, polearm). +2 spirit/die. Transcendence: Strike, Breathe, Rend adds rending damage equal to weapon dice." },
+        { "id": "shadow-sheath",         "name": "Shadow Sheath",         "desc": "Infinite armory (thrown light weapon). Free-action draws of weapon copies; +2 spirit/die (+3 vs off-guard). Transcendence: Liar's Hidden Blade retries on a missed Strike." },
+        { "id": "starshot",              "name": "Starshot",              "desc": "Cosmic projectile (ranged weapon). +1 spirit splash/die. Transcendence: Giant-Felling Comet basic-Reflex 5-ft burst within 60 ft." },
+        { "id": "titans-breaker",        "name": "Titan's Breaker",       "desc": "Mountain-shatterer (club/hammer/axe or bludgeoning unarmed). +2 spirit/die; bypasses Hardness equal to your level. Transcendence: Fracture Mountains crit-scales against constructs." },
+        { "id": "unfailing-bow",         "name": "Unfailing Bow",         "desc": "Guided arrow (ranged weapon). +1 spirit/die, +1d4 spirit/die on crit. Transcendence: Arrow Splits Arrow repeats the prior d20 result." }
+      ]
+    }
+  },
+
   "animist": {
     "subclasses": {
       "label": "Primary Apparition",
