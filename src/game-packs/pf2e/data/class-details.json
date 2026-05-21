@@ -39,7 +39,8 @@
         { "id": "ruffian",            "name": "Ruffian",            "desc": "Brutal back-alley enforcer. Wear medium armor and use martial weapons for sneak attack. STR-favored." },
         { "id": "scoundrel",          "name": "Scoundrel",          "desc": "Charming liar. CHA-based; bonus to Deception and Diplomacy; expert of misdirection and feint." },
         { "id": "thief",              "name": "Thief",              "desc": "Classic burglar. Use DEX for melee damage instead of STR. Trained in Thievery as bonus skill." },
-        { "id": "eldritch-trickster", "name": "Eldritch Trickster", "desc": "Mixes spellcasting and sneak attack. Caster multiclass synergies." }
+        { "id": "eldritch-trickster", "name": "Eldritch Trickster", "desc": "Mixes spellcasting and sneak attack. Caster multiclass synergies." },
+        { "id": "avenger",            "name": "Avenger",            "desc": "Church-trained holy assassin. Sanctified to your deity, Sneak Attack church-defined targets. Source: War of Immortals." }
       ]
     },
     "proficiencies": {
@@ -78,7 +79,8 @@
         { "id": "fury",         "name": "Fury Instinct",        "desc": "Pure unfocused rage. Bonus class feat at level 1 in exchange for no thematic abilities. The most freeform Instinct." },
         { "id": "giant",        "name": "Giant Instinct",       "desc": "Channel titanic forebears. Wield weapons two sizes larger than you. Massive damage at a cost to AC during rage." },
         { "id": "spirit",       "name": "Spirit Instinct",      "desc": "Channel ancestor spirits. Your rage adds negative or positive damage and you can disrupt undead." },
-        { "id": "superstition", "name": "Superstition Instinct","desc": "Anti-magic fury. Bonus to saves against spells while raging; you can't willingly receive magical help." }
+        { "id": "superstition", "name": "Superstition Instinct","desc": "Anti-magic fury. Bonus to saves against spells while raging; you can't willingly receive magical help." },
+        { "id": "bloodrager",   "name": "Bloodrager",            "desc": "Drink supernatural blood to fuel arcane or divine magic. Blood Rage adds persistent bleed damage; the Bloodrager archetype unlocks a CHA-based spell repertoire. Source: War of Immortals." }
       ]
     },
     "proficiencies": {
@@ -97,7 +99,8 @@
         { "id": "enigma",   "name": "Enigma",   "desc": "Scholar of mysteries. INT-favored. Gain Bardic Lore — automatic checks to recall obscure knowledge." },
         { "id": "maestro",  "name": "Maestro",  "desc": "Classic inspirer. Composition cantrip Inspire Courage. CHA-favored — the bard everyone thinks of." },
         { "id": "polymath", "name": "Polymath", "desc": "Versatile gatherer of lore. Gain Versatile Performance — sub Performance for other skills socially. Eclectic spell list." },
-        { "id": "warrior",  "name": "Warrior",  "desc": "Martial troubadour. Trained in martial weapons. Composition cantrip Lingering Composition stretches inspirations." }
+        { "id": "warrior",  "name": "Warrior",  "desc": "Martial troubadour. Trained in martial weapons. Composition cantrip Lingering Composition stretches inspirations." },
+        { "id": "zoophonia","name": "Zoophonia","desc": "Inspiration from animal voices — birdsong, wolf howls, trumpeting elephants. Zoophonic Communication lets you converse with animals. Source: Howl of the Wild." }
       ]
     },
     "proficiencies": {
@@ -117,7 +120,10 @@
         { "id": "animal-order",  "name": "Animal Order",  "desc": "Bond with beasts. Gain a young animal companion at level 1 and the Heal Animal focus spell. Trained in Athletics. Best for the player who wants a furry battle partner." },
         { "id": "leaf-order",    "name": "Leaf Order",    "desc": "Steward of growing things. Gain a leshy familiar and the Goodberry focus spell. Trained in Diplomacy. The naturalist healer fantasy." },
         { "id": "storm-order",   "name": "Storm Order",   "desc": "Channel weather and the sky. Gain the Tempest Surge focus spell. Trained in Acrobatics. Reach across the battlefield with lightning and gust." },
-        { "id": "untamed-order", "name": "Untamed Order", "desc": "Walk as a beast. Gain the Untamed Form focus spell — shapeshift into wild forms early and often. Trained in Nature. The shapeshifter path." }
+        { "id": "untamed-order", "name": "Untamed Order", "desc": "Walk as a beast. Gain the Untamed Form focus spell — shapeshift into wild forms early and often. Trained in Nature. The shapeshifter path." },
+        { "id": "flame-order",   "name": "Flame Order",   "desc": "Channel the elemental plane of Fire. Fire-themed focus spells and scaling fire resistance. Source: Rage of Elements." },
+        { "id": "stone-order",   "name": "Stone Order",   "desc": "Channel the elemental plane of Earth. Stone-themed focus spells and defensive bonuses on grounded terrain. Source: Rage of Elements." },
+        { "id": "wave-order",    "name": "Wave Order",    "desc": "Channel the elemental plane of Water. Water-themed focus spells with bonuses in or near water. Source: Rage of Elements." }
       ]
     },
     "proficiencies": {
