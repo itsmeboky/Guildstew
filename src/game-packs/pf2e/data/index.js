@@ -84,6 +84,7 @@ export { default as CASTING_TRADITION_BY_CLASS } from './casting-traditions.json
 export { default as CLASS_KITS } from './class-kits.json';
 export { default as EQUIPMENT_CATALOG } from './equipment-catalog.json';
 export { default as ANCESTRY_GRANTED_ITEMS } from './ancestry-granted-items.json';
+export { default as IKON_GRANTED_ITEMS } from './ikon-granted-items.json';
 export { default as DEITY_PRESETS } from './deity-presets.js';
 
 // Level tables (arrays + functions)
