@@ -430,10 +430,15 @@ export const RECOMMENDED_BUILDS = {
 // recommendation sections (boosts, skills, classFeats, startingItems)
 // stay class-wide because they don't vary with subclass at level 1.
 //
-// Covers the cases where subclass selection materially changes the
-// recommended spell list — primarily classes whose subclass determines
-// spell tradition. Other classes can fall through to the class-wide
-// .spells when no override is registered for the selected subclass.
+// Two categories of override:
+// - Tradition-changing subclasses (Sorcerer bloodlines, Witch patrons) —
+//   the subclass picks the spell tradition entirely; recommendation
+//   must match the resulting tradition's spell list.
+// - Theme-aligned subclasses (Cleric doctrines, Wizard schools, Druid
+//   orders, Bard muses, Psychic conscious minds, Oracle mysteries,
+//   Animist apparitions) — single tradition, but each subclass leans
+//   into a different theme. Picks emphasize signature spells of that
+//   theme on top of the base tradition staples.
 export const SPELLS_BY_SUBCLASS = {
   // Sorcerer bloodlines — each picks a tradition; cantrip and first-rank
   // recs match the tradition's signature staples.
@@ -462,6 +467,92 @@ export const SPELLS_BY_SUBCLASS = {
     'devourer-of-decay':  { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['enfeeble','heal'] },
     'ripple-in-the-deep': { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['dizzying-colors','heal'] },
     'whisper-of-wings':   { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['gentle-landing','heal'] },
+  },
+
+  // Cleric doctrines — both Divine. Cloistered leans support-utility,
+  // Warpriest leans martial-support.
+  cleric: {
+    cloistered: { cantrips: ['guidance','light','shield','stabilize','forbidding-ward'], first: ['heal','bless'] },
+    warpriest:  { cantrips: ['guidance','light','shield','stabilize','divine-lance'],    first: ['heal','spiritual-armament'] },
+  },
+
+  // Druid orders — all Primal. Each order's flavor pulls a different
+  // signature cantrip + first-rank pick.
+  druid: {
+    'animal-order':  { cantrips: ['vitality-lash','light','detect-magic','stabilize','tangle-vine'], first: ['heal','runic-body'] },
+    'leaf-order':    { cantrips: ['vitality-lash','light','detect-magic','shield','stabilize'],      first: ['heal','protector-tree'] },
+    'storm-order':   { cantrips: ['electric-arc','light','detect-magic','shield','stabilize'],       first: ['heal','gust-of-wind'] },
+    'untamed-order': { cantrips: ['vitality-lash','light','detect-magic','tangle-vine','stabilize'], first: ['heal','runic-body'] },
+    'flame-order':   { cantrips: ['ignition','light','detect-magic','shield','stabilize'],           first: ['heal','sure-strike'] },
+    'stone-order':   { cantrips: ['vitality-lash','light','detect-magic','shield','stabilize'],      first: ['heal','hydraulic-push'] },
+    'wave-order':    { cantrips: ['frostbite','light','detect-magic','stabilize','soothing-mist'],   first: ['heal','hydraulic-push'] },
+  },
+
+  // Bard muses — all Occult. Each muse's Muse Spell anchors the first-
+  // rank pick; cantrips pick from the Occult cantrip pool by theme.
+  bard: {
+    enigma:    { cantrips: ['courageous-anthem','daze','light','detect-magic','telekinetic-hand'],     first: ['sure-strike','phantasmal-minion'] },
+    maestro:   { cantrips: ['courageous-anthem','daze','light','shield','stabilize'],                  first: ['soothe','heal'] },
+    polymath:  { cantrips: ['courageous-anthem','daze','light','detect-magic','prestidigitation'],     first: ['phantasmal-minion','charm'] },
+    warrior:   { cantrips: ['courageous-anthem','daze','light','shield','telekinetic-projectile'],     first: ['fear','sure-strike'] },
+    zoophonia: { cantrips: ['courageous-anthem','daze','light','detect-magic','telekinetic-hand'],     first: ['summon-animal','heal'] },
+  },
+
+  // Psychic conscious minds — all Occult. Amped cantrips matter most;
+  // pick the conscious-mind-signature cantrip plus thematic staples.
+  psychic: {
+    'the-distant-grasp':    { cantrips: ['telekinetic-projectile','telekinetic-hand','daze','detect-magic','shield'], first: ['force-barrage','phantasmal-minion'] },
+    'the-infinite-eye':     { cantrips: ['daze','detect-magic','light','telekinetic-hand','prestidigitation'],        first: ['sure-strike','soothe'] },
+    'the-oscillating-wave': { cantrips: ['frostbite','ignition','daze','detect-magic','shield'],                       first: ['acid-grip','force-barrage'] },
+    'the-silent-whisper':   { cantrips: ['daze','detect-magic','light','shield','telekinetic-hand'],                   first: ['charm','fear'] },
+    'the-tangible-dream':   { cantrips: ['figment','daze','light','detect-magic','prestidigitation'],                  first: ['phantasmal-minion','illusory-disguise'] },
+    'the-unbound-step':     { cantrips: ['phase-bolt','daze','detect-magic','light','shield'],                         first: ['force-barrage','sure-strike'] },
+  },
+
+  // Oracle mysteries — all Divine, spontaneous. Each mystery's
+  // revelation theme guides the picks.
+  oracle: {
+    ancestors: { cantrips: ['guidance','daze','light','shield','stabilize'],            first: ['bless','soothe'] },
+    battle:    { cantrips: ['guidance','shield','light','stabilize','divine-lance'],    first: ['sure-strike','spiritual-armament'] },
+    bones:     { cantrips: ['void-warp','guidance','light','shield','stabilize'],       first: ['harm','spirit-link'] },
+    cosmos:    { cantrips: ['guidance','light','detect-magic','shield','stabilize'],    first: ['bless','sure-strike'] },
+    flames:    { cantrips: ['ignition','guidance','light','shield','stabilize'],        first: ['heal','sure-strike'] },
+    life:      { cantrips: ['guidance','light','shield','stabilize','vitality-lash'],   first: ['heal','bless'] },
+    lore:      { cantrips: ['guidance','daze','light','detect-magic','shield'],         first: ['sure-strike','soothe'] },
+    tempest:   { cantrips: ['electric-arc','guidance','light','shield','stabilize'],    first: ['heal','gust-of-wind'] },
+    time:      { cantrips: ['guidance','daze','light','detect-magic','shield'],         first: ['sure-strike','soothe'] },
+  },
+
+  // Animist apparitions — tradition varies (mostly Primal with some
+  // Divine and Occult mixing). Each apparition's vessel spell anchors
+  // the spell list flavor; first-rank picks pull from the apparition's
+  // own list per the canonical content.
+  animist: {
+    'crafter-in-the-vault':            { cantrips: ['guidance','light','telekinetic-hand','shield','stabilize'],  first: ['mending','heal'] },
+    'custodian-of-groves-and-gardens': { cantrips: ['guidance','vitality-lash','light','shield','stabilize'],     first: ['heal','protector-tree'] },
+    'echo-of-lost-moments':            { cantrips: ['guidance','daze','light','shield','stabilize'],              first: ['sure-strike','soothe'] },
+    'impostor-in-hidden-places':       { cantrips: ['guidance','daze','light','shield','stabilize'],              first: ['ill-omen','fear'] },
+    'lurker-in-devouring-dark':        { cantrips: ['frostbite','guidance','light','shield','stabilize'],          first: ['acid-grip','heal'] },
+    'monarch-of-the-fey-courts':       { cantrips: ['guidance','daze','light','shield','stabilize'],              first: ['charm','bless'] },
+    'reveler-in-lost-glee':            { cantrips: ['guidance','daze','light','shield','stabilize'],              first: ['dizzying-colors','soothe'] },
+    'stalker-in-darkened-boughs':      { cantrips: ['guidance','tangle-vine','light','shield','stabilize'],       first: ['sure-strike','heal'] },
+    'steward-of-stone-and-fire':       { cantrips: ['ignition','guidance','light','shield','stabilize'],          first: ['heal','sure-strike'] },
+    'vanguard-of-roaring-waters':      { cantrips: ['frostbite','guidance','light','shield','stabilize'],         first: ['hydraulic-push','heal'] },
+    'witness-to-ancient-battles':      { cantrips: ['guidance','light','shield','stabilize','divine-lance'],      first: ['sure-strike','bless'] },
+  },
+
+  // Wizard schools — all Arcane. Each school's curriculum + initial
+  // school spell guides the picks; cantrips lean into the curriculum's
+  // theme.
+  wizard: {
+    'school-of-ars-grammatica':         { cantrips: ['message','sigil','daze','detect-magic','forbidding-ward'], first: ['dispel-magic','sure-strike'] },
+    'school-of-battle-magic':           { cantrips: ['telekinetic-projectile','shield','daze','detect-magic','light'], first: ['force-barrage','fear'] },
+    'school-of-civic-wizardry':         { cantrips: ['telekinetic-hand','light','detect-magic','shield','prestidigitation'], first: ['hydraulic-push','summon-construct'] },
+    'school-of-mentalism':              { cantrips: ['daze','figment','light','detect-magic','prestidigitation'], first: ['charm','sleep'] },
+    'school-of-protean-form':           { cantrips: ['daze','light','detect-magic','telekinetic-hand','prestidigitation'], first: ['enlarge','pest-form'] },
+    'school-of-the-boundary':           { cantrips: ['telekinetic-projectile','daze','light','detect-magic','shield'], first: ['summon-undead','sure-strike'] },
+    'school-of-unified-magical-theory': { cantrips: ['daze','light','detect-magic','shield','prestidigitation'], first: ['force-barrage','fear'] },
+    'elemental-school':                 { cantrips: ['ignition','daze','light','detect-magic','shield'], first: ['force-barrage','hydraulic-push'] },
   },
 };
 
