@@ -20,7 +20,16 @@ import languagesData from './languages.json';
 
 // Re-shaped exports that the UI consumes
 export const ANCESTRIES = ancestriesData.filter(a => a.tier === 'tier1' || a.tier === 'tier2');
-export const CLASSES = classesData.filter(c => c.tier === 'tier1');
+// Tier filter: ship every class the importer keeps (tier1 = Player Core,
+// tier2 = expansion books that pass flavor scrub). Tier3 was already
+// excluded at import time.
+//
+// License filter: ORC-only. OGL classes (Kineticist, Magus, Summoner)
+// remain in classes.json for reference / future scope changes but are
+// hidden from the live picker.
+export const CLASSES = classesData.filter(c =>
+  (c.tier === 'tier1' || c.tier === 'tier2') && c.license === 'ORC'
+);
 export const BACKGROUNDS = backgroundsData;
 export const DEITIES = deitiesData;
 export const CLERIC_DOMAINS = domainsData;
