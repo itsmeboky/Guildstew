@@ -138,5 +138,248 @@
       "classDC": "trained",
       "primalSpellcasting": "trained"
     }
+  },
+
+  "champion": {
+    "subclasses": {
+      "label": "Cause",
+      "help": "Your divine calling. Each cause sets your tenets, anathema, and Champion's Reaction.",
+      "options": [
+        { "id": "justice",     "name": "Justice",     "desc": "Tenets of Good. Retributive Strike when an ally near you is hit. The shining knight." },
+        { "id": "liberation",  "name": "Liberation",  "desc": "Tenets of Good plus anti-tyranny. Liberating Step frees an ally from a grab or restriction as a reaction." },
+        { "id": "redemption",  "name": "Redemption",  "desc": "Tenets of Good plus mercy. Glimpse of Redemption makes the attacker choose: enfeebled or resistance-reduced damage." },
+        { "id": "grandeur",    "name": "Grandeur",    "desc": "Tenets of Good as inspiring example. Bring humility to other realms; bolster allies via shining presence." },
+        { "id": "iniquity",    "name": "Iniquity",    "desc": "Tenets of Evil. Dishonorable, dishonest, breaks false hopes of kindness. Chaotic-evil mirror of Justice." },
+        { "id": "obedience",   "name": "Obedience",   "desc": "Tenets of Evil through control. Enforce proper hierarchies; punish disobedience. Lawful-evil cause." },
+        { "id": "desecration", "name": "Desecration", "desc": "Tenets of Evil through corruption. Defile holy ground, holy creatures, sacred objects. Spread malign influence." }
+      ]
+    }
+  },
+
+  "ranger": {
+    "subclasses": {
+      "label": "Hunter's Edge",
+      "help": "How you specialize when hunting prey. Sets your combat-style focus.",
+      "options": [
+        { "id": "flurry",     "name": "Flurry",     "desc": "Multi-attack specialist. MAP −3/−6 instead of −5/−10 against your hunted prey." },
+        { "id": "outwit",     "name": "Outwit",     "desc": "Tactical specialist. +1 AC against prey AND +2 to Deception, Intimidation, Stealth, Recall Knowledge vs prey." },
+        { "id": "precision",  "name": "Precision",  "desc": "Big-hit specialist. First hit on your prey each round deals 1d8 bonus damage (scales with level)." },
+        { "id": "vindicator", "name": "Vindicator", "desc": "Divine inquisitor. +1 status to spell attack vs prey; learn the Vindicator's Mark warden spell. Source: War of Immortals." }
+      ]
+    }
+  },
+
+  "swashbuckler": {
+    "subclasses": {
+      "label": "Style",
+      "help": "How you generate Panache in combat. Each style ties Panache to a different skill.",
+      "options": [
+        { "id": "battledancer", "name": "Battledancer", "desc": "Performance-fueled. Tumble Through and theatrical actions generate Panache. Trained in Performance." },
+        { "id": "braggart",     "name": "Braggart",     "desc": "Intimidation-fueled. Demoralize generates Panache. Trained in Intimidation." },
+        { "id": "fencer",       "name": "Fencer",       "desc": "Acrobatics-fueled. Tumble Through generates Panache. Trained in Acrobatics." },
+        { "id": "gymnast",      "name": "Gymnast",      "desc": "Athletics-fueled. Grapple/Shove/Trip/Disarm generate Panache. Trained in Athletics." },
+        { "id": "wit",          "name": "Wit",          "desc": "Diplomacy-fueled. Bon Mot generates Panache. Trained in Diplomacy." },
+        { "id": "rascal",       "name": "Rascal",       "desc": "Deception-fueled. Feint generates Panache. Trained in Deception." }
+      ]
+    }
+  },
+
+  "magus": {
+    "subclasses": {
+      "label": "Hybrid Study",
+      "help": "Your spell-and-steel combat style. Each Hybrid Study tunes Spellstrike to a different weapon profile.",
+      "options": [
+        { "id": "inexorable-iron", "name": "Inexorable Iron", "desc": "Two-handed STR melee. Heaviest hits among Magus options." },
+        { "id": "laughing-shadow", "name": "Laughing Shadow", "desc": "One-handed DEX duelist with light armor and shadow flavor. Fast and slippery." },
+        { "id": "sparkling-targe", "name": "Sparkling Targe", "desc": "Shield-and-spell. Shield Block reactive defense with full Spellstrike access. The most durable Magus." },
+        { "id": "starlit-span",    "name": "Starlit Span",    "desc": "Bow-focused Spellstrike. Cast through ranged attacks at full bow range." },
+        { "id": "twisting-tree",   "name": "Twisting Tree",   "desc": "Two-handed STR/DEX flexibility (quarterstaff iconic). Defensive versatility with damage." }
+      ]
+    }
+  },
+
+  "oracle": {
+    "subclasses": {
+      "label": "Mystery",
+      "help": "The divine source that contacted you. Each mystery has a curse that escalates as you spend its power.",
+      "options": [
+        { "id": "ancestors", "name": "Ancestors", "desc": "Bound to ancestral spirits. Curse: spirits possess you, making you clumsy. Trained in Occultism." },
+        { "id": "battle",    "name": "Battle",    "desc": "The spirit of warfare. Martial proficiencies unusual for a caster — medium/heavy armor + weapon group. Trained in Athletics." },
+        { "id": "bones",     "name": "Bones",     "desc": "Death and undeath. Curse: your body slowly decays. Trained in Medicine." },
+        { "id": "cosmos",    "name": "Cosmos",    "desc": "Celestial bodies and the void. Resistance to physical damage scaling with level. Trained in Nature." },
+        { "id": "flames",    "name": "Flames",    "desc": "Sacred and destructive fire. Curse: persistent fire damage at higher levels. Trained in Acrobatics." },
+        { "id": "life",      "name": "Life",      "desc": "Positive energy and healing. Curse: your healing magic sympathetically harms you. Trained in Medicine." },
+        { "id": "lore",      "name": "Lore",      "desc": "Knowledge itself. Extra spells in your repertoire — you know more magic than other oracles. Trained in Occultism + a Lore." },
+        { "id": "tempest",   "name": "Tempest",   "desc": "Storms in wind and water. Add electricity damage to physical air/water spell damage. Trained in Nature." },
+        { "id": "time",      "name": "Time",      "desc": "Past, present, future. Brief precognitive glimpses and minor time-manipulation. Trained in Society. Source: Dark Archive Remastered." }
+      ]
+    }
+  },
+
+  "witch": {
+    "subclasses": {
+      "label": "Patron",
+      "help": "The mysterious entity that grants your magic through your familiar. Determines your spell tradition.",
+      "options": [
+        { "id": "faiths-flamekeeper", "name": "Faith's Flamekeeper",    "desc": "Divine patron — covert angel, aeon, or sinister celestial. Patron skill: Religion." },
+        { "id": "the-inscribed-one",  "name": "The Inscribed One",      "desc": "Arcane patron of glyphs and runes — likely a powerful archmage or abandoned artifact. Patron skill: Arcana." },
+        { "id": "the-resentment",     "name": "The Resentment",         "desc": "Occult patron of grudges and envy — a hag ousted from coven, lower-rank demon, or quasi-divinity. Patron skill: Occultism." },
+        { "id": "silence-in-snow",    "name": "Silence in Snow",        "desc": "Primal patron of winter — winter hag, ice yai, or spirit of the cold. Patron skill: Nature." },
+        { "id": "spinner-of-threads", "name": "Spinner of Threads",     "desc": "Occult patron of fate and time — norn, herald of Pharasma, or time-spanning entity. Patron skill: Occultism." },
+        { "id": "starless-shadow",    "name": "Starless Shadow",        "desc": "Occult patron of darkness — creature of the Netherworld or forgotten spirit of twilight. Patron skill: Occultism." },
+        { "id": "wilding-steward",    "name": "Wilding Steward",        "desc": "Primal patron of wilderness — dryad queen or primeval beast defending nature. Patron skill: Nature." },
+        { "id": "devourer-of-decay",  "name": "Devourer of Decay",      "desc": "Primal patron of rot and renewal — arboreal, fungus, or psychopomp. Patron skill: Nature. Source: Howl of the Wild." },
+        { "id": "ripple-in-the-deep", "name": "Ripple in the Deep",     "desc": "Primal patron of leviathans and the deep — kraken or ancient ocean denizen. Patron skill: Nature. Source: Howl of the Wild." },
+        { "id": "whisper-of-wings",   "name": "Whisper of Wings",       "desc": "Primal patron of sky and air. Wings and swirling winds. Patron skill: Nature. Source: Howl of the Wild." }
+      ]
+    }
+  },
+
+  "sorcerer": {
+    "subclasses": {
+      "label": "Bloodline",
+      "help": "The ancestral source of your innate magic. Determines your spell tradition and signature spells.",
+      "options": [
+        { "id": "bloodline-aberrant",  "name": "Aberrant",  "desc": "Something ancient and unknowable speaks to you from beyond the stars. Occult tradition." },
+        { "id": "bloodline-angelic",   "name": "Angelic",   "desc": "Celestial heritage or devotion's blessing. Divine tradition." },
+        { "id": "bloodline-demonic",   "name": "Demonic",   "desc": "Your ancestor fell victim to abyssal corruption. Divine tradition." },
+        { "id": "bloodline-diabolic",  "name": "Diabolic",  "desc": "Infernal pact or descent from hellfire. Divine tradition." },
+        { "id": "bloodline-draconic",  "name": "Draconic",  "desc": "Dragon blood. Tradition varies by Draconic Exemplar (Arcane / Divine / Occult / Primal)." },
+        { "id": "bloodline-elemental", "name": "Elemental", "desc": "Elemental Influence (air/earth/fire/metal/water/wood) determines damage type. Primal tradition." },
+        { "id": "bloodline-fey",       "name": "Fey",       "desc": "First World whimsy in the family line. Primal tradition." },
+        { "id": "bloodline-hag",       "name": "Hag",       "desc": "A hag's curse or hag/changeling descent. Occult tradition." },
+        { "id": "bloodline-imperial",  "name": "Imperial",  "desc": "Mortal ancestor who mastered magic itself — pure arcane bloodline. Arcane tradition." },
+        { "id": "bloodline-undead",    "name": "Undead",    "desc": "Vampire ancestor or other undead in the family tree. Divine tradition." },
+        { "id": "bloodline-aesir",     "name": "Aesir",     "desc": "An ancestor touched by an aesir. Divine tradition. Source: Battlecry!" }
+      ]
+    }
+  },
+
+  "alchemist": {
+    "subclasses": {
+      "label": "Research Field",
+      "help": "Your specialty within alchemy. Sets your starting formulas and signature mechanic.",
+      "options": [
+        { "id": "bomber",       "name": "Bomber",       "desc": "Splash-target precision. Throw bombs that deal splash damage only to your primary target." },
+        { "id": "chirurgeon",   "name": "Chirurgeon",   "desc": "Alchemical healer. Use Crafting in place of Medicine. Versatile vials can heal living creatures." },
+        { "id": "mutagenist",   "name": "Mutagenist",   "desc": "Self-experimenter. Drink mutagens for risky temporary transformations — bonuses with drawbacks." },
+        { "id": "toxicologist", "name": "Toxicologist", "desc": "Poisoner. Apply injury poisons as a single action. Your poison-trait items deal acid to poison-immune enemies." }
+      ]
+    }
+  },
+
+  "investigator": {
+    "subclasses": {
+      "label": "Methodology",
+      "help": "Your approach to investigation. Shapes your starting skill and signature action.",
+      "options": [
+        { "id": "alchemical-sciences-methodology", "name": "Alchemical Sciences", "desc": "Forensic chemist. Trained in Crafting + Alchemical Crafting feat. Quick Tincture brews short-lived items." },
+        { "id": "empiricism-methodology",          "name": "Empiricism",          "desc": "Data-driven detective. Trained in an INT skill + That's Odd feat. Expeditious Inspection: free-action Recall/Seek/Sense Motive." },
+        { "id": "forensic-medicine-methodology",   "name": "Forensic Medicine",   "desc": "Murder-scene specialist. Trained in Medicine + Battle Medicine. Heal allies almost every fight." },
+        { "id": "interrogation-methodology",       "name": "Interrogation",       "desc": "Truth-extractor. Trained in Diplomacy + No Cause for Alarm. Pointed Question gains Lie-detection bonuses." }
+      ]
+    }
+  },
+
+  "inventor": {
+    "subclasses": {
+      "label": "Innovation",
+      "help": "Your signature invention. The thing you'll modify and refine across your career.",
+      "options": [
+        { "id": "armor-innovation",        "name": "Armor Innovation",        "desc": "A powered exoskeleton you wear. Your armor IS your invention." },
+        { "id": "construct-innovation",    "name": "Construct Innovation",    "desc": "A mechanical companion that fights alongside you." },
+        { "id": "weapon-innovation",       "name": "Weapon Innovation",       "desc": "A one-of-a-kind signature weapon you customize over time." },
+        { "id": "light-mortar-innovation", "name": "Light Mortar Innovation", "desc": "A personal-scale mortar firing explosive shells along arcing trajectories — indirect-fire artillery." }
+      ]
+    }
+  },
+
+  "gunslinger": {
+    "subclasses": {
+      "label": "Way",
+      "help": "Your firearm specialty. Sets your Initial Deed and weapon focus.",
+      "options": [
+        { "id": "way-of-the-drifter",   "name": "Way of the Drifter",   "desc": "Wandering gunhand. Reactive Pistol Whip — use your firearm in melee for a reactive Strike. Trained in Stealth." },
+        { "id": "way-of-the-pistolero", "name": "Way of the Pistolero", "desc": "Dueling shootist. Pistolero's Retort — reactive Strike against attackers who crit-fail. Trained in Intimidation." },
+        { "id": "way-of-the-sniper",    "name": "Way of the Sniper",    "desc": "Long-range specialist. One Shot, One Kill — bonus damage against unaware targets. Trained in Stealth." },
+        { "id": "way-of-the-spellshot", "name": "Way of the Spellshot", "desc": "Magical gunslinger. Gain an arcane cantrip you can cast through your firearm. Trained in Arcana." },
+        { "id": "way-of-the-vanguard",  "name": "Way of the Vanguard",  "desc": "Crowd-controller with a long gun. Vanguard's Bravado — Demoralize while reloading. Trained in Intimidation." }
+      ]
+    }
+  },
+
+  "kineticist": {
+    "subclasses": {
+      "label": "Kinetic Gate",
+      "help": "The elemental plane(s) you channel. Each Gate determines your starting impulses and damage type.",
+      "options": [
+        { "id": "air-gate",   "name": "Air Gate",   "desc": "Bludgeoning or electricity. Speed, evasion, mobility, ranged force." },
+        { "id": "earth-gate", "name": "Earth Gate", "desc": "Bludgeoning or piercing. Durability, terrain manipulation, immovability." },
+        { "id": "fire-gate",  "name": "Fire Gate",  "desc": "Fire. Pure damage, area-of-effect, ignition. The blaster element." },
+        { "id": "metal-gate", "name": "Metal Gate", "desc": "Slashing/piercing or electricity. Weapon-themed manifestations, conductive attacks." },
+        { "id": "water-gate", "name": "Water Gate", "desc": "Cold or bludgeoning. Positioning, healing, terrain manipulation." },
+        { "id": "wood-gate",  "name": "Wood Gate",  "desc": "Bludgeoning or piercing. Terrain control, healing, restoration." }
+      ]
+    }
+  },
+
+  "thaumaturge": {
+    "subclasses": {
+      "label": "First Implement",
+      "help": "The magical object that channels your power. Pick your first implement; later levels add more.",
+      "options": [
+        { "id": "amulet",   "name": "Amulet",   "desc": "Lucky charm. Passive defensive benefits tied to wearing the amulet." },
+        { "id": "bell",     "name": "Bell",     "desc": "Sound-shaper. Emotion-affecting auras, sonic disruption, attention-grabbing strikes." },
+        { "id": "chalice",  "name": "Chalice",  "desc": "Cup of life. Once-per-round sip (temp HP) or drain (heal 3 HP/level, empties for 10 min)." },
+        { "id": "lantern",  "name": "Lantern",  "desc": "Light of revelation. Reveal hidden things, dispel illusions, damage shadow-loving enemies." },
+        { "id": "mirror",   "name": "Mirror",   "desc": "Misdirection specialist. Duplicates, reflected attacks, perception manipulation." },
+        { "id": "regalia",  "name": "Regalia",  "desc": "Badge of authority. Social interaction bonuses; command nearby allies." },
+        { "id": "shield",   "name": "Shield",   "desc": "Defender's symbol. Enhanced defenses, ally protection, ward effects. Source: Battlecry!" },
+        { "id": "tome",     "name": "Tome",     "desc": "Keeper of forgotten knowledge. Temporary skill training, knowledge-check bonuses." },
+        { "id": "wand",     "name": "Wand",     "desc": "Magic-channeling rod. Spell-like effects channeled through the wand; bonus damage on strikes." },
+        { "id": "weapon",   "name": "Weapon",   "desc": "Combat focus. One-handed weapon channels energies; weapon serves as fighting tool AND magical focus." }
+      ]
+    }
+  },
+
+  "summoner": {
+    "subclasses": {
+      "label": "Eidolon",
+      "help": "Your magical partner. Their nature determines your spell tradition.",
+      "options": [
+        { "id": "angel-eidolon",            "name": "Angel Eidolon",            "desc": "Celestial messenger from the angelic host. Divine tradition. Alignment must be good." },
+        { "id": "anger-phantom-eidolon",    "name": "Anger Phantom Eidolon",    "desc": "Lost soul bound by undying anger. Occult tradition. Home plane: Ethereal." },
+        { "id": "beast-eidolon",            "name": "Beast Eidolon",            "desc": "Manifestation of nature's life force as a powerful magical beast. Primal tradition." },
+        { "id": "construct-eidolon",        "name": "Construct Eidolon",        "desc": "Mental construct from astral entities. Shape limited only by your imagination. Arcane tradition." },
+        { "id": "demon-eidolon",            "name": "Demon Eidolon",            "desc": "Bound fiend of the Abyss. Divine tradition. Alignment must be chaotic evil." },
+        { "id": "devotion-phantom-eidolon", "name": "Devotion Phantom Eidolon", "desc": "Lost soul bound by duty or devotion. Occult tradition. Home plane: Ethereal." },
+        { "id": "dragon-eidolon",           "name": "Dragon Eidolon",           "desc": "Echoed mind of a deceased dragon. Arcane tradition. Includes a Breath Weapon trait." },
+        { "id": "elemental-eidolon",        "name": "Elemental Eidolon",        "desc": "Primal elemental matter infused with sapience. Primal tradition. Choose an Elemental Core at level 1." },
+        { "id": "fey-eidolon",              "name": "Fey Eidolon",              "desc": "Being of the First World. Primal tradition. May remember fragments of past lives." },
+        { "id": "plant-eidolon",            "name": "Plant Eidolon",            "desc": "Intelligent plant from the same fragments that become leshys. Primal tradition." },
+        { "id": "psychopomp-eidolon",       "name": "Psychopomp Eidolon",       "desc": "Soul-shepherd ushering the dead. Divine tradition. Alignment must be true neutral." },
+        { "id": "swarm-eidolon",            "name": "Swarm Eidolon",            "desc": "Collective of Tiny animals acting in concert with shared consciousness. Primal tradition. Source: Battlecry!" }
+      ]
+    }
+  },
+
+  "animist": {
+    "subclasses": {
+      "label": "Primary Apparition",
+      "help": "The spirit you bind most closely. Each apparition grants distinct skills and spells.",
+      "options": [
+        { "id": "crafter-in-the-vault",            "name": "Crafter in the Vault",            "desc": "Forge-spirit. Apparition skills: Architecture/Engineering Lore. Vessel Spell: Traveling Workshop." },
+        { "id": "custodian-of-groves-and-gardens", "name": "Custodian of Groves and Gardens", "desc": "Peaceful steward. Apparition skills: Farming/Herbalism Lore. Vessel Spell: Garden of Healing." },
+        { "id": "echo-of-lost-moments",            "name": "Echo of Lost Moments",            "desc": "Time-fragment. Apparition skills: Fortune-Telling/Genealogy Lore. Vessel Spell: Store Time." },
+        { "id": "impostor-in-hidden-places",       "name": "Impostor in Hidden Places",       "desc": "Whisperer in shadows. Apparition skills: Fortune-Telling/Underworld Lore. Vessel Spell: Discomfiting Whisper." },
+        { "id": "lurker-in-devouring-dark",        "name": "Lurker in Devouring Dark",        "desc": "Deep-dweller. Apparition skills: Ocean/Sailing Lore. Vessel Spell: Devouring Dark Form." },
+        { "id": "monarch-of-the-fey-courts",       "name": "Monarch of the Fey Courts",       "desc": "Fey royal. Apparition skills: Art/Fey Lore. Vessel Spell: Nymph's Grace." },
+        { "id": "reveler-in-lost-glee",            "name": "Reveler in Lost Glee",            "desc": "Dark jester. Apparition skills: Circus/Fortune-Telling Lore. Vessel Spell: Trickster's Mirrors." },
+        { "id": "stalker-in-darkened-boughs",      "name": "Stalker in Darkened Boughs",      "desc": "Forest predator. Apparition skills: Forest/Hunting Lore. Vessel Spell: Darkened Forest Form." },
+        { "id": "steward-of-stone-and-fire",       "name": "Steward of Stone and Fire",       "desc": "Volcano-keeper. Apparition skills: Mountain/Volcano Lore. Vessel Spell: Earth's Bile." },
+        { "id": "vanguard-of-roaring-waters",      "name": "Vanguard of Roaring Waters",      "desc": "River spirit. Apparition skills: Mountain/River Lore. Vessel Spell: River Carving Mountains." },
+        { "id": "witness-to-ancient-battles",      "name": "Witness to Ancient Battles",      "desc": "Battlefield spirit. Apparition skills: Battlegrounds/Heraldry Lore. Vessel Spell: Embodiment of Battle." }
+      ]
+    }
   }
 }
