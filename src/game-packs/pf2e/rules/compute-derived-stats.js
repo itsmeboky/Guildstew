@@ -23,6 +23,7 @@
 import { ABILITIES } from './constants.js';
 import { profBonus, normalizeRank } from './proficiency.js';
 import { computeAbilityScores, modOf } from './compute-ability-scores.js';
+import { getEffectiveKeyAbility } from './key-ability.js';
 import {
   ANCESTRIES,
   CLASSES,
@@ -83,7 +84,7 @@ export const computeDerivedStats = (data) => {
   // on classes that key off it like Alchemist, Witch hex DC, etc.)
   // still get one defaulted to trained at level 1, matching every
   // PF2e class's level-1 starting proficiency.
-  const keyAb = cls?.keyAbility?.[0];
+  const keyAb = getEffectiveKeyAbility(cls, data);
   const classDCRank = pickRank(
     importedProfs.classDC,
     curatedProfs.classDC,

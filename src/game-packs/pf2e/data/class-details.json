@@ -198,6 +198,37 @@
     }
   },
 
+  "psychic": {
+    "subclasses": {
+      "label": "Conscious Mind",
+      "help": "Your signature spell list and amped-cantrip specialty. The deliberate, intentional half of your psychic power.",
+      "options": [
+        { "id": "the-distant-grasp",    "name": "The Distant Grasp",    "desc": "Telekinesis. Move objects and creatures through psychic force. Amped cantrips weaponize psychokinetic force." },
+        { "id": "the-infinite-eye",     "name": "The Infinite Eye",     "desc": "Divination and perception. See what others can't — distant places, hidden truths, futures." },
+        { "id": "the-oscillating-wave", "name": "The Oscillating Wave", "desc": "Elemental damage alternating between fire and cold each round for variable-resistance bypass." },
+        { "id": "the-silent-whisper",   "name": "The Silent Whisper",   "desc": "Telepathic control. Daze, suggestion, mental manipulation as combat tools." },
+        { "id": "the-tangible-dream",   "name": "The Tangible Dream",   "desc": "Illusions visible and audible to others. Figment and battlefield misdirection." },
+        { "id": "the-unbound-step",     "name": "The Unbound Step",     "desc": "Spatial movement. Teleportation, phase shifts, slipping past barriers." }
+      ]
+    },
+    "subclassSecondary": {
+      "label": "Subconscious Mind",
+      "help": "The deeper layer of your psyche — sets your key ability and thoughtform aesthetic. Both Conscious and Subconscious selections are required at level 1.",
+      "keyAbilityMap": {
+        "emotional-acceptance": "cha",
+        "wandering-reverie":    "cha",
+        "gathered-lore":        "int",
+        "precise-discipline":   "int"
+      },
+      "options": [
+        { "id": "emotional-acceptance", "name": "Emotional Acceptance", "desc": "Feelings-driven (CHA). Thoughtforms manifest as emotion — joy as buoyancy, fear as gripping cold. Psyche action: Restore the Mind." },
+        { "id": "gathered-lore",        "name": "Gathered Lore",        "desc": "Trained mind (INT). Mantra thoughtforms; you draw on collected teaching and study. Psyche action: Recall the Teachings." },
+        { "id": "precise-discipline",   "name": "Precise Discipline",   "desc": "Calculator mind (INT). Calculation thoughtforms — equations, tessellations, harmonic tones. Psyche action: Calculate Threats." },
+        { "id": "wandering-reverie",    "name": "Wandering Reverie",    "desc": "Daydreamer (CHA). Imagination thoughtforms — surreal, indistinct, fading like dream-sensations. Psyche action: Fade into Daydreams." }
+      ]
+    }
+  },
+
   "oracle": {
     "subclasses": {
       "label": "Mystery",
