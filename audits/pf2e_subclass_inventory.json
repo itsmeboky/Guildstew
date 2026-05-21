@@ -1,7 +1,7 @@
 {
-  "generated": "2026-05-20",
-  "total_subclasses": 210,
-  "shipping_count": 174,
+  "generated": "2026-05-21",
+  "total_subclasses": 214,
+  "shipping_count": 178,
   "classes_without_l1_subclass": [
     "fighter",
     "monk",
@@ -10,11 +10,11 @@
   ],
   "classes_without_l1_subclass_note": "These classes grant fixed L1 features rather than a subclass selection. Fighter picks a weapon group via Field of Practice (not a subclass). Monk picks stances via feats. Commander gets Banner/Tactics shared by all. Guardian gets Taunt/Guardian's Armor shared by all.",
   "license_summary": {
-    "ORC (Remaster)": 181,
+    "ORC (Remaster)": 185,
     "OGL": 29
   },
   "tier_summary": {
-    "tier2": 98,
+    "tier2": 102,
     "tier1": 76,
     "tier3": 25,
     "unknown": 11
@@ -36,7 +36,7 @@
     "swashbuckler": 6,
     "sorcerer": 18,
     "alchemist": 4,
-    "animist": 13,
+    "animist": 17,
     "champion": 7,
     "wizard": 15,
     "psychic": 10,
@@ -61,7 +61,7 @@
     "swashbuckler": 6,
     "sorcerer": 11,
     "alchemist": 4,
-    "animist": 11,
+    "animist": 15,
     "champion": 7,
     "wizard": 8,
     "psychic": 10,
@@ -2052,6 +2052,58 @@
         "will_ship": true,
         "description_short": "Witnesses to ancient battles may be the lingering remnants of soldiers who never returned from their last deployment or the restless souls of warriors whose final contest left them unfulfilled. Or the apparitions may be valkyries and other beings from beyond, naturally drawn to sites of death and battle, or even the unquiet entity formed from a battlefield that saw so much death and blood it gained a spiritual essence of its own.",
         "description_full": "Witnesses to ancient battles may be the lingering remnants of soldiers who never returned from their last deployment or the restless souls of warriors whose final contest left them unfulfilled. Or the apparitions may be valkyries and other beings from beyond, naturally drawn to sites of death and battle, or even the unquiet entity formed from a battlefield that saw so much death and blood it gained a spiritual essence of its own. Witnesses to ancient battles are often somber and grim. Apparition Skills Battlegrounds Lore, Heraldry Lore Apparition Spells Cantrip Shield 1st Sure Strike 2nd Enlarge 3rd Ghostly Weapon 4th Weapon Storm 5th Invoke Spirits 6th Phantasmal Calamity 7th True Target 8th Canticle of Everlasting Grief 9th Weapon of Judgment Vessel Spell Embodiment of Battle Avatar General of Endless Battle Speed 70 feet, immune to Immobilized Melee 1 final strike (agile, fatal d12, reach 15 feet), Damage ]"
+      },
+      {
+        "slug": "liturgist",
+        "name": "Liturgist",
+        "parent_class": "animist",
+        "subclass_category": "practice",
+        "license": "ORC",
+        "is_remaster_orc": true,
+        "source": "Pathfinder War of Immortals",
+        "tier": "tier2",
+        "will_ship": true,
+        "description_short": "You draw forth your apparitions through the power of song and dance, connecting the spiritual to the physical. These performances can be of your own creation or follow the specific rites of your religion.",
+        "description_full": "You draw forth your apparitions through the power of song and dance, connecting the spiritual to the physical. These performances can be of your own creation or follow the specific rites of your religion. Song of Invocation (1st): You can sing out to the spirits to have them spin and twirl around you. You gain the Circle of Spirits feat. Dancing Invocation (9th): The movement of your body grants power to your magic. When you Leap, Step, or Tumble Through, you also Sustain an apparition spell or vessel spell. Invocation of Praise (17th): Your liturgies call to the spirits even in the heat of battle. When you roll initiative, you can use Circle of Spirits as a free action. If your first action on your first turn is to cast an apparition cantrip granted by your primary apparition, you reduce the number of actions it takes to cast it by 1 (minimum 1 action)."
+      },
+      {
+        "slug": "medium",
+        "name": "Medium",
+        "parent_class": "animist",
+        "subclass_category": "practice",
+        "license": "ORC",
+        "is_remaster_orc": true,
+        "source": "Pathfinder War of Immortals",
+        "tier": "tier2",
+        "will_ship": true,
+        "description_short": "You are particularly good at acting as a conduit for spiritual energy and tend to associate more freely with a wide array of apparitions, though you tend not to form the deep bond with a single apparition that other animists often develop. Invocation of Unity (1st): The lines between your body and your apparition are blurry.",
+        "description_full": "You are particularly good at acting as a conduit for spiritual energy and tend to associate more freely with a wide array of apparitions, though you tend not to form the deep bond with a single apparition that other animists often develop. Invocation of Unity (1st): The lines between your body and your apparition are blurry. You gain the Relinquish Control feat. Dual Invocation (9th): You can build powerful bonds with multiple apparitions. You can select two of your attuned apparitions to be your primary apparitions. If you have the Supreme Incarnation class feature, you choose which apparition's avatar form you manifest each time you cast the Avatar spell. The number of Focus Points in your focus pool is equal to the number of focus spells you have or the number of primary apparitions you are attuned to, whichever is higher (maximum 3). Invocation of Synchronization (17th): The line between your intentions and those of the apparition possessing you blurs, leaving you better able to support each other in the throes of combat. While you have Relinquished Control to an apparition, you gain the following additional benefits: Once per round, you can attempt a Recall Knowledge check as a free action. All Strikes you make with a weapon or unarmed attack deal an additional 2 points of spirit damage. You gain resistance equal to half your level against all physical damage, but have weakness equal to your level to spirit damage."
+      },
+      {
+        "slug": "seer",
+        "name": "Seer",
+        "parent_class": "animist",
+        "subclass_category": "practice",
+        "license": "ORC",
+        "is_remaster_orc": true,
+        "source": "Pathfinder War of Immortals",
+        "tier": "tier2",
+        "will_ship": true,
+        "description_short": "You are particularly sensitive to the presence and influence of spirits and undead. You can detect lingering spirits, offering you some defense against them.",
+        "description_full": "You are particularly sensitive to the presence and influence of spirits and undead. You can detect lingering spirits, offering you some defense against them. Invocation of Sight (1st): You shift your eyes easily to the spirit world, intuiting the needs of apparitions and other spiritual entities based on how they appear to you. You gain the Apparition Sense feat. You also gain a +1 status bonus to saving throws and AC against the effects of haunts and the abilities of spirits and incorporeal undead. Invocation of Protection (9th): Your status as an intermediary across planar boundaries grants you further defenses against spiritual ailments. You gain spirit resistance and void resistance equal to half your level, and your status bonus to saving throws and AC against the effects of haunts and the abilities of spirits and incorporeal undead increases to +2. Invocation of Resilience (17th): You are a bulwark against the terrible spirits that lurk in the dark. Your apparition sight becomes a precise sense and your status bonus to saving throws and AC against the effects of haunts and the abilities of spirits and incorporeal undead increases to +3."
+      },
+      {
+        "slug": "shaman",
+        "name": "Shaman",
+        "parent_class": "animist",
+        "subclass_category": "practice",
+        "license": "ORC",
+        "is_remaster_orc": true,
+        "source": "Pathfinder War of Immortals",
+        "tier": "tier2",
+        "will_ship": true,
+        "description_short": "You form close bonds with your apparitions that allow you to invest them with the rare ability to take on a material form and directly affect the physical world. Invocation of Embodiment (1st): You allow your apparition to inhabit a physical form.",
+        "description_full": "You form close bonds with your apparitions that allow you to invest them with the rare ability to take on a material form and directly affect the physical world. Invocation of Embodiment (1st): You allow your apparition to inhabit a physical form. You gain the Spirit Familiar feat. At 2nd level, you gain the Enhanced Familiar feat. Invocation of Growth (9th): Your bond with the physical form of your chosen apparition grows stronger. You gain the Incredible Familiar feat. Invocation of Otherworldliness (17th): Your apparition familiar becomes ever more powerful, straddling the line between physical and spiritual. Your spirit familiar can take a single action that has the concentrate trait to become incorporeal for 1 minute. It gains the incorporeal trait, meaning it can move through physical creatures and such creatures can move through it. It can't attempt Strength-based checks (such as Grapple) against corporeal creatures, and corporeal creatures can't attempt such checks against it. It gains immunity to precision damage and resistance to physical damage (except damage from Strikes with the Ghost Touch property rune) equal to half your level (double against non-magical damage) but weakness to force damage equal to half your level. However, when incorporeal, your spirit familiar can travel no more than 60 feet from you and must maintain line of effect to you; this typically prevents it from moving through walls. Your spirit familiar can Dismiss this effect."
       }
     ],
     "exemplar": [

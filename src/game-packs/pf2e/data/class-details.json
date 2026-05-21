@@ -411,6 +411,16 @@
         { "id": "vanguard-of-roaring-waters",      "name": "Vanguard of Roaring Waters",      "desc": "River spirit. Apparition skills: Mountain/River Lore. Vessel Spell: River Carving Mountains." },
         { "id": "witness-to-ancient-battles",      "name": "Witness to Ancient Battles",      "desc": "Battlefield spirit. Apparition skills: Battlegrounds/Heraldry Lore. Vessel Spell: Embodiment of Battle." }
       ]
+    },
+    "subclassSecondary": {
+      "label": "Animistic Practice",
+      "help": "How your power grows and develops alongside your apparition bond. Required at level 1; you gain its first invocation now and additional invocations at levels 9 and 17.",
+      "options": [
+        { "id": "liturgist", "name": "Liturgist", "desc": "Draw forth your apparitions through song and dance — performances of your own creation or rites of your religion. First invocation: Song of Invocation. Source: War of Immortals." },
+        { "id": "medium",    "name": "Medium",    "desc": "Conduit for spiritual energy; associate freely with a wide array of apparitions rather than bonding deeply with one. First invocation: Invocation of Unity. Source: War of Immortals." },
+        { "id": "seer",      "name": "Seer",      "desc": "Sensitive to the presence and influence of spirits and undead. Detect lingering spirits and gain defense against them. Source: War of Immortals." },
+        { "id": "shaman",    "name": "Shaman",    "desc": "Form close bonds that let apparitions take material form and directly affect the physical world. First invocation: Invocation of Embodiment. Source: War of Immortals." }
+      ]
     }
   }
 }
