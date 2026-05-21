@@ -84,6 +84,7 @@
         { "id": "giant",        "name": "Giant Instinct",       "desc": "Channel titanic forebears. Wield weapons two sizes larger than you. Massive damage at a cost to AC during rage." },
         { "id": "spirit",       "name": "Spirit Instinct",      "desc": "Channel ancestor spirits. Your rage adds negative or positive damage and you can disrupt undead." },
         { "id": "superstition", "name": "Superstition Instinct","desc": "Anti-magic fury. Bonus to saves against spells while raging; you can't willingly receive magical help." },
+        { "id": "elemental",    "name": "Elemental Instinct",    "desc": "Bond with one of the elemental planes (air, earth, fire, metal, water, wood). Rage damage takes on that element's damage type; elemental resistance scales with level. Source: Rage of Elements." },
         { "id": "bloodrager",   "name": "Bloodrager",            "desc": "Drink supernatural blood to fuel arcane or divine magic. Blood Rage adds persistent bleed damage; the Bloodrager archetype unlocks a CHA-based spell repertoire. Source: War of Immortals." }
       ]
     },
