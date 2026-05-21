@@ -12,13 +12,17 @@
   },
   "wizard": {
     "subclasses": {
-      "label": "Thesis",
-      "help": "Your magical specialty — the unique angle of arcane study that defines your wizardly career.",
+      "label": "Arcane School",
+      "help": "Your school of magical study — shapes your curriculum spells, your initial school spell, and the theoretical foundation of your spellcasting. Theses are a separate selection layered on later in your career via class feats.",
       "options": [
-        { "id": "spell-blending",       "name": "Spell Blending",              "desc": "Trade two lower-rank slots to gain one slot two ranks higher. Specialist of resource conversion." },
-        { "id": "spell-substitution",   "name": "Spell Substitution",          "desc": "Spend 10 minutes to swap a prepared spell for another from your spellbook. The classic adaptive wizard." },
-        { "id": "familiar-attunement",  "name": "Improved Familiar Attunement","desc": "Your familiar gains an extra ability and can recall a prepared spell once per day." },
-        { "id": "staff-nexus",          "name": "Staff Nexus",                 "desc": "Bind extra spells into your staff. Start with a stronger spell-storing staff." }
+        { "id": "school-of-ars-grammatica",        "name": "Ars Grammatica",           "desc": "Runes, wards, and the written word. Curriculum emphasizes Message, Sigil, Dispel Magic, Spellwrack. Initial school spell: Protective Wards." },
+        { "id": "school-of-battle-magic",          "name": "Battle Magic",             "desc": "The combat wizard. Curriculum focuses on damage and protection: Force Barrage, Fireball, Howling Blizzard. Initial school spell: Force Bolt." },
+        { "id": "school-of-civic-wizardry",        "name": "Civic Wizardry",           "desc": "Practical magic for the common citizen — construction, finding lost things, urban utility. Initial school spell: Earthworks." },
+        { "id": "school-of-mentalism",             "name": "Mentalism",                "desc": "The mind-mage. Curriculum: Daze, Figment, Sleep, Hallucination, Project Image. Initial school spell: Charming Push." },
+        { "id": "school-of-protean-form",          "name": "Protean Form",             "desc": "The polymorpher. Pest Form, Enlarge, Humanoid Form, Monstrosity Form, Metamorphosis. Initial school spell: Scramble Body." },
+        { "id": "school-of-the-boundary",          "name": "The Boundary",             "desc": "Planar and spirit magic. Grim Tendrils, Summon Undead, Banishment, Massacre. Initial school spell: Fortify Summoning." },
+        { "id": "school-of-unified-magical-theory","name": "Unified Magical Theory",   "desc": "The generalist. No curriculum. Bonus 1st-level wizard class feat AND one extra 1st-rank spell in your spellbook. Drain Bonded Item refreshes per rank instead of per day." },
+        { "id": "elemental-school",                "name": "Elemental School",         "desc": "Pick an element at level 1 (air, earth, fire, metal, water, wood). Curriculum spells take that element's trait; initial school spell is themed to your element. Source: Rage of Elements." }
       ]
     },
     "proficiencies": {
