@@ -64,7 +64,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
         kind="class"
         slug={data.class}
         available={CLASSES.map(c => c.slug)}
-        onReset={() => update({ class: null, subclass: null, subclassPick: null, subclassSecondary: null, subclassTertiary: null })}
+        onReset={() => update({ class: null, subclass: null, subclassPick: null, subclassSecondary: null, subclassTertiary: null, ikonWeapon: null })}
       />
     );
   }
