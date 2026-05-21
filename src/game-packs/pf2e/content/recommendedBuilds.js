@@ -109,7 +109,7 @@ export const RECOMMENDED_BUILDS = {
     skills: ['performance', 'occultism', 'diplomacy'],
     classFeats: { 1: ['lingering-composition'] },
     spells: {
-      cantrips: ['inspire-courage', 'daze', 'light', 'shield', 'detect-magic'],
+      cantrips: ['courageous-anthem', 'daze', 'light', 'shield', 'detect-magic'],
       first: ['fear', 'soothe'],
     },
     startingItems: ['rapier', 'leather-armor', 'musical-instrument-handheld', 'writing-set', 'adventurers-pack'],
@@ -127,7 +127,7 @@ export const RECOMMENDED_BUILDS = {
     skills: ['nature', 'survival'],
     classFeats: { 1: ['order-explorer'] },
     spells: {
-      cantrips: ['produce-flame', 'light', 'detect-magic', 'shield', 'stabilize'],
+      cantrips: ['ignition', 'light', 'detect-magic', 'shield', 'stabilize'],
       first: ['heal', 'soothe'],
     },
     startingItems: ['scimitar', 'sling-20-bullets', 'leather-armor', 'material-component-pouch', 'adventurers-pack'],
@@ -146,7 +146,7 @@ export const RECOMMENDED_BUILDS = {
     classFeats: { 1: ['counterspell'] },
     spells: {
       cantrips: ['daze', 'light', 'detect-magic', 'shield', 'prestidigitation'],
-      first: ['magic-missile', 'fear'],
+      first: ['force-barrage', 'fear'],
     },
     startingItems: ['crossbow-20-bolts', 'dagger', 'material-component-pouch', 'adventurers-pack', 'healing-potion-minor'],
     reasoning: {
@@ -164,7 +164,7 @@ export const RECOMMENDED_BUILDS = {
     classFeats: { 1: ['reach-spell'] },
     spells: {
       cantrips: ['daze', 'light', 'detect-magic', 'shield', 'prestidigitation'],
-      first: ['magic-missile', 'fear'],
+      first: ['force-barrage', 'fear'],
     },
     startingItems: ['quarterstaff', 'dagger', 'spellbook-blank', 'writing-set', 'material-component-pouch', 'adventurers-pack'],
     reasoning: {
@@ -261,7 +261,7 @@ export const RECOMMENDED_BUILDS = {
     classFeats: null,
     spells: {
       cantrips: ['shield', 'detect-magic', 'light', 'prestidigitation', 'electric-arc'],
-      first: ['magic-missile', 'fear'],
+      first: ['force-barrage', 'fear'],
     },
     reasoning: {
       boosts: "Magus needs both martial and casting investment. [[strength|STR]] or [[dexterity|DEX]] for your weapon (pick by Hybrid Study — Inexorable Iron = STR, Starlit Span = DEX), AND [[intelligence|INT]] to 16-18 for [[spell-dc|spell DC]] and Spellstrike scaling. [[constitution|CON]] to 14 for [[hit-points|HP]] — you'll be in melee a lot.",
@@ -367,7 +367,7 @@ export const RECOMMENDED_BUILDS = {
     skills: ['nature', 'religion'],
     classFeats: null,
     spells: {
-      cantrips: ['guidance', 'produce-flame', 'light', 'shield', 'stabilize'],
+      cantrips: ['guidance', 'ignition', 'light', 'shield', 'stabilize'],
       first: ['heal', 'soothe'],
     },
     reasoning: {
@@ -425,8 +425,54 @@ export const RECOMMENDED_BUILDS = {
   },
 };
 
-export function getRecommended(classSlug) {
-  return RECOMMENDED_BUILDS[classSlug] || null;
+// Subclass-aware spell recommendations. Keyed by class slug → subclass
+// id → spell list. Override applies only to the .spells field; other
+// recommendation sections (boosts, skills, classFeats, startingItems)
+// stay class-wide because they don't vary with subclass at level 1.
+//
+// Covers the cases where subclass selection materially changes the
+// recommended spell list — primarily classes whose subclass determines
+// spell tradition. Other classes can fall through to the class-wide
+// .spells when no override is registered for the selected subclass.
+export const SPELLS_BY_SUBCLASS = {
+  // Sorcerer bloodlines — each picks a tradition; cantrip and first-rank
+  // recs match the tradition's signature staples.
+  sorcerer: {
+    'bloodline-aberrant':  { cantrips: ['daze','light','detect-magic','shield','telekinetic-projectile'], first: ['fear','phantom-pain'] },
+    'bloodline-angelic':   { cantrips: ['guidance','light','detect-magic','shield','stabilize'],          first: ['bless','heal'] },
+    'bloodline-demonic':   { cantrips: ['guidance','light','detect-magic','shield','divine-lance'],        first: ['fear','harm'] },
+    'bloodline-diabolic':  { cantrips: ['guidance','light','detect-magic','shield','ignition'],            first: ['charm','fear'] },
+    'bloodline-draconic':  { cantrips: ['daze','light','detect-magic','shield','telekinetic-projectile'], first: ['force-barrage','fear'] },
+    'bloodline-elemental': { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['sure-strike','heal'] },
+    'bloodline-fey':       { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['charm','heal'] },
+    'bloodline-hag':       { cantrips: ['daze','light','detect-magic','shield','telekinetic-projectile'], first: ['fear','soothe'] },
+    'bloodline-imperial':  { cantrips: ['daze','light','detect-magic','shield','telekinetic-projectile'], first: ['force-barrage','sure-strike'] },
+    'bloodline-undead':    { cantrips: ['guidance','light','detect-magic','shield','void-warp'],           first: ['harm','fear'] },
+    'bloodline-aesir':     { cantrips: ['guidance','light','detect-magic','shield','stabilize'],           first: ['bless','heal'] },
+  },
+  // Witch patrons — patron determines tradition. Same logic as Sorcerer.
+  witch: {
+    'faiths-flamekeeper': { cantrips: ['guidance','light','detect-magic','shield','stabilize'],          first: ['bless','heal'] },
+    'the-inscribed-one':  { cantrips: ['daze','light','detect-magic','shield','telekinetic-projectile'], first: ['force-barrage','fear'] },
+    'the-resentment':     { cantrips: ['daze','light','detect-magic','shield','telekinetic-projectile'], first: ['fear','soothe'] },
+    'silence-in-snow':    { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['gust-of-wind','heal'] },
+    'spinner-of-threads': { cantrips: ['daze','light','detect-magic','shield','telekinetic-projectile'], first: ['sure-strike','soothe'] },
+    'starless-shadow':    { cantrips: ['daze','light','detect-magic','shield','telekinetic-projectile'], first: ['fear','soothe'] },
+    'wilding-steward':    { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['summon-animal','heal'] },
+    'devourer-of-decay':  { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['enfeeble','heal'] },
+    'ripple-in-the-deep': { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['dizzying-colors','heal'] },
+    'whisper-of-wings':   { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['gentle-landing','heal'] },
+  },
+};
+
+export function getRecommended(classSlug, subclassId) {
+  const base = RECOMMENDED_BUILDS[classSlug] || null;
+  if (!base || !subclassId) return base;
+  const override = SPELLS_BY_SUBCLASS[classSlug]?.[subclassId];
+  if (!override) return base;
+  // Shallow-merge: override only the .spells field, leave the rest of
+  // the recommendation untouched (boosts, skills, classFeats, etc.).
+  return { ...base, spells: { ...base.spells, ...override } };
 }
 
 // Normalize a display name to the kebab-case slug form used in
