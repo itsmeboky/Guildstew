@@ -64,7 +64,7 @@ const StepClass = ({ data, update, openDeityModal }) => {
         kind="class"
         slug={data.class}
         available={CLASSES.map(c => c.slug)}
-        onReset={() => update({ class: null, subclass: null, subclassPick: null })}
+        onReset={() => update({ class: null, subclass: null, subclassPick: null, subclassSecondary: null })}
       />
     );
   }
@@ -352,6 +352,47 @@ const StepClass = ({ data, update, openDeityModal }) => {
                   <p className="font-body text-sm text-pf-parchment leading-relaxed italic">
                     <AnnotatedText text={subTip} />
                   </p>
+                </div>
+              );
+            })()}
+            {details.subclassSecondary && (() => {
+              const sec = details.subclassSecondary;
+              const pickedSec = data.subclassSecondary;
+              return (
+                <div className="mt-6">
+                  <SectionHeader>{sec.label} — {selected.name}</SectionHeader>
+                  <p className="font-body text-xs text-pf-stone mb-3 italic">{sec.help}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {sec.options.map(opt => {
+                      const active = pickedSec === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          onClick={() => update({ subclassSecondary: opt.id })}
+                          className={`relative text-left p-4 bg-pf-bg-card border transition-all
+                                      ${active ? 'border-pf-brass bg-pf-brass/5 shadow-[0_0_20px_-12px_rgba(201,169,97,0.5)]' : 'border-pf-brass-dim/30 hover:border-pf-brass-dim'}`}
+                        >
+                          {active && <CornerBrackets active />}
+                          <h5 className="font-display text-base text-pf-bone mb-1.5">{opt.name}</h5>
+                          <p className="text-xs text-pf-stone font-body leading-relaxed">{opt.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {(() => {
+                    const secTip = pickedSec ? getSubclassTip(selected.slug, pickedSec) : null;
+                    if (!secTip) return null;
+                    return (
+                      <div className="bg-pf-brass/5 border-l-2 border-pf-brass pl-4 pr-4 py-3 mt-3">
+                        <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-1">
+                          {sec.label} Tip
+                        </p>
+                        <p className="font-body text-sm text-pf-parchment leading-relaxed italic">
+                          <AnnotatedText text={secTip} />
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })()}

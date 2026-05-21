@@ -10,6 +10,7 @@ import RecommendationPanel from '../components/RecommendationPanel.jsx';
 import RecommendedBadge from '../components/RecommendedBadge.jsx';
 import { CLASSES, BOOST_BATCH_LEVELS } from '../../data/index.js';
 import { ABILITIES } from '../../rules/constants.js';
+import { getEffectiveKeyAbility } from '../../rules/key-ability.js';
 import { getRecommended } from '../../content/recommendedBuilds.js';
 import { STEPS } from '../../config/steps.js';
 
@@ -76,7 +77,7 @@ const StepAbilities = ({ data, update }) => {
   };
 
   const cls = CLASSES.find(c => c.slug === data.class);
-  const keyAbility = cls?.keyAbility?.[0];
+  const keyAbility = getEffectiveKeyAbility(cls, data);
 
   const recommended = getRecommended(cls?.slug);
   const recFlags = data.recommendedFlags || {};
