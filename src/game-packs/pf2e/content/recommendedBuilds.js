@@ -109,7 +109,7 @@ export const RECOMMENDED_BUILDS = {
     skills: ['performance', 'occultism', 'diplomacy'],
     classFeats: { 1: ['lingering-composition'] },
     spells: {
-      cantrips: ['inspire-courage', 'daze', 'light', 'shield', 'detect-magic'],
+      cantrips: ['courageous-anthem', 'daze', 'light', 'shield', 'detect-magic'],
       first: ['fear', 'soothe'],
     },
     startingItems: ['rapier', 'leather-armor', 'musical-instrument-handheld', 'writing-set', 'adventurers-pack'],
@@ -127,7 +127,7 @@ export const RECOMMENDED_BUILDS = {
     skills: ['nature', 'survival'],
     classFeats: { 1: ['order-explorer'] },
     spells: {
-      cantrips: ['produce-flame', 'light', 'detect-magic', 'shield', 'stabilize'],
+      cantrips: ['ignition', 'light', 'detect-magic', 'shield', 'stabilize'],
       first: ['heal', 'soothe'],
     },
     startingItems: ['scimitar', 'sling-20-bullets', 'leather-armor', 'material-component-pouch', 'adventurers-pack'],
@@ -146,7 +146,7 @@ export const RECOMMENDED_BUILDS = {
     classFeats: { 1: ['counterspell'] },
     spells: {
       cantrips: ['daze', 'light', 'detect-magic', 'shield', 'prestidigitation'],
-      first: ['magic-missile', 'fear'],
+      first: ['force-barrage', 'fear'],
     },
     startingItems: ['crossbow-20-bolts', 'dagger', 'material-component-pouch', 'adventurers-pack', 'healing-potion-minor'],
     reasoning: {
@@ -164,7 +164,7 @@ export const RECOMMENDED_BUILDS = {
     classFeats: { 1: ['reach-spell'] },
     spells: {
       cantrips: ['daze', 'light', 'detect-magic', 'shield', 'prestidigitation'],
-      first: ['magic-missile', 'fear'],
+      first: ['force-barrage', 'fear'],
     },
     startingItems: ['quarterstaff', 'dagger', 'spellbook-blank', 'writing-set', 'material-component-pouch', 'adventurers-pack'],
     reasoning: {
@@ -218,6 +218,13 @@ export const RECOMMENDED_BUILDS = {
     skills: ['crafting', 'medicine'],
     classFeats: null,
     spells: null,
+    reasoning: {
+      boosts: "[[intelligence|INT]] is everything for an Alchemist — your [[class-dc|Class DC]] for splash damage, your Crafting checks for making items, and the size of your daily reagent pool all scale off it. Push INT to 18 at level 1, then take [[constitution|CON]] to 14 for [[hit-points|HP]] (your concoctions sometimes splash you), and [[dexterity|DEX]] to 14 for [[armor-class|AC]] since you're in light armor.",
+      skills: "[[crafting|Crafting]] is non-negotiable — Alchemical Crafting is what unlocks daily reagent prep. [[medicine|Medicine]] pairs well, especially for Bombers carrying healing elixirs. [[thievery|Thievery]] for handling delicate situations and [[survival|Survival]] for foraging components round out the kit.",
+      classFeats: "Quick Bomber at level 1 lets you draw and throw a bomb as a single [[action|action]] instead of two — huge for action economy. Calculated Splash boosts your splash damage with your INT modifier. Far Lobber extends your bomb range past the default 20 ft.",
+      spells: null,
+      startingItems: "The Alchemist [[class-kit|class kit]] covers your formula book, starting reagents, and a sturdy bandolier. Round it out with a simple weapon (a dagger for backup) and studded leather for some AC without slowing you down.",
+    },
   },
   investigator: {
     rationale: "INT-based skill specialist. Intelligence drives Devise a Stratagem, Dexterity for AC, Constitution for HP.",
@@ -225,6 +232,13 @@ export const RECOMMENDED_BUILDS = {
     skills: ['society', 'stealth', 'thievery'],
     classFeats: null,
     spells: null,
+    reasoning: {
+      boosts: "[[intelligence|INT]] is everything — Devise a Stratagem rolls off INT, your [[class-dc|Class DC]] uses INT, your extra trained skills come from INT. Max it to 18. [[dexterity|DEX]] to 14 for [[armor-class|AC]] and Reflex. [[constitution|CON]] to 14 for [[hit-points|HP]].",
+      skills: "[[society|Society]] is your signature — research, decipher writing, Recall Knowledge on civilization. [[stealth|Stealth]] for shadowing suspects. Your methodology grants a third skill at [[expert|Expert]] (Forensic = [[medicine|Medicine]], Empiricism = a Lore, Interrogation = [[intimidation|Intimidation]]). [[deception|Deception]] or [[diplomacy|Diplomacy]] for working sources.",
+      classFeats: "That's Odd at level 1 lets you spot something off about a scene. Strategic Strike upgrades your damage when you act on a Devised Stratagem. Clue In shares your investigative bonus with the party.",
+      spells: null,
+      startingItems: "Investigator [[class-kit|kit]] includes a formulary, a magnifying glass for clue-spotting, and a rapier or hand crossbow (your call — rapier for melee, hand crossbow for ranged). Studded leather rounds out the loadout.",
+    },
   },
   swashbuckler: {
     rationale: "Charisma-driven martial. Dexterity for AC and attacks, Charisma for panache and class DC, Constitution for HP.",
@@ -232,6 +246,13 @@ export const RECOMMENDED_BUILDS = {
     skills: ['acrobatics', 'performance'],
     classFeats: null,
     spells: null,
+    reasoning: {
+      boosts: "[[charisma|CHA]] is your [[key-ability|key ability]] for [[class-dc|Class DC]] AND your finisher math. [[dexterity|DEX]] to 18 for attacks and [[armor-class|AC]]. Push CHA to 16-18 too. [[constitution|CON]] to 12-14 for [[hit-points|HP]] — Swashbucklers are squishier than most martials.",
+      skills: "[[acrobatics|Acrobatics]] is core — Tumble Through generates panache for many styles. [[performance|Performance]] if you're a Battledancer (panache through art). [[diplomacy|Diplomacy]] or [[intimidation|Intimidation]] depending on whether you charm or threaten your way through scenes. Style-specific picks round out the kit.",
+      classFeats: "Confident Finisher at level 1 is your iconic move — a powerful [[strike|Strike]] that consumes panache. Opportune Riposte for reactive defense. Style-specific feats (One for All, Goading Feint, etc.) unlock your subclass's signature flavor.",
+      spells: null,
+      startingItems: "Swashbuckler [[class-kit|kit]] gives you a rapier or other agile weapon (agile is huge — reduced [[multiple-attack-penalty|MAP]] on follow-up strikes), light armor, and fashionable clothes for the social half of the class. Picking a one-handed weapon leaves your off hand free for buckler or showmanship.",
+    },
   },
   magus: {
     rationale: "Spellstrike hybrid. Strength or Dexterity for weapon, Intelligence for spells, Constitution for HP.",
@@ -240,7 +261,14 @@ export const RECOMMENDED_BUILDS = {
     classFeats: null,
     spells: {
       cantrips: ['shield', 'detect-magic', 'light', 'prestidigitation', 'electric-arc'],
-      first: ['magic-missile', 'fear'],
+      first: ['force-barrage', 'fear'],
+    },
+    reasoning: {
+      boosts: "Magus needs both martial and casting investment. [[strength|STR]] or [[dexterity|DEX]] for your weapon (pick by Hybrid Study — Inexorable Iron = STR, Starlit Span = DEX), AND [[intelligence|INT]] to 16-18 for [[spell-dc|spell DC]] and Spellstrike scaling. [[constitution|CON]] to 14 for [[hit-points|HP]] — you'll be in melee a lot.",
+      skills: "[[arcana|Arcana]] for identifying spells and Recall Knowledge on arcane creatures. [[athletics|Athletics]] for melee maneuvers if STR-based, [[acrobatics|Acrobatics]] for DEX-based. [[intimidation|Intimidation]] or [[society|Society]] for social work.",
+      classFeats: "Cascade Countermeasure at level 1 if you took Inexorable Iron. Other Hybrid Study feats expand your signature Spellstrike combo. Force Bolt feats for ranged options.",
+      spells: "You're a [[prepared-casting|prepared]] [[arcane|arcane]] caster, but with a tiny spell pool — make every slot count. [[cantrip|Cantrips]]: Shield (mandatory — your reactive defense), Telekinetic Projectile, Electric Arc. First-rank [[spell|spells]] for your slots: True Strike (huge with Spellstrike), Magic Missile, Force Barrage.",
+      startingItems: "Magus [[class-kit|kit]] includes a martial weapon (longsword/bastard sword for STR, rapier for DEX), spellbook, and medium armor (or light if you went DEX). Component pouch for spellcasting.",
     },
   },
   inventor: {
@@ -249,6 +277,13 @@ export const RECOMMENDED_BUILDS = {
     skills: ['crafting', 'society'],
     classFeats: null,
     spells: null,
+    reasoning: {
+      boosts: "[[intelligence|INT]] is your [[key-ability|key ability]] — your innovation, [[crafting|Crafting]] checks, and [[class-dc|Class DC]] all scale off it. Max to 18. [[constitution|CON]] to 14 for [[hit-points|HP]]. [[dexterity|DEX]] to 14 for [[armor-class|AC]] if your innovation isn't doing the work for you.",
+      skills: "[[crafting|Crafting]] is mandatory — it's how you tinker with your innovation. [[society|Society]] for tactical and scholarly know-how. [[thievery|Thievery]] for handling delicate mechanisms beyond your own.",
+      classFeats: "Megaton Strike at level 1 channels innovation power into a heavy hit. Searing Restoration for self-repair on construct or armor innovations. Innovation-specific feats define your build path (weapon, armor, construct).",
+      spells: null,
+      startingItems: "Inventor [[class-kit|kit]] centers on your innovation (weapon/armor/construct — your level-1 choice). Tools for tinkering, light armor if your innovation isn't already protective, and a basic ranged weapon for variety.",
+    },
   },
   gunslinger: {
     rationale: "Firearms specialist. Dexterity for everything, Constitution for HP, Wisdom for Perception.",
@@ -256,6 +291,13 @@ export const RECOMMENDED_BUILDS = {
     skills: ['acrobatics', 'stealth'],
     classFeats: null,
     spells: null,
+    reasoning: {
+      boosts: "[[dexterity|DEX]] is your [[key-ability|key ability]] for everything — firearm attacks, [[armor-class|AC]], [[reflex|Reflex]]. Max it to 18. [[constitution|CON]] to 14 for [[hit-points|HP]]. [[wisdom|WIS]] to 12-14 matters more than you'd think — high [[perception|Perception]] for [[initiative|initiative]] lets you go first and get off shots before melee closes.",
+      skills: "[[stealth|Stealth]] for snipers and approach work. [[crafting|Crafting]] for gunsmithing and ammo. [[acrobatics|Acrobatics]] for positioning. Way-specific skills (Pistolero = [[intimidation|Intimidation]], Vanguard = [[athletics|Athletics]], Sniper = [[stealth|Stealth]] even harder).",
+      classFeats: "Way-specific feats (Drifter's Juke, Pistolero's Riposte, Sniper's Aim, Vanguard's Shove) define your subclass. Black Powder Boost amplifies your firearm damage. Munitions Crafter at later levels for self-sufficiency.",
+      spells: null,
+      startingItems: "Gunslinger [[class-kit|kit]] includes your starting firearm (way-determined — pistol, musket, jezail, blunderbuss), powder, ammunition, and light armor. Always carry a melee backup — reload times leave you vulnerable.",
+    },
   },
   kineticist: {
     rationale: "Elemental Blast specialist. Constitution drives Impulse DC. Dexterity for AC, Wisdom for Perception.",
@@ -263,6 +305,13 @@ export const RECOMMENDED_BUILDS = {
     skills: ['nature', 'athletics'],
     classFeats: null,
     spells: null,
+    reasoning: {
+      boosts: "[[constitution|CON]] is your [[key-ability|key ability]] — your kinetic gate and [[class-dc|Class DC]] both run off it, AND it boosts your [[hit-points|HP]]. Double-dip. Max to 18. [[dexterity|DEX]] to 14 for [[armor-class|AC]] and [[reflex|Reflex]]. [[strength|STR]] to 12-14 if you took an Earth or Water gate (those love melee blasts).",
+      skills: "Element-specific picks — Air loves [[acrobatics|Acrobatics]], Earth loves [[athletics|Athletics]], Fire loves [[intimidation|Intimidation]], Water loves [[stealth|Stealth]] or [[diplomacy|Diplomacy]], Wood loves [[medicine|Medicine]], Metal loves [[crafting|Crafting]]. [[nature|Nature]] and [[survival|Survival]] are universally useful for elemental flavor.",
+      classFeats: "Element-specific impulse feats are your bread and butter — pick the impulses that match your gate's role (control, damage, support, mobility). Gate Attenuator unlocks at later levels for cross-element flexibility.",
+      spells: null,
+      startingItems: "Kineticist [[class-kit|kit]] is minimal — your impulses are your primary weapons. Light armor or unarmored (your gate's element may grant defensive resonance), a simple backup weapon, and element-specific reagents (an elemental focus stone for your gate).",
+    },
   },
   psychic: {
     rationale: "Spontaneous occult caster with amped cantrips. Intelligence or Charisma drives DC, Constitution for staying up.",
@@ -273,6 +322,13 @@ export const RECOMMENDED_BUILDS = {
       cantrips: ['daze', 'detect-magic', 'light', 'shield', 'prestidigitation'],
       first: ['fear', 'soothe'],
     },
+    reasoning: {
+      boosts: "Pick [[intelligence|INT]] (cerebral) or [[charisma|CHA]] (emotional) as your [[key-ability|key ability]] based on conscious mind subclass — both work for [[spell-dc|spell DC]]. [[constitution|CON]] to 14 for [[hit-points|HP]] (Psychics are fragile). [[dexterity|DEX]] to 14 for [[armor-class|AC]] in light or no armor.",
+      skills: "[[occultism|Occultism]] is essential — your spells are [[occult|occult]], and you'll Recall Knowledge constantly on mind-affecting creatures. [[diplomacy|Diplomacy]] or [[intimidation|Intimidation]] depending on social style. [[society|Society]] for esoteric scholarship.",
+      classFeats: "Amped cantrip feats are signature — they spend a [[focus-spell|focus]] point to amplify your [[cantrip|cantrips]] into combat-grade attacks. Conscious Mind feats expand your subclass's specific powers.",
+      spells: "[[spontaneous-casting|Spontaneous]] [[occult|occult]] caster with a tiny pool of leveled slots but a strong cantrip-amp loop. [[cantrip|Cantrips]]: Daze (signature — pairs with Amp), Telekinetic Hand, Guidance. First-rank [[spell|spells]]: Phantom Pain, Soothe, plus one tradition-flavored utility pick.",
+      startingItems: "Psychic kit is minimal — light armor or unarmored (your cantrips do the work, not your gear), a simple backup weapon, and a focus object that anchors your psychic power.",
+    },
   },
   thaumaturge: {
     rationale: "Esoteric implements. Charisma drives DC, Dexterity for AC, Constitution for HP.",
@@ -280,6 +336,13 @@ export const RECOMMENDED_BUILDS = {
     skills: ['occultism', 'religion'],
     classFeats: null,
     spells: null,
+    reasoning: {
+      boosts: "[[charisma|CHA]] is your [[key-ability|key ability]] — Esoteric Lore checks and [[class-dc|Class DC]] both depend on it. Max to 18. [[constitution|CON]] to 14 for [[hit-points|HP]]. [[dexterity|DEX]] to 14 for [[armor-class|AC]].",
+      skills: "Esoteric [[lore|Lore]] is your signature — auto-trained, lets you Recall Knowledge on virtually any creature with the right framing. [[religion|Religion]], [[occultism|Occultism]], [[arcana|Arcana]], [[nature|Nature]] — the more broad-knowledge skills you train in, the more your Exploit Vulnerability lands. [[diplomacy|Diplomacy]] for social work with the supernatural.",
+      classFeats: "Diverse Lore at level 1 lets you sub Esoteric Lore for any other knowledge skill — huge. Implement-specific feats (Amulet, Bell, Chalice, Lantern, Mirror, Regalia, Tome, Wand, Weapon) define your subclass.",
+      spells: null,
+      startingItems: "Thaumaturge [[class-kit|kit]] includes your primary implement (the heart of your power — pick by subclass), a martial weapon, and light or medium armor. Carry a charm or trinket pouch for esoterica — minor magical reagents you'll consume during Exploit Vulnerability.",
+    },
   },
   oracle: {
     rationale: "Spontaneous divine caster. Charisma drives DC, Constitution for staying up, Dexterity for AC.",
@@ -290,6 +353,13 @@ export const RECOMMENDED_BUILDS = {
       cantrips: ['guidance', 'shield', 'light', 'stabilize', 'detect-magic'],
       first: ['heal', 'bless'],
     },
+    reasoning: {
+      boosts: "[[charisma|CHA]] is your [[key-ability|key ability]] for [[spell-dc|spell DC]] and revelation powers — max it to 18. [[constitution|CON]] to 14 because Oracle mysteries inflict curse damage on you when you cast certain spells, and you need the [[hit-points|HP]] cushion. [[wisdom|WIS]] to 12 for [[will|Will]] saves.",
+      skills: "[[religion|Religion]] is mandatory — your mystery ties you to a divine power. [[diplomacy|Diplomacy]] for the social half of being a mystery-touched prophet. Your specific mystery grants a third skill (Battle Mystery = [[athletics|Athletics]], Bones Mystery = [[medicine|Medicine]], Cosmos Mystery = [[nature|Nature]], and so on).",
+      classFeats: "Domain Acumen gives you a domain spell tied to your mystery — pick early. Revelation feats expand your mystery's signature powers and are the single biggest source of class identity.",
+      spells: "You're a [[spontaneous-casting|spontaneous]] [[divine|divine]] caster. [[cantrip|Cantrips]] to grab: Guidance (party support), Stabilize (downed-ally insurance), Light. First-rank [[spell|spells]] for your repertoire: Heal (always), Bless, Shield, and one offensive option like Harm or Spirit Strike depending on mystery flavor.",
+      startingItems: "Oracle [[class-kit|kit]] includes a religious symbol of your divine source, a simple weapon, and light armor. The religious symbol matters — many spells require it as a focus.",
+    },
   },
   animist: {
     rationale: "Primal vessel caster. Wisdom drives spells. Constitution for HP, Charisma for diplomacy.",
@@ -297,8 +367,15 @@ export const RECOMMENDED_BUILDS = {
     skills: ['nature', 'religion'],
     classFeats: null,
     spells: {
-      cantrips: ['guidance', 'produce-flame', 'light', 'shield', 'stabilize'],
+      cantrips: ['guidance', 'ignition', 'light', 'shield', 'stabilize'],
       first: ['heal', 'soothe'],
+    },
+    reasoning: {
+      boosts: "[[wisdom|WIS]] is your [[key-ability|key ability]] for both [[spell-dc|spell DC]] and apparition powers — max it to 18. [[constitution|CON]] to 14 for survivability since apparitions can put you in messy positions, plus [[dexterity|DEX]] to 14 for [[armor-class|AC]] in light armor.",
+      skills: "[[religion|Religion]] is core — your apparitions are spiritual entities, and you'll be Recalling Knowledge on them constantly. [[nature|Nature]] supports your [[primal|primal]] spell side. [[diplomacy|Diplomacy]] for the social work that often comes with spiritual mediation; [[intimidation|Intimidation]] if you lean confrontational.",
+      classFeats: "Channeler's Stance at level 1 turns one of your apparitions into a passive buff. Additional Apparition feats let you collect more spiritual partners — pick to match your party's needs (combat support, healing, control).",
+      spells: "You cast both [[divine|divine]] and [[primal|primal]] spells through your apparitions, which is unusual and powerful. [[cantrip|Cantrips]] to grab: Guidance for party buff support, Tangle Vine for primal battlefield control, Telekinetic Hand for utility. First-rank [[spell|spells]]: Heal (always), Bless, Sure Strike for ally support.",
+      startingItems: "Animist kit gives you a spiritual vessel for your primary apparition, a simple weapon, and light armor. The vessel matters — it's where you funnel apparition power, so don't lose it.",
     },
   },
   summoner: {
@@ -310,6 +387,13 @@ export const RECOMMENDED_BUILDS = {
       cantrips: ['shield', 'light', 'detect-magic', 'prestidigitation', 'guidance'],
       first: ['fear', 'soothe'],
     },
+    reasoning: {
+      boosts: "[[charisma|CHA]] is your [[key-ability|key ability]] for [[spell-dc|spell DC]] and eidolon math — max it to 18. [[constitution|CON]] to 14 because your eidolon shares your [[hit-points|HP]] pool — every HP you lose, the eidolon loses too. [[dexterity|DEX]] to 14 for your own [[armor-class|AC]] (the eidolon handles its own AC differently).",
+      skills: "Your eidolon's traits influence skill picks — astral eidolons love [[occultism|Occultism]], fey eidolons love [[nature|Nature]], etc. [[diplomacy|Diplomacy]] for the dual-personality social dynamic. [[athletics|Athletics]] if your eidolon is a frontline brawler.",
+      classFeats: "Tandem Strike at later levels lets you and your eidolon attack the same target with combined action economy. Eidolon-specific feats (varied by Boost choice) shape your partner's combat style.",
+      spells: "Spontaneous caster with your tradition determined by eidolon type (Angel = [[divine|divine]], Beast = [[primal|primal]], Construct = [[arcane|arcane]], etc.). [[cantrip|Cantrips]]: Guidance, Detect Magic, plus one offensive option. First-rank [[spell|spells]]: Heal or equivalent + buffs to make your eidolon scarier (Sure Strike, Bless).",
+      startingItems: "Summoner kit is lean — light armor, a simple weapon for backup. Your eidolon does the heavy lifting in combat, so spend gold on consumables and ritual focus rather than personal gear.",
+    },
   },
   exemplar: {
     rationale: "Mythic martial. Strength for melee, Constitution for HP, Charisma for divine resonance.",
@@ -317,6 +401,13 @@ export const RECOMMENDED_BUILDS = {
     skills: ['athletics', 'religion'],
     classFeats: null,
     spells: null,
+    reasoning: {
+      boosts: "Your [[key-ability|key ability]] depends on your chosen ikon path — [[strength|STR]] for Cataphract-style martial focus, [[dexterity|DEX]] for nimble ikon paths, sometimes [[charisma|CHA]] for divine-charisma builds. Always max your key ability. [[constitution|CON]] to 14 for [[hit-points|HP]].",
+      skills: "[[religion|Religion]] is essential — you're divinely blooded and Recall Knowledge on outer planes constantly. [[athletics|Athletics]] for martial maneuvers. [[diplomacy|Diplomacy]] or [[society|Society]] depending on your character's role in mortal politics.",
+      classFeats: "Ikon-specific feats are your meat — pick the ones that interact with your chosen ikon. Spark of Iruxi grants divine sparkle to your strikes. Lessons of Divinity at later levels unlock godlike utility.",
+      spells: null,
+      startingItems: "Exemplar kit centers on your starting ikon weapon — that's the divine vessel everything else builds around. Pair with medium armor and a religious symbol for ritual work.",
+    },
   },
   commander: {
     rationale: "Tactical leader. Strength or Dexterity for personal weapon, Intelligence for tactics, Constitution for HP.",
@@ -324,11 +415,155 @@ export const RECOMMENDED_BUILDS = {
     skills: ['society', 'warfare-lore'],
     classFeats: null,
     spells: null,
+    reasoning: {
+      boosts: "Pick [[strength|STR]] (Frontline) or [[intelligence|INT]] (Strategist) based on your subclass — both work for [[class-dc|Class DC]]. [[constitution|CON]] to 14 since you're usually near the action issuing orders. [[charisma|CHA]] to 12-14 helps your social leadership feel natural.",
+      skills: "[[diplomacy|Diplomacy]] for commanding allies and negotiating during exploration. [[intimidation|Intimidation]] for commanding enemies (Demoralize stacks with your tactical debuffs). [[athletics|Athletics]] for frontline maneuvers. [[society|Society]] gives you the tactical lore for Recall Knowledge on military matters.",
+      classFeats: "Drilled Reactions at level 1 lets allies act with extra polish under your orders. Tactical Expertise grants bonuses to your commands. Lead by Example synergizes when you Strike alongside your allies.",
+      spells: null,
+      startingItems: "Commander [[class-kit|kit]] gives you a martial weapon, medium or heavy armor depending on subclass, and a banner or signet for tactical authority. The banner matters mechanically for some abilities — don't skip it.",
+    },
   },
 };
 
-export function getRecommended(classSlug) {
-  return RECOMMENDED_BUILDS[classSlug] || null;
+// Subclass-aware spell recommendations. Keyed by class slug → subclass
+// id → spell list. Override applies only to the .spells field; other
+// recommendation sections (boosts, skills, classFeats, startingItems)
+// stay class-wide because they don't vary with subclass at level 1.
+//
+// Two categories of override:
+// - Tradition-changing subclasses (Sorcerer bloodlines, Witch patrons) —
+//   the subclass picks the spell tradition entirely; recommendation
+//   must match the resulting tradition's spell list.
+// - Theme-aligned subclasses (Cleric doctrines, Wizard schools, Druid
+//   orders, Bard muses, Psychic conscious minds, Oracle mysteries,
+//   Animist apparitions) — single tradition, but each subclass leans
+//   into a different theme. Picks emphasize signature spells of that
+//   theme on top of the base tradition staples.
+export const SPELLS_BY_SUBCLASS = {
+  // Sorcerer bloodlines — each picks a tradition; cantrip and first-rank
+  // recs match the tradition's signature staples.
+  sorcerer: {
+    'bloodline-aberrant':  { cantrips: ['daze','light','detect-magic','shield','telekinetic-projectile'], first: ['fear','phantom-pain'] },
+    'bloodline-angelic':   { cantrips: ['guidance','light','detect-magic','shield','stabilize'],          first: ['bless','heal'] },
+    'bloodline-demonic':   { cantrips: ['guidance','light','detect-magic','shield','divine-lance'],        first: ['fear','harm'] },
+    'bloodline-diabolic':  { cantrips: ['guidance','light','detect-magic','shield','ignition'],            first: ['charm','fear'] },
+    'bloodline-draconic':  { cantrips: ['daze','light','detect-magic','shield','telekinetic-projectile'], first: ['force-barrage','fear'] },
+    'bloodline-elemental': { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['sure-strike','heal'] },
+    'bloodline-fey':       { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['charm','heal'] },
+    'bloodline-hag':       { cantrips: ['daze','light','detect-magic','shield','telekinetic-projectile'], first: ['fear','soothe'] },
+    'bloodline-imperial':  { cantrips: ['daze','light','detect-magic','shield','telekinetic-projectile'], first: ['force-barrage','sure-strike'] },
+    'bloodline-undead':    { cantrips: ['guidance','light','detect-magic','shield','void-warp'],           first: ['harm','fear'] },
+    'bloodline-aesir':     { cantrips: ['guidance','light','detect-magic','shield','stabilize'],           first: ['bless','heal'] },
+  },
+  // Witch patrons — patron determines tradition. Same logic as Sorcerer.
+  witch: {
+    'faiths-flamekeeper': { cantrips: ['guidance','light','detect-magic','shield','stabilize'],          first: ['bless','heal'] },
+    'the-inscribed-one':  { cantrips: ['daze','light','detect-magic','shield','telekinetic-projectile'], first: ['force-barrage','fear'] },
+    'the-resentment':     { cantrips: ['daze','light','detect-magic','shield','telekinetic-projectile'], first: ['fear','soothe'] },
+    'silence-in-snow':    { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['gust-of-wind','heal'] },
+    'spinner-of-threads': { cantrips: ['daze','light','detect-magic','shield','telekinetic-projectile'], first: ['sure-strike','soothe'] },
+    'starless-shadow':    { cantrips: ['daze','light','detect-magic','shield','telekinetic-projectile'], first: ['fear','soothe'] },
+    'wilding-steward':    { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['summon-animal','heal'] },
+    'devourer-of-decay':  { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['enfeeble','heal'] },
+    'ripple-in-the-deep': { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['dizzying-colors','heal'] },
+    'whisper-of-wings':   { cantrips: ['light','detect-magic','electric-arc','tangle-vine','stabilize'],  first: ['gentle-landing','heal'] },
+  },
+
+  // Cleric doctrines — both Divine. Cloistered leans support-utility,
+  // Warpriest leans martial-support.
+  cleric: {
+    cloistered: { cantrips: ['guidance','light','shield','stabilize','forbidding-ward'], first: ['heal','bless'] },
+    warpriest:  { cantrips: ['guidance','light','shield','stabilize','divine-lance'],    first: ['heal','spiritual-armament'] },
+  },
+
+  // Druid orders — all Primal. Each order's flavor pulls a different
+  // signature cantrip + first-rank pick.
+  druid: {
+    'animal-order':  { cantrips: ['vitality-lash','light','detect-magic','stabilize','tangle-vine'], first: ['heal','runic-body'] },
+    'leaf-order':    { cantrips: ['vitality-lash','light','detect-magic','shield','stabilize'],      first: ['heal','protector-tree'] },
+    'storm-order':   { cantrips: ['electric-arc','light','detect-magic','shield','stabilize'],       first: ['heal','gust-of-wind'] },
+    'untamed-order': { cantrips: ['vitality-lash','light','detect-magic','tangle-vine','stabilize'], first: ['heal','runic-body'] },
+    'flame-order':   { cantrips: ['ignition','light','detect-magic','shield','stabilize'],           first: ['heal','sure-strike'] },
+    'stone-order':   { cantrips: ['vitality-lash','light','detect-magic','shield','stabilize'],      first: ['heal','hydraulic-push'] },
+    'wave-order':    { cantrips: ['frostbite','light','detect-magic','stabilize','soothing-mist'],   first: ['heal','hydraulic-push'] },
+  },
+
+  // Bard muses — all Occult. Each muse's Muse Spell anchors the first-
+  // rank pick; cantrips pick from the Occult cantrip pool by theme.
+  bard: {
+    enigma:    { cantrips: ['courageous-anthem','daze','light','detect-magic','telekinetic-hand'],     first: ['sure-strike','phantasmal-minion'] },
+    maestro:   { cantrips: ['courageous-anthem','daze','light','shield','stabilize'],                  first: ['soothe','heal'] },
+    polymath:  { cantrips: ['courageous-anthem','daze','light','detect-magic','prestidigitation'],     first: ['phantasmal-minion','charm'] },
+    warrior:   { cantrips: ['courageous-anthem','daze','light','shield','telekinetic-projectile'],     first: ['fear','sure-strike'] },
+    zoophonia: { cantrips: ['courageous-anthem','daze','light','detect-magic','telekinetic-hand'],     first: ['summon-animal','heal'] },
+  },
+
+  // Psychic conscious minds — all Occult. Amped cantrips matter most;
+  // pick the conscious-mind-signature cantrip plus thematic staples.
+  psychic: {
+    'the-distant-grasp':    { cantrips: ['telekinetic-projectile','telekinetic-hand','daze','detect-magic','shield'], first: ['force-barrage','phantasmal-minion'] },
+    'the-infinite-eye':     { cantrips: ['daze','detect-magic','light','telekinetic-hand','prestidigitation'],        first: ['sure-strike','soothe'] },
+    'the-oscillating-wave': { cantrips: ['frostbite','ignition','daze','detect-magic','shield'],                       first: ['acid-grip','force-barrage'] },
+    'the-silent-whisper':   { cantrips: ['daze','detect-magic','light','shield','telekinetic-hand'],                   first: ['charm','fear'] },
+    'the-tangible-dream':   { cantrips: ['figment','daze','light','detect-magic','prestidigitation'],                  first: ['phantasmal-minion','illusory-disguise'] },
+    'the-unbound-step':     { cantrips: ['phase-bolt','daze','detect-magic','light','shield'],                         first: ['force-barrage','sure-strike'] },
+  },
+
+  // Oracle mysteries — all Divine, spontaneous. Each mystery's
+  // revelation theme guides the picks.
+  oracle: {
+    ancestors: { cantrips: ['guidance','daze','light','shield','stabilize'],            first: ['bless','soothe'] },
+    battle:    { cantrips: ['guidance','shield','light','stabilize','divine-lance'],    first: ['sure-strike','spiritual-armament'] },
+    bones:     { cantrips: ['void-warp','guidance','light','shield','stabilize'],       first: ['harm','spirit-link'] },
+    cosmos:    { cantrips: ['guidance','light','detect-magic','shield','stabilize'],    first: ['bless','sure-strike'] },
+    flames:    { cantrips: ['ignition','guidance','light','shield','stabilize'],        first: ['heal','sure-strike'] },
+    life:      { cantrips: ['guidance','light','shield','stabilize','vitality-lash'],   first: ['heal','bless'] },
+    lore:      { cantrips: ['guidance','daze','light','detect-magic','shield'],         first: ['sure-strike','soothe'] },
+    tempest:   { cantrips: ['electric-arc','guidance','light','shield','stabilize'],    first: ['heal','gust-of-wind'] },
+    time:      { cantrips: ['guidance','daze','light','detect-magic','shield'],         first: ['sure-strike','soothe'] },
+  },
+
+  // Animist apparitions — tradition varies (mostly Primal with some
+  // Divine and Occult mixing). Each apparition's vessel spell anchors
+  // the spell list flavor; first-rank picks pull from the apparition's
+  // own list per the canonical content.
+  animist: {
+    'crafter-in-the-vault':            { cantrips: ['guidance','light','telekinetic-hand','shield','stabilize'],  first: ['mending','heal'] },
+    'custodian-of-groves-and-gardens': { cantrips: ['guidance','vitality-lash','light','shield','stabilize'],     first: ['heal','protector-tree'] },
+    'echo-of-lost-moments':            { cantrips: ['guidance','daze','light','shield','stabilize'],              first: ['sure-strike','soothe'] },
+    'impostor-in-hidden-places':       { cantrips: ['guidance','daze','light','shield','stabilize'],              first: ['ill-omen','fear'] },
+    'lurker-in-devouring-dark':        { cantrips: ['frostbite','guidance','light','shield','stabilize'],          first: ['acid-grip','heal'] },
+    'monarch-of-the-fey-courts':       { cantrips: ['guidance','daze','light','shield','stabilize'],              first: ['charm','bless'] },
+    'reveler-in-lost-glee':            { cantrips: ['guidance','daze','light','shield','stabilize'],              first: ['dizzying-colors','soothe'] },
+    'stalker-in-darkened-boughs':      { cantrips: ['guidance','tangle-vine','light','shield','stabilize'],       first: ['sure-strike','heal'] },
+    'steward-of-stone-and-fire':       { cantrips: ['ignition','guidance','light','shield','stabilize'],          first: ['heal','sure-strike'] },
+    'vanguard-of-roaring-waters':      { cantrips: ['frostbite','guidance','light','shield','stabilize'],         first: ['hydraulic-push','heal'] },
+    'witness-to-ancient-battles':      { cantrips: ['guidance','light','shield','stabilize','divine-lance'],      first: ['sure-strike','bless'] },
+  },
+
+  // Wizard schools — all Arcane. Each school's curriculum + initial
+  // school spell guides the picks; cantrips lean into the curriculum's
+  // theme.
+  wizard: {
+    'school-of-ars-grammatica':         { cantrips: ['message','sigil','daze','detect-magic','forbidding-ward'], first: ['dispel-magic','sure-strike'] },
+    'school-of-battle-magic':           { cantrips: ['telekinetic-projectile','shield','daze','detect-magic','light'], first: ['force-barrage','fear'] },
+    'school-of-civic-wizardry':         { cantrips: ['telekinetic-hand','light','detect-magic','shield','prestidigitation'], first: ['hydraulic-push','summon-construct'] },
+    'school-of-mentalism':              { cantrips: ['daze','figment','light','detect-magic','prestidigitation'], first: ['charm','sleep'] },
+    'school-of-protean-form':           { cantrips: ['daze','light','detect-magic','telekinetic-hand','prestidigitation'], first: ['enlarge','pest-form'] },
+    'school-of-the-boundary':           { cantrips: ['telekinetic-projectile','daze','light','detect-magic','shield'], first: ['summon-undead','sure-strike'] },
+    'school-of-unified-magical-theory': { cantrips: ['daze','light','detect-magic','shield','prestidigitation'], first: ['force-barrage','fear'] },
+    'elemental-school':                 { cantrips: ['ignition','daze','light','detect-magic','shield'], first: ['force-barrage','hydraulic-push'] },
+  },
+};
+
+export function getRecommended(classSlug, subclassId) {
+  const base = RECOMMENDED_BUILDS[classSlug] || null;
+  if (!base || !subclassId) return base;
+  const override = SPELLS_BY_SUBCLASS[classSlug]?.[subclassId];
+  if (!override) return base;
+  // Shallow-merge: override only the .spells field, leave the rest of
+  // the recommendation untouched (boosts, skills, classFeats, etc.).
+  return { ...base, spells: { ...base.spells, ...override } };
 }
 
 // Normalize a display name to the kebab-case slug form used in

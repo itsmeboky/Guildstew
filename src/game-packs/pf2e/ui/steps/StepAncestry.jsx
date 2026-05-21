@@ -16,6 +16,7 @@ import {
   ANCESTRY_FEAT_LEVELS,
 } from '../../data/index.js';
 import { getAncestryTip } from '../../content/ancestryTips.js';
+import { getHeritageTip } from '../../content/heritageTips.js';
 import AnnotatedText from '@/components/glossary/AnnotatedText';
 import { STEPS } from '../../config/steps.js';
 
@@ -112,7 +113,7 @@ const StepAncestry = ({ data, update }) => {
 
       {/* Heritage row */}
       <SectionHeader>Heritage — {selected.name}</SectionHeader>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
         {heritages.map(h => {
           const active = data.heritage === h.id;
           return (
@@ -129,6 +130,21 @@ const StepAncestry = ({ data, update }) => {
           );
         })}
       </div>
+
+      {(() => {
+        const heritageTip = data.heritage ? getHeritageTip(data.heritage) : null;
+        if (!heritageTip) return null;
+        return (
+          <div className="bg-pf-brass/5 border-l-2 border-pf-brass pl-4 pr-4 py-3 mb-6">
+            <p className="font-display text-[10px] tracking-[0.25em] text-pf-brass uppercase mb-1">
+              Heritage Tip
+            </p>
+            <p className="font-body text-sm text-pf-parchment leading-relaxed italic">
+              <AnnotatedText text={heritageTip} />
+            </p>
+          </div>
+        );
+      })()}
 
       {/* Ancestry Feats — multi-picker per feat level */}
       {(() => {
