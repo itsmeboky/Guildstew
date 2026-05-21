@@ -11,6 +11,7 @@
 
 import { ABILITIES } from './constants.js';
 import { CLASSES } from '../data/index.js';
+import { getEffectiveKeyAbility } from './key-ability.js';
 
 export const computeAbilityScores = (data) => {
   const accumulated = {
@@ -33,7 +34,8 @@ export const computeAbilityScores = (data) => {
     }
   }
   const cls = CLASSES.find(c => c.slug === data.class);
-  if (cls?.keyAbility?.length) accumulated[cls.keyAbility[0]] = (accumulated[cls.keyAbility[0]] || 0) + 1;
+  const keyAb = getEffectiveKeyAbility(cls, data);
+  if (keyAb) accumulated[keyAb] = (accumulated[keyAb] || 0) + 1;
   const scores = {};
   for (const ab of ABILITIES) {
     let score = 10 + (accumulated[ab] || 0) * 2;

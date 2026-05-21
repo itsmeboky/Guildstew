@@ -99,7 +99,7 @@ const StepSpells = ({ data, update }) => {
   // slug field — so this mirrors the same trick used for class
   // feats). Spells that don't resolve are skipped with a console
   // warning rather than crashing the apply.
-  const rec = getRecommended(cls?.slug);
+  const rec = getRecommended(cls?.slug, data.subclass);
   const hasSpellRec = !!(rec?.spells?.cantrips?.length || rec?.spells?.first?.length);
   const recFlags = data.recommendedFlags || {};
 

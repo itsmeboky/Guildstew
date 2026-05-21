@@ -20,7 +20,16 @@ import languagesData from './languages.json';
 
 // Re-shaped exports that the UI consumes
 export const ANCESTRIES = ancestriesData.filter(a => a.tier === 'tier1' || a.tier === 'tier2');
-export const CLASSES = classesData.filter(c => c.tier === 'tier1');
+// Tier filter: ship every class the importer keeps (tier1 = Player Core,
+// tier2 = expansion books that pass flavor scrub). Tier3 was already
+// excluded at import time.
+//
+// License filter: ORC-only. OGL classes (Kineticist, Magus, Summoner)
+// remain in classes.json for reference / future scope changes but are
+// hidden from the live picker.
+export const CLASSES = classesData.filter(c =>
+  (c.tier === 'tier1' || c.tier === 'tier2') && c.license === 'ORC'
+);
 export const BACKGROUNDS = backgroundsData;
 export const DEITIES = deitiesData;
 export const CLERIC_DOMAINS = domainsData;
@@ -84,6 +93,7 @@ export { default as CASTING_TRADITION_BY_CLASS } from './casting-traditions.json
 export { default as CLASS_KITS } from './class-kits.json';
 export { default as EQUIPMENT_CATALOG } from './equipment-catalog.json';
 export { default as ANCESTRY_GRANTED_ITEMS } from './ancestry-granted-items.json';
+export { default as IKON_GRANTED_ITEMS } from './ikon-granted-items.json';
 export { default as DEITY_PRESETS } from './deity-presets.js';
 
 // Level tables (arrays + functions)

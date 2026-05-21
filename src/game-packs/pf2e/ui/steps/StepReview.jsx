@@ -22,6 +22,7 @@ import {
 } from '../../data/index.js';
 import { ABILITIES } from '../../rules/constants.js';
 import { computeDerivedStats } from '../../rules/compute-derived-stats.js';
+import { getEffectiveKeyAbility } from '../../rules/key-ability.js';
 import { fmtMod } from '../../rules/compute-ability-scores.js';
 import { profBonus } from '../../rules/proficiency.js';
 import { formatCharacterSubline } from '../../rules/character-subline.js';
@@ -43,6 +44,7 @@ const StepReview = ({ data, onForge }) => {
   const heritage = ancestry ? HERITAGES_BY_ANCESTRY[ancestry.id]?.find(h => h.slug === data.heritage) : null;
   const background = BACKGROUNDS.find(b => b.slug === data.background);
   const cls = CLASSES.find(c => c.slug === data.class);
+  const effectiveKey = getEffectiveKeyAbility(cls, data);
   const details = cls ? CLASS_DETAILS[cls.id] : null;
   const subclass = cls && details?.subclasses?.options.find(o => o.id === data.subclass);
   const stats = computeDerivedStats(data);
@@ -132,7 +134,7 @@ const StepReview = ({ data, onForge }) => {
           {ABILITIES.map(ab => {
             const score = stats.scores[ab];
             const mod = stats.mods[ab];
-            const isKey = cls?.keyAbility?.includes(ab);
+            const isKey = ab === effectiveKey;
             return (
               <div key={ab} className={`relative p-2 bg-pf-bg-elev border text-center ${isKey ? 'border-pf-brass' : 'border-pf-brass-dim/30'}`}>
                 {isKey && <CornerBrackets active />}
@@ -165,7 +167,7 @@ const StepReview = ({ data, onForge }) => {
             <div className="space-y-1 text-pf-parchment text-xs">
               <div className="flex justify-between"><span className="text-pf-stone">Size</span><span>{ancestry?.size || '—'}</span></div>
               <div className="flex justify-between"><span className="text-pf-stone">Vision</span><span className="capitalize">{ancestry?.vision || '—'}</span></div>
-              <div className="flex justify-between"><span className="text-pf-stone">Key Ability</span><span>{cls?.keyAbility?.join('/') || '—'}</span></div>
+              <div className="flex justify-between"><span className="text-pf-stone">Key Ability</span><span>{effectiveKey || cls?.keyAbility?.join('/') || '—'}</span></div>
               {subclass && <div className="flex justify-between"><span className="text-pf-stone">{details.subclasses.label}</span><span className="text-pf-brass">{subclass.name}</span></div>}
               {data.sanctification && data.sanctification !== 'none' && (
                 <div className="flex justify-between"><span className="text-pf-stone">Sanctification</span><span className="capitalize text-pf-brass">{data.sanctification}</span></div>
