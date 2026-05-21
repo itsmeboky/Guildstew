@@ -1,0 +1,22 @@
+{
+  "_comment": "Items physically manifested by Exemplar ikons (worn + weapon). Body ikons are imbued on the body and grant no item. Each weapon/worn ikon grants one level-0 mundane item per the 'providence ensures you come across these items' lore. Player can swap via the shop; this seeds the loadout.",
+
+  "bands-of-imprisonment":   { "name": "Bands (bracers/anklets/circlet)", "priceSp": 0, "bulk": "L", "note": "Worn ikon — Exemplar's ikon manifested as a heavy adornment that hones discipline." },
+  "fetching-bangles":         { "name": "Fetching Bangles",                "priceSp": 0, "bulk": "L", "note": "Worn ikon — bracers that gleam with your magnetism." },
+  "horn-of-plenty":           { "name": "Horn of Plenty (bag/gourd/cornucopia)", "priceSp": 0, "bulk": 1,   "note": "Worn ikon — vessel storing potions/elixirs; produces a temporary elixir of life daily." },
+  "mirrored-aegis":           { "name": "Mirrored Shield",                 "priceSp": 0, "bulk": 1,   "note": "Worn ikon — any shield, polished to reflect spiritual and ethereal attacks." },
+  "pelt-of-the-beast":        { "name": "Pelt (cloak or belt)",            "priceSp": 0, "bulk": "L", "note": "Worn ikon — animal hide as cloak or belt; daily-chosen elemental resistance." },
+  "skybearers-belt":          { "name": "Skybearer's Belt",                "priceSp": 0, "bulk": "L", "note": "Worn ikon — girdle that magnifies your strength." },
+  "thousand-league-sandals":  { "name": "Thousand-League Sandals",         "priceSp": 0, "bulk": "L", "note": "Worn ikon — threadbare but trustworthy footwear; +10 ft Speed." },
+  "victors-wreath":           { "name": "Victor's Wreath (laurel or sash)","priceSp": 0, "bulk": "L", "note": "Worn ikon — symbol of triumph; headwear or belt-sash." },
+
+  "barrows-edge":             { "name": "Barrow's Edge (longsword)",       "priceSp": 0, "bulk": 1,   "note": "Weapon ikon — slashing/piercing melee weapon. Longsword is the canonical default; any sword/knife works." },
+  "gleaming-blade":           { "name": "Gleaming Blade (longsword)",      "priceSp": 0, "bulk": 1,   "note": "Weapon ikon — sword or knife group weapon. Longsword is the default." },
+  "hands-of-the-wildling":    { "name": "Wildling's Hands (unarmed)",      "priceSp": 0, "bulk": 0,   "note": "Weapon ikon — tattooed fists, savage claws, or powerful gauntlets. No carried weapon required." },
+  "mortal-harvest":           { "name": "Mortal Harvest (scythe)",         "priceSp": 0, "bulk": 2,   "note": "Weapon ikon — sickle, axe, flail, or polearm group. Scythe is canonical." },
+  "noble-branch":             { "name": "Noble Branch (quarterstaff)",     "priceSp": 0, "bulk": 1,   "note": "Weapon ikon — staff, bo staff, fighting stick, khakkara, or spear/polearm. Quarterstaff is the default." },
+  "shadow-sheath":            { "name": "Shadow Sheath (dagger)",          "priceSp": 0, "bulk": "L", "note": "Weapon ikon — sheath for one-handed thrown weapon of light Bulk. Dagger is the default; any thrown light weapon works." },
+  "starshot":                 { "name": "Starshot (shortbow)",             "priceSp": 0, "bulk": 1,   "note": "Weapon ikon — ranged weapon. Shortbow is the default; any bow or crossbow works." },
+  "titans-breaker":           { "name": "Titan's Breaker (maul)",          "priceSp": 0, "bulk": 2,   "note": "Weapon ikon — club, hammer, or axe group. Maul is canonical." },
+  "unfailing-bow":            { "name": "Unfailing Bow (longbow)",         "priceSp": 0, "bulk": 2,   "note": "Weapon ikon — ranged weapon, bow-flavored. Longbow is the default." }
+}

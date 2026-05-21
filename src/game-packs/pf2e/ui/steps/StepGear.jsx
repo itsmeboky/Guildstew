@@ -14,6 +14,7 @@ import {
   CLASS_DETAILS,
   EQUIPMENT_CATALOG,
   ANCESTRY_GRANTED_ITEMS,
+  IKON_GRANTED_ITEMS,
   STARTING_WEALTH_BY_LEVEL,
 } from '../../data/index.js';
 import { isRecommendedForClass } from '../../content/recommendedBuilds.js';
@@ -63,6 +64,13 @@ const StepGear = ({ data, update }) => {
   const ancestry = ANCESTRIES.find(a => a.slug === data.ancestry);
   const kit = cls ? CLASS_KITS[cls.id] : null;
   const granted = ANCESTRY_GRANTED_ITEMS[ancestry?.id] || [];
+  // Exemplar's worn + weapon ikons grant a level-0 mundane item each per
+  // the "providence ensures you come across these items" lore. Body
+  // ikons are imbued on the body and grant no carried item.
+  const ikonGranted = [data.subclassSecondary, data.subclassTertiary]
+    .filter(Boolean)
+    .map(slug => IKON_GRANTED_ITEMS[slug])
+    .filter(Boolean);
   const loadout = data.loadout || [];
 
   const [activeTab, setActiveTab] = useState('kit');
@@ -82,7 +90,7 @@ const StepGear = ({ data, update }) => {
   const totalSpentSp = loadout.reduce((sum, item) => sum + item.priceSp * (item.qty || 1), 0);
   const remainingSp = startingSp - totalSpentSp;
   const purchasedBulk = computeBulk(loadout);
-  const grantedBulk = computeBulk(granted);
+  const grantedBulk = computeBulk(granted) + computeBulk(ikonGranted);
   const totalBulk = purchasedBulk + grantedBulk;
   const isEncumbered = totalBulk > encumberedAt;
   const isImmobile = totalBulk >= immobileAt;
@@ -437,6 +445,28 @@ const StepGear = ({ data, update }) => {
                     </div>
                     <span className="font-mono text-[10px] text-pf-stone shrink-0">
                       {item.bulk === 'L' ? 'L' : item.bulk}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {ikonGranted.length > 0 && (
+            <div className="mb-4">
+              <p className="font-display text-[10px] tracking-[0.2em] text-pf-brass uppercase mb-2">Ikon-Granted</p>
+              <div className="space-y-1.5">
+                {ikonGranted.map(item => (
+                  <div key={item.name} className="flex items-start gap-2 text-xs">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-body text-pf-parchment">{item.name}</span>
+                        <span className="px-1.5 py-0.5 text-[9px] font-mono bg-pf-brass/15 text-pf-brass border border-pf-brass/40 shrink-0">IKON</span>
+                      </div>
+                      {item.note && <p className="font-body text-[10px] text-pf-stone/70 italic mt-0.5">{item.note}</p>}
+                    </div>
+                    <span className="font-mono text-[10px] text-pf-stone shrink-0">
+                      {item.bulk === 'L' ? 'L' : (item.bulk === 0 ? '—' : item.bulk)}
                     </span>
                   </div>
                 ))}
