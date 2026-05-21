@@ -67,9 +67,28 @@ const StepGear = ({ data, update }) => {
   // Exemplar's worn + weapon ikons grant a level-0 mundane item each per
   // the "providence ensures you come across these items" lore. Body
   // ikons are imbued on the body and grant no carried item.
+  // Build the ikon-granted item list, swapping the canonical weapon
+  // entry for the player's specific pick when they've chosen one from
+  // the eligibility list (see Ikon Weapon Selection panel below).
+  const ikonWeaponSlug = data.subclassTertiary;
+  const ikonWeaponDef = ikonWeaponSlug ? IKON_GRANTED_ITEMS[ikonWeaponSlug] : null;
+  const ikonWeaponEligible = ikonWeaponDef?.eligibleWeapons || [];
+  const ikonWeaponPick = data.ikonWeapon || null;
   const ikonGranted = [data.subclassSecondary, data.subclassTertiary]
     .filter(Boolean)
-    .map(slug => IKON_GRANTED_ITEMS[slug])
+    .map(slug => {
+      const def = IKON_GRANTED_ITEMS[slug];
+      if (!def) return null;
+      // Weapon ikon with a specific pick → render the chosen weapon
+      // alongside the ikon's name. Catalog lookup pulls bulk/price.
+      if (slug === ikonWeaponSlug && ikonWeaponPick) {
+        const catEntry = (EQUIPMENT_CATALOG.weapons || []).find(w => w.name === ikonWeaponPick);
+        if (catEntry) {
+          return { ...catEntry, name: `${def.name} — ${catEntry.name}`, priceSp: 0, note: def.note };
+        }
+      }
+      return def;
+    })
     .filter(Boolean);
   const loadout = data.loadout || [];
 
@@ -470,6 +489,42 @@ const StepGear = ({ data, update }) => {
                     </span>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {ikonWeaponEligible.length > 0 && (
+            <div className="mb-4">
+              <p className="font-display text-[10px] tracking-[0.2em] text-pf-brass uppercase mb-2">
+                Ikon Weapon Choice — {ikonWeaponDef.name}
+              </p>
+              <p className="font-body text-[10px] text-pf-stone/70 italic mb-2 leading-relaxed">
+                {ikonWeaponDef.note} Pick the specific weapon your ikon manifests as. Providence delivers a level-0 mundane copy at character start.
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {ikonWeaponEligible.map(weaponName => {
+                  const active = ikonWeaponPick === weaponName;
+                  const catEntry = (EQUIPMENT_CATALOG.weapons || []).find(w => w.name === weaponName);
+                  return (
+                    <button
+                      key={weaponName}
+                      type="button"
+                      onClick={() => update({ ikonWeapon: weaponName })}
+                      className={`relative text-left px-2.5 py-2 border transition-all
+                                  ${active ? 'border-pf-brass bg-pf-brass/5' : 'border-pf-brass-dim/30 hover:border-pf-brass-dim bg-pf-bg-card'}`}
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="font-body text-xs text-pf-parchment">{weaponName}</span>
+                        <span className="font-mono text-[9px] text-pf-stone shrink-0">
+                          {catEntry ? (catEntry.bulk === 'L' ? 'L' : catEntry.bulk) : '—'}
+                        </span>
+                      </div>
+                      {catEntry?.note && (
+                        <p className="font-body text-[9px] text-pf-stone/70 italic mt-0.5">{catEntry.note}</p>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}

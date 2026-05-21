@@ -1,5 +1,5 @@
 {
-  "_comment": "Items physically manifested by Exemplar ikons (worn + weapon). Body ikons are imbued on the body and grant no item. Each weapon/worn ikon grants one level-0 mundane item per the 'providence ensures you come across these items' lore. Player can swap via the shop; this seeds the loadout.",
+  "_comment": "Items physically manifested by Exemplar ikons (worn + weapon). Body ikons are imbued on the body and grant no item. Each weapon/worn ikon grants one level-0 mundane item per the 'providence ensures you come across these items' lore. Player can swap via the shop; this seeds the loadout. For weapon ikons, the `eligibleWeapons` list constrains the player's choice to weapons matching the ikon's canonical category — see StepGear's ikon-weapon picker.",
 
   "bands-of-imprisonment":   { "name": "Bands (bracers/anklets/circlet)", "priceSp": 0, "bulk": "L", "note": "Worn ikon — Exemplar's ikon manifested as a heavy adornment that hones discipline." },
   "fetching-bangles":         { "name": "Fetching Bangles",                "priceSp": 0, "bulk": "L", "note": "Worn ikon — bracers that gleam with your magnetism." },
@@ -10,13 +10,22 @@
   "thousand-league-sandals":  { "name": "Thousand-League Sandals",         "priceSp": 0, "bulk": "L", "note": "Worn ikon — threadbare but trustworthy footwear; +10 ft Speed." },
   "victors-wreath":           { "name": "Victor's Wreath (laurel or sash)","priceSp": 0, "bulk": "L", "note": "Worn ikon — symbol of triumph; headwear or belt-sash." },
 
-  "barrows-edge":             { "name": "Barrow's Edge (longsword)",       "priceSp": 0, "bulk": 1,   "note": "Weapon ikon — slashing/piercing melee weapon. Longsword is the canonical default; any sword/knife works." },
-  "gleaming-blade":           { "name": "Gleaming Blade (longsword)",      "priceSp": 0, "bulk": 1,   "note": "Weapon ikon — sword or knife group weapon. Longsword is the default." },
-  "hands-of-the-wildling":    { "name": "Wildling's Hands (unarmed)",      "priceSp": 0, "bulk": 0,   "note": "Weapon ikon — tattooed fists, savage claws, or powerful gauntlets. No carried weapon required." },
-  "mortal-harvest":           { "name": "Mortal Harvest (scythe)",         "priceSp": 0, "bulk": 2,   "note": "Weapon ikon — sickle, axe, flail, or polearm group. Scythe is canonical." },
-  "noble-branch":             { "name": "Noble Branch (quarterstaff)",     "priceSp": 0, "bulk": 1,   "note": "Weapon ikon — staff, bo staff, fighting stick, khakkara, or spear/polearm. Quarterstaff is the default." },
-  "shadow-sheath":            { "name": "Shadow Sheath (dagger)",          "priceSp": 0, "bulk": "L", "note": "Weapon ikon — sheath for one-handed thrown weapon of light Bulk. Dagger is the default; any thrown light weapon works." },
-  "starshot":                 { "name": "Starshot (shortbow)",             "priceSp": 0, "bulk": 1,   "note": "Weapon ikon — ranged weapon. Shortbow is the default; any bow or crossbow works." },
-  "titans-breaker":           { "name": "Titan's Breaker (maul)",          "priceSp": 0, "bulk": 2,   "note": "Weapon ikon — club, hammer, or axe group. Maul is canonical." },
-  "unfailing-bow":            { "name": "Unfailing Bow (longbow)",         "priceSp": 0, "bulk": 2,   "note": "Weapon ikon — ranged weapon, bow-flavored. Longbow is the default." }
+  "barrows-edge":             { "name": "Barrow's Edge",       "priceSp": 0, "bulk": 1,   "note": "Weapon ikon — slashing/piercing melee weapon.",
+                                "eligibleWeapons": ["Longsword","Shortsword","Rapier","Greatsword","Dagger","Battle Axe","Greataxe"] },
+  "gleaming-blade":           { "name": "Gleaming Blade",      "priceSp": 0, "bulk": 1,   "note": "Weapon ikon — sword or knife group weapon.",
+                                "eligibleWeapons": ["Longsword","Shortsword","Rapier","Greatsword","Dagger"] },
+  "hands-of-the-wildling":    { "name": "Wildling's Hands",    "priceSp": 0, "bulk": 0,   "note": "Weapon ikon — tattooed fists, savage claws, or powerful gauntlets. No carried weapon required.",
+                                "eligibleWeapons": [] },
+  "mortal-harvest":           { "name": "Mortal Harvest",      "priceSp": 0, "bulk": 2,   "note": "Weapon ikon — sickle, axe, flail, or polearm group.",
+                                "eligibleWeapons": ["Battle Axe","Greataxe"] },
+  "noble-branch":             { "name": "Noble Branch",        "priceSp": 0, "bulk": 1,   "note": "Weapon ikon — staff, bo staff, fighting stick, khakkara, or spear/polearm.",
+                                "eligibleWeapons": ["Quarterstaff","Javelin"] },
+  "shadow-sheath":            { "name": "Shadow Sheath",       "priceSp": 0, "bulk": "L", "note": "Weapon ikon — sheath for a one-handed thrown weapon of light Bulk.",
+                                "eligibleWeapons": ["Dagger"] },
+  "starshot":                 { "name": "Starshot",            "priceSp": 0, "bulk": 1,   "note": "Weapon ikon — ranged weapon.",
+                                "eligibleWeapons": ["Longbow + 20 arrows","Shortbow + 20 arrows","Sling + 20 bullets","Crossbow + 20 bolts"] },
+  "titans-breaker":           { "name": "Titan's Breaker",     "priceSp": 0, "bulk": 2,   "note": "Weapon ikon — club, hammer, or axe group, or bludgeoning unarmed.",
+                                "eligibleWeapons": ["Mace","Battle Axe","Greataxe"] },
+  "unfailing-bow":            { "name": "Unfailing Bow",       "priceSp": 0, "bulk": 2,   "note": "Weapon ikon — ranged bow-flavored weapon.",
+                                "eligibleWeapons": ["Longbow + 20 arrows","Shortbow + 20 arrows","Crossbow + 20 bolts"] }
 }
