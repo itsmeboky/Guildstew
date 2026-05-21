@@ -342,6 +342,7 @@ function transformClass(item, guard) {
     spellcasting: sys.spellcasting ?? 0,
     desc: getDesc(item, tier),
     source: sys.publication?.title,
+    license: sys.publication?.license,
     tier,
   };
 }
