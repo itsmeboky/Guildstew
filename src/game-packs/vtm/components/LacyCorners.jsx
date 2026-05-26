@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { V } from '../theme/colors.js';
-import { LACY_PATTERNS, STEP_PATTERN_KEYS } from '../theme/lacyPatterns.js';
+import { LACY_PATTERNS, STEP_PATTERN_KEYS } from '../theme/lacyPatterns.jsx';
 
 function LacyCorner({ pattern, position, color = V.bloodBri, opacity = 0.18, size = 460, rotateCCW = false }) {
   const placement = {

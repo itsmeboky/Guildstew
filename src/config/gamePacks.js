@@ -102,14 +102,33 @@ export const GAME_PACKS = {
   },
   world_of_darkness: {
     id: "world_of_darkness",
-    name: "World of Darkness",
-    short: "WoD",
+    family: "vtm",
+    name: "Vampire: The Masquerade (V5)",
+    short: "VTM",
+    shortName: "VTM",
+    tagAbbreviation: "VTM V5",
     tagline: "Modern horror with d10 dice pools.",
     description:
       "Vampires, werewolves, mages, and the human cost of supernatural power. Storyteller-focused mechanics.",
     accent: "#7f1d1d",
+    accentColor: "#c41e3a",
     icon: "🩸",
+    // Pre-launch: keeps the picker from offering this to non-admin
+    // users (CreateCharacterDialog.handlePackSelect early-returns
+    // on status !== 'available'). The route's admin gate
+    // (pages/VTMCharacterCreator.jsx isAdminUser check) is the
+    // real lock — flipping this to 'available' before the WoD/
+    // Paradox license closes would expose the route to the entire
+    // user base.
     status: "coming_soon",
+    creatorRoute: "VTMCharacterCreator",
+    license: "Dark Pack (pre-launch fan/dev use)",
+    // Lazy creator wired the same way as pf2e so CharacterCreator
+    // dispatch can resolve it once the status flips to 'available'.
+    creator: lazy(() =>
+      import("@/game-packs/vtm").then((m) => ({ default: m.CharacterCreatorFlow }))
+    ),
+    meta: () => import("@/game-packs/vtm").then((m) => m.PACK_META),
   },
   mork_borg: {
     id: "mork_borg",
