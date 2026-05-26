@@ -1,172 +1,379 @@
-// Applies a V5 predator type's grants + costs to the character
-// object. The prototype rendered the bonus strings as flavor text
-// only — production has to actually mutate the character state so
-// the Embrace step reflects the right Humanity, the right
-// background dots, the right merits/flaws.
+// V5 predator-type grant + cost parser, choice-driven.
 //
-// The strings come straight from PREDATOR_TYPES in
-// ../data/predatorTypes.js. They follow a small set of patterns
-// the V5 corebook uses for every predator type:
+// The prototype's parser auto-applied multi-option grants (e.g.
+// "Gain (•) Celerity or (•) Potence") and silently picked one,
+// or worse — for "Specialty: X or Y" — pushed the literal OR
+// string as a specialty. This file replaces that with a two-step
+// pipeline:
 //
-//   "Specialty: X"                       → specialties += [X]
-//   "Gain (•) <Discipline>"              → disciplines[<D>] += 1 (cap 5)
-//   "Gain (•) <D> or (•) <D2>"           → ambiguous; queued as a player pick
-//   "Contact (•••)"                      → backgrounds.contacts += 3 (cap 3)
-//   "Herd (••)" / "Resources (•)" etc.   → backgrounds.<id> += N (cap 3)
-//   "Feeding (••) <flavor>"              → merits += ["Feeding (•••) flavor"]
-//   "Looks Merit (••) — X"               → merits += [verbatim string]
-//   "Fame (•) within the scene"          → backgrounds.fame += 1
-//   "Gain one dot of Humanity"           → humanity = (humanity ?? 7) + 1
-//   "Lose one dot of Humanity"           → humanity -= 1
-//   "Lose three dots of Humanity"        → humanity -= 3
-//   "Enemy (•) — X" / "Dark Secret (•)"  → flaws += [verbatim]
-//   "Prey Exclusion (•) — X"             → flaws += [verbatim]
-//   "Spend three dots between X and Y"   → player-choice prompts queued
+//   parsePredatorGrants(predatorType)
+//      → { required: [...], choices: [...] }
 //
-// Strings that don't match any pattern (rare, but possible if the
-// data file grows) get pushed onto pendingChoices with a `raw`
-// label so the GM / player can resolve them by hand.
+//   applyResolution(baseline, predatorType, resolutions)
+//      → patched character
+//
+// `parsePredatorGrants` is pure and deterministic. It produces
+//   - `required` entries: grants/costs with no user input
+//   - `choices` entries: grants/costs that need the user to pick
+//     between options or distribute a dot budget
+//
+// `applyResolution` overlays the required entries + the user's
+// resolved choices onto a baseline character snapshot (which the
+// caller — VTMCharacterCreator — snapshots on first entry to
+// Step VI, then re-uses on every re-apply). Idempotent across
+// predator changes: switching from Alleycat to Bagger and
+// re-resolving produces the same character as picking Bagger from
+// scratch.
+//
+// Resolution shape stored on character.predatorResolutions:
+//   { [choice.id]: { picked: <option index> } }            // OR
+//   { [choice.id]: { distribution: [<dots>, <dots>, …] } } // distribute
 
-const KNOWN_BACKGROUNDS = [
+const KNOWN_BACKGROUNDS = new Set([
   'allies', 'contacts', 'fame', 'haven', 'herd', 'influence',
   'mask', 'mawla', 'resources', 'retainers', 'status',
-];
+]);
 
-// Strip the ornamental bullet dots and count them.
-function dotsFromBullets(str) {
+const WORD_NUMBERS = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
+};
+
+// Lower-cased background id from a corebook-cased name. Plural form
+// (`Contact` → `contacts`) collapsed to the canonical key used in
+// data/backgrounds.js.
+function backgroundId(name) {
+  let id = name.toLowerCase().trim();
+  if (id === 'contact') id = 'contacts';
+  if (id === 'resource') id = 'resources';
+  return KNOWN_BACKGROUNDS.has(id) ? id : null;
+}
+
+function countBullets(str) {
   const m = str.match(/\(([•]+)\)/);
   return m ? m[1].length : 0;
 }
 
-function classifyDot(line) {
-  // Specialty grants
-  const specialty = line.match(/^Specialty:\s*(.+)$/i);
-  if (specialty) return { kind: 'specialty', value: specialty[1].trim() };
+// --- Effect builders ----------------------------------------------
+// Each returns one of the {kind, ...} effect shapes referenced by
+// `required` entries and by `choices[].options[]` /
+// `choices[].targets[]`.
 
-  // Humanity nudges
-  if (/Lose three dots of Humanity/i.test(line)) return { kind: 'humanity', delta: -3 };
-  if (/Lose one dot of Humanity/i.test(line))    return { kind: 'humanity', delta: -1 };
-  if (/Gain one dot of Humanity/i.test(line))    return { kind: 'humanity', delta: +1 };
+const discipline = (target, dots = 1) => ({ kind: 'discipline', target, dots });
+const background = (target, dots) => ({ kind: 'background', target, dots });
+const specialty  = (value)         => ({ kind: 'specialty',  value });
+const humanity   = (delta)         => ({ kind: 'humanity',   delta });
+const merit      = (value)         => ({ kind: 'merit',      value });
+const flaw       = (value)         => ({ kind: 'flaw',       value });
 
-  // Either/or discipline grants — queued as a pick
-  const eitherDisc = line.match(/Gain\s+\(•\)\s+([\w\s]+?)\s+or\s+\(•\)\s+(.+?)(?:\s*\(in-clan\))?$/i);
-  if (eitherDisc) {
-    const choices = [eitherDisc[1].trim(), eitherDisc[2].trim()].map((s) => s.replace(/\s*\(in-clan\)\s*$/i, ''));
-    return { kind: 'choice', label: 'Discipline', options: choices.map((opt) => ({ kind: 'discipline', value: opt, dots: 1 })) };
+// --- Line classifier ----------------------------------------------
+// Returns one of:
+//   { kind: 'required', effect: <effect> }
+//   { kind: 'choice', choice: { id, prompt, kind, ... } }
+// Choice ids are derived from (predatorType.id, line index) so
+// resolutions can persist across re-renders.
+
+function parseLine(line, predatorId, idx) {
+  const raw = line.trim();
+
+  // ---- Specialty grants -----------------------------------------
+  // "Specialty: X" — one option → required
+  // "Specialty: X or Y" — two options → OR choice
+  // "Specialty: X / Y / Z" — three slash-separated options → OR choice
+  const specMatch = raw.match(/^Specialty:\s*(.+)$/i);
+  if (specMatch) {
+    const body = specMatch[1].trim();
+    // Slash-separated wins first because Scene Queen's
+    // "Etiquette / Leadership / Streetwise (scene)" uses ` / `.
+    if (body.includes(' / ')) {
+      const opts = body.split(' / ').map((s) => s.trim()).filter(Boolean);
+      if (opts.length >= 2) {
+        return {
+          kind: 'choice',
+          choice: {
+            id: `${predatorId}-specialty-${idx}`,
+            prompt: 'Choose your starting specialty',
+            kind: 'or',
+            options: opts.map((value) => specialty(value)),
+          },
+        };
+      }
+    }
+    if (/\s+or\s+/i.test(body)) {
+      const opts = body.split(/\s+or\s+/i).map((s) => s.trim()).filter(Boolean);
+      if (opts.length === 2) {
+        return {
+          kind: 'choice',
+          choice: {
+            id: `${predatorId}-specialty-${idx}`,
+            prompt: 'Choose your starting specialty',
+            kind: 'or',
+            options: opts.map((value) => specialty(value)),
+          },
+        };
+      }
+    }
+    return { kind: 'required', effect: specialty(body) };
   }
 
-  // Plain single-dot discipline grant
-  const singleDisc = line.match(/Gain\s+\(•\)\s+(.+?)\s*(?:\(in-clan\))?\s*$/i);
-  if (singleDisc) return { kind: 'discipline', value: singleDisc[1].trim(), dots: 1 };
+  // ---- Humanity nudges (no options) -----------------------------
+  if (/Lose three dots of Humanity/i.test(raw)) return { kind: 'required', effect: humanity(-3) };
+  if (/Lose one dot of Humanity/i.test(raw))    return { kind: 'required', effect: humanity(-1) };
+  if (/Gain one dot of Humanity/i.test(raw))    return { kind: 'required', effect: humanity(+1) };
 
-  // Either/or background — Fame and Herd, etc.
-  const spendBetween = line.match(/Spend\s+(\w+)\s+dots?\s+between\s+(.+?)\s+and\s+(.+?)$/i);
-  if (spendBetween) {
-    const wordToNum = { one: 1, two: 2, three: 3, four: 4, five: 5 };
-    const total = wordToNum[spendBetween[1].toLowerCase()] || parseInt(spendBetween[1], 10) || 0;
+  // ---- Discipline OR choice -------------------------------------
+  // "Gain (•) X or (•) Y" — always one dot per side.
+  // The "(in-clan)" trailing tag is informational only; it doesn't
+  // change the effect, so we strip it before building the option.
+  const eitherDisc = raw.match(/^Gain\s+\(•\)\s+(.+?)\s+or\s+\(•\)\s+(.+?)\s*$/i);
+  if (eitherDisc) {
+    const a = eitherDisc[1].trim().replace(/\s*\(in-clan\)\s*$/i, '');
+    const b = eitherDisc[2].trim().replace(/\s*\(in-clan\)\s*$/i, '');
     return {
       kind: 'choice',
-      label: `Spend ${total} dots between ${spendBetween[2]} and ${spendBetween[3]}`,
-      total,
-      options: [spendBetween[2], spendBetween[3]].map((name) => ({ name, id: name.toLowerCase() })),
+      choice: {
+        id: `${predatorId}-discipline-${idx}`,
+        prompt: 'Choose your starting discipline',
+        kind: 'or',
+        options: [discipline(a, 1), discipline(b, 1)],
+      },
     };
   }
 
-  // Background grants — "Contact (•••)", "Herd (••)", "Resources (•)", etc.
-  // Also handles "Contact (•••) — Criminal" trailing flavor.
-  const bgMatch = line.match(/^(Allies|Contacts?|Contact|Fame|Haven|Herd|Influence|Mask|Mawla|Resources?|Retainers|Status)\s*\(([•]+)\)/i);
+  // ---- Single-dot discipline grant (no choice) ------------------
+  const singleDisc = raw.match(/^Gain\s+\(•\)\s+(.+?)\s*(?:\(in-clan\))?\s*$/i);
+  if (singleDisc) {
+    return { kind: 'required', effect: discipline(singleDisc[1].trim(), 1) };
+  }
+
+  // ---- "Spend N dots between X and Y" distribute choice ---------
+  const spendBetween = raw.match(/^Spend\s+(\w+)\s+dots?\s+between\s+(.+?)\s+and\s+(.+?)\s*$/i);
+  if (spendBetween) {
+    const budget = WORD_NUMBERS[spendBetween[1].toLowerCase()] ?? parseInt(spendBetween[1], 10) ?? 0;
+    const a = spendBetween[2].trim();
+    const b = spendBetween[3].trim();
+    // Targets are either backgrounds (Fame/Herd/etc.) or
+    // flaws (Enemies / Mythic Flaws). Inspect both sides — if
+    // both resolve to backgrounds, target.kind = 'background';
+    // otherwise treat each side as a flaw category.
+    const aBg = backgroundId(a);
+    const bBg = backgroundId(b);
+    const targets = (aBg && bBg)
+      ? [background(aBg, 0), background(bBg, 0)]
+      : [{ kind: 'flaw', target: a, dots: 0 }, { kind: 'flaw', target: b, dots: 0 }];
+    return {
+      kind: 'choice',
+      choice: {
+        id: `${predatorId}-distribute-${idx}`,
+        prompt: `Distribute ${budget} dots between ${a} and ${b}`,
+        kind: 'distribute',
+        budget,
+        targets: targets.map((t) => ({ ...t, max: 3, label: t.target })),
+      },
+    };
+  }
+
+  // ---- Background grants ----------------------------------------
+  // "Contact (•••)", "Herd (••)", "Resources (•)", "Fame (•)
+  // within the scene", "Contact (•)". Both numbered-bullet count
+  // and known-background name are required.
+  const bgMatch = raw.match(/^(Allies|Contacts?|Fame|Haven|Herd|Influence|Mask|Mawla|Resources?|Retainers|Status)\s*\(([•]+)\)/i);
   if (bgMatch) {
-    let id = bgMatch[1].toLowerCase();
-    if (id === 'contact') id = 'contacts';
-    if (id === 'resource') id = 'resources';
-    if (KNOWN_BACKGROUNDS.includes(id)) {
-      return { kind: 'background', id, dots: bgMatch[2].length };
+    const id = backgroundId(bgMatch[1]);
+    if (id) return { kind: 'required', effect: background(id, bgMatch[2].length) };
+  }
+
+  // ---- Feeding lines --------------------------------------------
+  // V5 distinguishes feeding merits (Iron Gullet, Bloodhound) from
+  // feeding flaws (Vegan). Heuristic: if the line has a "—" with a
+  // trailing dietary restriction descriptor, treat as flaw;
+  // otherwise treat as merit. The current data only has one flaw
+  // form (Farmer's "Feeding (••) — Vegan").
+  if (/^Feeding\s*\(/i.test(raw)) {
+    if (/—\s*Vegan/i.test(raw)) return { kind: 'required', effect: flaw(raw) };
+    return { kind: 'required', effect: merit(raw) };
+  }
+
+  // ---- Other merits ---------------------------------------------
+  if (/^Looks Merit\s*\(/i.test(raw)) {
+    return { kind: 'required', effect: merit(raw) };
+  }
+
+  // ---- Flaws -----------------------------------------------------
+  if (/^Enemy\s*\(/i.test(raw))         return { kind: 'required', effect: flaw(raw) };
+  if (/^Dark Secret\s*\(/i.test(raw))   return { kind: 'required', effect: flaw(raw) };
+  if (/^Prey Exclusion\s*\(/i.test(raw)) return { kind: 'required', effect: flaw(raw) };
+
+  // ---- Unrecognized line — surface as a required raw note --------
+  // Better than a silent drop: the Embrace summary will show this
+  // so the GM/player can deal with it manually.
+  return { kind: 'required', effect: { kind: 'raw', value: raw } };
+}
+
+/**
+ * Parse every grant + cost line on a predator type into a
+ * structured choice tree.
+ *
+ * @param {Object} predatorType  Entry from PREDATOR_TYPES
+ * @returns {{ required: Effect[], choices: Choice[] }}
+ */
+export function parsePredatorGrants(predatorType) {
+  if (!predatorType) return { required: [], choices: [] };
+  const required = [];
+  const choices = [];
+  const lines = [...(predatorType.grants || []), ...(predatorType.cost || [])];
+  lines.forEach((line, idx) => {
+    const parsed = parseLine(line, predatorType.id, idx);
+    if (parsed.kind === 'required') required.push(parsed.effect);
+    else choices.push(parsed.choice);
+  });
+  return { required, choices };
+}
+
+// --- Resolution completeness check --------------------------------
+
+/**
+ * Whether the user has fully resolved every choice. The Step VI
+ * NavBar uses this to gate Continue.
+ */
+export function isResolutionComplete(parsedOrPredatorType, resolutions = {}) {
+  const parsed = parsedOrPredatorType?.choices
+    ? parsedOrPredatorType
+    : parsePredatorGrants(parsedOrPredatorType);
+  if (!parsed) return false;
+  for (const choice of parsed.choices) {
+    const r = resolutions[choice.id];
+    if (!r) return false;
+    if (choice.kind === 'or') {
+      if (typeof r.picked !== 'number') return false;
+      if (r.picked < 0 || r.picked >= choice.options.length) return false;
+    } else if (choice.kind === 'distribute') {
+      if (!Array.isArray(r.distribution)) return false;
+      if (r.distribution.length !== choice.targets.length) return false;
+      const sum = r.distribution.reduce((a, b) => a + b, 0);
+      if (sum !== choice.budget) return false;
+      for (let i = 0; i < r.distribution.length; i++) {
+        const d = r.distribution[i];
+        if (d < 0 || d > (choice.targets[i].max ?? 3)) return false;
+      }
     }
   }
-  // "Fame (•) within the scene" — same pattern.
-  if (/^Fame\s*\(([•]+)\)/i.test(line)) {
-    const m = line.match(/^Fame\s*\(([•]+)\)/i);
-    return { kind: 'background', id: 'fame', dots: m[1].length };
-  }
-
-  // Feeding merit — V5 calls these out as "Feeding (•••) Iron Gullet", etc.
-  if (/^Feeding\s*\(/i.test(line)) {
-    return { kind: 'merit', value: line };
-  }
-
-  // Looks Merit, generic merits
-  if (/^Looks Merit\s*\(/i.test(line)) {
-    return { kind: 'merit', value: line };
-  }
-
-  // Costs that read as flaws.
-  if (/^Enemy\s*\(/i.test(line)) return { kind: 'flaw', value: line };
-  if (/^Dark Secret\s*\(/i.test(line)) return { kind: 'flaw', value: line };
-  if (/^Prey Exclusion\s*\(/i.test(line)) return { kind: 'flaw', value: line };
-
-  // Anything else gets queued for human resolution.
-  return { kind: 'raw', value: line };
+  return true;
 }
 
-function clampedAdd(prev, addend, cap) {
-  return Math.min(cap, (prev || 0) + addend);
+// --- Overlay computation ------------------------------------------
+
+const cap = (n, m) => Math.min(m, Math.max(0, n));
+
+function applyEffectToAccum(acc, effect) {
+  switch (effect.kind) {
+    case 'discipline':
+      acc.disciplines[effect.target] = (acc.disciplines[effect.target] || 0) + effect.dots;
+      break;
+    case 'background':
+      if (effect.dots > 0) {
+        acc.backgrounds[effect.target] = (acc.backgrounds[effect.target] || 0) + effect.dots;
+      }
+      break;
+    case 'specialty':
+      acc.specialties.push(effect.value);
+      break;
+    case 'humanity':
+      acc.humanityDelta += effect.delta;
+      break;
+    case 'merit':
+      acc.merits.push(effect.value);
+      break;
+    case 'flaw':
+      acc.flaws.push(effect.value);
+      break;
+    case 'raw':
+      // Surface in flaws so the GM/player sees something on Embrace
+      // rather than the line being silently dropped.
+      acc.flaws.push(`(Unparsed) ${effect.value}`);
+      break;
+    default:
+      break;
+  }
 }
 
-// Returns the next character state after applying every grant/cost
-// the predator type carries. Pure — does not mutate the input.
-// Re-running with the same predator id is a no-op-ish noop because
-// the second call still re-applies bonuses; the caller is
-// responsible for only calling once per predator pick (see
-// VTMCharacterCreator.jsx, which calls on advance from Step VI).
-export function applyPredatorBonuses(character, predatorType) {
-  if (!predatorType) return character;
-
-  const next = {
-    ...character,
-    specialties: [...(character.specialties || [])],
-    merits: [...(character.merits || [])],
-    flaws: [...(character.flaws || [])],
-    pendingChoices: [...(character.pendingChoices || [])],
-    disciplines: { ...(character.disciplines || {}) },
-    backgrounds: { ...(character.backgrounds || {}) },
-    humanity: character.humanity != null ? character.humanity : 7,
-    predatorBonusesApplied: predatorType.id,
+function computeOverlay(parsed, resolutions) {
+  const acc = {
+    disciplines: {}, backgrounds: {},
+    specialties: [], merits: [], flaws: [],
+    humanityDelta: 0,
   };
 
-  const lines = [...(predatorType.grants || []), ...(predatorType.cost || [])];
+  for (const effect of parsed.required) {
+    applyEffectToAccum(acc, effect);
+  }
 
-  for (const raw of lines) {
-    const eff = classifyDot(raw);
-    switch (eff.kind) {
-      case 'specialty':
-        next.specialties.push(eff.value);
-        break;
-      case 'humanity':
-        next.humanity = Math.max(0, Math.min(10, next.humanity + eff.delta));
-        break;
-      case 'discipline':
-        next.disciplines[eff.value] = clampedAdd(next.disciplines[eff.value], eff.dots, 5);
-        break;
-      case 'background':
-        next.backgrounds[eff.id] = clampedAdd(next.backgrounds[eff.id], eff.dots, 3);
-        break;
-      case 'merit':
-        next.merits.push(eff.value);
-        break;
-      case 'flaw':
-        next.flaws.push(eff.value);
-        break;
-      case 'choice':
-        // Either/or grant — player has to resolve before save. The
-        // VTMCharacterCreator surfaces this as a UI prompt before
-        // advancing past Step VI.
-        next.pendingChoices.push({ source: predatorType.id, ...eff });
-        break;
-      case 'raw':
-      default:
-        next.pendingChoices.push({ source: predatorType.id, kind: 'raw', value: eff.value, label: 'Apply manually' });
+  for (const choice of parsed.choices) {
+    const r = resolutions[choice.id];
+    if (!r) continue;
+    if (choice.kind === 'or' && typeof r.picked === 'number') {
+      const opt = choice.options[r.picked];
+      if (opt) applyEffectToAccum(acc, opt);
+    } else if (choice.kind === 'distribute' && Array.isArray(r.distribution)) {
+      r.distribution.forEach((dots, i) => {
+        const target = choice.targets[i];
+        if (!target || dots <= 0) return;
+        if (target.kind === 'background') {
+          applyEffectToAccum(acc, background(target.target, dots));
+        } else if (target.kind === 'flaw') {
+          applyEffectToAccum(acc, flaw(`${target.target} (${'•'.repeat(dots)})`));
+        }
+      });
     }
   }
 
-  return next;
+  return acc;
+}
+
+// --- Final apply --------------------------------------------------
+
+/**
+ * Take a baseline character (user's hand-allocated state, before
+ * any predator bonuses), the predator type, and the user's
+ * resolutions, and produce the patched character with bonuses
+ * overlaid.
+ *
+ * Pure / idempotent — calling twice with the same arguments
+ * produces the same result. Calling with a different predatorType
+ * or resolutions starts from the same baseline (the caller passes
+ * the *baseline*, not the previously-patched character) so prior
+ * predator effects never leak.
+ *
+ * @param {Object} baseline    User-hand-allocated character snapshot
+ * @param {Object} predatorType
+ * @param {Object} resolutions { [choice.id]: { picked|distribution } }
+ * @returns {Object}           New character object
+ */
+export function applyResolution(baseline, predatorType, resolutions = {}) {
+  if (!baseline) return baseline;
+  if (!predatorType) return baseline;
+
+  const parsed = parsePredatorGrants(predatorType);
+  const overlay = computeOverlay(parsed, resolutions);
+
+  const disciplines = { ...(baseline.disciplines || {}) };
+  for (const [d, dots] of Object.entries(overlay.disciplines)) {
+    disciplines[d] = cap((disciplines[d] || 0) + dots, 5);
+  }
+
+  const backgrounds = { ...(baseline.backgrounds || {}) };
+  for (const [b, dots] of Object.entries(overlay.backgrounds)) {
+    backgrounds[b] = cap((backgrounds[b] || 0) + dots, 3);
+  }
+
+  const humanity = cap((baseline.humanity ?? 7) + overlay.humanityDelta, 10);
+
+  return {
+    ...baseline,
+    disciplines,
+    backgrounds,
+    humanity,
+    specialties: [...(baseline.specialties || []), ...overlay.specialties],
+    merits:      [...(baseline.merits      || []), ...overlay.merits],
+    flaws:       [...(baseline.flaws       || []), ...overlay.flaws],
+  };
 }

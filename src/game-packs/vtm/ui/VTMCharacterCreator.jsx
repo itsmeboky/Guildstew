@@ -1,21 +1,37 @@
 // Root VTM creator. Owns the character state, the current step
 // index, the random background tile, the Blood-Leech storyteller
-// gate, and the predator-bonus apply pass on advance from
-// Step VI. Save is lifted to the parent via `onComplete` (the
-// pages/VTMCharacterCreator.jsx shell handles the actual
-// Character.create call so the page can also pull `useAuth`
-// + `useSubscription` without leaking those into the pack).
+// gate, the predator-resolution snapshot, and the bonus-apply
+// pass on advance from Step VI. Save is lifted to the parent via
+// `onComplete` (the pages/VTMCharacterCreator.jsx shell handles
+// the actual Character.create call so the page can also pull
+// `useAuth` + `useSubscription` without leaking those into the
+// pack).
 //
 // Auth identity (userId for upload paths) is also passed down
 // from the shell — the pack itself never touches AuthContext so
 // it stays self-contained.
+//
+// Predator-bonus state machine (Step VI semantics):
+//   - On forward Step VI → VII (or any later step): snapshot the
+//     pure-user character into `_preBonuses` (if not already), then
+//     overlay applyResolution() onto that baseline. Storing the
+//     baseline lets us re-apply cleanly when the player changes
+//     their predator pick or their resolutions without accumulating
+//     prior predator's effects.
+//   - On backward navigation past Step VI (to ≤ V): drop
+//     `_preBonuses` AND `predatorResolutions`, and restore the
+//     character to its pre-bonus state. The player can re-pick
+//     and re-resolve when they advance again.
+//   - On predator change while on Step VI itself: clear
+//     `predatorResolutions` (resolutions don't carry across
+//     predator picks). The baseline (if it exists) stays put.
 
 import React, { useState, useCallback, useMemo, useRef } from 'react';
 
 import { STEPS } from '../data/steps.js';
 import { BACKGROUND_IMAGES } from '../data/assets.js';
-import { PREDATOR_TYPES, getPredatorType } from '../data/predatorTypes.js';
-import { applyPredatorBonuses } from '../rules/predatorBonuses.js';
+import { getPredatorType } from '../data/predatorTypes.js';
+import { applyResolution, isResolutionComplete, parsePredatorGrants } from '../rules/predatorBonuses.js';
 import { uploadVtmAsset } from '../rules/uploadAsset.js';
 
 import GlobalStyles from '../theme/GlobalStyles.jsx';
@@ -38,6 +54,20 @@ import StepEmbrace from '../steps/StepEmbrace.jsx';
 // but the upload path doesn't need cryptographic uniqueness —
 // userId already namespaces.
 const newTempId = () => `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+// Fields that get overwritten by the predator-bonus overlay. The
+// snapshot stashes their values before first apply so subsequent
+// re-applies start from a clean baseline.
+function snapshotBonusFields(character) {
+  return {
+    disciplines: { ...(character.disciplines || {}) },
+    backgrounds: { ...(character.backgrounds || {}) },
+    humanity:    character.humanity ?? 7,
+    specialties: [...(character.specialties || [])],
+    merits:      [...(character.merits      || [])],
+    flaws:       [...(character.flaws       || [])],
+  };
+}
 
 export default function VTMCharacterCreator({
   userId,           // string — auth user.id; required for uploads
@@ -64,28 +94,34 @@ export default function VTMCharacterCreator({
     },
     skills: {}, skillApproach: 'Balanced',
     disciplines: {}, predatorType: null,
+    predatorResolutions: {},
+    _preBonuses: null,
     touchstones: [], backgrounds: {},
     humanity: 7,
     specialties: [], merits: [], flaws: [],
-    pendingChoices: [],
-    predatorBonusesApplied: null,
   });
 
   const update = useCallback((patch) => setCharacter((c) => ({ ...c, ...patch })), []);
 
   // --- Blood Leech gating ----------------------------------------
   const [pendingPredator, setPendingPredator] = useState(null);
+  const commitPredator = useCallback((id) => {
+    // Changing predator clears resolutions (they don't carry across
+    // picks). The baseline snapshot stays so re-applying with the
+    // new predator produces a clean character from the same baseline.
+    update({ predatorType: id, predatorResolutions: {} });
+  }, [update]);
   const requestPredatorPick = useCallback((id) => {
     if (id === 'blood_leech' && character.predatorType !== 'blood_leech') {
       setPendingPredator(id);
       return;
     }
-    update({ predatorType: id, predatorBonusesApplied: null });
-  }, [character.predatorType, update]);
+    commitPredator(id);
+  }, [character.predatorType, commitPredator]);
   const acceptPredator = useCallback(() => {
-    if (pendingPredator) update({ predatorType: pendingPredator, predatorBonusesApplied: null });
+    if (pendingPredator) commitPredator(pendingPredator);
     setPendingPredator(null);
-  }, [pendingPredator, update]);
+  }, [pendingPredator, commitPredator]);
   const cancelPredator = useCallback(() => setPendingPredator(null), []);
 
   // --- Step nav with predator-bonus apply pass on Step VI exit ----
@@ -94,14 +130,37 @@ export default function VTMCharacterCreator({
   const goTo = useCallback((newStep) => {
     if (newStep < 0 || newStep > 8) return character;
     let nextChar = character;
-    // Leaving Step VI (Hunt) forward — apply predator bonuses once.
+
+    // Leaving Step VI (Hunt) forward — overlay predator bonuses.
+    // applyResolution only touches the six bonus fields
+    // (disciplines, backgrounds, humanity, specialties, merits,
+    // flaws); the rest of the character (attributes, skills,
+    // touchstones, identity text, etc.) carries over via the
+    // outer spread.
     if (step === 5 && newStep > 5) {
       const pt = getPredatorType(character.predatorType);
-      if (pt && character.predatorBonusesApplied !== pt.id) {
-        nextChar = applyPredatorBonuses(character, pt);
+      if (pt) {
+        const baseline = character._preBonuses || snapshotBonusFields(character);
+        const overlaid = applyResolution(baseline, pt, character.predatorResolutions || {});
+        nextChar = { ...character, ...overlaid, _preBonuses: baseline };
         setCharacter(nextChar);
       }
     }
+
+    // Going backward to Step VI or earlier — drop the overlay so
+    // the player sees their pure user state. Predator resolutions
+    // stay so they don't have to re-pick if they're just bouncing
+    // back to Step VI to change disciplines. The overlay will
+    // re-apply on the next forward advance from Step VI.
+    if (step > 5 && newStep <= 5 && character._preBonuses) {
+      nextChar = {
+        ...character,
+        ...character._preBonuses,
+        _preBonuses: null,
+      };
+      setCharacter(nextChar);
+    }
+
     setStep(newStep);
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
     return nextChar;
@@ -126,12 +185,15 @@ export default function VTMCharacterCreator({
       setStep(8);
       return;
     }
-    // Apply predator bonuses if the user skipped Step VI bonuses
-    // pass (defensive — usually goTo handles it on advance from 5).
+    // Defensive re-apply — by Step VIII the overlay is already
+    // applied (Step VI's resolution gate enforces it), so this
+    // mostly catches the path where a future code change loses
+    // the overlay state. Cheap to run.
     let finalChar = character;
     const pt = getPredatorType(character.predatorType);
-    if (pt && character.predatorBonusesApplied !== pt.id) {
-      finalChar = applyPredatorBonuses(character, pt);
+    if (pt && character._preBonuses) {
+      const overlaid = applyResolution(character._preBonuses, pt, character.predatorResolutions || {});
+      finalChar = { ...character, ...overlaid };
       setCharacter(finalChar);
     }
     setStep(8);
@@ -149,6 +211,18 @@ export default function VTMCharacterCreator({
   }, [character, onComplete]);
 
   const isAdvantages = step === 7;
+  const isHunt = step === 5;
+
+  // Block Step VI → VII advance until every predator choice is
+  // resolved. Other steps don't gate today.
+  const huntComplete = useMemo(() => {
+    if (!isHunt) return true;
+    const pt = getPredatorType(character.predatorType);
+    if (!pt) return false; // no predator picked yet
+    return isResolutionComplete(parsePredatorGrants(pt), character.predatorResolutions || {});
+  }, [isHunt, character.predatorType, character.predatorResolutions]);
+
+  const canAdvance = (saving ? false : true) && (isHunt ? huntComplete : true);
 
   return (
     <div
@@ -184,12 +258,13 @@ export default function VTMCharacterCreator({
         step={step}
         total={STEPS.length}
         onBack={() => goTo(step - 1)}
-        // Step VIII → IX: "EMBRACE" fires the save *and* advances.
-        // Step IX itself: NavBar's last-step branch disables the
-        // button — by that point save is already in flight or done.
         onNext={isAdvantages ? handleEmbrace : () => goTo(step + 1)}
-        canNext={!saving}
-        nextLabel={isAdvantages ? (saving ? 'SAVING…' : 'EMBRACE') : 'CONTINUE'}
+        canNext={canAdvance}
+        nextLabel={
+          isHunt && !huntComplete ? 'RESOLVE CHOICES'
+          : isAdvantages ? (saving ? 'SAVING…' : 'EMBRACE')
+          : 'CONTINUE'
+        }
       />
 
       <BloodLeechGate

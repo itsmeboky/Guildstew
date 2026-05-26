@@ -45,5 +45,9 @@ export const CharacterCreatorFlow = lazy(() =>
 
 // Re-export the helpers Phase 4 introduced for testing /
 // debugging from outside the pack.
-export { applyPredatorBonuses } from './rules/predatorBonuses.js';
+export {
+  parsePredatorGrants,
+  applyResolution,
+  isResolutionComplete,
+} from './rules/predatorBonuses.js';
 export { uploadVtmAsset } from './rules/uploadAsset.js';
