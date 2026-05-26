@@ -19,6 +19,7 @@ import AmbientGlow from '../components/AmbientGlow.jsx';
 import AmbientBats from '../components/AmbientBats.jsx';
 import CharacterWitness from '../components/CharacterWitness.jsx';
 import Label from '../components/Label.jsx';
+import PredatorChoiceResolver from '../components/PredatorChoiceResolver.jsx';
 
 function PredatorDetail({ predator }) {
   const Icon = predator.sigil;
@@ -98,6 +99,8 @@ export default function StepPredator({ character, update, requestPredatorPick })
     else update({ predatorType: id });
   };
 
+  const setResolutions = (next) => update({ predatorResolutions: next });
+
   return (
     <div className="scene-in" style={{ minHeight: '100vh', position: 'relative', overflow: 'hidden', padding: '60px 32px 140px' }}>
       <AmbientGlow red={0.2} teal={0.18} />
@@ -165,6 +168,14 @@ export default function StepPredator({ character, update, requestPredatorPick })
                   Click a pin on the map. Each neighborhood holds a different way to feed.
                 </p>
               </div>
+            )}
+
+            {selected && (
+              <PredatorChoiceResolver
+                predatorType={selected}
+                resolutions={character.predatorResolutions || {}}
+                onChange={setResolutions}
+              />
             )}
 
             <div className="cut-md" style={{
