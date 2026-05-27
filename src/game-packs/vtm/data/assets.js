@@ -16,9 +16,9 @@ const PUBLIC_BUCKET = 'https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/objec
 
 export const BACKGROUND_IMAGES = [
   `${PUBLIC_BUCKET}/UI/characterbackground1.png`,
-  `${PUBLIC_BUCKET}/UI/characterbackground2.png`,
-  `${PUBLIC_BUCKET}/UI/characterbackground3.png`,
-  `${PUBLIC_BUCKET}/UI/characterbackground4.png`,
+  `${PUBLIC_BUCKET}/UI/characterbackground2.jpg`,
+  `${PUBLIC_BUCKET}/UI/characterbackground3.jpg`,
+  `${PUBLIC_BUCKET}/UI/characterbackground4.jpg`,
   `${PUBLIC_BUCKET}/UI/characterbackground5.jpg`,
 ];
 
