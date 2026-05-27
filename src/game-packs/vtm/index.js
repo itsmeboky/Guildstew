@@ -23,8 +23,6 @@
  *   - ui/         root VTMCharacterCreator flow
  */
 
-import { lazy } from 'react';
-
 export * from './data/index.js';
 
 export const PACK_META = {
@@ -36,22 +34,20 @@ export const PACK_META = {
   license: ['Dark Pack (pre-launch fan/dev use)'],
 };
 
-// Lazy-loaded root creator. Matches how pf2e wires
-// `CharacterCreatorFlow` so the gamePacks config can refer to the
-// pack without dragging the JSX into the initial bundle.
-export const CharacterCreatorFlow = lazy(() =>
-  import('./ui/VTMCharacterCreator.jsx').then((m) => ({ default: m.default }))
-);
-
-// Library-side placeholder character sheet. Routed through
-// CharacterDetailDispatcher via pack.detailComponent =
-// 'VTMCharacterDetail'. The full V5 sheet is a separate downstream
-// project; this renders portrait + identity + stat strip + the
-// resolved-overlay-derived V5 vitals so the player at least sees
-// their character back when they click in the library.
-export const CharacterDetail = lazy(() =>
-  import('./ui/CharacterDetail.jsx').then((m) => ({ default: m.default }))
-);
+// Direct re-exports — match the pf2e pattern. Callers that want
+// code-splitting wrap these in React.lazy() at the consumer site
+// (gamePacks.js `creator`, CharacterDetailDispatcher.DETAIL_COMPONENTS).
+//
+// We used to wrap these in lazy() here too, which produced a
+// double-lazy chain on the detail-panel path: the dispatcher's
+// `lazy(() => import('@/game-packs/vtm').then(m => ({ default:
+// m.CharacterDetail })))` resolved to `{ default: <inner lazy
+// thunk> }`, asking React to render a lazy as if it were a regular
+// component — minified error #306. CharacterCreatorFlow happened to
+// survive (the page shell renders it directly inside its own
+// Suspense), but the library card crashed.
+export { default as CharacterCreatorFlow } from './ui/VTMCharacterCreator.jsx';
+export { default as CharacterDetail } from './ui/CharacterDetail.jsx';
 
 // Re-export the helpers Phase 4 introduced for testing /
 // debugging from outside the pack.
