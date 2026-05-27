@@ -20,6 +20,7 @@ import AmbientBats from '../components/AmbientBats.jsx';
 import CharacterWitness from '../components/CharacterWitness.jsx';
 import Label from '../components/Label.jsx';
 import PredatorChoiceResolver from '../components/PredatorChoiceResolver.jsx';
+import CaseFileStrip from '../components/CaseFileStrip.jsx';
 
 function PredatorDetail({ predator }) {
   const Icon = predator.sigil;
@@ -164,9 +165,9 @@ export default function StepPredator({ character, update, requestPredatorPick })
                 border: `1px solid ${V.edgeRedDim}`, padding: 32, textAlign: 'center',
               }}>
                 <MapPin size={32} color={V.textDim} style={{ marginBottom: 14, opacity: 0.6 }} />
-                <p className="f-italic" style={{ color: V.textMuted, fontSize: 16, margin: 0, lineHeight: 1.55 }}>
+                <CaseFileStrip fontSize={16}>
                   Click a pin on the map. Each neighborhood holds a different way to feed.
-                </p>
+                </CaseFileStrip>
               </div>
             )}
 

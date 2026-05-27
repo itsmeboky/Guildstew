@@ -13,6 +13,7 @@ import CharacterWitness from '../components/CharacterWitness.jsx';
 import Art from '../components/Art.jsx';
 import Dots from '../components/Dots.jsx';
 import Label from '../components/Label.jsx';
+import CaseFileStrip from '../components/CaseFileStrip.jsx';
 
 export default function StepAdvantages({ character, update }) {
   const ADVANTAGE_BUDGET = 7;
@@ -39,9 +40,11 @@ export default function StepAdvantages({ character, update }) {
         <div className="fade-up" style={{ textAlign: 'center', marginBottom: 32 }}>
           <div className="f-mono" style={{ fontSize: 11, color: V.cyan, letterSpacing: '0.4em', marginBottom: 12 }}>CHAPTER VIII · CONNECTIONS</div>
           <h1 className="outline-text" style={{ fontSize: 'clamp(48px, 7vw, 84px)', lineHeight: 0.95, fontWeight: 900, margin: 0 }}>WHO ANSWERS</h1>
-          <p className="f-italic" style={{ fontSize: 17, color: V.textMuted, marginTop: 14, maxWidth: 640, margin: '14px auto 0' }}>
-            Seven dots' worth of leverage. The threads that tie you to the city.
-          </p>
+          <div style={{ marginTop: 14 }}>
+            <CaseFileStrip fontSize={17}>
+              Seven dots' worth of leverage. The threads that tie you to the city.
+            </CaseFileStrip>
+          </div>
         </div>
 
         <div className="fade-up-1 cut-md" style={{

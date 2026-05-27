@@ -17,6 +17,7 @@ import AmbientBats from '../components/AmbientBats.jsx';
 import PolaroidUpload from '../components/PolaroidUpload.jsx';
 import PolaroidMemory from '../components/PolaroidMemory.jsx';
 import CompactField from '../components/CompactField.jsx';
+import CaseFileStrip from '../components/CaseFileStrip.jsx';
 
 export default function StepConcept({ character, update, uploadPortraitToken }) {
   return (
@@ -36,12 +37,11 @@ export default function StepConcept({ character, update, uploadPortraitToken }) 
           <h1 className="outline-text" style={{ fontSize: 'clamp(48px, 8vw, 92px)', lineHeight: 0.95, fontWeight: 900, margin: 0 }}>
             BEFORE THE KISS
           </h1>
-          <p className="f-italic" style={{
-            fontSize: 17, color: V.textMuted, marginTop: 14, maxWidth: 680,
-            margin: '14px auto 0', lineHeight: 1.55,
-          }}>
-            Tonight you bury who you were. Lay out the photographs while you still remember the warmth of them. Sign the Compact when you're ready.
-          </p>
+          <div style={{ marginTop: 14 }}>
+            <CaseFileStrip fontSize={17}>
+              Tonight you bury who you were. Lay out the photographs while you still remember the warmth of them. Sign the Compact when you're ready.
+            </CaseFileStrip>
+          </div>
         </div>
 
         <div className="fade-up-1" style={{
