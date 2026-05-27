@@ -72,7 +72,14 @@ export default function VTMCharacterDetail({ character, pack, onDelete }) {
   return (
     <div style={{
       width: '100%', minHeight: '100%',
-      background: `radial-gradient(ellipse at top, ${accent}25 0%, transparent 50%), linear-gradient(180deg, #03020a 0%, #0a0408 100%)`,
+      // No outer background — the library's right-panel wrapper
+      // (CharacterLibrary.jsx ~line 395, 500px-wide div with the
+      // standard `rgba(30, 36, 48, ...)` panel gradient) is the
+      // chrome every detail surface sits in. Painting a VTM-themed
+      // radial+linear over it made the right sidebar look like a
+      // distinct red-tinted column instead of the library's normal
+      // panel — the clan flavor now lives on the portrait frame
+      // and the identity text shadows only.
       color: V.text, padding: '24px 8px',
       fontFamily: 'Inter, system-ui, sans-serif',
     }}>
