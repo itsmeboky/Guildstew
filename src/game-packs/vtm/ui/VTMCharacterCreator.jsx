@@ -252,16 +252,13 @@ export default function VTMCharacterCreator({
         color: 'var(--vtm-text, #e8dcc8)',
         overflowX: 'hidden',
         position: 'relative',
-        // Background paint is wholly delegated to <BackgroundLayer/>
-        // below — the previous v-root inline `backgroundImage:
-        // url(bgUrl)` painted the tile a second time, and v-root's
-        // own background paints AFTER its negative-z fixed children
-        // per CSS stacking (parent background = step 1 of its own
-        // box render, fixed children with z<0 = step 2 of the
-        // document root). That covered every BackgroundLayer layer
-        // — base, texture, tile, the new clan overlay, the vignette
-        // — with a fresh full-saturation tile, which is why the
-        // overlay polish didn't visually mute the pattern.
+        backgroundColor: '#03020a',
+        backgroundImage: bgUrl
+          ? `linear-gradient(180deg, ${overlayAccent}99 0%, #03020a99 100%), url("${bgUrl}")`
+          : `linear-gradient(180deg, ${overlayAccent}99 0%, #03020a99 100%)`,
+        backgroundRepeat: 'no-repeat, repeat',
+        backgroundSize: 'cover, auto',
+        backgroundAttachment: 'fixed, fixed',
       }}
     >
       <GlobalStyles />
