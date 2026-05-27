@@ -13,7 +13,7 @@ import React from 'react';
 import { Shield, Heart, Zap, Footprints, Eye, Crosshair, Sparkles, BookOpen } from 'lucide-react';
 import { ANCESTRIES } from '../../data/index.js';
 import { computeDerivedStats } from '../../rules/compute-derived-stats.js';
-import { fmtMod, SectionHeading, StatCard } from './_shared.js';
+import { fmtMod, SectionHeading, StatCard } from './_shared.jsx';
 
 // Accent palette mirrors D&D 5e: teal=AC, red=HP, orange=Initiative,
 // brass=Class DC / Spell DC, gray=Speed/Perception. Keeps the two
