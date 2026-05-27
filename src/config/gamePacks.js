@@ -122,6 +122,10 @@ export const GAME_PACKS = {
     // user base.
     status: "coming_soon",
     creatorRoute: "VTMCharacterCreator",
+    // CharacterDetailDispatcher routes saved VTM characters in
+    // the library to this lazy-loaded placeholder sheet. The full
+    // V5 character sheet is a separate downstream project.
+    detailComponent: "VTMCharacterDetail",
     license: "Dark Pack (pre-launch fan/dev use)",
     // Lazy creator wired the same way as pf2e so CharacterCreator
     // dispatch can resolve it once the status flips to 'available'.
