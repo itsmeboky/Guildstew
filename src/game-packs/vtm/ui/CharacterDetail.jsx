@@ -82,8 +82,8 @@ export default function VTMCharacterDetail({ character, pack, onEdit, onDelete }
   const tokenZoom = usingTokenSource
     ? (sd.token_zoom || character?.token_zoom)
     : (sd.portrait_zoom || character?.portrait_zoom);
-  const tokenTransform = tokenPos && tokenZoom
-    ? `translate(${tokenPos.x}px, ${tokenPos.y}px) scale(${tokenZoom})`
+  const tokenTransform = (tokenPos || tokenZoom)
+    ? `translate(${tokenPos?.x ?? 0}px, ${tokenPos?.y ?? 0}px) scale(${tokenZoom ?? 1})`
     : 'none';
 
   // V5 derived stats from the overlay-resolved state.
@@ -167,9 +167,14 @@ export default function VTMCharacterDetail({ character, pack, onEdit, onDelete }
         boxShadow: `0 16px 40px rgba(0,0,0,0.7), 0 0 32px ${accent}40`,
       }}>
         {tokenUrl ? (
+          // `contain` mirrors the Step I polaroid framing — the
+          // player's whole token is visible at the saved zoom/position
+          // rather than being auto-cropped to fill the 1:1 square.
+          // Zoom > 1× from the adjuster still crops in, matching the
+          // polaroid's behavior on the same image.
           <img src={tokenUrl} alt={character?.name || 'Token'}
             style={{
-              width: '100%', height: '100%', objectFit: 'cover',
+              width: '100%', height: '100%', objectFit: 'contain',
               transform: tokenTransform, transformOrigin: 'center center',
             }} />
         ) : (
