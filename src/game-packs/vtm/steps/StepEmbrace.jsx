@@ -156,7 +156,7 @@ export default function StepEmbrace({ character, onConfirm, saving = false }) {
                   <div key={cat}>
                     <Label color={V.gold} style={{ fontSize: 9, marginBottom: 6 }}>{cat}</Label>
                     {attrs.map((a) => (
-                      <div key={a} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 13, color: V.text }}>
+                      <div key={a} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 15, color: V.text }}>
                         <span>{a}</span>
                         <Dots value={character.attributes[a] || 1} size={7} />
                       </div>
@@ -186,13 +186,13 @@ export default function StepEmbrace({ character, onConfirm, saving = false }) {
                 .sort((a, b) => (character.skills[b] || 0) - (character.skills[a] || 0))
                 .slice(0, 9)
                 .map((s) => (
-                  <div key={s} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 13, color: V.text }}>
+                  <div key={s} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 15, color: V.text }}>
                     <span>{s}</span>
                     <Dots value={character.skills[s]} size={7} />
                   </div>
                 ))}
               {ALL_SKILLS.filter((s) => (character.skills[s] || 0) > 0).length === 0 && (
-                <p className="f-italic" style={{ color: V.textDim, fontSize: 13, margin: 0 }}>No skills selected yet.</p>
+                <p className="f-italic" style={{ color: V.textDim, fontSize: 15, margin: 0 }}>No skills selected yet.</p>
               )}
             </div>
           </div>
@@ -215,7 +215,7 @@ export default function StepEmbrace({ character, onConfirm, saving = false }) {
                   ))}
                 </div>
               ) : (
-                <p className="f-italic" style={{ color: V.textDim, fontSize: 13, margin: '10px 0 0 0' }}>No Disciplines yet.</p>
+                <p className="f-italic" style={{ color: V.textDim, fontSize: 15, margin: '10px 0 0 0' }}>No Disciplines yet.</p>
               )}
             </div>
             <div className="cut-md" style={{
@@ -236,7 +236,7 @@ export default function StepEmbrace({ character, onConfirm, saving = false }) {
                   })}
                 </div>
               ) : (
-                <p className="f-italic" style={{ color: V.textDim, fontSize: 13, margin: '10px 0 0 0' }}>No advantages yet.</p>
+                <p className="f-italic" style={{ color: V.textDim, fontSize: 15, margin: '10px 0 0 0' }}>No advantages yet.</p>
               )}
             </div>
           </div>
@@ -279,13 +279,13 @@ export default function StepEmbrace({ character, onConfirm, saving = false }) {
                     display: 'flex', flexDirection: 'column', gap: 4,
                   }}>
                     <div className="f-decorative" style={{
-                      fontSize: 13, color: V.textBone, letterSpacing: '0.08em', fontWeight: 600,
+                      fontSize: 15, color: V.textBone, letterSpacing: '0.08em', fontWeight: 600,
                       lineHeight: 1.2,
                     }}>
                       {(ts.name || `Touchstone ${i + 1}`).toUpperCase()}
                     </div>
                     {ts.description && (
-                      <div className="f-italic" style={{ fontSize: 12, color: V.textMuted, lineHeight: 1.35 }}>
+                      <div className="f-italic" style={{ fontSize: 14, color: V.textMuted, lineHeight: 1.35 }}>
                         {ts.description}
                       </div>
                     )}
@@ -293,7 +293,7 @@ export default function StepEmbrace({ character, onConfirm, saving = false }) {
                       <div style={{
                         marginTop: 'auto', paddingTop: 6,
                         borderTop: `1px dashed ${V.edgeGold}`,
-                        fontSize: 11, color: V.gold, fontStyle: 'italic',
+                        fontSize: 13, color: V.gold, fontStyle: 'italic',
                         lineHeight: 1.3,
                       }}>
                         “{ts.conviction}”

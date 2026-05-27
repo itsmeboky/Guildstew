@@ -75,7 +75,7 @@ export default function StepAdvantages({ character, update }) {
                     <div className="f-decorative" style={{ fontSize: 15, color: V.textBri, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 3 }}>
                       {bg.name.toUpperCase()}
                     </div>
-                    <p className="f-italic" style={{ margin: 0, fontSize: 13, color: V.textMuted, lineHeight: 1.4 }}>{bg.desc}</p>
+                    <p className="f-italic" style={{ margin: 0, fontSize: 15, color: V.textMuted, lineHeight: 1.4 }}>{bg.desc}</p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                     <button onClick={() => setBg(bg.id, value - 1)} disabled={value === 0} className="cut-sm"

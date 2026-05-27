@@ -56,7 +56,11 @@ export default function StepConcept({ character, update, uploadPortraitToken }) 
               <PolaroidMemory image={MEMORY_PHOTOS[6]} rotate={2} size={135} tapeColor="#d4b06a" />
             </div>
 
-            {/* TOP ROW: Portrait + Token (labeled, the only labels) */}
+            {/* TOP ROW: Portrait + Token (labeled, the only labels).
+                Each polaroid also threads position/zoom so the player
+                can pan + scale the image inside the well after upload;
+                values persist on the character record and the library /
+                detail panel honor the same transform at render time. */}
             <div style={{ position: 'absolute', top: 20, left: '6%', zIndex: 8 }}>
               <PolaroidUpload
                 value={character.portrait}
@@ -67,6 +71,10 @@ export default function StepConcept({ character, update, uploadPortraitToken }) 
                 rotate={-3}
                 size={210}
                 tapeColor="#c41e3a"
+                position={character.portrait_position}
+                zoom={character.portrait_zoom}
+                onPositionChange={(v) => update({ portrait_position: v })}
+                onZoomChange={(v) => update({ portrait_zoom: v })}
               />
             </div>
 
@@ -80,6 +88,10 @@ export default function StepConcept({ character, update, uploadPortraitToken }) 
                 rotate={6}
                 size={130}
                 tapeColor="#b8985a"
+                position={character.token_position}
+                zoom={character.token_zoom}
+                onPositionChange={(v) => update({ token_position: v })}
+                onZoomChange={(v) => update({ token_zoom: v })}
               />
             </div>
 
