@@ -96,7 +96,7 @@ export default function StepSkills({ character, update }) {
                   <div className="f-decorative" style={{ fontSize: 17, color: active ? V.textBri : V.gold, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 6 }}>
                     {app.name.toUpperCase()}
                   </div>
-                  <div style={{ fontSize: 13, color: V.textMuted, lineHeight: 1.5 }}>{app.blurb}</div>
+                  <div style={{ fontSize: 15, color: V.textMuted, lineHeight: 1.5 }}>{app.blurb}</div>
                   <div className="f-mono" style={{ marginTop: 12, fontSize: 10, color: V.cyan, letterSpacing: '0.15em' }}>
                     {Object.entries(app.dist).sort(([a], [b]) => b - a).map(([t, c]) => `${c}×${t}`).join('  ·  ')}
                   </div>
@@ -155,7 +155,7 @@ export default function StepSkills({ character, update }) {
           ))}
         </div>
 
-        <p className="f-italic fade-up-4" style={{ color: V.textDim, fontSize: 13, textAlign: 'center', marginTop: 24 }}>
+        <p className="f-italic fade-up-4" style={{ color: V.textDim, fontSize: 15, textAlign: 'center', marginTop: 24 }}>
           Click any skill to cycle its rating. Choose an approach above to auto-distribute.
         </p>
       </div>
