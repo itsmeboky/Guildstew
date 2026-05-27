@@ -16,6 +16,7 @@ import NYCSkylineMinimal from '../components/NYCSkylineMinimal.jsx';
 import AmbientBats from '../components/AmbientBats.jsx';
 import CharacterWitness from '../components/CharacterWitness.jsx';
 import Art from '../components/Art.jsx';
+import CaseFileStrip from '../components/CaseFileStrip.jsx';
 import Label from '../components/Label.jsx';
 
 function ClanReveal({ clan, character, update }) {
@@ -177,9 +178,11 @@ export default function StepClan({ character, update }) {
           }}>
             WHO MADE YOU
           </h1>
-          <p className="f-italic" style={{ fontSize: 17, color: V.textMuted, marginTop: 14, maxWidth: 640, margin: '14px auto 0', lineHeight: 1.5 }}>
-            Five portraits hang on the wall. Five Sires. Five curses. The one who Embraced you stares back. Which painting holds your reflection?
-          </p>
+          <div style={{ marginTop: 14 }}>
+            <CaseFileStrip fontSize={17}>
+              Five portraits hang on the wall. Five Sires. Five curses. The one who Embraced you stares back. Which painting holds your reflection?
+            </CaseFileStrip>
+          </div>
         </div>
 
         <div className="fade-up-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16, marginBottom: 40 }}>
@@ -225,8 +228,10 @@ export default function StepClan({ character, update }) {
           })}
         </div>
 
-        <div className="fade-up-2 f-italic" style={{ textAlign: 'center', color: V.textDim, fontSize: 15 }}>
-          Click a portrait. The painting will recognize you.
+        <div className="fade-up-2" style={{ textAlign: 'center' }}>
+          <CaseFileStrip fontSize={15}>
+            Click a portrait. The painting will recognize you.
+          </CaseFileStrip>
         </div>
       </div>
     </div>
