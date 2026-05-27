@@ -56,13 +56,13 @@ function PredatorDetail({ predator }) {
         <p className="f-italic" style={{ margin: '0 0 14px 0', fontSize: 14, color: V.text, lineHeight: 1.5 }}>{predator.pitch}</p>
         <div style={{ marginBottom: 12 }}>
           <Label color={V.cyan} style={{ fontSize: 9 }}>Hunting Pool</Label>
-          <div style={{ fontSize: 12, color: V.textMuted, lineHeight: 1.4 }}>{predator.pool}</div>
+          <div style={{ fontSize: 14, color: V.textMuted, lineHeight: 1.4 }}>{predator.pool}</div>
         </div>
         <div style={{ marginBottom: 12 }}>
           <Label color={V.gold} style={{ fontSize: 9 }}>Grants</Label>
           <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
             {predator.grants.map((g, i) => (
-              <li key={i} style={{ fontSize: 12, color: V.text, padding: '3px 0 3px 12px', position: 'relative', lineHeight: 1.5 }}>
+              <li key={i} style={{ fontSize: 14, color: V.text, padding: '3px 0 3px 12px', position: 'relative', lineHeight: 1.5 }}>
                 <span style={{ position: 'absolute', left: 0, top: 9, width: 4, height: 4, background: V.gold, boxShadow: `0 0 6px ${V.gold}` }} />
                 {g}
               </li>
@@ -74,7 +74,7 @@ function PredatorDetail({ predator }) {
             <Label color={V.bloodNeon} style={{ fontSize: 9 }}>Cost</Label>
             <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
               {predator.cost.map((c, i) => (
-                <li key={i} style={{ fontSize: 12, color: V.text, padding: '3px 0 3px 12px', position: 'relative', lineHeight: 1.5 }}>
+                <li key={i} style={{ fontSize: 14, color: V.text, padding: '3px 0 3px 12px', position: 'relative', lineHeight: 1.5 }}>
                   <span style={{ position: 'absolute', left: 0, top: 9, width: 4, height: 4, background: V.bloodNeon, boxShadow: `0 0 6px ${V.bloodNeon}` }} />
                   {c}
                 </li>

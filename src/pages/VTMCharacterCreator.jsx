@@ -84,11 +84,19 @@ export default function VTMCharacterCreator() {
         user_id: authUser.id,
         // Stash portrait + token at the top of system_data so
         // characterMedia.getCharacterPortraitUrl / getCharacterTokenUrl
-        // find them without per-pack code.
+        // find them without per-pack code. The matching {portrait,
+        // token}_{position,zoom} are the Step I adjuster output —
+        // the library left sidebar and the VTM CharacterDetail
+        // apply the same translate(...) scale(...) at render time so
+        // the framing the player saw in the polaroid carries through.
         system_data: {
           ...characterData,
           portrait_url: characterData.portrait || null,
           token_url: characterData.token || null,
+          portrait_position: characterData.portrait_position || null,
+          portrait_zoom: characterData.portrait_zoom || null,
+          token_position: characterData.token_position || null,
+          token_zoom: characterData.token_zoom || null,
         },
       });
 
