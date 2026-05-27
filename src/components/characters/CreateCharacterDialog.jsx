@@ -14,6 +14,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/AuthContext";
+import { isAdminUser } from "@/lib/isAdmin";
 import {
   calculateMaxHP,
   calculateAC,
@@ -30,6 +31,7 @@ export default function CreateCharacterDialog({ open, onClose }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const isAdmin = isAdminUser(user);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
 
   // Game pack gate. With one owned pack (everyone today) we
@@ -64,7 +66,13 @@ export default function CreateCharacterDialog({ open, onClose }) {
 
   const handlePackSelect = (packId) => {
     const pack = getGamePack(packId);
-    if (!pack || pack.status !== "available") {
+    // Admins bypass the public-availability gate so staff can
+    // build characters in pre-release packs (VTM today). The
+    // creator routes themselves still enforce per-route admin
+    // gates (e.g. pages/VTMCharacterCreator.jsx), so this only
+    // affects which cards the picker accepts a click on — direct
+    // URL access is still guarded.
+    if (!pack || (pack.status !== "available" && !isAdmin)) {
       toast.error("That game system isn't available yet.");
       return;
     }
@@ -150,7 +158,11 @@ export default function CreateCharacterDialog({ open, onClose }) {
               <DialogHeader>
                 <DialogTitle className="sr-only">Choose Game System</DialogTitle>
               </DialogHeader>
-              <GamePackPicker ownedPackIds={ownedPacks} onSelect={handlePackSelect} />
+              <GamePackPicker
+                ownedPackIds={ownedPacks}
+                onSelect={handlePackSelect}
+                isAdmin={isAdmin}
+              />
             </>
           ) : (
             <DialogPackedContent
