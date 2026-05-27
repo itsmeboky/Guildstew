@@ -84,13 +84,35 @@ export const computeDerivedStats = (data) => {
   // on classes that key off it like Alchemist, Witch hex DC, etc.)
   // still get one defaulted to trained at level 1, matching every
   // PF2e class's level-1 starting proficiency.
+  //
+  // Defensive null-safety: getEffectiveKeyAbility normalizes the
+  // ability name now, but if `mods[keyAb]` ever comes back undefined
+  // again (data shape drift, partially imported class, etc.) the old
+  // formula silently produced NaN — surfacing as "Class DC: NaN" in
+  // the sheet. Fall back to a 0 ability modifier and log a warning
+  // so the underlying mismatch is debuggable; never default Class DC
+  // to a flat 10, since that would hide the bug entirely.
   const keyAb = getEffectiveKeyAbility(cls, data);
   const classDCRank = pickRank(
     importedProfs.classDC,
     curatedProfs.classDC,
     keyAb ? 1 : 0, // trained for any class that has a key ability
   );
-  const classDC = keyAb ? 10 + mods[keyAb] + profBonus(classDCRank, level, opts) : null;
+  let classDC = null;
+  if (keyAb) {
+    let abilityMod = mods[keyAb];
+    if (typeof abilityMod !== 'number') {
+      if (typeof console !== 'undefined') {
+        console.warn(
+          `[pf2e/computeDerivedStats] Class DC: mods["${keyAb}"] is not a number ` +
+          `(got ${abilityMod}). Falling back to +0 ability modifier. ` +
+          `class=${cls?.slug} available=${Object.keys(mods).join(',')}`,
+        );
+      }
+      abilityMod = 0;
+    }
+    classDC = 10 + abilityMod + profBonus(classDCRank, level, opts);
+  }
 
   // Spell DC and spell attack. Caster classes have spellcasting=1
   // (trained) at level 1 by default. The curated layer may carry a
