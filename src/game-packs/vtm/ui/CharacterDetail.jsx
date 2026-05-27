@@ -41,13 +41,19 @@ function Vital({ label, value, accent }) {
   return (
     <div style={{ textAlign: 'center', minWidth: 56 }}>
       <div style={{
-        fontSize: 32, color: accent, lineHeight: 1, fontWeight: 700,
+        // 36px to match the dnd5e detail panel's text-4xl (HP / hit dice)
+        // — the round-2 pass left this at 32 which read smaller than
+        // dnd5e's stat values in a side-by-side comparison.
+        fontSize: 36, color: accent, lineHeight: 1, fontWeight: 700,
         textShadow: `0 0 12px ${accent}60`,
       }}>
         {value}
       </div>
       <div className="font-display" style={{
-        fontSize: 10, color: V.textMuted,
+        // 12px to match dnd5e's text-xs stat labels (ARMOR CLASS,
+        // INITIATIVE, …). The 10px previous value was the same as
+        // pf2e but visibly thinner than dnd5e in the live panel.
+        fontSize: 12, color: V.textMuted,
         letterSpacing: '0.28em', marginTop: 6,
         textTransform: 'uppercase',
       }}>
@@ -76,8 +82,8 @@ export default function VTMCharacterDetail({ character, pack, onEdit, onDelete }
   const tokenZoom = usingTokenSource
     ? (sd.token_zoom || character?.token_zoom)
     : (sd.portrait_zoom || character?.portrait_zoom);
-  const tokenTransform = tokenPos && tokenZoom
-    ? `translate(${tokenPos.x}px, ${tokenPos.y}px) scale(${tokenZoom})`
+  const tokenTransform = (tokenPos || tokenZoom)
+    ? `translate(${tokenPos?.x ?? 0}px, ${tokenPos?.y ?? 0}px) scale(${tokenZoom ?? 1})`
     : 'none';
 
   // V5 derived stats from the overlay-resolved state.
@@ -161,9 +167,14 @@ export default function VTMCharacterDetail({ character, pack, onEdit, onDelete }
         boxShadow: `0 16px 40px rgba(0,0,0,0.7), 0 0 32px ${accent}40`,
       }}>
         {tokenUrl ? (
+          // `contain` mirrors the Step I polaroid framing — the
+          // player's whole token is visible at the saved zoom/position
+          // rather than being auto-cropped to fill the 1:1 square.
+          // Zoom > 1× from the adjuster still crops in, matching the
+          // polaroid's behavior on the same image.
           <img src={tokenUrl} alt={character?.name || 'Token'}
             style={{
-              width: '100%', height: '100%', objectFit: 'cover',
+              width: '100%', height: '100%', objectFit: 'contain',
               transform: tokenTransform, transformOrigin: 'center center',
             }} />
         ) : (
@@ -187,7 +198,7 @@ export default function VTMCharacterDetail({ character, pack, onEdit, onDelete }
           {character?.name || sd.name || 'Unnamed Childe'}
         </h2>
         {(clan || predator) && (
-          <div className="font-italic" style={{ fontSize: 17, color: accent, marginTop: 8 }}>
+          <div className="font-italic" style={{ fontSize: 18, color: accent, marginTop: 8 }}>
             {clan?.name}{clan?.epithet ? ` · ${clan.epithet}` : ''}{predator ? ` · ${predator.name}` : ''}
           </div>
         )}
@@ -216,7 +227,13 @@ export default function VTMCharacterDetail({ character, pack, onEdit, onDelete }
         <Vital label="Potency"   value={potency}   accent={V.bloodNeon} />
       </div>
 
-      {/* Compact text */}
+      {/* Compact text.
+          Section labels (CONCEPT / SIRE / AMBITION / DESIRE) stay at
+          10px font-mono — those are decorative small-caps tags, not
+          body text. The body VALUE bumps from 16 → 18: Cormorant
+          Garamond italic reads visibly smaller than the upright
+          sans-serif dnd5e/pf2e use, so the extra 2px restores
+          perceived parity. */}
       {(sd.concept || sd.ambition || sd.desire || sd.sire) && (
         <div style={{
           padding: 16, marginBottom: 22,
@@ -226,25 +243,25 @@ export default function VTMCharacterDetail({ character, pack, onEdit, onDelete }
           {sd.concept && (
             <div style={{ marginBottom: 12 }}>
               <div className="font-mono" style={{ fontSize: 10, color: V.gold, letterSpacing: '0.3em', marginBottom: 4 }}>CONCEPT</div>
-              <div className="font-italic" style={{ fontSize: 16, color: V.text }}>{sd.concept}</div>
+              <div className="font-italic" style={{ fontSize: 18, color: V.text, lineHeight: 1.4 }}>{sd.concept}</div>
             </div>
           )}
           {sd.sire && (
             <div style={{ marginBottom: 12 }}>
               <div className="font-mono" style={{ fontSize: 10, color: V.gold, letterSpacing: '0.3em', marginBottom: 4 }}>SIRE</div>
-              <div className="font-italic" style={{ fontSize: 16, color: V.text }}>{sd.sire}</div>
+              <div className="font-italic" style={{ fontSize: 18, color: V.text, lineHeight: 1.4 }}>{sd.sire}</div>
             </div>
           )}
           {sd.ambition && (
             <div style={{ marginBottom: 12 }}>
               <div className="font-mono" style={{ fontSize: 10, color: V.cyan, letterSpacing: '0.3em', marginBottom: 4 }}>AMBITION</div>
-              <div className="font-italic" style={{ fontSize: 16, color: V.text }}>{sd.ambition}</div>
+              <div className="font-italic" style={{ fontSize: 18, color: V.text, lineHeight: 1.4 }}>{sd.ambition}</div>
             </div>
           )}
           {sd.desire && (
             <div>
               <div className="font-mono" style={{ fontSize: 10, color: V.bloodNeon, letterSpacing: '0.3em', marginBottom: 4 }}>DESIRE</div>
-              <div className="font-italic" style={{ fontSize: 16, color: V.text }}>{sd.desire}</div>
+              <div className="font-italic" style={{ fontSize: 18, color: V.text, lineHeight: 1.4 }}>{sd.desire}</div>
             </div>
           )}
         </div>
@@ -255,7 +272,7 @@ export default function VTMCharacterDetail({ character, pack, onEdit, onDelete }
         padding: 16,
         background: `linear-gradient(135deg, rgba(196, 30, 58, 0.08) 0%, rgba(34, 211, 238, 0.05) 100%)`,
         border: `1px dashed ${V.edgeGold}`,
-        fontSize: 14, color: V.textMuted, lineHeight: 1.55, textAlign: 'center',
+        fontSize: 16, color: V.textMuted, lineHeight: 1.55, textAlign: 'center',
       }}>
         Full character sheet arrives with public launch — your data is preserved.
       </div>
