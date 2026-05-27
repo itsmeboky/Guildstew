@@ -57,13 +57,23 @@ function countBullets(str) {
 // Each returns one of the {kind, ...} effect shapes referenced by
 // `required` entries and by `choices[].options[]` /
 // `choices[].targets[]`.
+//
+// For flaws and merits the payload is a structured object — either
+// `{ value: '...verbatim flavor text...' }` (for required entries
+// the corebook calls out by name, e.g. "Enemy (••) — Police") or
+// `{ name, dots }` (for distribute-driven entries that share a
+// category name and need to consolidate, e.g. Osiris's Enemies
+// distribution). Verbatim and structured entries can coexist in
+// the same array.
 
 const discipline = (target, dots = 1) => ({ kind: 'discipline', target, dots });
 const background = (target, dots) => ({ kind: 'background', target, dots });
 const specialty  = (value)         => ({ kind: 'specialty',  value });
 const humanity   = (delta)         => ({ kind: 'humanity',   delta });
-const merit      = (value)         => ({ kind: 'merit',      value });
-const flaw       = (value)         => ({ kind: 'flaw',       value });
+const meritFromString = (value)    => ({ kind: 'merit', payload: { value } });
+const meritFromName   = (name, dots) => ({ kind: 'merit', payload: { name, dots } });
+const flawFromString  = (value)    => ({ kind: 'flaw',  payload: { value } });
+const flawFromName    = (name, dots) => ({ kind: 'flaw',  payload: { name, dots } });
 
 // --- Line classifier ----------------------------------------------
 // Returns one of:
@@ -189,19 +199,19 @@ function parseLine(line, predatorId, idx) {
   // otherwise treat as merit. The current data only has one flaw
   // form (Farmer's "Feeding (••) — Vegan").
   if (/^Feeding\s*\(/i.test(raw)) {
-    if (/—\s*Vegan/i.test(raw)) return { kind: 'required', effect: flaw(raw) };
-    return { kind: 'required', effect: merit(raw) };
+    if (/—\s*Vegan/i.test(raw)) return { kind: 'required', effect: flawFromString(raw) };
+    return { kind: 'required', effect: meritFromString(raw) };
   }
 
   // ---- Other merits ---------------------------------------------
   if (/^Looks Merit\s*\(/i.test(raw)) {
-    return { kind: 'required', effect: merit(raw) };
+    return { kind: 'required', effect: meritFromString(raw) };
   }
 
   // ---- Flaws -----------------------------------------------------
-  if (/^Enemy\s*\(/i.test(raw))         return { kind: 'required', effect: flaw(raw) };
-  if (/^Dark Secret\s*\(/i.test(raw))   return { kind: 'required', effect: flaw(raw) };
-  if (/^Prey Exclusion\s*\(/i.test(raw)) return { kind: 'required', effect: flaw(raw) };
+  if (/^Enemy\s*\(/i.test(raw))         return { kind: 'required', effect: flawFromString(raw) };
+  if (/^Dark Secret\s*\(/i.test(raw))   return { kind: 'required', effect: flawFromString(raw) };
+  if (/^Prey Exclusion\s*\(/i.test(raw)) return { kind: 'required', effect: flawFromString(raw) };
 
   // ---- Unrecognized line — surface as a required raw note --------
   // Better than a silent drop: the Embrace summary will show this
@@ -281,19 +291,50 @@ function applyEffectToAccum(acc, effect) {
       acc.humanityDelta += effect.delta;
       break;
     case 'merit':
-      acc.merits.push(effect.value);
+      acc.merits.push({ ...effect.payload });
       break;
     case 'flaw':
-      acc.flaws.push(effect.value);
+      acc.flaws.push({ ...effect.payload });
       break;
     case 'raw':
-      // Surface in flaws so the GM/player sees something on Embrace
-      // rather than the line being silently dropped.
-      acc.flaws.push(`(Unparsed) ${effect.value}`);
+      // Surface in flaws as a verbatim entry so the GM/player sees
+      // something on Embrace rather than the line being dropped.
+      acc.flaws.push({ value: `(Unparsed) ${effect.value}` });
       break;
     default:
       break;
   }
+}
+
+// Merge entries that share a `name` field, summing their `dots`.
+// Verbatim entries (no `name`, just `value`) pass through unchanged
+// because there's no canonical key to group them by — Bagger's
+// "Enemy (••) — Police or escaped victim" and Scene Queen's
+// "Enemy (••) — A rival in the scene" are distinct flaws even
+// though they share the "Enemy" prefix, so we don't merge them.
+//
+// Within-category only: Bagger's `Enemy` (flaw) and Scene Queen's
+// `Enemy` (flaw) live in the same array but on different characters,
+// never on the same character at the same time.
+function consolidateByName(entries) {
+  const namedFirst = new Map();
+  const order = [];
+  const verbatim = [];
+  for (const entry of entries) {
+    if (entry.name) {
+      const prev = namedFirst.get(entry.name);
+      if (prev) {
+        prev.dots = (prev.dots || 0) + (entry.dots || 0);
+      } else {
+        const copy = { ...entry };
+        namedFirst.set(entry.name, copy);
+        order.push(copy);
+      }
+    } else {
+      verbatim.push(entry);
+    }
+  }
+  return [...verbatim, ...order];
 }
 
 function computeOverlay(parsed, resolutions) {
@@ -320,11 +361,22 @@ function computeOverlay(parsed, resolutions) {
         if (target.kind === 'background') {
           applyEffectToAccum(acc, background(target.target, dots));
         } else if (target.kind === 'flaw') {
-          applyEffectToAccum(acc, flaw(`${target.target} (${'•'.repeat(dots)})`));
+          applyEffectToAccum(acc, flawFromName(target.target, dots));
+        } else if (target.kind === 'merit') {
+          applyEffectToAccum(acc, meritFromName(target.target, dots));
         }
       });
     }
   }
+
+  // Final consolidation pass — sum dots across same-name entries.
+  // Backgrounds are already a {[name]: dots} map and don't need
+  // this step; flaws and merits are arrays where the same `name`
+  // could legitimately appear more than once (one required entry +
+  // one distribute entry, or two distribute entries from different
+  // choices on the same predator).
+  acc.flaws  = consolidateByName(acc.flaws);
+  acc.merits = consolidateByName(acc.merits);
 
   return acc;
 }
