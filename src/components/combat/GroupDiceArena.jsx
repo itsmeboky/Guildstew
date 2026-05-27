@@ -83,6 +83,15 @@ export default function GroupDiceArena({
     () => selectedUserIds.filter((uid) => !responses?.[uid]),
     [selectedUserIds, responses],
   );
+  // Force-roll envelope — present while an admin's forced animation
+  // is in flight. Each connected client uses this to mount the
+  // matching DiceRoller for the affected slots and play the
+  // predetermined roll. Cleared by the admin's batched write once
+  // animations settle.
+  const forcedRoll = call?.forced_roll || null;
+  const forcedResults = forcedRoll?.results || null;
+  const forcedRollKey = forcedRoll?.start_at || null;
+  const forcedRollInFlight = !!forcedRoll;
 
   // Roll-to-response writer with concurrent-write safety. Re-reads
   // the campaign from the query cache before merging so two
@@ -120,12 +129,19 @@ export default function GroupDiceArena({
   });
 
   // Admin-only force-roll for any selected player who hasn't rolled
-  // yet. Demo tool for Boky — fills pending response slots with
-  // 1d20 + DEX so the Accept Initiative button enables without
-  // waiting on real players. Each forced roll is logged with
-  // forced:true so demo data can be filtered out of analytics.
-  // Never overwrites an existing roll — re-checks against the
-  // latest cached responses at write time.
+  // yet. Demo tool for Boky — pre-computes 1d20+DEX for each pending
+  // slot, broadcasts a `forced_roll` envelope on the initiative_call
+  // so every connected client mounts a DiceRoller (with the player's
+  // custom skin) and plays the predetermined animation in sync,
+  // then atomically writes the responses + clears the envelope so
+  // slots transition to their result pills together.
+  //
+  // Audit: each response carries forced:true + forced_by:<adminId>;
+  // each campaign log entry appends "(forced)" and tags forced:true.
+  // Never overwrites an existing real roll — re-reads the latest
+  // responses at every write, so a player who rolls during the
+  // ~2s animation window is preserved.
+  const FORCED_ANIMATION_MS = 2000;
   const forceRollPending = useMutation({
     mutationFn: async () => {
       if (!isAdminUser(user)) {
@@ -134,20 +150,23 @@ export default function GroupDiceArena({
       if (mode !== 'initiative') {
         throw new Error("Force roll is initiative-only.");
       }
-      const latest = queryClient.getQueryData(['campaign', campaignId]) || campaign;
-      const latestCall = latest?.combat_data?.initiative_call;
-      if (!latestCall?.active) {
+      const latest0 = queryClient.getQueryData(['campaign', campaignId]) || campaign;
+      const latestCall0 = latest0?.combat_data?.initiative_call;
+      if (!latestCall0?.active) {
         throw new Error("Initiative call is no longer active.");
       }
-      const latestResponses = latestCall.responses || {};
-      const latestSelected = Array.isArray(latestCall.selected_user_ids)
-        ? latestCall.selected_user_ids
+      if (latestCall0.forced_roll) {
+        throw new Error("A force-roll is already in flight.");
+      }
+      const latestResponses0 = latestCall0.responses || {};
+      const latestSelected0 = Array.isArray(latestCall0.selected_user_ids)
+        ? latestCall0.selected_user_ids
         : [];
-      const stillPending = latestSelected.filter((uid) => !latestResponses[uid]);
+      const stillPending = latestSelected0.filter((uid) => !latestResponses0[uid]);
       if (stillPending.length === 0) return { rolled: [] };
 
+      const forcedResults = {};
       const rolled = [];
-      const nextResponses = { ...latestResponses };
       for (const uid of stillPending) {
         const p = players.find((x) => x.user_id === uid);
         const char = p?.character || characters.find(
@@ -157,14 +176,9 @@ export default function GroupDiceArena({
         const mod = abilityModifier(dex);
         const raw = Math.floor(Math.random() * 20) + 1;
         const total = raw + mod;
-        nextResponses[uid] = {
-          roll: raw,
-          mod,
-          total,
-          forced: true,
-          rolled_at: new Date().toISOString(),
-        };
+        forcedResults[uid] = { roll: raw, mod, total };
         rolled.push({
+          uid,
           name: char?.name || p?.username || 'Player',
           raw,
           mod,
@@ -172,34 +186,110 @@ export default function GroupDiceArena({
         });
       }
 
-      const nextCombatData = {
-        ...(latest?.combat_data || {}),
-        initiative_call: { ...latestCall, responses: nextResponses },
+      // Phase 1 — broadcast the forced_roll envelope. Realtime
+      // pushes this to every connected client within ~100ms;
+      // each client's ArenaSlot mounts a DiceRoller for the
+      // matching uid and animates to the predetermined roll.
+      const startAt = new Date().toISOString();
+      const phase1CombatData = {
+        ...(latest0?.combat_data || {}),
+        initiative_call: {
+          ...latestCall0,
+          forced_roll: {
+            start_at: startAt,
+            by: user?.id || null,
+            results: forcedResults,
+          },
+        },
       };
-      await base44.entities.Campaign.update(campaignId, { combat_data: nextCombatData });
+      await base44.entities.Campaign.update(campaignId, { combat_data: phase1CombatData });
+      queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
 
-      for (const r of rolled) {
-        const sign = r.mod >= 0 ? '+' : '−';
-        const absMod = Math.abs(r.mod);
-        try {
-          await logCombatEvent(
-            campaignId,
-            `${r.name} rolls initiative (forced): ${r.total} (${r.raw} ${sign} ${absMod})`,
-            {
-              event: 'initiative_roll',
-              category: 'initiative',
-              actor: r.name,
-              roll: r.total,
-              raw: r.raw,
-              mod: r.mod,
-              forced: true,
-            },
-          );
-        } catch (err) {
-          console.error(`[forceRollPending] failed to log roll for ${r.name}`, err);
+      try {
+        // Phase 2 — let the animation play out. DiceRoller's
+        // baseline d20 settle is ~1.2s including reveal; 2s gives
+        // headroom for shake-induced bounce variance without
+        // dragging the demo.
+        await new Promise((resolve) => setTimeout(resolve, FORCED_ANIMATION_MS));
+
+        // Phase 3 — re-read the latest call (a real player may
+        // have rolled into one of these slots during the window),
+        // merge the forced responses for slots still empty, and
+        // atomically commit responses + clear forced_roll.
+        const latest1 = queryClient.getQueryData(['campaign', campaignId]) || campaign;
+        const latestCall1 = latest1?.combat_data?.initiative_call;
+        if (!latestCall1?.active) {
+          throw new Error("Initiative call was closed mid-animation.");
         }
+        const latestResponses1 = latestCall1.responses || {};
+        const finalResponses = { ...latestResponses1 };
+        const finalRolled = [];
+        for (const r of rolled) {
+          if (latestResponses1[r.uid]) continue;
+          finalResponses[r.uid] = {
+            roll: r.raw,
+            mod: r.mod,
+            total: r.total,
+            forced: true,
+            forced_by: user?.id || null,
+            rolled_at: new Date().toISOString(),
+          };
+          finalRolled.push(r);
+        }
+
+        const { forced_roll: _drop, ...callWithoutForced } = latestCall1;
+        const phase3CombatData = {
+          ...(latest1?.combat_data || {}),
+          initiative_call: {
+            ...callWithoutForced,
+            responses: finalResponses,
+          },
+        };
+        await base44.entities.Campaign.update(campaignId, { combat_data: phase3CombatData });
+
+        for (const r of finalRolled) {
+          const sign = r.mod >= 0 ? '+' : '−';
+          const absMod = Math.abs(r.mod);
+          try {
+            await logCombatEvent(
+              campaignId,
+              `${r.name} rolls initiative (forced): ${r.total} (${r.raw} ${sign} ${absMod})`,
+              {
+                event: 'initiative_roll',
+                category: 'initiative',
+                actor: r.name,
+                roll: r.total,
+                raw: r.raw,
+                mod: r.mod,
+                forced: true,
+                forced_by: user?.id || null,
+              },
+            );
+          } catch (err) {
+            console.error(`[forceRollPending] failed to log roll for ${r.name}`, err);
+          }
+        }
+        return { rolled: finalRolled };
+      } catch (err) {
+        // Best-effort: clear the forced_roll envelope so connected
+        // clients aren't stuck animating forever if phase 3 fails.
+        try {
+          const recoveryLatest = queryClient.getQueryData(['campaign', campaignId]) || campaign;
+          const recoveryCall = recoveryLatest?.combat_data?.initiative_call;
+          if (recoveryCall?.forced_roll) {
+            const { forced_roll: _drop2, ...cleaned } = recoveryCall;
+            await base44.entities.Campaign.update(campaignId, {
+              combat_data: {
+                ...(recoveryLatest?.combat_data || {}),
+                initiative_call: cleaned,
+              },
+            });
+          }
+        } catch (cleanupErr) {
+          console.error('[forceRollPending] failed to clear forced_roll on error', cleanupErr);
+        }
+        throw err;
       }
-      return { rolled };
     },
     onSuccess: ({ rolled } = { rolled: [] }) => {
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
@@ -210,6 +300,7 @@ export default function GroupDiceArena({
     onError: (err) => {
       console.error('[forceRollPending] error', err);
       toast.error(err?.message || "Couldn't force-roll pending.");
+      queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
     },
   });
 
@@ -442,6 +533,8 @@ export default function GroupDiceArena({
               response={responseFor(uid)}
               profile={profileFor(uid)}
               character={charFor(uid)}
+              forcedHere={forcedResults?.[uid] || null}
+              forcedKey={forcedRollKey}
               onSubmit={(payload) => submitRoll.mutate({ userId: uid, ...payload })}
             />
           ))}
@@ -460,12 +553,16 @@ export default function GroupDiceArena({
                   if (!isAdminUser(user)) return;
                   forceRollPending.mutate();
                 }}
-                disabled={pendingUserIds.length === 0 || forceRollPending.isPending}
+                disabled={
+                  pendingUserIds.length === 0 ||
+                  forceRollPending.isPending ||
+                  forcedRollInFlight
+                }
                 className="border-amber-400/60 text-amber-300 hover:bg-amber-400/10 disabled:opacity-40"
                 title="Admin: auto-roll initiative for any selected player who hasn't rolled yet."
               >
                 <Zap className="w-4 h-4 mr-1" />
-                {forceRollPending.isPending ? 'Rolling…' : 'Force Roll Pending'}
+                {forceRollPending.isPending || forcedRollInFlight ? 'Rolling…' : 'Force Roll Pending'}
               </Button>
             )}
             {mode === 'initiative' && (
@@ -501,6 +598,8 @@ function ArenaSlot({
   response,
   profile,
   character,
+  forcedHere,
+  forcedKey,
   onSubmit,
 }) {
   const [secondsLeft, setSecondsLeft] = useState(Math.round(AUTO_ROLL_MS / 1000));
@@ -615,18 +714,29 @@ function ArenaSlot({
         )}
       </div>
 
-      {/* Live dice tray — owner-tab only. Other viewers see the
-          static avatar + result-pill below. Spectator dice playback
-          on non-owner tabs is filed as a polish smell — the
-          forcedResult + autoRollOnOpen pattern from CombatDiceWindow
-          could replay the roll once it lands, but ships separately. */}
-      {isSelf && !response && (
+      {/* Live dice tray — owner-tab gets a live DiceRoller; other
+          viewers normally see the static "Awaiting roll…" placeholder
+          below. When an admin force-roll is in flight for this slot
+          (forcedHere is populated), every viewer mounts a DiceRoller
+          with the predetermined `forcedResult` and `autoRollOnOpen`
+          so the animation plays in sync across all clients. Each
+          slot's DiceRoller still pulls the slot owner's custom dice
+          cosmetic via `userId` → useActiveDiceSkin. The forcedKey
+          forces a fresh mount when a new force-roll envelope lands,
+          which is what triggers `autoRollOnOpen`. */}
+      {(isSelf || forcedHere) && !response && (
         <div className="w-full h-[200px] rounded-lg overflow-hidden border border-slate-700 bg-[#050816] relative">
           <DiceRoller
-            key={`arena-${userId}`}
+            key={forcedHere ? `arena-${userId}-forced-${forcedKey}` : `arena-${userId}`}
             isOpen={true}
             initialDice="d20"
-            onRollComplete={onRollComplete}
+            forcedResult={forcedHere ? forcedHere.roll : null}
+            autoRollOnOpen={!!forcedHere}
+            // Forced rolls are written in a single batched update
+            // from the admin's handler — suppress the owner-side
+            // submission to avoid a duplicate, non-forced write
+            // racing the batched one.
+            onRollComplete={forcedHere ? () => {} : onRollComplete}
             modifier="none"
             userId={userId}
             isThemedSkin={true}
@@ -647,7 +757,7 @@ function ArenaSlot({
           </div>
           <div className="text-[10px] text-slate-500 mt-0.5">{breakdown}</div>
         </div>
-      ) : !isSelf ? (
+      ) : !isSelf && !forcedHere ? (
         <div className="w-full text-center py-6 text-xs text-slate-500 italic">
           {checkType ? `Awaiting roll…` : 'Rolling…'}
         </div>
