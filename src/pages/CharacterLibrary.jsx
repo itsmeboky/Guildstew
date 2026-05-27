@@ -294,6 +294,15 @@ export default function CharacterLibrary() {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {characters.map((character) => {
               const cardTokenUrl = getCharacterTokenUrl(character) || getCharacterPortraitUrl(character);
+              // Token transform: VTM writes to system_data.token_{position,zoom};
+              // dnd5e writes top-level profile_{position,zoom}. Either shape
+              // resolves the same translate(...) scale(...) here so the framing
+              // the player set in their creator carries through to the library.
+              const tokenPos = character.system_data?.token_position || character.profile_position;
+              const tokenZoom = character.system_data?.token_zoom || character.profile_zoom;
+              const tokenTransform = tokenPos && tokenZoom
+                ? `translate(${tokenPos.x}px, ${tokenPos.y}px) scale(${tokenZoom})`
+                : 'none';
               return (
                 <div
                   key={character.id}
@@ -316,12 +325,10 @@ export default function CharacterLibrary() {
                           objectFit: 'cover',
                           // Default to "top" so tall portraits keep the face in
                           // frame instead of anchoring to the midsection. A
-                          // character-specific profile_position still wins
-                          // through the transform below.
+                          // character-specific token transform still wins
+                          // through `tokenTransform` above.
                           objectPosition: 'top',
-                          transform: character.profile_position && character.profile_zoom
-                            ? `translate(${character.profile_position.x}px, ${character.profile_position.y}px) scale(${character.profile_zoom})`
-                            : 'none',
+                          transform: tokenTransform,
                           transformOrigin: 'center center'
                         }}
                       />
@@ -356,23 +363,43 @@ export default function CharacterLibrary() {
           Pack-agnostic via getCharacterPortraitUrl: D&D 5e records
           carry portrait/avatar at the top level; PF2e records (post
           J.2 flatten) carry it at system_data.portrait_url. Either
-          shape resolves to the same URL here. */}
+          shape resolves to the same URL here.
+          Renders as an <img> (not a background-image div) so the
+          per-character portrait transform — set by the VTM Step I
+          adjuster and stored on system_data.portrait_{position,zoom}
+          (or dnd5e's top-level avatar_{position,zoom}) — can apply
+          the same translate(...) scale(...) here that the creator's
+          polaroid showed. */}
       <div className="flex-1 flex items-center justify-center p-8 relative z-10">
         {selectedCharacter ? (() => {
           const portraitUrl = getCharacterPortraitUrl(selectedCharacter);
+          const portraitPos = selectedCharacter.system_data?.portrait_position || selectedCharacter.avatar_position;
+          const portraitZoom = selectedCharacter.system_data?.portrait_zoom || selectedCharacter.avatar_zoom;
+          const portraitTransform = portraitPos && portraitZoom
+            ? `translate(${portraitPos.x}px, ${portraitPos.y}px) scale(${portraitZoom})`
+            : 'none';
           return (
             <div
-              className="w-full h-full bg-top bg-cover rounded-2xl shadow-2xl"
+              className="w-full h-full rounded-2xl shadow-2xl overflow-hidden"
               style={{
-                // Falls through to a dark gradient if the character
-                // has no portrait — no more via.placeholder hits that
-                // were failing in dev.
-                backgroundImage: portraitUrl
-                  ? `url(${portraitUrl})`
-                  : 'linear-gradient(135deg, #1a1f2e 0%, #2A3441 50%, #050816 100%)',
+                background: 'linear-gradient(135deg, #1a1f2e 0%, #2A3441 50%, #050816 100%)',
                 maxWidth: '600px',
               }}
-            />
+            >
+              {portraitUrl && (
+                <img
+                  src={portraitUrl}
+                  alt={selectedCharacter.name || 'Portrait'}
+                  className="w-full h-full"
+                  style={{
+                    objectFit: 'cover',
+                    objectPosition: 'top',
+                    transform: portraitTransform,
+                    transformOrigin: 'center center',
+                  }}
+                />
+              )}
+            </div>
           );
         })() : (
           <div className="text-gray-500 text-xl">Select a character to view</div>

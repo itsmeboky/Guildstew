@@ -97,7 +97,13 @@ export default function VTMCharacterCreator({
   const [step, setStep] = useState(0);
   const [character, setCharacter] = useState({
     name: '', chronicle: '', sire: '', concept: '', ambition: '', desire: '',
-    portrait: null, token: null, clan: null,
+    portrait: null, token: null,
+    // Per-image scale + position (set by Step I's PolaroidUpload
+    // adjuster, persisted on the character so the library + detail
+    // panel can reproduce the same framing).
+    portrait_position: null, portrait_zoom: null,
+    token_position: null, token_zoom: null,
+    clan: null,
     attributes: {
       Strength: 1, Dexterity: 2, Stamina: 2,
       Charisma: 2, Manipulation: 2, Composure: 3,
@@ -253,10 +259,12 @@ export default function VTMCharacterCreator({
         overflowX: 'hidden',
         position: 'relative',
         backgroundColor: '#03020a',
-        backgroundImage: bgUrl ? `url("${bgUrl}")` : 'none',
-        backgroundRepeat: 'repeat',
-        backgroundSize: 'auto',
-        backgroundAttachment: 'fixed',
+        backgroundImage: bgUrl
+          ? `linear-gradient(180deg, ${overlayAccent}99 0%, #03020a99 100%), url("${bgUrl}")`
+          : `linear-gradient(180deg, ${overlayAccent}99 0%, #03020a99 100%)`,
+        backgroundRepeat: 'no-repeat, repeat',
+        backgroundSize: 'cover, auto',
+        backgroundAttachment: 'fixed, fixed',
       }}
     >
       <GlobalStyles />

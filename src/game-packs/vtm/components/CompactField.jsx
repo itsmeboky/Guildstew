@@ -11,8 +11,8 @@ export default function CompactField({ preamble, label, value, onChange, placeho
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-        <span className="f-italic" style={{ fontSize: 13, color: V.textMuted }}>{preamble}</span>
-        <span className="f-mono" style={{ fontSize: 9, color: accent, letterSpacing: '0.3em' }}>{label}</span>
+        <span className="f-italic" style={{ fontSize: 15, color: V.textMuted }}>{preamble}</span>
+        <span className="f-mono" style={{ fontSize: 10, color: accent, letterSpacing: '0.3em' }}>{label}</span>
       </div>
       <Tag
         className={multi ? 'v-textarea' : 'v-input'}
@@ -24,7 +24,7 @@ export default function CompactField({ preamble, label, value, onChange, placeho
           background: 'rgba(8, 4, 12, 0.4)',
           border: `1px solid ${V.edgeGold}`,
           fontFamily: "'Old Standard TT', serif",
-          fontSize: 16, fontStyle: 'italic',
+          fontSize: 18, fontStyle: 'italic',
           color: V.textBone, letterSpacing: '0.01em',
         }}
       />
