@@ -1,3 +1,4 @@
+import { useAuth } from "@/lib/AuthContext";
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -171,11 +172,7 @@ export default function CharacterLibrary() {
 
   const queryClient = useQueryClient();
 
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => base44.auth.me(),
-    initialData: null
-  });
+  const { user } = useAuth();
 
   const { data: characters, isLoading: charactersLoading } = useQuery({
     queryKey: ['allCharacters'],
