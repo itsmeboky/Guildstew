@@ -13,7 +13,7 @@ import React from 'react';
 import { SKILLS, CLASSES, BACKGROUNDS } from '../../data/index.js';
 import { computeDerivedStats } from '../../rules/compute-derived-stats.js';
 import { PROFICIENCY_TIER_LABELS, PROF_TIER_INDEX, profBonus } from '../../rules/proficiency.js';
-import { fmtMod, SectionHeading } from './_shared.js';
+import { fmtMod, SectionHeading } from './_shared.jsx';
 
 const abilityKey = (short) => ({
   Str: 'Strength', Dex: 'Dexterity', Con: 'Constitution',
