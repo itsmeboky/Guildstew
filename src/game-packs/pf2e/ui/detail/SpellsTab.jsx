@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { CASTING_TRADITION_BY_CLASS } from '../../data/index.js';
-import { cap, SectionHeading } from './_shared.js';
+import { cap, SectionHeading } from './_shared.jsx';
 
 export default function SpellsTab({ data }) {
   const tradition = CASTING_TRADITION_BY_CLASS[data.class];
