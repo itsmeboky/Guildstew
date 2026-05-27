@@ -16,39 +16,39 @@ const PUBLIC_BUCKET = 'https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/objec
 
 export const BACKGROUND_IMAGES = [
   `${PUBLIC_BUCKET}/UI/characterbackground1.png`,
-  `${PUBLIC_BUCKET}/UI/characterbackground2.jpg`,
-  `${PUBLIC_BUCKET}/UI/characterbackground3.jpg`,
-  `${PUBLIC_BUCKET}/UI/characterbackground4.jpg`,
+  `${PUBLIC_BUCKET}/UI/characterbackground2.png`,
+  `${PUBLIC_BUCKET}/UI/characterbackground3.png`,
+  `${PUBLIC_BUCKET}/UI/characterbackground4.png`,
   `${PUBLIC_BUCKET}/UI/characterbackground5.jpg`,
 ];
 
 export const CLAN_PORTRAITS = {
-  brujah:    `${PUBLIC_BUCKET}/clans/brujah.jpg`,
-  toreador:  `${PUBLIC_BUCKET}/clans/toreador.jpg`,
-  ventrue:   `${PUBLIC_BUCKET}/clans/ventrue.jpg`,
-  nosferatu: `${PUBLIC_BUCKET}/clans/nosferatu.jpg`,
-  tremere:   `${PUBLIC_BUCKET}/clans/tremere.jpg`,
+  brujah:    `${PUBLIC_BUCKET}/clans/brujah.webp`,
+  toreador:  `${PUBLIC_BUCKET}/clans/toreador.webp`,
+  ventrue:   `${PUBLIC_BUCKET}/clans/ventrue.webp`,
+  nosferatu: `${PUBLIC_BUCKET}/clans/nosferatu.webp`,
+  tremere:   `${PUBLIC_BUCKET}/clans/tremere.webp`,
 };
 
 export const MEMORY_PHOTOS = [
-  `${PUBLIC_BUCKET}/memory-photos/photo1.jpg`,
-  `${PUBLIC_BUCKET}/memory-photos/photo2.jpg`,
-  `${PUBLIC_BUCKET}/memory-photos/photo3.jpg`,
-  `${PUBLIC_BUCKET}/memory-photos/photo4.jpg`,
-  `${PUBLIC_BUCKET}/memory-photos/photo5.jpg`,
-  `${PUBLIC_BUCKET}/memory-photos/photo6.jpg`,
-  `${PUBLIC_BUCKET}/memory-photos/photo7.jpg`,
+  `${PUBLIC_BUCKET}/memory-photos/photo1.webp`,
+  `${PUBLIC_BUCKET}/memory-photos/photo2.webp`,
+  `${PUBLIC_BUCKET}/memory-photos/photo3.webp`,
+  `${PUBLIC_BUCKET}/memory-photos/photo4.webp`,
+  `${PUBLIC_BUCKET}/memory-photos/photo5.webp`,
+  `${PUBLIC_BUCKET}/memory-photos/photo6.webp`,
+  `${PUBLIC_BUCKET}/memory-photos/photo7.webp`,
 ];
 
-export const HUNT_MAP = `${PUBLIC_BUCKET}/maps/manhattan-hunt-map.jpg`;
+export const HUNT_MAP = `${PUBLIC_BUCKET}/maps/manhattan-hunt-map.webp`;
 
-export const ANATOMY_FIGURE = `${PUBLIC_BUCKET}/UI/anatomy-figure.jpg`;
+export const ANATOMY_FIGURE = `${PUBLIC_BUCKET}/UI/anatomy-figure.webp`;
 
 // Keyed by skill-approach name (Jack / Balanced / Specialist) — the
 // Education step (StepSkills) reads this map directly when rendering
 // the grimoire-cover for each approach card.
 export const GRIMOIRES = {
-  Jack:       `${PUBLIC_BUCKET}/UI/grimoire-jack.jpg`,
-  Balanced:   `${PUBLIC_BUCKET}/UI/grimoire-balanced.jpg`,
-  Specialist: `${PUBLIC_BUCKET}/UI/grimoire-specialist.jpg`,
+  Jack:       `${PUBLIC_BUCKET}/UI/grimoire-jack.webp`,
+  Balanced:   `${PUBLIC_BUCKET}/UI/grimoire-balanced.webp`,
+  Specialist: `${PUBLIC_BUCKET}/UI/grimoire-specialist.webp`,
 };
