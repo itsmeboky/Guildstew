@@ -123,7 +123,15 @@ export default function PolaroidUpload({
               onMouseDown={handleMouseDown}
               draggable={false}
               style={{
-                width: '100%', height: '100%', objectFit: 'cover',
+                width: '100%', height: '100%',
+                // `contain` (not `cover`) so the player sees their
+                // ENTIRE uploaded image at zoom 1×, letterboxed inside
+                // the polaroid well. Cover was auto-cropping faces and
+                // feet on tall portraits. Zooming above 1× via the
+                // slider scales the image past the well's bounds and
+                // crops the same way cover used to — just opt-in
+                // rather than forced.
+                objectFit: 'contain',
                 transform: hasTransform
                   ? `translate(${pos.x}px, ${pos.y}px) scale(${z})`
                   : 'none',
@@ -188,7 +196,12 @@ export default function PolaroidUpload({
                   <Slider
                     value={[z]}
                     onValueChange={(v) => onZoomChange?.(v[0])}
-                    min={0.5}
+                    // Min 1× — at the default zoom the whole image is
+                    // already visible (object-fit: contain), so the
+                    // useful range is 1× ("show all") → 3× ("crop in").
+                    // The old 0.5× shrank the image below the well's
+                    // bounds, which was never useful.
+                    min={1}
                     max={3}
                     step={0.1}
                     className="flex-1"
