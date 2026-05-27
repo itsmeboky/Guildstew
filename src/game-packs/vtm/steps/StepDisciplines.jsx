@@ -16,6 +16,7 @@ import AmbientBats from '../components/AmbientBats.jsx';
 import CharacterWitness from '../components/CharacterWitness.jsx';
 import Dots from '../components/Dots.jsx';
 import Label from '../components/Label.jsx';
+import CaseFileStrip from '../components/CaseFileStrip.jsx';
 
 export default function StepDisciplines({ character, update }) {
   const clan = CLANS.find((c) => c.id === character.clan);
@@ -25,9 +26,11 @@ export default function StepDisciplines({ character, update }) {
         <div style={{ textAlign: 'center', maxWidth: 500 }}>
           <Wand2 size={48} color={V.textDim} style={{ marginBottom: 18, opacity: 0.5 }} />
           <h2 className="f-decorative" style={{ fontSize: 28, color: V.text, margin: 0 }}>NO BLOODLINE</h2>
-          <p className="f-italic" style={{ color: V.textMuted, fontSize: 16, marginTop: 14 }}>
-            Choose a clan in Chapter II. The Disciplines wait for blood that knows their name.
-          </p>
+          <div style={{ marginTop: 14 }}>
+            <CaseFileStrip fontSize={16}>
+              Choose a clan in Chapter II. The Disciplines wait for blood that knows their name.
+            </CaseFileStrip>
+          </div>
         </div>
       </div>
     );
@@ -62,9 +65,11 @@ export default function StepDisciplines({ character, update }) {
           <h1 className="outline-red" style={{ fontSize: 'clamp(48px, 7vw, 84px)', lineHeight: 0.95, fontWeight: 900, margin: 0 }}>
             INHUMAN GIFTS
           </h1>
-          <p className="f-italic" style={{ fontSize: 17, color: V.textMuted, marginTop: 12, maxWidth: 640, margin: '12px auto 0' }}>
-            Two dots among the clan's powers. Pour both into one, or split them. Every gift becomes a need.
-          </p>
+          <div style={{ marginTop: 12 }}>
+            <CaseFileStrip fontSize={17}>
+              Two dots among the clan's powers. Pour both into one, or split them. Every gift becomes a need.
+            </CaseFileStrip>
+          </div>
         </div>
 
         <div className="fade-up-1" style={{ display: 'flex', justifyContent: 'center', marginBottom: 32 }}>
