@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Megaphone, Eye, Check, X as XIcon } from "lucide-react";
+import { Megaphone, Eye, Check, X as XIcon, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { base44 } from "@/api/base44Client";
 import DiceRoller from "@/components/dice/DiceRoller";
@@ -12,6 +12,8 @@ import { readCombatQueue } from "@/utils/combatQueue";
 import { initClassResources } from "@/components/combat/classResources";
 import { logCombatEvent } from "@/utils/combatLog";
 import { normalizeHp } from "@/components/combat/hpColor";
+import { useAuth } from "@/lib/AuthContext";
+import { isAdminUser } from "@/lib/isAdmin";
 
 /**
  * GroupDiceArena — shared multi-player rolling space.
@@ -55,6 +57,8 @@ export default function GroupDiceArena({
   allUserProfiles = [],
 }) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const viewerIsAdmin = isAdminUser(user);
   const isOpen = !!call?.active;
 
   const selectedUserIds = useMemo(
@@ -75,6 +79,10 @@ export default function GroupDiceArena({
   const allResponded =
     selectedUserIds.length > 0 &&
     selectedUserIds.every((uid) => !!responseFor(uid));
+  const pendingUserIds = useMemo(
+    () => selectedUserIds.filter((uid) => !responses?.[uid]),
+    [selectedUserIds, responses],
+  );
 
   // Roll-to-response writer with concurrent-write safety. Re-reads
   // the campaign from the query cache before merging so two
@@ -109,6 +117,100 @@ export default function GroupDiceArena({
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] }),
     onError: (err) => toast.error(err?.message || "Couldn't submit roll."),
+  });
+
+  // Admin-only force-roll for any selected player who hasn't rolled
+  // yet. Demo tool for Boky — fills pending response slots with
+  // 1d20 + DEX so the Accept Initiative button enables without
+  // waiting on real players. Each forced roll is logged with
+  // forced:true so demo data can be filtered out of analytics.
+  // Never overwrites an existing roll — re-checks against the
+  // latest cached responses at write time.
+  const forceRollPending = useMutation({
+    mutationFn: async () => {
+      if (!isAdminUser(user)) {
+        throw new Error("Force roll is admin-only.");
+      }
+      if (mode !== 'initiative') {
+        throw new Error("Force roll is initiative-only.");
+      }
+      const latest = queryClient.getQueryData(['campaign', campaignId]) || campaign;
+      const latestCall = latest?.combat_data?.initiative_call;
+      if (!latestCall?.active) {
+        throw new Error("Initiative call is no longer active.");
+      }
+      const latestResponses = latestCall.responses || {};
+      const latestSelected = Array.isArray(latestCall.selected_user_ids)
+        ? latestCall.selected_user_ids
+        : [];
+      const stillPending = latestSelected.filter((uid) => !latestResponses[uid]);
+      if (stillPending.length === 0) return { rolled: [] };
+
+      const rolled = [];
+      const nextResponses = { ...latestResponses };
+      for (const uid of stillPending) {
+        const p = players.find((x) => x.user_id === uid);
+        const char = p?.character || characters.find(
+          (c) => c.user_id === uid || c.created_by === p?.email,
+        );
+        const dex = char?.attributes?.dex || 10;
+        const mod = abilityModifier(dex);
+        const raw = Math.floor(Math.random() * 20) + 1;
+        const total = raw + mod;
+        nextResponses[uid] = {
+          roll: raw,
+          mod,
+          total,
+          forced: true,
+          rolled_at: new Date().toISOString(),
+        };
+        rolled.push({
+          name: char?.name || p?.username || 'Player',
+          raw,
+          mod,
+          total,
+        });
+      }
+
+      const nextCombatData = {
+        ...(latest?.combat_data || {}),
+        initiative_call: { ...latestCall, responses: nextResponses },
+      };
+      await base44.entities.Campaign.update(campaignId, { combat_data: nextCombatData });
+
+      for (const r of rolled) {
+        const sign = r.mod >= 0 ? '+' : '−';
+        const absMod = Math.abs(r.mod);
+        try {
+          await logCombatEvent(
+            campaignId,
+            `${r.name} rolls initiative (forced): ${r.total} (${r.raw} ${sign} ${absMod})`,
+            {
+              event: 'initiative_roll',
+              category: 'initiative',
+              actor: r.name,
+              roll: r.total,
+              raw: r.raw,
+              mod: r.mod,
+              forced: true,
+            },
+          );
+        } catch (err) {
+          console.error(`[forceRollPending] failed to log roll for ${r.name}`, err);
+        }
+      }
+      return { rolled };
+    },
+    onSuccess: ({ rolled } = { rolled: [] }) => {
+      queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
+      if (rolled.length > 0) {
+        toast.success(`Force-rolled ${rolled.length} pending ${rolled.length === 1 ? 'roll' : 'rolls'}.`);
+      }
+    },
+    onError: (err) => {
+      console.error('[forceRollPending] error', err);
+      toast.error(err?.message || "Couldn't force-roll pending.");
+    },
   });
 
   // GM cancel — clears the call from combat_data.
@@ -351,6 +453,21 @@ export default function GroupDiceArena({
             <Button variant="outline" onClick={() => cancelCall.mutate()} disabled={cancelCall.isPending}>
               <XIcon className="w-4 h-4 mr-1" /> {mode === 'initiative' ? 'Cancel call' : 'Close'}
             </Button>
+            {mode === 'initiative' && viewerIsAdmin && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (!isAdminUser(user)) return;
+                  forceRollPending.mutate();
+                }}
+                disabled={pendingUserIds.length === 0 || forceRollPending.isPending}
+                className="border-amber-400/60 text-amber-300 hover:bg-amber-400/10 disabled:opacity-40"
+                title="Admin: auto-roll initiative for any selected player who hasn't rolled yet."
+              >
+                <Zap className="w-4 h-4 mr-1" />
+                {forceRollPending.isPending ? 'Rolling…' : 'Force Roll Pending'}
+              </Button>
+            )}
             {mode === 'initiative' && (
               <Button
                 onClick={() => acceptInitiative.mutate()}
