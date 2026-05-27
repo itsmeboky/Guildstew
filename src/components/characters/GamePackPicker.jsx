@@ -1,5 +1,5 @@
 import React from "react";
-import { Lock, ChevronRight } from "lucide-react";
+import { Lock, ChevronRight, ShieldAlert } from "lucide-react";
 import {
   getOwnedGamePacks,
   getUpcomingGamePacks,
@@ -13,13 +13,28 @@ import {
  * single-pack users (i.e. everyone today), so this component
  * really only renders when entitlements expand later.
  *
+ * Admin override: when `isAdmin` is true, packs that would
+ * normally render as locked "Coming Soon" previews promote into
+ * the clickable section so staff can build characters in
+ * pre-release packs (VTM today; whatever ships in pre-release
+ * state next) through the regular creator flow. A red
+ * "ADMIN PREVIEW" chip on those cards keeps it obvious which
+ * pack is publicly visible vs. staff-only.
+ *
  * Props:
  *   ownedPackIds   string[] — ids of game packs the player owns
  *   onSelect       (packId) => void
+ *   isAdmin        boolean — staff override; promotes coming_soon
+ *                  packs into the clickable list
  */
-export default function GamePackPicker({ ownedPackIds, onSelect }) {
+export default function GamePackPicker({ ownedPackIds, onSelect, isAdmin = false }) {
   const owned = getOwnedGamePacks(ownedPackIds);
   const upcoming = getUpcomingGamePacks(ownedPackIds);
+
+  // Admin gets the upcoming packs merged into the clickable
+  // section; non-admin sees them as locked previews below.
+  const pickable = isAdmin ? [...owned, ...upcoming] : owned;
+  const lockedPreviews = isAdmin ? [] : upcoming;
 
   return (
     <div className="space-y-6">
@@ -31,36 +46,47 @@ export default function GamePackPicker({ ownedPackIds, onSelect }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {owned.map((pack) => (
-          <button
-            key={pack.id}
-            type="button"
-            onClick={() => onSelect?.(pack.id)}
-            className="text-left bg-[#1E2430] border-2 border-slate-700 hover:border-[var(--accent)] rounded-xl p-5 transition-all group"
-            style={{ "--accent": pack.accent }}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-3">
-                <span className="text-3xl" aria-hidden>{pack.icon}</span>
-                <div>
-                  <h3 className="text-lg font-bold text-white">{pack.name}</h3>
-                  <p className="text-[11px] text-slate-400 italic">{pack.tagline}</p>
+        {pickable.map((pack) => {
+          const isPreview = pack.status !== "available";
+          return (
+            <button
+              key={pack.id}
+              type="button"
+              onClick={() => onSelect?.(pack.id)}
+              className="text-left bg-[#1E2430] border-2 border-slate-700 hover:border-[var(--accent)] rounded-xl p-5 transition-all group relative"
+              style={{ "--accent": pack.accent }}
+            >
+              {isPreview && (
+                <span
+                  className="absolute top-2 right-2 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-red-300 bg-red-900/50 border border-red-700/60 px-1.5 py-0.5 rounded"
+                  title="Pre-launch pack — visible only to staff accounts"
+                >
+                  <ShieldAlert className="w-2.5 h-2.5" /> Admin Preview
+                </span>
+              )}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl" aria-hidden>{pack.icon}</span>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">{pack.name}</h3>
+                    <p className="text-[11px] text-slate-400 italic">{pack.tagline}</p>
+                  </div>
                 </div>
+                <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-[var(--accent)] transition" />
               </div>
-              <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-[var(--accent)] transition" />
-            </div>
-            <p className="text-xs text-slate-300 leading-relaxed">{pack.description}</p>
-          </button>
-        ))}
+              <p className="text-xs text-slate-300 leading-relaxed">{pack.description}</p>
+            </button>
+          );
+        })}
       </div>
 
-      {upcoming.length > 0 && (
+      {lockedPreviews.length > 0 && (
         <div>
           <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500 font-bold mb-3">
             More systems coming soon
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {upcoming.map((pack) => (
+            {lockedPreviews.map((pack) => (
               <div
                 key={pack.id}
                 aria-disabled

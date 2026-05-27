@@ -39,6 +39,7 @@ import UserProfile from './pages/UserProfile';
 import WatchLive from './pages/WatchLive';
 import CharacterCreator from './pages/CharacterCreator';
 import PathfinderCharacterCreator from './pages/PathfinderCharacterCreator';
+import VTMCharacterCreator from './pages/VTMCharacterCreator';
 import CampaignNPCs from './pages/CampaignNPCs';
 import CampaignItems from './pages/CampaignItems';
 import CampaignMaps from './pages/CampaignMaps';
@@ -118,6 +119,7 @@ export const PAGES = {
     "WatchLive": WatchLive,
     "CharacterCreator": CharacterCreator,
     "PathfinderCharacterCreator": PathfinderCharacterCreator,
+    "VTMCharacterCreator": VTMCharacterCreator,
     "CampaignNPCs": CampaignNPCs,
     "CampaignItems": CampaignItems,
     "CampaignMaps": CampaignMaps,
