@@ -10,7 +10,14 @@
 export const V = {
   bg: '#03020a', bgDeep: '#01000a', bgWarm: '#0a0408',
   surface: '#120612', surfaceLi: '#1a0a14', surfaceHi: '#241024',
-  glass: 'rgba(15, 8, 18, 0.55)',
+  // Glass alphas: 0.6 is the readability floor for any creator panel
+  // that holds text — below that the patterned background bleeds
+  // through and the text fights with it. `glass` was at 0.55 and
+  // visibly let the chrome through; bumped to 0.6 to match
+  // `glassWarm` and clear the legibility threshold. `glassDeep` at
+  // 0.78 is already well above and stays — it's the heavyweight
+  // surface used for content cards with dense information.
+  glass: 'rgba(15, 8, 18, 0.6)',
   glassDeep: 'rgba(8, 4, 12, 0.78)',
   glassWarm: 'rgba(26, 12, 18, 0.6)',
   edgeRed: 'rgba(196, 30, 58, 0.4)',

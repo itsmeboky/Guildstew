@@ -19,6 +19,7 @@ import AmbientGlow from '../components/AmbientGlow.jsx';
 import AmbientBats from '../components/AmbientBats.jsx';
 import CharacterWitness from '../components/CharacterWitness.jsx';
 import Art from '../components/Art.jsx';
+import CaseFileStrip from '../components/CaseFileStrip.jsx';
 import Dots from '../components/Dots.jsx';
 import Label from '../components/Label.jsx';
 
@@ -155,9 +156,11 @@ export default function StepSkills({ character, update }) {
           ))}
         </div>
 
-        <p className="f-italic fade-up-4" style={{ color: V.textDim, fontSize: 15, textAlign: 'center', marginTop: 24 }}>
-          Click any skill to cycle its rating. Choose an approach above to auto-distribute.
-        </p>
+        <div className="fade-up-4" style={{ textAlign: 'center', marginTop: 24 }}>
+          <CaseFileStrip fontSize={15}>
+            Click any skill to cycle its rating. Choose an approach above to auto-distribute.
+          </CaseFileStrip>
+        </div>
       </div>
     </div>
   );
