@@ -117,7 +117,7 @@ export default function StepDisciplines({ character, update }) {
                   }}>
                     {disc.toUpperCase()}
                   </div>
-                  <p className="f-italic" style={{ margin: '0 0 16px 0', fontSize: 13, color: V.textMuted, lineHeight: 1.5, minHeight: 60 }}>
+                  <p className="f-italic" style={{ margin: '0 0 16px 0', fontSize: 15, color: V.textMuted, lineHeight: 1.5, minHeight: 60 }}>
                     {DISCIPLINES[disc]}
                   </p>
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>

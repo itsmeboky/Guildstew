@@ -63,9 +63,22 @@ export default function VTMCharacterDetail({ character, pack, onEdit, onDelete }
   const predator = PREDATOR_TYPES.find((p) => p.id === sd.predatorType);
   // Prefer the square token; fall back to the portrait only when
   // the player didn't upload a dedicated token, so the sidebar
-  // square doesn't end up empty.
-  const tokenUrl = sd.token_url || sd.token || character?.token_url
-    || sd.portrait_url || sd.portrait || character?.portrait_url || null;
+  // square doesn't end up empty. When falling back to the portrait
+  // we also pick up that image's transform so the framing the player
+  // set in their polaroid still applies.
+  const usingTokenSource = !!(sd.token_url || sd.token || character?.token_url);
+  const tokenUrl = usingTokenSource
+    ? (sd.token_url || sd.token || character?.token_url)
+    : (sd.portrait_url || sd.portrait || character?.portrait_url || null);
+  const tokenPos = usingTokenSource
+    ? (sd.token_position || character?.token_position)
+    : (sd.portrait_position || character?.portrait_position);
+  const tokenZoom = usingTokenSource
+    ? (sd.token_zoom || character?.token_zoom)
+    : (sd.portrait_zoom || character?.portrait_zoom);
+  const tokenTransform = tokenPos && tokenZoom
+    ? `translate(${tokenPos.x}px, ${tokenPos.y}px) scale(${tokenZoom})`
+    : 'none';
 
   // V5 derived stats from the overlay-resolved state.
   const attrs = sd.attributes || {};
@@ -149,7 +162,10 @@ export default function VTMCharacterDetail({ character, pack, onEdit, onDelete }
       }}>
         {tokenUrl ? (
           <img src={tokenUrl} alt={character?.name || 'Token'}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            style={{
+              width: '100%', height: '100%', objectFit: 'cover',
+              transform: tokenTransform, transformOrigin: 'center center',
+            }} />
         ) : (
           <div style={{
             width: '100%', height: '100%',

@@ -116,10 +116,10 @@ function ClanReveal({ clan, character, update }) {
                     background: V.glass, backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
                     border: `1px solid ${V.edgeRedDim}`,
                   }}>
-                    <div className="f-display" style={{ fontSize: 13, color: clan.accent, fontWeight: 600, letterSpacing: '0.1em', marginBottom: 4 }}>
+                    <div className="f-display" style={{ fontSize: 15, color: clan.accent, fontWeight: 600, letterSpacing: '0.1em', marginBottom: 4 }}>
                       {d.toUpperCase()}
                     </div>
-                    <div className="f-italic" style={{ fontSize: 12, color: V.textMuted, lineHeight: 1.45 }}>
+                    <div className="f-italic" style={{ fontSize: 14, color: V.textMuted, lineHeight: 1.45 }}>
                       {DISCIPLINES[d]}
                     </div>
                   </div>
@@ -218,14 +218,14 @@ export default function StepClan({ character, update }) {
                   <div className="f-decorative" style={{ fontSize: 16, color: V.textBri, fontWeight: 700, letterSpacing: '0.06em', marginBottom: 2 }}>
                     {clan.name.toUpperCase()}
                   </div>
-                  <div className="f-italic" style={{ fontSize: 11, color: V.textDim }}>{clan.epithet}</div>
+                  <div className="f-italic" style={{ fontSize: 13, color: V.textDim }}>{clan.epithet}</div>
                 </div>
               </button>
             );
           })}
         </div>
 
-        <div className="fade-up-2 f-italic" style={{ textAlign: 'center', color: V.textDim, fontSize: 13 }}>
+        <div className="fade-up-2 f-italic" style={{ textAlign: 'center', color: V.textDim, fontSize: 15 }}>
           Click a portrait. The painting will recognize you.
         </div>
       </div>
