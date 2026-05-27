@@ -20,6 +20,9 @@ const DETAIL_COMPONENTS = {
   PathfinderCharacterDetail: lazy(() =>
     import("@/game-packs/pf2e").then((m) => ({ default: m.CharacterSheet })),
   ),
+  VTMCharacterDetail: lazy(() =>
+    import("@/game-packs/vtm").then((m) => ({ default: m.CharacterDetail })),
+  ),
   // Dnd5eCharacterDetail: pending extraction from CharacterLibrary
 };
 
