@@ -43,6 +43,16 @@ export const CharacterCreatorFlow = lazy(() =>
   import('./ui/VTMCharacterCreator.jsx').then((m) => ({ default: m.default }))
 );
 
+// Library-side placeholder character sheet. Routed through
+// CharacterDetailDispatcher via pack.detailComponent =
+// 'VTMCharacterDetail'. The full V5 sheet is a separate downstream
+// project; this renders portrait + identity + stat strip + the
+// resolved-overlay-derived V5 vitals so the player at least sees
+// their character back when they click in the library.
+export const CharacterDetail = lazy(() =>
+  import('./ui/CharacterDetail.jsx').then((m) => ({ default: m.default }))
+);
+
 // Re-export the helpers Phase 4 introduced for testing /
 // debugging from outside the pack.
 export {

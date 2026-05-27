@@ -114,7 +114,7 @@ test('bagger: Blood Sorcery or Obfuscate; Enemy flaw', () => {
   assert.equal(disc.options[1].target, 'Obfuscate');
   const c = applyResolution(baseline(), pt, autoResolve(parsed));
   assert.equal(c.disciplines['Blood Sorcery'], 1);
-  assert.ok(c.flaws.some((f) => f.startsWith('Enemy')), 'enemy flaw present');
+  assert.ok(c.flaws.some((f) => (f.value || '').startsWith('Enemy')), 'enemy flaw present');
 });
 
 test('blood_leech: Celerity or Protean; humanity 4; diablerist', () => {
@@ -124,7 +124,7 @@ test('blood_leech: Celerity or Protean; humanity 4; diablerist', () => {
   // Auto-resolve picks Celerity (option 0)
   assert.equal(c.disciplines.Celerity, 1);
   assert.equal(c.humanity, 4, 'humanity = 7 - 3');
-  assert.ok(c.flaws.some((f) => /Diablerist/.test(f)), 'diablerist flaw');
+  assert.ok(c.flaws.some((f) => /Diablerist/.test(f.value || '')), 'diablerist flaw');
 });
 
 test('cleaver: Dominate or Animalism; Herd 2', () => {
@@ -141,7 +141,7 @@ test('consensualist: Auspex or Fortitude; humanity 8; masquerade-breacher flaw',
   const c = applyResolution(baseline(), pt, autoResolve(parsed));
   assert.equal(c.disciplines.Auspex, 1);
   assert.equal(c.humanity, 8);
-  assert.ok(c.flaws.some((f) => /Masquerade Breacher/i.test(f)));
+  assert.ok(c.flaws.some((f) => /Masquerade Breacher/i.test(f.value || '')));
 });
 
 test('farmer: Animalism or Protean; humanity 8; vegan as a flaw (not merit)', () => {
@@ -151,11 +151,11 @@ test('farmer: Animalism or Protean; humanity 8; vegan as a flaw (not merit)', ()
   assert.equal(c.disciplines.Animalism, 1);
   assert.equal(c.humanity, 8);
   // V5 taxonomy: feeding restrictions are flaws, not merits.
-  assert.ok(c.flaws.some((f) => /Vegan/i.test(f)), 'vegan landed in flaws');
-  assert.ok(!c.merits.some((m) => /Vegan/i.test(m)), 'vegan not in merits');
+  assert.ok(c.flaws.some((f) => /Vegan/i.test(f.value || '')), 'vegan landed in flaws');
+  assert.ok(!c.merits.some((m) => /Vegan/i.test(m.value || '')), 'vegan not in merits');
 });
 
-test('osiris: Blood Sorcery or Presence; Fame+Herd sum 3; Enemies+Mythic sum 2', () => {
+test('osiris: Blood Sorcery or Presence; Fame+Herd sum 3; Enemies+Mythic sum 2 dots', () => {
   const pt = getPredatorType('osiris');
   const parsed = parsePredatorGrants(pt);
   // Three choices: discipline OR + 2 distributes
@@ -164,10 +164,33 @@ test('osiris: Blood Sorcery or Presence; Fame+Herd sum 3; Enemies+Mythic sum 2',
   assert.equal(c.disciplines['Blood Sorcery'], 1);
   // Auto distribution puts 2/1 in Fame/Herd (3 budget, round-robin)
   assert.equal((c.backgrounds.fame || 0) + (c.backgrounds.herd || 0), 3);
-  // Enemies + Mythic Flaws flaws sum to 2 dots
-  const enemyFlawCount = c.flaws.filter((f) => /Enemies/.test(f)).length;
-  const mythicFlawCount = c.flaws.filter((f) => /Mythic Flaws/.test(f)).length;
-  assert.equal(enemyFlawCount + mythicFlawCount, 2);
+  // Enemies + Mythic Flaws flaws now sum dots via the structured
+  // {name, dots} shape instead of one-string-per-dot.
+  const enemiesEntry = c.flaws.find((f) => f.name === 'Enemies');
+  const mythicEntry  = c.flaws.find((f) => f.name === 'Mythic Flaws');
+  // Auto-distribute is round-robin so each gets exactly 1 dot.
+  assert.equal(enemiesEntry?.dots || 0, 1);
+  assert.equal(mythicEntry?.dots || 0, 1);
+});
+
+// Explicit Change 1 regression: 2 dots into Enemies (and 0 into
+// Mythic Flaws) must emit ONE entry { name: 'Enemies', dots: 2 },
+// not two { name: 'Enemies', dots: 1 } entries.
+test('osiris: 2 dots into Enemies emits one consolidated entry', () => {
+  const pt = getPredatorType('osiris');
+  const parsed = parsePredatorGrants(pt);
+  // Build a hand-picked resolution: 2 dots into Enemies, 0 into Mythic.
+  const enemiesChoice = parsed.choices.find((c) =>
+    c.kind === 'distribute' && c.targets.some((t) => t.target === 'Enemies'));
+  assert.ok(enemiesChoice, 'enemies/mythic distribute choice exists');
+  const auto = autoResolve(parsed);
+  auto[enemiesChoice.id] = { distribution: [2, 0] };
+  const c = applyResolution(baseline(), pt, auto);
+  const enemiesEntries = c.flaws.filter((f) => f.name === 'Enemies');
+  assert.equal(enemiesEntries.length, 1, 'one Enemies entry, not two');
+  assert.equal(enemiesEntries[0].dots, 2);
+  // Mythic Flaws gets nothing this time.
+  assert.equal(c.flaws.filter((f) => f.name === 'Mythic Flaws').length, 0);
 });
 
 test('sandman: Auspex or Obfuscate; Resources 1', () => {
@@ -188,7 +211,7 @@ test('scene_queen: three-option specialty choice; Fame 1 + Contact 1', () => {
   assert.equal(c.disciplines.Dominate, 1);
   assert.equal(c.backgrounds.fame, 1);
   assert.equal(c.backgrounds.contacts, 1);
-  assert.ok(c.flaws.some((f) => /Enemy/.test(f)));
+  assert.ok(c.flaws.some((f) => /Enemy/.test(f.value || '')));
 });
 
 test('siren: Fortitude or Presence; Looks Merit; Enemy', () => {
@@ -196,8 +219,8 @@ test('siren: Fortitude or Presence; Looks Merit; Enemy', () => {
   const parsed = parsePredatorGrants(pt);
   const c = applyResolution(baseline(), pt, autoResolve(parsed));
   assert.equal(c.disciplines.Fortitude, 1);
-  assert.ok(c.merits.some((m) => /Looks Merit/.test(m)));
-  assert.ok(c.flaws.some((f) => /^Enemy/.test(f)));
+  assert.ok(c.merits.some((m) => /Looks Merit/.test(m.value || '')));
+  assert.ok(c.flaws.some((f) => /^Enemy/.test(f.value || '')));
 });
 
 // --- Idempotency: re-applying with the same baseline + resolutions
