@@ -380,9 +380,13 @@ export default function CharacterLibrary() {
             : 'none';
           return (
             <div
-              className="w-full h-full rounded-2xl shadow-2xl overflow-hidden"
+              className="w-full h-full overflow-hidden"
               style={{
-                background: 'linear-gradient(135deg, #1a1f2e 0%, #2A3441 50%, #050816 100%)',
+                // No background / shadow / border-radius — the portrait
+                // sits directly on the library's natural backdrop so
+                // there's no visible container frame around it. Only
+                // the layout primitives (full size, max width, image
+                // clipping) remain.
                 maxWidth: '600px',
               }}
             >
