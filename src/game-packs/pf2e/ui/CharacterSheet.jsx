@@ -10,14 +10,14 @@
 // Per Phase J.3 this file is a thin tab dispatcher; the actual tab
 // render code lives under ui/detail/*.jsx. Helpers shared across
 // tabs (sd/media/cap/fmtMod/SectionHeading/StatBlock) sit in
-// ui/detail/_shared.js.
+// ui/detail/_shared.jsx.
 
 import React, { useState } from 'react';
 import { Edit, Trash2 } from 'lucide-react';
 import GamePackTag from '@/components/characters/GamePackTag';
 import { ANCESTRIES, HERITAGES_BY_ANCESTRY, BACKGROUNDS, CLASSES, CLASS_DETAILS, CASTING_TRADITION_BY_CLASS } from '../data/index.js';
 import { formatCharacterSubline } from '../rules/character-subline.js';
-import { sd, media } from './detail/_shared.js';
+import { sd, media } from './detail/_shared.jsx';
 import StatsTab from './detail/StatsTab.jsx';
 import SkillsTab from './detail/SkillsTab.jsx';
 import FeatsTab from './detail/FeatsTab.jsx';

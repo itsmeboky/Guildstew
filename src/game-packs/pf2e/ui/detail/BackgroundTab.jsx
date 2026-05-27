@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { ANCESTRIES, HERITAGES_BY_ANCESTRY, BACKGROUNDS, CLASSES, CLASS_DETAILS } from '../../data/index.js';
-import { cap } from './_shared.js';
+import { cap } from './_shared.jsx';
 
 export default function BackgroundTab({ data }) {
   const ancestry = ANCESTRIES.find(a => a.slug === data.ancestry);
