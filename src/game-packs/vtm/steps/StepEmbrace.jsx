@@ -5,8 +5,10 @@
 // grid, top skills, disciplines, connections, and the touchstone
 // quote panel.
 //
-// The save button itself is hosted by the parent NavBar at this
-// step; this component is purely the read-out.
+// The save is fired by the explicit "WELCOME TO THE LONG NIGHT"
+// button at the bottom of this screen (NavBar's forward button is
+// hidden on Step IX). Mirrors the 5e / pf2e creator pattern where
+// the final step is review-then-confirm rather than save-on-advance.
 
 import React from 'react';
 import { V } from '../theme/colors.js';
@@ -23,7 +25,7 @@ import Dots from '../components/Dots.jsx';
 import Label from '../components/Label.jsx';
 import Vital from '../components/Vital.jsx';
 
-export default function StepEmbrace({ character }) {
+export default function StepEmbrace({ character, onConfirm, saving = false }) {
   const clan = CLANS.find((c) => c.id === character.clan);
   const predator = PREDATOR_TYPES.find((p) => p.id === character.predatorType);
   const health = (character.attributes.Stamina || 1) + 3;
@@ -310,6 +312,42 @@ export default function StepEmbrace({ character }) {
         }}>
           &ldquo;Welcome to the long, long night.&rdquo;
         </p>
+
+        {/* Explicit confirm. NavBar's forward button is hidden on
+            Step IX so this is the only path that fires the save.
+            Disabled while saving to prevent double-submit. */}
+        {onConfirm && (
+          <div className="fade-up-4" style={{ textAlign: 'center', marginTop: 32 }}>
+            <button
+              onClick={onConfirm}
+              disabled={saving}
+              className="v-btn cut-lg"
+              style={{
+                background: V.blood,
+                border: `1px solid ${V.bloodBri}`,
+                color: V.textBri,
+                padding: '20px 48px',
+                cursor: saving ? 'not-allowed' : 'pointer',
+                fontFamily: "'Inter', sans-serif",
+                fontSize: 14,
+                letterSpacing: '0.32em',
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                opacity: saving ? 0.5 : 1,
+                boxShadow: saving ? 'none' : `0 0 32px ${V.bloodBri}80, 0 0 80px ${V.bloodBri}40`,
+                transition: 'opacity 0.2s ease, box-shadow 0.2s ease',
+              }}
+            >
+              {saving ? 'Binding the Childe…' : 'Welcome to the Long Night'}
+            </button>
+            <div className="f-mono" style={{
+              fontSize: 9, color: V.textMuted, letterSpacing: '0.3em',
+              marginTop: 14, textTransform: 'uppercase',
+            }}>
+              Confirms the Embrace · saves to your library
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -30,6 +30,7 @@ import React, { useState, useCallback, useMemo, useRef } from 'react';
 
 import { STEPS } from '../data/steps.js';
 import { BACKGROUND_IMAGES } from '../data/assets.js';
+import { CLANS } from '../data/clans.js';
 import { getPredatorType } from '../data/predatorTypes.js';
 import { applyResolution, isResolutionComplete, parsePredatorGrants } from '../rules/predatorBonuses.js';
 import { uploadVtmAsset } from '../rules/uploadAsset.js';
@@ -80,6 +81,16 @@ export default function VTMCharacterCreator({
   // Random tile picked once per mount — matches prototype behavior.
   const bgUrl = useMemo(
     () => BACKGROUND_IMAGES[Math.floor(Math.random() * BACKGROUND_IMAGES.length)],
+    []
+  );
+
+  // Random clan accent for the gradient overlay, picked once per
+  // mount alongside the tile. Tints the page so the pattern stops
+  // out-shouting the polaroids / anatomical figure. Independent
+  // of character.clan: the player hasn't picked one yet on Step 0,
+  // and we don't want the page to re-hue mid-flow when they do.
+  const overlayAccent = useMemo(
+    () => CLANS[Math.floor(Math.random() * CLANS.length)].accent,
     []
   );
 
@@ -175,20 +186,30 @@ export default function VTMCharacterCreator({
     return uploadVtmAsset({ userId, tempId: tempIdRef.current, slot: `touchstone-${idx}`, file });
   }, [userId]);
 
-  // --- Embrace handler ------------------------------------------
-  // Called when the player clicks "EMBRACE" on Step VIII
-  // (Connections). Advances to Step IX (the read-only reveal) AND
-  // fires the save handler in parallel — Step IX is the visual
-  // outcome of the save.
-  const handleEmbrace = useCallback(async () => {
-    if (!onComplete) {
-      setStep(8);
-      return;
+  // --- Step VIII → IX advance (review only, no save) -------------
+  // Player clicks "REVIEW" on Step VIII. We re-apply the predator
+  // overlay defensively (Step VI's gate normally enforces it, but
+  // this catches a code-path drift) and advance to the read-only
+  // review screen. Save fires from the explicit confirm button on
+  // Step IX, not here.
+  const advanceToReview = useCallback(() => {
+    const pt = getPredatorType(character.predatorType);
+    if (pt && character._preBonuses) {
+      const overlaid = applyResolution(character._preBonuses, pt, character.predatorResolutions || {});
+      setCharacter((c) => ({ ...c, ...overlaid }));
     }
-    // Defensive re-apply — by Step VIII the overlay is already
-    // applied (Step VI's resolution gate enforces it), so this
-    // mostly catches the path where a future code change loses
-    // the overlay state. Cheap to run.
+    setStep(8);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [character]);
+
+  // --- Embrace confirm — fires from Step IX's confirm button -----
+  // Mirrors the dnd5e / pf2e creator pattern where the final step
+  // shows a full review and the save only fires after an explicit
+  // user click. Earlier the save fired the moment the player hit
+  // "EMBRACE" on Step VIII, which gave them no chance to scan the
+  // review summary before being yanked back to the library.
+  const confirmEmbrace = useCallback(async () => {
+    if (!onComplete) return;
     let finalChar = character;
     const pt = getPredatorType(character.predatorType);
     if (pt && character._preBonuses) {
@@ -196,17 +217,16 @@ export default function VTMCharacterCreator({
       finalChar = { ...character, ...overlaid };
       setCharacter(finalChar);
     }
-    setStep(8);
-    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
     try {
       await onComplete({
         ...finalChar,
         _vtmTempId: tempIdRef.current,
       });
     } catch (err) {
-      // Parent toasts the failure; rewind step so the player can retry.
+      // Parent toasts the failure; player stays on Step IX and can
+      // click the confirm button again. Rewinding to Step VIII would
+      // lose the review context they were just looking at.
       console.error('VTM Embrace save failed', err);
-      setStep(7);
     }
   }, [character, onComplete]);
 
@@ -241,7 +261,7 @@ export default function VTMCharacterCreator({
     >
       <GlobalStyles />
 
-      <BackgroundLayer bgUrl={bgUrl} />
+      <BackgroundLayer bgUrl={bgUrl} overlayAccent={overlayAccent} />
       <LacyCorners step={step} />
 
       {step === 0 && <StepConcept character={character} update={update} uploadPortraitToken={uploadPortraitToken} />}
@@ -252,19 +272,29 @@ export default function VTMCharacterCreator({
       {step === 5 && <StepPredator character={character} update={update} requestPredatorPick={requestPredatorPick} />}
       {step === 6 && <StepTouchstones character={character} update={update} uploadTouchstone={uploadTouchstone} />}
       {step === 7 && <StepAdvantages character={character} update={update} />}
-      {step === 8 && <StepEmbrace character={character} />}
+      {step === 8 && (
+        <StepEmbrace
+          character={character}
+          onConfirm={confirmEmbrace}
+          saving={saving}
+        />
+      )}
 
       <NavBar
         step={step}
         total={STEPS.length}
         onBack={() => goTo(step - 1)}
-        onNext={isAdvantages ? handleEmbrace : () => goTo(step + 1)}
+        onNext={isAdvantages ? advanceToReview : () => goTo(step + 1)}
         canNext={canAdvance}
         nextLabel={
           isHunt && !huntComplete ? 'RESOLVE CHOICES'
-          : isAdvantages ? (saving ? 'SAVING…' : 'EMBRACE')
+          : isAdvantages ? 'REVIEW EMBRACE'
           : 'CONTINUE'
         }
+        // Step IX's forward action is the explicit confirm button
+        // inside StepEmbrace itself; hide the NavBar's next button
+        // entirely so there's only one path forward.
+        hideNext={step === STEPS.length - 1}
       />
 
       <BloodLeechGate

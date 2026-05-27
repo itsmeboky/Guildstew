@@ -12,7 +12,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { V } from '../theme/colors.js';
 import { STEPS } from '../data/steps.js';
 
-export default function NavBar({ step, total, onBack, onNext, canNext = true, nextLabel = 'CONTINUE' }) {
+export default function NavBar({ step, total, onBack, onNext, canNext = true, nextLabel = 'CONTINUE', hideNext = false }) {
   return (
     <div style={{
       position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
@@ -51,20 +51,27 @@ export default function NavBar({ step, total, onBack, onNext, canNext = true, ne
           </div>
           <span className="f-mono" style={{ fontSize: 10, color: V.gold, letterSpacing: '0.3em' }}>{STEPS[step].name.toUpperCase()}</span>
         </div>
-        <button onClick={onNext} disabled={!canNext || step === total - 1} className="v-btn cut-sm"
-          style={{
-            background: step === total - 1 ? V.glassDeep : V.blood,
-            backdropFilter: step === total - 1 ? 'blur(20px)' : 'none',
-            border: `1px solid ${step === total - 1 ? V.edgeRedDim : V.bloodBri}`,
-            color: step === total - 1 ? V.textDim : V.textBri,
-            padding: '12px 28px', cursor: !canNext || step === total - 1 ? 'not-allowed' : 'pointer',
-            fontFamily: "'Inter', sans-serif", fontSize: 11, letterSpacing: '0.22em',
-            fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8,
-            opacity: !canNext || step === total - 1 ? 0.4 : 1,
-            boxShadow: !canNext || step === total - 1 ? 'none' : `0 0 24px ${V.bloodBri}50`,
-          }}>
-          {nextLabel} <ChevronRight size={14} />
-        </button>
+        {hideNext ? (
+          // Spacer keeps the chapter pill centered when the forward
+          // button is hidden (matches the back button's footprint
+          // closely enough that the eye doesn't register the gap).
+          <div style={{ width: 110 }} aria-hidden="true" />
+        ) : (
+          <button onClick={onNext} disabled={!canNext || step === total - 1} className="v-btn cut-sm"
+            style={{
+              background: step === total - 1 ? V.glassDeep : V.blood,
+              backdropFilter: step === total - 1 ? 'blur(20px)' : 'none',
+              border: `1px solid ${step === total - 1 ? V.edgeRedDim : V.bloodBri}`,
+              color: step === total - 1 ? V.textDim : V.textBri,
+              padding: '12px 28px', cursor: !canNext || step === total - 1 ? 'not-allowed' : 'pointer',
+              fontFamily: "'Inter', sans-serif", fontSize: 11, letterSpacing: '0.22em',
+              fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8,
+              opacity: !canNext || step === total - 1 ? 0.4 : 1,
+              boxShadow: !canNext || step === total - 1 ? 'none' : `0 0 24px ${V.bloodBri}50`,
+            }}>
+            {nextLabel} <ChevronRight size={14} />
+          </button>
+        )}
       </div>
     </div>
   );
