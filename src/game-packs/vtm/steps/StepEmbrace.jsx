@@ -20,6 +20,7 @@ import { BACKGROUNDS } from '../data/backgrounds.js';
 import AmbientGlow from '../components/AmbientGlow.jsx';
 import NYCSkylineMinimal from '../components/NYCSkylineMinimal.jsx';
 import AmbientBats from '../components/AmbientBats.jsx';
+import CaseFileStrip from '../components/CaseFileStrip.jsx';
 import Art from '../components/Art.jsx';
 import Dots from '../components/Dots.jsx';
 import Label from '../components/Label.jsx';
@@ -340,12 +341,11 @@ export default function StepEmbrace({ character, onConfirm, saving = false }) {
           </div>
         )}
 
-        <p className="f-italic fade-up-4" style={{
-          color: V.textMuted, fontSize: 18, margin: '20px 0 0 0', textAlign: 'center', fontStyle: 'italic',
-          textShadow: `0 0 12px ${V.bloodInk}`,
-        }}>
+        <div className="fade-up-4" style={{ margin: '20px 0 0 0', textAlign: 'center' }}>
+          <CaseFileStrip fontSize={18}>
           &ldquo;Welcome to the long, long night.&rdquo;
-        </p>
+          </CaseFileStrip>
+        </div>
 
         {/* Explicit confirm. NavBar's forward button is hidden on
             Step IX so this is the only path that fires the save.

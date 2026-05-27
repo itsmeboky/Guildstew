@@ -15,6 +15,7 @@ import AmbientBats from '../components/AmbientBats.jsx';
 import CharacterWitness from '../components/CharacterWitness.jsx';
 import Art from '../components/Art.jsx';
 import PolaroidCard from '../components/PolaroidCard.jsx';
+import CaseFileStrip from '../components/CaseFileStrip.jsx';
 
 export default function StepTouchstones({ character, update, uploadTouchstone }) {
   const touchstones = character.touchstones || [];
@@ -43,9 +44,11 @@ export default function StepTouchstones({ character, update, uploadTouchstone })
         <div className="fade-up" style={{ textAlign: 'center', marginBottom: 40 }}>
           <div className="f-mono" style={{ fontSize: 11, color: V.cyan, letterSpacing: '0.4em', marginBottom: 12 }}>CHAPTER VII · THE ANCHORS</div>
           <h1 className="outline-text" style={{ fontSize: 'clamp(48px, 7vw, 84px)', lineHeight: 0.95, fontWeight: 900, margin: 0 }}>WHO KEEPS YOU HUMAN</h1>
-          <p className="f-italic" style={{ fontSize: 17, color: V.textMuted, marginTop: 14, maxWidth: 640, margin: '14px auto 0' }}>
-            One to three mortals keep you from drowning. Each carries a Conviction — the line you refuse to cross while they live.
-          </p>
+          <div style={{ marginTop: 14 }}>
+            <CaseFileStrip fontSize={17}>
+              One to three mortals keep you from drowning. Each carries a Conviction — the line you refuse to cross while they live.
+            </CaseFileStrip>
+          </div>
         </div>
 
         {touchstones.length === 0 && (
@@ -55,7 +58,9 @@ export default function StepTouchstones({ character, update, uploadTouchstone })
             maxWidth: 600, margin: '0 auto',
           }}>
             <Heart size={36} color={V.textMuted} style={{ marginBottom: 16, opacity: 0.6 }} />
-            <p className="f-italic" style={{ color: V.textMuted, fontSize: 17, margin: '0 0 22px 0' }}>The wall is empty. The Beast notices.</p>
+            <div style={{ margin: '0 0 22px 0' }}>
+              <CaseFileStrip fontSize={17}>The wall is empty. The Beast notices.</CaseFileStrip>
+            </div>
             <button onClick={addTouchstone} className="cut-sm"
               style={{
                 background: V.blood, border: `1px solid ${V.bloodBri}`,
