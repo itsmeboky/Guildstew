@@ -100,8 +100,20 @@ export function getMonsterPortrait(monster) {
   if (MONSTER_PORTRAITS_ENABLED) {
     return getMonsterImageUrl(monster);
   }
-  const rawType = monster?.type ?? monster?.stats?.type;
-  return getMonsterCrestUrl(rawType);
+  return getMonsterCrestUrl(rawCreatureType(monster));
+}
+
+/**
+ * The raw creature type, dual-path (flat ?? nested), but ignoring the
+ * combat-side 'monster' / 'npc' kind discriminators — built combatants
+ * overwrite `type` with 'monster' for faction logic and stash the real
+ * SRD type under `stats.type`. Returns undefined when only a discriminator
+ * is present, letting normalizeMonsterType fall back to Humanoid.
+ */
+function rawCreatureType(creature) {
+  const flat = creature?.type;
+  if (flat && flat !== "monster" && flat !== "npc") return flat;
+  return creature?.stats?.type;
 }
 
 /**
@@ -135,15 +147,17 @@ export function isAiMonsterUrl(url) {
  *            must NOT be hidden).
  *
  * raw keeps the stats.image_url tail so the precedence at GMPanel's
- * "Your Monsters" grid is preserved verbatim.
+ * "Your Monsters" grid is preserved verbatim, and the creature.avatar tail
+ * so already-built combatants (whose only image field is the gated
+ * `avatar`) resolve too — a crest avatar passes back through untouched.
  */
 export function getCombatantPortrait(creature) {
   const raw =
-    creature?.image_url || creature?.avatar_url || creature?.stats?.image_url || "";
+    creature?.image_url || creature?.avatar_url || creature?.stats?.image_url ||
+    creature?.avatar || "";
   if (MONSTER_PORTRAITS_ENABLED) return raw;
   if (!raw || isAiMonsterUrl(raw)) {
-    const rawType = creature?.type ?? creature?.stats?.type;
-    return getMonsterCrestUrl(rawType);
+    return getMonsterCrestUrl(rawCreatureType(creature));
   }
   return raw;
 }
@@ -153,7 +167,7 @@ export function getCombatantPortrait(creature) {
  * --crest-color. Mirrors the type getMonsterPortrait keyed the crest off.
  */
 export function getMonsterCrestType(monster) {
-  return normalizeMonsterType(getMonsterType(monster));
+  return normalizeMonsterType(rawCreatureType(monster) ?? getMonsterType(monster));
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   isCrestUrl,
   isAiMonsterUrl,
   getCombatantPortrait,
+  getMonsterCrestType,
 } from "../monsterPortrait.js";
 
 test("gate is OFF by default (no env wired)", () => {
@@ -158,4 +159,37 @@ test("getCombatantPortrait reads creature type from flat or nested stats", () =>
   // No portrait -> crest keyed off the type accessor (type ?? stats.type).
   assert.match(getCombatantPortrait({ type: "fiend (demon)" }), /Fiend\.svg$/);
   assert.match(getCombatantPortrait({ stats: { type: "plant" } }), /Plant\.svg$/);
+});
+
+test("getCombatantPortrait ignores the 'monster'/'npc' kind discriminator", () => {
+  // Built combatants overwrite type with 'monster'; the real type lives in
+  // stats.type. The crest must key off stats.type, not 'monster'.
+  assert.match(
+    getCombatantPortrait({ type: "monster", stats: { type: "dragon" } }),
+    /Dragon\.svg$/,
+  );
+  assert.match(
+    getCombatantPortrait({ type: "monster", image_url: AI_URL, stats: { type: "undead" } }),
+    /Undead\.svg$/,
+  );
+  // 'npc' discriminator with no real type -> Humanoid default.
+  assert.match(getCombatantPortrait({ type: "npc" }), /Humanoid\.svg$/);
+});
+
+test("getCombatantPortrait resolves a built combatant via its gated avatar field", () => {
+  const crest = "https://x/campaign-assets/monster-type-crests/Beast.svg";
+  // Already-gated combatant (only carries `avatar`) passes the crest back.
+  assert.equal(
+    getCombatantPortrait({ type: "monster", uniqueId: "monster-7", avatar: crest }),
+    crest,
+  );
+  // A user-upload avatar passes through untouched.
+  assert.equal(
+    getCombatantPortrait({ type: "monster", avatar: USER_URL }),
+    USER_URL,
+  );
+});
+
+test("getMonsterCrestType keys off stats.type past the 'monster' discriminator", () => {
+  assert.equal(getMonsterCrestType({ type: "monster", stats: { type: "fey" } }), "Fey");
 });
