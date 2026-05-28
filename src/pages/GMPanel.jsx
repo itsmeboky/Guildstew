@@ -25,6 +25,7 @@ import ItemTooltip from "@/components/shared/ItemTooltip";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
 import { computeArmorClass } from "@/components/dnd5e/armorClass";
 import { safeText } from "@/utils/safeRender";
+import { getCombatantPortrait, isCrestUrl, getCrestCrBand, getMonsterCrestType, MONSTER_TYPE_COLORS } from "@/utils/monsterPortrait";
 import MonsterStatBlock from "@/game-packs/dnd5e/ui/MonsterStatBlock";
 import EquipmentLayout from "@/game-packs/dnd5e/ui/EquipmentLayout";
 import getSilhouetteImage from "@/components/shared/getSilhouetteImage";
@@ -2457,7 +2458,10 @@ export default function GMPanel() {
       return {
         id: `monster-${m.queueId}`,
         name: m.name,
-        avatar: m.image_url || m.avatar_url,
+        // Gated at the build chokepoint so no AI/SRD art leaks into any
+        // downstream combatant.avatar consumer (initiative tracker,
+        // FallenCard, DeathSavePanel, dice window). Crest URL when off.
+        avatar: getCombatantPortrait(m),
         dexMod: mod,
         type: 'monster',
         initiative: roll.total,
@@ -4876,7 +4880,10 @@ export default function GMPanel() {
                 {combatQueue.length > 0 ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {combatQueue.map((monster) => {
-                      const art = monster.image_url || monster.avatar_url || monster.stats?.image_url;
+                      const art = getCombatantPortrait(monster);
+                      const artIsCrest = isCrestUrl(art);
+                      const artCrestBand = artIsCrest ? getCrestCrBand(monster.challenge_rating ?? monster.stats?.challenge_rating) : null;
+                      const artCrestColor = artIsCrest ? MONSTER_TYPE_COLORS[getMonsterCrestType(monster)] : undefined;
                       return (
                         <button
                           key={monster.queueId}
@@ -4893,10 +4900,11 @@ export default function GMPanel() {
                           className="bg-[#1a1f2e] rounded-xl overflow-hidden hover:ring-2 hover:ring-[#FF5722] transition-all text-left"
                         >
                           <div
-                            className="h-32 bg-cover bg-center relative"
+                            className={`h-32 bg-cover bg-center relative${artIsCrest ? ` monster-crest crest-${artCrestBand}` : ''}`}
                             style={{
                               backgroundImage: art ? `url(${art})` : 'none',
-                              backgroundColor: '#0b1220'
+                              backgroundColor: '#0b1220',
+                              ...(artIsCrest ? { "--crest-color": artCrestColor } : {}),
                             }}
                           >
                             {!art && (
@@ -5831,6 +5839,10 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
                         const hasCondition = !adjustingHp && activeConditions[id]?.includes(selectedCondition);
                         const currentHp = monster.hit_points?.current !== undefined ? monster.hit_points.current : (monster.hit_points?.max || 10);
                         const maxHp = monster.hit_points?.max || 10;
+                        const portrait = getCombatantPortrait(monster);
+                        const portraitIsCrest = isCrestUrl(portrait);
+                        const portraitCrestBand = portraitIsCrest ? getCrestCrBand(monster.challenge_rating ?? monster.stats?.challenge_rating) : null;
+                        const portraitCrestColor = portraitIsCrest ? MONSTER_TYPE_COLORS[getMonsterCrestType(monster)] : undefined;
 
                         return (
                           <button
@@ -5845,7 +5857,7 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
                                 : 'bg-[#0b1220] border-[#111827] hover:border-slate-600'
                             }`}
                           >
-                            <div className="w-10 h-10 rounded-full bg-cover bg-top bg-[#111827]" style={{ backgroundImage: (monster.image_url || monster.avatar_url) ? `url(${monster.image_url || monster.avatar_url})` : 'none' }} />
+                            <div className={`w-10 h-10 rounded-full bg-cover bg-top bg-[#111827]${portraitIsCrest ? ` monster-crest crest-${portraitCrestBand}` : ''}`} style={{ backgroundImage: portrait ? `url(${portrait})` : 'none', ...(portraitIsCrest ? { "--crest-color": portraitCrestColor } : {}) }} />
                             <div className="text-left min-w-0 flex-1">
                               <p className="text-sm font-bold text-white truncate">{safeText(monster.name)}</p>
                               {adjustingHp ? (

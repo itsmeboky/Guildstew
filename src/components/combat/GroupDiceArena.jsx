@@ -12,6 +12,7 @@ import { readCombatQueue } from "@/utils/combatQueue";
 import { initClassResources } from "@/components/combat/classResources";
 import { logCombatEvent } from "@/utils/combatLog";
 import { normalizeHp } from "@/components/combat/hpColor";
+import { getCombatantPortrait } from "@/utils/monsterPortrait";
 import { useAuth } from "@/lib/AuthContext";
 import { isAdminUser } from "@/lib/isAdmin";
 
@@ -273,7 +274,9 @@ export default function GroupDiceArena({
         return {
           id: `monster-${m.queueId}`,
           name: m.name,
-          avatar: m.image_url || m.avatar_url,
+          // Gated like the GMPanel build chokepoint — crest URL when the
+          // portrait flag is off, raw image_url||avatar_url when on.
+          avatar: getCombatantPortrait(m),
           dexMod: mod,
           type: 'monster',
           initiative: r.total,
