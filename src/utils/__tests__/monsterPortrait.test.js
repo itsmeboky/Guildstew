@@ -15,6 +15,8 @@ import {
   getMonsterPortrait,
   getCrestCrBand,
   isCrestUrl,
+  isAiMonsterUrl,
+  getCombatantPortrait,
 } from "../monsterPortrait.js";
 
 test("gate is OFF by default (no env wired)", () => {
@@ -109,4 +111,51 @@ test("isCrestUrl distinguishes crests from real portraits", () => {
     isCrestUrl("https://x/campaign-assets/dnd5e/monsters/Goblin.png"),
     false,
   );
+});
+
+// --- Combat-surface gate (CombatQueue + GMPanel) ---------------------------
+
+const AI_URL =
+  "https://x.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/monsters/Goblin.png";
+const USER_URL =
+  "https://x.supabase.co/storage/v1/object/public/user-assets/users/abc/campaigns/def/homebrew/monsters/my-beastie.webp";
+
+test("isAiMonsterUrl flags the dnd5e/monsters naming-convention art only", () => {
+  assert.equal(isAiMonsterUrl(AI_URL), true);
+  assert.equal(isAiMonsterUrl(USER_URL), false);
+  assert.equal(isAiMonsterUrl(""), false);
+  assert.equal(isAiMonsterUrl(undefined), false);
+  assert.equal(isAiMonsterUrl(null), false);
+});
+
+test("getCombatantPortrait (gate OFF): AI/SRD art -> type crest", () => {
+  const url = getCombatantPortrait({ image_url: AI_URL, stats: { type: "humanoid (goblinoid)" } });
+  assert.ok(isCrestUrl(url));
+  assert.match(url, /Humanoid\.svg$/);
+});
+
+test("getCombatantPortrait (gate OFF): empty slot -> type crest, not blank", () => {
+  const url = getCombatantPortrait({ stats: { type: "dragon" } });
+  assert.ok(isCrestUrl(url));
+  assert.match(url, /Dragon\.svg$/);
+});
+
+test("getCombatantPortrait (gate OFF): homebrew user upload passes through untouched", () => {
+  // The must-not-break case.
+  const url = getCombatantPortrait({ image_url: USER_URL, type: "Aberration" });
+  assert.equal(url, USER_URL);
+  assert.equal(isCrestUrl(url), false);
+});
+
+test("getCombatantPortrait (gate OFF): honors avatar_url and stats.image_url precedence", () => {
+  assert.equal(getCombatantPortrait({ avatar_url: USER_URL }), USER_URL);
+  assert.equal(getCombatantPortrait({ stats: { image_url: USER_URL } }), USER_URL);
+  // stats.image_url carrying AI art is still gated to a crest.
+  assert.ok(isCrestUrl(getCombatantPortrait({ stats: { image_url: AI_URL, type: "ooze" } })));
+});
+
+test("getCombatantPortrait reads creature type from flat or nested stats", () => {
+  // No portrait -> crest keyed off the type accessor (type ?? stats.type).
+  assert.match(getCombatantPortrait({ type: "fiend (demon)" }), /Fiend\.svg$/);
+  assert.match(getCombatantPortrait({ stats: { type: "plant" } }), /Plant\.svg$/);
 });
