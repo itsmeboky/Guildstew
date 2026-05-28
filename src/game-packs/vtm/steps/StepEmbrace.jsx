@@ -20,6 +20,7 @@ import { BACKGROUNDS } from '../data/backgrounds.js';
 import AmbientGlow from '../components/AmbientGlow.jsx';
 import NYCSkylineMinimal from '../components/NYCSkylineMinimal.jsx';
 import AmbientBats from '../components/AmbientBats.jsx';
+import CaseFileStrip from '../components/CaseFileStrip.jsx';
 import Art from '../components/Art.jsx';
 import Dots from '../components/Dots.jsx';
 import Label from '../components/Label.jsx';
@@ -72,21 +73,55 @@ export default function StepEmbrace({ character, onConfirm, saving = false }) {
         }}>
           <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', minHeight: 540 }}>
             <div style={{ position: 'relative', background: V.bgDeep, borderRight: `1px solid ${V.edgeGold}` }}>
-              {character.portrait ? (
-                <img src={character.portrait} alt="portrait" style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }} />
-              ) : (
-                <Art label="UPLOADED PORTRAIT" description="Player uploaded from Chapter I" style={{ position: 'absolute', inset: 0, border: 'none', borderRadius: 0, padding: 0 }} />
-              )}
-              <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(to right, transparent 60%, ${V.bg}80 100%), radial-gradient(ellipse at center, transparent 40%, ${V.bg}50 100%)`, pointerEvents: 'none' }} />
-              {character.token && (
-                <div style={{
-                  position: 'absolute', bottom: 18, left: 18, width: 64, height: 64,
-                  borderRadius: '50%', border: `2px solid ${V.gold}`, overflow: 'hidden',
-                  background: V.bg, boxShadow: `0 0 20px ${V.gold}60, 0 4px 12px rgba(0,0,0,0.7)`,
-                }}>
-                  <img src={character.token} alt="token" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </div>
-              )}
+              {(() => {
+                // 5th replay site for the polaroid adjuster. Mirrors the
+                // pattern from the other four (PolaroidUpload itself,
+                // CharacterLibrary left card + center column, VTM
+                // CharacterDetail token): read saved position/zoom with
+                // a system_data → top-level fallback, OR-merge so a
+                // partial save (zoom-only or pan-only) still replays,
+                // and use object-fit: contain so tall portraits aren't
+                // clipped at the head/feet. The in-progress creator
+                // state on this step still has the fields at the top
+                // level — they move into system_data on save — so we
+                // check both shapes.
+                const portraitPos = character.system_data?.portrait_position || character.portrait_position;
+                const portraitZoom = character.system_data?.portrait_zoom || character.portrait_zoom;
+                const portraitTransform = (portraitPos || portraitZoom)
+                  ? `translate(${portraitPos?.x ?? 0}px, ${portraitPos?.y ?? 0}px) scale(${portraitZoom ?? 1})`
+                  : 'none';
+                const tokenPos = character.system_data?.token_position || character.token_position;
+                const tokenZoom = character.system_data?.token_zoom || character.token_zoom;
+                const tokenTransform = (tokenPos || tokenZoom)
+                  ? `translate(${tokenPos?.x ?? 0}px, ${tokenPos?.y ?? 0}px) scale(${tokenZoom ?? 1})`
+                  : 'none';
+                return (
+                  <>
+                    {character.portrait ? (
+                      <img src={character.portrait} alt="portrait" style={{
+                        width: '100%', height: '100%', objectFit: 'contain',
+                        position: 'absolute', inset: 0,
+                        transform: portraitTransform, transformOrigin: 'center center',
+                      }} />
+                    ) : (
+                      <Art label="UPLOADED PORTRAIT" description="Player uploaded from Chapter I" style={{ position: 'absolute', inset: 0, border: 'none', borderRadius: 0, padding: 0 }} />
+                    )}
+                    <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(to right, transparent 60%, ${V.bg}80 100%), radial-gradient(ellipse at center, transparent 40%, ${V.bg}50 100%)`, pointerEvents: 'none' }} />
+                    {character.token && (
+                      <div style={{
+                        position: 'absolute', bottom: 18, left: 18, width: 64, height: 64,
+                        borderRadius: '50%', border: `2px solid ${V.gold}`, overflow: 'hidden',
+                        background: V.bg, boxShadow: `0 0 20px ${V.gold}60, 0 4px 12px rgba(0,0,0,0.7)`,
+                      }}>
+                        <img src={character.token} alt="token" style={{
+                          width: '100%', height: '100%', objectFit: 'contain',
+                          transform: tokenTransform, transformOrigin: 'center center',
+                        }} />
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             <div style={{ padding: 36, display: 'flex', flexDirection: 'column', gap: 22, position: 'relative' }}>
@@ -306,12 +341,11 @@ export default function StepEmbrace({ character, onConfirm, saving = false }) {
           </div>
         )}
 
-        <p className="f-italic fade-up-4" style={{
-          color: V.textMuted, fontSize: 18, margin: '20px 0 0 0', textAlign: 'center', fontStyle: 'italic',
-          textShadow: `0 0 12px ${V.bloodInk}`,
-        }}>
+        <div className="fade-up-4" style={{ margin: '20px 0 0 0', textAlign: 'center' }}>
+          <CaseFileStrip fontSize={18}>
           &ldquo;Welcome to the long, long night.&rdquo;
-        </p>
+          </CaseFileStrip>
+        </div>
 
         {/* Explicit confirm. NavBar's forward button is hidden on
             Step IX so this is the only path that fires the save.
