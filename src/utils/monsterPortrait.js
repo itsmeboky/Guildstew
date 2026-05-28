@@ -114,6 +114,41 @@ export function isCrestUrl(url) {
 }
 
 /**
+ * True when a URL is an AI/SRD naming-convention portrait — the art that
+ * lives at campaign-assets/dnd5e/monsters/<name>.png and gets gated. User
+ * homebrew uploads live in the user-assets bucket and won't match.
+ */
+export function isAiMonsterUrl(url) {
+  return typeof url === "string" && url.length > 0 && url.includes("dnd5e/monsters/");
+}
+
+/**
+ * Combat-surface portrait resolver — the single function CombatQueue and
+ * GMPanel call. Combat creatures render straight off image_url / avatar_url
+ * (and, at one GMPanel site, stats.image_url) rather than the bestiary
+ * resolver, so the gate has to intercept here too.
+ *
+ * Gate ON  → the raw stored URL, untouched (full restore).
+ * Gate OFF → crest for the creature type when the slot is empty OR carries
+ *            the AI/SRD naming-convention art; otherwise the raw URL passes
+ *            through untouched (this is the homebrew user-upload case that
+ *            must NOT be hidden).
+ *
+ * raw keeps the stats.image_url tail so the precedence at GMPanel's
+ * "Your Monsters" grid is preserved verbatim.
+ */
+export function getCombatantPortrait(creature) {
+  const raw =
+    creature?.image_url || creature?.avatar_url || creature?.stats?.image_url || "";
+  if (MONSTER_PORTRAITS_ENABLED) return raw;
+  if (!raw || isAiMonsterUrl(raw)) {
+    const rawType = creature?.type ?? creature?.stats?.type;
+    return getMonsterCrestUrl(rawType);
+  }
+  return raw;
+}
+
+/**
  * The normalized crest type key for a monster — used to pick the
  * --crest-color. Mirrors the type getMonsterPortrait keyed the crest off.
  */
