@@ -204,8 +204,9 @@ export default function CombatQueue({
                 return (
                 <div
                   key={monster.queueId}
-                  className="relative group"
+                  className="group flex flex-col items-center gap-1 flex-shrink-0"
                 >
+                  <div className="relative">
                   <button
                     onClick={() => onSelectMonster({ ...monster, type: monster.type || 'monster' })}
                     className={`w-14 h-14 rounded-xl bg-[#0b1220] border-2 ${style.outline} hover:brightness-125 overflow-hidden transition-all flex-shrink-0`}
@@ -253,14 +254,15 @@ export default function CombatQueue({
                       ×{monster.charmDuration}
                     </div>
                   )}
-
-                  {/* Name tooltip */}
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-                    <div className={`px-2 py-1 rounded text-[9px] whitespace-nowrap ${style.pill} border ${style.outline}`}>
-                      {safeText(monster.name)}
-                      <span className="ml-1 opacity-80">({style.label})</span>
-                    </div>
                   </div>
+
+                  {/* Always-visible name beneath the icon */}
+                  <span
+                    className="w-14 text-[8px] leading-tight text-center text-slate-300 truncate"
+                    title={`${safeText(monster.name)} (${style.label})`}
+                  >
+                    {safeText(monster.name)}
+                  </span>
                 </div>
                 );
               })}
