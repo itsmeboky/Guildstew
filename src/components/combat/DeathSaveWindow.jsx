@@ -1,6 +1,8 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import DiceRoller from "@/components/dice/DiceRoller";
+import { isCrestUrl } from "@/utils/monsterPortrait";
+import MonsterCrest from "@/components/shared/MonsterCrest";
 
 /**
  * Dramatic full-screen overlay that replaces the normal action bar / dice
@@ -345,7 +347,9 @@ export default function DeathSaveWindow({
               }
               className="w-36 h-36 md:w-44 md:h-44 rounded-full overflow-hidden border-4 border-red-500/70 bg-[#1a1f2e] shadow-[0_0_60px_rgba(239,68,68,0.55)] flex-shrink-0"
             >
-              {combatant.avatar ? (
+              {isCrestUrl(combatant.avatar) ? (
+                <MonsterCrest combat monster={combatant} src={combatant.avatar} className="w-full h-full opacity-80" title={combatant.name} />
+              ) : combatant.avatar ? (
                 <img
                   src={combatant.avatar}
                   alt={combatant.name}

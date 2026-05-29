@@ -29,10 +29,8 @@ import {
   getSpecialAbilities, getActions, getLegendaryActions, getReactions,
   getDescription, formatUsage,
 } from "@/utils/monsterHelpers";
-import {
-  getMonsterPortrait, isCrestUrl, getMonsterCrestType, getCrestCrBand,
-  MONSTER_TYPE_COLORS,
-} from "@/utils/monsterPortrait";
+import { getMonsterPortrait, isCrestUrl } from "@/utils/monsterPortrait";
+import MonsterCrest from "@/components/shared/MonsterCrest";
 import { safeText } from "@/utils/safeRender";
 
 /**
@@ -442,11 +440,9 @@ function MonsterCard({ monster, encountered, isGM, selected, onClick, onToggleEn
   const ac = getAC(monster);
   const hp = getHP(monster);
   const cr = getCR(monster);
-  // Crest fallback gets a CR-intensity glow tinted by creature type;
-  // real portraits get none (see .monster-crest in index.css).
+  // Crest fallback renders as a type-tinted emblem (MonsterCrest); real
+  // portraits render as the cover image.
   const crest = isCrestUrl(img);
-  const crestColor = crest ? MONSTER_TYPE_COLORS[getMonsterCrestType(monster)] : undefined;
-  const crestBand = crest ? getCrestCrBand(cr) : undefined;
   // "Huge Dragon" instead of just "Dragon". Size falls back silently
   // when the stat block doesn't record one (most homebrew shims).
   const typeLabel = size ? `${size} ${type}` : type;
@@ -464,12 +460,13 @@ function MonsterCard({ monster, encountered, isGM, selected, onClick, onToggleEn
         className="text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#37F2D1]/40"
       >
         <div className="h-40 overflow-hidden bg-[#0f1219] relative">
-          {img ? (
+          {crest ? (
+            <MonsterCrest monster={monster} src={img} className="w-full h-full" title={safeText(monster.name)} />
+          ) : img ? (
             <img
               src={img}
               alt={monster.name}
-              className={`w-full h-full object-cover object-top${crest ? ` monster-crest crest-${crestBand}` : ""}`}
-              style={crest ? { "--crest-color": crestColor } : undefined}
+              className="w-full h-full object-cover object-top"
               onError={(e) => {
                 e.currentTarget.onerror = null;
                 e.currentTarget.src = "/default-monster.png";
@@ -531,11 +528,9 @@ function MonsterStatBlock({ monster, isGM, onDelete }) {
   const size  = getSize(monster);
   const type  = getMonsterType(monster);
   const align = getAlignment(monster);
-  // Crest fallback gets a CR-intensity glow tinted by creature type;
-  // real portraits get none (see .monster-crest in index.css).
+  // Crest fallback renders as a type-tinted emblem (MonsterCrest); real
+  // portraits render as the cover image.
   const crest = isCrestUrl(img);
-  const crestColor = crest ? MONSTER_TYPE_COLORS[getMonsterCrestType(monster)] : undefined;
-  const crestBand = crest ? getCrestCrBand(getCR(monster)) : undefined;
   const typeStr = safeText(type);
   const metaLine = [safeText(size), typeStr ? typeStr.toLowerCase() : "", safeText(align)]
     .filter(Boolean)
@@ -556,12 +551,13 @@ function MonsterStatBlock({ monster, isGM, onDelete }) {
     <div>
         {/* Hero image + title */}
         <div className="relative h-56 overflow-hidden">
-          {img ? (
+          {crest ? (
+            <MonsterCrest monster={monster} src={img} className="w-full h-full" title={safeText(monster.name)} />
+          ) : img ? (
             <img
               src={img}
               alt={monster.name}
-              className={`w-full h-full object-cover object-top${crest ? ` monster-crest crest-${crestBand}` : ""}`}
-              style={crest ? { "--crest-color": crestColor } : undefined}
+              className="w-full h-full object-cover object-top"
               onError={(e) => {
                 e.currentTarget.onerror = null;
                 e.currentTarget.src = "/default-monster.png";
