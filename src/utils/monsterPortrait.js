@@ -117,6 +117,20 @@ function rawCreatureType(creature) {
 }
 
 /**
+ * Extract the SRD type from a crest URL (…/monster-type-crests/{Type}.svg).
+ * Lets a tint match the rendered silhouette even when the combatant object
+ * carries no type (e.g. the lightweight dice-window actor/target objects).
+ * Returns null when the URL isn't a crest or the type isn't one of the 14.
+ */
+export function crestTypeFromUrl(url) {
+  if (typeof url !== "string") return null;
+  const m = url.match(/\/monster-type-crests\/([^/?#]+)\.svg(?:[?#].*)?$/);
+  if (!m) return null;
+  const name = decodeURIComponent(m[1]);
+  return MONSTER_TYPE_KEYS.includes(name) ? name : null;
+}
+
+/**
  * True when a resolved src is a type crest (vs a real portrait). Render
  * sites use this to decide whether to apply the CR-intensity glow layer —
  * real portraits get NO glow, crests only.
@@ -160,6 +174,33 @@ export function getCombatantPortrait(creature) {
     return getMonsterCrestUrl(rawCreatureType(creature));
   }
   return raw;
+}
+
+/**
+ * Resolve a combat-tracker combatant's display avatar. Players keep their
+ * own avatar untouched; monsters/NPCs route through the gate so AI/SRD art
+ * (or an empty slot) becomes a type crest — and crucially this re-resolves
+ * at render time, so even stale combat_data.order rows that still carry a
+ * raw AI URL render the crest. Returns { src, isCrest, isPlayer }.
+ *
+ * Player detection: combat builders tag PCs with type === 'player' (or an
+ * isPlayer flag / a `player-` id prefix); everything else is a creature.
+ */
+export function resolveCombatantAvatar(combatant) {
+  const isPlayer =
+    combatant?.type === "player" || combatant?.isPlayer === true ||
+    String(combatant?.id || combatant?.uniqueId || "").startsWith("player-");
+  if (isPlayer) {
+    return {
+      src:
+        combatant?.avatar || combatant?.avatar_url || combatant?.image_url ||
+        combatant?.profile_avatar_url || "",
+      isCrest: false,
+      isPlayer: true,
+    };
+  }
+  const src = getCombatantPortrait(combatant);
+  return { src, isCrest: isCrestUrl(src), isPlayer: false };
 }
 
 /**

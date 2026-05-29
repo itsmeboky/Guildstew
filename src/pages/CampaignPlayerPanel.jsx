@@ -41,7 +41,7 @@ import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
 import { toast } from "sonner";
 import { supabase } from "@/api/supabaseClient";
 import { safeText } from "@/utils/safeRender";
-import { getCombatantPortrait, isCrestUrl } from "@/utils/monsterPortrait";
+import { resolveCombatantAvatar } from "@/utils/monsterPortrait";
 import MonsterCrest from "@/components/shared/MonsterCrest";
 import {
   AlertDialog,
@@ -2805,9 +2805,8 @@ function TurnOrderDisplay({ order, currentTurnIndex, onSelectTarget, selectionMo
                     // Players keep their avatar; monsters/NPCs resolve through
                     // the gate so AI/SRD art (even from stale combat_data)
                     // becomes a type-tinted crest.
-                    const isMonster = combatant.type !== 'player' && !combatant.isPlayer;
-                    const src = isMonster ? getCombatantPortrait(combatant) : combatant.avatar;
-                    if (isMonster && isCrestUrl(src)) {
+                    const { src, isCrest } = resolveCombatantAvatar(combatant);
+                    if (isCrest) {
                       return <MonsterCrest combat monster={combatant} src={src} className="w-full h-full" title={combatant.name} />;
                     }
                     return src ? (
