@@ -90,23 +90,27 @@ CREATE POLICY "admins_manage_attributions" ON public.artist_attributions
 -- ----------------------------------------------------------------------------
 
 -- Legal asset credits — CC BY 3.0 game-icons.net monster-type icons.
--- is_protected = true. Idempotent on (name, category).
+-- is_protected = true. portfolio_url is the artist's own site; source_url
+-- is game-icons.net for all three. Idempotent on (name, category).
 INSERT INTO public.artist_attributions
-  (name, category, credit_note, source, source_url, license, license_url, is_protected, sort_order)
-SELECT v.name, 'asset_credit', v.credit_note, 'game-icons.net',
-       v.source_url, 'CC BY 3.0', 'http://creativecommons.org/licenses/by/3.0/',
+  (name, category, portfolio_url, credit_note, source, source_url, license, license_url, is_protected, sort_order)
+SELECT v.name, 'asset_credit', v.portfolio_url, v.credit_note, 'game-icons.net',
+       'https://game-icons.net/', 'CC BY 3.0', 'http://creativecommons.org/licenses/by/3.0/',
        true, v.sort_order
 FROM (VALUES
   ('Lorc',
+   'https://lorcblog.blogspot.com/',
    'Aberration, Beast, Celestial, Construct, Elemental, Fey, Fiend, Humanoid, Monstrosity, Plant monster-type icons',
-   'https://lorcblog.blogspot.com/', 0),
+   1),
   ('Delapouite',
+   'https://delapouite.com/',
    'Dragon, Giant, Ooze monster-type icons',
-   'https://delapouite.com/', 1),
+   2),
   ('Skoll',
+   'https://game-icons.net/',
    'Undead monster-type icon',
-   'https://game-icons.net/', 2)
-) AS v(name, credit_note, source_url, sort_order)
+   3)
+) AS v(name, portfolio_url, credit_note, sort_order)
 WHERE NOT EXISTS (
   SELECT 1 FROM public.artist_attributions a
   WHERE a.name = v.name AND a.category = 'asset_credit'
@@ -117,9 +121,9 @@ INSERT INTO public.artist_attributions
   (name, role, category, is_protected, sort_order)
 SELECT v.name, v.role, 'studio_artist', false, v.sort_order
 FROM (VALUES
-  ('Boky', 'Creative Director', 0),
-  ('June', 'Artist', 1),
-  ('Vee',  'Artist', 2)
+  ('Boky', 'Creative Director', 1),
+  ('June', 'Artist', 2),
+  ('Vee',  'Artist', 3)
 ) AS v(name, role, sort_order)
 WHERE NOT EXISTS (
   SELECT 1 FROM public.artist_attributions a
