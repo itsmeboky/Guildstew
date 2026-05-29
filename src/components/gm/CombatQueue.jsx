@@ -204,8 +204,9 @@ export default function CombatQueue({
                 return (
                 <div
                   key={monster.queueId}
-                  className="relative group"
+                  className="group flex flex-col items-center gap-1 flex-shrink-0"
                 >
+                  <div className="relative">
                   <button
                     onClick={() => onSelectMonster({ ...monster, type: monster.type || 'monster' })}
                     className={`w-14 h-14 rounded-xl bg-[#0b1220] border-2 ${style.outline} hover:brightness-125 overflow-hidden transition-all flex-shrink-0`}
