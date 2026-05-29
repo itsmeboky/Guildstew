@@ -35,14 +35,15 @@ import {
   COVER,
 } from "@/components/dnd5e/dnd5eRules";
 import { safeText } from "@/utils/safeRender";
-import { getCombatantPortrait, isCrestUrl, getCrestCrBand, getMonsterCrestType, MONSTER_TYPE_COLORS } from "@/utils/monsterPortrait";
+import { getCombatantPortrait, isCrestUrl } from "@/utils/monsterPortrait";
+import MonsterCrest from "@/components/shared/MonsterCrest";
 
 // Resolve a combatant's portrait for the dice window, gating AI/SRD monster
 // art to a type crest while leaving player avatars and homebrew uploads
 // alone. Monsters are detected by the 'monster'/'npc' kind discriminator or
 // a `monster-` id prefix; players keep their original avatar precedence.
-// When a crest results, returns the glow class + --crest-color (banded by
-// CR) so the markup can apply the same treatment used elsewhere.
+// Returns { src, isCrest, monster } so the markup can render either a plain
+// <img> or a type-tinted <MonsterCrest>.
 function resolveCombatantPortrait(c) {
   const isMonster =
     c?.type === "monster" || c?.type === "npc" ||
@@ -50,18 +51,12 @@ function resolveCombatantPortrait(c) {
   if (!isMonster) {
     return {
       src: c?.avatar || c?.avatar_url || c?.image_url || c?.profile_avatar_url,
-      className: "",
-      style: undefined,
+      isCrest: false,
+      monster: c,
     };
   }
   const src = getCombatantPortrait(c);
-  if (!isCrestUrl(src)) return { src, className: "", style: undefined };
-  const cr = c?.challenge_rating ?? c?.stats?.challenge_rating;
-  return {
-    src,
-    className: ` monster-crest crest-${getCrestCrBand(cr)}`,
-    style: { "--crest-color": MONSTER_TYPE_COLORS[getMonsterCrestType(c)] },
-  };
+  return { src, isCrest: isCrestUrl(src), monster: c };
 }
 
 // Alias so the existing in-file lookups don't need renaming.
@@ -2149,18 +2144,18 @@ export default function CombatDiceWindow({
                       className="bg-[#0b1220] rounded-2xl p-4 flex flex-col items-center border border-[#111827] relative"
                     >
                       {(() => {
-                        const { src: avatar, className: crestClass, style: crestStyle } =
-                          resolveCombatantPortrait(c);
+                        const { src: avatar, isCrest, monster } = resolveCombatantPortrait(c);
                         return (
                           <div
                             className={`w-16 h-16 rounded-full overflow-hidden mb-3 border-2 ${style.outline}`}
                           >
-                            {avatar ? (
+                            {isCrest ? (
+                              <MonsterCrest combat monster={monster} src={avatar} className="w-full h-full" title={safeText(c.name)} />
+                            ) : avatar ? (
                               <img
                                 src={avatar}
                                 alt={safeText(c.name)}
-                                className={`w-full h-full object-cover${crestClass}`}
-                                style={crestStyle}
+                                className="w-full h-full object-cover"
                               />
                             ) : (
                               <div className="w-full h-full bg-[#1a1f2e] flex items-center justify-center text-xl text-slate-400 font-bold">
@@ -2317,8 +2312,7 @@ export default function CombatDiceWindow({
           Up Next
         </span>
         {queue.map((c, i) => {
-          const { src: avatar, className: crestClass, style: crestStyle } =
-            resolveCombatantPortrait(c);
+          const { src: avatar, isCrest, monster } = resolveCombatantPortrait(c);
           return (
             <div
               key={c.uniqueId || c.id || i}
@@ -2338,8 +2332,10 @@ export default function CombatDiceWindow({
                 e.currentTarget.style.borderColor = "rgba(51,65,85,1)";
               }}
             >
-              {avatar ? (
-                <img src={avatar} alt="" className={`w-full h-full object-cover${crestClass}`} style={crestStyle} />
+              {isCrest ? (
+                <MonsterCrest combat monster={monster} src={avatar} className="w-full h-full" title={safeText(c.name)} />
+              ) : avatar ? (
+                <img src={avatar} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-500 font-bold">
                   {safeText(c.name)?.[0]}
@@ -2491,8 +2487,7 @@ export default function CombatDiceWindow({
   const renderPortrait = (combatant, opts = {}) => {
     const { isActor = false, size = 200 } = opts;
     const color = factionColor(combatant);
-    const { src: avatar, className: crestClass, style: crestStyle } =
-      resolveCombatantPortrait(combatant);
+    const { src: avatar, isCrest, monster } = resolveCombatantPortrait(combatant);
     return (
       <div
         className="relative bg-[#1a1f2e] overflow-hidden"
@@ -2508,12 +2503,13 @@ export default function CombatDiceWindow({
             ", inset 0 0 30px rgba(0,0,0,0.5)",
         }}
       >
-        {avatar ? (
+        {isCrest ? (
+          <MonsterCrest combat monster={monster} src={avatar} className="w-full h-full" title={safeText(combatant?.name)} />
+        ) : avatar ? (
           <img
             src={avatar}
             alt={safeText(combatant?.name)}
-            className={`w-full h-full object-cover${crestClass}`}
-            style={crestStyle}
+            className="w-full h-full object-cover"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-5xl text-slate-600 font-bold">
