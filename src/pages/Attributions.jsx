@@ -1,14 +1,19 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ExternalLink } from "lucide-react";
+import { supabase } from "@/api/supabaseClient";
 
 /**
  * Open-content attribution page. Required by CC-BY 4.0 for the SRD
- * data shipped under the 2014 and 2024 game packs, and a courtesy
- * acknowledgment for the open dataset projects we adapt the JSON
- * from.
+ * data shipped under the 2014 and 2024 game packs, CC-BY 3.0 for the
+ * game-icons.net monster-type icons, and a courtesy acknowledgment for
+ * the open dataset projects we adapt the JSON from. Also credits the
+ * studio artists. The artist + icon-credit sections are data-driven
+ * from `artist_attributions` (public read, admin-managed); the SRD /
+ * dataset sections below are static.
  *
- * Routed at `/attributions` (see App.jsx) and linked from the
+ * Routed at `/Attributions` (see App.jsx) and linked from the
  * site-wide LegalFooter.
  */
 
@@ -38,6 +43,22 @@ function ExtLink({ href, children }) {
 }
 
 export default function Attributions() {
+  // Public read (RLS allows anon). Ordered by sort_order then name.
+  const { data: attributions = [] } = useQuery({
+    queryKey: ["artistAttributions"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("artist_attributions")
+        .select("*")
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true });
+      return data || [];
+    },
+  });
+
+  const studioArtists = attributions.filter((a) => a.category === "studio_artist");
+  const assetCredits = attributions.filter((a) => a.category === "asset_credit");
+
   return (
     <div className="min-h-screen bg-[#0f1219] text-white p-8">
       <div className="max-w-4xl mx-auto">
@@ -59,6 +80,60 @@ export default function Attributions() {
           the license under which we redistribute their work, as
           required by those licenses.
         </p>
+
+        {studioArtists.length > 0 && (
+          <Section title="Artists & Contributors">
+            <ul className="space-y-3">
+              {studioArtists.map((a) => (
+                <li key={a.id}>
+                  <span className="font-semibold text-white">{a.name}</span>
+                  {a.role && <span className="text-slate-400"> — {a.role}</span>}
+                  {(a.portfolio_url || a.contact) && (
+                    <div className="text-xs text-slate-400 mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+                      {a.portfolio_url && (
+                        <ExtLink href={a.portfolio_url}>Portfolio</ExtLink>
+                      )}
+                      {a.contact && <span>{a.contact}</span>}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
+
+        {assetCredits.length > 0 && (
+          <Section title="Asset & Icon Credits">
+            <p className="text-slate-400 text-xs">
+              Game icons used in Guildstew are licensed under Creative
+              Commons and require attribution to their creators.
+            </p>
+            <ul className="space-y-3">
+              {assetCredits.map((a) => (
+                <li key={a.id}>
+                  <span className="font-semibold text-white">{a.name}</span>
+                  {a.credit_note && (
+                    <span className="text-slate-300"> — {a.credit_note}</span>
+                  )}
+                  {(a.source || a.source_url || a.license || a.license_url) && (
+                    <div className="text-xs text-slate-400 mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+                      {(a.source || a.source_url) && (
+                        a.source_url
+                          ? <ExtLink href={a.source_url}>{a.source || a.source_url}</ExtLink>
+                          : <span>{a.source}</span>
+                      )}
+                      {(a.license || a.license_url) && (
+                        a.license_url
+                          ? <ExtLink href={a.license_url}>{a.license || "License"}</ExtLink>
+                          : <span>{a.license}</span>
+                      )}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
 
         <Section title="D&D 5e — System Reference Document 5.1 (2014 edition)">
           <p>
