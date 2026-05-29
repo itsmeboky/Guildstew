@@ -350,27 +350,28 @@ h1, h2, h3, h4, h5, h6 {
  * recolored to its creature-type hue via background-blend-mode (a
  * stained-glass tint, set inline by crestMaskStyle), clipped to the crest
  * silhouette by a CSS mask — the icon itself is colored, detail preserved,
- * not just bordered. --crest-color carries that hue; the band class scales a
- * drop-shadow glow that traces the silhouette. Real AI portraits never get
- * .monster-crest, so they stay un-tinted/un-glowed. Nothing is baked into
- * the SVG assets — purely a render-time treatment. */
+ * not just bordered. --crest-color carries that hue; the band class adds an
+ * outer drop-shadow halo in that color, scaled by CR (no brightness/saturate
+ * — that washed the disc toward white at high CR). Real AI portraits never
+ * get .monster-crest, so they stay un-tinted/un-glowed. Nothing is baked
+ * into the SVG assets — purely a render-time treatment. */
 .monster-crest {
   --crest-color: #4FA3E3; /* Humanoid blue fallback */
   transition: filter 150ms ease;
 }
 .monster-crest.crest-common {
-  filter: drop-shadow(0 0 1px var(--crest-color));
+  filter: none;
 }
 .monster-crest.crest-dangerous {
-  filter: drop-shadow(0 0 4px var(--crest-color));
+  filter: drop-shadow(0 0 5px var(--crest-color));
 }
 .monster-crest.crest-deadly {
   filter:
-    drop-shadow(0 0 6px var(--crest-color))
-    drop-shadow(0 0 10px var(--crest-color));
+    drop-shadow(0 0 9px var(--crest-color))
+    drop-shadow(0 0 4px var(--crest-color));
 }
 .monster-crest.crest-legendary {
   filter:
-    drop-shadow(0 0 9px var(--crest-color))
-    drop-shadow(0 0 18px var(--crest-color));
+    drop-shadow(0 0 16px var(--crest-color))
+    drop-shadow(0 0 8px var(--crest-color));
 }
