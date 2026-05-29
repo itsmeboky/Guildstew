@@ -2301,36 +2301,37 @@ export default function CombatDiceWindow({
         {queue.map((c, i) => {
           const { src: avatar, isCrest, monster } = resolveCombatantPortrait(c);
           return (
-            <div
-              key={c.uniqueId || c.id || i}
-              className="relative group rounded-full overflow-hidden bg-[#0b1220] transition-all hover:scale-105"
-              style={{
-                width: 44,
-                height: 44,
-                border: "2px solid rgba(51,65,85,1)",
-                opacity: 0.7,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.opacity = "1";
-                e.currentTarget.style.borderColor = "#FF5300";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.opacity = "0.7";
-                e.currentTarget.style.borderColor = "rgba(51,65,85,1)";
-              }}
-            >
-              {isCrest ? (
-                <MonsterCrest combat monster={monster} src={avatar} className="w-full h-full" title={safeText(c.name)} />
-              ) : avatar ? (
-                <img src={avatar} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-500 font-bold">
-                  {safeText(c.name)?.[0]}
-                </div>
-              )}
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/70 text-[8px] text-white text-center leading-tight transition-opacity px-1">
-                {safeText(c.name)}
+            <div key={c.uniqueId || c.id || i} className="flex flex-col items-center gap-0.5">
+              <div
+                className="relative group rounded-full overflow-hidden bg-[#0b1220] transition-all hover:scale-105"
+                style={{
+                  width: 44,
+                  height: 44,
+                  border: "2px solid rgba(51,65,85,1)",
+                  opacity: 0.7,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = "1";
+                  e.currentTarget.style.borderColor = "#FF5300";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = "0.7";
+                  e.currentTarget.style.borderColor = "rgba(51,65,85,1)";
+                }}
+              >
+                {isCrest ? (
+                  <MonsterCrest combat monster={monster} src={avatar} className="w-full h-full" title={safeText(c.name)} />
+                ) : avatar ? (
+                  <img src={avatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-500 font-bold">
+                    {safeText(c.name)?.[0]}
+                  </div>
+                )}
               </div>
+              <span className="max-w-[52px] text-[8px] leading-tight text-center text-slate-300 truncate" title={safeText(c.name)}>
+                {safeText(c.name)}
+              </span>
             </div>
           );
         })}
