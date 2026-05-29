@@ -18,6 +18,8 @@ import {
   isAiMonsterUrl,
   getCombatantPortrait,
   getMonsterCrestType,
+  resolveCombatantAvatar,
+  crestTypeFromUrl,
 } from "../monsterPortrait.js";
 
 test("gate is OFF by default (no env wired)", () => {
@@ -192,4 +194,40 @@ test("getCombatantPortrait resolves a built combatant via its gated avatar field
 
 test("getMonsterCrestType keys off stats.type past the 'monster' discriminator", () => {
   assert.equal(getMonsterCrestType({ type: "monster", stats: { type: "fey" } }), "Fey");
+});
+
+test("crestTypeFromUrl extracts the type from a crest URL", () => {
+  assert.equal(crestTypeFromUrl("https://x/campaign-assets/monster-type-crests/Dragon.svg"), "Dragon");
+  assert.equal(crestTypeFromUrl("https://x/campaign-assets/monster-type-crests/Undead.svg?v=2"), "Undead");
+  assert.equal(crestTypeFromUrl("https://x/campaign-assets/dnd5e/monsters/Goblin.png"), null);
+  assert.equal(crestTypeFromUrl("https://x/campaign-assets/monster-type-crests/Bogus.svg"), null);
+  assert.equal(crestTypeFromUrl(""), null);
+});
+
+// --- resolveCombatantAvatar: one rule for every combat tracker -------------
+
+test("resolveCombatantAvatar leaves players untouched (never crests them)", () => {
+  assert.deepEqual(
+    resolveCombatantAvatar({ type: "player", avatar: USER_URL }),
+    { src: USER_URL, isCrest: false, isPlayer: true },
+  );
+  // player- id prefix is enough even without type
+  assert.equal(resolveCombatantAvatar({ id: "player-42", avatar: USER_URL }).isPlayer, true);
+  // a player with no avatar stays empty (gets a letter fallback, not a crest)
+  assert.equal(resolveCombatantAvatar({ type: "player" }).src, "");
+  assert.equal(resolveCombatantAvatar({ type: "player" }).isCrest, false);
+});
+
+test("resolveCombatantAvatar crests monsters, incl. stale AI in the avatar field", () => {
+  // Stale combat_data row: only an AI URL in `avatar` -> still crested.
+  const stale = resolveCombatantAvatar({ type: "monster", avatar: AI_URL, stats: { type: "dragon" } });
+  assert.ok(stale.isCrest);
+  assert.match(stale.src, /Dragon\.svg$/);
+  // empty monster slot -> crest
+  assert.ok(resolveCombatantAvatar({ id: "monster-7", stats: { type: "ooze" } }).isCrest);
+  // homebrew user upload -> passthrough
+  assert.deepEqual(
+    resolveCombatantAvatar({ type: "monster", avatar: USER_URL }),
+    { src: USER_URL, isCrest: false, isPlayer: false },
+  );
 });
