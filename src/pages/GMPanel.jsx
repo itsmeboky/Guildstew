@@ -25,7 +25,8 @@ import ItemTooltip from "@/components/shared/ItemTooltip";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
 import { computeArmorClass } from "@/components/dnd5e/armorClass";
 import { safeText } from "@/utils/safeRender";
-import { getCombatantPortrait, isCrestUrl, getCrestCrBand, getMonsterCrestType, MONSTER_TYPE_COLORS } from "@/utils/monsterPortrait";
+import { getCombatantPortrait, resolveCombatantAvatar, isCrestUrl, getCrestCrBand, getMonsterCrestType, MONSTER_TYPE_COLORS } from "@/utils/monsterPortrait";
+import MonsterCrest, { crestMaskStyle } from "@/components/shared/MonsterCrest";
 import MonsterStatBlock from "@/game-packs/dnd5e/ui/MonsterStatBlock";
 import EquipmentLayout from "@/game-packs/dnd5e/ui/EquipmentLayout";
 import getSilhouetteImage from "@/components/shared/getSilhouetteImage";
@@ -4882,8 +4883,6 @@ export default function GMPanel() {
                     {combatQueue.map((monster) => {
                       const art = getCombatantPortrait(monster);
                       const artIsCrest = isCrestUrl(art);
-                      const artCrestBand = artIsCrest ? getCrestCrBand(monster.challenge_rating ?? monster.stats?.challenge_rating) : null;
-                      const artCrestColor = artIsCrest ? MONSTER_TYPE_COLORS[getMonsterCrestType(monster)] : undefined;
                       return (
                         <button
                           key={monster.queueId}
@@ -4900,13 +4899,14 @@ export default function GMPanel() {
                           className="bg-[#1a1f2e] rounded-xl overflow-hidden hover:ring-2 hover:ring-[#FF5722] transition-all text-left"
                         >
                           <div
-                            className={`h-32 bg-cover bg-center relative${artIsCrest ? ` monster-crest crest-${artCrestBand}` : ''}`}
-                            style={{
-                              backgroundImage: art ? `url(${art})` : 'none',
-                              backgroundColor: '#0b1220',
-                              ...(artIsCrest ? { "--crest-color": artCrestColor } : {}),
-                            }}
+                            className="h-32 bg-cover bg-center relative overflow-hidden"
+                            style={artIsCrest ? { backgroundColor: '#0b1220' } : { backgroundImage: art ? `url(${art})` : 'none', backgroundColor: '#0b1220' }}
                           >
+                            {/* Crest is its own layer so the mask doesn't clip
+                                the accent bar / placeholder overlays below. */}
+                            {artIsCrest && (
+                              <MonsterCrest combat monster={monster} src={art} className="absolute inset-0 w-full h-full" title={safeText(monster.name)} />
+                            )}
                             {!art && (
                               <div className="absolute inset-0 flex items-center justify-center text-4xl text-slate-600">?</div>
                             )}
@@ -5857,7 +5857,7 @@ function ConditionManagerDialog({ onClose, activeConditions, toggleCondition, pl
                                 : 'bg-[#0b1220] border-[#111827] hover:border-slate-600'
                             }`}
                           >
-                            <div className={`w-10 h-10 rounded-full bg-cover bg-top bg-[#111827]${portraitIsCrest ? ` monster-crest crest-${portraitCrestBand}` : ''}`} style={{ backgroundImage: portrait ? `url(${portrait})` : 'none', ...(portraitIsCrest ? { "--crest-color": portraitCrestColor } : {}) }} />
+                            <div className={`w-10 h-10 rounded-full bg-cover bg-top bg-[#111827]${portraitIsCrest ? ` monster-crest crest-${portraitCrestBand}` : ''}`} style={portraitIsCrest ? crestMaskStyle(portrait, portraitCrestColor, { size: "65%" }) : { backgroundImage: portrait ? `url(${portrait})` : 'none' }} />
                             <div className="text-left min-w-0 flex-1">
                               <p className="text-sm font-bold text-white truncate">{safeText(monster.name)}</p>
                               {adjustingHp ? (
@@ -6009,21 +6009,36 @@ function CharacterPanel({ character, onSelectCharacter, isPossessed, setIsPosses
   return (
     <div className="relative z-10 rounded-[32px] bg-[#050816]/95 px-6 pt-6 pb-8 shadow-[0_24px_60px_rgba(0,0,0,0.8)] flex flex-col items-center gap-6">
       <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white/10 shadow-[0_12px_40px_rgba(0,0,0,0.8)]">
-        <div 
-          className="w-full h-full bg-cover bg-center" 
-          style={{ 
-            backgroundImage: character 
-              ? `url(${character.image_url || character.avatar_url || '/images/karliah-avatar.jpg'})` 
-              : 'none',
-            backgroundColor: '#1a1f2e'
-          }}
-        >
-          {!character && (
-            <div className="w-full h-full flex items-center justify-center text-5xl text-gray-600">
-              ?
-            </div>
-          )}
-        </div>
+        {!character ? (
+          <div className="w-full h-full bg-[#1a1f2e] flex items-center justify-center text-5xl text-gray-600">
+            ?
+          </div>
+        ) : (() => {
+          // Possessed combatants can be monsters (gate AI/SRD art to a
+          // type-tinted crest) or players (keep their portrait untouched).
+          const isMonster =
+            character.type === 'monster' || character.type === 'npc' ||
+            String(character.id || character.uniqueId || '').startsWith('monster-');
+          const src = isMonster
+            ? getCombatantPortrait(character)
+            : (character.image_url || character.avatar_url || '/images/karliah-avatar.jpg');
+          if (isMonster && isCrestUrl(src)) {
+            const color = MONSTER_TYPE_COLORS[getMonsterCrestType(character)];
+            const band = getCrestCrBand(character.challenge_rating ?? character.stats?.challenge_rating);
+            return (
+              <div
+                className={`w-full h-full monster-crest crest-${band}`}
+                style={crestMaskStyle(src, color, { size: '70%' })}
+              />
+            );
+          }
+          return (
+            <div
+              className="w-full h-full bg-cover bg-center"
+              style={{ backgroundImage: `url(${src})`, backgroundColor: '#1a1f2e' }}
+            />
+          );
+        })()}
       </div>
 
       {character ? (
@@ -6781,18 +6796,23 @@ function FallenCard({ combatant }) {
       className="min-w-[120px] max-w-[120px] rounded-3xl bg-[#050816] overflow-hidden border border-[#111827] relative"
       title={combatant.name}
     >
-      <div
-        className="h-20 bg-cover bg-center relative grayscale"
-        style={{
-          backgroundImage: combatant.avatar ? `url(${combatant.avatar})` : 'none',
-          backgroundColor: '#1a1f2e',
-        }}
-      >
-        {!combatant.avatar && (
-          <div className="absolute inset-0 flex items-center justify-center text-2xl text-slate-600 font-bold">
-            {combatant.name?.[0] || '?'}
-          </div>
-        )}
+      <div className="h-20 relative grayscale overflow-hidden" style={{ backgroundColor: '#1a1f2e' }}>
+        {(() => {
+          // Portrait/crest layer behind the skull overlay. Masking lives on
+          // this layer (not the container) so it never clips the skull.
+          const { src, isCrest } = resolveCombatantAvatar(combatant);
+          if (isCrest) {
+            return <MonsterCrest combat monster={combatant} src={src} className="absolute inset-0 w-full h-full" title={combatant.name} />;
+          }
+          if (src) {
+            return <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${src})` }} />;
+          }
+          return (
+            <div className="absolute inset-0 flex items-center justify-center text-2xl text-slate-600 font-bold">
+              {combatant.name?.[0] || '?'}
+            </div>
+          );
+        })()}
         <div className="absolute inset-0 flex items-center justify-center">
           <img
             src={DEATH_SAVE_ICONS.death}
@@ -6827,13 +6847,17 @@ function DeathSavePanel({ combatant, isPlayer, isActiveTurn, onRoll, onAdjust, o
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-[#ef4444] bg-[#1a1f2e] flex-shrink-0 opacity-70">
-            {combatant.avatar ? (
-              <img src={combatant.avatar} alt={combatant.name} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-xl text-slate-400 font-bold">
-                {combatant.name?.[0] || '?'}
-              </div>
-            )}
+            {(() => {
+              const { src, isCrest } = resolveCombatantAvatar(combatant);
+              if (isCrest) return <MonsterCrest combat monster={combatant} src={src} className="w-full h-full" title={combatant.name} />;
+              return src ? (
+                <img src={src} alt={combatant.name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-xl text-slate-400 font-bold">
+                  {combatant.name?.[0] || '?'}
+                </div>
+              );
+            })()}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[10px] uppercase tracking-[0.22em] text-red-400 font-bold">Downed — 0 HP</p>
@@ -7232,7 +7256,8 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
                             }}
                           >
                             <PortraitWithState
-                              url={combatant.avatar}
+                              url={resolveCombatantAvatar(combatant).src}
+                              monster={combatant}
                               bloodiedUrl={combatant.bloodied_avatar_url}
                               current={combatant.hit_points?.current ?? combatant.hit_points?.max}
                               max={combatant.hit_points?.max}

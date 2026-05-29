@@ -1,4 +1,11 @@
 import React from 'react';
+import {
+  isCrestUrl,
+  getCrestCrBand,
+  getMonsterCrestType,
+  MONSTER_TYPE_COLORS,
+} from '@/utils/monsterPortrait';
+import { crestMaskStyle } from '@/components/shared/MonsterCrest';
 
 /**
  * Combat portrait with HP-based visual state.
@@ -30,12 +37,15 @@ export default function PortraitWithState({
   fallback = null,
   skullSize = 'md',
   overlayOpacity = 0.6,
+  monster = null,
 }) {
   const cur = Number(current ?? 0);
   const mx  = Number(max ?? 0);
   const pct = mx > 0 ? (cur / mx) * 100 : 100;
   const state = cur <= 0 ? 'dead' : pct <= 50 ? 'bloodied' : 'healthy';
   const src = state === 'bloodied' && bloodiedUrl ? bloodiedUrl : url;
+  // A gated crest renders as a type-tinted mask instead of a raw image.
+  const crest = isCrestUrl(src);
 
   const skullClass =
     skullSize === 'sm' ? 'text-2xl' :
@@ -43,7 +53,16 @@ export default function PortraitWithState({
 
   return (
     <div className={`relative w-full h-full overflow-hidden ${className}`}>
-      {src ? (
+      {crest ? (
+        <div
+          role="img"
+          aria-label={alt}
+          className={`w-full h-full monster-crest crest-${getCrestCrBand(monster?.challenge_rating ?? monster?.stats?.challenge_rating)} ${
+            state === 'dead' ? 'grayscale' : ''
+          }`}
+          style={crestMaskStyle(src, MONSTER_TYPE_COLORS[getMonsterCrestType(monster)], { size: '70%' })}
+        />
+      ) : src ? (
         <img
           src={src}
           alt={alt}
