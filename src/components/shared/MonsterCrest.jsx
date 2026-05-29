@@ -10,18 +10,26 @@ import {
 } from "@/utils/monsterPortrait";
 
 /**
- * Inline style that tints a type-crest SVG to its creature-type color.
+ * Inline style that gives a type-crest SVG a stained-glass tint.
  *
- * An <img>/background-image shows the SVG's own colors, so the only way to
- * recolor it is to use the SVG as a CSS mask and fill the element with a
- * solid background-color. The element then reads as a flat type-colored
- * silhouette; the CR-band class adds a drop-shadow glow that traces it.
+ * Two background layers — a solid type-color fill on top, the crest art
+ * underneath — composited with `background-blend-mode: color`. That keeps
+ * the crest's own luminance/shading (its detail) while recoloring its hue to
+ * the creature type, so it reads like colored glass rather than a flat
+ * silhouette. A mask clips the whole thing to the crest outline so the color
+ * layer doesn't fill the bounding box. The CR-band class adds the glow.
  */
 export function crestMaskStyle(url, color, { size = "contain" } = {}) {
   return {
     "--crest-color": color,
-    backgroundColor: color,
-    backgroundImage: "none",
+    backgroundColor: "transparent",
+    // First listed layer is the top layer: the solid color blends (mode
+    // `color`) over the crest art below it.
+    backgroundImage: `linear-gradient(${color}, ${color}), url("${url}")`,
+    backgroundBlendMode: "color",
+    backgroundRepeat: "no-repeat, no-repeat",
+    backgroundPosition: "center, center",
+    backgroundSize: `${size}, ${size}`,
     WebkitMaskImage: `url("${url}")`,
     maskImage: `url("${url}")`,
     WebkitMaskRepeat: "no-repeat",
