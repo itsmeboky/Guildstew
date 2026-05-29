@@ -7,18 +7,19 @@ import { readCombatQueue, writeCombatQueue, FACTION_STYLES, FACTIONS } from "@/u
 import { normalizeHp } from "@/components/combat/hpColor";
 import { base44 } from "@/api/base44Client";
 import { safeText } from "@/utils/safeRender";
-import { getCombatantPortrait, isCrestUrl, getCrestCrBand, getMonsterCrestType, MONSTER_TYPE_COLORS } from "@/utils/monsterPortrait";
+import { getCombatantPortrait, isCrestUrl } from "@/utils/monsterPortrait";
+import MonsterCrest from "@/components/shared/MonsterCrest";
 
-// Crest treatment for a gated combatant portrait. When the resolved src is
-// a type crest, returns the glow class + inline --crest-color (banded by CR);
-// real user uploads get neither.
-function crestImgProps(creature, src) {
-  if (!isCrestUrl(src)) return { className: "", style: undefined };
-  const cr = creature?.challenge_rating ?? creature?.stats?.challenge_rating;
-  return {
-    className: ` monster-crest crest-${getCrestCrBand(cr)}`,
-    style: { "--crest-color": MONSTER_TYPE_COLORS[getMonsterCrestType(creature)] },
-  };
+// Render a gated combatant portrait: a type-tinted crest when the resolved
+// src is a crest, the real upload (object-cover img) otherwise. `fallback`
+// renders only when there's no src at all (flag ON + no art).
+function CombatantPortrait({ creature, className, fallback = null }) {
+  const src = getCombatantPortrait(creature);
+  if (!src) return fallback;
+  if (isCrestUrl(src)) {
+    return <MonsterCrest combat monster={creature} src={src} className={className} title={safeText(creature?.name)} />;
+  }
+  return <img src={src} alt={safeText(creature?.name)} className={className} />;
 }
 
 const SAVED_LOADOUTS_KEY = 'gm_saved_monster_loadouts';
@@ -209,22 +210,15 @@ export default function CombatQueue({
                     onClick={() => onSelectMonster({ ...monster, type: monster.type || 'monster' })}
                     className={`w-14 h-14 rounded-xl bg-[#0b1220] border-2 ${style.outline} hover:brightness-125 overflow-hidden transition-all flex-shrink-0`}
                   >
-                    {(() => {
-                      const portrait = getCombatantPortrait(monster);
-                      const crest = crestImgProps(monster, portrait);
-                      return portrait ? (
-                      <img
-                        src={portrait}
-                        alt={safeText(monster.name)}
-                        className={`w-full h-full object-cover object-top${crest.className}`}
-                        style={crest.style}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-500">
-                        {safeText(monster.name)?.charAt(0)}
-                      </div>
-                    );
-                    })()}
+                    <CombatantPortrait
+                      creature={monster}
+                      className="w-full h-full object-cover object-top"
+                      fallback={
+                        <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-500">
+                          {safeText(monster.name)?.charAt(0)}
+                        </div>
+                      }
+                    />
                     {(monster.inventory?.length > 0 || monster.spells?.length > 0) && (
                       <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-[#37F2D1] rounded-full flex items-center justify-center">
                         <span className="text-[7px] text-[#050816] font-bold">✓</span>
@@ -352,17 +346,15 @@ function AddMonsterDialog({ monsters, npcs, onAdd, onClose, onCreateNpc }) {
 
           <div className="p-5 space-y-5">
             <div className="flex justify-center">
-              {(() => {
-                const portrait = getCombatantPortrait(selected);
-                const crest = crestImgProps(selected, portrait);
-                return portrait ? (
-                <img src={portrait} alt="" className={`w-24 h-24 rounded-2xl object-cover object-top shadow-lg border border-[#111827]${crest.className}`} style={crest.style} />
-              ) : (
-                <div className="w-24 h-24 rounded-2xl bg-[#111827] flex items-center justify-center text-slate-600 text-2xl font-bold">
-                  {selected.name?.charAt(0)}
-                </div>
-              );
-              })()}
+              <CombatantPortrait
+                creature={selected}
+                className="w-24 h-24 rounded-2xl object-cover object-top shadow-lg border border-[#111827]"
+                fallback={
+                  <div className="w-24 h-24 rounded-2xl bg-[#111827] flex items-center justify-center text-slate-600 text-2xl font-bold">
+                    {selected.name?.charAt(0)}
+                  </div>
+                }
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -528,15 +520,11 @@ function AddMonsterDialog({ monsters, npcs, onAdd, onClose, onCreateNpc }) {
                   }}
                   className="w-full flex items-center gap-3 p-3 rounded-xl bg-[#0b1220] border border-[#111827] hover:border-[#22c5f5]/50 transition-all text-left"
                 >
-                  {(() => {
-                    const portrait = getCombatantPortrait(creature);
-                    const crest = crestImgProps(creature, portrait);
-                    return portrait ? (
-                    <img src={portrait} alt="" className={`w-10 h-10 rounded-lg object-cover object-top${crest.className}`} style={crest.style} />
-                  ) : (
-                    <div className="w-10 h-10 rounded-lg bg-[#111827] flex items-center justify-center text-slate-600">?</div>
-                  );
-                  })()}
+                  <CombatantPortrait
+                    creature={creature}
+                    className="w-10 h-10 rounded-lg object-cover object-top"
+                    fallback={<div className="w-10 h-10 rounded-lg bg-[#111827] flex items-center justify-center text-slate-600">?</div>}
+                  />
                   <div className="flex-1">
                     <p className="text-white text-sm font-medium">{creature.name}</p>
                     <p className="text-xs text-slate-400">
@@ -600,15 +588,11 @@ function EditLoadoutDialog({ monster, savedLoadouts, onUpdate, onSaveLoadout, on
       <div className="bg-[#050816] rounded-3xl border-2 border-amber-500/30 shadow-[0_24px_80px_rgba(0,0,0,0.9)] max-w-3xl w-full max-h-[85vh] overflow-hidden">
         <div className="flex items-center justify-between p-5 border-b border-[#111827]">
           <div className="flex items-center gap-3">
-            {(() => {
-              const portrait = getCombatantPortrait(monster);
-              const crest = crestImgProps(monster, portrait);
-              return portrait ? (
-              <img src={portrait} alt="" className={`w-10 h-10 rounded-lg object-cover object-top${crest.className}`} style={crest.style} />
-            ) : (
-              <div className="w-10 h-10 rounded-lg bg-[#111827] flex items-center justify-center text-slate-600">?</div>
-            );
-            })()}
+            <CombatantPortrait
+              creature={monster}
+              className="w-10 h-10 rounded-lg object-cover object-top"
+              fallback={<div className="w-10 h-10 rounded-lg bg-[#111827] flex items-center justify-center text-slate-600">?</div>}
+            />
             <div>
               <h2 className="text-lg font-bold">{safeText(monster.name)}</h2>
               <p className="text-xs text-slate-400">Edit loadout</p>
