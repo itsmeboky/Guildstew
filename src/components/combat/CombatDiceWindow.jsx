@@ -35,28 +35,15 @@ import {
   COVER,
 } from "@/components/dnd5e/dnd5eRules";
 import { safeText } from "@/utils/safeRender";
-import { getCombatantPortrait, isCrestUrl } from "@/utils/monsterPortrait";
+import { resolveCombatantAvatar } from "@/utils/monsterPortrait";
 import MonsterCrest from "@/components/shared/MonsterCrest";
 
-// Resolve a combatant's portrait for the dice window, gating AI/SRD monster
-// art to a type crest while leaving player avatars and homebrew uploads
-// alone. Monsters are detected by the 'monster'/'npc' kind discriminator or
-// a `monster-` id prefix; players keep their original avatar precedence.
-// Returns { src, isCrest, monster } so the markup can render either a plain
-// <img> or a type-tinted <MonsterCrest>.
+// Resolve a combatant's portrait for the dice window via the shared gate:
+// monsters/NPCs become a type-tinted crest (catching stale AI too), players
+// keep their avatar. Returns { src, isCrest, monster } for the markup.
 function resolveCombatantPortrait(c) {
-  const isMonster =
-    c?.type === "monster" || c?.type === "npc" ||
-    String(c?.id || c?.uniqueId || "").startsWith("monster-");
-  if (!isMonster) {
-    return {
-      src: c?.avatar || c?.avatar_url || c?.image_url || c?.profile_avatar_url,
-      isCrest: false,
-      monster: c,
-    };
-  }
-  const src = getCombatantPortrait(c);
-  return { src, isCrest: isCrestUrl(src), monster: c };
+  const { src, isCrest } = resolveCombatantAvatar(c);
+  return { src, isCrest, monster: c };
 }
 
 // Alias so the existing in-file lookups don't need renaming.

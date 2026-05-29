@@ -1,7 +1,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import DiceRoller from "@/components/dice/DiceRoller";
-import { isCrestUrl } from "@/utils/monsterPortrait";
+import { resolveCombatantAvatar } from "@/utils/monsterPortrait";
 import MonsterCrest from "@/components/shared/MonsterCrest";
 
 /**
@@ -347,19 +347,21 @@ export default function DeathSaveWindow({
               }
               className="w-36 h-36 md:w-44 md:h-44 rounded-full overflow-hidden border-4 border-red-500/70 bg-[#1a1f2e] shadow-[0_0_60px_rgba(239,68,68,0.55)] flex-shrink-0"
             >
-              {isCrestUrl(combatant.avatar) ? (
-                <MonsterCrest combat monster={combatant} src={combatant.avatar} className="w-full h-full opacity-80" title={combatant.name} />
-              ) : combatant.avatar ? (
-                <img
-                  src={combatant.avatar}
-                  alt={combatant.name}
-                  className="w-full h-full object-cover opacity-80"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-5xl text-slate-400 font-bold">
-                  {combatant.name?.[0] || "?"}
-                </div>
-              )}
+              {(() => {
+                const { src, isCrest } = resolveCombatantAvatar(combatant);
+                if (isCrest) return <MonsterCrest combat monster={combatant} src={src} className="w-full h-full opacity-80" title={combatant.name} />;
+                return src ? (
+                  <img
+                    src={src}
+                    alt={combatant.name}
+                    className="w-full h-full object-cover opacity-80"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-5xl text-slate-400 font-bold">
+                    {combatant.name?.[0] || "?"}
+                  </div>
+                );
+              })()}
             </motion.div>
 
             {/* Failures column */}

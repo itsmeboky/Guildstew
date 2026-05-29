@@ -5,6 +5,7 @@ import {
   getMonsterCrestType,
   getMonsterPortrait,
   getCombatantPortrait,
+  crestTypeFromUrl,
   MONSTER_TYPE_COLORS,
 } from "@/utils/monsterPortrait";
 
@@ -48,7 +49,9 @@ export default function MonsterCrest({
 }) {
   const url =
     src || (combat ? getCombatantPortrait(monster) : getMonsterPortrait(monster));
-  const color = MONSTER_TYPE_COLORS[getMonsterCrestType(monster)];
+  // Prefer the type baked into the crest filename so the tint always matches
+  // the rendered silhouette, even when `monster` carries no resolvable type.
+  const color = MONSTER_TYPE_COLORS[crestTypeFromUrl(url) || getMonsterCrestType(monster)];
   const cr = monster?.challenge_rating ?? monster?.stats?.challenge_rating;
   const band = getCrestCrBand(cr);
   return (

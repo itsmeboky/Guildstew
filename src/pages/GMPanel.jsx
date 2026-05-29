@@ -25,7 +25,7 @@ import ItemTooltip from "@/components/shared/ItemTooltip";
 import { allItemsWithEnchanted, itemIcons } from "@/components/dnd5e/itemData";
 import { computeArmorClass } from "@/components/dnd5e/armorClass";
 import { safeText } from "@/utils/safeRender";
-import { getCombatantPortrait, isCrestUrl, getCrestCrBand, getMonsterCrestType, MONSTER_TYPE_COLORS } from "@/utils/monsterPortrait";
+import { getCombatantPortrait, resolveCombatantAvatar, isCrestUrl, getCrestCrBand, getMonsterCrestType, MONSTER_TYPE_COLORS } from "@/utils/monsterPortrait";
 import MonsterCrest, { crestMaskStyle } from "@/components/shared/MonsterCrest";
 import MonsterStatBlock from "@/game-packs/dnd5e/ui/MonsterStatBlock";
 import EquipmentLayout from "@/game-packs/dnd5e/ui/EquipmentLayout";
@@ -6797,18 +6797,23 @@ function FallenCard({ combatant }) {
       className="min-w-[120px] max-w-[120px] rounded-3xl bg-[#050816] overflow-hidden border border-[#111827] relative"
       title={combatant.name}
     >
-      <div
-        className="h-20 bg-cover bg-center relative grayscale"
-        style={{
-          backgroundImage: combatant.avatar ? `url(${combatant.avatar})` : 'none',
-          backgroundColor: '#1a1f2e',
-        }}
-      >
-        {!combatant.avatar && (
-          <div className="absolute inset-0 flex items-center justify-center text-2xl text-slate-600 font-bold">
-            {combatant.name?.[0] || '?'}
-          </div>
-        )}
+      <div className="h-20 relative grayscale overflow-hidden" style={{ backgroundColor: '#1a1f2e' }}>
+        {(() => {
+          // Portrait/crest layer behind the skull overlay. Masking lives on
+          // this layer (not the container) so it never clips the skull.
+          const { src, isCrest } = resolveCombatantAvatar(combatant);
+          if (isCrest) {
+            return <MonsterCrest combat monster={combatant} src={src} className="absolute inset-0 w-full h-full" title={combatant.name} />;
+          }
+          if (src) {
+            return <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${src})` }} />;
+          }
+          return (
+            <div className="absolute inset-0 flex items-center justify-center text-2xl text-slate-600 font-bold">
+              {combatant.name?.[0] || '?'}
+            </div>
+          );
+        })()}
         <div className="absolute inset-0 flex items-center justify-center">
           <img
             src={DEATH_SAVE_ICONS.death}
@@ -6843,15 +6848,17 @@ function DeathSavePanel({ combatant, isPlayer, isActiveTurn, onRoll, onAdjust, o
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-[#ef4444] bg-[#1a1f2e] flex-shrink-0 opacity-70">
-            {isCrestUrl(combatant.avatar) ? (
-              <MonsterCrest combat monster={combatant} src={combatant.avatar} className="w-full h-full" title={combatant.name} />
-            ) : combatant.avatar ? (
-              <img src={combatant.avatar} alt={combatant.name} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-xl text-slate-400 font-bold">
-                {combatant.name?.[0] || '?'}
-              </div>
-            )}
+            {(() => {
+              const { src, isCrest } = resolveCombatantAvatar(combatant);
+              if (isCrest) return <MonsterCrest combat monster={combatant} src={src} className="w-full h-full" title={combatant.name} />;
+              return src ? (
+                <img src={src} alt={combatant.name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-xl text-slate-400 font-bold">
+                  {combatant.name?.[0] || '?'}
+                </div>
+              );
+            })()}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[10px] uppercase tracking-[0.22em] text-red-400 font-bold">Downed — 0 HP</p>
@@ -7250,7 +7257,7 @@ function TurnOrderBar({ order, setOrder, activeConditions, concentrationByCharac
                             }}
                           >
                             <PortraitWithState
-                              url={combatant.avatar}
+                              url={resolveCombatantAvatar(combatant).src}
                               monster={combatant}
                               bloodiedUrl={combatant.bloodied_avatar_url}
                               current={combatant.hit_points?.current ?? combatant.hit_points?.max}
