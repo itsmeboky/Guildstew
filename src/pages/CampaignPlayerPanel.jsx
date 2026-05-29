@@ -41,6 +41,8 @@ import { logCombatEvent, logSystemEvent } from "@/utils/combatLog";
 import { toast } from "sonner";
 import { supabase } from "@/api/supabaseClient";
 import { safeText } from "@/utils/safeRender";
+import { resolveCombatantAvatar } from "@/utils/monsterPortrait";
+import MonsterCrest from "@/components/shared/MonsterCrest";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -2799,13 +2801,22 @@ function TurnOrderDisplay({ order, currentTurnIndex, onSelectTarget, selectionMo
                     isCurrent ? 'border-[#37F2D1] shadow-[0_0_20px_rgba(55,242,209,0.4)]' : 'border-[#111827]'
                   }`}
                 >
-                  {combatant.avatar ? (
-                    <img src={combatant.avatar} alt={combatant.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-xl text-slate-600 font-bold">
-                      {combatant.name?.[0]}
-                    </div>
-                  )}
+                  {(() => {
+                    // Players keep their avatar; monsters/NPCs resolve through
+                    // the gate so AI/SRD art (even from stale combat_data)
+                    // becomes a type-tinted crest.
+                    const { src, isCrest } = resolveCombatantAvatar(combatant);
+                    if (isCrest) {
+                      return <MonsterCrest combat monster={combatant} src={src} className="w-full h-full" title={combatant.name} />;
+                    }
+                    return src ? (
+                      <img src={src} alt={combatant.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xl text-slate-600 font-bold">
+                        {combatant.name?.[0]}
+                      </div>
+                    );
+                  })()}
                   {/* Initiative numbers are hidden on the player side so
                       players can't tell the GM rearranged the order. */}
                   {!hideInitiative && (
