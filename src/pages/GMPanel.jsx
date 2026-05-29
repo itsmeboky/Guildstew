@@ -4883,8 +4883,6 @@ export default function GMPanel() {
                     {combatQueue.map((monster) => {
                       const art = getCombatantPortrait(monster);
                       const artIsCrest = isCrestUrl(art);
-                      const artCrestBand = artIsCrest ? getCrestCrBand(monster.challenge_rating ?? monster.stats?.challenge_rating) : null;
-                      const artCrestColor = artIsCrest ? MONSTER_TYPE_COLORS[getMonsterCrestType(monster)] : undefined;
                       return (
                         <button
                           key={monster.queueId}
@@ -4901,13 +4899,14 @@ export default function GMPanel() {
                           className="bg-[#1a1f2e] rounded-xl overflow-hidden hover:ring-2 hover:ring-[#FF5722] transition-all text-left"
                         >
                           <div
-                            className={`h-32 bg-cover bg-center relative${artIsCrest ? ` monster-crest crest-${artCrestBand}` : ''}`}
-                            style={
-                              artIsCrest
-                                ? crestMaskStyle(art, artCrestColor, { size: "55%" })
-                                : { backgroundImage: art ? `url(${art})` : 'none', backgroundColor: '#0b1220' }
-                            }
+                            className="h-32 bg-cover bg-center relative overflow-hidden"
+                            style={artIsCrest ? { backgroundColor: '#0b1220' } : { backgroundImage: art ? `url(${art})` : 'none', backgroundColor: '#0b1220' }}
                           >
+                            {/* Crest is its own layer so the mask doesn't clip
+                                the accent bar / placeholder overlays below. */}
+                            {artIsCrest && (
+                              <MonsterCrest combat monster={monster} src={art} className="absolute inset-0 w-full h-full" title={safeText(monster.name)} />
+                            )}
                             {!art && (
                               <div className="absolute inset-0 flex items-center justify-center text-4xl text-slate-600">?</div>
                             )}

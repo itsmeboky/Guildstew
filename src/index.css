@@ -346,16 +346,16 @@ h1, h2, h3, h4, h5, h6 {
   flex-wrap: wrap;
 }
 
-/* Monster type-crest CR-intensity layer. A crest renders as a CSS mask
- * (the SVG silhouette) filled with backgroundColor = the creature-type hex
- * (set inline via crestMaskStyle), so the icon itself is tinted to its type
- * color — not just bordered. --crest-color carries that same hex; the band
- * class scales a drop-shadow glow that traces the silhouette. Real AI
- * portraits never get .monster-crest, so they stay un-tinted/un-glowed.
- * Nothing is baked into the SVG assets — purely a render-time treatment. */
+/* Monster type-crest CR-intensity layer. A crest renders as the crest art
+ * recolored to its creature-type hue via background-blend-mode (a
+ * stained-glass tint, set inline by crestMaskStyle), clipped to the crest
+ * silhouette by a CSS mask — the icon itself is colored, detail preserved,
+ * not just bordered. --crest-color carries that hue; the band class scales a
+ * drop-shadow glow that traces the silhouette. Real AI portraits never get
+ * .monster-crest, so they stay un-tinted/un-glowed. Nothing is baked into
+ * the SVG assets — purely a render-time treatment. */
 .monster-crest {
   --crest-color: #4FA3E3; /* Humanoid blue fallback */
-  background-color: var(--crest-color);
   transition: filter 150ms ease;
 }
 .monster-crest.crest-common {
