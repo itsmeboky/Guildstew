@@ -163,9 +163,9 @@ export function buildStatsFromCharacterData(characterData) {
     // companions — the canonical rich array written by the creator's
     // CompanionPicker (and later edited in the Party panel / GM approval
     // flow). Without this the picked companion was silently dropped on
-    // save. Deprecated flat companion_* columns are intentionally NOT
-    // emitted here; legacy rows are migrated via
-    // migrations/backfill_companions_array.sql.
+    // save. The old flat companion_* fields are intentionally NOT
+    // emitted here (and the only one that ever existed as a column,
+    // companion_image, has no populated rows — nothing to migrate).
     companions: Array.isArray(characterData.companions) ? characterData.companions : [],
 
     // fluff

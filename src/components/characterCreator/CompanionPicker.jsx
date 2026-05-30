@@ -18,10 +18,11 @@ import { resolveCompanionContext } from "@/config/companionCatalog";
  *
  * Persistence shape: writes the first (and, for now, only) companion
  * onto `characterData.companions[0]` — the canonical rich array. The
- * legacy flat columns (`companion_name`, `companion_image`,
- * `companion_background`) are deprecated and no longer written here;
- * existing rows are backfilled into companions[] by
- * migrations/backfill_companions_array.sql.
+ * picker used to also mirror flat `companion_name` /
+ * `companion_background` fields, but those columns never existed on the
+ * `characters` table (only an orphaned `companion_image` text column
+ * does, and it has no populated rows), so the mirror is gone and there
+ * is no legacy flat data to back-fill.
  *
  * Custom companions:
  *   { id: 'custom', is_custom: true, needs_gm_approval: true, name,
