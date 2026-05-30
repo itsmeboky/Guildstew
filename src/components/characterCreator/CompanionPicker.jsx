@@ -17,10 +17,11 @@ import { resolveCompanionContext } from "@/config/companionCatalog";
  * Chain upgrades).
  *
  * Persistence shape: writes the first (and, for now, only) companion
- * onto `characterData.companions[0]`. The legacy freeform fields
- * (`companion_name`, `companion_image`, `companion_background`) still
- * mirror the same data so any existing code that reads them keeps
- * working.
+ * onto `characterData.companions[0]` — the canonical rich array. The
+ * legacy flat columns (`companion_name`, `companion_image`,
+ * `companion_background`) are deprecated and no longer written here;
+ * existing rows are backfilled into companions[] by
+ * migrations/backfill_companions_array.sql.
  *
  * Custom companions:
  *   { id: 'custom', is_custom: true, needs_gm_approval: true, name,
@@ -110,12 +111,7 @@ export default function CompanionPicker({ characterData, updateCharacterData, ca
       is_custom: false,
       needs_gm_approval: false,
     };
-    updateCharacterData({
-      companions: [next],
-      companion_name: next.name,
-      companion_image: next.image,
-      companion_background: current?.companion_background || "",
-    });
+    updateCharacterData({ companions: [next] });
   };
 
   const pickCustom = () => {
@@ -134,22 +130,13 @@ export default function CompanionPicker({ characterData, updateCharacterData, ca
       hp: null,
       speed: null,
     };
-    updateCharacterData({
-      companions: [blank],
-      companion_name: "",
-      companion_image: null,
-      companion_background: "",
-    });
+    updateCharacterData({ companions: [blank] });
   };
 
   const updateCurrent = (patch) => {
     if (!current) return;
     const merged = { ...current, ...patch };
-    updateCharacterData({
-      companions: [merged],
-      companion_name: merged.name ?? current.name,
-      companion_image: merged.image ?? current.image,
-    });
+    updateCharacterData({ companions: [merged] });
   };
 
   const uploadPortrait = async (file) => {
