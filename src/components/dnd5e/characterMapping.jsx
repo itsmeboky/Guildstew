@@ -160,6 +160,14 @@ export function buildStatsFromCharacterData(characterData) {
     expertise: characterData.expertise || [],
     inventory: characterData.inventory || [],
 
+    // companions — the canonical rich array written by the creator's
+    // CompanionPicker (and later edited in the Party panel / GM approval
+    // flow). Without this the picked companion was silently dropped on
+    // save. Deprecated flat companion_* columns are intentionally NOT
+    // emitted here; legacy rows are migrated via
+    // migrations/backfill_companions_array.sql.
+    companions: Array.isArray(characterData.companions) ? characterData.companions : [],
+
     // fluff
     description: characterData.description || "",
     personality: characterData.personality || {
