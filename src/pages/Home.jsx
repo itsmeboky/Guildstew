@@ -12,6 +12,11 @@ import UpcomingSessionsCard from "@/components/home/UpcomingSessionsCard";
 import AlphaWelcomeModal from "@/components/alpha/AlphaWelcomeModal";
 import { useAuth } from "@/lib/AuthContext";
 
+// Hero banners accept images (incl. animated .gif / .avif, which render
+// natively in <img>) as well as .webm video. Video sources need a
+// <video> element instead of <img>, so the render branches on this.
+const isVideoSource = (url) => /\.webm(\?.*)?$/i.test(url || "");
+
 const HERO_SLIDES = [
   {
     id: 1,
@@ -279,12 +284,23 @@ export default function Home() {
                     index === currentSlide ? 'opacity-100' : 'opacity-0'
                   }`}
                 >
-                  <LazyImage
-                    src={slide.image}
-                    alt="Hero"
-                    className="absolute inset-0 w-full h-full"
-                    imageClassName={slide.backgroundPosition === 'left center' ? 'object-left' : ''}
-                  />
+                  {isVideoSource(slide.image) ? (
+                    <video
+                      src={slide.image}
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      className={`absolute inset-0 w-full h-full object-cover ${slide.backgroundPosition === 'left center' ? 'object-left' : ''}`}
+                    />
+                  ) : (
+                    <LazyImage
+                      src={slide.image}
+                      alt="Hero"
+                      className="absolute inset-0 w-full h-full"
+                      imageClassName={slide.backgroundPosition === 'left center' ? 'object-left' : ''}
+                    />
+                  )}
                   <div className="absolute inset-0" 
                     style={{
                       backgroundSize: 'cover',
