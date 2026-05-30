@@ -13,6 +13,10 @@ import {
 } from "lucide-react";
 import { supabase } from "@/api/supabaseClient";
 
+// Banners accept images (incl. animated .gif / .avif) and .webm video.
+// Only .webm needs a <video> element for the preview / thumbnail.
+const isBannerVideo = (url) => /\.webm(\?.*)?$/i.test(url || "");
+
 /**
  * Admin → Homepage.
  *
@@ -138,7 +142,11 @@ function HeroBannersSection() {
             <div key={b.id} className="p-3 flex items-center gap-3">
               <div className="w-20 h-12 rounded overflow-hidden bg-[#050816] border border-slate-700 flex-shrink-0">
                 {b.image_url ? (
-                  <img src={b.image_url} alt="" className="w-full h-full object-cover" />
+                  isBannerVideo(b.image_url) ? (
+                    <video src={b.image_url} muted playsInline className="w-full h-full object-cover" />
+                  ) : (
+                    <img src={b.image_url} alt="" className="w-full h-full object-cover" />
+                  )
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <ImageIcon className="w-4 h-4 text-slate-600" />
@@ -224,10 +232,14 @@ function BannerEditor({ row, defaultSortOrder, onClose, onSave }) {
           <DialogTitle>{row?.id ? "Edit Banner" : "New Banner"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <Field label="Image URL">
-            <Input value={form.image_url} onChange={(e) => set({ image_url: e.target.value })} className="bg-[#050816] border-slate-700 text-white" placeholder="https://…" />
+          <Field label="Image or video URL">
+            <Input value={form.image_url} onChange={(e) => set({ image_url: e.target.value })} className="bg-[#050816] border-slate-700 text-white" placeholder="https://… (.png, .jpg, .gif, .avif, .webm)" />
             {form.image_url && (
-              <img src={form.image_url} alt="" className="mt-2 w-full h-36 rounded object-cover border border-slate-700" />
+              isBannerVideo(form.image_url) ? (
+                <video src={form.image_url} autoPlay loop muted playsInline className="mt-2 w-full h-36 rounded object-cover border border-slate-700" />
+              ) : (
+                <img src={form.image_url} alt="" className="mt-2 w-full h-36 rounded object-cover border border-slate-700" />
+              )
             )}
           </Field>
           <div className="grid grid-cols-2 gap-2">
