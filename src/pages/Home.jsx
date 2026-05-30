@@ -87,11 +87,14 @@ export default function Home() {
   const slides = adminBanners.length > 0
     ? adminBanners.map((b) => ({
         id: b.id,
-        image: b.image_url,
-        title: b.title || undefined,
-        subtitle: b.subtitle || undefined,
-        buttonText: b.link_url ? (b.title ? 'Learn More' : undefined) : undefined,
-        buttonLink: b.link_url || undefined,
+        image: b.image_url || "",
+        title: b.title || "",
+        subtitle: b.subtitle || "",
+        // Admin rows have no button-text column — default to "Learn More"
+        // whenever a link exists so the CTA never renders empty. A row
+        // with no link_url gets no button at all (handled in the render).
+        buttonText: b.link_url ? "Learn More" : "",
+        buttonLink: b.link_url || "",
         showText: !!(b.title || b.subtitle),
       }))
     : HERO_SLIDES;
@@ -300,21 +303,23 @@ export default function Home() {
                           </p>
                         </>
                       )}
-                      {slide.buttonLink.startsWith('http') ? (
-                        <a
-                          href={slide.buttonLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-block bg-[#2A3441] hover:bg-[#1E2430] text-white px-12 py-4 rounded-2xl font-bold text-lg transition-colors"
-                        >
-                          {slide.buttonText}
-                        </a>
-                      ) : (
-                        <Link to={slide.buttonLink}>
-                          <Button className="bg-[#2A3441] hover:bg-[#1E2430] text-white px-12 py-4 rounded-2xl font-bold text-lg">
+                      {slide.buttonLink && (
+                        (slide.buttonLink || "").startsWith('http') ? (
+                          <a
+                            href={slide.buttonLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block bg-[#2A3441] hover:bg-[#1E2430] text-white px-12 py-4 rounded-2xl font-bold text-lg transition-colors"
+                          >
                             {slide.buttonText}
-                          </Button>
-                        </Link>
+                          </a>
+                        ) : (
+                          <Link to={slide.buttonLink}>
+                            <Button className="bg-[#2A3441] hover:bg-[#1E2430] text-white px-12 py-4 rounded-2xl font-bold text-lg">
+                              {slide.buttonText}
+                            </Button>
+                          </Link>
+                        )
                       )}
                     </div>
                   </div>
