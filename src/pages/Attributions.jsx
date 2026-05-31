@@ -1,258 +1,800 @@
-import React from "react";
-import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+  ArrowLeft, ExternalLink, Image as ImageIcon, Mail, MessageCircle, Send, Trash2,
+} from "lucide-react";
 import { supabase } from "@/api/supabaseClient";
+import { useAuth } from "@/lib/AuthContext";
 
 /**
- * Open-content attribution page. Required by CC-BY 4.0 for the SRD
- * data shipped under the 2014 and 2024 game packs, CC-BY 3.0 for the
- * game-icons.net monster-type icons, and a courtesy acknowledgment for
- * the open dataset projects we adapt the JSON from. Also credits the
- * studio artists. The artist + icon-credit sections are data-driven
- * from `artist_attributions` (public read, admin-managed); the SRD /
- * dataset sections below are static.
+ * Attributions & Studio — the tabbed "tavern-menu" page (a faithful
+ * port of the prototype's brutalist parchment aesthetic, Fraunces +
+ * Hanken Grotesk, hard offset shadows, sticky navy tab bar). One
+ * URL-driven component, three views (shareable deep links):
  *
- * Routed at `/Attributions` (see App.jsx) and linked from the
- * site-wide LegalFooter.
+ *   (no params)                   → credits view (tabs)
+ *   ?member=<id>                  → member profile
+ *   ?view=gallery&artist=<id|all> → studio gallery
+ *
+ * Every word of content comes from the studio tables managed in
+ * Admin → Studio — there are no hardcoded rosters, license blurbs, or
+ * gallery arrays here (only static page chrome/headings, as in the
+ * prototype). Reads use TanStack Query with explicit loading + error
+ * handling (no silent `.catch(() => [])`). The /Attributions route
+ * already existed in App.jsx.
  */
 
-function Section({ title, children }) {
-  return (
-    <section className="bg-[#1E2430] rounded-xl p-6 border border-[#2A3441] mb-6">
-      <h2 className="text-xl font-bold text-[#37F2D1] mb-3">{title}</h2>
-      <div className="text-slate-200 text-sm leading-relaxed space-y-3">
-        {children}
-      </div>
-    </section>
-  );
+const STAFF_DOMAINS = ["@aetherianstudios.com", "@guildstew.com"];
+const isStaffEmail = (email) =>
+  STAFF_DOMAINS.some((d) => (email || "").toLowerCase().endsWith(d));
+
+const monoGrad = (m) =>
+  `linear-gradient(135deg, ${m?.avatar_color_1 || "#FF5300"}, ${m?.avatar_color_2 || "#ff8a4d"})`;
+const initial = (name) => (name || "?").trim().charAt(0).toUpperCase();
+
+// Fraunces (display) + Hanken Grotesk (body), loaded once.
+const FONT_LINK_ID = "attributions-fonts";
+function useStudioFonts() {
+  useEffect(() => {
+    if (document.getElementById(FONT_LINK_ID)) return;
+    const link = document.createElement("link");
+    link.id = FONT_LINK_ID;
+    link.rel = "stylesheet";
+    link.href =
+      "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Hanken+Grotesk:wght@400;500;600;700&display=swap";
+    document.head.appendChild(link);
+  }, []);
 }
 
-function ExtLink({ href, children }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-[#37F2D1] hover:underline inline-flex items-center gap-1"
-    >
-      {children}
-      <ExternalLink className="w-3 h-3" />
-    </a>
-  );
+// Prototype CSS, namespaced under `.gs-attr` so nothing leaks into (or
+// out of) the rest of the app's global styles.
+const STYLES = `
+.gs-attr{
+  --orange:#FF5300; --navy:#1B2535; --teal:#04685A; --salmon:#F8A47C;
+  --parchment:#FBF3E6; --parchment-2:#F4E9D5; --ink:#1B2535; --line:#E4D6BC; --white:#fff;
+  font-family:'Hanken Grotesk',sans-serif; color:var(--ink); background:var(--parchment);
+  background-image:
+    radial-gradient(circle at 12% 18%, rgba(255,83,0,.06), transparent 30%),
+    radial-gradient(circle at 88% 8%, rgba(4,104,90,.06), transparent 28%);
+  min-height:100vh; padding:0 0 80px;
+}
+.gs-attr *{box-sizing:border-box}
+.gs-attr a{color:inherit}
+.gs-attr .wrap{max-width:1120px;margin:0 auto;padding:0 28px}
+
+.gs-attr .hero{position:relative;padding:54px 28px 30px;text-align:center;overflow:hidden;border-bottom:3px solid var(--ink);background:linear-gradient(180deg,rgba(255,83,0,.10),transparent 70%)}
+.gs-attr .kicker{font-weight:700;letter-spacing:.32em;text-transform:uppercase;font-size:12px;color:var(--teal)}
+.gs-attr h1.title{font-family:'Fraunces',serif;font-weight:900;font-size:clamp(46px,8vw,86px);line-height:.92;letter-spacing:-.02em;margin:6px 0 8px}
+.gs-attr h1.title .hot{color:var(--orange);font-style:italic}
+.gs-attr .sub{font-size:16px;color:#6a5c44;max-width:560px;margin:0 auto;font-weight:500}
+
+.gs-attr nav.tabs{position:sticky;top:0;z-index:30;margin-top:22px;background:var(--ink);box-shadow:0 6px 0 rgba(27,37,53,.12)}
+.gs-attr .tabs-inner{max-width:1120px;margin:0 auto;display:flex;flex-wrap:wrap;gap:4px;padding:8px 24px}
+.gs-attr .tab{appearance:none;border:0;cursor:pointer;background:transparent;color:#cdbfa9;font-weight:700;font-size:14px;letter-spacing:.04em;padding:12px 18px;border-radius:10px 10px 0 0;transition:.18s;position:relative}
+.gs-attr .tab:hover{color:#fff;background:rgba(255,255,255,.06)}
+.gs-attr .tab.active{color:var(--ink);background:var(--parchment)}
+.gs-attr .tab.active::after{content:"";position:absolute;left:14px;right:14px;bottom:-3px;height:3px;background:var(--orange)}
+
+.gs-attr .panel{padding-top:42px;animation:gsrise .5s ease both}
+@keyframes gsrise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.gs-attr .section-label{display:flex;align-items:center;gap:14px;margin:6px 0 22px}
+.gs-attr .section-label h2{font-family:'Fraunces',serif;font-weight:600;font-size:13px;letter-spacing:.34em;text-transform:uppercase;color:var(--teal);white-space:nowrap}
+.gs-attr .section-label .rule{flex:1;height:2px;background:repeating-linear-gradient(90deg,var(--line) 0 8px,transparent 8px 14px)}
+.gs-attr .group{margin-bottom:46px}
+
+.gs-attr .crew-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px}
+.gs-attr .card{background:var(--white);border:2px solid var(--ink);border-radius:16px;padding:20px;position:relative;box-shadow:5px 5px 0 rgba(27,37,53,.12);transition:.18s}
+.gs-attr .card:hover{transform:translate(-2px,-2px);box-shadow:8px 8px 0 rgba(255,83,0,.28)}
+.gs-attr .avatar{width:58px;height:58px;border-radius:13px;display:grid;place-items:center;font-family:'Fraunces',serif;font-weight:900;font-size:24px;color:#fff;margin-bottom:14px;border:2px solid var(--ink);overflow:hidden}
+.gs-attr .avatar img,.gs-attr .ava img,.gs-attr .big-ava img{width:100%;height:100%;object-fit:cover}
+.gs-attr .card .name{font-family:'Fraunces',serif;font-weight:600;font-size:20px;line-height:1.05;cursor:pointer;transition:.15s;background:none;border:0;padding:0;text-align:left;color:inherit}
+.gs-attr .card .name:hover{color:var(--orange);text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
+.gs-attr .card .role{font-size:13px;font-weight:600;color:#8a7a60;margin-top:3px}
+.gs-attr .pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.gs-attr .badge-art{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);background:rgba(4,104,90,.1);padding:3px 9px;border-radius:99px}
+.gs-attr .comm{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:99px}
+.gs-attr .comm.open{color:#fff;background:var(--teal)}
+.gs-attr .comm.closed{color:#8a7a60;background:var(--parchment-2)}
+.gs-attr .gallery-btn{margin-top:15px;width:100%;cursor:pointer;border:2px solid var(--ink);background:var(--orange);color:#fff;font-weight:700;font-size:13.5px;letter-spacing:.03em;padding:10px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px;transition:.16s}
+.gs-attr .gallery-btn:hover{background:var(--ink);transform:translateY(-1px)}
+.gs-attr .gallery-btn svg{width:16px;height:16px}
+
+.gs-attr .stack{display:grid;gap:14px}
+.gs-attr .lic{background:var(--white);border:2px solid var(--ink);border-left:8px solid var(--orange);border-radius:12px;padding:18px 20px;box-shadow:4px 4px 0 rgba(27,37,53,.1)}
+.gs-attr .lic.teal{border-left-color:var(--teal)} .gs-attr .lic.salmon{border-left-color:var(--salmon)} .gs-attr .lic.navy{border-left-color:var(--navy)}
+.gs-attr .lic h3{font-family:'Fraunces',serif;font-weight:600;font-size:18px;margin-bottom:5px}
+.gs-attr .lic h3 a,.gs-attr .lic .lic-link{color:var(--orange);text-decoration:none;border-bottom:2px solid rgba(255,83,0,.3)}
+.gs-attr .lic p{font-size:13.5px;color:#6a5c44;line-height:1.55;font-weight:500}
+.gs-attr .lic .lic-link{display:inline-flex;align-items:center;gap:4px;font-weight:700;font-size:13px;margin-top:8px}
+.gs-attr .lic .todo{display:inline-block;margin-top:7px;font-size:11px;font-weight:700;color:var(--orange);background:rgba(255,83,0,.1);padding:2px 8px;border-radius:6px}
+.gs-attr .chips{display:flex;flex-wrap:wrap;gap:10px}
+.gs-attr .chip{background:var(--white);border:2px solid var(--ink);border-radius:99px;padding:8px 16px;font-weight:700;font-size:13px;box-shadow:3px 3px 0 rgba(27,37,53,.1);text-decoration:none}
+.gs-attr .chip span{color:var(--teal);font-weight:600}
+
+.gs-attr .gal-head{padding:40px 0 14px}
+.gs-attr .back{appearance:none;border:2px solid var(--ink);background:var(--white);cursor:pointer;font-weight:700;font-size:13px;padding:8px 15px;border-radius:10px;display:inline-flex;align-items:center;gap:7px;box-shadow:3px 3px 0 rgba(27,37,53,.12);margin-bottom:20px;color:inherit}
+.gs-attr .back:hover{background:var(--ink);color:#fff}
+.gs-attr .back svg{width:15px;height:15px}
+.gs-attr .gal-head h1{font-family:'Fraunces',serif;font-weight:900;font-size:clamp(38px,6vw,64px);line-height:.95}
+.gs-attr .gal-head h1 .hot{color:var(--orange);font-style:italic}
+.gs-attr .gal-head p{color:#6a5c44;font-weight:500;margin-top:6px;max-width:540px}
+.gs-attr .filters{display:flex;flex-wrap:wrap;gap:9px;margin:24px 0 26px}
+.gs-attr .fchip{cursor:pointer;border:2px solid var(--ink);background:var(--white);font-weight:700;font-size:13px;padding:8px 16px;border-radius:99px;transition:.15s;color:inherit}
+.gs-attr .fchip.active{background:var(--orange);color:#fff}
+
+.gs-attr .artist-banner{display:flex;gap:18px;align-items:center;background:var(--white);border:2px solid var(--ink);border-radius:16px;padding:18px 20px;box-shadow:5px 5px 0 rgba(27,37,53,.12);margin-bottom:26px;flex-wrap:wrap}
+.gs-attr .artist-banner .ava{width:62px;height:62px;border-radius:14px;display:grid;place-items:center;font-family:'Fraunces',serif;font-weight:900;font-size:26px;color:#fff;border:2px solid var(--ink);flex-shrink:0;overflow:hidden}
+.gs-attr .artist-banner .who{flex:1;min-width:170px}
+.gs-attr .artist-banner .who .n{font-family:'Fraunces',serif;font-weight:600;font-size:22px;line-height:1;cursor:pointer;background:none;border:0;padding:0;color:inherit}
+.gs-attr .artist-banner .who .n:hover{color:var(--orange)}
+.gs-attr .artist-banner .who .r{color:#8a7a60;font-size:13px;font-weight:600;margin-top:3px}
+.gs-attr .artist-banner .acts{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.gs-attr .ab-btn{cursor:pointer;border:2px solid var(--ink);border-radius:10px;font-weight:700;font-size:13px;padding:9px 14px;display:inline-flex;align-items:center;gap:7px;text-decoration:none;transition:.15s;color:inherit}
+.gs-attr .ab-btn svg{width:15px;height:15px}
+.gs-attr .ab-btn.outline{background:var(--white)} .gs-attr .ab-btn.outline:hover{background:var(--parchment-2)}
+.gs-attr .ab-btn.solid{background:var(--orange);color:#fff} .gs-attr .ab-btn.solid:hover{background:var(--ink)}
+.gs-attr .ab-btn.teal{background:var(--teal);color:#fff} .gs-attr .ab-btn.teal:hover{background:var(--ink)}
+.gs-attr .ab-btn.navy{background:var(--navy);color:#fff} .gs-attr .ab-btn.navy:hover{background:var(--orange)}
+.gs-attr .commbar{display:flex;align-items:center;gap:9px;background:var(--parchment-2);border:2px solid var(--ink);border-radius:10px;padding:6px 12px}
+.gs-attr .commbar .lab{font-size:12px;font-weight:700}
+.gs-attr .commbar .lab.open{color:var(--teal)} .gs-attr .commbar .lab.closed{color:#8a7a60}
+
+.gs-attr .grid{columns:3;column-gap:18px}
+@media(max-width:820px){.gs-attr .grid{columns:2}}
+@media(max-width:520px){.gs-attr .grid{columns:1}}
+.gs-attr .piece{break-inside:avoid;margin-bottom:18px;border:2px solid var(--ink);border-radius:14px;overflow:hidden;background:var(--white);box-shadow:5px 5px 0 rgba(27,37,53,.12);cursor:pointer;transition:.18s;display:block;width:100%;padding:0;text-align:left;color:inherit}
+.gs-attr .piece:hover{transform:translate(-2px,-2px);box-shadow:8px 8px 0 rgba(4,104,90,.28)}
+.gs-attr .piece .art{position:relative;background:var(--parchment-2)}
+.gs-attr .piece .art img{width:100%;display:block}
+.gs-attr .piece .art .tag{position:absolute;top:10px;right:10px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:rgba(27,37,53,.82);color:#fff;padding:4px 9px;border-radius:99px}
+.gs-attr .piece .meta{padding:13px 15px}
+.gs-attr .piece .meta .pt{font-family:'Fraunces',serif;font-weight:600;font-size:16px;line-height:1.1}
+.gs-attr .piece .meta .pa{font-size:12.5px;color:#8a7a60;font-weight:600;margin-top:2px}
+.gs-attr .piece .meta .cc{font-size:12px;color:var(--teal);font-weight:700;margin-top:8px;display:flex;align-items:center;gap:5px}
+
+.gs-attr .overlay{position:fixed;inset:0;background:rgba(27,37,53,.72);backdrop-filter:blur(3px);z-index:60;padding:30px;overflow-y:auto;display:flex;align-items:flex-start;justify-content:center}
+.gs-attr .modal{background:var(--parchment);border:3px solid var(--ink);border-radius:20px;width:min(880px,100%);box-shadow:0 24px 0 rgba(0,0,0,.25);overflow:hidden;display:grid;grid-template-columns:1.1fr 1fr;animation:gsrise .35s ease both}
+@media(max-width:740px){.gs-attr .modal{grid-template-columns:1fr}}
+.gs-attr .modal .art-big{min-height:340px;position:relative;background:var(--parchment-2)}
+.gs-attr .modal .art-big img{width:100%;height:100%;object-fit:cover;display:block}
+.gs-attr .modal .art-big .x{position:absolute;top:12px;left:12px;width:34px;height:34px;border-radius:50%;border:2px solid var(--ink);background:var(--white);cursor:pointer;font-size:18px;line-height:1;display:grid;place-items:center;color:inherit}
+.gs-attr .modal .side{padding:24px;display:flex;flex-direction:column;max-height:78vh}
+.gs-attr .modal .side h3{font-family:'Fraunces',serif;font-weight:900;font-size:26px;line-height:1}
+.gs-attr .modal .side .by{font-weight:700;color:var(--teal);font-size:13.5px;margin:6px 0 12px}
+.gs-attr .modal .side .desc{font-size:14px;color:#5c4f3a;line-height:1.55;font-weight:500;margin-bottom:14px}
+.gs-attr .artist-strip{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--ink);color:#fff;border-radius:12px;padding:10px 14px;margin-bottom:16px}
+.gs-attr .artist-strip .lab{font-size:12px;font-weight:600} .gs-attr .artist-strip .lab b{color:var(--salmon)}
+.gs-attr .toggle{position:relative;width:48px;height:26px;border-radius:99px;background:#4a5568;cursor:pointer;border:2px solid #000;transition:.2s;flex-shrink:0}
+.gs-attr .toggle.on{background:var(--orange)}
+.gs-attr .toggle.readonly{cursor:default;opacity:.85}
+.gs-attr .toggle::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s}
+.gs-attr .toggle.on::after{left:24px}
+.gs-attr .comments{flex:1;overflow-y:auto;border-top:2px dashed var(--line);padding-top:14px}
+.gs-attr .comments .ch{font-weight:700;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#8a7a60;margin-bottom:12px}
+.gs-attr .cmt{display:flex;gap:10px;margin-bottom:14px}
+.gs-attr .cmt .ca{width:34px;height:34px;border-radius:9px;flex-shrink:0;display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px;border:2px solid var(--ink)}
+.gs-attr .cmt .cb{background:var(--white);border:2px solid var(--ink);border-radius:11px;padding:9px 12px;flex:1}
+.gs-attr .cmt .cb .cn{font-weight:700;font-size:13px} .gs-attr .cmt .cb .ct{font-size:13px;color:#5c4f3a;margin-top:2px;line-height:1.4}
+.gs-attr .cmt .del{background:none;border:0;cursor:pointer;color:#8B2C1E;opacity:.5;align-self:flex-start}
+.gs-attr .cmt .del:hover{opacity:1}
+.gs-attr .composer{display:flex;gap:8px;margin-top:10px;padding-top:12px;border-top:2px solid var(--line)}
+.gs-attr .composer input{flex:1;border:2px solid var(--ink);border-radius:10px;padding:10px 12px;font-family:'Hanken Grotesk';font-size:13.5px;background:var(--white);color:var(--ink)}
+.gs-attr .composer input:focus{outline:3px solid rgba(255,83,0,.3)}
+.gs-attr .composer button{border:2px solid var(--ink);background:var(--orange);color:#fff;font-weight:700;font-size:13px;padding:0 16px;border-radius:10px;cursor:pointer}
+.gs-attr .composer button:hover{background:var(--ink)}
+.gs-attr .composer button:disabled{opacity:.5;cursor:default}
+.gs-attr .locked{text-align:center;color:#8a7a60;font-weight:600;font-size:13.5px;padding:26px 10px;background:var(--white);border:2px dashed var(--line);border-radius:12px}
+.gs-attr .locked .em{font-size:26px;display:block;margin-bottom:6px}
+.gs-attr .footnote{text-align:center;color:#9a8b70;font-size:12.5px;font-weight:600;padding:30px 20px 0}
+
+.gs-attr .profile{background:var(--white);border:2px solid var(--ink);border-radius:20px;padding:30px;box-shadow:6px 6px 0 rgba(27,37,53,.12);max-width:760px;margin:0 auto}
+.gs-attr .member-back{margin-top:40px}
+.gs-attr .profile-top{display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+.gs-attr .big-ava{width:104px;height:104px;border-radius:20px;border:3px solid var(--ink);overflow:hidden;display:grid;place-items:center;font-family:'Fraunces',serif;font-weight:900;font-size:44px;color:#fff;flex-shrink:0}
+.gs-attr .pmeta{flex:1;min-width:200px}
+.gs-attr .kicker-sm{font-weight:700;letter-spacing:.2em;text-transform:uppercase;font-size:11px;color:var(--teal);margin-bottom:4px}
+.gs-attr .pname{font-family:'Fraunces',serif;font-weight:900;font-size:clamp(30px,5vw,42px);line-height:.98}
+.gs-attr .pname .known{color:#8a7a60;font-weight:600;font-size:.5em;font-style:italic}
+.gs-attr .prole{color:#8a7a60;font-weight:600;font-size:14px;margin-top:5px}
+.gs-attr .pbio{font-size:15.5px;line-height:1.65;color:#5c4f3a;font-weight:500;margin:22px 0 24px;border-top:2px dashed var(--line);padding-top:22px}
+.gs-attr .pactions{display:flex;gap:10px;flex-wrap:wrap}
+
+.gs-attr .state{padding:60px 20px;text-align:center;color:#8a7a60;font-weight:600}
+.gs-attr .state.err{color:#8B2C1E}
+.gs-attr .spinner{display:inline-block;width:24px;height:24px;border:3px solid currentColor;border-top-color:transparent;border-radius:50%;animation:gsspin .8s linear infinite}
+@keyframes gsspin{to{transform:rotate(360deg)}}
+`;
+
+// ── Shared bits ──────────────────────────────────────────────────────
+function AvatarFill({ member }) {
+  return member?.avatar_url
+    ? <img src={member.avatar_url} alt={member.name} />
+    : <>{initial(member?.name)}</>;
 }
 
-export default function Attributions() {
-  // Public read (RLS allows anon). Ordered by sort_order then name.
-  const { data: attributions = [] } = useQuery({
-    queryKey: ["artistAttributions"],
+function LoadingState() {
+  return (
+    <div className="state"><span className="spinner" /><p style={{ marginTop: 12 }}>Plating up…</p></div>
+  );
+}
+function ErrorState({ error }) {
+  return (
+    <div className="state err">
+      <p>Couldn't load this section.</p>
+      <p style={{ fontSize: 13, opacity: 0.8, marginTop: 4 }}>{error?.message || String(error)}</p>
+    </div>
+  );
+}
+function EmptyState({ children }) {
+  return <div className="state" style={{ fontStyle: "italic" }}>{children}</div>;
+}
+function SectionLabel({ children }) {
+  return <div className="section-label"><h2>{children}</h2><span className="rule" /></div>;
+}
+
+// ── Data hooks ───────────────────────────────────────────────────────
+function useGroups() {
+  return useQuery({
+    queryKey: ["studioGroups"],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("artist_attributions")
-        .select("*")
-        .order("sort_order", { ascending: true })
-        .order("name", { ascending: true });
+      const { data, error } = await supabase.from("team_groups").select("*").order("sort_order", { ascending: true });
+      if (error) { console.error("Load team_groups", error); throw error; }
       return data || [];
     },
   });
+}
+function useMembers() {
+  return useQuery({
+    queryKey: ["studioMembers"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("team_members").select("*").order("sort_order", { ascending: true });
+      if (error) { console.error("Load team_members", error); throw error; }
+      return data || [];
+    },
+  });
+}
+function useAttributionEntries() {
+  return useQuery({
+    queryKey: ["attributionEntries"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("attribution_entries").select("*").order("sort_order", { ascending: true });
+      if (error) { console.error("Load attribution_entries", error); throw error; }
+      return data || [];
+    },
+  });
+}
+function useGalleryPieces() {
+  return useQuery({
+    queryKey: ["galleryPieces"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("gallery_pieces")
+        .select("*, artist:team_members(*)")
+        .order("sort_order", { ascending: true });
+      if (error) { console.error("Load gallery_pieces", error); throw error; }
+      return data || [];
+    },
+  });
+}
 
-  const studioArtists = attributions.filter((a) => a.category === "studio_artist");
-  const assetCredits = attributions.filter((a) => a.category === "asset_credit");
+// ─────────────────────────────────────────────────────────────────────
+export default function Attributions() {
+  useStudioFonts();
+  const [params, setParams] = useSearchParams();
+  const memberId = params.get("member");
+  const view = params.get("view");
 
   return (
-    <div className="min-h-screen bg-[#0f1219] text-white p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 text-slate-400 hover:text-[#37F2D1]"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back to app
-          </Link>
+    <div className="gs-attr">
+      <style>{STYLES}</style>
+      {view === "gallery" ? (
+        <GalleryView artistParam={params.get("artist") || "all"} setParams={setParams} />
+      ) : memberId ? (
+        <MemberProfile memberId={memberId} setParams={setParams} />
+      ) : (
+        <CreditsView setParams={setParams} />
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════ Credits view (tabs) ════════════════════════
+const TABS = [
+  { id: "crew", label: "The Crew" },
+  { id: "open_content", label: "Open Content" },
+  { id: "tech", label: "Brewed With" },
+  { id: "assets", label: "Art & Assets" },
+];
+
+function CreditsView({ setParams }) {
+  const [tab, setTab] = useState("crew");
+  return (
+    <div id="attributions-view">
+      <header className="hero">
+        <div className="kicker">Made by the kitchen · Stirred with care</div>
+        <h1 className="title">The <span className="hot">Credits</span> Counter</h1>
+        <p className="sub">
+          Everyone who chopped, simmered, and plated Guildstew — plus the
+          open ingredients we built it on. Ladle says thanks.
+        </p>
+      </header>
+
+      <nav className="tabs">
+        <div className="tabs-inner">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              className={`tab ${tab === t.id ? "active" : ""}`}
+              onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      <main className="wrap">
+        <div className="panel" key={tab}>
+          {tab === "crew" && <CrewTab setParams={setParams} />}
+          {tab === "open_content" && <EntriesTab section="open_content" label="Open Game Content" />}
+          {tab === "tech" && <TechTab />}
+          {tab === "assets" && <EntriesTab section="assets" label="Type, Art & Sundries" />}
+        </div>
+      </main>
+
+      <p className="footnote">🥄 Built weird, built bold, built worlds — Aetherian Studios</p>
+    </div>
+  );
+}
+
+// ─────────────── The Crew ───────────────
+function CrewTab({ setParams }) {
+  const groups = useGroups();
+  const members = useMembers();
+
+  if (groups.isLoading || members.isLoading) return <LoadingState />;
+  if (groups.error) return <ErrorState error={groups.error} />;
+  if (members.error) return <ErrorState error={members.error} />;
+  if (!members.data.length) return <EmptyState>No crew members yet. Add them in Admin → Studio.</EmptyState>;
+
+  const openMember = (id) => setParams({ member: id });
+  const openGallery = (artistId) => setParams({ view: "gallery", artist: artistId });
+  const ungrouped = members.data.filter((m) => !m.group_id);
+
+  const renderGroup = (key, name, list) => (
+    <div className="group" key={key}>
+      <SectionLabel>{name}</SectionLabel>
+      <div className="crew-grid">
+        {list.map((m) => <CrewCard key={m.id} member={m} onOpen={openMember} onGallery={openGallery} />)}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {groups.data.map((g) => {
+        const list = members.data.filter((m) => m.group_id === g.id);
+        return list.length ? renderGroup(g.id, g.name, list) : null;
+      })}
+      {ungrouped.length > 0 && renderGroup("_none", "The Crew", ungrouped)}
+    </>
+  );
+}
+
+function CrewCard({ member, onOpen, onGallery }) {
+  return (
+    <div className="card">
+      <div className="avatar" style={{ background: monoGrad(member) }}><AvatarFill member={member} /></div>
+      <button className="name" onClick={() => onOpen(member.id)} title="View profile">{member.name}</button>
+      {member.role && <div className="role">{member.role}</div>}
+      {member.is_artist && (
+        <>
+          <div className="pills">
+            <span className="badge-art">Studio Artist</span>
+            <span className={`comm ${member.commissions_open ? "open" : "closed"}`}>
+              {member.commissions_open ? "Commissions open" : "Commissions closed"}
+            </span>
+          </div>
+          <button className="gallery-btn" onClick={() => onGallery(member.id)}>
+            <ImageIcon /> View Gallery
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─────────────── Open Content / Art & Assets ───────────
+function EntriesTab({ section, label }) {
+  const { data, isLoading, error } = useAttributionEntries();
+  if (isLoading) return <LoadingState />;
+  if (error) return <ErrorState error={error} />;
+
+  const rows = (data || []).filter((e) => e.section === section);
+  return (
+    <>
+      <SectionLabel>{label}</SectionLabel>
+      {rows.length === 0 ? (
+        <EmptyState>Nothing here yet. Add entries in Admin → Studio.</EmptyState>
+      ) : (
+        <div className="stack">
+          {rows.map((e) => {
+            const needsExact = (e.body || "").startsWith("REPLACE:");
+            const bodyText = needsExact ? e.body.replace(/^REPLACE:\s*/, "") : e.body;
+            const accentClass = e.accent && e.accent !== "orange" ? e.accent : "";
+            return (
+              <div className={`lic ${accentClass}`} key={e.id}>
+                <h3>{e.title}</h3>
+                {bodyText && <p>{bodyText}</p>}
+                {e.link_url && (
+                  <a className="lic-link" href={e.link_url} target="_blank" rel="noopener noreferrer">
+                    {e.link_label || e.link_url} <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+                {needsExact && <span className="todo">⚑ Replace with exact license wording</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─────────────── Brewed With (tech chips) ───────────
+function TechTab() {
+  const { data, isLoading, error } = useAttributionEntries();
+  if (isLoading) return <LoadingState />;
+  if (error) return <ErrorState error={error} />;
+
+  const rows = (data || []).filter((e) => e.section === "tech");
+  return (
+    <>
+      <SectionLabel>The Tech Pantry</SectionLabel>
+      <p style={{ color: "#6a5c44", fontWeight: 500, marginBottom: 20, maxWidth: 560 }}>
+        Open-source tools we lean on. Hats off to the maintainers who keep these simmering.
+      </p>
+      {rows.length === 0 ? (
+        <EmptyState>No tech listed yet. Add chips in Admin → Studio.</EmptyState>
+      ) : (
+        <div className="chips">
+          {rows.map((e) => {
+            const inner = <>{e.title} {e.tag && <span>· {e.tag}</span>}</>;
+            return e.link_url ? (
+              <a className="chip" key={e.id} href={e.link_url} target="_blank" rel="noopener noreferrer">{inner}</a>
+            ) : (
+              <div className="chip" key={e.id}>{inner}</div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ═══════════════════════ Member profile ════════════════════════════
+function MemberProfile({ memberId, setParams }) {
+  const { data, isLoading, error } = useMembers();
+  const groups = useGroups();
+
+  if (isLoading || groups.isLoading) return <div className="wrap"><LoadingState /></div>;
+  if (error) return <div className="wrap"><ErrorState error={error} /></div>;
+
+  const member = (data || []).find((m) => m.id === memberId);
+  const back = (
+    <button className="back member-back" onClick={() => setParams({})}>
+      <ArrowLeft /> Back to Credits
+    </button>
+  );
+  if (!member) {
+    return <div className="wrap" id="member-view">{back}<EmptyState>This crew member couldn't be found.</EmptyState></div>;
+  }
+
+  const group = (groups.data || []).find((g) => g.id === member.group_id);
+  const display = member.full_name || member.name;
+  const known = member.full_name ? ` ("${member.name}")` : "";
+
+  return (
+    <div className="wrap" id="member-view">
+      {back}
+      <div className="profile">
+        <div className="profile-top">
+          <div className="big-ava" style={{ background: monoGrad(member) }}><AvatarFill member={member} /></div>
+          <div className="pmeta">
+            {group && <div className="kicker-sm">{group.name}</div>}
+            <h1 className="pname">{display}<span className="known">{known}</span></h1>
+            {member.role && <div className="prole">{member.role}</div>}
+            {member.is_artist && (
+              <span className={`comm ${member.commissions_open ? "open" : "closed"}`} style={{ marginTop: 10, display: "inline-block" }}>
+                {member.commissions_open ? "Commissions open" : "Commissions closed"}
+              </span>
+            )}
+          </div>
+        </div>
+        <p className="pbio">{member.bio || "Bio coming soon."}</p>
+        <div className="pactions">
+          {member.is_artist && member.portfolio_url && (
+            <a className="ab-btn outline" href={member.portfolio_url} target="_blank" rel="noopener noreferrer">
+              <ExternalLink /> Portfolio
+            </a>
+          )}
+          {member.is_artist && member.commission_email && (
+            <a className="ab-btn solid" href={`mailto:${member.commission_email}?subject=${encodeURIComponent(`${member.commissions_open ? "Commission request for" : "Inquiry for"} ${member.name}`)}`}>
+              <Mail /> {member.commissions_open ? "Commission Me" : "Get in Touch"}
+            </a>
+          )}
+          {member.is_artist && (
+            <button className="ab-btn teal" onClick={() => setParams({ view: "gallery", artist: member.id })}>
+              <ImageIcon /> View Gallery
+            </button>
+          )}
+          {member.business_inquiries && member.business_email && (
+            <a className="ab-btn navy" href={`mailto:${member.business_email}?subject=${encodeURIComponent(`Business inquiry — ${member.name}`)}`}>
+              <Mail /> Business Inquiries
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════ Gallery view ═══════════════════════════════
+function GalleryView({ artistParam, setParams }) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const pieces = useGalleryPieces();
+  const members = useMembers();
+  const [activePiece, setActivePiece] = useState(null);
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["galleryPieces"] });
+    queryClient.invalidateQueries({ queryKey: ["studioMembers"] });
+  };
+
+  const toggleCommissions = useMutation({
+    mutationFn: async ({ memberId, value }) => {
+      const { error } = await supabase.from("team_members").update({ commissions_open: value }).eq("id", memberId);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+    onError: (err) => { console.error("Toggle commissions", err); toast.error(err?.message || "Failed to update"); },
+  });
+
+  const toggleComments = useMutation({
+    mutationFn: async ({ pieceId, value }) => {
+      const { error } = await supabase.from("gallery_pieces").update({ comments_enabled: value }).eq("id", pieceId);
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      invalidate();
+      setActivePiece((p) => (p && p.id === vars.pieceId ? { ...p, comments_enabled: vars.value } : p));
+    },
+    onError: (err) => { console.error("Toggle comments", err); toast.error(err?.message || "Failed to update"); },
+  });
+
+  if (pieces.isLoading || members.isLoading) return <div className="wrap"><LoadingState /></div>;
+  if (pieces.error) return <div className="wrap"><ErrorState error={pieces.error} /></div>;
+  if (members.error) return <div className="wrap"><ErrorState error={members.error} /></div>;
+
+  const artists = (members.data || []).filter((m) => m.is_artist);
+  const filtered = artistParam === "all" ? pieces.data : pieces.data.filter((p) => p.artist_member_id === artistParam);
+  const focusedArtist = artistParam !== "all" ? artists.find((a) => a.id === artistParam) : null;
+
+  const canManageMember = (member) =>
+    !!member && (isStaffEmail(user?.email) || (member.user_id && member.user_id === user?.id));
+
+  return (
+    <div className="wrap" id="gallery-view">
+      <div className="gal-head">
+        <button className="back" onClick={() => setParams({})}><ArrowLeft /> Back to Credits</button>
+        <h1>The <span className="hot">Gallery</span> Wall</h1>
+        <p>Original work from the Guildstew art kitchen. Leave a note for the artist — if they've left the door open.</p>
+
+        <div className="filters">
+          <button className={`fchip ${artistParam === "all" ? "active" : ""}`} onClick={() => setParams({ view: "gallery", artist: "all" })}>All</button>
+          {artists.map((a) => (
+            <button key={a.id} className={`fchip ${artistParam === a.id ? "active" : ""}`} onClick={() => setParams({ view: "gallery", artist: a.id })}>
+              {a.name}
+            </button>
+          ))}
         </div>
 
-        <h1 className="text-3xl font-bold text-[#37F2D1] mb-2">
-          Open Content Attributions
-        </h1>
-        <p className="text-slate-400 mb-8 text-sm">
-          Guildstew ships open-content game data licensed under
-          Creative Commons. This page lists each upstream source and
-          the license under which we redistribute their work, as
-          required by those licenses.
-        </p>
-
-        {studioArtists.length > 0 && (
-          <Section title="Artists & Contributors">
-            <ul className="space-y-3">
-              {studioArtists.map((a) => (
-                <li key={a.id}>
-                  <span className="font-semibold text-white">{a.name}</span>
-                  {a.role && <span className="text-slate-400"> — {a.role}</span>}
-                  {(a.portfolio_url || a.contact) && (
-                    <div className="text-xs text-slate-400 mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-1">
-                      {a.portfolio_url && (
-                        <ExtLink href={a.portfolio_url}>Portfolio</ExtLink>
-                      )}
-                      {a.contact && <span>{a.contact}</span>}
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </Section>
+        {focusedArtist && (
+          <ArtistBanner
+            artist={focusedArtist}
+            canManage={canManageMember(focusedArtist)}
+            onToggleCommissions={(value) => toggleCommissions.mutate({ memberId: focusedArtist.id, value })}
+            onOpenProfile={() => setParams({ member: focusedArtist.id })}
+          />
         )}
+      </div>
 
-        {assetCredits.length > 0 && (
-          <Section title="Asset & Icon Credits">
-            <p className="text-slate-400 text-xs">
-              Game icons used in Guildstew are licensed under Creative
-              Commons and require attribution to their creators.
-            </p>
-            <ul className="space-y-3">
-              {assetCredits.map((a) => (
-                <li key={a.id}>
-                  <span className="font-semibold text-white">{a.name}</span>
-                  {a.credit_note && (
-                    <span className="text-slate-300"> — {a.credit_note}</span>
-                  )}
-                  {(a.source || a.source_url || a.license || a.license_url) && (
-                    <div className="text-xs text-slate-400 mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-1">
-                      {(a.source || a.source_url) && (
-                        a.source_url
-                          ? <ExtLink href={a.source_url}>{a.source || a.source_url}</ExtLink>
-                          : <span>{a.source}</span>
-                      )}
-                      {(a.license || a.license_url) && (
-                        a.license_url
-                          ? <ExtLink href={a.license_url}>{a.license || "License"}</ExtLink>
-                          : <span>{a.license}</span>
-                      )}
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </Section>
+      {!filtered.length ? (
+        <EmptyState>No pieces published yet.</EmptyState>
+      ) : (
+        <div className="grid">
+          {filtered.map((p) => (
+            <button className="piece" key={p.id} onClick={() => setActivePiece(p)}>
+              <div className="art">
+                <img src={p.image_url} alt={p.title} loading="lazy" />
+                {!p.comments_enabled && <span className="tag">Comments off</span>}
+              </div>
+              <div className="meta">
+                <div className="pt">{p.title}</div>
+                {p.artist?.name && <div className="pa">{p.artist.name}</div>}
+                <div className="cc">
+                  <MessageCircle style={{ width: 13, height: 13 }} />
+                  {p.comments_enabled ? "Open for notes" : "Comments closed"}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {activePiece && (
+        <PieceModal
+          piece={activePiece}
+          onClose={() => setActivePiece(null)}
+          canManage={canManageMember(activePiece.artist)}
+          onToggleComments={(value) => toggleComments.mutate({ pieceId: activePiece.id, value })}
+        />
+      )}
+    </div>
+  );
+}
+
+function ArtistBanner({ artist, canManage, onToggleCommissions, onOpenProfile }) {
+  return (
+    <div className="artist-banner">
+      <div className="ava" style={{ background: monoGrad(artist) }}><AvatarFill member={artist} /></div>
+      <div className="who">
+        <button className="n" onClick={onOpenProfile}>{artist.name}</button>
+        {artist.role && <div className="r">{artist.role}</div>}
+      </div>
+      <div className="acts">
+        {artist.portfolio_url && (
+          <a className="ab-btn outline" href={artist.portfolio_url} target="_blank" rel="noopener noreferrer"><ExternalLink /> Portfolio</a>
         )}
+        <div className="commbar">
+          <span className={`lab ${artist.commissions_open ? "open" : "closed"}`}>
+            {artist.commissions_open ? "Open for commissions" : "Commissions closed"}
+          </span>
+          {canManage && (
+            <div
+              className={`toggle ${artist.commissions_open ? "on" : ""}`}
+              title="Toggle commission status"
+              onClick={() => onToggleCommissions(!artist.commissions_open)}
+            />
+          )}
+        </div>
+        {artist.commission_email && (
+          <a className="ab-btn solid" href={`mailto:${artist.commission_email}?subject=${encodeURIComponent(`Commission request for ${artist.name}`)}`}>
+            <Mail /> {artist.commissions_open ? "Commission Me" : "Get in Touch"}
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
 
-        <Section title="D&D 5e — System Reference Document 5.1 (2014 edition)">
-          <p>
-            The 2014 game pack uses content from the System Reference
-            Document 5.1, licensed by Wizards of the Coast LLC under
-            the Creative Commons Attribution 4.0 International License
-            (CC-BY 4.0).
-          </p>
-          <p>
-            <span className="font-semibold">Title:</span>{" "}
-            System Reference Document 5.1
-            <br />
-            <span className="font-semibold">Copyright:</span>{" "}
-            © 2023 Wizards of the Coast LLC
-            <br />
-            <span className="font-semibold">License:</span>{" "}
-            <ExtLink href="https://creativecommons.org/licenses/by/4.0/legalcode">
-              CC-BY 4.0
-            </ExtLink>
-          </p>
-          <p>
-            Available from Wizards of the Coast at{" "}
-            <ExtLink href="https://www.dndbeyond.com/srd">
-              dndbeyond.com/srd
-            </ExtLink>
-            .
-          </p>
-        </Section>
+// ─────────────── Piece modal + comments ───────────────
+function PieceModal({ piece, onClose, canManage, onToggleComments }) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [body, setBody] = useState("");
 
-        <Section title="D&D 5e — System Reference Document 5.2 (2024 edition)">
-          <p>
-            The 2024 game pack uses content from the System Reference
-            Document 5.2, also licensed by Wizards of the Coast LLC
-            under CC-BY 4.0.
-          </p>
-          <p>
-            <span className="font-semibold">Title:</span>{" "}
-            System Reference Document 5.2
-            <br />
-            <span className="font-semibold">Copyright:</span>{" "}
-            © 2025 Wizards of the Coast LLC
-            <br />
-            <span className="font-semibold">License:</span>{" "}
-            <ExtLink href="https://creativecommons.org/licenses/by/4.0/legalcode">
-              CC-BY 4.0
-            </ExtLink>
-          </p>
-          <p>
-            Available from Wizards of the Coast at{" "}
-            <ExtLink href="https://www.dndbeyond.com/srd">
-              dndbeyond.com/srd
-            </ExtLink>
-            .
-          </p>
-          <p className="text-slate-400 text-xs italic">
-            Note: where the 2024 SRD JSON shipped by upstream datasets
-            is incomplete (e.g. the 2024 spell list isn't yet packaged
-            as inline JSON), Guildstew uses the 2014 SRD as a stopgap
-            base and applies a documented override layer for revisions.
-            All such content remains under CC-BY 4.0 with the
-            attribution chain above.
-          </p>
-        </Section>
+  const commentsQuery = useQuery({
+    queryKey: ["galleryComments", piece.id],
+    queryFn: async () => {
+      const { data: comments, error } = await supabase
+        .from("gallery_comments").select("*").eq("piece_id", piece.id).order("created_at", { ascending: true });
+      if (error) { console.error("Load gallery_comments", error); throw error; }
+      const list = comments || [];
+      const userIds = [...new Set(list.map((c) => c.user_id).filter(Boolean))];
+      let profiles = {};
+      if (userIds.length) {
+        const { data: profs, error: pErr } = await supabase
+          .from("user_profiles").select("user_id, username, profile_color_1, profile_color_2").in("user_id", userIds);
+        if (pErr) { console.error("Load commenter profiles", pErr); throw pErr; }
+        profiles = Object.fromEntries((profs || []).map((p) => [p.user_id, p]));
+      }
+      return list.map((c) => ({ ...c, profile: profiles[c.user_id] || null }));
+    },
+    enabled: piece.comments_enabled,
+  });
 
-        <Section title="5e-bits / 5e-database (JSON adapter)">
-          <p>
-            The structured JSON files we read for species, classes,
-            backgrounds, feats, equipment, and other tables come from
-            the 5e-bits / 5e-database open dataset project, which
-            redistributes the SRD content above in machine-readable
-            form.
-          </p>
-          <p>
-            <span className="font-semibold">Project:</span>{" "}
-            <ExtLink href="https://github.com/5e-bits/5e-database">
-              5e-bits/5e-database on GitHub
-            </ExtLink>
-            <br />
-            <span className="font-semibold">License:</span>{" "}
-            CC-BY 4.0 (inherited from the underlying SRD)
-          </p>
-        </Section>
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["galleryComments", piece.id] });
 
-        <Section title="What's hand-authored vs. SRD-derived">
-          <p>
-            Game mechanics described in Guildstew — spell-slot tables,
-            prepared-spell counts, class-feature scaling, weapon
-            mastery slot counts — are not copyrightable game rules; we
-            implement them as plain code, not redistributed text.
-          </p>
-          <p>
-            Where we surface a feature, spell, class, species, or
-            background name in the UI, that name comes directly from
-            the SRD JSON files cited above. Content that lives only in
-            the Player's Handbook is intentionally not shipped — both
-            because the OGL/SRD doesn't license it and because we
-            don't want to substitute our own paraphrase for the
-            authoritative source.
-          </p>
-          <p>
-            UI commentary like subclass &ldquo;Best For&rdquo;
-            recommendations, info-tip prose, and step instructions is
-            original work by Guildstew and not under CC-BY.
-          </p>
-        </Section>
+  const post = useMutation({
+    mutationFn: async (text) => {
+      const { error } = await supabase.from("gallery_comments").insert({ piece_id: piece.id, user_id: user.id, body: text });
+      if (error) throw error;
+    },
+    onSuccess: () => { setBody(""); invalidate(); },
+    onError: (err) => { console.error("Post comment", err); toast.error(err?.message || "Failed to post"); },
+  });
 
-        <Section title="Trademarks">
-          <p>
-            Dungeons &amp; Dragons, D&amp;D, the dragon ampersand, and
-            related trademarks are property of Wizards of the Coast
-            LLC. Guildstew is not affiliated with, endorsed, sponsored,
-            or specifically approved by Wizards of the Coast LLC.
-          </p>
-        </Section>
+  const del = useMutation({
+    mutationFn: async (id) => {
+      const { error } = await supabase.from("gallery_comments").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+    onError: (err) => { console.error("Delete comment", err); toast.error(err?.message || "Failed to delete"); },
+  });
 
-        <p className="text-slate-500 text-xs text-center mt-8">
-          Find an error or missing attribution? Email us via the
-          support link in the app — we want this page to stay current.
-        </p>
+  const canDelete = (c) =>
+    c.user_id === user?.id || isStaffEmail(user?.email) ||
+    (piece.artist?.user_id && piece.artist.user_id === user?.id);
+
+  const firstName = (piece.artist?.name || "the artist").split(" ")[0];
+  const comments = commentsQuery.data || [];
+
+  return (
+    <div className="overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal">
+        <div className="art-big">
+          <img src={piece.image_url} alt={piece.title} />
+          <button className="x" onClick={onClose}>×</button>
+        </div>
+        <div className="side">
+          <h3>{piece.title}</h3>
+          {piece.artist?.name && <div className="by">by {piece.artist.name}</div>}
+          {piece.description && <div className="desc">{piece.description}</div>}
+
+          {canManage && (
+            <div className="artist-strip">
+              <span className="lab">Viewing as <b>the artist</b> · per-piece comments</span>
+              <div className={`toggle ${piece.comments_enabled ? "on" : ""}`} onClick={() => onToggleComments(!piece.comments_enabled)} />
+            </div>
+          )}
+
+          {!piece.comments_enabled ? (
+            <div className="comments">
+              <div className="locked"><span className="em">🔒</span>{firstName} has turned off comments for this piece.</div>
+            </div>
+          ) : (
+            <div className="comments">
+              {commentsQuery.isLoading ? (
+                <p style={{ color: "#8a7a60", fontWeight: 600, fontSize: 13.5 }}>Loading notes…</p>
+              ) : commentsQuery.error ? (
+                <ErrorState error={commentsQuery.error} />
+              ) : (
+                <>
+                  <div className="ch">{comments.length} Note{comments.length === 1 ? "" : "s"} for the artist</div>
+                  <div>
+                    {comments.length === 0 ? (
+                      <div style={{ color: "#8a7a60", fontWeight: 600, fontSize: 13.5 }}>No notes yet. Be the first.</div>
+                    ) : comments.map((c) => {
+                      const name = c.profile?.username || "adventurer";
+                      const c1 = c.profile?.profile_color_1 || "#FF5722";
+                      const c2 = c.profile?.profile_color_2 || "#37F2D1";
+                      return (
+                        <div className="cmt" key={c.id}>
+                          <div className="ca" style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}>{initial(name)}</div>
+                          <div className="cb"><div className="cn">@{name}</div><div className="ct">{c.body}</div></div>
+                          {canDelete(c) && <button className="del" title="Delete" onClick={() => del.mutate(c.id)}><Trash2 className="w-4 h-4" /></button>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {user ? (
+                    <form className="composer" onSubmit={(e) => { e.preventDefault(); if (body.trim()) post.mutate(body.trim()); }}>
+                      <input value={body} onChange={(e) => setBody(e.target.value)} placeholder={`Tell ${firstName} what you think…`} />
+                      <button type="submit" disabled={!body.trim() || post.isPending}><Send className="w-4 h-4" /></button>
+                    </form>
+                  ) : (
+                    <div className="composer" style={{ color: "#8a7a60", fontWeight: 600, fontSize: 13.5 }}>Sign in to leave a note.</div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
