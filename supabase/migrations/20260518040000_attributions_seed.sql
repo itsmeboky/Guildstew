@@ -29,25 +29,34 @@ from (values
 where not exists (select 1 from team_groups);
 
 -- ---------- team_members ----------
--- monogram colors use the brand palette; bios/emails/portfolio/avatar
--- left null for the team to fill in.
+-- Roster, roles, groups, monogram colors, and bios match the prototype.
+-- Emails / portfolio links / avatar photos are left null for the team to
+-- fill in (via Admin → Studio, or self-managing from a company account).
 insert into team_members
-  (name, full_name, role, group_id, is_artist, business_inquiries,
-   avatar_color_1, avatar_color_2, sort_order)
+  (name, full_name, role, group_id, is_artist, commissions_open,
+   business_inquiries, bio, avatar_color_1, avatar_color_2, sort_order)
 select
   m.name, m.full_name, m.role,
   (select id from team_groups g where g.name = m.group_name),
-  m.is_artist, m.business_inquiries, m.c1, m.c2, m.sort_order
+  m.is_artist, m.commissions_open, m.business_inquiries, m.bio, m.c1, m.c2, m.sort_order
 from (values
-  ('Boky',              'Bojana "Boky" Milenkovic', 'Founder & Creative Director', 'The Pass — Leadership',  true,  true,  '#FF5300', '#ff8a4d', 1),
-  ('Brandon Hazell',    null,                       'Co-Founder & Operations',     'The Pass — Leadership',  false, true,  '#04685A', '#3aa191', 2),
-  ('Chris Brink',       null,                       'Engineering Lead',            'The Pass — Leadership',  false, false, '#1B2535', '#39506e', 3),
-  ('Olivia Hardy',      null,                       'Artist',                      'The Kitchen — Creative', true,  false, '#F8A47C', '#ffc6a8', 1),
-  ('June River',        null,                       'Artist',                      'The Kitchen — Creative', true,  false, '#FF5300', '#ff8a4d', 2),
-  ('Christopher Wylie', null,                       'Writer',                      'The Kitchen — Creative', false, false, '#04685A', '#3aa191', 3),
-  ('Skylar LaBounty',   null,                       'Community',                   'Front of House — Reach', false, false, '#F8A47C', '#ffc6a8', 1),
-  ('Joshua Stanford',   null,                       'Marketing',                   'Front of House — Reach', false, false, '#1B2535', '#39506e', 2)
-) m(name, full_name, role, group_name, is_artist, business_inquiries, c1, c2, sort_order)
+  ('Boky', 'Bojana Milenkovic', 'Creative Director · CEO · Programmer · Artist', 'The Pass — Leadership', true, true, true,
+     'Head chef of the whole kitchen — sets the menu, writes the code, and paints when no one is looking.', '#FF5300', '#ff8a4d', 1),
+  ('Brandon Hazell', null, 'Chief Financial Officer', 'The Pass — Leadership', false, false, true,
+     'Keeps the coffers honest and the spreadsheets balanced so the rest of the kitchen can build weird without burning the place down.', '#1B2535', '#3a4a63', 2),
+  ('Chris Brink', null, 'Lore Master', 'The Kitchen — Creative', false, false, false,
+     'Keeper of the world bible. If it has a backstory, a faction, or a forgotten god, Chris probably wrote it.', '#04685A', '#0a9c87', 1),
+  ('Olivia Hardy', null, 'Artist', 'The Kitchen — Creative', true, true, false,
+     'Paints the faces of Guildstew, from the mascot grinning at the top of this page to the monsters lurking in your campaign.', '#F8A47C', '#ff9d6e', 2),
+  ('June River', null, 'Artist', 'The Kitchen — Creative', true, false, false,
+     'Concept art and splash frames — the reason a nat 20 actually feels like a crit.', '#7c5cff', '#a78bfa', 3),
+  ('Christopher Wylie', null, 'Marketing Manager', 'Front of House — Reach', false, false, false,
+     'Tells the world Guildstew exists — loudly, cleverly, and always on-brand.', '#d4380d', '#ff7847', 1),
+  ('Skylar LaBounty', null, 'Outreach Coordinator', 'Front of House — Reach', false, false, false,
+     'Builds bridges to the community one conversation at a time.', '#04685A', '#5bb3a3', 2),
+  ('Joshua Stanford', null, 'Outreach Coordinator', 'Front of House — Reach', false, false, false,
+     'Outreach and partnerships — the friendly face in your inbox.', '#1B2535', '#04685A', 3)
+) m(name, full_name, role, group_name, is_artist, commissions_open, business_inquiries, bio, c1, c2, sort_order)
 where not exists (select 1 from team_members);
 
 -- ---------- attribution_entries ----------
@@ -55,43 +64,49 @@ insert into attribution_entries
   (section, title, body, link_url, link_label, tag, accent, sort_order)
 select v.section, v.title, v.body, v.link_url, v.link_label, v.tag, v.accent, v.sort_order
 from (values
-  -- Open Content (license cards) — body text is PLACEHOLDER, replace with exact wording.
+  -- Open Game Content (license cards). SRD wording matches the prototype;
+  -- the Pathfinder card stays flagged (REPLACE:) until the exact ORC /
+  -- Community Use notice + product-identity list is confirmed.
   ('open_content', 'System Reference Document 5.1',
-     'REPLACE: include the exact CC-BY 4.0 attribution required for SRD 5.1 — "System Reference Document 5.1" © Wizards of the Coast LLC, CC-BY 4.0.',
-     'https://www.dndbeyond.com/srd', 'D&D Beyond SRD', null, 'orange', 1),
+     '2014-edition content from the SRD 5.1, © Wizards of the Coast LLC, under the Creative Commons Attribution 4.0 International License (CC-BY-4.0). Inclusion gated strictly to SRD coverage.',
+     'https://www.dndbeyond.com/srd', 'dndbeyond.com/srd', null, 'orange', 1),
   ('open_content', 'System Reference Document 5.2',
-     'REPLACE: include the exact CC-BY 4.0 attribution required for SRD 5.2 — "System Reference Document 5.2" © Wizards of the Coast LLC, CC-BY 4.0.',
-     'https://www.dndbeyond.com/srd', 'D&D Beyond SRD', null, 'orange', 2),
+     '2024-edition content from the SRD 5.2, © Wizards of the Coast LLC, under CC-BY-4.0.',
+     'https://www.dndbeyond.com/srd', 'dndbeyond.com/srd', null, 'teal', 2),
   ('open_content', 'Pathfinder Second Edition',
-     'REPLACE: include the exact ORC License notice and the Paizo Community Use / product-identity list required for Pathfinder Second Edition content.',
-     'https://paizo.com/community/communityuse', 'Paizo Community Use', null, 'teal', 3),
+     'REPLACE: Pathfinder content used under Paizo''s ORC License. "Pathfinder" and associated marks and logos are trademarks of Paizo Inc. and are used under license / the Community Use Policy where applicable — confirm the exact notice + product-identity list.',
+     'https://paizo.com/community/communityuse', 'Paizo Community Use', null, 'navy', 3),
+  ('open_content', 'A note on homebrew',
+     'Community creations in the Brewery are owned by their authors. Guildstew only ships official content covered by the licenses above.',
+     null, null, null, 'salmon', 4),
 
-  -- Brewed With (tech chips)
-  ('tech', 'React',        null, 'https://react.dev',            'react.dev',        'framework', 'navy',   1),
-  ('tech', 'Vite',         null, 'https://vitejs.dev',           'vitejs.dev',       'build',     'salmon', 2),
-  ('tech', 'TailwindCSS',  null, 'https://tailwindcss.com',      'tailwindcss.com',  'styling',   'teal',   3),
-  ('tech', 'shadcn/ui',    null, 'https://ui.shadcn.com',        'ui.shadcn.com',    'UI',        'navy',   4),
-  ('tech', 'TanStack Query', null, 'https://tanstack.com/query', 'tanstack.com',     'data',      'orange', 5),
-  ('tech', 'React Router', null, 'https://reactrouter.com',      'reactrouter.com',  'routing',   'salmon', 6),
-  ('tech', 'Three.js',     null, 'https://threejs.org',          'threejs.org',      '3D',        'teal',   7),
-  ('tech', 'Framer Motion', null, 'https://www.framer.com/motion', 'framer.com',     'motion',    'navy',   8),
-  ('tech', 'Supabase',     null, 'https://supabase.com',         'supabase.com',     'backend',   'orange', 9),
+  -- The Tech Pantry (chips: "Title · tag")
+  ('tech', 'React',          null, 'https://react.dev',             'react.dev',        'UI',         'navy',   1),
+  ('tech', 'Vite',           null, 'https://vitejs.dev',            'vitejs.dev',       'build',      'salmon', 2),
+  ('tech', 'TailwindCSS',    null, 'https://tailwindcss.com',       'tailwindcss.com',  'styles',     'teal',   3),
+  ('tech', 'shadcn/ui',      null, 'https://ui.shadcn.com',         'ui.shadcn.com',    'components', 'navy',   4),
+  ('tech', 'TanStack Query', null, 'https://tanstack.com/query',    'tanstack.com',     'data',       'orange', 5),
+  ('tech', 'React Router',   null, 'https://reactrouter.com',       'reactrouter.com',  'routing',    'salmon', 6),
+  ('tech', 'Three.js',       null, 'https://threejs.org',           'threejs.org',      '3D dice',    'teal',   7),
+  ('tech', 'Framer Motion',  null, 'https://www.framer.com/motion', 'framer.com',       'animation',  'navy',   8),
+  ('tech', 'Supabase',       null, 'https://supabase.com',          'supabase.com',     'backend',    'orange', 9),
 
-  -- Art & Assets (credit cards)
+  -- Type, Art & Sundries (credit cards). Iconography stays flagged until
+  -- the exact game-icons.net artist list is filled in.
   ('assets', 'Cream',
-     'Display typeface by Philip Trautmann.',
-     'https://shapedfonts.com/about/', 'ShapedFonts', null, 'salmon', 1),
+     'Our display typeface, designed by Philip Trautmann of Shaped Fonts.',
+     'https://shapedfonts.com/about/', 'shapedfonts.com', null, 'teal', 1),
   ('assets', '3D Dice Models',
-     'Dice models by Boky (Aetherian Studios).',
+     'Polyhedral dice modeled by Boky, rendered in Three.js.',
      null, null, null, 'orange', 2),
   ('assets', 'Iconography',
-     'REPLACE: Lucide icons (ISC License) and game-icons.net icons (CC-BY 3.0) — list the specific game-icons.net artist names whose icons are used.',
-     'https://game-icons.net', 'game-icons.net', null, 'teal', 3),
+     'REPLACE: Interface icons by Lucide (ISC). Game & ability icons from game-icons.net under CC-BY-3.0 — by Lorc, Delapouite, and other contributors. List the exact artists whose icons ship.',
+     'https://game-icons.net', 'game-icons.net', null, 'salmon', 3),
   ('assets', 'Motion & Templates',
-     'Motion graphics and templates licensed via Envato.',
+     'Select motion graphics and graphic templates sourced from Envato under its standard license.',
      'https://envato.com', 'Envato', null, 'navy', 4),
   ('assets', 'Placeholder Imagery',
-     'Placeholder photography from Unsplash.',
-     'https://unsplash.com', 'Unsplash', null, 'salmon', 5)
+     'Temporary art from Unsplash under its standard license, pending replacement with original work.',
+     'https://unsplash.com', 'Unsplash', null, 'orange', 5)
 ) v(section, title, body, link_url, link_label, tag, accent, sort_order)
 where not exists (select 1 from attribution_entries);
