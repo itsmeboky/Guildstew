@@ -108,6 +108,7 @@ const STYLES = `
 .gs-attr .lic h3 a,.gs-attr .lic .lic-link{color:var(--orange);text-decoration:none;border-bottom:2px solid rgba(255,83,0,.3)}
 .gs-attr .lic p{font-size:13.5px;color:#6a5c44;line-height:1.55;font-weight:500}
 .gs-attr .lic .lic-link{display:inline-flex;align-items:center;gap:4px;font-weight:700;font-size:13px;margin-top:8px}
+.gs-attr .lic .lic-inline{color:var(--orange);text-decoration:none;border-bottom:2px solid rgba(255,83,0,.3);font-weight:600;white-space:nowrap}
 .gs-attr .lic .todo{display:inline-block;margin-top:7px;font-size:11px;font-weight:700;color:var(--orange);background:rgba(255,83,0,.1);padding:2px 8px;border-radius:6px}
 .gs-attr .chips{display:flex;flex-wrap:wrap;gap:10px}
 .gs-attr .chip{background:var(--white);border:2px solid var(--ink);border-radius:99px;padding:8px 16px;font-weight:700;font-size:13px;box-shadow:3px 3px 0 rgba(27,37,53,.1);text-decoration:none}
@@ -232,6 +233,19 @@ function EmptyState({ children }) {
 }
 function SectionLabel({ children }) {
   return <div className="section-label"><h2>{children}</h2><span className="rule" /></div>;
+}
+
+// Render `text` with the first occurrence of `label` turned into a link.
+function renderWithInlineLink(text, label, url) {
+  const i = text.indexOf(label);
+  if (i === -1) return text;
+  return (
+    <>
+      {text.slice(0, i)}
+      <a className="lic-inline" href={url} target="_blank" rel="noopener noreferrer">{label}</a>
+      {text.slice(i + label.length)}
+    </>
+  );
 }
 
 // ── Data hooks ───────────────────────────────────────────────────────
@@ -424,11 +438,21 @@ function EntriesTab({ section, label }) {
             const needsExact = (e.body || "").startsWith("REPLACE:");
             const bodyText = needsExact ? e.body.replace(/^REPLACE:\s*/, "") : e.body;
             const accentClass = e.accent && e.accent !== "orange" ? e.accent : "";
+            // When the body mentions the link label (e.g. "…available from
+            // Creative Commons."), render that phrase inline as the link
+            // instead of tacking a separate link line on below.
+            const inline = !!(e.link_url && e.link_label && bodyText?.includes(e.link_label));
             return (
               <div className={`lic ${accentClass}`} key={e.id}>
                 <h3>{e.title}</h3>
-                {bodyText && <p>{bodyText}</p>}
-                {e.link_url && (
+                {bodyText && (
+                  inline ? (
+                    <p>{renderWithInlineLink(bodyText, e.link_label, e.link_url)}</p>
+                  ) : (
+                    <p>{bodyText}</p>
+                  )
+                )}
+                {e.link_url && !inline && (
                   <a className="lic-link" href={e.link_url} target="_blank" rel="noopener noreferrer">
                     {e.link_label || e.link_url} <ExternalLink className="w-3 h-3" />
                   </a>
