@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ArrowLeft, ExternalLink, Image as ImageIcon, Mail, MessageCircle, Send, Trash2,
+  ChevronLeft, ChevronRight, Play, Layers,
 } from "lucide-react";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
@@ -33,6 +34,22 @@ const isStaffEmail = (email) =>
 const monoGrad = (m) =>
   `linear-gradient(135deg, ${m?.avatar_color_1 || "#FF5300"}, ${m?.avatar_color_2 || "#ff8a4d"})`;
 const initial = (name) => (name || "?").trim().charAt(0).toUpperCase();
+
+// ─── gallery media ───
+// `media` (jsonb) is canonical: [{ url, type:'image'|'video', sort }].
+// Rows not yet backfilled fall back to a one-item list from image_url.
+const VIDEO_EXT_RE = /\.(webm|mov|mp4|m4v|ogv)$/i;
+const isVideoItem = (m) =>
+  m?.type === "video" || (m?.type == null && VIDEO_EXT_RE.test(m?.url || ""));
+function pieceMedia(piece) {
+  const raw = Array.isArray(piece?.media) ? piece.media : [];
+  const list = raw
+    .filter((m) => m && m.url)
+    .map((m, i) => ({ url: m.url, type: isVideoItem(m) ? "video" : "image", sort: m.sort ?? i }))
+    .sort((a, b) => a.sort - b.sort);
+  if (list.length) return list;
+  return piece?.image_url ? [{ url: piece.image_url, type: "image", sort: 0 }] : [];
+}
 
 // Fraunces (display) + Hanken Grotesk (body), loaded once.
 const FONT_LINK_ID = "attributions-fonts";
@@ -148,8 +165,24 @@ const STYLES = `
 .gs-attr .piece{break-inside:avoid;margin-bottom:18px;border:2px solid var(--ink);border-radius:14px;overflow:hidden;background:var(--white);box-shadow:5px 5px 0 rgba(27,37,53,.12);cursor:pointer;transition:.18s;display:block;width:100%;padding:0;text-align:left;color:inherit}
 .gs-attr .piece:hover{transform:translate(-2px,-2px);box-shadow:8px 8px 0 rgba(4,104,90,.28)}
 .gs-attr .piece .art{position:relative;background:var(--parchment-2)}
-.gs-attr .piece .art img{width:100%;display:block}
+.gs-attr .piece .art img,.gs-attr .piece .art video{width:100%;display:block}
 .gs-attr .piece .art .tag{position:absolute;top:10px;right:10px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:rgba(27,37,53,.82);color:#fff;padding:4px 9px;border-radius:99px}
+.gs-attr .art-empty{display:grid;place-items:center;min-height:160px;color:#b7a98f}
+.gs-attr .art-empty.big{min-height:340px;height:100%}
+.gs-attr .art-empty svg{width:34px;height:34px}
+.gs-attr .piece .art .vbadge{position:absolute;left:10px;bottom:10px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:rgba(27,37,53,.82);color:#fff;border:2px solid #fff}
+.gs-attr .piece .art .vbadge svg{width:14px;height:14px}
+.gs-attr .piece .art .multi{position:absolute;left:10px;top:10px;display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;background:rgba(255,255,255,.92);color:var(--ink);border:2px solid var(--ink);padding:3px 7px;border-radius:99px}
+.gs-attr .piece .art .multi svg{width:13px;height:13px}
+/* modal carousel */
+.gs-attr .modal .art-big video{width:100%;height:100%;object-fit:contain;display:block;background:#000}
+.gs-attr .modal .art-big .cnav{position:absolute;top:50%;transform:translateY(-50%);width:40px;height:40px;border-radius:50%;border:2px solid var(--ink);background:var(--white);cursor:pointer;display:grid;place-items:center;color:inherit;z-index:2}
+.gs-attr .modal .art-big .cnav:hover{background:var(--orange);color:#fff}
+.gs-attr .modal .art-big .cnav svg{width:20px;height:20px}
+.gs-attr .modal .art-big .cnav.prev{left:12px} .gs-attr .modal .art-big .cnav.next{right:12px}
+.gs-attr .modal .art-big .cdots{position:absolute;left:0;right:0;bottom:12px;display:flex;gap:7px;justify-content:center;z-index:2}
+.gs-attr .modal .art-big .cdot{width:9px;height:9px;border-radius:50%;border:2px solid var(--ink);background:var(--white);cursor:pointer;padding:0}
+.gs-attr .modal .art-big .cdot.on{background:var(--orange)}
 .gs-attr .piece .meta{padding:13px 15px}
 .gs-attr .piece .meta .pt{font-family:'Fraunces',serif;font-weight:600;font-size:16px;line-height:1.1}
 .gs-attr .piece .meta .pa{font-size:12.5px;color:#8a7a60;font-weight:600;margin-top:2px}
@@ -565,6 +598,67 @@ function MemberProfile({ memberId, setParams }) {
   );
 }
 
+// Grid cover: first media item (image, or muted video showing its first
+// frame with a ▶ badge), plus a "multi" indicator for carousels.
+function GalleryCover({ piece }) {
+  const media = pieceMedia(piece);
+  const cover = media[0];
+  return (
+    <div className="art">
+      {cover ? (
+        cover.type === "video" ? (
+          <video src={cover.url} muted playsInline preload="metadata" tabIndex={-1} />
+        ) : (
+          <img src={cover.url} alt={piece.title} loading="lazy" />
+        )
+      ) : (
+        <div className="art-empty"><ImageIcon /></div>
+      )}
+      {cover?.type === "video" && <span className="vbadge"><Play /></span>}
+      {media.length > 1 && <span className="multi"><Layers /> {media.length}</span>}
+      {!piece.comments_enabled && <span className="tag">Comments off</span>}
+    </div>
+  );
+}
+
+// Modal carousel over a piece's media in sort order. Images render as
+// <img>; video as <video controls>. SVG is served via <img src> only —
+// never inlined — so uploaded markup cannot execute.
+function MediaCarousel({ piece }) {
+  const media = pieceMedia(piece);
+  const [i, setI] = useState(0);
+  const n = media.length;
+  if (!n) return <div className="art-empty big"><ImageIcon /></div>;
+  const idx = Math.min(i, n - 1);
+  const cur = media[idx];
+  const go = (d) => setI((p) => (((Math.min(p, n - 1) + d) % n) + n) % n);
+  return (
+    <>
+      {cur.type === "video" ? (
+        <video src={cur.url} controls playsInline preload="metadata" />
+      ) : (
+        <img src={cur.url} alt={`${piece.title} — ${idx + 1} of ${n}`} />
+      )}
+      {n > 1 && (
+        <>
+          <button className="cnav prev" onClick={() => go(-1)} aria-label="Previous"><ChevronLeft /></button>
+          <button className="cnav next" onClick={() => go(1)} aria-label="Next"><ChevronRight /></button>
+          <div className="cdots">
+            {media.map((_, k) => (
+              <button
+                key={k}
+                className={`cdot ${k === idx ? "on" : ""}`}
+                onClick={() => setI(k)}
+                aria-label={`Go to item ${k + 1}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 // ═══════════════════════ Gallery view ═══════════════════════════════
 function GalleryView({ artistParam, setParams }) {
   const { user } = useAuth();
@@ -642,10 +736,7 @@ function GalleryView({ artistParam, setParams }) {
         <div className="grid">
           {filtered.map((p) => (
             <button className="piece" key={p.id} onClick={() => setActivePiece(p)}>
-              <div className="art">
-                <img src={p.image_url} alt={p.title} loading="lazy" />
-                {!p.comments_enabled && <span className="tag">Comments off</span>}
-              </div>
+              <GalleryCover piece={p} />
               <div className="meta">
                 <div className="pt">{p.title}</div>
                 {p.artist?.name && <div className="pa">{p.artist.name}</div>}
@@ -762,7 +853,7 @@ function PieceModal({ piece, onClose, canManage, onToggleComments }) {
     <div className="overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal">
         <div className="art-big">
-          <img src={piece.image_url} alt={piece.title} />
+          <MediaCarousel piece={piece} />
           <button className="x" onClick={onClose}>×</button>
         </div>
         <div className="side">
