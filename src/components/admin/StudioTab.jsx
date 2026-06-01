@@ -14,11 +14,44 @@ import {
 } from "@/components/ui/select";
 import {
   Plus, Edit3, Trash2, Users, FolderTree, ScrollText, Image as ImageIcon,
-  Upload, Link2, MessageSquare,
+  Upload, Link2, MessageSquare, Film, ChevronUp, ChevronDown, X,
 } from "lucide-react";
 import { supabase } from "@/api/supabaseClient";
 import { uploadFile } from "@/utils/uploadFile";
 import { useAuth } from "@/lib/AuthContext";
+
+// Gallery media: accepted upload types + their MIME map. SVG is allowed
+// here because the public gallery renders it only via <img src> (never
+// inlined), so it cannot execute scripts. Validation runs locally below;
+// uploadFile is then called WITHOUT an uploadType so the shared validator
+// (which rejects avif/svg/video) is skipped while the quota bump still runs.
+const GALLERY_MEDIA = {
+  image: {
+    exts: ["png", "jpg", "jpeg", "avif", "gif", "svg"],
+    mimes: ["image/png", "image/jpeg", "image/avif", "image/gif", "image/svg+xml"],
+  },
+  video: {
+    exts: ["webm", "mov"],
+    mimes: ["video/webm", "video/quicktime"],
+  },
+};
+const GALLERY_ACCEPT =
+  ".png,.jpg,.jpeg,.avif,.gif,.svg,.webm,.mov," +
+  "image/png,image/jpeg,image/avif,image/gif,image/svg+xml,video/webm,video/quicktime";
+
+// Classify a picked file by extension + MIME. Extension is authoritative;
+// MIME must agree or be blank (browsers often omit it for .avif/.mov).
+function classifyMediaFile(file) {
+  const name = file?.name || "";
+  const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+  const mime = (file?.type || "").toLowerCase();
+  for (const type of ["image", "video"]) {
+    const cfg = GALLERY_MEDIA[type];
+    if (cfg.exts.includes(ext) && (!mime || cfg.mimes.includes(mime))) return { ok: true, type };
+    if (!ext && cfg.mimes.includes(mime)) return { ok: true, type };
+  }
+  return { ok: false, type: null };
+}
 
 /**
  * Admin → Studio.
@@ -829,8 +862,17 @@ function GallerySection() {
         <div className="bg-[#1E2430] border border-slate-700 rounded-lg divide-y divide-slate-800">
           {pieces.map((p) => (
             <div key={p.id} className="p-3 flex items-center gap-3">
-              <div className="w-14 h-14 rounded overflow-hidden bg-[#050816] border border-slate-700 flex-shrink-0">
-                {p.image_url ? <img src={p.image_url} alt="" className="w-full h-full object-cover" /> : <ImageIcon className="w-4 h-4 text-slate-600 m-auto" />}
+              <div className="w-14 h-14 rounded overflow-hidden bg-[#050816] border border-slate-700 flex-shrink-0 relative">
+                {(() => {
+                  const cover = (Array.isArray(p.media) && p.media[0]) || (p.image_url ? { url: p.image_url, type: "image" } : null);
+                  if (!cover) return <ImageIcon className="w-4 h-4 text-slate-600 m-auto" />;
+                  return cover.type === "video"
+                    ? <video src={cover.url} muted playsInline preload="metadata" className="w-full h-full object-cover" />
+                    : <img src={cover.url} alt="" className="w-full h-full object-cover" />;
+                })()}
+                {Array.isArray(p.media) && p.media.length > 1 && (
+                  <span className="absolute bottom-0 right-0 text-[9px] font-bold bg-[#37F2D1] text-[#050816] px-1 rounded-tl">{p.media.length}</span>
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-white font-bold truncate">{p.title}</p>
@@ -868,11 +910,19 @@ function GallerySection() {
 
 function PieceEditor({ row, artists, defaultSortOrder, onClose, onSave }) {
   const { user } = useAuth();
+  // Normalize existing media; fall back to the legacy single image_url.
+  const initialMedia = Array.isArray(row?.media) && row.media.length
+    ? row.media
+        .filter((m) => m && m.url)
+        .slice()
+        .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+        .map((m) => ({ url: m.url, type: m.type === "video" ? "video" : "image" }))
+    : (row?.image_url ? [{ url: row.image_url, type: "image" }] : []);
   const [form, setForm] = useState(() => ({
     artist_member_id: row?.artist_member_id || artists[0]?.id || "",
     title: row?.title || "",
     description: row?.description || "",
-    image_url: row?.image_url || "",
+    media: initialMedia,
     comments_enabled: row?.comments_enabled !== false,
     is_published: row?.is_published !== false,
     sort_order: row?.sort_order ?? defaultSortOrder,
@@ -880,30 +930,60 @@ function PieceEditor({ row, artists, defaultSortOrder, onClose, onSave }) {
   const [uploading, setUploading] = useState(false);
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
 
-  const handleUpload = async (file) => {
-    if (!file) return;
+  // Upload one or many files; reject unsupported types with a toast and
+  // append the rest in pick order. First item ends up as the cover.
+  const handleUpload = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
     setUploading(true);
+    const added = [];
     try {
-      const { file_url } = await uploadFile(file, "user-assets", "gallery", { userId: user?.id, uploadType: "general" });
-      set({ image_url: file_url });
-      toast.success("Image uploaded");
-    } catch (err) {
-      console.error("Upload gallery image", err);
-      toast.error(`Upload failed: ${err?.message || err}`);
+      for (const file of files) {
+        const { ok, type } = classifyMediaFile(file);
+        if (!ok) {
+          toast.error(`${file.name}: unsupported type. Allowed: PNG, JPG, AVIF, GIF, SVG, WEBM, MOV.`);
+          continue;
+        }
+        try {
+          // No uploadType → skip the shared image-only validator; quota
+          // tracking still runs because userId is passed.
+          const { file_url } = await uploadFile(file, "user-assets", "gallery", { userId: user?.id });
+          added.push({ url: file_url, type });
+        } catch (err) {
+          console.error("Upload gallery media", err);
+          toast.error(`${file.name}: ${err?.message || "upload failed"}`);
+        }
+      }
+      if (added.length) {
+        setForm((f) => ({ ...f, media: [...f.media, ...added] }));
+        toast.success(`${added.length} item${added.length === 1 ? "" : "s"} uploaded`);
+      }
     } finally {
       setUploading(false);
     }
   };
 
+  const moveMedia = (i, dir) => setForm((f) => {
+    const next = f.media.slice();
+    const j = i + dir;
+    if (j < 0 || j >= next.length) return f;
+    [next[i], next[j]] = [next[j], next[i]];
+    return { ...f, media: next };
+  });
+  const removeMedia = (i) => setForm((f) => ({ ...f, media: f.media.filter((_, k) => k !== i) }));
+
   const submit = () => {
     if (!form.artist_member_id) { toast.error("Choose an artist."); return; }
     if (!form.title.trim()) { toast.error("Title is required."); return; }
-    if (!form.image_url.trim()) { toast.error("Upload an image first."); return; }
+    if (!form.media.length) { toast.error("Add at least one image or video."); return; }
+    // media is canonical (re-indexed sort); image_url stays synced to the cover.
+    const media = form.media.map((m, i) => ({ url: m.url, type: m.type, sort: i }));
     const payload = {
       artist_member_id: form.artist_member_id,
       title: form.title.trim(),
       description: form.description.trim() || null,
-      image_url: form.image_url.trim(),
+      media,
+      image_url: media[0].url,
       comments_enabled: !!form.comments_enabled,
       is_published: !!form.is_published,
       sort_order: Number(form.sort_order) || 0,
@@ -923,12 +1003,37 @@ function PieceEditor({ row, artists, defaultSortOrder, onClose, onSave }) {
               <SelectContent>{artists.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent>
             </Select>
           </Field>
-          <Field label="Image">
-            {form.image_url && <img src={form.image_url} alt="" className="mb-2 w-full max-h-56 object-contain rounded border border-slate-700 bg-[#050816]" />}
+          <Field label="Media (first item is the cover)">
+            {form.media.length > 0 && (
+              <div className="space-y-1.5 mb-2">
+                {form.media.map((m, i) => (
+                  <div key={`${m.url}-${i}`} className="flex items-center gap-2 bg-[#050816] border border-slate-700 rounded p-1.5">
+                    <div className="w-12 h-12 rounded bg-[#0b1020] overflow-hidden flex-shrink-0 grid place-items-center">
+                      {m.type === "video"
+                        ? <video src={m.url} muted playsInline preload="metadata" className="w-full h-full object-cover" />
+                        : <img src={m.url} alt="" className="w-full h-full object-cover" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-bold text-white flex items-center gap-1">
+                        {m.type === "video" ? <Film className="w-3 h-3" /> : <ImageIcon className="w-3 h-3" />}
+                        {m.type}{i === 0 && <span className="text-[#37F2D1]">· cover</span>}
+                      </p>
+                      <p className="text-[10px] text-slate-500 truncate">{m.url.split("/").pop()}</p>
+                    </div>
+                    <div className="flex gap-0.5">
+                      <Button size="sm" variant="outline" disabled={i === 0} onClick={() => moveMedia(i, -1)} title="Move up"><ChevronUp className="w-3 h-3" /></Button>
+                      <Button size="sm" variant="outline" disabled={i === form.media.length - 1} onClick={() => moveMedia(i, 1)} title="Move down"><ChevronDown className="w-3 h-3" /></Button>
+                      <Button size="sm" variant="outline" onClick={() => removeMedia(i)} title="Remove" className="border-red-500/50 text-red-400"><X className="w-3 h-3" /></Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             <label className="inline-flex items-center gap-1.5 text-xs bg-[#050816] border border-slate-700 rounded px-2 py-1.5 cursor-pointer hover:border-[#37F2D1]/60">
-              <Upload className="w-3 h-3" /> {uploading ? "Uploading…" : form.image_url ? "Replace image" : "Upload image"}
-              <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => handleUpload(e.target.files?.[0])} />
+              <Upload className="w-3 h-3" /> {uploading ? "Uploading…" : form.media.length ? "Add more media" : "Upload media"}
+              <input type="file" multiple accept={GALLERY_ACCEPT} className="hidden" disabled={uploading} onChange={(e) => { handleUpload(e.target.files); e.target.value = ""; }} />
             </label>
+            <p className="text-[10px] text-slate-500 mt-1">Images: PNG, JPG, AVIF, GIF, SVG · Video: WEBM, MOV</p>
           </Field>
           <Field label="Title"><Input value={form.title} onChange={(e) => set({ title: e.target.value })} className={inputCls} /></Field>
           <Field label="Description"><Textarea rows={2} value={form.description} onChange={(e) => set({ description: e.target.value })} className={`${inputCls} text-sm`} /></Field>
