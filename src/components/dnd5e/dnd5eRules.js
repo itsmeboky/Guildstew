@@ -338,6 +338,26 @@ export const CLASS_WEAPON_PROFICIENCIES = {
   Wizard: ['dagger', 'dart', 'sling', 'quarterstaff', 'light crossbow'],
 };
 
+/**
+ * Racial proficiency grants (SRD). Keyed by race AND subrace display
+ * name; a character merges its base race entry with its subrace entry.
+ * Only races that grant weapon/armor/tool proficiencies appear; the
+ * rest get nothing here. (Stored as structured data because the RACES
+ * table records these only as feature-name strings.)
+ *   Dwarf  — Dwarven Combat Training (base, both subraces)
+ *   Mountain Dwarf — Dwarven Armor Training
+ *   High/Wood Elf  — Elf Weapon Training
+ *   Drow — Drow weapon training
+ */
+export const RACE_PROFICIENCIES = {
+  Dwarf: { weapons: ['Battleaxe', 'Handaxe', 'Light hammer', 'Warhammer'] },
+  'Mountain Dwarf': { armor: ['light', 'medium'] },
+  'High Elf': { weapons: ['Longsword', 'Shortsword', 'Shortbow', 'Longbow'] },
+  'Wood Elf': { weapons: ['Longsword', 'Shortsword', 'Shortbow', 'Longbow'] },
+  Drow: { weapons: ['Rapier', 'Shortsword', 'Hand crossbow'] },
+  'Dark Elf (Drow)': { weapons: ['Rapier', 'Shortsword', 'Hand crossbow'] },
+};
+
 /** Spellcasting ability per class */
 export const SPELLCASTING_ABILITY = {
   Bard: 'cha', Cleric: 'wis', Druid: 'wis', Paladin: 'cha',
