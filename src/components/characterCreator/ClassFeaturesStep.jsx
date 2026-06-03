@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
+import { resolveFeatureChoices } from "@/components/characterCreator/featureChoiceResolver";
 import SubclassPicker from "@/components/characterCreator/SubclassPicker";
 import InfoTip from "@/components/characterCreator/InfoTip";
 import { tipFor } from "@/components/characterCreator/creatorTips";
@@ -129,10 +130,18 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
   const primaryPrereqDesc = multiclassPrereqDescription(characterData.class);
   const canMulticlass = totalLevel >= 2 && primaryClassLevel >= 1 && primaryPrereqMet;
 
-  const primaryFeatures = getClassFeaturesForLevel(characterData.class, primaryClassLevel) || [];
+  const primaryFeatures = resolveFeatureChoices(
+    getClassFeaturesForLevel(characterData.class, primaryClassLevel) || [],
+    characterData,
+    primaryClassLevel,
+  );
   const multiclassFeatures = multiclasses.flatMap((mc) => {
     if (!mc.class || !mc.level) return [];
-    const features = getClassFeaturesForLevel(mc.class, mc.level) || [];
+    const features = resolveFeatureChoices(
+      getClassFeaturesForLevel(mc.class, mc.level) || [],
+      characterData,
+      mc.level,
+    );
     return features.map((f) => ({ ...f, multiclass: mc.class }));
   });
   const allFeatures = [...primaryFeatures, ...multiclassFeatures];
@@ -780,7 +789,11 @@ function MulticlassPanel({
       {mc.class && mc.level && <MulticlassProficienciesPanel className={mc.class} />}
 
       {mc.class && mc.level && (() => {
-        const mcFeatures = getClassFeaturesForLevel(mc.class, mc.level) || [];
+        const mcFeatures = resolveFeatureChoices(
+          getClassFeaturesForLevel(mc.class, mc.level) || [],
+          characterData,
+          mc.level,
+        );
         const mcAccent = CLASS_ACCENT[mc.class] || ACCENT_FALLBACK;
         return (
           <>
