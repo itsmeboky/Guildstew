@@ -8,6 +8,7 @@ import {
   clearBreweryClassMarkers,
 } from "@/lib/breweryClassApply";
 import CompanionPicker from "@/components/characterCreator/CompanionPicker";
+import { LevelPicker } from "@/components/characterCreator/LevelPicker";
 import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
 import { Primer } from "@/components/characterCreator/chrome/Primer";
 import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
@@ -312,6 +313,13 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
     updateCharacterData({ subclass: subclassName });
   };
 
+  // Level is set once, here on the Class step (relocated from Identity +
+  // the old Features-step picker). Clamp 1–20; downstream HP / proficiency
+  // / slots / feature accumulation all read characterData.level.
+  const handlePickLevel = (newLevel) => {
+    updateCharacterData({ level: Math.max(1, Math.min(20, Number(newLevel) || 1)) });
+  };
+
   return (
     <div>
       <StepHeader
@@ -337,6 +345,16 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+          <div className="tome" style={{ padding: '24px 28px' }}>
+            <LevelPicker
+              totalLevel={characterData.level || 1}
+              primaryClassName={characterData.class || ''}
+              primaryClassLevel={characterData.level || 1}
+              multiclasses={[]}
+              onChange={handlePickLevel}
+            />
+          </div>
+
           {selectedClass ? (
             <ClassFeaturedTome
               cls={selectedClass}
@@ -551,9 +569,14 @@ function SubclassChapter({ cls, accent, subclass, level, onPick }) {
       >
         {availableNow
           ? `Active at your current level (${level || 1}).`
-          : `Unlocks at level ${cls.subclassLevel} — pick now to plan your build.`}
+          : `Unlocks at level ${cls.subclassLevel}. Raise your level above to choose.`}
       </div>
 
+      {/* Subclass is gated by level: the picker only appears once the
+          class actually grants the subclass (level >= subclassLevel).
+          Below that, no picker — closing the "pick before you've
+          unlocked it" leak. */}
+      {availableNow && (
       <div
         style={{
           display: 'grid',
@@ -602,6 +625,7 @@ function SubclassChapter({ cls, accent, subclass, level, onPick }) {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

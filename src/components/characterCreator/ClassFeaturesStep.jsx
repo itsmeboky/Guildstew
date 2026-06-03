@@ -102,19 +102,6 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
     });
   }, [characterData.class, primaryAsiLevels.length]);
 
-  const handleLevelChange = (newLevel) => {
-    const lvl = Math.max(1, Math.min(20, Number(newLevel) || 1));
-    const totalMc = multiclasses.reduce((sum, mc) => sum + (mc.level || 0), 0);
-    const clampedMcs = totalMc > lvl - 1
-      ? multiclasses.map((mc) => ({ ...mc, level: 0 })).filter(() => false)
-      : multiclasses;
-    if (clampedMcs !== multiclasses) setMulticlasses(clampedMcs);
-    updateCharacterData({
-      level: lvl,
-      ...(clampedMcs !== multiclasses ? { multiclasses: clampedMcs } : {}),
-    });
-  };
-
   const handleAsiChange = (level, nextSelection) => {
     const key = asiKey(characterData.class, level);
     setAsiSelections((current) => {
@@ -130,11 +117,15 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
   const primaryPrereqDesc = multiclassPrereqDescription(characterData.class);
   const canMulticlass = totalLevel >= 2 && primaryClassLevel >= 1 && primaryPrereqMet;
 
+  // Subclass is now SELECTED on the Class step (gated by level). The
+  // Features step still DELIVERS subclass features (Frenzy@3, etc. — those
+  // are separate per-level entries), but the subclass-selection prompt
+  // itself is filtered out here so subclass isn't chosen in two places.
   const primaryFeatures = resolveFeatureChoices(
     getClassFeaturesForLevel(characterData.class, primaryClassLevel) || [],
     characterData,
     primaryClassLevel,
-  );
+  ).filter((f) => !isSubclassFeature(f));
   const multiclassFeatures = multiclasses.flatMap((mc) => {
     if (!mc.class || !mc.level) return [];
     const features = resolveFeatureChoices(
@@ -232,14 +223,6 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
       >
         {/* LEFT — features tome */}
         <div className="tome" style={{ padding: '32px 36px' }}>
-          <LevelPicker
-            totalLevel={totalLevel}
-            primaryClassName={characterData.class}
-            primaryClassLevel={primaryClassLevel}
-            multiclasses={multiclasses}
-            onChange={handleLevelChange}
-          />
-
           {primaryAsiLevels.length > 0 && (
             <>
               <FleurDivider />
@@ -410,58 +393,6 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
             characterClass={characterData.class}
             currentLevel={primaryClassLevel}
           />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// Level picker — top section of the tome
-// ============================================================================
-function LevelPicker({ totalLevel, primaryClassName, primaryClassLevel, multiclasses, onChange }) {
-  return (
-    <div>
-      <OrnateHeading>The Ledger</OrnateHeading>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          flexWrap: 'wrap',
-          justifyContent: 'center',
-        }}
-      >
-        <div className="label" style={{ color: 'var(--text-dim)' }}>
-          Character Level
-        </div>
-        <select
-          value={String(totalLevel)}
-          onChange={(e) => onChange(e.target.value)}
-          className="input"
-          style={{
-            width: 110,
-            textAlign: 'center',
-            fontSize: 16,
-            fontWeight: 700,
-            fontFamily: 'var(--display)',
-          }}
-        >
-          {Array.from({ length: 20 }, (_, i) => i + 1).map((l) => (
-            <option key={l} value={String(l)}>Level {l}</option>
-          ))}
-        </select>
-        <div
-          className="italic-serif"
-          style={{ fontSize: 13, color: 'var(--text-dim)' }}
-        >
-          {primaryClassName}{' '}
-          <span style={{ color: 'var(--teal)', fontWeight: 700 }}>L{primaryClassLevel}</span>
-          {multiclasses.filter((mc) => mc.class).length > 0 && (
-            <span style={{ marginLeft: 6, color: 'var(--text-faint)' }}>
-              (total − multiclass levels)
-            </span>
-          )}
         </div>
       </div>
     </div>
