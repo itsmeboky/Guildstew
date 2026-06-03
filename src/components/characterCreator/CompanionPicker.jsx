@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Shield, Heart, Wind, Upload, Sparkles, Check, PenLine, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,7 @@ export default function CompanionPicker({ characterData, updateCharacterData, ca
     className: characterData.class,
     subclass: characterData.subclass,
     pactBoon,
+    level: characterData.level,
   });
   const current = Array.isArray(characterData.companions) && characterData.companions[0]
     ? characterData.companions[0]
