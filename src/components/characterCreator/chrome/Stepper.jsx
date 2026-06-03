@@ -1,12 +1,14 @@
 import React from "react";
 
+// Must mirror the STEPS array in CharacterCreator.jsx — the indicator
+// keys its highlight/click off the same indices.
 export const STEP_DEFS = [
   { id: "identity", label: "Identity" },
   { id: "class", label: "Class & Path" },
   { id: "abilities", label: "Abilities" },
+  { id: "spells", label: "Spells" },
   { id: "features", label: "Features" },
   { id: "skills", label: "Skills" },
-  { id: "spells", label: "Spells" },
   { id: "equipment", label: "Equipment" },
   { id: "review", label: "Review" },
 ];
