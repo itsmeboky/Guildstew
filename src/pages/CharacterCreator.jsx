@@ -286,6 +286,10 @@ export default function CharacterCreator() {
           asiSelections: existingCharacter.asiSelections || prev.asiSelections,
           inventory: existingCharacter.inventory || prev.inventory,
           equipment: existingCharacter.equipment || prev.equipment,
+          // Equipment-selector UI state (M4) so the EquipmentStep
+          // selectors reflect prior picks on reopen.
+          equipment_choices: existingCharacter.equipment_choices || prev.equipment_choices,
+          used_starting_gold: existingCharacter.used_starting_gold ?? prev.used_starting_gold,
           currency: existingCharacter.currency || prev.currency,
           personality: existingCharacter.personality || prev.personality,
           appearance: existingCharacter.appearance || prev.appearance,
