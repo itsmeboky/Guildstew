@@ -153,23 +153,28 @@ export function buildStatsFromCharacterData(characterData) {
     ],
     feature_choices: characterData.feature_choices || {},
     multiclasses: characterData.multiclasses || [],
-    // Choice audit-trail that can't be recomputed from derived stats and
-    // must survive save→reopen (M3): pre-ASI base scores, the ASI/feat
-    // selections at each milestone, and per-class multiclass skill picks.
-    // Without these, reopening collapses baseAttributes into the post-ASI
-    // attributes and empties the ASI/multiclass history, mis-recomputing
-    // the character on edit. Emitted in the table's snake_case column
-    // convention (the characterData state keeps the camelCase form); the
-    // reload path maps back. Columns added in
-    // migrations/20271216_character_creator_choice_columns.sql.
-    base_attributes: characterData.baseAttributes || characterData.attributes || {},
-    asi_selections: characterData.asiSelections || {},
-    multiclass_skills: characterData.multiclassSkills || {},
-    // Equipment-selector UI state (M4) — which starting-kit options the
-    // player picked and the kit-vs-gold toggle — so the EquipmentStep
-    // selectors reflect prior choices on reopen.
-    equipment_choices: characterData.equipment_choices || {},
-    used_starting_gold: !!characterData.used_starting_gold,
+    // Creator-only state that must survive save→reopen but has NO external
+    // consumer (verified: nothing outside the creator reads these). The
+    // `characters` table is column-per-field with no character-data jsonb
+    // blob, so rather than add a column for each — and break the next save
+    // the moment a new creator field appears (bonds, deities, …) — these
+    // nest inside the single `creator_data` jsonb column. Future
+    // creator-only fields go here too: no migration, no save breakage.
+    //   - baseAttributes / asiSelections / multiclassSkills: the ASI /
+    //     multiclass audit trail (M3) so reopening doesn't collapse
+    //     baseAttributes into post-ASI attributes.
+    //   - equipment_choices / used_starting_gold: EquipmentStep selector
+    //     state (M4).
+    // Cross-system fields (companions, below) stay top-level columns.
+    // Column added in
+    // migrations/20271217_character_save_payload_reconcile.sql.
+    creator_data: {
+      baseAttributes: characterData.baseAttributes || characterData.attributes || {},
+      asiSelections: characterData.asiSelections || {},
+      multiclassSkills: characterData.multiclassSkills || {},
+      equipment_choices: characterData.equipment_choices || {},
+      used_starting_gold: !!characterData.used_starting_gold,
+    },
     spells: characterData.spells || { cantrips: [], level1: [] },
     equipment: characterData.equipment || { weapons: [], armor: {} },
     currency: characterData.currency || {

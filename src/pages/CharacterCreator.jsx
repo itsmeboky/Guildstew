@@ -267,13 +267,18 @@ export default function CharacterCreator() {
         const persistedPack =
           existingCharacter.game_pack === 'dnd5e' ? 'dnd5e_2014'
             : existingCharacter.game_pack || 'dnd5e_2014';
+        // Creator-only fields now live in the `creator_data` jsonb blob
+        // (see buildStatsFromCharacterData). Fall back to the legacy
+        // top-level snake_case columns, then to defaults, so older rows
+        // still reopen.
+        const creatorData = existingCharacter.creator_data || {};
         setCharacterData(prev => ({
           ...prev,
           ...existingCharacter,
           gamePack: persistedPack,
           game_pack: persistedPack,
           attributes: existingCharacter.attributes || prev.attributes,
-          baseAttributes: existingCharacter.base_attributes || existingCharacter.attributes || prev.baseAttributes,
+          baseAttributes: creatorData.baseAttributes || existingCharacter.base_attributes || existingCharacter.attributes || prev.baseAttributes,
           skills: existingCharacter.skills || prev.skills,
           spells: existingCharacter.spells || prev.spells,
           saving_throws: existingCharacter.saving_throws || prev.saving_throws,
@@ -282,14 +287,14 @@ export default function CharacterCreator() {
           features: existingCharacter.features || prev.features,
           feature_choices: existingCharacter.feature_choices || prev.feature_choices,
           multiclasses: existingCharacter.multiclasses || prev.multiclasses,
-          multiclassSkills: existingCharacter.multiclass_skills || prev.multiclassSkills,
-          asiSelections: existingCharacter.asi_selections || prev.asiSelections,
+          multiclassSkills: creatorData.multiclassSkills || existingCharacter.multiclass_skills || prev.multiclassSkills,
+          asiSelections: creatorData.asiSelections || existingCharacter.asi_selections || prev.asiSelections,
           inventory: existingCharacter.inventory || prev.inventory,
           equipment: existingCharacter.equipment || prev.equipment,
           // Equipment-selector UI state (M4) so the EquipmentStep
           // selectors reflect prior picks on reopen.
-          equipment_choices: existingCharacter.equipment_choices || prev.equipment_choices,
-          used_starting_gold: existingCharacter.used_starting_gold ?? prev.used_starting_gold,
+          equipment_choices: creatorData.equipment_choices || existingCharacter.equipment_choices || prev.equipment_choices,
+          used_starting_gold: creatorData.used_starting_gold ?? existingCharacter.used_starting_gold ?? prev.used_starting_gold,
           currency: existingCharacter.currency || prev.currency,
           personality: existingCharacter.personality || prev.personality,
           appearance: existingCharacter.appearance || prev.appearance,
