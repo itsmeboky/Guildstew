@@ -158,10 +158,13 @@ export function buildStatsFromCharacterData(characterData) {
     // selections at each milestone, and per-class multiclass skill picks.
     // Without these, reopening collapses baseAttributes into the post-ASI
     // attributes and empties the ASI/multiclass history, mis-recomputing
-    // the character on edit.
-    baseAttributes: characterData.baseAttributes || characterData.attributes || {},
-    asiSelections: characterData.asiSelections || {},
-    multiclassSkills: characterData.multiclassSkills || {},
+    // the character on edit. Emitted in the table's snake_case column
+    // convention (the characterData state keeps the camelCase form); the
+    // reload path maps back. Columns added in
+    // migrations/20271216_character_creator_choice_columns.sql.
+    base_attributes: characterData.baseAttributes || characterData.attributes || {},
+    asi_selections: characterData.asiSelections || {},
+    multiclass_skills: characterData.multiclassSkills || {},
     // Equipment-selector UI state (M4) — which starting-kit options the
     // player picked and the kit-vs-gold toggle — so the EquipmentStep
     // selectors reflect prior choices on reopen.
