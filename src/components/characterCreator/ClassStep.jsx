@@ -8,6 +8,7 @@ import {
   clearBreweryClassMarkers,
 } from "@/lib/breweryClassApply";
 import CompanionPicker from "@/components/characterCreator/CompanionPicker";
+import { bondsForClass } from "@/components/characterCreator/bondsSections";
 import { LevelPicker } from "@/components/characterCreator/LevelPicker";
 import { trimChoicesToLevel } from "@/components/characterCreator/levelTrim";
 import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
@@ -375,12 +376,16 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
             <EmptyClassPrompt />
           )}
 
+          {/* Bonds & Allies — conditional: renders only the sections that
+              apply (deity, patron, familiar picker, mount flag, …) and the
+              embedded CompanionPicker. Hidden entirely when none apply. */}
           {selectedClass && (
             <BondsTome
               cls={selectedClass}
               accent={accent}
               data={characterData}
               update={updateCharacterData}
+              campaignId={campaignId}
             />
           )}
 
@@ -388,14 +393,6 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
             <BreweryClassPickers
               characterData={characterData}
               updateCharacterData={updateCharacterData}
-            />
-          )}
-
-          {selectedClass && (selectedClass.hasCompanion || selectedClass.hasPatron) && (
-            <CompanionPicker
-              characterData={characterData}
-              updateCharacterData={updateCharacterData}
-              campaignId={campaignId}
             />
           )}
         </div>
@@ -641,97 +638,12 @@ function SubclassChapter({ cls, accent, subclass, level, onPick }) {
 // ============================================================================
 // BONDS TOME — patrons / deities / companions / mounts / circles / origins
 // ============================================================================
-function bondsForClass(cls, data) {
-  const bonds = [];
-  const subclass = (cls.subclasses || []).find((s) => s.name === data.subclass) || null;
 
-  if (cls.name === "Warlock") {
-    bonds.push({
-      key: "patron",
-      label: "Your Patron",
-      kicker: "The being you serve",
-      presetOptions: (cls.subclasses || []).map((s) => ({ id: s.name, name: s.name, desc: s.desc })),
-      preset: subclass ? { name: subclass.name, desc: subclass.desc } : null,
-      placeholder: "Asmodeus, Mab, the Whisper Beyond...",
-      descPlaceholder: "What do they want from you? How did the pact form?",
-    });
-    bonds.push({
-      key: "familiar",
-      label: "Pact of the Chain Familiar",
-      kicker: "Optional — unlocks at level 3 with Pact of the Chain",
-      presetOptions: (cls.companions || []).map((c) => ({ id: c.name, name: c.name, desc: c.desc })),
-      preset: null,
-      placeholder: "Wisp, Shadowclaw, Bound-In-Chains...",
-      descPlaceholder: "What does it look like? What does it whisper?",
-    });
-  }
-
-  if (cls.name === "Ranger") {
-    bonds.push({
-      key: "companion",
-      label: "Animal Companion",
-      kicker: "Beast Master ranger — unlocks at level 3",
-      presetOptions: (cls.companions || []).map((c) => ({ id: c.name, name: c.name, desc: c.desc })),
-      preset: null,
-      placeholder: "Rangefur, Talonshine, Old Boar...",
-      descPlaceholder: "How did they bond? What's their personality?",
-    });
-  }
-
-  if (cls.name === "Paladin") {
-    bonds.push({
-      key: "deity",
-      label: "Your Deity",
-      kicker: "The power your oath is sworn to",
-      placeholder: "Bahamut, the Dawnflower, the Silent Watcher...",
-      descPlaceholder: "What does your deity stand for? What rites do you keep?",
-    });
-    bonds.push({
-      key: "mount",
-      label: "Celestial Mount",
-      kicker: "Optional — unlocks via Find Steed at level 5",
-      placeholder: "Brightmane, Stormhoof, Last-Sunrise...",
-      descPlaceholder: "Pegasus, warhorse, dire wolf — what answers your call?",
-    });
-  }
-
-  if (cls.name === "Cleric") {
-    bonds.push({
-      key: "deity",
-      label: "Your Deity",
-      kicker: subclass ? `Chosen of the ${subclass.name}` : "The god whose miracles you channel",
-      placeholder: "Pelor, Moradin, the Raven Queen...",
-      descPlaceholder: "What does your god demand? What do you preach?",
-    });
-  }
-
-  if (cls.name === "Druid") {
-    bonds.push({
-      key: "circle",
-      label: "Your Druidic Circle",
-      kicker: "The grove or order that taught you",
-      placeholder: "Circle of the Iron Birch, the Tidal Court...",
-      descPlaceholder: "Where do you gather? What rites do you observe?",
-    });
-  }
-
-  if (cls.name === "Sorcerer") {
-    bonds.push({
-      key: "origin",
-      label: "Source of your magic",
-      kicker: subclass ? subclass.name : "The wellspring of your power",
-      preset: subclass ? { name: subclass.name, desc: subclass.desc } : null,
-      placeholder: "My dragon ancestor Vrazak, a wild surge in the womb...",
-      descPlaceholder: "How does the magic feel? Does it want anything?",
-    });
-  }
-
-  return bonds;
-}
-
-function BondsTome({ cls, accent, data, update }) {
-  const bonds = bondsForClass(cls, data);
-  if (bonds.length === 0) return null;
+function BondsTome({ cls, accent, data, update, campaignId }) {
+  const sections = bondsForClass(cls, data);
+  // No applicable section → the whole Bonds & Allies tome is hidden
+  // (e.g. Fighter, Barbarian, Monk, Rogue, base Ranger, Bard, Sorcerer).
+  if (sections.length === 0) return null;
 
   return (
     <div className="tome" style={{ padding: '32px 36px' }}>
@@ -750,15 +662,85 @@ function BondsTome({ cls, accent, data, update }) {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-        {bonds.map((bond) => (
-          <AllyCard
-            key={bond.key}
-            bond={bond}
-            accent={accent}
-            data={data}
-            update={update}
-          />
-        ))}
+        {sections.map((section) => {
+          if (section.type === "flavor") {
+            return (
+              <AllyCard
+                key={section.key}
+                bond={section}
+                accent={accent}
+                data={data}
+                update={update}
+              />
+            );
+          }
+          if (section.type === "patron") {
+            return <PatronReadout key={section.key} accent={accent} subclass={data.subclass} cls={cls} />;
+          }
+          if (section.type === "mount-flag") {
+            return <MountFlag key={section.key} accent={accent} />;
+          }
+          if (section.type === "companion-picker") {
+            return (
+              <CompanionPicker
+                key={section.key}
+                characterData={data}
+                updateCharacterData={update}
+                campaignId={campaignId}
+              />
+            );
+          }
+          return null;
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Read-only patron surface — the patron IS the Warlock subclass, chosen
+// on the Class step's subclass picker; this just reflects it (no re-pick).
+function PatronReadout({ accent, subclass, cls }) {
+  const detail = (cls.subclasses || []).find((s) => s.name === subclass) || null;
+  return (
+    <div
+      style={{
+        padding: 20,
+        background: `linear-gradient(135deg, ${accent}0E, transparent 70%)`,
+        border: `1px solid ${accent}33`,
+        borderLeft: `3px solid ${accent}`,
+        borderRadius: 6,
+      }}
+    >
+      <div className="label" style={{ color: accent, marginBottom: 4 }}>The being you serve</div>
+      <div className="display" style={{ fontSize: 22, color: 'var(--text)' }}>
+        {subclass || 'Choose your patron on the path picker above'}
+      </div>
+      {detail?.desc && (
+        <div className="italic-serif" style={{ fontSize: 14, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.5 }}>
+          {detail.desc}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Informational mount note — Find Steed summons a celestial mount in
+// play; it isn't a creation-time picker.
+function MountFlag({ accent }) {
+  return (
+    <div
+      style={{
+        padding: 20,
+        background: `linear-gradient(135deg, ${accent}0E, transparent 70%)`,
+        border: `1px solid ${accent}33`,
+        borderLeft: `3px solid ${accent}`,
+        borderRadius: 6,
+      }}
+    >
+      <div className="label" style={{ color: accent, marginBottom: 4 }}>Celestial Mount</div>
+      <div className="italic-serif" style={{ fontSize: 14.5, color: 'var(--text-dim)', lineHeight: 1.55 }}>
+        Your <strong style={{ color: 'var(--text)' }}>Find Steed</strong> spell lets you summon a celestial
+        mount when you cast it in play — no need to pick one now.
       </div>
     </div>
   );
