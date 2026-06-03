@@ -151,7 +151,7 @@ const CLASSES_DATA = [
     savingThrows: ["Strength", "Dexterity"],
     features: ["Favored Enemy", "Natural Explorer"],
     icon: "https://ktdxhsstrgwciqkvprph.supabase.co/storage/v1/object/public/campaign-assets/dnd5e/classes/748e5be38_Ranger1.png",
-    spellcaster: "half", spellAbility: "wis", hasCompanion: true,
+    spellcaster: "half", spellAbility: "wis",
     subclassName: "Ranger Archetype", subclassLevel: 3,
     subclasses: [
       { name: "Hunter", desc: "Pick anti-horde, anti-boss, or defensive bonuses. Pure combat.", best: "Bow-focused damage rangers." },
