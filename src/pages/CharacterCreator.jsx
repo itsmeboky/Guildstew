@@ -58,13 +58,16 @@ import { Stepper } from "@/components/characterCreator/chrome/Stepper";
 import { StepNav } from "@/components/characterCreator/chrome/StepNav";
 import { themeForClass } from "@/data/character-creator-class-themes";
 
+// Step order follows the dependency chain: class (level + subclass) →
+// abilities (casting modifier) → spells → features (invocations can now
+// see cantrips chosen on the Spells step) → skills → equipment → review.
 const STEPS = [
   { id: 'identity', label: 'Identity', component: IdentityStep },
   { id: 'class', label: 'Class & Path', component: ClassStep },
   { id: 'abilities', label: 'Abilities', component: AbilityScoresStep },
+  { id: 'spells', label: 'Spells', component: SpellsStep },
   { id: 'features', label: 'Features', component: ClassFeaturesStep },
   { id: 'skills', label: 'Skills', component: SkillsStep },
-  { id: 'spells', label: 'Spells', component: SpellsStep },
   { id: 'equipment', label: 'Equipment', component: EquipmentStep },
   { id: 'review', label: 'Review', component: ReviewStep }
 ];
