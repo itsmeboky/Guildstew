@@ -23,16 +23,33 @@ import { getBackgroundSkills } from "@/components/dnd5e/backgroundData";
  * can render per-bucket progress without redoing the work.
  */
 
-const EXPERTISE_COUNTS = {
-  Rogue: 2,
-  Bard: 2,
-};
+
+/**
+ * Expertise grants scale by class level (M6):
+ *   Rogue — 2 at level 1, 2 more at level 6 (4 total).
+ *   Bard  — 2 at level 3, 2 more at level 10 (4 total); NONE before level 3.
+ *   No other class gets expertise.
+ * Uses the PRIMARY class level (total − multiclass levels), since expertise
+ * comes from the primary class.
+ */
+export function expertiseRequiredFor(characterData = {}) {
+  const className = characterData.class;
+  if (className !== "Rogue" && className !== "Bard") return 0;
+  const total = Number(characterData.level) || 1;
+  const mcLevels = Array.isArray(characterData.multiclasses)
+    ? characterData.multiclasses.reduce((s, m) => s + (Number(m?.level) || 0), 0)
+    : 0;
+  const level = Math.max(1, total - mcLevels);
+  if (className === "Rogue") return level >= 6 ? 4 : 2;
+  // Bard
+  return level >= 10 ? 4 : level >= 3 ? 2 : 0;
+}
 
 export function getSkillsCompletion(characterData = {}) {
   const className = characterData.class;
   const choice = CLASS_SKILL_CHOICES[className] || { count: 2, from: [] };
   const classRequired = choice.count || 2;
-  const expertiseRequired = EXPERTISE_COUNTS[className] || 0;
+  const expertiseRequired = expertiseRequiredFor(characterData);
 
   // Bard's `from` is the literal "any" — expand to every skill.
   // Anything else falls back to an empty list so the includes()
