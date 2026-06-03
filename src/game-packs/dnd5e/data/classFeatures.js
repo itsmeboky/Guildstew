@@ -30,6 +30,7 @@
 
 import LEVELS from '../../../../docs/5e_reference/2014/5e-SRD-Levels.json' with { type: 'json' };
 import FEATURES from '../../../../docs/5e_reference/2014/5e-SRD-Features.json' with { type: 'json' };
+import SPELLS from '../../../../docs/5e_reference/2014/5e-SRD-Spells.json' with { type: 'json' };
 
 // ─── Class / subclass identity maps ──────────────────────────────────
 // Display name (as used across the creator UI + characterData.class)
@@ -103,6 +104,49 @@ for (const f of FEATURES) {
   FEATURE_DESC.set(f.index, desc);
 }
 
+// Eldritch Invocations, sourced wholesale from the SRD feature list
+// (index `eldritch-invocation-*`) with their prerequisites normalized to
+// a flat shape the render-time eligibility filter understands:
+//   { level?, pactBoon?, cantrip? }
+// SRD prerequisite types map as: level→level, feature(pact-of-the-*)→
+// pactBoon display name, spell(eldritch-blast)→cantrip "Eldritch Blast".
+function normalizeInvocationPrereq(prereqs) {
+  const out = {};
+  for (const p of prereqs || []) {
+    if (p.type === 'level' && typeof p.level === 'number') {
+      out.level = p.level;
+    } else if (p.type === 'spell' && /eldritch-blast/.test(p.spell || '')) {
+      out.cantrip = 'Eldritch Blast';
+    } else if (p.type === 'feature') {
+      if (/pact-of-the-chain/.test(p.feature || '')) out.pactBoon = 'Pact of the Chain';
+      else if (/pact-of-the-tome/.test(p.feature || '')) out.pactBoon = 'Pact of the Tome';
+      else if (/pact-of-the-blade/.test(p.feature || '')) out.pactBoon = 'Pact of the Blade';
+    }
+  }
+  return out;
+}
+
+export const ELDRITCH_INVOCATIONS = FEATURES
+  .filter((f) => f.index && f.index.startsWith('eldritch-invocation-'))
+  .map((f) => ({
+    name: f.name.replace(/^Eldritch Invocation:\s*/, ''),
+    description: Array.isArray(f.desc) ? f.desc.join('\n') : (f.desc || ''),
+    prerequisite: normalizeInvocationPrereq(f.prerequisites),
+  }));
+
+// Warlock spells grouped by spell level (for Mystic Arcanum: 6th/7th/
+// 8th/9th). Sourced from the SRD spell list — the same dataset the
+// 2024 spells adapter reads — filtered to the warlock class.
+const WARLOCK_SPELLS_BY_LEVEL = {};
+for (const sp of SPELLS) {
+  if (!Array.isArray(sp.classes) || !sp.classes.some((c) => c.index === 'warlock')) continue;
+  if (sp.level < 6 || sp.level > 9) continue;
+  (WARLOCK_SPELLS_BY_LEVEL[sp.level] ||= []).push({
+    name: sp.name,
+    description: `${ordinal(sp.level)}-level warlock spell${sp.school?.name ? ` · ${sp.school.name}` : ''}`,
+  });
+}
+
 function ordinal(n) {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
@@ -129,22 +173,19 @@ function buildSubclassChoiceDescription(subEntriesByLevel) {
   return lines.join('\n\n');
 }
 
-// Is this base feature one of the four working-picker features?
-function isCuratedChoiceFeature(name, className) {
-  const sub = SUBCLASS_BY_CLASS[className];
-  return (
-    (sub && name === sub.selectionFeature)
-    || (name === 'Fighting Style' && !!FIGHTING_STYLE_BY_CLASS[className])
-    || name === 'Metamagic'
-    || name === 'Pact Boon'
-  );
-}
+// Choice features the SRD repeats across levels (Metamagic at 3/10/17;
+// Eldritch Invocations at 2/5/7/9/12/15/18). Only the FIRST occurrence
+// is emitted — a single picker renders and multiPickCount handles the
+// scaling count. (Subclass-selection / Fighting Style / Pact Boon appear
+// once in the SRD anyway; Mystic Arcanum / Additional Fighting Style use
+// distinct names per level, so none of those need de-duping.)
+const RECURRING_CHOICE_FEATURES = new Set(['Metamagic', 'Eldritch Invocations']);
 
-// Decorate a base feature with picker choices when it's one of the
-// working-picker features; otherwise return it untouched. The SRD data
-// repeats some choice features at every level they recur (e.g.
-// Metamagic at 3/10/17); the caller emits only the FIRST occurrence so
-// a single picker renders and multiPickCount handles the scaling count.
+// Decorate a feature with picker metadata when it's a choice-bearing
+// feature; otherwise return it untouched. Static `choices` are baked in
+// here; choices that depend on the live character (invocation
+// prerequisites, the Champion's already-chosen Fighting Style) carry
+// marker flags resolved at render time by featureChoiceResolver.
 function decorateChoice(feature, className, subclassChoiceDesc) {
   const sub = SUBCLASS_BY_CLASS[className];
   if (sub && feature.name === sub.selectionFeature) {
@@ -170,6 +211,42 @@ function decorateChoice(feature, className, subclassChoiceDesc) {
   if (feature.name === 'Pact Boon') {
     return { ...feature, choiceRequired: true, choices: PACT_BOON_CHOICES };
   }
+  // Eldritch Invocations — multi-pick scaling via multiPickCount; the
+  // full SRD list is attached and prereq-filtered per-character at render.
+  if (feature.name === 'Eldritch Invocations') {
+    return {
+      ...feature,
+      choiceRequired: true,
+      prereqFiltered: true,
+      choices: ELDRITCH_INVOCATIONS,
+    };
+  }
+  // Mystic Arcanum (6th/7th/8th/9th level) — single-pick of one warlock
+  // spell of the matching level. SRD names them "Mystic Arcanum (6th
+  // level)" etc.
+  const arcanum = /^Mystic Arcanum \((\d)\w+ level\)/i.exec(feature.name);
+  if (arcanum) {
+    const spellLevel = Number(arcanum[1]);
+    return {
+      ...feature,
+      choiceRequired: true,
+      choices: WARLOCK_SPELLS_BY_LEVEL[spellLevel] || [],
+    };
+  }
+  // Champion's second Fighting Style (level 10). Gated to the Champion
+  // subclass and excludes the level-1 pick — both resolved at render.
+  if (feature.name === 'Additional Fighting Style') {
+    return {
+      ...feature,
+      choiceRequired: true,
+      requiresSubclass: 'Champion',
+      excludePriorStyle: true,
+      choices: (FIGHTING_STYLE_BY_CLASS.Fighter || []).map((name) => ({
+        name,
+        description: FIGHTING_STYLES[name],
+      })),
+    };
+  }
   return feature;
 }
 
@@ -189,32 +266,39 @@ function buildClassFeaturesData() {
     );
 
     // Subclass features grouped by level (for both the discrete
-    // per-level entries and the assembled choice description).
-    const subByLevel = {};
+    // per-level entries and the assembled choice description). Build the
+    // plain descriptions first so the subclass-choice blurb can be
+    // assembled before any choice decoration runs.
+    const subByLevelRaw = {};
     for (const e of subEntries) {
       for (const ref of e.features || []) {
         if (isAsiFeature(ref)) continue;
-        (subByLevel[e.level] ||= []).push({
+        (subByLevelRaw[e.level] ||= []).push({
           name: ref.name,
           level: e.level,
           description: FEATURE_DESC.get(ref.index) || '',
         });
       }
     }
-    const subclassChoiceDesc = buildSubclassChoiceDescription(subByLevel);
+    const subclassChoiceDesc = buildSubclassChoiceDescription(subByLevelRaw);
+    // Decorate subclass features too (e.g. Champion's "Additional
+    // Fighting Style" at level 10 becomes a picker).
+    const subByLevel = {};
+    for (const [lvl, feats] of Object.entries(subByLevelRaw)) {
+      subByLevel[lvl] = feats.map((f) => decorateChoice(f, className, subclassChoiceDesc));
+    }
 
     // Base features grouped by level, with picker choices attached.
-    // Curated-choice features (subclass selection, Fighting Style,
-    // Metamagic, Pact Boon) are emitted only on their FIRST occurrence
-    // — the single picker scales via multiPickCount, so the SRD's
-    // repeat entries (e.g. Metamagic at 3/10/17) must not each spawn
-    // their own picker.
+    // Recurring choice features (Metamagic, Eldritch Invocations) are
+    // emitted only on their FIRST occurrence — the single picker scales
+    // via multiPickCount, so the SRD's repeat entries must not each
+    // spawn their own picker.
     const seenChoiceFeature = new Set();
     const byLevel = {};
     for (const e of baseEntries) {
       for (const ref of e.features || []) {
         if (isAsiFeature(ref)) continue;
-        if (isCuratedChoiceFeature(ref.name, className)) {
+        if (RECURRING_CHOICE_FEATURES.has(ref.name)) {
           if (seenChoiceFeature.has(ref.name)) continue;
           seenChoiceFeature.add(ref.name);
         }
