@@ -9,6 +9,7 @@ import {
   CLASS_SKILL_CHOICES,
   getMulticlassSkillGrant,
 } from "@/components/dnd5e/dnd5eRules";
+import { expertiseRequiredFor } from "@/components/characterCreator/skillsCompletion";
 import InfoTip from "@/components/characterCreator/InfoTip";
 import { tipFor } from "@/components/characterCreator/creatorTips";
 import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
@@ -35,7 +36,6 @@ const CLASS_SKILL_OPTIONS = Object.fromEntries(
 const CLASS_SKILL_COUNTS = Object.fromEntries(
   Object.entries(CLASS_SKILL_CHOICES).map(([cls, v]) => [cls, v.count || 2]),
 );
-const CLASS_EXPERTISE_COUNT = { Rogue: 2, Bard: 2 };
 
 export default function SkillsStep({ characterData, updateCharacterData }) {
   const [selectedSkills, setSelectedSkills] = useState(characterData.skills || {});
@@ -52,7 +52,8 @@ export default function SkillsStep({ characterData, updateCharacterData }) {
     ? null
     : raceRule.from;
   const classSkillCount = CLASS_SKILL_COUNTS[characterData.class] || 2;
-  const expertiseCount = CLASS_EXPERTISE_COUNT[characterData.class] || 0;
+  // Level-gated: Rogue 2@L1/4@L6, Bard 0 below L3 / 2@L3 / 4@L10.
+  const expertiseCount = expertiseRequiredFor(characterData);
 
   // Auto-apply background-granted skills (they're free, not class picks).
   useEffect(() => {

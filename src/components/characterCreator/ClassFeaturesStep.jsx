@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { getClassFeaturesForLevel } from "@/components/dnd5e/classFeatures";
 import { resolveFeatureChoices } from "@/components/characterCreator/featureChoiceResolver";
+import { isSubclassFeature, getFeaturesCompletion } from "@/components/characterCreator/featuresCompletion";
 import SubclassPicker from "@/components/characterCreator/SubclassPicker";
 import InfoTip from "@/components/characterCreator/InfoTip";
 import { tipFor } from "@/components/characterCreator/creatorTips";
@@ -29,29 +30,6 @@ import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
 import { Primer } from "@/components/characterCreator/chrome/Primer";
 import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
 import { CharacterSummary } from "@/components/characterCreator/chrome/CharacterSummary";
-
-// Canonical "choose your specialization" feature names per class.
-// When a feature's name lands in this set, render the arrow-pattern
-// SubclassPicker instead of the legacy Select dropdown.
-const SUBCLASS_FEATURE_NAMES = new Set([
-  "Primal Path",
-  "Bard College",
-  "Divine Domain",
-  "Druid Circle",
-  "Martial Archetype",
-  "Monastic Tradition",
-  "Sacred Oath",
-  "Ranger Archetype",
-  "Ranger Conclave",
-  "Roguish Archetype",
-  "Sorcerous Origin",
-  "Otherworldly Patron",
-  "Arcane Tradition",
-]);
-
-function isSubclassFeature(feature) {
-  return !!feature?.choiceRequired && SUBCLASS_FEATURE_NAMES.has(feature?.name);
-}
 
 const AVAILABLE_CLASSES = [
   "Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk",
@@ -168,11 +146,8 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
     updateCharacterData({ feature_choices: newChoices });
   };
 
-  const requiredChoices = allFeatures.filter((f) => f.choiceRequired);
-  const allChoicesMade = requiredChoices.every((f) => {
-    const key = `${f.multiclass || characterData.class}-${f.level}-${f.name}`;
-    return featureChoices[key];
-  });
+  // Shared with CharacterCreator's Features gate — banner and gate agree.
+  const featuresComplete = getFeaturesCompletion(characterData).isComplete;
 
   if (!characterData.class) {
     return (
@@ -372,7 +347,7 @@ export default function ClassFeaturesStep({ characterData, updateCharacterData }
             </>
           )}
 
-          {requiredChoices.length > 0 && !allChoicesMade && (
+          {!featuresComplete && (
             <RequiredChoicesBanner />
           )}
         </div>

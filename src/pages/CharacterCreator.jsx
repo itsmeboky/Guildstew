@@ -15,6 +15,7 @@ import { getSpellSlots, getPactSlots } from "@/components/dnd5e/spellData";
 import { getSkillsCompletion } from "@/components/characterCreator/skillsCompletion";
 import { getSkillsCompletion2024 } from "@/components/characterCreator/skillsCompletion2024";
 import { getSpellsCompletion } from "@/components/characterCreator/spellsCompletion";
+import { getFeaturesCompletion, isSubclassSelectionComplete } from "@/components/characterCreator/featuresCompletion";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   calculateMaxHP, 
@@ -561,7 +562,12 @@ export default function CharacterCreator() {
         }
         return characterData.name && characterData.race && characterData.background && characterData.alignment;
       case 'class':
-        return !!characterData.class;
+        // A class is required; a subclass is required only once the
+        // character's level qualifies for one (Cleric/Sorcerer/Warlock
+        // at 1, Wizard/Druid at 2, the rest at 3). A level-1 Fighter
+        // advances with no subclass; a level-3 Fighter must pick one.
+        if (characterData.gamePack === 'dnd5e_2024') return !!characterData.class;
+        return !!characterData.class && isSubclassSelectionComplete(characterData);
       case 'abilities':
         // Effective post-racial / post-ASI scores cap at 20 per RAW
         // (PHB p. 15). The base-score caps (rolled / point-buy /
@@ -572,7 +578,11 @@ export default function CharacterCreator() {
         // get rejected at the gate.
         return Object.values(characterData.attributes).every(val => val >= 3 && val <= 20);
       case 'features':
-        return true;
+        // Every mandatory choiceRequired pick (Fighting Style, Metamagic,
+        // Pact Boon, Eldritch Invocations, Mystic Arcanum) must be resolved
+        // before advancing. 2024 keeps its own flow.
+        if (characterData.gamePack === 'dnd5e_2024') return true;
+        return getFeaturesCompletion(characterData).isComplete;
       case 'skills':
         // 2024 reads from its own SRD-driven completion helper —
         // background skills come from AbilitiesStep2024's selection,
@@ -639,9 +649,15 @@ export default function CharacterCreator() {
         return 'Complete the identity fields';
       case 'class':
         if (!characterData.class) return 'Pick a class';
-        return 'Pick a class';
+        return 'Choose your subclass';
       case 'abilities':
         return 'Set every ability score between 3 and 20';
+      case 'features': {
+        const missing = getFeaturesCompletion(characterData).missing;
+        return missing.length
+          ? `Resolve: ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? '…' : ''}`
+          : 'Resolve all required choices';
+      }
       case 'skills':
         return 'Finish your skill picks';
       case 'spells':

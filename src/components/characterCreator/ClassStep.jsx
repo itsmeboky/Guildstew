@@ -9,6 +9,7 @@ import {
 } from "@/lib/breweryClassApply";
 import CompanionPicker from "@/components/characterCreator/CompanionPicker";
 import { LevelPicker } from "@/components/characterCreator/LevelPicker";
+import { trimChoicesToLevel } from "@/components/characterCreator/levelTrim";
 import { StepHeader } from "@/components/characterCreator/chrome/StepHeader";
 import { Primer } from "@/components/characterCreator/chrome/Primer";
 import { OrnateHeading, FleurDivider } from "@/components/characterCreator/chrome/Ornaments";
@@ -317,7 +318,14 @@ export default function ClassStep({ characterData, updateCharacterData, campaign
   // the old Features-step picker). Clamp 1–20; downstream HP / proficiency
   // / slots / feature accumulation all read characterData.level.
   const handlePickLevel = (newLevel) => {
-    updateCharacterData({ level: Math.max(1, Math.min(20, Number(newLevel) || 1)) });
+    const lvl = Math.max(1, Math.min(20, Number(newLevel) || 1));
+    // On a level DECREASE, trim choices that are no longer legal
+    // (over-cap spells, excess invocations/arcanum/expertise, a subclass
+    // picked above the new level) so nothing stale persists or locks.
+    const trim = lvl < (Number(characterData.level) || 1)
+      ? trimChoicesToLevel(characterData, lvl)
+      : {};
+    updateCharacterData({ level: lvl, ...trim });
   };
 
   return (
