@@ -57,7 +57,6 @@ const CLASSES_DATA = [
     subclassName: "Primal Path", subclassLevel: 3,
     subclasses: [
       { name: "Path of the Berserker", desc: "Pure fury. Frenzy lets you attack as a bonus action while raging.", best: "Players who want unfiltered damage." },
-      { name: "Path of the Totem Warrior", desc: "Channel animal spirits for resistance, speed, or aim.", best: "Strategic damage-takers who want utility." },
     ],
   },
   {
@@ -72,7 +71,6 @@ const CLASSES_DATA = [
     subclassName: "Bard College", subclassLevel: 3,
     subclasses: [
       { name: "College of Lore", desc: "Bonus skills, Cutting Words to debuff enemies, and extra spells from other lists.", best: "Skill monkeys and spell-thieves." },
-      { name: "College of Valor", desc: "Better armor & weapons, Extra Attack at 6th. Combat bard.", best: "Front-line inspiring warriors." },
     ],
   },
   {
@@ -87,8 +85,6 @@ const CLASSES_DATA = [
     subclassName: "Divine Domain", subclassLevel: 1,
     subclasses: [
       { name: "Life Domain", desc: "The premier healer. Disciples of Life bonus healing & heavy armor.", best: "Players who love keeping the party alive." },
-      { name: "Light Domain", desc: "Blaster cleric. Fire spells, Warding Flare, Radiance of the Dawn.", best: "Damage-leaning clerics." },
-      { name: "War Domain", desc: "Heavy armor, martial weapons, bonus attack via War Priest.", best: "Front-line holy warriors." },
     ],
   },
   {
@@ -103,7 +99,6 @@ const CLASSES_DATA = [
     subclassName: "Druid Circle", subclassLevel: 2,
     subclasses: [
       { name: "Circle of the Land", desc: "Spellcasting-focused. Bonus spells based on terrain — forest, mountain, etc.", best: "Druids who want stronger spellcasting." },
-      { name: "Circle of the Moon", desc: "Wildshape into a brown bear at L2. Massive HP pool, frontline beast.", best: "Players who want to BE the animal." },
     ],
   },
   {
@@ -118,7 +113,6 @@ const CLASSES_DATA = [
     subclassName: "Martial Archetype", subclassLevel: 3,
     subclasses: [
       { name: "Champion", desc: "Crit on 19-20, extra athleticism. The simplest fighter to play.", best: "New players who want to swing weapons reliably." },
-      { name: "Battle Master", desc: "Maneuvers (trip, disarm, riposte) powered by superiority dice. Tactical.", best: "Players who like options each round." },
     ],
   },
   {
@@ -133,7 +127,6 @@ const CLASSES_DATA = [
     subclassName: "Monastic Tradition", subclassLevel: 3,
     subclasses: [
       { name: "Way of the Open Hand", desc: "Classic unarmed combat — knockdown, knockback, pressure points.", best: "Players who want clean punch-and-kick combat." },
-      { name: "Way of Shadow", desc: "Stealth, teleportation, ki-fueled illusions. Ninja monk.", best: "Players who like sneaking and ambushing." },
     ],
   },
   {
@@ -148,8 +141,6 @@ const CLASSES_DATA = [
     subclassName: "Sacred Oath", subclassLevel: 3,
     subclasses: [
       { name: "Oath of Devotion", desc: "The classic paladin — honor, justice, smites against unholy foes.", best: "Lawful good champions." },
-      { name: "Oath of the Ancients", desc: "Nature, beauty, defiance of darkness. Damage resistance aura.", best: "Defensive ranger-paladins." },
-      { name: "Oath of Vengeance", desc: "Hunt evildoers. Mobility, Vow of Enmity for advantage.", best: "Single-target damage paladins." },
     ],
   },
   {
@@ -164,7 +155,6 @@ const CLASSES_DATA = [
     subclassName: "Ranger Archetype", subclassLevel: 3,
     subclasses: [
       { name: "Hunter", desc: "Pick anti-horde, anti-boss, or defensive bonuses. Pure combat.", best: "Bow-focused damage rangers." },
-      { name: "Beast Master", desc: "Gain a loyal animal companion. Fight side by side.", best: "Players who want a pet from level 3." },
     ],
     companions: [
       { name: "Wolf", desc: "Pack tactics — advantage when allies are adjacent." },
@@ -186,8 +176,6 @@ const CLASSES_DATA = [
     subclassName: "Roguish Archetype", subclassLevel: 3,
     subclasses: [
       { name: "Thief", desc: "Fast hands (bonus action utility), second-story work. Classic burglar.", best: "Skill-heavy adventurers." },
-      { name: "Assassin", desc: "Auto-crit surprise attacks, disguises, poisons.", best: "Burst damage from the shadows." },
-      { name: "Arcane Trickster", desc: "Wizard spells, Mage Hand legerdemain. Spell + skill hybrid.", best: "Spellsword rogues." },
     ],
   },
   {
@@ -202,7 +190,6 @@ const CLASSES_DATA = [
     subclassName: "Sorcerous Origin", subclassLevel: 1,
     subclasses: [
       { name: "Draconic Bloodline", desc: "Dragon ancestry — bonus HP, scaly skin, breath-themed damage.", best: "Durable blasters." },
-      { name: "Wild Magic", desc: "Roll on the Wild Magic table — chaos triggers when you cast.", best: "Players who love unpredictability." },
     ],
   },
   {
@@ -217,8 +204,6 @@ const CLASSES_DATA = [
     subclassName: "Otherworldly Patron", subclassLevel: 1,
     subclasses: [
       { name: "The Fiend", desc: "A pact with a devil or demon. Bonus temp HP on kills, fire spells.", best: "Damage-and-survival warlocks." },
-      { name: "The Archfey", desc: "Pact with a fey lord. Charm, fear, fey teleports.", best: "Trickster warlocks." },
-      { name: "The Great Old One", desc: "Eldritch alien horror. Telepathy, psychic damage, madness.", best: "Mysterious manipulators." },
     ],
     companions: [
       { name: "Imp", desc: "Fiendish. Invisible, shapechanger, telepathic." },
@@ -239,8 +224,6 @@ const CLASSES_DATA = [
     subclassName: "Arcane Tradition", subclassLevel: 2,
     subclasses: [
       { name: "School of Evocation", desc: "Sculpt your fireballs around allies. Damage school.", best: "Blaster wizards." },
-      { name: "School of Divination", desc: "Portent — replace any roll with a pre-rolled d20.", best: "Strategic minds." },
-      { name: "School of Abjuration", desc: "Arcane Ward absorbs damage. Tankier wizard.", best: "Defensive casters." },
     ],
   },
 ];
